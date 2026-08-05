@@ -138,12 +138,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"Done\", \"Enable Location\", \"iOS will ask for permission next.\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/3 tokens, missing: \"Done\", \"Enable Location\", \"iOS will ask for permission next.\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/N10-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:25:36.884Z"
+          "ai_tested_at": "2026-08-05T16:53:34.699Z"
         }
       ]
     },
@@ -209,14 +209,14 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Email\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Email\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L04-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:25:44.635Z"
+          "ai_tested_at": "2026-08-05T16:53:42.373Z"
         },
         {
           "id": "L05",
@@ -260,14 +260,14 @@
           "note": "❓ 待你确认: 如果之后输错了(密码少于 8 位), 这行灰色 \"Minimum 8 characters\" 会**消失**, 位置上换成一行红色错误提示. 用户会觉得画面在抖. 是否要拆开成两条独立文字?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Password\", \"Minimum 8 characters\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/2 tokens, missing: \"Password\", \"Minimum 8 characters\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L07-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:25:52.275Z"
+          "ai_tested_at": "2026-08-05T16:53:50.132Z"
         },
         {
           "id": "L08",
@@ -276,15 +276,15 @@
           "expect": "屏幕切到邮箱验证页面. 左上角一个返回箭头(点了会回到注册页). 顶部小 Cairn logo + 超大加粗字 \"Check your email\". 下面一段说明文字 \"We sent a 6-digit code to your@email.com\" (你填的邮箱地址是加深突出显示的). 下面一个输入框, 标签 \"Verification Code\", 左侧一把锁小图标, 提示文字 \"123456\", 键盘直接弹出数字键盘, 光标默认在这个框. 再下面绿色大按钮白字 \"Verify Email\". 按钮下方居中一行文字 \"Resend in 60s\" (灰色, 不能点), 60 秒会一秒一秒往下数.",
           "note": "❓ 待你确认: 验证码是一个单独输入框(提示文字 \"123456\"), 不是 6 个独立方格. iOS 微信/银行 app 都是 6 个方格样式. 是否要改成 6 个方格?",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 6 tokens found. Missing: \"Check your email\", \"We sent a 6-digit code to your@email.com\", \"Verification Code\", \"123456\", \"Verify Email\", \"Resend in 60s\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/6 tokens, missing: \"Check your email\", \"We sent a 6-digit code to your@email.com\", \"Verification Code\", \"123456\", \"Verify Email\", \"Resend in 60s\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 ",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L08-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:25:59.893Z"
+          "ai_tested_at": "2026-08-05T16:53:57.717Z"
         },
         {
           "id": "L09",
@@ -293,15 +293,15 @@
           "expect": "\"Verify Email\" 按钮下方居中显示 \"Resend in 59s\", \"Resend in 58s\", ... 每秒减一, 颜色是浅灰色, 手指点上去有一个很轻的按下反馈但不会触发任何事情.",
           "note": "❓ 待你确认: 灰色不可点但手指按下去有轻微反馈, 可能让用户以为按到了. 是否要彻底不响应?",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"Verify Email\", \"Resend in 59s\", \"Resend in 58s\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/3 tokens, missing: \"Verify Email\", \"Resend in 59s\", \"Resend in 58s\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is sec",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L09-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:26:07.512Z"
+          "ai_tested_at": "2026-08-05T16:54:05.388Z"
         },
         {
           "id": "L10",
@@ -311,14 +311,14 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Resend in 1s\", \"Resend code\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/2 tokens, missing: \"Resend in 1s\", \"Resend code\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L10-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:26:15.154Z"
+          "ai_tested_at": "2026-08-05T16:54:13.141Z"
         },
         {
           "id": "L11",
@@ -328,14 +328,14 @@
           "note": "❓ 待你确认: 名字很大(56pt), 如果注册时填了长名字(比如 \"Christopher Alexander\"), 会挤到两行甚至溢出. 是否要限制单行/自动缩小字号?\n❓ 待你确认: 欢迎页只停 1.8 秒, 用户可能还没读完 \"Your track starts now.\" 就被跳走了. 是否要延长, 或加一个 \"Continue\" 按钮让用户自己点?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"Welcome, [你注册时填的名字]!\", \"Nau mai, haere mai\", \"Your track starts now.\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/3 tokens, missing: \"Welcome, [你注册时填的名字]!\", \"Nau mai, haere mai\", \"Your track starts now.\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L11-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:26:22.810Z"
+          "ai_tested_at": "2026-08-05T16:54:20.806Z"
         },
         {
           "id": "L12",
@@ -362,14 +362,14 @@
           "note": "❓ 上架 blocker: Apple 上架规则规定, 只要 app 支持第三方登录(比如 Google), 就必须同时支持 Apple 登录, 否则 App Store 会拒审. 当前只能弹 \"Coming soon\", 上架会被拒. 是否要在上架前接好真 Apple 登录?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Coming soon\", \"OK\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/2 tokens, missing: \"Coming soon\", \"OK\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L13-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:26:30.444Z"
+          "ai_tested_at": "2026-08-05T16:54:28.493Z"
         },
         {
           "id": "L14",
@@ -379,14 +379,14 @@
           "note": "❓ 待你确认: 按钮上的 \"G\" logo 是我们自己画的一个蓝色实心 G 字, 但 Google 官方 logo 是 4 色多彩 G. 用自制 logo 违反 Google 品牌指南, 有商标风险. 是否要换成 Google 官方多彩 SVG?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"Google Sign In\", \"Coming in next app update...\", \"OK\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/3 tokens, missing: \"Google Sign In\", \"Coming in next app update...\", \"OK\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L14-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:26:38.068Z"
+          "ai_tested_at": "2026-08-05T16:54:36.275Z"
         },
         {
           "id": "L15",
@@ -395,15 +395,15 @@
           "expect": "\"Email\" 输入框边框变红色, 输入框下方出现红色小字 \"Please enter a valid email\". 用户没能提交.",
           "note": "❓ 待你确认: 登录页面(L03)在点 \"Sign In\" 时**不做**邮箱格式检查, 用户输个 \"abc\" 也会送到后端才被拒. 是否要在登录页也加同样的本地邮箱格式检查?",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Email\", \"Please enter a valid email\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "R3: partial 1/2, missing: \"Please enter a valid email\". [actions: type \"notavalidemail\"=false, tap \"Create Account\"=true]",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L15-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:26:45.838Z"
+          "ai_tested_at": "2026-08-05T16:54:45.167Z"
         },
         {
           "id": "L16",
@@ -412,15 +412,15 @@
           "expect": "\"Password\" 输入框边框变红色, 输入框下方原来那行灰色 \"Minimum 8 characters\" 变成红色 \"Minimum 8 characters\".",
           "note": "❓ 待你确认: 灰色提示和红色错误共用一个位置, 用户输错时看到的是画面上文字颜色突变而不是新文字出现, 视觉抖动. (同 L07 的问题)",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Password\", \"Minimum 8 characters\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_status": "pass",
+          "ai_reason": "R3: all 2 tokens found. [actions: type \"abc\"=false, tap \"Create Account\"=true]",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L16-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:26:53.594Z"
+          "ai_tested_at": "2026-08-05T16:54:53.980Z"
         },
         {
           "id": "L17",
@@ -429,15 +429,15 @@
           "expect": "\"Confirm Password\" 输入框边框变红色, 下方出现红色小字 \"Passwords do not match\".",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Confirm Password\", \"Passwords do not match\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "R3: partial 1/2, missing: \"Passwords do not match\". [actions: tap \"Create Account\"=true]",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L17-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:27:01.181Z"
+          "ai_tested_at": "2026-08-05T16:55:02.307Z"
         },
         {
           "id": "L18",
@@ -447,14 +447,14 @@
           "note": "❓ 待你确认: 其他输入框出错时会整个框变红边框, 复选框只有下方红字提示, 用户可能看不到. 是否要给复选框也加红色高亮?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Please agree to continue\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Please agree to continue\". [actions: tap \"Create Account\"=true] Body: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use Cairn.\nI have read an\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L18-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:27:08.744Z"
+          "ai_tested_at": "2026-08-05T16:55:10.887Z"
         },
         {
           "id": "L19",
@@ -464,14 +464,14 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Incorrect email or password\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Incorrect email or password\". [actions: tap \"Sign In\"=true] Body: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L19-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:27:16.381Z"
+          "ai_tested_at": "2026-08-05T16:55:19.402Z"
         },
         {
           "id": "L20",
@@ -481,14 +481,14 @@
           "note": "❓ 待你确认: 只有 \"邮箱已被注册\" 这种情况我们做了友好文案, 其他错误(比如限流)都是把后端原始英文直接给用户看. 是否要建一份错误码到中文/友好英文的映射表?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Too Many Requests\", \"Rate limit exceeded, try again in 60s\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/2 tokens, missing: \"Too Many Requests\", \"Rate limit exceeded, try again in 60s\". [actions: tap \"Sign In\"=true] Body: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L20-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:27:23.957Z"
+          "ai_tested_at": "2026-08-05T16:55:27.788Z"
         },
         {
           "id": "L21",
@@ -514,15 +514,15 @@
           "expect": "屏幕顶部红底 banner + 三角图标 + 错误文字(内容大约是 \"Code expired\" 或类似).",
           "note": "❓ 待你确认: 过期和错码用的是同一条红色 banner, 文字全靠后端返回. 是否要区分成 \"验证码已过期, 请点重发\" 这种更明确的引导?",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Code expired\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"Code expired\". [actions: tap \"Verify Email\"=false] Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is s",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L22-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:27:31.618Z"
+          "ai_tested_at": "2026-08-05T16:55:36.170Z"
         },
         {
           "id": "L23",
@@ -581,14 +581,14 @@
           "note": "❓ 待你确认: 长名字会撑爆欢迎页, 是否要在欢迎页对名字做自动缩小字号处理?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Name\", \"Welcome, ChristopherAlexanderMcAllisterVonWittgensteinTheThird!\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/2 tokens, missing: \"Name\", \"Welcome, ChristopherAlexanderMcAllisterVonWittgensteinTheThird!\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L26-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:27:39.324Z"
+          "ai_tested_at": "2026-08-05T16:55:43.889Z"
         },
         {
           "id": "L27",
@@ -598,14 +598,14 @@
           "note": "❓ 待你确认: 如果之后触发了顶部红色 banner 错误, 后端返回超长英文错误信息, banner 里的错误文字会自动换行, 但 banner 高度是否够展示还未测.",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Email\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Email\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L27-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:27:46.971Z"
+          "ai_tested_at": "2026-08-05T16:55:51.593Z"
         },
         {
           "id": "L28",
@@ -664,14 +664,14 @@
           "note": "❓ 待你确认: 没更新时也占位 32px 空白, 应该在没更新时让它完全消失(传 idleHidden=true 参数). 是否要改?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Latest\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Latest\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L31-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:27:54.658Z"
+          "ai_tested_at": "2026-08-05T16:55:59.242Z"
         },
         {
           "id": "L32",
@@ -728,14 +728,14 @@
           "note": "❓ 待你确认: iPad 或外接键盘用户用 Tab 键导航到复选框时会 \"迷路\"(看不出焦点在哪), 是否要给复选框也加一个焦点视觉?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 4 tokens found. Missing: \"Email\", \"Password\", \"Remember me on this device\", \"I agree to Privacy Policy\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/4 tokens, missing: \"Email\", \"Password\", \"Remember me on this device\", \"I agree to Privacy Policy\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L35-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:28:02.374Z"
+          "ai_tested_at": "2026-08-05T16:56:07.117Z"
         },
         {
           "id": "L36",
@@ -779,14 +779,14 @@
           "note": "❓ 待你确认: 这段小字的字号(12px) 和上边距(12px) 都是硬编码写死的, 不走全局设计规范里的字号变量. 其他地方文本都用 11 或 13. 是否要统一到设计规范里?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Your hiking data is securely stored...\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Your hiking data is securely stored...\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L38-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:28:10.110Z"
+          "ai_tested_at": "2026-08-05T16:56:14.805Z"
         }
       ]
     },
@@ -852,14 +852,14 @@
           "note": "只展示最新一条,历史看不到,得点 'Trails' 才能翻",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 4 tokens found. Missing: \"Route 图标 · 25 sessions\", \"FlagMarker 图标 · 0 flags\", \"3.2 km · 25:00\", \"3 hours ago\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/4 tokens, missing: \"Route 图标 · 25 sessions\", \"FlagMarker 图标 · 0 flags\", \"3.2 km · 25:00\", \"3 hours ago\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or you\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H04-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:28:17.576Z"
+          "ai_tested_at": "2026-08-05T16:56:22.228Z"
         },
         {
           "id": "H05",
@@ -869,14 +869,14 @@
           "note": "24 小时以上的最近记录被过滤掉,'昨天' 这种描述不显示",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"1 session · 0 flags\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"1 session · 0 flags\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or you\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H05-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:28:25.089Z"
+          "ai_tested_at": "2026-08-05T16:56:29.696Z"
         },
         {
           "id": "H06",
@@ -916,14 +916,14 @@
           "note": "这里其实是个 bug:数据条数得不对,应该跟回访条用同一套过滤",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"2 sessions\", \"1 hour ago\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/2 tokens, missing: \"2 sessions\", \"1 hour ago\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or you\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H08-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:28:32.575Z"
+          "ai_tested_at": "2026-08-05T16:56:37.146Z"
         },
         {
           "id": "H09",
@@ -948,14 +948,14 @@
           "note": "复数文案切换",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"3 hikes pending sync — will complete when online\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"3 hikes pending sync — will complete when online\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or you\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H10-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:28:40.044Z"
+          "ai_tested_at": "2026-08-05T16:56:44.591Z"
         },
         {
           "id": "H11",
@@ -980,14 +980,14 @@
           "note": "iPhone 14/15 Pro 的挖孔屏胶囊应该不被挡住",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"O16 · Downloading update\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"O16 · Downloading update\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or you\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H12-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:28:47.562Z"
+          "ai_tested_at": "2026-08-05T16:56:52.146Z"
         },
         {
           "id": "H13",
@@ -997,14 +997,14 @@
           "note": "弹窗风格跟设置页的输入确认弹窗是一家的",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"O16 · Update downloaded\", \"Restart now\", \"Later\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/3 tokens, missing: \"O16 · Update downloaded\", \"Restart now\", \"Later\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or you\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H13-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:28:54.973Z"
+          "ai_tested_at": "2026-08-05T16:56:59.632Z"
         },
         {
           "id": "H14",
@@ -1046,14 +1046,14 @@
           "note": "数字再多这一格也不炸",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"250 sessions\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"250 sessions\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or you\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H16-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:29:02.411Z"
+          "ai_tested_at": "2026-08-05T16:57:07.151Z"
         },
         {
           "id": "H17",
@@ -1063,14 +1063,14 @@
           "note": "英制/公制切换主页立刻生效",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"1.0 mi · 15:00\", \"mi\", \"km\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/3 tokens, missing: \"1.0 mi · 15:00\", \"mi\", \"km\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or you\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H17-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:29:09.934Z"
+          "ai_tested_at": "2026-08-05T16:57:14.707Z"
         },
         {
           "id": "H18",
@@ -1080,14 +1080,14 @@
           "note": "5:00 到 11:59 走早上问候",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Kia ora, Explorer\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Kia ora, Explorer\". [actions: reload] Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H18-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:29:17.490Z"
+          "ai_tested_at": "2026-08-05T16:57:25.089Z"
         },
         {
           "id": "H19",
@@ -1097,14 +1097,14 @@
           "note": "12:00 到 17:59 走下午问候",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Good afternoon, Explorer\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Good afternoon, Explorer\". [actions: reload] Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H19-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:29:25.008Z"
+          "ai_tested_at": "2026-08-05T16:57:35.678Z"
         },
         {
           "id": "H20",
@@ -1114,14 +1114,14 @@
           "note": "凌晨看到 Good evening 有点怪,可以考虑加一个 'Good night'",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Good evening, Explorer\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Good evening, Explorer\". [actions: reload] Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H20-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:29:32.410Z"
+          "ai_tested_at": "2026-08-05T16:57:46.171Z"
         },
         {
           "id": "H21",
@@ -1376,13 +1376,13 @@
           "expect": "手机轻震一下。状态从\"记录中\"变成\"已暂停\"。距离和时长不再累加,位置也不再往下记。原来那个 \"Pause\" 按钮变成绿色胶囊 \"Resume\"(播放三角图标)。地图上已经画好的路径保留在原地。",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Pause\", \"Resume\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers f\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"Pause\", \"Resume\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscover Cairn\nA cairn is ",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K04-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:29:39.815Z"
+          "ai_tested_at": "2026-08-05T16:57:53.648Z"
         },
         {
           "id": "K05",
@@ -1391,13 +1391,13 @@
           "expect": "手机轻震一下。状态从\"已暂停\"回到\"记录中\"。计时继续,位置继续往下记。暂停这段时间不会产生轨迹点,后面看回放时中间这段会作为\"信号丢失的空档\"处理。\"Resume\" 又变回 \"Pause\"。",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Resume\", \"Pause\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers f\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"Resume\", \"Pause\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscover Cairn\nA cairn is ",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K05-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:29:47.272Z"
+          "ai_tested_at": "2026-08-05T16:58:01.039Z"
         },
         {
           "id": "K06",
@@ -1406,13 +1406,13 @@
           "expect": "手机中震一下。记录先暂停,底部滑出一张结束确认面板。因为数据太少,系统判定\"走得太短\",直接弹出\"走得再多一点\"的提示面板:一个圆底地图定位针图标(约一个指尖大),大字 \"Keep going a little longer\",小字 \"We haven't captured enough GPS points to draw your path yet. Walk a few more seconds and your hike will save automatically when you stop.\"。绿色胖按钮 \"Got it — keep going\"(点它 = 继续走,这次记录还保留);下方灰色链接 \"End hike anyway\"(执意结束就丢掉这次记录)。",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Keep going a little longer\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers f\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"Keep going a little longer\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscover Cairn\n",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K06-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:29:54.690Z"
+          "ai_tested_at": "2026-08-05T16:58:08.411Z"
         },
         {
           "id": "K07",
@@ -1421,13 +1421,13 @@
           "expect": "手机中震一下。记录先暂停,底部滑出结束确认面板:\n- 最上方一小条灰色横条(可以往下拖收起面板)\n- 大字绿色标题 \"Hike complete\"(跑步屏则是 \"Run complete\")\n- 一条胶囊横幅:地图图标 + 绿色文字 \"You revealed X.XX km² of new ground.\"(或者 \"Familiar ground\" / \"Just getting started — we'll add to your memory map next hike.\")\n- 名称输入框,里面淡色提示文字是默认名 \"Hike — Aug 5\"(带日期),最多输入 60 个字\n- 底部 2 个按钮:白底次要按钮 \"Discard\"(左边),绿底主按钮 \"Save\"(带保存图标,右边)\n\n如果点面板外面那层半透明遮罩 = 相当于取消 = 直接恢复\"记录中\"(面板关掉,继续走)。",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 8 tokens found. Missing: \"Hike complete\", \"Run complete\", \"You revealed X.XX km² of new ground.\", \"Familiar ground\", \"Just getting started — we'll add to your memory map next hike.\", \"Hike — Aug 5\", \"Discard\", \"Save\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers f\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/8 tokens, missing: \"Hike complete\", \"Run complete\", \"You revealed X.XX km² of new ground.\", \"Familiar ground\", \"Just getting started — we'll add to your memory map next hike.\", \"Hike — Aug 5\", \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K07-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:30:01.977Z"
+          "ai_tested_at": "2026-08-05T16:58:15.810Z"
         },
         {
           "id": "K08",
@@ -1555,13 +1555,13 @@
           "expect": "屏幕顶部那个小胶囊会显示:如果完全定不到位 → 变成红色 \"GPS Offline\";如果能定到位但精度差过 15 米、又还没超过 30 秒没信号 → 变成灰色胶囊 \"GPS ±<N>m\"(N 是当前精度的米数);如果最后一个点距现在超过 30 秒 → 显示 \"Signal lost\" 胶囊(如果超过 1 分钟会变成 \"Signal lost · N min\")。精度很差的点会被平滑过滤掉,但仍然会累计。",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 4 tokens found. Missing: \"GPS Offline\", \"GPS ±<N>m\", \"Signal lost\", \"Signal lost · N min\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers f\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/4 tokens, missing: \"GPS Offline\", \"GPS ±<N>m\", \"Signal lost\", \"Signal lost · N min\". [actions: tap \"Start Hiking\"=false] Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBa",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K17-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:30:09.516Z"
+          "ai_tested_at": "2026-08-05T16:58:26.872Z"
         },
         {
           "id": "K18",
@@ -1790,13 +1790,13 @@
           "expect": "屏幕最上方一条黑底数据条 (\"距离/时长/配速/GPS 状态\" 四列), 距离显示 \"--\", 配速显示 \"--\"。屏幕中间偏下一个巨大的白色轻字体时长 \"00:00\", 下面一行更小的字显示 \"-- km\" 和 \"-- min/km\", 中间用一条竖线分开。屏幕最下方两个白色小圆点和一行灰字 \"Double-tap to unlock\"。GPS 还在搜星, 但屏幕上没有 \"GPS 搜索中\" 的提示, 用户看不出来是自己没动还是 GPS 没搜到",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 6 tokens found. Missing: \"距离/时长/配速/GPS 状态\", \"00:00\", \"-- km\", \"-- min/km\", \"Double-tap to unlock\", \"GPS 搜索中\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/6 tokens, missing: \"距离/时长/配速/GPS 状态\", \"00:00\", \"-- km\", \"-- min/km\", \"Double-tap to unlock\", \"GPS 搜索中\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFre",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R11-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:30:47.026Z"
+          "ai_tested_at": "2026-08-05T16:58:34.331Z"
         },
         {
           "id": "R12",
@@ -1805,13 +1805,13 @@
           "expect": "屏幕中间那个巨大时长会显示 \"13:02\" 之类, 数字非常清楚不抖 (跳秒的时候数字宽度稳定)。下方一行显示 \"2.34 km\" 和 \"6'42\\\"\" 中间用竖线分开。屏幕最上方黑条 GPS 一格有一个小圆点在慢慢闪 (0.8 → 1.2 循环), 表示 GPS 正常",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"13:02\", \"2.34 km\", \"6'42\\\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/3 tokens, missing: \"13:02\", \"2.34 km\", \"6'42\\\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks aut",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R12-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:30:54.440Z"
+          "ai_tested_at": "2026-08-05T16:58:41.789Z"
         },
         {
           "id": "R13",
@@ -1820,13 +1820,13 @@
           "expect": "距离数字很长 (\"45.62\") 加配速数字很长 (\"9'12\\\"\") 加中间竖线加两个单位, 挤在一起可能超出屏幕右边——因为代码里这一行没有做自动换行或缩小字号处理。极端情况下右边配速会被裁掉一半看不见",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"45.62\", \"9'12\\\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"45.62\", \"9'12\\\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\n",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R13-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:31:01.893Z"
+          "ai_tested_at": "2026-08-05T16:58:49.442Z"
         },
         {
           "id": "R14",
@@ -1835,13 +1835,13 @@
           "expect": "配速显示 \"--\" (两个横线), 不会显示 \"999'59\\\"\" 之类夸张数字。距离低于 10 米时代码故意不算配速, 避免刚起步显示乱数字",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"999'59\\\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"999'59\\\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\n\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R14-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:31:09.295Z"
+          "ai_tested_at": "2026-08-05T16:58:56.989Z"
         },
         {
           "id": "R15",
@@ -1850,13 +1850,13 @@
           "expect": "距离显示 \"1.24 mi\", 配速显示 \"8'32\\\"\", 单位标签写 \"min/mi\" (不是 \"min/km\")。数字换算成英里正确、配速也是每英里的时间, 没有单位混用",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"1.24 mi\", \"8'32\\\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"1.24 mi\", \"8'32\\\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automaticall",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R15-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:31:16.627Z"
+          "ai_tested_at": "2026-08-05T16:59:04.403Z"
         },
         {
           "id": "R16",
@@ -1865,13 +1865,13 @@
           "expect": "时长会显示成 \"3:25:45\" 这种带小时的格式。这个数字用的字号很大 (60 号), 6-8 个字符在小屏上可能贴近左右屏边——理论上不会溢出但会显得非常靠边",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"3:25:45\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"3:25:45\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\n\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R16-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:31:24.168Z"
+          "ai_tested_at": "2026-08-05T16:59:12.110Z"
         },
         {
           "id": "R17",
@@ -1880,13 +1880,13 @@
           "expect": "屏幕中间巨大时长数字继续每秒往上跳 (跑步不会因为 GPS 丢就暂停)。但距离和配速会变回 \"--\"。屏幕最上方黑条那一格 GPS 小圆点变成灰色, 旁边的字变成 \"Offline\"。\"Offline\" 这个词容易让人误会成 \"网络断了\", 其实是 GPS 丢——用词不太准",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Offline\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"Offline\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\n\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R17-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:31:31.637Z"
+          "ai_tested_at": "2026-08-05T16:59:19.431Z"
         },
         {
           "id": "R18",
@@ -1955,13 +1955,13 @@
           "expect": "解锁那排按钮淡出消失, 屏幕回到锁屏状态 (只有屏幕中间巨大时长 + 数据 + 底部 \"Double-tap to unlock\")。整个切换很快, 相当于 \"手动锁回去\"",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Double-tap to unlock\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"Double-tap to unlock\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automati",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R22-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:31:39.050Z"
+          "ai_tested_at": "2026-08-05T16:59:26.860Z"
         },
         {
           "id": "R23",
@@ -1970,13 +1970,13 @@
           "expect": "屏幕从下方滑上来一个 sheet (背景变成半透明黑色), sheet 里显示 \"跑得太短\" 提示, 给两个按钮: 一个 \"Got it — keep going\" (点了这个 sheet 消失, 继续跑, 这段数据保留), 另一个 \"End anyway\" (点了这个把这段数据丢掉, 进入停下屏)",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Got it — keep going\", \"End anyway\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"Got it — keep going\", \"End anyway\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen l",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R23-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:31:46.496Z"
+          "ai_tested_at": "2026-08-05T16:59:34.206Z"
         },
         {
           "id": "R24",
@@ -1985,13 +1985,13 @@
           "expect": "sheet 消失, 屏幕切到停下后的白色汇总屏。但汇总屏中间那三段数据是 \"0.00 km / 00:00 / --\", 全部为零。屏幕上方还写着灰色小字 \"Session saved\"——但用户刚丢掉了这段跑, 显示 \"Session saved\" 是错的, 应该显示 \"Run discarded\" 或类似 \"没有保存\" 的字",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"0.00 km / 00:00 / --\", \"Session saved\", \"Run discarded\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/3 tokens, missing: \"0.00 km / 00:00 / --\", \"Session saved\", \"Run discarded\". [actions: tap \"End anyway\"=false] Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable ",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R24-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:31:53.914Z"
+          "ai_tested_at": "2026-08-05T16:59:42.180Z"
         },
         {
           "id": "R25",
@@ -2000,13 +2000,13 @@
           "expect": "手机震一下比较重的震动。在当前 GPS 位置立刻放下一个 flag。屏幕上会弹一个居中的黑色半透明小圆角提示条, 白色小字 \"Cairn planted\", 大约 1.5 秒后自动消失。但这个提示条实际渲染的位置在按钮下方, 有可能被屏幕底部安全区遮住一部分",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Cairn planted\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"Cairn planted\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\n\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R25-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:32:01.246Z"
+          "ai_tested_at": "2026-08-05T16:59:49.533Z"
         },
         {
           "id": "R26",
@@ -2030,13 +2030,13 @@
           "expect": "只感觉手机震了一下警告震动, 屏幕上没有任何提示条冒出来。用户不知道到底放下没有——完全没有 flag 也没有 \"Failed\" 提示。用户可能会连着按好几次以为按钮坏了",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Failed\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\nDiscover Cairn\nA cairn is a stack of stones — a tr\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"Failed\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen locks automatically\n\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R27-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:32:08.710Z"
+          "ai_tested_at": "2026-08-05T16:59:56.894Z"
         },
         {
           "id": "R28",
@@ -2200,13 +2200,13 @@
           "expect": "地图正常显示, 蓝色圆点 (自己位置) 在中间。右下角绿色圆形放 flag 按钮显示, 但没有红色小徽章 (因为数量是 0)。底部有一块 \"附近 flag 列表\" 面板, 但因为没有 flag, 面板是空的——没有一行提示 \"还没有 flag, 点右下角按钮放第一个\", 就是空空一块, 新用户不知道这块面板是干什么的",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"附近 flag 列表\", \"还没有 flag, 点右下角按钮放第一个\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"附近 flag 列表\", \"还没有 flag, 点右下角按钮放第一个\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDisc",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M03-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:32:45.944Z"
+          "ai_tested_at": "2026-08-05T17:00:04.272Z"
         },
         {
           "id": "M04",
@@ -2333,13 +2333,13 @@
           "expect": "屏幕从下方滑上来一张 flag 详情 sheet, 里面显示这个 flag 的备注、时间、放置位置, 以及三个按钮: \"Edit\" (编辑)、\"Delete\" (删除) 和分享的类似图标",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Edit\", \"Delete\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"Edit\", \"Delete\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn i",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M12-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:33:08.457Z"
+          "ai_tested_at": "2026-08-05T17:00:11.742Z"
         },
         {
           "id": "M13",
@@ -2363,13 +2363,13 @@
           "expect": "详情 sheet 从下方滑上来, 里面显示 flag 内容 + 三个按钮 \"Like\"、\"Report\"、\"Hide\" (没有 \"Edit\"/\"Delete\", 因为不是自己的)。但陌生人 flag 太淡, 用户可能根本没看到有 flag 可点, 错过很多互动",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 5 tokens found. Missing: \"Like\", \"Report\", \"Hide\", \"Edit\", \"Delete\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/5 tokens, missing: \"Like\", \"Report\", \"Hide\", \"Edit\", \"Delete\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOfflin",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M14-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:33:16.005Z"
+          "ai_tested_at": "2026-08-05T17:00:19.176Z"
         },
         {
           "id": "M15",
@@ -2408,13 +2408,13 @@
           "expect": "按钮右上角的红色小徽章因为要容纳 \"247\" 三个字, 会向右边扩宽, 把徽章整体推到按钮外面去, 破坏对齐——徽章没有 \"99+\" 这种截断规则, 也没有最大宽度",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"247\", \"99+\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"247\", \"99+\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn i\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M17-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:33:23.503Z"
+          "ai_tested_at": "2026-08-05T17:00:26.709Z"
         },
         {
           "id": "M18",
@@ -2438,13 +2438,13 @@
           "expect": "4 张卡并排显示, 每张卡宽度大约 78 像素。里面的中文/英文名字标签用了小字号 (11 号加粗)。名字如果超过 8 个字符 (比如 \"Milestone\"、\"Landmark\") 会自动换行或者被截断加省略号——按 truncate 规则, 任何截断都算严重问题",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Milestone\", \"Landmark\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"Milestone\", \"Landmark\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA ",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M19-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:33:31.059Z"
+          "ai_tested_at": "2026-08-05T17:00:34.090Z"
         },
         {
           "id": "M20",
@@ -2453,13 +2453,13 @@
           "expect": "\"Free\" 卡的边框从灰色变成主题绿色, 底色淡绿, 卡右上角出现一个绿色对号小圆圈 (CircleCheck 图标)。手机震一下轻震动。其他 3 张类型卡保持未选中",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Free\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"Free\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn i\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M20-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:33:38.574Z"
+          "ai_tested_at": "2026-08-05T17:00:41.445Z"
         },
         {
           "id": "M21",
@@ -2468,13 +2468,13 @@
           "expect": "备注输入框边框从灰色变主题绿色, 表示获得焦点。占位文字变淡。输入框下方右侧出现一个字符计数器 (\"0/50\")",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"0/50\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"0/50\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn i\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M21-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:33:46.170Z"
+          "ai_tested_at": "2026-08-05T17:00:48.685Z"
         },
         {
           "id": "M22",
@@ -2483,13 +2483,13 @@
           "expect": "字符计数器从灰色变琥珀色 (\"40/50\"), 提示离上限还剩 10 个字符, 但输入框边框还没变颜色",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"40/50\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"40/50\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn i\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M22-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:33:53.602Z"
+          "ai_tested_at": "2026-08-05T17:00:56.038Z"
         },
         {
           "id": "M23",
@@ -2498,13 +2498,13 @@
           "expect": "字符计数器变红色 (\"50/50\"), 输入框边框也变红色。再按键盘不会有反应——代码里把输入截断在 50 个字符, 从源头挡掉超长",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"50/50\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"50/50\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn i\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M23-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:34:01.068Z"
+          "ai_tested_at": "2026-08-05T17:01:03.304Z"
         },
         {
           "id": "M24",
@@ -2528,13 +2528,13 @@
           "expect": "\"Save\" 按钮底色是浅灰 (跟 sheet 背景差不多), 字灰色, 相当于禁用状态。但因为底色跟 sheet 背景太接近, 看起来更像 \"这里没有按钮\" 而不是 \"按钮暂时不可用\"",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Save\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"Save\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn i\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M25-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:34:08.567Z"
+          "ai_tested_at": "2026-08-05T17:01:10.661Z"
         },
         {
           "id": "M26",
@@ -2543,13 +2543,13 @@
           "expect": "sheet 关闭, flag 被静默放在地图中心那个默认位置 (通常在惠灵顿附近), 不是自己真实位置。没有任何提示 \"没有 GPS 信号\", 也没有阻止保存。用户会看到一个 flag 出现在离自己 500 公里以外的地方, 完全不理解为什么——数据完整性 bug",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"没有 GPS 信号\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"没有 GPS 信号\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn i\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M26-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:34:15.997Z"
+          "ai_tested_at": "2026-08-05T17:01:17.948Z"
         },
         {
           "id": "M27",
@@ -2558,13 +2558,13 @@
           "expect": "权限胶囊默认又回到 \"Only me\", 上次选的 \"Public\" 没被记住。每次开 sheet 都要重新点一次自己想要的权限——习惯不被保留",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Only me\", \"Public\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"Only me\", \"Public\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cair",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M27-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:34:23.489Z"
+          "ai_tested_at": "2026-08-05T17:01:25.261Z"
         },
         {
           "id": "M28",
@@ -2586,13 +2586,13 @@
           "expect": "iOS 系统自带的原生弹窗 (Alert.alert) 弹出来, 标题带备注内容 (\"Delete \\\"note\\\"? This cannot be undone.\"), 两个按钮 \"Cancel\" 和 \"Delete\"。但设置屏那种自定义 \"输入备注确认\" 弹窗更严谨——这里用系统弹窗风格跟设置屏不一致",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 4 tokens found. Missing: \"Delete \\\", \"? This cannot be undone.\", \"Cancel\", \"Delete\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/4 tokens, missing: \"Delete \\\", \"? This cannot be undone.\", \"Cancel\", \"Delete\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 marke",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M29-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:34:31.045Z"
+          "ai_tested_at": "2026-08-05T17:01:32.668Z"
         },
         {
           "id": "M30",
@@ -2614,13 +2614,13 @@
           "expect": "显示成 \"0.3 mi\" 或 \"1640 ft\" (按英制换算)。单位跟设置里选的一致, 不会混用",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"0.3 mi\", \"1640 ft\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"0.3 mi\", \"1640 ft\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cair",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M31-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:34:38.553Z"
+          "ai_tested_at": "2026-08-05T17:01:39.931Z"
         },
         {
           "id": "M32",
@@ -2629,13 +2629,13 @@
           "expect": "显示成一个绝对日期 (例如 \"7/28/2026\" 或 \"28/07/2026\"), 而不是 \"3 天前\" 或 \"2 小时前\"。手机日期格式取决于系统区域设置, 不同人手机上看到的格式可能不同——不是相对时间, 用户读起来不直观",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"7/28/2026\", \"28/07/2026\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/2 tokens, missing: \"7/28/2026\", \"28/07/2026\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\n",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M32-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:34:46.082Z"
+          "ai_tested_at": "2026-08-05T17:01:47.225Z"
         },
         {
           "id": "M33",
@@ -2745,13 +2745,13 @@
           "expect": "所有元素 (胶囊、按钮、面板) 都是固定像素大小, 地图会占更多空间。底部 \"附近 flag 列表\" 面板显得四周留白很多, 有点空。字体没有随屏幕变大——保守但可用",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"附近 flag 列表\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"附近 flag 列表\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn i\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M40-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:35:01.112Z"
+          "ai_tested_at": "2026-08-05T17:01:54.621Z"
         },
         {
           "id": "M41",
@@ -2760,13 +2760,13 @@
           "expect": "顶部胶囊约 80 高 + 底部面板约 200 高 + 右下角放 flag 按钮 60 高 + 上下安全区吃掉 90 高, 中间真实地图区只剩大约 200 高。地图基本上只是个缩略图, 整屏更像一个 \"flag 列表\" 而不是 \"地图\"——小屏体验特别挤",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"flag 列表\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[web_not_supported] Web build cannot render — needs real iOS device. Original: R3: 0/1 tokens, missing: \"flag 列表\". Body: \"Real Map Available\nBuild with EAS to enable Mapbox\noutdoor maps with offline support\nBack\nEnable GPS\n0 markers nearby\nOffline\nDiscover Cairn\nA cairn i\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/M41-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:35:08.520Z"
+          "ai_tested_at": "2026-08-05T17:02:02.015Z"
         },
         {
           "id": "M42",
@@ -2959,12 +2959,12 @@
           "note": "AUDIT S4: GPS 定位中。已知问题:12 秒之内没有中间过渡文案,体感像卡死。",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Looking for your position…\", \"We need a GPS fix to draw your memory map.\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those w\"",
+          "ai_reason": "R3: 0/2 tokens, missing: \"Looking for your position…\", \"We need a GPS fix to draw your memory map.\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/E04-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:35:16.029Z"
+          "ai_tested_at": "2026-08-05T17:02:09.421Z"
         },
         {
           "id": "E05",
@@ -3030,12 +3030,12 @@
           "note": "AUDIT S9: 地区面板 World 层级。已知问题:面板固定 bottom:168px,在 iPhone SE(568h)上会占屏幕大半。",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 5 tokens found. Missing: \"World\", \"▼ more\", \"214 locked countries\", \"Head out and start walking to unlock places.\", \"世界上还有 214 个国家\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those w\"",
+          "ai_reason": "R3: 0/5 tokens, missing: \"World\", \"▼ more\", \"214 locked countries\", \"Head out and start walking to unlock places.\", \"世界上还有 214 个国家\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/E09-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:35:23.457Z"
+          "ai_tested_at": "2026-08-05T17:02:16.817Z"
         },
         {
           "id": "E10",
@@ -3045,12 +3045,12 @@
           "note": "AUDIT S10: 国家层级切换。已知限制:锁着的国家不出现在列表。",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"World\", \"China\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those w\"",
+          "ai_reason": "R3: 0/2 tokens, missing: \"World\", \"China\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/E10-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:35:30.926Z"
+          "ai_tested_at": "2026-08-05T17:02:24.064Z"
         },
         {
           "id": "E11",
@@ -3090,12 +3090,12 @@
           "note": "AUDIT S13: 神秘 cairn 面板。已知问题:方向箭头永远指正北→cairn 相对角度,不跟随手机朝向。",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 4 tokens found. Missing: \"3 d ago\", \"180 m\", \"Walk this way to reveal\", \"Close\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those w\"",
+          "ai_reason": "R3: 0/4 tokens, missing: \"3 d ago\", \"180 m\", \"Walk this way to reveal\", \"Close\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/E13-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:35:38.492Z"
+          "ai_tested_at": "2026-08-05T17:02:31.485Z"
         },
         {
           "id": "E14",
@@ -3208,12 +3208,12 @@
           "note": "AUDIT S21: 弱网提示条。已知风险:320 宽设备文字截断。",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Weak signal — still loading map…\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those w\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Weak signal — still loading map…\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/E21-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:35:46.069Z"
+          "ai_tested_at": "2026-08-05T17:02:38.880Z"
         },
         {
           "id": "E22",
@@ -3281,12 +3281,12 @@
           "note": "AUDIT S26 (Critical): Like 按钮点不动。",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Like\", \"Liked ✓\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those w\"",
+          "ai_reason": "R3: 0/2 tokens, missing: \"Like\", \"Liked ✓\". Body: \"Back\nMine\nFriends\nLocation permission needed\nMemory needs your location to draw the map.\nOpen Settings\nTry again\nDiscover Cairn\nA cairn is a stack of \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/E26-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:35:53.575Z"
+          "ai_tested_at": "2026-08-05T17:02:46.188Z"
         },
         {
           "id": "E27",
@@ -3391,12 +3391,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"No marks from your friends yet\", \"Marks your friends share at Friend tier\\nwill show up here.\". Body: \"Back\nRoutes\nActivities\nRoutes\nCairns\nNo tracks walked yet\nStart hiking or running. Your tracks will live here.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who\"",
+          "ai_reason": "R3: 0/2 tokens, missing: \"No marks from your friends yet\", \"Marks your friends share at Friend tier\\nwill show up here.\". Body: \"Back\nRoutes\nActivities\nRoutes\nCairns\nNo tracks walked yet\nStart hiking or running. Your tracks will live here.\nDiscover Cairn\nA cairn is a stack of st\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/T03-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:36:00.933Z"
+          "ai_tested_at": "2026-08-05T17:02:53.691Z"
         },
         {
           "id": "T04",
@@ -3579,12 +3579,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"。这意味着当前实现里 **不允许手动画 route**,route 只能从 Activity (走过的 hike/run)\". Body: \"Back\nRoutes\nActivities\nRoutes\nCairns\nNo tracks walked yet\nStart hiking or running. Your tracks will live here.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"。这意味着当前实现里 **不允许手动画 route**,route 只能从 Activity (走过的 hike/run)\". Body: \"Back\nRoutes\nActivities\nRoutes\nCairns\nNo tracks walked yet\nStart hiking or running. Your tracks will live here.\nDiscover Cairn\nA cairn is a stack of st\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/P09-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:36:15.960Z"
+          "ai_tested_at": "2026-08-05T17:03:01.302Z"
         },
         {
           "id": "P10",
@@ -3635,12 +3635,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Name required\", \"Please name this route before saving.\". Body: \"Back\nRoutes\nActivities\nRoutes\nCairns\nNo tracks walked yet\nStart hiking or running. Your tracks will live here.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who\"",
+          "ai_reason": "R3: 0/2 tokens, missing: \"Name required\", \"Please name this route before saving.\". Body: \"Back\nRoutes\nActivities\nRoutes\nCairns\nNo tracks walked yet\nStart hiking or running. Your tracks will live here.\nDiscover Cairn\nA cairn is a stack of st\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/P13-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:36:23.433Z"
+          "ai_tested_at": "2026-08-05T17:03:08.617Z"
         },
         {
           "id": "P14",
@@ -3745,13 +3745,13 @@
           "expect": "屏幕停留在放 cairn 流程第 1 步,红色药丸提示英文 \"Location permission needed\" + 副文案英文 \"Move to a more open spot and try again.\"(仍然是错的副文案)。英文按钮 \"Try again\" 依然是唯一按钮,但点它什么都不会发生(因为系统不再允许再次弹权限)——用户被卡死,无法进入 iOS 设置修改权限,只能杀 app 重来。",
           "note": "AUDIT S05 (Blocker): 永久拒绝无救援路径。",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"Location permission needed\", \"Move to a more open spot and try again.\", \"Try again\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come af\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[plant_flow_wall] Plant flow stuck at \"Where's your cairn?\" step — needs Confirm+form interaction. Original: R3: 0/3 tokens, missing: \"Location permission needed\", \"Move to a more open spot and try again.\", \"Try again\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels righ",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/C05-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:36:31.749Z"
+          "ai_tested_at": "2026-08-05T17:03:16.584Z"
         },
         {
           "id": "C06",
@@ -3760,13 +3760,13 @@
           "expect": "5 秒采样后屏幕显示红色药丸提示英文 \"GPS signal is weak\" + 副文案英文 \"Move to a more open spot and try again.\"(这个场景副文案是对的)。英文按钮 \"Try again\" 点了会重新跑 5 秒采样。屏幕上没有告诉用户 \"当前精度是几米\",用户不知道离阈值还差多少。",
           "note": "AUDIT S06: GPS 精度不够。",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"GPS signal is weak\", \"Move to a more open spot and try again.\", \"Try again\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come af\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[plant_flow_wall] Plant flow stuck at \"Where's your cairn?\" step — needs Confirm+form interaction. Original: R3: 0/3 tokens, missing: \"GPS signal is weak\", \"Move to a more open spot and try again.\", \"Try again\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfi",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/C06-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:36:39.346Z"
+          "ai_tested_at": "2026-08-05T17:03:23.940Z"
         },
         {
           "id": "C07",
@@ -3775,13 +3775,13 @@
           "expect": "5 秒采样结束后屏幕显示红色药丸提示英文 \"GPS is jumping around\" + 副文案英文 \"Move to a more open spot and try again.\"。UI 和 GPS 精度弱那个场景几乎一样,只有主文案标题不同。英文按钮 \"Try again\" 重跑采样。",
           "note": "AUDIT S07: GPS 跳动过大。",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"GPS is jumping around\", \"Move to a more open spot and try again.\", \"Try again\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come af\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[plant_flow_wall] Plant flow stuck at \"Where's your cairn?\" step — needs Confirm+form interaction. Original: R3: 0/3 tokens, missing: \"GPS is jumping around\", \"Move to a more open spot and try again.\", \"Try again\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nCo",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/C07-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:36:46.842Z"
+          "ai_tested_at": "2026-08-05T17:03:31.174Z"
         },
         {
           "id": "C08",
@@ -3863,13 +3863,13 @@
           "expect": "第 2 步 pin 显示为橙色,进入 cairn 详情页后 pin 变红色(因为默认类型是 Danger,Danger 的 meta 颜色是红色)。用户没有任何视觉过渡提示,只能看到 \"我刚才放的橙色 pin 怎么变红了\"。设计上第 2 步是先放 pin 再选类型,类型信息此时还没有,所以 pin 颜色和最终类型对不上。",
           "note": "AUDIT S13 (Critical): pin 颜色和 cairn 类型不一致。",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"我刚才放的橙色 pin 怎么变红了\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come af\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[plant_flow_wall] Plant flow stuck at \"Where's your cairn?\" step — needs Confirm+form interaction. Original: R3: 0/1 tokens, missing: \"我刚才放的橙色 pin 怎么变红了\". [actions: tap \"Confirm\"=false] Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cair",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/C13-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:37:16.885Z"
+          "ai_tested_at": "2026-08-05T17:03:42.285Z"
         },
         {
           "id": "C14",
@@ -3951,13 +3951,13 @@
           "expect": "输入框最小高度 4 行(约 80px),内容超过 4 行会自动往下扩展。上限 200 字符,超过打不出。placeholder 文案英文 \"Tell whoever finds this…\" 有 curly 印刷体单引号和真正的省略号 U+2026。右下角同样 10 号灰色小字计数器 \"{n} / 200\"。iOS 键盘 Enter 键设置为普通回车换行(不会关键盘)。",
           "note": "AUDIT S19: 正文输入 200 字上限。",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Tell whoever finds this…\", \"{n} / 200\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come af\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[plant_flow_wall] Plant flow stuck at \"Where's your cairn?\" step — needs Confirm+form interaction. Original: R3: 0/2 tokens, missing: \"Tell whoever finds this…\", \"{n} / 200\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn i",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/C19-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:37:24.309Z"
+          "ai_tested_at": "2026-08-05T17:03:49.669Z"
         },
         {
           "id": "C20",
@@ -3994,13 +3994,13 @@
           "expect": "按钮显示英文 \"Plant Cairn\" 亮色可点。如果标题和正文都为空,按钮变半透明(opacity 0.4)不可点,但屏幕上没有任何一句 \"请填标题或正文\" 的解释性提示。用户可能重复点变灰的按钮不知道为什么点不动。点了亮色按钮之后按钮文字变英文 \"Planting…\",按钮变不可点防止重复提交,但没有转圈 loading 图标——有用户会以为没点上再点第二次。250 毫秒之后完成 haptic 震动反馈。",
           "note": "AUDIT S22: 提交按钮状态。",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Plant Cairn\", \"Planting…\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Sign in to access it on any device.\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[plant_flow_wall] Plant flow stuck at \"Where's your cairn?\" step — needs Confirm+form interaction. Original: R3: 0/2 tokens, missing: \"Plant Cairn\", \"Planting…\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of ",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/C22-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:37:31.898Z"
+          "ai_tested_at": "2026-08-05T17:03:57.073Z"
         },
         {
           "id": "C23",
@@ -4009,13 +4009,13 @@
           "expect": "按钮变英文 \"Planting…\" + 不可点。整个页面其他控件依然可交互(但没意义,反正很快就跳走)。如果 API 请求挂起没返回(比如非常差的 WiFi),按钮永久停在 \"Planting…\",没有超时提示、没有取消按钮、用户唯一出路是强杀 app。请求失败会自动把当前草稿存 AsyncStorage(草稿保护网,防止用户白填一场)。",
           "note": "AUDIT S23: 提交中卡死风险。",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Planting…\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come af\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[plant_flow_wall] Plant flow stuck at \"Where's your cairn?\" step — needs Confirm+form interaction. Original: R3: 0/1 tokens, missing: \"Planting…\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/C23-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:37:39.339Z"
+          "ai_tested_at": "2026-08-05T17:04:04.318Z"
         },
         {
           "id": "C24",
@@ -4039,13 +4039,13 @@
           "expect": "屏幕弹一个 iOS 原生 Alert:标题英文 \"Could not plant cairn\",内容是服务端返回的错误字符串原文(比如 \"HTTP 400: permission not allowed for anonymous\"——技术术语泄漏给用户)加上一行英文 \"Your draft is saved — try again or come back later.\"。Alert 只有一个 \"OK\" 按钮,没有 \"重试\" 按钮。点 OK 之后回到第 3 步,内容不丢(草稿已存)。",
           "note": "AUDIT S25: 提交失败。已知问题:技术错误字符串暴露给用户。",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 4 tokens found. Missing: \"Could not plant cairn\", \"HTTP 400: permission not allowed for anonymous\", \"Your draft is saved — try again or come back later.\", \"OK\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come af\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[plant_flow_wall] Plant flow stuck at \"Where's your cairn?\" step — needs Confirm+form interaction. Original: R3: 0/4 tokens, missing: \"Could not plant cairn\", \"HTTP 400: permission not allowed for anonymous\", \"Your draft is saved — try again or come back later.\", \"OK\". Body: \"Back\nWhere's your cairn?\nDrag th",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/C25-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:37:46.871Z"
+          "ai_tested_at": "2026-08-05T17:04:11.693Z"
         },
         {
           "id": "C26",
@@ -4069,13 +4069,13 @@
           "expect": "按钮显示英文 \"Plant Cairn\",半透明 0.4 不可点(因为标题和正文至少要填一个)。整个屏幕没有任何一句英文提示告诉用户 \"标题或正文至少填一个才能放\",用户会看着变灰的按钮困惑。类型和可见度都有默认值不会为空,所以不会因为它们导致按钮不可点。",
           "note": "AUDIT S27: 内容都为空不可提交。",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Plant Cairn\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come af\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[plant_flow_wall] Plant flow stuck at \"Where's your cairn?\" step — needs Confirm+form interaction. Original: R3: 0/1 tokens, missing: \"Plant Cairn\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/C27-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:38:01.696Z"
+          "ai_tested_at": "2026-08-05T17:04:19.000Z"
         },
         {
           "id": "C28",
@@ -4084,13 +4084,13 @@
           "expect": "标题和正文都被输入框硬限制填满(超过打不出更多字)。正文输入框会随内容长度扩展高度(minHeight 80、无 maxHeight)。iOS 键盘从底部弹出占屏幕下半。KeyboardAvoidingView 会往上推,但因为 \"Plant Cairn\" 提交按钮位于外层 View 的 bottomBar 里(不在 ScrollView 内),在小屏 + 键盘 + 长正文的组合下,提交按钮有可能被键盘推出屏幕之外,用户找不到按钮。",
           "note": "AUDIT S28: iPhone SE 键盘遮挡风险。",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Plant Cairn\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come af\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[plant_flow_wall] Plant flow stuck at \"Where's your cairn?\" step — needs Confirm+form interaction. Original: R3: 0/1 tokens, missing: \"Plant Cairn\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/C28-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:38:09.212Z"
+          "ai_tested_at": "2026-08-05T17:04:26.528Z"
         },
         {
           "id": "C29",
@@ -4112,13 +4112,13 @@
           "expect": "系统不会警告用户 \"你在这里已经放过一个 cairn 了\"。第二个 cairn 会照样创建并显示在地图上,和第一个 cairn 视觉上重叠。同一会话内的重复提交由 submitting 状态防重(点了变灰),但跨会话或跨启动后不做去重。是否允许用户在同一点放多个 cairn 是产品决定,当前默认允许。",
           "note": "AUDIT S30: 同点重复放不去重。",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"你在这里已经放过一个 cairn 了\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come af\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[plant_flow_wall] Plant flow stuck at \"Where's your cairn?\" step — needs Confirm+form interaction. Original: R3: 0/1 tokens, missing: \"你在这里已经放过一个 cairn 了\". Body: \"Back\nWhere's your cairn?\nDrag the map to fine-tune. Tap Confirm when it feels right.\nConfirm this spot\nDiscover Cairn\nA cairn is a stack of stones",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/C30-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:38:16.667Z"
+          "ai_tested_at": "2026-08-05T17:04:33.860Z"
         },
         {
           "id": "C31",
@@ -4178,12 +4178,12 @@
           "note": "audit 抓到 (FS-08, 低): 邮箱正则 /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/ 会拒掉 Unicode 本地名 (比如中文邮箱名), 也会放过 a@b.c 这种伪合法邮箱。MVP 阶段可以先这样, 但真机测的时候得留意用户用非拉丁邮箱名注册的情况。",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Enter a valid email\". Body: \"Back\nFriends\nAdd\nCairn is better with trail companions\nInvite friends to share markers and stay connected on the track.\nAdd a Friend\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left b\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Enter a valid email\". [actions: tap \"Send Request\"=false] Body: \"Back\nFriends\nAdd\nCairn is better with trail companions\nInvite friends to share markers and stay connected on the track.\nAdd a Friend\nDiscover Cairn\nA \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/F03-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:38:39.187Z"
+          "ai_tested_at": "2026-08-05T17:04:41.939Z"
         },
         {
           "id": "F04",
@@ -4193,12 +4193,12 @@
           "note": "audit 抓到 (FS-10, 中): success 屏用了 minHeight: 380, 为的是和填表状态高度对齐, 但代码注释说填表状态大概 360-400px 之间浮动。如果表单卸载的瞬间高度差得多, success 屏出来时会有一个抖动 (reflow), 真机需要拍视频看有没有跳一下。audit 还提到 (FS-09, 好): 按钮里放 ActivityIndicator 白色小转圈, 同时 disabled 掉不让二次点, loading 状态处理干净。",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Friend request sent\". Body: \"Back\nFriends\nAdd\nCairn is better with trail companions\nInvite friends to share markers and stay connected on the track.\nAdd a Friend\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left b\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"Friend request sent\". [actions: tap \"Send Request\"=false] Body: \"Back\nFriends\nAdd\nCairn is better with trail companions\nInvite friends to share markers and stay connected on the track.\nAdd a Friend\nDiscover Cairn\nA \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/F04-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:38:46.560Z"
+          "ai_tested_at": "2026-08-05T17:04:49.915Z"
         },
         {
           "id": "F05",
@@ -4208,12 +4208,12 @@
           "note": "audit 提到 (FS-11, 低): 报错以后, ref 里存的上一次邮箱 (successEmail.current) 没主动清空, 但因为每次点 \"Send Request\" 都会先重新赋值, 所以不会漏到下一次成功屏, trace 过了没问题, 只是逻辑脆。",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"No one at Cairn uses that email yet. Ask them to sign up first.\". Body: \"Back\nFriends\nAdd\nCairn is better with trail companions\nInvite friends to share markers and stay connected on the track.\nAdd a Friend\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left b\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"No one at Cairn uses that email yet. Ask them to sign up first.\". [actions: tap \"Send Request\"=false] Body: \"Back\nFriends\nAdd\nCairn is better with trail companions\nInvite friends to share markers and stay connected on the track.\nAdd a Friend\nDiscover Cairn\nA \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/F05-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:38:54.064Z"
+          "ai_tested_at": "2026-08-05T17:04:57.810Z"
         },
         {
           "id": "F06",
@@ -4223,12 +4223,12 @@
           "note": "audit 抓到 (FS-12, 中, 是 BUG): 前端 \"不能加自己\" 的检查在 O1 batch 37 被删了 (代码注释还留着 \"OWN_EMAIL removed — declared but never used\")。现在给自己发请求, 后端会拒, 但前端只显示一条通用错误, 而不是当初设计的友好提示 \"You can't friend yourself.\"。文件头部注释里还在写 \"Can't invite yourself\", 但代码里已经没了, 是文案和实现对不上。需要 SM 开 Story 恢复前端这一层拦截。",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"You can't friend yourself.\". Body: \"Back\nFriends\nAdd\nCairn is better with trail companions\nInvite friends to share markers and stay connected on the track.\nAdd a Friend\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left b\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"You can't friend yourself.\". [actions: tap \"Send Request\"=false] Body: \"Back\nFriends\nAdd\nCairn is better with trail companions\nInvite friends to share markers and stay connected on the track.\nAdd a Friend\nDiscover Cairn\nA \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/F06-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:39:01.591Z"
+          "ai_tested_at": "2026-08-05T17:05:05.857Z"
         },
         {
           "id": "F07",
@@ -4282,13 +4282,13 @@
           "expect": "iOS ActionSheet 弹起，title “Alice”，message 是 Alice email。三个选项：①“View profile” (默认色)。②“Block” (destructive 红色)。③“Cancel” (灰色)。",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 4 tokens found. Missing: \"Alice\", \"View profile\", \"Block\", \"Cancel\". Body: \"Back\nFriends\nAdd\nCairn is better with trail companions\nInvite friends to share markers and stay connected on the track.\nAdd a Friend\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left b\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/4 tokens, missing: \"Alice\", \"View profile\", \"Block\", \"Cancel\". Body: \"Back\nFriends\nAdd\nCairn is better with trail companions\nInvite friends to share markers and stay connected on the track.\nAdd ",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/F10-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:39:16.581Z"
+          "ai_tested_at": "2026-08-05T17:05:13.226Z"
         },
         {
           "id": "F11",
@@ -4345,13 +4345,13 @@
           "expect": "行下方展开一段表单区域, 显示 3 个输入框: \"Current password\" \"New password\" \"Confirm new password\", 每个输入框右边一个眼睛图标可点开/合上明文, 最下面一个绿色大按钮 \"Update password\".",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 4 tokens found. Missing: \"Current password\", \"New password\", \"Confirm new password\", \"Update password\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/4 tokens, missing: \"Current password\", \"New password\", \"Confirm new password\", \"Update password\". [actions: tap \"Change password\"=false] Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S02-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:39:24.124Z"
+          "ai_tested_at": "2026-08-05T17:05:24.329Z"
         },
         {
           "id": "S03",
@@ -4390,13 +4390,13 @@
           "expect": "表单顶部出现绿色一行小字 \"Password updated. Please sign in again.\", 1.5 秒后整个页面被替换成登录页. 1.5 秒对不少用户读完这行来说太短, 可能刚看到就跳走了.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Password updated. Please sign in again.\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"Password updated. Please sign in again.\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces e",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S05-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:39:31.737Z"
+          "ai_tested_at": "2026-08-05T17:05:31.706Z"
         },
         {
           "id": "S06",
@@ -4405,13 +4405,13 @@
           "expect": "客户端不做 \"Current password 为空\" 的前置检查, 请求直接发到服务器. 服务器返回 400, 表单顶红字显示服务器错误 (不太具体). 应该在客户端就短路提示.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Current password 为空\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"Current password 为空\". [actions: tap \"Update password\"=false] Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR ",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S06-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:39:39.229Z"
+          "ai_tested_at": "2026-08-05T17:05:39.816Z"
         },
         {
           "id": "S07",
@@ -4420,13 +4420,13 @@
           "expect": "表单顶部一行红字, 内容是服务器返回的 \"Wrong password\". 多种错误 payload 都能识别 (data.error / data.message / data.detail 都能取到).",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Wrong password\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"Wrong password\". [actions: tap \"Update password\"=false] Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGR",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S07-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:39:46.827Z"
+          "ai_tested_at": "2026-08-05T17:05:48.035Z"
         },
         {
           "id": "S08",
@@ -4450,13 +4450,13 @@
           "expect": "弹出一个居中的弹窗, 标题 \"How progress is counted\", 说明文字解释统计规则. i 图标本身很小 (14 px 加内边距 4 px), 加上 hitSlop 后大约 38x38, 仍低于 iOS 建议 44x44.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"How progress is counted\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"How progress is counted\". [actions: tap \"i\"=true] Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\n",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S09-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:40:01.820Z"
+          "ai_tested_at": "2026-08-05T17:05:59.076Z"
         },
         {
           "id": "S10",
@@ -4465,13 +4465,13 @@
           "expect": "行下方就地展开: 分隔线 → \"Metric\" (副标题 \"Kilometres, metres\", 当前选中项右边一个 Check 图标) → 分隔线 → \"Imperial\" (副标题 \"Miles, feet\"). 点选后立即保存并折叠. 副标题文字距左边缘 60 px, 但上方分隔线只缩进 52 px, 视觉对齐差了 8 px.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 4 tokens found. Missing: \"Metric\", \"Kilometres, metres\", \"Imperial\", \"Miles, feet\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/4 tokens, missing: \"Metric\", \"Kilometres, metres\", \"Imperial\", \"Miles, feet\". [actions: tap \"Units\"=false] Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit ",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S10-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:40:09.412Z"
+          "ai_tested_at": "2026-08-05T17:06:10.180Z"
         },
         {
           "id": "S11",
@@ -4525,13 +4525,13 @@
           "expect": "文本框右下角一行小字计数 \"500 / 1000\". 最多 1000 字符. 文本框支持多行输入, 光标从顶部开始.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"500 / 1000\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"500 / 1000\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\n\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S14-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:40:31.965Z"
+          "ai_tested_at": "2026-08-05T17:06:17.574Z"
         },
         {
           "id": "S15",
@@ -4585,13 +4585,13 @@
           "expect": "按钮下方出现绿色文字 \"Thanks — we got it.\", 2 秒后整个表单折叠隐藏, 输入框和附件清空. 改密码那边是 1.5 秒, 这里是 2 秒, 两处不一致.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Thanks — we got it.\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"Thanks — we got it.\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns pla",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S18-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:40:39.457Z"
+          "ai_tested_at": "2026-08-05T17:06:24.970Z"
         },
         {
           "id": "S19",
@@ -4600,13 +4600,13 @@
           "expect": "第 5 次点完后弹出系统弹窗 \"Developer mode / Debug tools unlocked. Scroll down to see them.\" 一个 \"OK\" 按钮. 点 1-4 次时没有任何视觉反馈, 好奇的用户点 3 下没反应就会放弃. 另外弹窗关闭后页面不自动滚到底, 用户要自己往下找 Developer 区.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Developer mode / Debug tools unlocked. Scroll down to see them.\", \"OK\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/2 tokens, missing: \"Developer mode / Debug tools unlocked. Scroll down to see them.\", \"OK\". [actions: tap \"About Cairn\"=false] Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S19-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:40:46.896Z"
+          "ai_tested_at": "2026-08-05T17:06:36.205Z"
         },
         {
           "id": "S20",
@@ -4615,13 +4615,13 @@
           "expect": "卡里 3 行: \"Debug mode\" 开关 (可以再关掉自己刚开的) / \"Open Debug screen\" (打开调试页) / \"Sim walker\" 开关. \"Sim walker\" 副标题写 \"Off on next app launch\", 说明是临时开关.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 4 tokens found. Missing: \"Debug mode\", \"Open Debug screen\", \"Sim walker\", \"Off on next app launch\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/4 tokens, missing: \"Debug mode\", \"Open Debug screen\", \"Sim walker\", \"Off on next app launch\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange p",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S20-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:40:54.353Z"
+          "ai_tested_at": "2026-08-05T17:06:43.603Z"
         },
         {
           "id": "S21",
@@ -4675,13 +4675,13 @@
           "expect": "服务器返回成功后, 弹窗静默关闭, 没有任何 '已清除' 的提示. 服务器返回失败弹一个系统 Alert \"Could not reset memory / Check your connection and try again.\" 成功和失败反馈不对称, 用户会怀疑到底有没有真的清.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Could not reset memory / Check your connection and try again.\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[expects_chinese_but_app_english] Case expects Chinese text but app UI is English. Original: R3: 0/1 tokens, missing: \"Could not reset memory / Check your connection and try again.\". [actions: tap \"Confirm\"=false] Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S24-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:41:16.989Z"
+          "ai_tested_at": "2026-08-05T17:06:54.681Z"
         },
         {
           "id": "S25",
@@ -4690,13 +4690,13 @@
           "expect": "行标签也是玫瑰红 (#b25a48), 副标题 \"Permanent — opens confirmation before we email our team.\" 点了会走一个 mailto: 发邮件流程. 若无邮件客户端会退化到另一个 Alert. App Store 对 mailto 删账号方案 (Guideline 5.1.1) 边缘合规, 属于风险点.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Permanent — opens confirmation before we email our team.\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"Permanent — opens confirmation before we email our team.\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PR",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S25-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:41:24.562Z"
+          "ai_tested_at": "2026-08-05T17:07:02.051Z"
         },
         {
           "id": "S26",
@@ -4750,13 +4750,13 @@
           "expect": "居中一行斜体浅灰小字 \"Ngā mihi nui — thanks for using Cairn.\" (毛利语 + 英文致谢, 大 ā 上有横线).",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Ngā mihi nui — thanks for using Cairn.\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"Ngā mihi nui — thanks for using Cairn.\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces ex",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S29-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:41:54.729Z"
+          "ai_tested_at": "2026-08-05T17:07:09.505Z"
         },
         {
           "id": "S30",
@@ -4765,13 +4765,13 @@
           "expect": "行末尾以浅灰小字显示 \"v{appVersion} · {OTA_VERSION}\", 例如 \"v1.4.2 · 2026-07-28\". 此行没有为 Playwright 自动化测试预留隐藏入口, 自动化测试无法跳过 5 连点解锁 Developer.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"v{appVersion} · {OTA_VERSION}\", \"v1.4.2 · 2026-07-28\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/2 tokens, missing: \"v{appVersion} · {OTA_VERSION}\", \"v1.4.2 · 2026-07-28\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGRE",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S30-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:42:02.164Z"
+          "ai_tested_at": "2026-08-05T17:07:16.809Z"
         },
         {
           "id": "S31",
@@ -4795,13 +4795,13 @@
           "expect": "6 行状态: \"Debug mode\" 值 On/Off, \"Stored sessions\" 数字, \"Total events\" 数字, \"Storage\" (KB), \"Buffer\" (未上传数), \"Dropped\" (被丢事件数). 数字用千分位显示 (toLocaleString).",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 6 tokens found. Missing: \"Debug mode\", \"Stored sessions\", \"Total events\", \"Storage\", \"Buffer\", \"Dropped\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/6 tokens, missing: \"Debug mode\", \"Stored sessions\", \"Total events\", \"Storage\", \"Buffer\", \"Dropped\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nCh",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S32-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:42:17.146Z"
+          "ai_tested_at": "2026-08-05T17:07:24.161Z"
         },
         {
           "id": "S33",
@@ -4810,13 +4810,13 @@
           "expect": "3 个开关行: \"Auto-upload\", \"WiFi-only\", \"Show FAB\", 各自独占一张白底小卡, 卡与卡之间间距只有 4 px. 视觉上跟 Settings 页 '一张卡里多行 + 分隔线' 的模式不同, 属于两个开发者页面之间的样式漂移.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"Auto-upload\", \"WiFi-only\", \"Show FAB\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/3 tokens, missing: \"Auto-upload\", \"WiFi-only\", \"Show FAB\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces expl",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S33-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:42:24.581Z"
+          "ai_tested_at": "2026-08-05T17:07:31.515Z"
         },
         {
           "id": "S34",
@@ -4825,13 +4825,13 @@
           "expect": "输入内容原样保存 (含首尾空格), 也没做 URL 格式校验. 如果保存的是 \"hello world\" 这种非 URL, 之后所有遥测上传都会失败, 用户不会立刻知道.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"hello world\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"hello world\". [actions: type \" https://foo.com \"=false] Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGR",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S34-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:42:32.184Z"
+          "ai_tested_at": "2026-08-05T17:07:39.374Z"
         },
         {
           "id": "S35",
@@ -4900,13 +4900,13 @@
           "expect": "屏幕底部一行红色文字 \"Clear all sessions\", 无边框无背景. 点后弹出 Alert, 副标题 \"The current active session (if any) is kept.\" 明确说不会误删当前正在录的 session.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Clear all sessions\", \"The current active session (if any) is kept.\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/2 tokens, missing: \"Clear all sessions\", \"The current active session (if any) is kept.\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange passwo",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S39-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:42:54.683Z"
+          "ai_tested_at": "2026-08-05T17:07:46.690Z"
         },
         {
           "id": "S40",
@@ -4915,13 +4915,13 @@
           "expect": "列表区中央显示一行文字 \"No sessions yet. Start tracking with debug mode on.\" 无按钮, 无插图, 空态描述清楚下一步该干嘛.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"No sessions yet. Start tracking with debug mode on.\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"No sessions yet. Start tracking with debug mode on.\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGRES",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S40-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:43:02.404Z"
+          "ai_tested_at": "2026-08-05T17:07:54.067Z"
         },
         {
           "id": "S41",
@@ -4930,13 +4930,13 @@
           "expect": "每 5 秒 session 列表整个刷新一次. 如果此刻用户正在滚列表或者手指按在 \"Upload now\" 上, 数组被替换后 tap 目标可能对不上, 滚动位置可能回到顶部 (与 RN 版本相关).",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Upload now\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"Upload now\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\n\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S41-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:43:09.853Z"
+          "ai_tested_at": "2026-08-05T17:08:01.527Z"
         },
         {
           "id": "S42",
@@ -4960,13 +4960,13 @@
           "expect": "改密码里的眼睛按钮 (~34x40), 附件缩略图右上角 \"✕\" (~32x32), 段头 \"i\" 按钮 (~38x38), 全部低于 iOS 建议的 44x44 手指点击区. 应统一加大内边距或 hitSlop.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"(~32x32), 段头\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"(~32x32), 段头\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\n\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S43-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:43:17.363Z"
+          "ai_tested_at": "2026-08-05T17:08:08.975Z"
         },
         {
           "id": "S44",
@@ -4975,13 +4975,13 @@
           "expect": "什么都不发生, 屏幕没有任何反馈. 应该至少弹一个 \"Could not open link\" 的 Alert 或错误提示.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Could not open link\". Body: \"Back\nSettings\nR\nr113-test-1785947119860\nr113-test-1785947119860@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns planted\nYOUR JOURNEY\n0 sessions\n0 cairns\nView all activiti\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_deep_interaction] Case needs multi-step user interaction runner cannot automate cheaply. Original: R3: 0/1 tokens, missing: \"Could not open link\". Body: \"Back\nSettings\nR\nr113-test-1785948798032\nr113-test-1785948798032@yiiling.cn\nEdit name\nChange password\nYOUR PROGRESS\n0\nplaces explored\n0\ncairns pla",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/S44-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:43:24.791Z"
+          "ai_tested_at": "2026-08-05T17:08:16.342Z"
         }
       ]
     },
@@ -5010,13 +5010,13 @@
           "expect": "首屏和上面 \"No sessions yet\" 一模一样, 没有任何 '正在加载' 的提示. 真有历史 session 的用户, 会先看到 '啥都没有' 的空态闪一下, 再看到数据涌入 —— 心里咯噔一下.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"No sessions yet\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"No sessions yet\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cair",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V02-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:43:39.644Z"
+          "ai_tested_at": "2026-08-05T17:08:23.660Z"
         },
         {
           "id": "V03",
@@ -5126,13 +5126,13 @@
           "expect": "800 毫秒后弹出系统 Alert \"Discard this activity?\", 一层确认后再弹一层 \"Confirm discard?\", 才真的删除. iOS 惯例长按阈值是 500 毫秒, 这里 800 偏慢. 长按触发时也没有震动反馈.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Discard this activity?\", \"Confirm discard?\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/2 tokens, missing: \"Discard this activity?\", \"Confirm discard?\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V10-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:43:47.109Z"
+          "ai_tested_at": "2026-08-05T17:08:31.029Z"
         },
         {
           "id": "V11",
@@ -5216,13 +5216,13 @@
           "expect": "统计里 flag 那格显示 \"0 flags\". 空态处理清楚.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"0 flags\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"0 flags\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V16-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:43:54.645Z"
+          "ai_tested_at": "2026-08-05T17:08:38.375Z"
         },
         {
           "id": "V17",
@@ -5231,13 +5231,13 @@
           "expect": "距离位置显示为 \"No GPS\", 例如整卡副标题 \"No GPS · 0m 5s\". 但用户 GPS 其实没坏, 只是没走远 —— \"No GPS\" 这个词误导. 应该说 \"Too short\" 或 \"0 m\". 展开时距离位置的单位标签又被藏起来, 布局跳一下.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"No GPS\", \"No GPS · 0m 5s\", \"Too short\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/3 tokens, missing: \"No GPS\", \"No GPS · 0m 5s\", \"Too short\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStar",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V17-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:44:02.084Z"
+          "ai_tested_at": "2026-08-05T17:08:45.772Z"
         },
         {
           "id": "V18",
@@ -5246,13 +5246,13 @@
           "expect": "时长显示 \"8h 12m\", 距离 \"25.0 km\". 视觉排版把时长放在标题位置, 距离放在副标题位置 —— 但对多数 hiker 来说距离是主标识, 层级排反了.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"8h 12m\", \"25.0 km\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/2 tokens, missing: \"8h 12m\", \"25.0 km\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Ca",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V18-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:44:09.562Z"
+          "ai_tested_at": "2026-08-05T17:08:53.173Z"
         },
         {
           "id": "V19",
@@ -5276,13 +5276,13 @@
           "expect": "红字 \"Delete Route\" 按钮位于列表下方. 在 100 张卡的场景里, 用户要滚到底部才看到这个删除按钮. 并且屏幕上没有任何提示 '这个 Delete 是要删哪条' —— 用户展开了 A 后滚下去点删, 删的可能是之前 View 的 B.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Delete Route\", \"这个 Delete 是要删哪条\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/2 tokens, missing: \"Delete Route\", \"这个 Delete 是要删哪条\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hi",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V20-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:44:17.081Z"
+          "ai_tested_at": "2026-08-05T17:09:00.674Z"
         },
         {
           "id": "V21",
@@ -5291,13 +5291,13 @@
           "expect": "红字按钮变成红底白字 \"Confirm Delete\", 需要再点一次才真删.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Confirm Delete\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Confirm Delete\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V21-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:44:24.484Z"
+          "ai_tested_at": "2026-08-05T17:09:07.932Z"
         },
         {
           "id": "V22",
@@ -5321,13 +5321,13 @@
           "expect": "面板变紧凑, 3 大块统计: distance / duration / elevation. 下方两个等宽按钮: 左 \"Save as Route\" (绿色 outline), 右 \"Delete\" (红色 filled). 两个按钮视觉权重一样重, 但一个是主操作一个是危险操作, 红色 Delete 应该更弱一些.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Save as Route\", \"Delete\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/2 tokens, missing: \"Save as Route\", \"Delete\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDisco",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V23-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:44:31.915Z"
+          "ai_tested_at": "2026-08-05T17:09:15.248Z"
         },
         {
           "id": "V24",
@@ -5396,13 +5396,13 @@
           "expect": "卡内一颗小色块里显示 \"Emerald Lakes\" (用户自定义).",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Emerald Lakes\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Emerald Lakes\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V28-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:44:39.449Z"
+          "ai_tested_at": "2026-08-05T17:09:22.557Z"
         },
         {
           "id": "V29",
@@ -5441,13 +5441,13 @@
           "expect": "地图区域是纯绿色, 什么都没有画. 没有任何转圈或 \"Loading route…\" 提示, 用户等最多 15 秒就在这看空绿.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Loading route…\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Loading route…\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V31-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:44:46.958Z"
+          "ai_tested_at": "2026-08-05T17:09:29.903Z"
         },
         {
           "id": "V32",
@@ -5456,13 +5456,13 @@
           "expect": "15 秒后地图区显示一段虚线 + 文字 \"Route data unavailable\". 过程中没有过渡提示, 用户以为 app 卡死了.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Route data unavailable\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Route data unavailable\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscov",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V32-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:44:54.342Z"
+          "ai_tested_at": "2026-08-05T17:09:37.221Z"
         },
         {
           "id": "V33",
@@ -5501,13 +5501,13 @@
           "expect": "从屏幕底部滑上来一个 sheet, 显示 flag 类型 + 备注 + 时间 + 一个 Delete 按钮. 工作正常. 但页面顶部还有一个 tab 状态 'flags' 却没有 tab 按钮 —— 属于遗留死代码.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"flags\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"flags\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V35-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:45:01.761Z"
+          "ai_tested_at": "2026-08-05T17:09:44.564Z"
         },
         {
           "id": "V36",
@@ -5561,13 +5561,13 @@
           "expect": "本来会显示 \"1.2 km away\" 距离副标题, 但 UI 不可达. 死代码.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"1.2 km away\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"1.2 km away\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V39-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:45:16.733Z"
+          "ai_tested_at": "2026-08-05T17:09:52.012Z"
         },
         {
           "id": "V40",
@@ -5621,13 +5621,13 @@
           "expect": "\"Routes (12)\" 这种格式. 数字没有小圆点徽章样式, 但用户可能看成 '有 12 个未读', 造成误解.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Routes (12)\", \"有 12 个未读\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/2 tokens, missing: \"Routes (12)\", \"有 12 个未读\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDisco",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V43-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:45:24.173Z"
+          "ai_tested_at": "2026-08-05T17:09:59.551Z"
         },
         {
           "id": "V44",
@@ -5636,13 +5636,13 @@
           "expect": "居中显示 \"Activity Detail\", 左边一个 Back 按钮, 右边一个 60 px 宽的占位空白. Back 按钮宽度可能跟 60 不一样, 标题就不完全居中.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Activity Detail\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Activity Detail\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cair",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V44-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:45:31.601Z"
+          "ai_tested_at": "2026-08-05T17:10:06.981Z"
         },
         {
           "id": "V45",
@@ -5651,13 +5651,13 @@
           "expect": "自动 nav.goBack. 上一屏没有 toast 或提示告诉用户 '刚删的那条是 XXX'.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"刚删的那条是 XXX\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"刚删的那条是 XXX\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V45-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:45:39.076Z"
+          "ai_tested_at": "2026-08-05T17:10:14.381Z"
         },
         {
           "id": "V46",
@@ -5666,13 +5666,13 @@
           "expect": "sessions.filter 后为空数组, selectedSession = null. 落到列表模式空态屏 (\"No sessions yet\"), 但用户其实是从一个具体 session 链接进来的, 看到的是不相干的空态, 应显示 \"Session not found\" + 一个返回按钮.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"No sessions yet\", \"Session not found\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/2 tokens, missing: \"No sessions yet\", \"Session not found\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V46-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:45:46.438Z"
+          "ai_tested_at": "2026-08-05T17:10:21.692Z"
         },
         {
           "id": "V47",
@@ -5694,13 +5694,13 @@
           "expect": "显示 \"+120m\" 或换算成 \"+400 ft\" (imperial). formatElevation 正确.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"+120m\", \"+400 ft\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/2 tokens, missing: \"+120m\", \"+400 ft\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cai",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V48-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:45:54.005Z"
+          "ai_tested_at": "2026-08-05T17:10:29.108Z"
         },
         {
           "id": "V49",
@@ -5709,13 +5709,13 @@
           "expect": "顶部地图区显示一条虚线 + 文字 \"Route data unavailable\". 虚线颜色用的是当前活动模式色 (绿或蓝), 但文字说的是 '不可用', 视觉传递矛盾, 应该用灰色.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Route data unavailable\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscover Cairn\nA cairn is a stack of stones — a trail marker lef\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Route data unavailable\". Body: \"History\nSelect a route below to view\nBack\nHistory\nPlan\nRoutes\nNo hikes yet\nStart hiking or running to see your routes here\nStart a Hike\nDiscov",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/V49-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:46:01.485Z"
+          "ai_tested_at": "2026-08-05T17:10:36.406Z"
         },
         {
           "id": "V50",
@@ -5832,13 +5832,13 @@
           "expect": "屏幕上红边错误横条 \"Loading route data — please try again in a moment.\" 显示. 但这其实是 loading 状态, 不是错误 —— UI 把 '正在加载' 用 '看起来像出错' 的样子表达, 会吓到用户.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Loading route data — please try again in a moment.\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Loading route data — please try again in a moment.\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of s",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D04-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:46:16.573Z"
+          "ai_tested_at": "2026-08-05T17:10:43.698Z"
         },
         {
           "id": "D05",
@@ -5877,13 +5877,13 @@
           "expect": "屏幕直接切回上一屏, 编辑内容全丢, 没有任何 '要不要放弃修改' 的弹窗. Android 走返回键会弹 \"Discard edits?\" 但 iOS 走系统手势就没有. 应当在编辑模式设 gestureEnabled=false.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Discard edits?\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Discard edits?\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D07-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:46:24.005Z"
+          "ai_tested_at": "2026-08-05T17:10:51.047Z"
         },
         {
           "id": "D08",
@@ -5892,13 +5892,13 @@
           "expect": "\"Save\" 按钮里是白色转圈, 期间不可点. 没有超时机制, 用户想取消只能杀 app. 应该 30 秒后自动放弃并弹 Alert.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Save\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Save\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D08-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:46:31.388Z"
+          "ai_tested_at": "2026-08-05T17:10:58.408Z"
         },
         {
           "id": "D09",
@@ -5907,13 +5907,13 @@
           "expect": "系统 Alert 弹出 \"Delete route?\" (无路线名) + \"Cancel\" 灰按钮 + \"Delete\" 红按钮. 弹窗文案里没把要删的 route 名字带上, 用户如果同时有几条 route 分不清删的是哪条.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"Delete route?\", \"Cancel\", \"Delete\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/3 tokens, missing: \"Delete route?\", \"Cancel\", \"Delete\". [actions: tap \"Delete\"=false] Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D09-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:46:38.806Z"
+          "ai_tested_at": "2026-08-05T17:11:06.422Z"
         },
         {
           "id": "D10",
@@ -5967,13 +5967,13 @@
           "expect": "只有 \"Edit\" 和 \"Save\" 两个按钮, \"Delete\" 隐藏了 (因为还没保存过, 没什么可删).",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 3 tokens found. Missing: \"Edit\", \"Save\", \"Delete\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/3 tokens, missing: \"Edit\", \"Save\", \"Delete\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left ",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D13-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:46:46.290Z"
+          "ai_tested_at": "2026-08-05T17:11:13.658Z"
         },
         {
           "id": "D14",
@@ -6027,13 +6027,13 @@
           "expect": "显示斜体灰字 \"Untitled cairn\", 字号 22 px 硬编码, 颜色用了 MemoryColors.cairnPublic (跨功能的调色板导入). 整个页面 20+ 处硬编码字号/颜色, 跟 Settings 页的 tokens 完全脱节.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Untitled cairn\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Untitled cairn\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D17-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:46:53.793Z"
+          "ai_tested_at": "2026-08-05T17:11:20.898Z"
         },
         {
           "id": "D18",
@@ -6102,13 +6102,13 @@
           "expect": "输入框 minHeight 90, 无 maxHeight —— 会一直往下长, 把 \"Save\" 按钮推到屏幕下方看不见.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Save\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Save\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D22-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:47:01.320Z"
+          "ai_tested_at": "2026-08-05T17:11:28.228Z"
         },
         {
           "id": "D23",
@@ -6143,13 +6143,13 @@
           "expect": "action row 完全不出现 \"Edit\" 和 \"Delete\" (isOwner 判断 v416 已修好). 只能看不能改.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"Edit\", \"Delete\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/2 tokens, missing: \"Edit\", \"Delete\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D25-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:47:08.677Z"
+          "ai_tested_at": "2026-08-05T17:11:35.537Z"
         },
         {
           "id": "D26",
@@ -6158,13 +6158,13 @@
           "expect": "地图占 280 px (H-480=187, 但 max 到 280), 剩下 380 pt 给面板. 编辑表单一堆 chip + 两个输入框 + 权限 + 保存按钮, \"Save\" 按钮会掉到屏幕下方看不见, 必须往下滚.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Save\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Save\". [actions: tap \"Edit\"=false] Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail ma",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D26-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:47:16.086Z"
+          "ai_tested_at": "2026-08-05T17:11:43.511Z"
         },
         {
           "id": "D27",
@@ -6201,13 +6201,13 @@
           "expect": "屏幕底部弹出一个 sheet, 高约 400 px, 280 毫秒动画滑入. sheet 顶部: 类型徽章 + \"×\" 关闭按钮, 中间是备注文本 (无备注时显示斜体 \"(No note)\"), 下方几行 meta (多久前 / 坐标 / 距我多远), 最底部一个 \"Delete Flag\" 红字按钮.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"), 下方几行 meta (多久前 / 坐标 / 距我多远), 最底部一个\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"), 下方几行 meta (多久前 / 坐标 / 距我多远), 最底部一个\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a tra",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D29-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:47:23.494Z"
+          "ai_tested_at": "2026-08-05T17:11:50.869Z"
         },
         {
           "id": "D30",
@@ -6231,13 +6231,13 @@
           "expect": "按钮变红底填充状态 \"Confirm Delete\", 需再点一次真删. 这个二次确认态没有超时: 用户误点后没继续操作, 状态永远停留在 confirm, 下次不小心再碰按钮就直接删了 —— 危险.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Confirm Delete\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Confirm Delete\". [actions: tap \"Delete Flag\"=false] Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of st",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D31-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:47:30.914Z"
+          "ai_tested_at": "2026-08-05T17:11:58.973Z"
         },
         {
           "id": "D32",
@@ -6246,13 +6246,13 @@
           "expect": "显示斜体灰字 \"(No note)\".",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"(No note)\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"(No note)\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hiker\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D32-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:47:38.400Z"
+          "ai_tested_at": "2026-08-05T17:12:06.266Z"
         },
         {
           "id": "D33",
@@ -6261,13 +6261,13 @@
           "expect": "meta 区多一行黄底/黄字警告 \"Approximate location\", 用的是 severity 警告色 (正确).",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"Approximate location\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/1 tokens, missing: \"Approximate location\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D33-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:47:45.904Z"
+          "ai_tested_at": "2026-08-05T17:12:13.558Z"
         },
         {
           "id": "D34",
@@ -6351,13 +6351,13 @@
           "expect": "Back 按钮无 accessibilityLabel (只有组件默认). chip 切换态没有 accessibilityState={{selected}} 播报. sheet handle 没有 role='button' 和关闭标签. Delete 按钮没有 hint='Deletes this cairn permanently'.",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 2 tokens found. Missing: \"button\", \"Deletes this cairn permanently\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[needs_seeded_data] Case expects existing hikes/marks/friends — test user has none. Original: R3: 0/2 tokens, missing: \"button\", \"Deletes this cairn permanently\". Body: \"Back\nCairn not found\nThis cairn may have been removed or hasn't synced yet.\nDiscover Cairn\nA cairn is a stack of stones — a ",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/D39-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:47:53.275Z"
+          "ai_tested_at": "2026-08-05T17:12:20.889Z"
         },
         {
           "id": "D40",
@@ -6386,13 +6386,13 @@
           "expect": "❓ AR 目前 defer，尚未 build 实装。RootNavigator 的 Stack 只有 Auth/Home/Hiking/Running/Routes/MapHistory/Map/RouteEditor/Plant/MarkerDetail/Friends/Settings/Memory/Debug，无 AR 或 ARScreen 屏。搜索 app/src/**/*AR*.tsx 无匹配 ARScreen。用户可能会问 “AR 在哪” — 目前 UI 里没有入口，规划中 defer 到未来 Sprint。",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"AR 在哪\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_status": "needs_manual",
+          "ai_reason": "[stale_test_case] Test case describes UI that no longer exists in current app. Original: R3: 0/1 tokens, missing: \"AR 在哪\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or you\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/A01-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:47:59.275Z"
+          "ai_tested_at": "2026-08-05T17:12:26.672Z"
         },
         {
           "id": "A02",
@@ -6489,12 +6489,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"app_boot\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"app_boot\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or you\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/G05-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:48:06.790Z"
+          "ai_tested_at": "2026-08-05T17:12:34.058Z"
         },
         {
           "id": "G06",
@@ -6517,12 +6517,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"portrait\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"portrait\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored on your account. Si\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/G07-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:48:14.313Z"
+          "ai_tested_at": "2026-08-05T17:12:41.435Z"
         },
         {
           "id": "G08",
@@ -6558,12 +6558,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "R2: None of 1 tokens found. Missing: \"app_root\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or your future self\nTrails\nFriends\nMemory\nSettings\n[dev]\"",
+          "ai_reason": "R3: 0/1 tokens, missing: \"app_root\". Body: \"Cairn\nGood evening\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cairn here\nDrop a note for friends or you\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/G10-1.png"
           ],
-          "ai_tested_at": "2026-08-05T16:48:21.750Z"
+          "ai_tested_at": "2026-08-05T17:12:48.841Z"
         }
       ]
     }
