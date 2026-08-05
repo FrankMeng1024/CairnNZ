@@ -8,7 +8,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest --watchAll=false",
-    "test:watch": "jest"
+    "test:watch": "jest",
+    "eas-build-pre-install": "if [ \"$EAS_BUILD_PLATFORM\" = \"ios\" ]; then echo '=== R103: downloading Metal Toolchain (Xcode 26 on-demand component) ==='; xcodebuild -downloadComponent MetalToolchain; xcodebuild -showComponent metalToolchain; echo '=== Metal Toolchain download done ==='; fi"
   },
   "jest": {
     "preset": "jest-expo",
