@@ -250,6 +250,22 @@ export function HomeScreen() {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('../services/bootDiagnostics').markBootPhase('home_screen_render_start');
   } catch {/* ignore */}
+
+  // R100 (2026-08-05): boot-ok snapshot upload — fires ONCE per app lifetime
+  // on the first Home render. Uploads recent breadcrumbs so we can validate
+  // the full auth → hydrate → Home flow completed without a crash, and
+  // confirm the currently-running bundle's BUILD_HASH matches what we pushed.
+  //
+  // Wrapped in try + fire-and-forget so nothing blocks Home mount. crashLogger
+  // internally debounces via global flag so re-renders don't re-fire.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { crashLogger } = require('../services/crashLogger');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { API_BASE_URL } = require('../config/api');
+    crashLogger.breadcrumb('home:render_reached — trigger boot_ok upload');
+    crashLogger.uploadBootSnapshot(API_BASE_URL, 'home_first_render').catch(() => {});
+  } catch { /* silent — best effort */ }
   const nav = useNavigation<Nav>();
   // O12: uiMode removed
   const sessions = useSessionStore(s => s.sessions);

@@ -711,6 +711,7 @@ export function AuthScreen() {
       // user) — prompt them to backfill before proceeding. Only fires
       // once because DOB is immutable once set.
       if (!isRegister && result.user && result.user.dateOfBirth == null) {
+        crashLogger.breadcrumb(`dob_backfill:trigger user_id=${result.user.id} — dateOfBirth null`);
         setDob('');
         setDobError('');
         setView('dob_backfill');
@@ -1175,6 +1176,7 @@ export function AuthScreen() {
   // ── O18 AUTH-06: legacy DOB backfill modal ──────────────────────────────
   // Only shown once (immutable once set). Same >= 13 validation as register.
   if (view === 'dob_backfill') {
+    crashLogger.breadcrumb('dob_backfill:view_render');
     return (
       <SafeAreaView style={[styles.container, { padding: 24 }]} edges={['top', 'bottom']}>
         <View style={{ marginTop: 40 }}>
@@ -1198,20 +1200,40 @@ export function AuthScreen() {
             style={[styles.primaryBtn, { marginTop: 24 }]}
             disabled={loading}
             onPress={async () => {
+              crashLogger.breadcrumb(`dob_backfill:btn_press dob_len=${dob.length}`);
               const err = validateDob(dob);
-              if (err) { setDobError(err); return; }
+              if (err) {
+                crashLogger.breadcrumb(`dob_backfill:validate_fail err=${err.slice(0, 40)}`);
+                setDobError(err); return;
+              }
+              crashLogger.breadcrumb('dob_backfill:validate_ok');
               setLoading(true);
               try {
+                crashLogger.breadcrumb('dob_backfill:patchdob_call');
                 const r = await patchDob(dob.trim());
+                crashLogger.breadcrumb(`dob_backfill:patchdob_returned has_err=${!!r.error} has_user=${!!r.user}`);
                 if (r.error) {
+                  crashLogger.breadcrumb(`dob_backfill:patchdob_error ${String(r.error).slice(0, 60)}`);
                   setDobError(r.error);
                   return;
                 }
-                if (r.user) setUser(r.user);
+                if (r.user) {
+                  crashLogger.breadcrumb(`dob_backfill:setUser user_id=${r.user.id}`);
+                  setUser(r.user);
+                }
+                crashLogger.breadcrumb('dob_backfill:hydrate_start');
                 await hydrate();
+                crashLogger.breadcrumb('dob_backfill:hydrate_done');
                 setLoggedIn(true);
+                crashLogger.breadcrumb('dob_backfill:setLoggedIn_done');
+              } catch (loopErr: any) {
+                // 这个 catch 是防御性: 如果 patchDob/hydrate/setLoggedIn 中
+                // 任一 throw uncaught，我们至少能在 crashLogger 里看到。
+                crashLogger.breadcrumb(`dob_backfill:handler_catch ${String(loopErr?.message || loopErr).slice(0, 100)}`);
+                throw loopErr;
               } finally {
                 setLoading(false);
+                crashLogger.breadcrumb('dob_backfill:finally_loading_cleared');
               }
             }}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Continue</Text>}

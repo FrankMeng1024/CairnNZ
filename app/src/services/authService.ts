@@ -4,6 +4,7 @@
  */
 import { API_BASE_URL } from '../config/api';
 import { saveToken, clearToken, getToken } from './tokenStore';
+import { crashLogger } from './crashLogger';
 
 export interface UserProfile {
   id: string;
@@ -379,9 +380,15 @@ export async function fetchExportHistory(): Promise<Array<{
 // migration have dateOfBirth=null and get a modal on next login).
 // Backend enforces >= 13 same as register + immutable once set.
 export async function patchDob(dateOfBirth: string): Promise<AuthResult> {
+  crashLogger.breadcrumb(`patchdob:start dob_len=${dateOfBirth.length}`);
   const token = await getToken();
-  if (!token) return { error: 'not_signed_in' };
+  if (!token) {
+    crashLogger.breadcrumb('patchdob:no_token — return not_signed_in');
+    return { error: 'not_signed_in' };
+  }
+  crashLogger.breadcrumb(`patchdob:token_read token_len=${token.length}`);
   try {
+    crashLogger.breadcrumb('patchdob:fetch_start');
     const res = await fetch(`${API_BASE_URL}/api/auth/dob`, {
       method: 'PATCH',
       headers: {
@@ -390,10 +397,17 @@ export async function patchDob(dateOfBirth: string): Promise<AuthResult> {
       },
       body: JSON.stringify({ dateOfBirth }),
     });
+    crashLogger.breadcrumb(`patchdob:response status=${res.status} ok=${res.ok}`);
     const data = await res.json();
-    if (!res.ok) return { error: data?.error || 'Could not save date of birth.', hint: data?.hint };
+    crashLogger.breadcrumb(`patchdob:json_parsed has_user=${!!data?.user} has_error=${!!data?.error}`);
+    if (!res.ok) {
+      crashLogger.breadcrumb(`patchdob:not_ok err=${String(data?.error).slice(0, 60)}`);
+      return { error: data?.error || 'Could not save date of birth.', hint: data?.hint };
+    }
+    crashLogger.breadcrumb('patchdob:success');
     return { user: data.user };
-  } catch {
+  } catch (err: any) {
+    crashLogger.breadcrumb(`patchdob:catch ${String(err?.message || err).slice(0, 80)}`);
     return { error: 'Unable to connect. Please try again.' };
   }
 }

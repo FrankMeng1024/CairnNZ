@@ -630,6 +630,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   },
 
   hydrate: async (userId: string) => {
+    crashLogger.breadcrumb(`marker_hydrate:start user_id=${userId}`);
     // Sprint 6 review C3 fix (2026-07-30): apply the same mutex pattern
     // useSessionStore added in SAF-03 so overlapping hydrate calls (login
     // + focus + nav all firing near-simultaneously) can't cross-pollute
@@ -639,8 +640,12 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     // markers into user A's view.
     if (markerHydrateInFlight) {
       const sameUser = markerHydrateInFlightUserId === userId;
+      crashLogger.breadcrumb(`marker_hydrate:mutex_wait same_user=${sameUser}`);
       await markerHydrateInFlight.catch(() => {});
-      if (sameUser) return;
+      if (sameUser) {
+        crashLogger.breadcrumb('marker_hydrate:mutex_same_user_return');
+        return;
+      }
     }
     const run = (async () => {
       // Sprint 6 round-11 R11B2: snapshot the generation counter at
@@ -693,12 +698,15 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       if (raw) {
         try {
           const markers: Marker[] = JSON.parse(raw);
+          crashLogger.breadcrumb(`marker_hydrate:parsed count=${markers.length}`);
           set({ markers, userId });
-        } catch {
+        } catch (parseErr: any) {
+          crashLogger.breadcrumb(`marker_hydrate:parse_fail ${String(parseErr?.message || parseErr).slice(0, 60)}`);
           storage.removeItem(key);
           set({ markers: [], userId });
         }
       } else {
+        crashLogger.breadcrumb('marker_hydrate:no_cache');
         set({ markers: [], userId });
       }
       // 2. Then fetch from backend (async, updates state when done)
@@ -708,6 +716,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     markerHydrateInFlightUserId = userId;
     try {
       await run;
+      crashLogger.breadcrumb(`marker_hydrate:done user_id=${userId}`);
+    } catch (runErr: any) {
+      crashLogger.breadcrumb(`marker_hydrate:catch ${String(runErr?.message || runErr).slice(0, 80)}`);
+      throw runErr;
     } finally {
       if (markerHydrateInFlight === run) {
         markerHydrateInFlight = null;
