@@ -37,8 +37,10 @@ import { useAppStore } from '../store/useAppStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import { useMarkerStore } from '../store/useMarkerStore';
+// O24 SETTINGS-JOURNEY: sessions count for the new Your journey section.
+import { useSessionStore } from '../store/useSessionStore';
 import { useSimWalkerStore } from '../dev/simWalker/useSimWalkerStore';
-import { logout } from '../services/authService';
+import { logout, patchName } from '../services/authService';
 import { haptic } from '../services/hapticService';
 import { deleteAllMemoryFromServer } from '../services/memorySync';
 import { crashLogger } from '../services/crashLogger';
@@ -227,7 +229,7 @@ function TypeToConfirmModal({
 // ── Main ──────────────────────────────────────────────────────────────────
 export function SettingsScreen() {
   const nav = useNavigation<Nav>();
-  const { user, isLoggedIn, logout: appLogout } = useAppStore();
+  const { user, isLoggedIn, logout: appLogout, setUser } = useAppStore();
   const simWalkerActive = useSimWalkerStore((s) => s.active);
   const setSimWalkerActive = useSimWalkerStore((s) => s.setActive);
 
@@ -244,6 +246,10 @@ export function SettingsScreen() {
   const memoryPointCount = useMemoryStore((s) => s.points.length);
   const allMarkers = useMarkerStore((s) => s.markers);
   const myCairnCount = user?.id ? allMarkers.filter((m) => m.authorId === user.id).length : 0;
+  // O24 SETTINGS-JOURNEY: total activity counts for the Your journey section.
+  // All-time totals (no period toggle here — Settings is for the full picture).
+  const sessionCount = useSessionStore((s) => s.sessions.length);
+  const totalCairnCount = allMarkers.length;
 
   // O18 SET-05 (batch 6.5): push notification preferences.
   const [pushPrefs, setPushPrefs] = useState<{ friendRequests: boolean; markerReplies: boolean; memoryHits: boolean; announcements: boolean } | null>(null);
@@ -285,6 +291,47 @@ export function SettingsScreen() {
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
+
+  // R100 SETTINGS: Edit Name modal state. Opens from ActionRow in the
+  // profile card. Draft holds the pending edit; saving fires patchName
+  // and updates useAppStore.user so the profile card reflects it
+  // immediately without a reload.
+  const [showEditNameModal, setShowEditNameModal] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState('');
+  const [nameToast, setNameToast] = useState('');
+
+  const openEditName = () => {
+    setNameDraft(user?.name || '');
+    setNameError('');
+    setShowEditNameModal(true);
+  };
+
+  const handleSaveName = async () => {
+    const trimmed = nameDraft.trim();
+    if (!trimmed) { setNameError('Name cannot be empty'); return; }
+    if (trimmed.length > 32) { setNameError('Name too long (max 32 characters)'); return; }
+    if (trimmed === (user?.name || '')) { setShowEditNameModal(false); return; }
+    setNameSaving(true);
+    setNameError('');
+    try {
+      const r = await patchName(trimmed);
+      if (r.error || !r.user) {
+        setNameError(r.error || 'Could not save name.');
+        setNameSaving(false);
+        return;
+      }
+      setUser(r.user);
+      setShowEditNameModal(false);
+      setNameToast('Name updated');
+      setTimeout(() => setNameToast(''), 2000);
+    } catch {
+      setNameError('Unable to connect. Please try again.');
+    } finally {
+      setNameSaving(false);
+    }
+  };
 
   const handleChangePassword = async () => {
     setPwError(''); setPwSuccess('');
@@ -534,6 +581,10 @@ export function SettingsScreen() {
               </View>
               <View style={styles.dividerFlush} />
               <ActionRow
+                label="Edit name"
+                onPress={openEditName}
+              />
+              <ActionRow
                 label="Change password"
                 onPress={() => {
                   setShowChangePw(v => !v);
@@ -679,6 +730,37 @@ export function SettingsScreen() {
                 {myCairnCount === 1 ? 'cairn planted' : 'cairns planted'}
               </Text>
             </View>
+          </View>
+
+          {/* ── Your journey (O24) ──
+           *  Moved from Home to keep Home visually calm. Shows all-time
+           *  totals (no period toggle — Settings is the full-picture view)
+           *  and a one-tap jump to the Activities list (Routes route). */}
+          <SectionHeader title="Your journey" />
+          <View style={styles.card}>
+            <View style={journeyStyles.statsRow}>
+              <View style={journeyStyles.statChip}>
+                <Icon name="Route" size={14} color={Colors.primary} strokeWidth={2} />
+                <Text style={journeyStyles.statText}>
+                  {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
+                </Text>
+              </View>
+              <View style={journeyStyles.statChip}>
+                <Icon name="Mountain" size={14} color="#b5823d" strokeWidth={2} />
+                <Text style={journeyStyles.statText}>
+                  {totalCairnCount} {totalCairnCount === 1 ? 'cairn' : 'cairns'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.divider} />
+            <ActionRow
+              iconName="Milestone"
+              iconColor={Colors.primary}
+              iconBg={Colors.primaryLight}
+              label="View all activities"
+              hint="Full list of your hikes and runs"
+              onPress={() => nav.navigate('Routes')}
+            />
           </View>
 
           {/* ── Preferences ── */}
@@ -1246,6 +1328,78 @@ export function SettingsScreen() {
         </Pressable>
       </Modal>
 
+      {/* R100 SETTINGS: Edit Name modal. Opens from profile card
+          ActionRow. Simple text input with inline validation and
+          save/cancel. Not a type-to-confirm — this is a low-risk edit. */}
+      <Modal
+        visible={showEditNameModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => (nameSaving ? null : setShowEditNameModal(false))}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable
+            style={modalStyles.backdrop}
+            onPress={() => (nameSaving ? null : setShowEditNameModal(false))}
+            accessibilityLabel="Dismiss"
+          >
+            <Pressable style={modalStyles.card} onPress={() => { /* absorb */ }}>
+              <Text style={modalStyles.title} accessibilityRole="header">Edit name</Text>
+              <Text style={modalStyles.body}>
+                This is how friends will see you across Cairn.
+              </Text>
+              <TextInput
+                style={modalStyles.input}
+                value={nameDraft}
+                onChangeText={(v) => { setNameDraft(v); if (nameError) setNameError(''); }}
+                placeholder="Your name"
+                placeholderTextColor={Colors.textMuted}
+                maxLength={32}
+                autoFocus
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={handleSaveName}
+              />
+              {!!nameError && (
+                <Text style={pwStyles.error}>{nameError}</Text>
+              )}
+              <View style={modalStyles.actions}>
+                <TouchableOpacity
+                  style={modalStyles.btnCancel}
+                  onPress={() => setShowEditNameModal(false)}
+                  disabled={nameSaving}
+                >
+                  <Text style={modalStyles.btnCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    modalStyles.btnConfirm,
+                    (nameSaving || !nameDraft.trim()) && modalStyles.btnConfirmDisabled,
+                  ]}
+                  onPress={handleSaveName}
+                  disabled={nameSaving || !nameDraft.trim()}
+                >
+                  {nameSaving
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={modalStyles.btnConfirmText}>Save</Text>}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* R100 SETTINGS: tiny transient toast after save. */}
+      {!!nameToast && (
+        <View pointerEvents="none" style={toastStyles.wrap}>
+          <View style={toastStyles.pill}>
+            <Text style={toastStyles.text}>{nameToast}</Text>
+          </View>
+        </View>
+      )}
       {/* Reset my map memory — type "reset memory" to confirm */}
       <TypeToConfirmModal
         visible={showResetMemoryModal}
@@ -1664,6 +1818,30 @@ const badgeStyles = StyleSheet.create({
   },
 });
 
+// O24 SETTINGS-JOURNEY: stats chips inside the Your journey card.
+// Visual echo of the old Home stats row but sits inside a card so it
+// reads as a Settings block, not a floating strip.
+const journeyStyles = StyleSheet.create({
+  statsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+  },
+  statChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: Radius.pill,
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)',
+  },
+  statText: {
+    fontSize: FontSize.small,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+});
+
 const modalStyles = StyleSheet.create({
   backdrop: {
     flex: 1,
@@ -1731,4 +1909,26 @@ const modalStyles = StyleSheet.create({
   pickerRowActive: { backgroundColor: Colors.primaryBg },
   pickerLabel: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
   pickerHint: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
+});
+
+// R100 SETTINGS: tiny toast used after Edit Name save. Non-blocking,
+// auto-dismisses after 2s via setTimeout in handleSaveName.
+const toastStyles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    bottom: 60,
+    left: 0, right: 0,
+    alignItems: 'center',
+  },
+  pill: {
+    backgroundColor: 'rgba(20,20,20,0.9)',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  text: {
+    color: '#fff',
+    fontSize: FontSize.small,
+    fontWeight: '600',
+  },
 });

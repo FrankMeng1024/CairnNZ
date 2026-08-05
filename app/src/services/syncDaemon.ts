@@ -24,11 +24,26 @@ let pendingSignal = false;
 
 /**
  * 触发一次 drain。多次并发调用只跑一次, 但记 pendingSignal 保证跑完立刻再跑。
+ *
+ * O21 HOME-SYNC-UX fix: 支持 onProgress 回调 + 返回统计结果, 让 UI 层
+ * 能显示 "Syncing N/M..." 并在完成时区分 succeeded/failed/skipped。
+ * 老 fire-and-forget 调用者(useAppStore.hydrate)不传 opts, 忽略返回值
+ * 即可, 行为兼容。
  */
-export async function drainPending(): Promise<void> {
+export interface DrainResult {
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+}
+
+export async function drainPending(opts?: {
+  onProgress?: (done: number, total: number) => void;
+}): Promise<DrainResult> {
+  const result: DrainResult = { attempted: 0, succeeded: 0, failed: 0, skipped: 0 };
   if (isDraining) {
     pendingSignal = true;
-    return;
+    return result;
   }
   isDraining = true;
   try {
@@ -73,15 +88,25 @@ export async function drainPending(): Promise<void> {
       } catch (e) {
         crashLogger.breadcrumb(`v412:orphan_sweep_failed ${String(e).slice(0, 60)}`);
       }
-      if (list.length === 0) return;
+      if (list.length === 0) return result;
       crashLogger.breadcrumb(`v412:sync_drain start count=${list.length}`);
+      const total = list.length;
+      let done = 0;
+      try { opts?.onProgress?.(done, total); } catch { /* silent */ }
       for (const hike of list) {
-        await uploadOne(hike);
+        result.attempted += 1;
+        const outcome = await uploadOne(hike);
+        if (outcome === 'succeeded') result.succeeded += 1;
+        else if (outcome === 'failed') result.failed += 1;
+        else if (outcome === 'skipped') result.skipped += 1;
+        done += 1;
+        try { opts?.onProgress?.(done, total); } catch { /* silent */ }
       }
     } while (pendingSignal);
   } finally {
     isDraining = false;
   }
+  return result;
 }
 
 /**
@@ -93,7 +118,7 @@ export async function drainPending(): Promise<void> {
  * 4xx (非 401) 视为客户端错误, 不删 pending 也不 markAttempt, 等下次机会 (设计保守)。
  * 5xx / 网络错误 → markAttempt, 保留 pending, 等下次。
  */
-async function uploadOne(hike: PendingHike): Promise<void> {
+async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 'skipped'> {
   // Sprint 6 round-7 review R7B1 + R7B5 fix: gate on current user.
   // A pending file's userId is the user who created the hike; if a
   // different user is now signed in on this device (family device,
@@ -115,13 +140,13 @@ async function uploadOne(hike: PendingHike): Promise<void> {
       crashLogger.breadcrumb(
         `v412:sync_skip_unknown_user localId=${hike.localId.slice(0, 8)}`,
       );
-      return;
+      return 'skipped';
     }
     if (currentUserId && hikeUser !== currentUserId) {
       crashLogger.breadcrumb(
         `v412:sync_skip_cross_user localId=${hike.localId.slice(0, 8)} hikeUser=${hikeUser} currentUser=${currentUserId}`,
       );
-      return;
+      return 'skipped';
     }
   } catch { /* silent — session store not loaded */ }
 
@@ -136,7 +161,7 @@ async function uploadOne(hike: PendingHike): Promise<void> {
       if (!r || typeof r !== 'number') {
         await markAttempt(hike.localId);
         crashLogger.breadcrumb(`v412:sync_start_failed localId=${hike.localId.slice(0, 8)}`);
-        return;
+        return 'failed';
       }
       hike.remoteId = r;
       await updateRemoteId(hike.localId, r);
@@ -198,6 +223,7 @@ async function uploadOne(hike: PendingHike): Promise<void> {
       // count) — user sees stale badge but data is safe.
       await removePending(hike.localId);
     }
+    return 'succeeded';
   } catch (err: any) {
     // R96 修补 A.4 + review B1/B2: detect SESSION_NOT_FOUND_RESYNC 场景。
     // aliyun sessions 表被 R9B7 auto-migration 误删,重建后 auto_increment
@@ -222,12 +248,13 @@ async function uploadOne(hike: PendingHike): Promise<void> {
           `v412:sync_resync_reset_failed localId=${hike.localId.slice(0, 8)} — will retry next drain`,
         );
       }
-      return; // 不 markAttempt: 这是路径调整,不是失败重试
+      return 'skipped'; // 不 markAttempt: 这是路径调整,不是失败重试
     }
     await markAttempt(hike.localId);
     crashLogger.breadcrumb(
       `v412:sync_upload_failed localId=${hike.localId.slice(0, 8)} status=${err?.status || 'net'}`,
     );
+    return 'failed';
   }
 }
 

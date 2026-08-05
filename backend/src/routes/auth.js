@@ -1045,4 +1045,35 @@ router.patch('/dob', authenticate, validateBody(schemas.auth.setDob), async (req
   }
 });
 
+// ── PATCH /api/auth/me (R100 SETTINGS) ────────────────────────────────────
+// Update display name. Users who register with email + password can pick
+// any name at registration, but Apple sign-in path may set name=null →
+// backend falls back to email.split('@')[0] which for numeric qq.com
+// addresses looks like "916354835" and abbrevs to "9" on avatar. This
+// endpoint lets the user fix that from Settings.
+//
+// Validation:
+//   - Joi (schemas.auth.setName): string, 1..32 chars, required
+//   - Route: trim → reject empty; reject control chars (\x00-\x1f)
+//   - Route: max length 32 (matches Joi — belt-and-braces after trim)
+router.patch('/me', authenticate, validateBody(schemas.auth.setName), async (req, res) => {
+  const raw = req.body.name;
+  const name = typeof raw === 'string' ? raw.trim() : '';
+  if (!name) return res.status(400).json({ error: 'Name cannot be empty' });
+  if (name.length > 32) return res.status(400).json({ error: 'Name too long (max 32 characters)' });
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f]/.test(name)) return res.status(400).json({ error: 'Invalid characters' });
+
+  try {
+    const existing = await User.findById(req.user.userId);
+    if (!existing) return res.status(404).json({ error: 'Account not found.' });
+    await User.updateName(existing.id, name);
+    const updated = await User.findById(existing.id);
+    return res.json({ user: User.toPublic(updated) });
+  } catch (err) {
+    console.error('[name patch]', err);
+    return res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
 module.exports = router;

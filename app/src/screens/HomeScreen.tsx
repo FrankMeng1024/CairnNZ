@@ -7,7 +7,7 @@
  */
 import React, { useRef, useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, useWindowDimensions, Platform,
+  View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, useWindowDimensions, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -22,13 +22,15 @@ import { useMarkerStore } from '../store/useMarkerStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { formatDuration, getRelativeTime } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
-import { getCurrentRegion } from '../config/regions';
+// O24: getCurrentRegion no longer used — stats chips (only consumer) moved to Settings.
+// import { getCurrentRegion } from '../config/regions';
 import { OtaBadge } from '../components/OtaBadge';
 // v412: UnfinishedSessionBanner 已被 v412 UnfinishedRecoveryModal 取代 (HikingScreen 内)
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+// O24: plural helper no longer used — stats chips (only consumer) moved to Settings.
+// const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -283,6 +285,11 @@ export function HomeScreen() {
     .filter(s => s.syncState === 'pending' || s.syncState === 'syncing')
     .map(s => s.id).join(',');
   const [fsPendingCount, setFsPendingCount] = useState<number>(0);
+  // O21 HOME-SYNC-UX: banner tap now shows real progress + error feedback.
+  // syncing != null → "Syncing done/total..." + spinner (debounces re-taps).
+  // syncError !== null → red message auto-clears after 3s.
+  const [syncing, setSyncing] = useState<{ done: number; total: number } | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -306,23 +313,10 @@ export function HomeScreen() {
       markers_n: allMarkers.length,
     });
   } catch {/* ignore */}
-  const region = getCurrentRegion();
-  // O17 P-RENDER-05: memoize marker count so HomeScreen doesn't recompute
-  // the .filter().length on every unrelated re-render (allMarkers is stable
-  // between hikes; region.code changes rarely).
-  const markerCount = React.useMemo(
-    () => allMarkers.filter(m => m.regionCode === region.code).length,
-    [allMarkers, region.code],
-  );
-  // O18 HOME-04: period filter for stats (week/month/year/all).
-  const [statsPeriod, setStatsPeriod] = useState<'week' | 'month' | 'year' | 'all'>('all');
-  const periodSessionCount = React.useMemo(() => {
-    if (statsPeriod === 'all') return sessions.length;
-    const now = Date.now();
-    const cutoff = now - (statsPeriod === 'week' ? 7 : statsPeriod === 'month' ? 30 : 365) * 86400000;
-    return sessions.filter(s => (s.startedAt ?? 0) >= cutoff).length;
-  }, [sessions, statsPeriod]);
-  const hasData = sessions.length > 0 || markerCount > 0;
+  // O24 HOME-SIMPLIFY: period toggle + stats strip removed from Home
+  // (moved to Settings › Your journey). Home stays clean: greeting →
+  // pending banner → recent → cards → tools.
+  // markerCount / region were only consumed by the removed stats chips.
   const hasRecent = sessions.length > 0;
 
   const opacity = useRef(new Animated.Value(1)).current;
@@ -438,8 +432,11 @@ export function HomeScreen() {
   // mounts. With insetsReady gate, when we DO render we already have
   // correct paddingBottom and tabs are positioned right on the first
   // pixel the user sees.
+  // O2 flicker fix: return null (not a white View) so the underlying
+  // OnboardingModal slide-out completes without a white flash. The
+  // 250ms timeout logic is preserved for the tab-jump fix.
   if (!insetsReady) {
-    return <View style={styles.safe} />;
+    return null;
   }
 
   return (
@@ -499,66 +496,84 @@ export function HomeScreen() {
           // O18 SAF-06: use max(in-memory, filesystem) so the banner survives
           // hydrate wiping the in-memory pending row.
           const pendingCount = Math.max(inMemoryPending, fsPendingCount);
-          if (pendingCount === 0) return null;
+          // O21 HOME-SYNC-UX: keep banner visible while syncing/error so the
+          // user sees the outcome. Hide only when idle AND 0 pending.
+          if (pendingCount === 0 && !syncing && !syncError) return null;
+
+          // O21 HOME-SYNC-UX: real-progress tap handler. Awaits drainPending,
+          // displays "Syncing N/M..." during, then refreshes fsPendingCount
+          // from disk (so banner drops the moment the store is empty), then
+          // shows a 3s error/skip message if not everything succeeded.
+          const handleSyncTap = async () => {
+            if (syncing) return; // debounce concurrent taps
+            setSyncError(null);
+            setSyncing({ done: 0, total: pendingCount });
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { drainPending } = require('../services/syncDaemon');
+              const result = await drainPending({
+                onProgress: (done: number, total: number) => setSyncing({ done, total }),
+              });
+              // Force-refresh fs count so the banner drops immediately when
+              // the disk store is empty, without waiting for the sessions
+              // signal effect to re-fire.
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const { listPending } = require('../services/pendingSyncStore');
+                const list = await listPending();
+                setFsPendingCount(Array.isArray(list) ? list.length : 0);
+              } catch { /* silent */ }
+              if (result && result.failed > 0) {
+                setSyncError(`${result.failed} failed — check connection`);
+                setTimeout(() => setSyncError(null), 3000);
+              } else if (result && result.skipped > 0 && result.succeeded === 0) {
+                setSyncError(
+                  result.skipped === 1
+                    ? '1 hike belongs to another account'
+                    : `${result.skipped} hikes belong to another account`,
+                );
+                setTimeout(() => setSyncError(null), 3000);
+              }
+            } catch (e) {
+              // eslint-disable-next-line no-console
+              console.warn('[HOME-SYNC-UX] manual sync trigger failed:', e);
+              setSyncError('Sync failed');
+              setTimeout(() => setSyncError(null), 3000);
+            } finally {
+              setSyncing(null);
+            }
+          };
+
+          const label = syncing
+            ? `Syncing ${syncing.done}/${syncing.total}...`
+            : syncError
+              ? `Sync failed — ${syncError}`
+              : pendingCount === 1
+                ? '1 hike pending sync — tap to retry now'
+                : `${pendingCount} hikes pending sync — tap to retry now`;
+
           return (
-            // O18 HOME-02: banner is now tappable — invokes syncDaemon.drainPending
-            // so users don't have to wait for the automatic retry cycle.
             <TouchableOpacity
               style={styles.pendingBanner}
-              onPress={async () => {
-                try {
-                  const { drainPending } = require('../services/syncDaemon');
-                  await drainPending();
-                } catch (e) {
-                  // eslint-disable-next-line no-console
-                  console.warn('[HOME-02] manual sync trigger failed:', e);
-                }
-              }}
+              onPress={handleSyncTap}
+              disabled={!!syncing}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Retry pending sync now"
+              accessibilityLabel={syncing ? 'Sync in progress' : 'Retry pending sync now'}
             >
-              <Icon name="CloudOff" size={14} color={Colors.textSecondary} strokeWidth={2} />
-              <Text style={styles.pendingBannerText}>
-                {pendingCount === 1
-                  ? '1 hike pending sync — tap to retry now'
-                  : `${pendingCount} hikes pending sync — tap to retry now`}
-              </Text>
+              {syncing ? (
+                <ActivityIndicator size="small" color={Colors.textSecondary} />
+              ) : (
+                <Icon name="CloudOff" size={14} color={Colors.textSecondary} strokeWidth={2} />
+              )}
+              <Text style={styles.pendingBannerText}>{label}</Text>
             </TouchableOpacity>
           );
         })()}
 
-        {/* Stats strip — only when data exists.
-            O18 HOME-04: added period toggle (week / month / year / all). */}
-        {hasData && (
-          <>
-            <View style={styles.periodToggle}>
-              {(['week', 'month', 'year', 'all'] as const).map(p => (
-                <TouchableOpacity
-                  key={p}
-                  onPress={() => setStatsPeriod(p)}
-                  style={[styles.periodChip, statsPeriod === p && styles.periodChipActive]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Show ${p} stats`}
-                >
-                  <Text style={[styles.periodChipText, statsPeriod === p && styles.periodChipTextActive]}>
-                    {p === 'all' ? 'All' : p === 'week' ? 'Week' : p === 'month' ? 'Month' : 'Year'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={styles.statsRow}>
-              <View style={styles.statChip}>
-                <Icon name="Route" size={12} color={Colors.primary} strokeWidth={2} />
-                <Text style={styles.statText}>{plural(periodSessionCount, 'session')}</Text>
-              </View>
-              <View style={styles.statChip}>
-                <FlagMarkerIcon size={14} stoneColor={Colors.flag} flagColor={Colors.primary} />
-                <Text style={styles.statText}>{plural(markerCount, 'cairn')}</Text>
-              </View>
-            </View>
-          </>
-        )}
+        {/* O24 HOME-SIMPLIFY: period toggle + stats strip removed —
+            these have moved to Settings › Your journey. Home stays
+            visually calm: greeting → pending banner → recent → cards. */}
 
         {/* Recent activity — above the cards so user sees it before cards */}
         {hasRecent && <RecentRow onPress={(id) => nav.navigate('MapHistory', { sessionId: id })} />}
@@ -585,10 +600,9 @@ export function HomeScreen() {
             onPress={() => nav.navigate('Running')}
             anim={card2}
           />
-          {/* v0.2.6.2 — Plant cairn entry. Smaller flex (0.5) so it
-              reads as a tertiary action and Hiking/Running cards keep
-              their v0.2.5 visual proportions. Flag/cairn palette so it
-              reads as a third distinct activity. */}
+          {/* R110 P2-10: Plant cairn entry —— 视觉权重与 Hiking/Running 同级 (三张卡都是主动作).
+              原来 flex=0.4 让它视觉降级但导航地位不降, 用户困惑.
+              Flag/cairn palette 保留区分色, 但尺寸对齐. */}
           <ActivityCard
             icon={(sz) => <FlagMarkerIcon size={sz} stoneColor={Colors.flag} flagColor={Colors.primary} />}
             title="Leave a Cairn here"
@@ -601,7 +615,6 @@ export function HomeScreen() {
               nav.navigate('Plant');
             }}
             anim={card2}
-            flex={0.4}
           />
         </View>
 
@@ -647,33 +660,8 @@ const styles = StyleSheet.create({
   },
   greeting: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textSecondary },
 
-  statsRow: { flexDirection: 'row', gap: Spacing.sm },
-  // O18 HOME-04: period toggle above stats row.
-  periodToggle: {
-    flexDirection: 'row',
-    gap: 4,
-    marginBottom: Spacing.xs,
-  },
-  periodChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  periodChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  periodChipText: {
-    fontSize: FontSize.tiny,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  periodChipTextActive: {
-    color: '#fff',
-  },
+  // O24 HOME-SIMPLIFY: statsRow / periodToggle / periodChip* / statChip / statText
+  // styles removed — the stats strip they styled moved to Settings › Your journey.
   // v412: 离线未同步提示条
   pendingBanner: {
     flexDirection: 'row',
@@ -690,15 +678,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
     flex: 1,
   },
-  statChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: Radius.pill,
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
-  },
-  statText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary },
 
   cardsArea: { flex: 1, gap: Spacing.sm },
 

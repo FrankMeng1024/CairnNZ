@@ -80,6 +80,16 @@ async function setDateOfBirth(userId, dateOfBirth) {
   );
 }
 
+// R100 SETTINGS: update display name. Called by PATCH /api/auth/me.
+// Trim before write — route handler already trims, but belt-and-braces
+// so any future caller cannot accidentally store leading/trailing ws.
+async function updateName(userId, name) {
+  await pool.execute(
+    'UPDATE users SET name = ? WHERE id = ?',
+    [String(name).trim(), userId]
+  );
+}
+
 // O18 AUTH-01: schedule the account for hard-delete via the cron sweep.
 // Idempotent — a second call within grace period keeps the original
 // deleted_at (cron uses the earliest timestamp).
@@ -266,6 +276,8 @@ module.exports = {
   // O18 batch 6.3
   setDateOfBirth, softDelete, restoreDeleted, findHardDeleteCandidates, hardDelete,
   bumpTokenVersion,
+  // R100 SETTINGS
+  updateName,
   // user_oauth
   findOAuth, linkOAuth, getUserProviders,
   // pending

@@ -230,7 +230,11 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
                   id="track-line-layer"
                   style={{
                     lineColor: color,
-                    lineWidth: 4,
+                    // v(post-O2): 4 → 7. Combined with DP simplify above,
+                    // out-and-back overlaps read as one thick path instead of
+                    // two neighbouring lines. 7px is still narrow enough at
+                    // z11 (zoomed-out summary) not to smear over map labels.
+                    lineWidth: 7,
                     lineOpacity: 0.9,
                     lineCap: 'round',
                     lineJoin: 'round',
@@ -247,7 +251,10 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
                   id="track-gap-line-layer"
                   style={{
                     lineColor: Colors.textMuted,
-                    lineWidth: 3,
+                    // v(post-O2): 3 → 5 to match solid segments' new 7px
+                    // (keep dashed slightly narrower so gap segments still
+                    // read as "less certain" without shrinking to invisible).
+                    lineWidth: 5,
                     lineDasharray: [2, 1.5],
                     lineCap: 'round',
                     lineJoin: 'round',
@@ -924,7 +931,12 @@ export function MapHistoryScreen() {
   // smoothed. Same split as Strava.
   const smoothedTrackPoints = React.useMemo(() => {
     if (!sessionForDisplay || sessionForDisplay.trackPoints.length === 0) return [];
-    const KALMAN_PROCESS_NOISE = 1e-9;
+    // v(post-O2): Kalman Q 1e-9 → 1e-7. 1e-9 heavily trusted the prior, which
+    // over-smoothed U-turns/out-and-back — the return leg lagged the outbound
+    // leg by 5-15m and rendered as a visible parallel line rather than
+    // overlapping. 1e-7 gives the filter more freedom to snap back on
+    // direction reversals while still suppressing sub-meter GPS jitter.
+    const KALMAN_PROCESS_NOISE = 1e-7;
     const ACCURACY_REJECT_M = 25;
     const TELEPORT_SPEED_MPS = 15;
     const TELEPORT_DIST_MIN_M = 30;
@@ -1001,7 +1013,21 @@ export function MapHistoryScreen() {
     // (Kalman + filters above, but no DP simplify). Slightly more vertices
     // on long hikes but typical NZ trail is < 2000 points — Mapbox handles
     // it without effort.
-    return out;
+    //
+    // v(post-O2) re-add DP simplify with ε=5m. User reported out-and-back
+    // hikes render as "two nearby parallel lines" instead of one thick
+    // overlapping line. Root cause: GPS ±5-10m jitter on the return leg
+    // never falls exactly on the outbound vertices → Kalman preserves the
+    // parallel offset. DP simplify at ε=5m drops sub-5m deviations, so
+    // outbound and inbound vertices merge into visually collinear segments;
+    // combined with a wider lineWidth the two legs read as one path.
+    // NOTE: distance shown to user still comes from server-stored raw
+    // distance_m — this simplify is render-only, upstream calculators
+    // (routeFlags, bbox) still receive the un-simplified `out` via the
+    // export path immediately below. If we later route bbox/flags through
+    // the return value, revisit whether distance should be preserved.
+    const DP_EPSILON_M = 5;
+    return simplifyPolyline(out, DP_EPSILON_M);
   }, [sessionForDisplay?.trackPoints]);
 
   // Replace raw with smoothed in sessionForDisplay so all downstream

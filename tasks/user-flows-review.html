@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>Cairn 测试清单</title>
+<style>
+  :root {
+    --bg: #f5f2ec;
+    --card: #ffffff;
+    --fg: #1f1f1f;
+    --muted: #8a827a;
+    --dim: #b5aea3;
+    --border: #e0d9cb;
+    --accent: #4a7a4a;
+    --accent-soft: #e6efdf;
+    --pass: #2e7d32;
+    --pass-bg: #e6efdf;
+    --fail: #b23a2a;
+    --fail-bg: #fbe6e2;
+    --warn: #b58800;
+    --warn-bg: #fef4c4;
+    --code-bg: #f0ebe0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--fg);
+  }
+  header {
+    position: sticky; top: 0; z-index: 30;
+    background: var(--bg);
+    padding: 18px 32px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 { margin: 0 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .toolbar {
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 12px; font-size: 13px; color: var(--muted);
+  }
+  .toolbar .progress-num { color: var(--fg); font-weight: 600; }
+  .toolbar .split { width: 1px; height: 14px; background: var(--border); }
+  .toolbar button {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--fg);
+  }
+  .toolbar button:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .toolbar button.danger:hover { background: var(--fail-bg); border-color: var(--fail); color: var(--fail); }
+  .save-state { font-size: 12px; padding: 3px 10px; border-radius: 12px; }
+  .save-state.ok { background: var(--pass-bg); color: var(--pass); }
+  .save-state.warn { background: var(--fail-bg); color: var(--fail); }
+  .save-state.idle { background: var(--code-bg); color: var(--muted); }
+
+  .tabs-wrap {
+    position: relative;
+  }
+  .tabs-wrap::before, .tabs-wrap::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 24px;
+    pointer-events: none; z-index: 2;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .tabs-wrap::before {
+    left: 0; background: linear-gradient(to right, var(--bg), transparent);
+  }
+  .tabs-wrap::after {
+    right: 0; background: linear-gradient(to left, var(--bg), transparent);
+  }
+  .tabs-wrap.can-scroll-left::before { opacity: 1; }
+  .tabs-wrap.can-scroll-right::after { opacity: 1; }
+  .tabs {
+    display: flex; flex-wrap: nowrap; gap: 6px; padding-bottom: 0;
+    overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    padding: 8px 14px; cursor: pointer; white-space: nowrap; font-size: 13px;
+    border: 1px solid transparent; border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    color: var(--muted); background: transparent;
+    display: flex; align-items: center; gap: 8px;
+    position: relative; top: 1px;
+    flex-shrink: 0;
+  }
+  .tab:hover { color: var(--fg); }
+  .tab.active {
+    background: var(--card); color: var(--fg);
+    border-color: var(--border); font-weight: 600;
+  }
+  .tab .count {
+    font-size: 11px; color: var(--muted);
+    background: var(--bg); padding: 1px 7px; border-radius: 10px;
+    font-weight: 400;
+  }
+  .tab.active .count { background: var(--accent-soft); color: var(--accent); }
+  .tab.all-passed { color: var(--pass); }
+  .tab.has-fail { color: var(--fail); }
+  .tab.has-fail .count { background: var(--fail-bg); color: var(--fail); }
+
+  main { padding: 24px 32px 80px; }
+  .page-block {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 0 12px 12px 12px;
+  }
+  .page-progress {
+    padding: 14px 24px; font-size: 13px; color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; gap: 20px;
+  }
+  .page-progress .title { color: var(--fg); font-weight: 600; font-size: 15px; }
+  .page-progress .bar-wrap {
+    flex: 1; max-width: 300px; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden;
+  }
+  .page-progress .bar-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+
+  .filter-bar {
+    display: flex; gap: 12px; align-items: center;
+    padding: 10px 24px; background: #faf7f0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--muted);
+  }
+  .filter-bar label {
+    cursor: pointer; padding: 3px 12px; border-radius: 12px;
+    background: transparent; border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .filter-bar label:hover { border-color: var(--border); }
+  .filter-bar label.active {
+    background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600;
+  }
+  .filter-bar input[type=radio] { display: none; }
+
+  .head-row, .row {
+    display: grid;
+    grid-template-columns: 155px 60px 1fr 1fr 1.1fr 40px;
+    gap: 18px;
+    padding: 14px 24px;
+    align-items: start;
+  }
+  .head-row {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); font-weight: 600;
+    background: #faf7f0; border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+  }
+  .head-row .status-hdr { display: flex; gap: 8px; }
+  .head-row .status-hdr span { flex: 1; text-align: center; }
+
+  .row { border-bottom: 1px solid #f4f0e6; transition: background 0.15s; }
+  .row:last-of-type { border-bottom: none; }
+  .row:hover { background: #fbfaf5; }
+  .row.all-passed { background: var(--pass-bg); }
+  .row.all-passed:hover { background: #dae8d0; }
+  .row.all-passed .cell { color: #5a7a5a; }
+  .row.has-fail { background: #fff5f3; }
+  .row.has-fail:hover { background: #ffe9e5; }
+
+  .status-cell {
+    display: flex; flex-direction: column; gap: 8px; align-items: stretch;
+    padding-top: 2px;
+  }
+  .status-row {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .status-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--dim); font-weight: 700; min-width: 28px;
+  }
+
+  /* 状态 pill — 统一样式 · 3 态 · AI 只读 / 人工可点循环 */
+  .status-pill {
+    flex: 1; padding: 5px 10px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 600;
+    text-align: center; user-select: none;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    position: relative;
+  }
+  .status-pill.untested {
+    background: linear-gradient(135deg, #faf7f0, #f0ebe0);
+    color: #8a827a;
+    border-color: #d8d0c0;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .status-pill.pass {
+    background: linear-gradient(135deg, #d4e8c4, #b8dda0);
+    color: #2e5d2e; border-color: #a8cc90;
+    box-shadow: 0 1px 2px rgba(74,122,74,0.15);
+  }
+  .status-pill.fail {
+    background: linear-gradient(135deg, #f8d0c6, #f0b0a0);
+    color: #8a2a1a; border-color: #d8a090;
+    box-shadow: 0 1px 2px rgba(178,58,42,0.15);
+  }
+  .status-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor; opacity: 0.7;
+  }
+  .status-pill.untested .dot { opacity: 0.4; }
+
+  /* AI 只读: 无 hover · 无 cursor pointer · 无点击 */
+  .status-pill.readonly {
+    cursor: default;
+  }
+  .status-pill.readonly.fail {
+    cursor: help;
+  }
+  .status-pill.readonly.fail:hover::after {
+    content: attr(data-tooltip);
+    position: absolute; top: calc(100% + 6px);
+    left: 50%; transform: translateX(-50%);
+    background: #2a2a2a; color: white; padding: 10px 12px;
+    border-radius: 6px; font-size: 12px; z-index: 20;
+    white-space: pre-wrap; max-width: 320px; min-width: 200px; text-align: left;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2); font-weight: 400;
+    line-height: 1.5;
+    pointer-events: none;
+  }
+  .status-pill.readonly.fail:hover::before {
+    content: ""; position: absolute; top: calc(100% + 2px);
+    left: 50%; transform: translateX(-50%);
+    border: 4px solid transparent; border-bottom-color: #2a2a2a;
+    z-index: 21;
+  }
+
+  /* 人工可点: hover + cursor pointer + 循环切换 */
+  .status-pill.clickable {
+    cursor: pointer;
+  }
+  .status-pill.clickable:hover {
+    filter: brightness(1.05); transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  .status-pill.clickable:active {
+    transform: translateY(0);
+  }
+
+  .cell { font-size: 14px; line-height: 1.6; min-width: 0; word-wrap: break-word; }
+  .cell.id { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--muted); padding-top: 2px; }
+  .cell.pre { color: #6a6a6a; font-style: italic; }
+  .cell.action { font-weight: 600; color: #2a2a2a; }
+  .cell.action strong, .cell.expect strong { color: var(--fg); background: #fff4c4; padding: 0 3px; border-radius: 2px; }
+  .cell.expect { color: #3a3a3a; }
+  .cell[contenteditable]:focus { background: #fffbe6; border-radius: 4px; padding: 3px 5px !important; margin: -3px -5px; outline: 1px solid #f0d060; }
+
+  /* Inline code style for UI strings */
+  .cell code, .cell .ui-str {
+    background: var(--code-bg); color: #2a2a2a;
+    padding: 1px 6px; border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px; font-weight: 500;
+  }
+  .cell .warn-note {
+    display: block; margin-top: 6px; padding: 6px 10px;
+    background: var(--warn-bg); border-left: 3px solid var(--warn);
+    color: #6a5a2a; font-size: 12.5px; font-style: normal; border-radius: 0 4px 4px 0;
+  }
+  .cell .warn-note::before { content: "⚠ 待你确认: "; font-weight: 600; }
+
+  .btn-del {
+    background: transparent; border: none; cursor: pointer;
+    color: var(--dim); font-size: 15px; padding: 3px 6px; border-radius: 4px;
+    line-height: 1;
+  }
+  .btn-del:hover { background: var(--fail-bg); color: var(--fail); }
+
+  .note-block {
+    background: #fef9e0; border-left: 3px solid #f0c419;
+    padding: 8px 14px;
+    margin: 2px 24px 6px 275px;
+    border-radius: 0 6px 6px 0;
+    font-size: 13px; color: #6a5a2a;
+    outline: none; white-space: pre-wrap;
+    min-height: 20px;
+    transition: all 0.15s;
+  }
+  /* 空 note 折叠成小提示条, 不占大块空间 */
+  .note-block:empty {
+    background: transparent; border-left: none;
+    padding: 2px 0 2px 275px; margin: 0;
+    color: #b5a56a; font-size: 11px; font-style: italic;
+    opacity: 0.5;
+  }
+  .note-block:empty:hover { opacity: 1; }
+  .note-block:empty::before {
+    content: "＋ 加备注 (Enter 换行分段)";
+  }
+  .note-block:focus:empty {
+    opacity: 1; background: #fef9e0; border-left: 3px solid #f0c419;
+    padding: 8px 14px; margin: 2px 24px 6px 275px;
+  }
+  .note-block:focus:empty::before { content: ""; }
+  .note-block:focus { background: #fef4c4; }
+  .note-block:empty::before { content: "点这里加备注 · 按 Enter 换行分段..."; color: #c5b56a; }
+
+  .screenshot-link {
+    display: inline-block; margin-left: 4px; padding: 1px 6px;
+    background: var(--code-bg); border-radius: 3px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 11px;
+    color: var(--muted); cursor: pointer; user-select: none;
+    border: 1px solid transparent;
+  }
+  .screenshot-link:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .screenshot-link::before { content: "📋 "; opacity: 0.6; }
+
+  .add-row-btn {
+    display: block; width: 100%; padding: 14px;
+    background: transparent; border: none; border-top: 1px dashed var(--border);
+    color: var(--muted); cursor: pointer; font-size: 13px;
+  }
+  .add-row-btn:hover { background: var(--accent-soft); color: var(--accent); }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #2a2a2a; color: white; padding: 10px 20px; border-radius: 6px;
+    font-size: 13px; z-index: 100; opacity: 0; transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Cairn 测试清单</h1>
+  <div class="toolbar">
+    <span>总进度: <span class="progress-num" id="totalProgress">0 / 0</span></span>
+    <span class="split"></span>
+    <span>AI: <span class="progress-num" id="aiProgress" style="color:var(--pass)">0</span> 过 · <span id="aiFail" style="color:var(--fail)">0</span> 不过</span>
+    <span class="split"></span>
+    <span>人工: <span class="progress-num" id="manualProgress">0</span></span>
+    <span class="split"></span>
+    <button id="btnBind">绑定 JSON 文件</button>
+    <button id="btnResetAll" class="danger">重置全部 AI 状态</button>
+    <button id="btnDump">下载 JSON 备份</button>
+    <span id="saveStatus" class="save-state idle">未绑定</span>
+  </div>
+  <div class="tabs-wrap" id="tabsWrap"><div class="tabs" id="tabs"></div></div>
+</header>
+
+<main id="main"></main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+ * DATA — 从独立 JSON 文件读取 (user-flows-review.json)
+ * ============================================================ */
+let DATA = { screens: [] };
+let fileHandle = null;
+let saveTimer = null;
+const HANDLE_KEY = 'cairn-flows-handle-idb';
+let activeTab = 0;
+let filter = 'all'; // all / todo / done
+
+/* ============================================================
+ * IndexedDB — 存 FileSystemFileHandle, 下次自动恢复
+ * ============================================================ */
+async function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('cairn-flows-db', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('handles');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSet(key, val) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').put(val, key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('handles', 'readonly');
+    const r = tx.objectStore('handles').get(key);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+
+/* ============================================================
+ * Toast
+ * ============================================================ */
+function toast(msg, ms = 1600) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+/* ============================================================
+ * File bind — 首次点击后授权 + 记忆 handle 到 IndexedDB
+ * ============================================================ */
+async function tryAutoBind() {
+  try {
+    const h = await idbGet(HANDLE_KEY);
+    if (!h) return false;
+    let perm = await h.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') {
+      // 静默 request (Chrome 允许如果之前授权过)
+      perm = await h.requestPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') return false;
+    }
+    fileHandle = h;
+    await loadFromFile();
+    setSaveState(`✓ 已自动绑定 ${h.name}`, 'ok');
+    return true;
+  } catch (e) {
+    console.warn('auto-bind failed:', e);
+    return false;
+  }
+}
+
+document.getElementById('btnBind').addEventListener('click', async () => {
+  try {
+    if (!('showOpenFilePicker' in window)) {
+      alert('浏览器不支持 File System Access API. 请用 Chrome 或 Edge.');
+      return;
+    }
+    const [h] = await window.showOpenFilePicker({
+      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+      suggestedName: 'user-flows-review.json',
+      startIn: 'documents',
+    });
+    const perm = await h.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') { alert('未授权'); return; }
+    fileHandle = h;
+    await idbSet(HANDLE_KEY, h);
+    await loadFromFile();
+    setSaveState(`✓ 已绑定 ${h.name} · 下次自动恢复`, 'ok');
+  } catch (e) {
+    if (e.name !== 'AbortError') console.error(e);
+  }
+});
+
+async function loadFromFile() {
+  if (!fileHandle) return;
+  const f = await fileHandle.getFile();
+  const text = await f.text();
+  try {
+    DATA = JSON.parse(text);
+    render();
+  } catch (e) {
+    alert('JSON 解析失败: ' + e.message);
+  }
+}
+
+function scheduleSave() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 350);
+}
+
+async function saveNow() {
+  if (!fileHandle) {
+    setSaveState('未绑定 · 修改仅在内存', 'warn');
+    return;
+  }
+  try {
+    const w = await fileHandle.createWritable();
+    await w.write(JSON.stringify(DATA, null, 2));
+    await w.close();
+    setSaveState(`✓ 已保存 ${new Date().toLocaleTimeString()}`, 'ok');
+  } catch (e) {
+    setSaveState('保存失败: ' + e.message, 'warn');
+  }
+}
+
+function setSaveState(txt, cls) {
+  const el = document.getElementById('saveStatus');
+  el.textContent = txt;
+  el.className = 'save-state ' + cls;
+}
+
+/* ============================================================
+ * Render
+ * ============================================================ */
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// UI 元素原文自动加高亮: 匹配 "xxx" 或 'xxx' 内的英文字符串包起来
+function highlightUIStrings(text) {
+  const esc = escapeHtml(text);
+  // 英文/数字/常见符号在双引号或中文引号里 → code style
+  return esc
+    .replace(/["""]([A-Za-z0-9][A-Za-z0-9 \-.'!?&,()]*)["""]/g, '<span class="ui-str">$1</span>')
+    .replace(/❓([^。\n]*)/g, '<span class="warn-note">$1</span>')
+    // 换行 → <br>
+    .replace(/\n/g, '<br>');
+}
+
+function nextIdFor(screen) {
+  const prefix = (screen.rows[0]?.id || 'X').match(/^[A-Z]+/)?.[0] || 'X';
+  let max = 0;
+  screen.rows.forEach(r => {
+    const m = String(r.id).match(new RegExp('^' + prefix + '(\\d+)'));
+    if (m) max = Math.max(max, +m[1]);
+  });
+  return prefix + String(max + 1).padStart(2, '0');
+}
+
+function renderTabs() {
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = '';
+  DATA.screens.forEach((s, i) => {
+    const total = s.rows.length;
+    const manualPass = s.rows.filter(r => (r.manual_status || (r.tested ? 'pass' : 'untested')) === 'pass').length;
+    const anyFail = s.rows.some(r => r.ai_status === 'fail' || r.manual_status === 'fail');
+    const allDone = total > 0 && manualPass === total;
+    const tab = document.createElement('div');
+    let cls = 'tab' + (i === activeTab ? ' active' : '');
+    if (allDone) cls += ' all-passed';
+    else if (anyFail) cls += ' has-fail';
+    tab.className = cls;
+    tab.innerHTML = `<span>${escapeHtml(s.name)}</span><span class="count">${manualPass}/${total}</span>`;
+    tab.addEventListener('click', () => {
+      activeTab = i; render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    tabs.appendChild(tab);
+  });
+  updateTabFade();
+  // scroll active tab into view
+  const activeEl = tabs.children[activeTab];
+  if (activeEl) activeEl.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+}
+
+function updateTabFade() {
+  const wrap = document.getElementById('tabsWrap');
+  const tabs = document.getElementById('tabs');
+  if (!wrap || !tabs) return;
+  const canLeft = tabs.scrollLeft > 4;
+  const canRight = tabs.scrollLeft < (tabs.scrollWidth - tabs.clientWidth - 4);
+  wrap.classList.toggle('can-scroll-left', canLeft);
+  wrap.classList.toggle('can-scroll-right', canRight);
+}
+// bind once
+window.addEventListener('DOMContentLoaded', () => {
+  const tabs = document.getElementById('tabs');
+  if (tabs) tabs.addEventListener('scroll', updateTabFade);
+  window.addEventListener('resize', updateTabFade);
+});
+
+function statusLabel(s) {
+  if (s === 'pass') return '通过';
+  if (s === 'fail') return '不通过';
+  return '未测';
+}
+
+function renderStatusPair(r) {
+  const aiState = r.ai_status || 'untested';
+  const manualState = r.manual_status || (r.tested ? 'pass' : 'untested');
+  const aiTooltip = aiState === 'fail'
+    ? `${r.ai_reason || '(未记录原因)'}${r.ai_screenshot ? '\n\n截图: ' + r.ai_screenshot : ''}`
+    : '';
+  const manualTooltip = manualState === 'fail'
+    ? (r.manual_reason || '(点右下角 💬 备注写原因)')
+    : '';
+  return `
+    <div class="status-row">
+      <span class="status-label">AI</span>
+      <div class="status-pill readonly ${aiState}" data-role="ai" ${aiTooltip ? `data-tooltip="${escapeHtml(aiTooltip)}"` : ''}>
+        <span class="dot"></span><span>${statusLabel(aiState)}</span>
+      </div>
+    </div>
+    <div class="status-row">
+      <span class="status-label">人工</span>
+      <div class="status-pill clickable ${manualState}" data-role="manual" ${manualTooltip ? `data-tooltip="${escapeHtml(manualTooltip)}"` : ''}>
+        <span class="dot"></span><span>${statusLabel(manualState)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderMain() {
+  const main = document.getElementById('main');
+  main.innerHTML = '';
+  const s = DATA.screens[activeTab];
+  if (!s) return;
+
+  const total = s.rows.length;
+  const manualPass = s.rows.filter(r => (r.manual_status || (r.tested ? 'pass' : 'untested')) === 'pass').length;
+  const manualFail = s.rows.filter(r => r.manual_status === 'fail').length;
+  const manualUntested = total - manualPass - manualFail;
+  const aiPass = s.rows.filter(r => r.ai_status === 'pass').length;
+  const aiFail = s.rows.filter(r => r.ai_status === 'fail').length;
+  const pct = total ? Math.round(manualPass / total * 100) : 0;
+
+  const block = document.createElement('div');
+  block.className = 'page-block';
+  block.innerHTML = `
+    <div class="page-progress">
+      <span class="title">${escapeHtml(s.name)}</span>
+      <span style="font-size:12px;">
+        <span style="color:var(--pass);font-weight:600">AI 过 ${aiPass}</span>
+        · <span style="color:var(--fail);font-weight:600">不过 ${aiFail}</span>
+        <span style="color:var(--dim); margin:0 6px">|</span>
+        <span style="color:var(--pass);font-weight:600">人工 过 ${manualPass}</span>
+        · <span style="color:var(--fail);font-weight:600">不过 ${manualFail}</span>
+        · <span style="color:var(--muted)">未测 ${manualUntested}</span>
+      </span>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div>
+      <span style="font-weight:600;color:var(--accent)">${pct}%</span>
+    </div>
+    <div class="filter-bar">
+      <label class="${filter==='all'?'active':''}"><input type="radio" name="f" value="all" ${filter==='all'?'checked':''}> 全部 (${total})</label>
+      <label class="${filter==='todo'?'active':''}"><input type="radio" name="f" value="todo" ${filter==='todo'?'checked':''}> 未测 (${manualUntested})</label>
+      <label class="${filter==='done'?'active':''}"><input type="radio" name="f" value="done" ${filter==='done'?'checked':''}> 通过 (${manualPass})</label>
+      <label class="${filter==='fail'?'active':''}"><input type="radio" name="f" value="fail" ${filter==='fail'?'checked':''}> 有不通过 (${s.rows.filter(r=>r.ai_status==='fail' || r.manual_status==='fail').length})</label>
+    </div>
+    <div class="head-row">
+      <div>状态</div>
+      <div>ID</div>
+      <div>前置状态</div>
+      <div>做什么</div>
+      <div>预期看到</div>
+      <div></div>
+    </div>
+  `;
+
+  block.querySelectorAll('input[name=f]').forEach(radio => {
+    radio.addEventListener('change', () => { filter = radio.value; render(); });
+  });
+
+  s.rows.forEach((r, ri) => {
+    const manualState = r.manual_status || (r.tested ? 'pass' : 'untested');
+    if (filter === 'todo' && manualState !== 'untested') return;
+    if (filter === 'done' && manualState !== 'pass') return;
+    if (filter === 'fail' && !(r.ai_status === 'fail' || manualState === 'fail')) return;
+
+    const bothPassed = r.ai_status === 'pass' && manualState === 'pass';
+    const anyFail = r.ai_status === 'fail' || manualState === 'fail';
+
+    const row = document.createElement('div');
+    row.className = 'row' + (bothPassed ? ' all-passed' : '') + (anyFail ? ' has-fail' : '');
+
+    // Screenshot link (only shown if ai_screenshot exists)
+    const screenshotLink = r.ai_screenshot
+      ? `<span class="screenshot-link" data-path="${escapeHtml(r.ai_screenshot)}" title="点击复制路径">${escapeHtml(r.ai_screenshot.split(/[\\\\/]/).pop())}</span>`
+      : '';
+
+    row.innerHTML = `
+      <div class="status-cell">${renderStatusPair(r)}</div>
+      <div class="cell id">${escapeHtml(r.id)}</div>
+      <div class="cell pre" contenteditable="true" data-k="pre">${highlightUIStrings(r.pre || '')}</div>
+      <div class="cell action" contenteditable="true" data-k="action">${highlightUIStrings(r.action || '')}</div>
+      <div class="cell expect" contenteditable="true" data-k="expect">${highlightUIStrings(r.expect || '')}${screenshotLink ? '<br>' + screenshotLink : ''}</div>
+      <div><button class="btn-del" title="删除此行">✕</button></div>
+    `;
+
+    // AI status: READ ONLY (只显示, 不响应点击)
+    // 用户不能改 AI 状态; AI 只由主 agent 测试后写入
+
+    // 人工 状态: 循环点击 untested → pass → fail → untested
+    row.querySelector('[data-role=manual]').addEventListener('click', (e) => {
+      const cur = r.manual_status || (r.tested ? 'pass' : 'untested');
+      let next;
+      if (cur === 'untested') next = 'pass';
+      else if (cur === 'pass') next = 'fail';
+      else next = 'untested';
+      r.manual_status = next;
+      r.tested = (next === 'pass');  // 兼容旧字段
+      scheduleSave();
+      render();
+    });
+
+    // Editable cells (pre/action/expect)
+    row.querySelectorAll('[contenteditable][data-k]').forEach(cell => {
+      cell.addEventListener('blur', () => {
+        const k = cell.dataset.k;
+        r[k] = cell.innerText.trim();
+        scheduleSave();
+      });
+    });
+
+    // Screenshot copy
+    const sc = row.querySelector('.screenshot-link');
+    if (sc) {
+      sc.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(sc.dataset.path);
+          toast(`路径已复制: ${sc.dataset.path}`);
+        } catch { toast('复制失败, 手动选中'); }
+      });
+    }
+
+    // Delete
+    row.querySelector('.btn-del').addEventListener('click', () => {
+      if (!confirm(`删除 ${r.id}?`)) return;
+      s.rows.splice(ri, 1);
+      scheduleSave(); render();
+    });
+
+    block.appendChild(row);
+
+    // Note row (always show if has note or a "+" affordance if not)
+    const note = document.createElement('div');
+    note.className = 'note-block';
+    note.contentEditable = 'true';
+    note.textContent = r.note || '';
+    note.addEventListener('blur', () => {
+      r.note = note.innerText;
+      scheduleSave();
+    });
+    // Allow Enter for newline (default behavior in contenteditable div)
+    block.appendChild(note);
+  });
+
+  // Add row
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-row-btn';
+  addBtn.textContent = '＋ 新增一条测试';
+  addBtn.addEventListener('click', () => {
+    s.rows.push({
+      id: nextIdFor(s), pre: '', action: '', expect: '',
+      note: '', tested: false,
+      ai_status: 'untested', ai_reason: '', ai_screenshot: '',
+    });
+    scheduleSave(); render();
+  });
+  block.appendChild(addBtn);
+
+  main.appendChild(block);
+
+  // Totals
+  let totalRows = 0, totalManualPass = 0, totalManualFail = 0, totalAiPass = 0, totalAiFail = 0;
+  DATA.screens.forEach(sc => {
+    totalRows += sc.rows.length;
+    totalManualPass += sc.rows.filter(x => (x.manual_status || (x.tested ? 'pass' : 'untested')) === 'pass').length;
+    totalManualFail += sc.rows.filter(x => x.manual_status === 'fail').length;
+    totalAiPass += sc.rows.filter(x => x.ai_status === 'pass').length;
+    totalAiFail += sc.rows.filter(x => x.ai_status === 'fail').length;
+  });
+  document.getElementById('totalProgress').textContent = `${totalManualPass} / ${totalRows}`;
+  document.getElementById('aiProgress').textContent = totalAiPass;
+  document.getElementById('aiFail').textContent = totalAiFail;
+  document.getElementById('manualProgress').textContent = `${totalManualPass} 过 / ${totalManualFail} 不过`;
+}
+
+function render() {
+  renderTabs();
+  renderMain();
+}
+
+/* ============================================================
+ * Reset all AI status
+ * ============================================================ */
+document.getElementById('btnResetAll').addEventListener('click', () => {
+  if (!confirm('重置所有 AI 测试状态回未测? (人工状态不受影响)')) return;
+  DATA.screens.forEach(s => s.rows.forEach(r => {
+    r.ai_status = 'untested';
+    r.ai_reason = '';
+    r.ai_screenshot = '';
+  }));
+  scheduleSave(); render();
+  toast('AI 状态已重置');
+});
+
+document.getElementById('btnDump').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(DATA, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'user-flows-review.json'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+/* ============================================================
+ * Boot
+ * ============================================================ */
+(async () => {
+  render(); // 先渲染空
+  const auto = await tryAutoBind();
+  if (!auto) {
+    setSaveState('未绑定 · 点上方 “绑定 JSON 文件” 一次即可', 'warn');
+  }
+})();
+</script>
+
+</body>
+</html>

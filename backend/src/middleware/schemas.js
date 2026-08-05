@@ -274,6 +274,15 @@ const authSetDob = Joi.object({
   dateOfBirth: Joi.string().isoDate().required(),
 });
 
+// R100 SETTINGS: change display name from Settings screen. Joi bounds
+// mirror the register schema (min 1, max 60 was overkill — clamp to 32
+// to match route-level length check and prevent UI overflow on avatar
+// rows). Trim happens in route handler, not Joi (so validation error
+// message stays actionable).
+const authSetName = Joi.object({
+  name: Joi.string().min(1).max(32).required(),
+});
+
 // ── Hide ───────────────────────────────────────────────────────────────
 const hideCreate = Joi.object({
   item_type: Joi.string().valid('mark', 'route').required(),
@@ -332,6 +341,7 @@ module.exports = {
     passwordResetRequest: authPasswordResetRequest,
     passwordResetVerify: authPasswordResetVerify,
     setDob: authSetDob,
+    setName: authSetName,
   },
   hide: {
     create: hideCreate,

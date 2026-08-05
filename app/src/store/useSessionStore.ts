@@ -225,6 +225,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   // 语义变"确保这条 session 以 synced 状态在 store 里存在",不再
   // 假设 addSession 早就跑过。
   markSynced: (localId, remoteId, upsertData) => {
+    // R110 P2-15: merge semantic verified —— in-memory 分支用 `{...sess, ...}` spread,
+    // 现有 sess 字段 (name/description/durationS 等) 保留优先, 只覆盖 remoteId/syncState.
+    // upsert 分支只在内存里找不到该 localId 时走 (真孤立), 无服务端 name 需要保留.
     set((s) => {
       const idx = s.sessions.findIndex((sess) => sess.id === localId);
       let updated: TrackingSession[];

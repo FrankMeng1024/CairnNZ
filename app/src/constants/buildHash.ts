@@ -16,4 +16,4 @@
  *   3. 拼成 `${date}-${hash}` 替换下面 BUILD_HASH
  *   4. commit + eas update
  */
-export const BUILD_HASH = '20260805-2340-85d8a22';
+export const BUILD_HASH = '20260805-2340-R110-O20';

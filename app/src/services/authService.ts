@@ -412,6 +412,29 @@ export async function patchDob(dateOfBirth: string): Promise<AuthResult> {
   }
 }
 
+// R100 SETTINGS: update display name from Settings screen. Called by
+// Edit Name modal after user types + hits Save. Backend enforces
+// length 1..32 + strips control chars. Returns updated user on success.
+export async function patchName(name: string): Promise<AuthResult> {
+  const token = await getToken();
+  if (!token) return { error: 'not_signed_in' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data?.error || 'Could not save name.' };
+    return { user: data.user };
+  } catch {
+    return { error: 'Unable to connect. Please try again.' };
+  }
+}
+
 /**
  * Sprint 72 STORY-00550: exchange current valid token for a fresh one.
  * Called by:

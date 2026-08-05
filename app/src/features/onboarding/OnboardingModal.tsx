@@ -30,16 +30,22 @@
  *   - `cairn_onboarding_v1_done` is not 'true'
  *
  * Denied-permission path: if the user rejects Screen 4 CTA (or system
- * dialog), we show a fifth screen "You can still use Cairn" with Open
- * Settings / Later actions. Choosing Later marks onboarding done — the user
- * has explicitly opted out of location. GPS-dependent features (Hiking,
- * Plant, Memory) will re-prompt when reached, per user note "GPS 不允许功能
- * 也没法用".
+ * dialog), we show a fifth screen "You can still use Cairn" with Continue
+ * (primary — finishes onboarding, user proceeds to Home) and Open Settings
+ * (secondary). Per user feedback: "GPS 拒了不要死胡同". GPS-dependent
+ * features (Hiking, Plant, Memory) will re-prompt when reached.
+ *
+ * Swipe navigation (2026-08-05): the 4 intro screens are horizontally
+ * pageable via FlatList (pagingEnabled). Users can swipe left/right, tap
+ * the CTA arrow, or tap a dot to jump. Screen 4 is the last swipeable
+ * page — swiping further has no effect. `denied` remains a separate branch
+ * outside the FlatList, reached only via Screen 4 CTA rejection.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Modal, View, Text, StyleSheet, TouchableOpacity, Animated, Easing,
-  Image, Platform, Linking,
+  Image, Platform, Linking, FlatList, Dimensions,
+  NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -60,10 +66,19 @@ interface Props {
 
 type Step = 1 | 2 | 3 | 4 | 'denied';
 
+interface IntroScreen {
+  key: string;
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+}
+
 export function OnboardingModal({ visible, onFinish }: Props) {
   const [step, setStep] = useState<Step>(1);
   const [locationGranted, setLocationGranted] = useState<boolean | null>(null);
   const fade = useRef(new Animated.Value(0)).current;
+  const listRef = useRef<FlatList<IntroScreen>>(null);
+  const screenWidth = Dimensions.get('window').width;
 
   useEffect(() => {
     if (visible) {
@@ -81,9 +96,34 @@ export function OnboardingModal({ visible, onFinish }: Props) {
     }
   }, [visible]);
 
+  const scrollToIndex = (index: number) => {
+    listRef.current?.scrollToIndex({ index, animated: true });
+  };
+
   const advance = () => {
     haptic.impact('light');
-    setStep(prev => (prev === 1 ? 2 : prev === 2 ? 3 : prev === 3 ? 4 : prev));
+    if (step === 1 || step === 2 || step === 3) {
+      const next = (step + 1) as Step;
+      setStep(next);
+      // step values 1..4 map to indices 0..3
+      scrollToIndex((next as number) - 1);
+    }
+  };
+
+  const jumpTo = (targetStep: 1 | 2 | 3 | 4) => {
+    haptic.impact('light');
+    setStep(targetStep);
+    scrollToIndex(targetStep - 1);
+  };
+
+  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+    const clamped = Math.max(0, Math.min(3, idx));
+    const nextStep = (clamped + 1) as 1 | 2 | 3 | 4;
+    if (nextStep !== step) {
+      setStep(nextStep);
+      haptic.impact('light');
+    }
   };
 
   const finish = async () => {
@@ -123,120 +163,133 @@ export function OnboardingModal({ visible, onFinish }: Props) {
 
   if (!visible) return null;
 
+  const screens: IntroScreen[] = [
+    {
+      key: 'discover',
+      icon: <CairnLogo size={64} />,
+      title: 'Discover Cairn',
+      body: 'A cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet companion for the outdoors.',
+    },
+    {
+      key: 'hiking',
+      icon: <HikingIcon size={64} color={Colors.primary} />,
+      title: 'Track every hike',
+      body: 'Cairn quietly records your route, distance, and elevation.\nNo chatter, no leaderboards.',
+    },
+    {
+      key: 'cairns',
+      icon: <FlagMarkerIcon size={64} stoneColor={Colors.flag} flagColor={Colors.primary} />,
+      title: 'Leave a cairn',
+      body: 'Drop a small marker with a note.\nKeep it for yourself, or share with friends walking the same trail.',
+    },
+    {
+      key: 'memory',
+      icon: <Icon name="Footprints" size={56} color={Colors.primary} strokeWidth={1.5} />,
+      title: 'Uncover your map',
+      body: 'Every step reveals fog on your map.\nOver months, you build a personal atlas of where you have walked.',
+    },
+  ];
+
+  const stepIndex = step === 'denied' ? 3 : step - 1;
+  const isLastIntro = step === 4;
+
   return (
-    <Modal visible={visible} animationType="fade" statusBarTranslucent transparent={false}>
+    <Modal visible={visible} animationType="slide" statusBarTranslucent transparent={false}>
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <Animated.View style={[styles.inner, { opacity: fade }]}>
-          {step === 1 && (
-            <ScreenLayout
-              icon={<CairnLogo size={64} />}
-              title="Discover Cairn"
-              body="Your quiet companion for the outdoors."
-              cta="Get started"
-              onCta={advance}
-              stepIndex={0}
-            />
-          )}
-          {step === 2 && (
-            <ScreenLayout
-              icon={<HikingIcon size={64} color={Colors.primary} />}
-              title="Track every hike"
-              body={"Cairn quietly records your route, distance, and elevation.\nNo chatter, no leaderboards."}
-              cta="Next"
-              onCta={advance}
-              stepIndex={1}
-            />
-          )}
-          {step === 3 && (
-            <ScreenLayout
-              icon={<FlagMarkerIcon size={64} stoneColor={Colors.flag} flagColor={Colors.primary} />}
-              title="Leave a cairn"
-              body={"Drop a small marker with a note.\nKeep it for yourself, or share with friends walking the same trail."}
-              cta="Next"
-              onCta={advance}
-              stepIndex={2}
-            />
-          )}
-          {step === 4 && (
-            <ScreenLayout
-              icon={<Icon name="Footprints" size={56} color={Colors.primary} strokeWidth={1.5} />}
-              title="Uncover your map"
-              body={"Every step reveals fog on your map.\nOver months, you build a personal atlas of where you have walked."}
-              cta={locationGranted === true ? 'Done' : 'Enable Location'}
-              ctaHint={locationGranted === true ? undefined : 'iOS will ask for permission next.'}
-              onCta={requestLocation}
-              stepIndex={3}
-            />
+          {step !== 'denied' && (
+            <View style={styles.pagerWrap}>
+              <FlatList
+                ref={listRef}
+                data={screens}
+                keyExtractor={(item) => item.key}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={onMomentumScrollEnd}
+                initialScrollIndex={0}
+                getItemLayout={(_, index) => ({
+                  length: screenWidth,
+                  offset: screenWidth * index,
+                  index,
+                })}
+                bounces={false}
+                renderItem={({ item }) => (
+                  <View style={[styles.page, { width: screenWidth }]}>
+                    <View style={styles.iconWrap}>{item.icon}</View>
+                    <Text style={styles.title}>{item.title}</Text>
+                    <Text style={styles.body}>{item.body}</Text>
+                  </View>
+                )}
+              />
+              <View style={styles.dots}>
+                {[0, 1, 2, 3].map(i => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => jumpTo((i + 1) as 1 | 2 | 3 | 4)}
+                    activeOpacity={0.6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Go to screen ${i + 1}`}
+                    hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                  >
+                    <View
+                      style={[styles.dot, i === stepIndex && styles.dotActive]}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.ctaWrap}>
+                <TouchableOpacity
+                  style={styles.ctaBtn}
+                  onPress={isLastIntro ? requestLocation : advance}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={isLastIntro ? (locationGranted === true ? 'Done' : 'Enable Location') : 'Continue'}
+                >
+                  <Text style={styles.ctaText}>
+                    {isLastIntro ? (locationGranted === true ? 'Done' : 'Enable Location') : 'Continue'}
+                  </Text>
+                </TouchableOpacity>
+                {isLastIntro && locationGranted !== true && (
+                  <Text style={styles.ctaHint}>iOS will ask for permission next.</Text>
+                )}
+              </View>
+            </View>
           )}
           {step === 'denied' && (
-            <ScreenLayout
-              icon={<Icon name="MapPin" size={56} color={Colors.textMuted} strokeWidth={1.5} />}
-              title="You can still use Cairn"
-              body={"Without location, we can't record your hikes or reveal your map.\nWhen you're ready, turn on location in Settings."}
-              cta="Open Settings"
-              onCta={openSettings}
-              secondaryCta="Later"
-              onSecondary={finish}
-            />
+            <View style={styles.screen}>
+              <View style={styles.iconWrap}>
+                <Icon name="MapPin" size={56} color={Colors.textMuted} strokeWidth={1.5} />
+              </View>
+              <Text style={styles.title}>You can still use Cairn</Text>
+              <Text style={styles.body}>
+                {"Without location, we can't record your hikes or reveal your map.\nYou can turn on location later in Settings."}
+              </Text>
+              <View style={styles.ctaWrap}>
+                <TouchableOpacity
+                  style={styles.ctaBtn}
+                  onPress={finish}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue"
+                >
+                  <Text style={styles.ctaText}>Continue</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.secondaryBtn}
+                  onPress={openSettings}
+                  activeOpacity={0.6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open Settings"
+                >
+                  <Text style={styles.secondaryText}>Open Settings</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
         </Animated.View>
       </SafeAreaView>
     </Modal>
-  );
-}
-
-interface ScreenLayoutProps {
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-  cta: string;
-  ctaHint?: string;
-  onCta: () => void;
-  secondaryCta?: string;
-  onSecondary?: () => void;
-  stepIndex?: number;
-}
-
-function ScreenLayout({ icon, title, body, cta, ctaHint, onCta, secondaryCta, onSecondary, stepIndex }: ScreenLayoutProps) {
-  return (
-    <View style={styles.screen}>
-      <View style={styles.iconWrap}>{icon}</View>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.body}>{body}</Text>
-      {stepIndex !== undefined && (
-        <View style={styles.dots}>
-          {[0, 1, 2, 3].map(i => (
-            <View
-              key={i}
-              style={[styles.dot, i === stepIndex && styles.dotActive]}
-            />
-          ))}
-        </View>
-      )}
-      <View style={styles.ctaWrap}>
-        <TouchableOpacity
-          style={styles.ctaBtn}
-          onPress={onCta}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel={cta}
-        >
-          <Text style={styles.ctaText}>{cta}</Text>
-        </TouchableOpacity>
-        {ctaHint && <Text style={styles.ctaHint}>{ctaHint}</Text>}
-        {secondaryCta && onSecondary && (
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            onPress={onSecondary}
-            activeOpacity={0.6}
-            accessibilityRole="button"
-            accessibilityLabel={secondaryCta}
-          >
-            <Text style={styles.secondaryText}>{secondaryCta}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
   );
 }
 
@@ -257,14 +310,22 @@ const styles = StyleSheet.create({
   },
   inner: {
     flex: 1,
-    paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.xl,
+  },
+  pagerWrap: {
+    flex: 1,
+  },
+  page: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xl + Spacing.md,
   },
   screen: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.xl + Spacing.md,
   },
   iconWrap: {
     marginBottom: Spacing.xl,
@@ -290,7 +351,10 @@ const styles = StyleSheet.create({
   dots: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: Spacing.xl,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    marginBottom: Spacing.md,
   },
   dot: {
     width: 8,
@@ -303,11 +367,9 @@ const styles = StyleSheet.create({
     width: 24,
   },
   ctaWrap: {
-    position: 'absolute',
-    bottom: Spacing.xl,
-    left: Spacing.xl,
-    right: Spacing.xl,
     alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.xl,
   },
   ctaBtn: {
     backgroundColor: Colors.primary,

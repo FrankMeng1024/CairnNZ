@@ -19,11 +19,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   KeyboardAvoidingView, Platform, Animated, ScrollView, Dimensions, Alert,
-  ActivityIndicator,
+  ActivityIndicator, Modal,
 } from 'react-native';
 import Svg, { Path, Ellipse, Line, G } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 // v412: UnfinishedSessionBanner 已被 v412 UnfinishedRecoveryModal 取代 (HikingScreen 内)
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -444,6 +445,7 @@ export function AuthScreen() {
   // string (matches backend Joi.isoDate schema). Empty until user picks.
   const [dob, setDob] = useState('');
   const [dobError, setDobError] = useState('');
+  const [dobPickerOpen, setDobPickerOpen] = useState(false);  // R110 P1-9: native date picker modal
   // O18 AUTH-04: forgot-password state — reset email, 6-digit code, new pw.
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotCode, setForgotCode] = useState('');
@@ -1184,16 +1186,57 @@ export function AuthScreen() {
           <Text style={[styles.tagline, { color: Colors.textSecondary, marginBottom: 24 }]}>
             We ask new members to confirm they're 13 or older. This is a one-time step.
           </Text>
-          <TextInput
+          {/* R110 P1-9: DOB backfill 也用 native picker (跟注册流程一致) */}
+          <TouchableOpacity
             testID="input-dob-backfill"
-            style={formStyles.input}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={Colors.textMuted}
-            value={dob}
-            onChangeText={(v) => { setDob(v); if (dobError) setDobError(''); }}
-            keyboardType="numbers-and-punctuation"
-            maxLength={10}
-          />
+            style={[formStyles.input, { justifyContent: 'center' }]}
+            onPress={() => setDobPickerOpen(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: dob ? Colors.textPrimary : Colors.textMuted, fontSize: 16 }}>
+              {dob || 'Tap to select your birthday'}
+            </Text>
+          </TouchableOpacity>
+          <Modal
+            visible={dobPickerOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setDobPickerOpen(false)}
+          >
+            <TouchableOpacity
+              style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
+              activeOpacity={1}
+              onPress={() => setDobPickerOpen(false)}
+            >
+              <TouchableOpacity activeOpacity={1} style={{ backgroundColor: '#fff', paddingBottom: 30 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
+                  <TouchableOpacity onPress={() => setDobPickerOpen(false)}>
+                    <Text style={{ fontSize: 16, color: Colors.textMuted }}>Cancel</Text>
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.textPrimary }}>Date of birth</Text>
+                  <TouchableOpacity onPress={() => setDobPickerOpen(false)}>
+                    <Text style={{ fontSize: 16, color: Colors.primary, fontWeight: '600' }}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={dob ? new Date(dob) : new Date(Date.now() - 25 * 365 * 24 * 60 * 60 * 1000)}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  maximumDate={new Date(Date.now() - 13 * 365 * 24 * 60 * 60 * 1000)}
+                  minimumDate={new Date('1900-01-01')}
+                  onChange={(_, selected) => {
+                    if (selected) {
+                      const y = selected.getFullYear();
+                      const m = String(selected.getMonth() + 1).padStart(2, '0');
+                      const d = String(selected.getDate()).padStart(2, '0');
+                      setDob(`${y}-${m}-${d}`);
+                      if (dobError) setDobError('');
+                    }
+                  }}
+                />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
           {dobError ? <Text style={formStyles.errorText}>{dobError}</Text> : null}
           <TouchableOpacity
             testID="btn-save-dob"
@@ -1404,7 +1447,7 @@ export function AuthScreen() {
               <Text style={formStyles.label}>Name</Text>
               <FieldInput
                 icon="User"
-                placeholder="Your name"
+                placeholder="How friends will see you"
                 value={name}
                 onChangeText={(v) => { setName(v); if (nameError) setNameError(''); }}
                 error={nameError}
@@ -1523,20 +1566,61 @@ export function AuthScreen() {
                 onBlur={() => { if (confirm && confirm !== password) setConfirmError('Passwords do not match'); }}
                 isNew
               />
-              {/* O18 AUTH-06: date of birth required (COPPA + App Store). */}
+              {/* O18 AUTH-06 + R110 P1-9: date of birth — native picker (iOS wheel / Android calendar).
+                  用户体验从"手打 YYYY-MM-DD"改成"点一下弹选择器", 注册转化率显著提升.
+                  内部 state 保持 YYYY-MM-DD string 格式, 后端 API 无变化. */}
               <Text style={formStyles.label}>Date of birth</Text>
-              <TextInput
+              <TouchableOpacity
                 testID="input-dob"
-                style={[formStyles.input, dobError ? formStyles.inputError : null]}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={Colors.textMuted}
-                value={dob}
-                onChangeText={(v) => { setDob(v); if (dobError) setDobError(''); }}
-                keyboardType="numbers-and-punctuation"
-                maxLength={10}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
+                style={[formStyles.input, dobError ? formStyles.inputError : null, { justifyContent: 'center' }]}
+                onPress={() => setDobPickerOpen(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={{ color: dob ? Colors.textPrimary : Colors.textMuted, fontSize: 16 }}>
+                  {dob || 'Tap to select'}
+                </Text>
+              </TouchableOpacity>
+              {/* R110 P1-9: 独立 Modal 装 DateTimePicker, iOS/Android 都用同一 UX */}
+              <Modal
+                visible={dobPickerOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setDobPickerOpen(false)}
+              >
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
+                  activeOpacity={1}
+                  onPress={() => setDobPickerOpen(false)}
+                >
+                  <TouchableOpacity activeOpacity={1} style={{ backgroundColor: '#fff', paddingBottom: 30 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
+                      <TouchableOpacity onPress={() => setDobPickerOpen(false)}>
+                        <Text style={{ fontSize: 16, color: Colors.textMuted }}>Cancel</Text>
+                      </TouchableOpacity>
+                      <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.textPrimary }}>Date of birth</Text>
+                      <TouchableOpacity onPress={() => setDobPickerOpen(false)}>
+                        <Text style={{ fontSize: 16, color: Colors.primary, fontWeight: '600' }}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <DateTimePicker
+                      value={dob ? new Date(dob) : new Date(Date.now() - 25 * 365 * 24 * 60 * 60 * 1000)}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      maximumDate={new Date(Date.now() - 13 * 365 * 24 * 60 * 60 * 1000)}
+                      minimumDate={new Date('1900-01-01')}
+                      onChange={(_, selected) => {
+                        if (selected) {
+                          const y = selected.getFullYear();
+                          const m = String(selected.getMonth() + 1).padStart(2, '0');
+                          const d = String(selected.getDate()).padStart(2, '0');
+                          setDob(`${y}-${m}-${d}`);
+                          if (dobError) setDobError('');
+                        }
+                      }}
+                    />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              </Modal>
               {dobError ? <Text style={formStyles.errorText}>{dobError}</Text> : (
                 <Text style={formStyles.hintText}>You must be 13+ to use Cairn.</Text>
               )}
@@ -1566,13 +1650,25 @@ export function AuthScreen() {
               </View>
               {!!privacyError && <Text style={formStyles.fieldError}>{privacyError}</Text>}
 
-              {privacyExpanded && (
-                <View style={formStyles.privacyExpanded}>
-                  <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled showsVerticalScrollIndicator>
+              {/* R110 P2-13: 隐私政策改用全屏 Modal 打开, 避免内嵌 ScrollView 的 nested scroll 冲突 */}
+              <Modal
+                visible={privacyExpanded}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setPrivacyExpanded(false)}
+              >
+                <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bg }} edges={['top', 'bottom']}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.textPrimary }}>Privacy Policy</Text>
+                    <TouchableOpacity onPress={() => setPrivacyExpanded(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                      <Text style={{ fontSize: 16, color: Colors.primary, fontWeight: '600' }}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
                     <Text style={formStyles.privacyContent}>{PRIVACY_POLICY}</Text>
                   </ScrollView>
-                </View>
-              )}
+                </SafeAreaView>
+              </Modal>
             </>
           )}
 
@@ -1593,10 +1689,7 @@ export function AuthScreen() {
           {/* Social login — Sign In only, not on Create Account */}
           {!isRegister && (
             <>
-              <Text style={formStyles.staySignedIn}>
-                You'll stay signed in for 30 days.
-              </Text>
-
+              {/* R110 P2-12: 删掉 "You'll stay signed in for 30 days" 文案 (Issue E) —— 用户不需要知道 token 有效期, 和下方 Remember me checkbox 逻辑重叠增加认知负担 */}
               <View style={formStyles.divider}>
                 <View style={formStyles.divLine} />
                 <Text style={formStyles.divText}>or continue with</Text>

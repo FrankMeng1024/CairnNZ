@@ -317,7 +317,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //
 // Verified: TypeScript --noEmit clean (only pre-existing test / turf-helpers
 // warnings unchanged). Ready for real-device TestFlight verification.
-export const OTA_VERSION = 'O19';
+export const OTA_VERSION = 'O20';
 
 
 type OtaState =
@@ -359,6 +359,9 @@ interface Props {
 }
 
 export function OtaBadge({ inline = false, idleHidden = false }: Props) {
+  // R110 P2-11: 生产环境隐藏 OTA 版本徽章 (dev 用户不需要看 v456 之类, 且泄漏 OTA_VERSION 无意义).
+  // 只在 __DEV__ (Expo dev client / Metro bundler) 或 内测环境 显示.
+  if (!__DEV__) return null;
   const [state, setState] = useState<OtaState>('checking');
   const [modalOpen, setModalOpen] = useState(false);
   const fade = useRef(new Animated.Value(inline ? 1 : 0)).current;
