@@ -21,6 +21,24 @@
     --warn-bg: #fef4c4;
     --code-bg: #f0ebe0;
   }
+  /* Dark mode — 跟随 feature-map 顶部 ☀️/🌙 切换 (localStorage cairn-theme) */
+  html.dark-mode {
+    --bg: #0a0c14;
+    --card: #141824;
+    --fg: #e4e8f4;
+    --muted: #a8b0c4;
+    --dim: #6b7288;
+    --border: #2a2f3d;
+    --accent: #7ea065;
+    --accent-soft: #1f2e1a;
+    --pass: #7ea065;
+    --pass-bg: #1f2e1a;
+    --fail: #d95d4a;
+    --fail-bg: #3a1a15;
+    --warn: #e5b04e;
+    --warn-bg: #3a2f18;
+    --code-bg: #1a1f2e;
+  }
   * { box-sizing: border-box; }
   body {
     margin: 0; padding: 0;
@@ -204,25 +222,76 @@
   .status-pill.readonly {
     cursor: default;
   }
-  .status-pill.readonly.fail {
+  .status-pill.readonly.has-evidence {
     cursor: help;
   }
-  .status-pill.readonly.fail:hover::after {
-    content: attr(data-tooltip);
-    position: absolute; top: calc(100% + 6px);
+
+  /* Rich tooltip — 支持缩略图 + 复制按钮 + 大图链接 */
+  .evidence-tooltip {
+    display: none;
+    position: absolute; top: calc(100% + 8px);
     left: 50%; transform: translateX(-50%);
-    background: #2a2a2a; color: white; padding: 10px 12px;
-    border-radius: 6px; font-size: 12px; z-index: 20;
-    white-space: pre-wrap; max-width: 320px; min-width: 200px; text-align: left;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.2); font-weight: 400;
-    line-height: 1.5;
-    pointer-events: none;
+    background: #1a1a1a; color: white;
+    padding: 10px 12px; border-radius: 8px;
+    font-size: 12px; z-index: 100;
+    min-width: 280px; max-width: 420px;
+    text-align: left; line-height: 1.5;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    pointer-events: auto;
+    white-space: normal;
   }
-  .status-pill.readonly.fail:hover::before {
-    content: ""; position: absolute; top: calc(100% + 2px);
+  .status-pill:hover .evidence-tooltip {
+    display: block;
+  }
+  .evidence-tooltip::before {
+    content: ""; position: absolute; top: -8px;
     left: 50%; transform: translateX(-50%);
-    border: 4px solid transparent; border-bottom-color: #2a2a2a;
-    z-index: 21;
+    border: 4px solid transparent; border-bottom-color: #1a1a1a;
+  }
+  .evidence-tooltip .reason {
+    color: #ffcc99; font-weight: 500; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid #333;
+  }
+  .evidence-tooltip .pass-note {
+    color: #a4d288; font-weight: 500; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid #333;
+  }
+  .evidence-tooltip .shots {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px;
+  }
+  .evidence-tooltip .shot {
+    display: flex; flex-direction: column; gap: 2px;
+    background: #0a0a0a; border-radius: 4px; padding: 4px;
+    max-width: 130px;
+  }
+  .evidence-tooltip .shot img {
+    width: 120px; height: 90px; object-fit: cover; border-radius: 3px;
+    background: #333; cursor: pointer;
+    border: 1px solid #444;
+  }
+  .evidence-tooltip .shot img:hover {
+    border-color: #ffcc99;
+  }
+  .evidence-tooltip .shot .path {
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 10px; color: #999; word-break: break-all;
+    max-width: 120px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .evidence-tooltip .shot .copy-btn {
+    background: #333; color: #ccc; border: none;
+    padding: 2px 6px; border-radius: 3px; cursor: pointer;
+    font-size: 10px; font-family: inherit;
+  }
+  .evidence-tooltip .shot .copy-btn:hover {
+    background: #555; color: #ffcc99;
+  }
+  .evidence-tooltip .no-shots {
+    color: #999; font-style: italic; font-size: 11px;
+  }
+  .evidence-tooltip .meta {
+    color: #888; font-size: 10px; margin-top: 6px;
+    padding-top: 6px; border-top: 1px solid #333;
   }
 
   /* 人工可点: hover + cursor pointer + 循环切换 */
@@ -325,7 +394,6 @@
 <body>
 
 <header>
-  <h1>Cairn 测试清单</h1>
   <div class="toolbar">
     <span>总进度: <span class="progress-num" id="totalProgress">0 / 0</span></span>
     <span class="split"></span>
@@ -334,7 +402,6 @@
     <span>人工: <span class="progress-num" id="manualProgress">0</span></span>
     <span class="split"></span>
     <button id="btnResetAll" class="danger">重置全部 AI 状态</button>
-    <button id="btnDump">下载 JSON 备份</button>
     <span id="saveStatus" class="save-state idle">加载中...</span>
   </div>
   <div class="tabs-wrap" id="tabsWrap"><div class="tabs" id="tabs"></div></div>
@@ -491,26 +558,50 @@ function statusLabel(s) {
 function renderStatusPair(r) {
   const aiState = r.ai_status || 'untested';
   const manualState = r.manual_status || (r.tested ? 'pass' : 'untested');
-  const aiTooltip = aiState === 'fail'
-    ? `${r.ai_reason || '(未记录原因)'}${r.ai_screenshot ? '\n\n截图: ' + r.ai_screenshot : ''}`
-    : '';
+  // 兼容旧字段: ai_screenshot (string) → ai_screenshots (array)
+  const shots = Array.isArray(r.ai_screenshots) ? r.ai_screenshots
+              : (r.ai_screenshot ? [r.ai_screenshot] : []);
+  const aiHasEvidence = aiState !== 'untested' && (shots.length > 0 || r.ai_reason);
+  const aiTooltipHTML = aiHasEvidence ? buildEvidenceTooltip(aiState, r.ai_reason, shots, r.ai_tested_at) : '';
+
   const manualTooltip = manualState === 'fail'
     ? (r.manual_reason || '(点右下角 💬 备注写原因)')
     : '';
   return `
     <div class="status-row">
       <span class="status-label">AI</span>
-      <div class="status-pill readonly ${aiState}" data-role="ai" ${aiTooltip ? `data-tooltip="${escapeHtml(aiTooltip)}"` : ''}>
+      <div class="status-pill readonly ${aiState}${aiHasEvidence ? ' has-evidence' : ''}" data-role="ai">
         <span class="dot"></span><span>${statusLabel(aiState)}</span>
+        ${aiTooltipHTML}
       </div>
     </div>
     <div class="status-row">
       <span class="status-label">人工</span>
-      <div class="status-pill clickable ${manualState}" data-role="manual" ${manualTooltip ? `data-tooltip="${escapeHtml(manualTooltip)}"` : ''}>
+      <div class="status-pill clickable ${manualState}" data-role="manual" ${manualTooltip ? `title="${escapeHtml(manualTooltip)}"` : ''}>
         <span class="dot"></span><span>${statusLabel(manualState)}</span>
       </div>
     </div>
   `;
+}
+
+function buildEvidenceTooltip(state, reason, shots, ts) {
+  const label = state === 'pass' ? 'pass-note' : 'reason';
+  const prefix = state === 'pass' ? '✓ AI 已测通过' : '✗ ' + (reason || '(未记录原因)');
+  let shotsHTML = '';
+  if (shots.length > 0) {
+    shotsHTML = '<div class="shots">' + shots.map((path, idx) => {
+      const shortName = path.split('/').pop();
+      return `<div class="shot">
+        <img src="${escapeHtml(path)}" alt="shot ${idx+1}" onclick="window.open('${escapeHtml(path)}', '_blank')" onerror="this.style.background='#5a2020';this.alt='加载失败:' + this.alt" />
+        <div class="path" title="${escapeHtml(path)}">${escapeHtml(shortName)}</div>
+        <button class="copy-btn" onclick="event.stopPropagation();navigator.clipboard.writeText('${escapeHtml(path)}').then(()=>toast('已复制: ${escapeHtml(shortName)}'))">复制路径</button>
+      </div>`;
+    }).join('') + '</div>';
+  } else {
+    shotsHTML = '<div class="no-shots">(无截图证据)</div>';
+  }
+  const meta = ts ? `<div class="meta">测试时间: ${escapeHtml(ts)}</div>` : '';
+  return `<div class="evidence-tooltip"><div class="${label}">${escapeHtml(prefix)}</div>${shotsHTML}${meta}</div>`;
 }
 
 function renderMain() {
@@ -698,17 +789,51 @@ document.getElementById('btnResetAll').addEventListener('click', () => {
   toast('AI 状态已重置');
 });
 
-document.getElementById('btnDump').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(DATA, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'user-flows-review.json'; a.click();
-  URL.revokeObjectURL(url);
-});
+/* R109: btnDump 移除 - 后端已持久化, 备份按钮多余 */
 
 /* ============================================================
  * Boot
  * ============================================================ */
+/* ============================================================
+ * Theme sync — 跟随 feature-map 顶部 ☀️/🌙 切换
+ * feature-map 用 localStorage 'cairn-theme' (light | 空/dark)
+ * ============================================================ */
+(function(){
+  function applyTheme(mode){
+    if(mode === 'dark' || !mode){
+      document.documentElement.classList.add('dark-mode');
+    } else {
+      document.documentElement.classList.remove('dark-mode');
+    }
+  }
+  // 1. localStorage 初始化
+  try {
+    var t = localStorage.getItem('cairn-theme');
+    applyTheme(t === 'light' ? 'light' : 'dark');
+  } catch(e) { applyTheme('dark'); }
+  // 2. postMessage 请求父窗口告知当前主题
+  if(window.parent !== window){
+    try { window.parent.postMessage({type:'request-theme'}, '*'); } catch(e){}
+  }
+  // 3. 收父窗口 theme 事件
+  window.addEventListener('message', function(e){
+    if(e.data && e.data.type === 'theme'){
+      applyTheme(e.data.mode);
+    }
+  });
+  // 4. 轮询 localStorage 检测父窗口切主题
+  var lastTheme = localStorage.getItem('cairn-theme');
+  setInterval(function(){
+    try {
+      var cur = localStorage.getItem('cairn-theme');
+      if(cur !== lastTheme){
+        lastTheme = cur;
+        applyTheme(cur === 'light' ? 'light' : 'dark');
+      }
+    } catch(e){}
+  }, 500);
+})();
+
 loadData();
 </script>
 
