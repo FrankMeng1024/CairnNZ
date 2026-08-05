@@ -191,10 +191,13 @@ public class CairnFogLayerModule: Module {
     private func findReactView(reactTag: Int) -> UIView? {
         // Try several lookup paths — Expo / RN new arch handles vary.
         // (1) UIApplication.shared.delegate.window root view tree.
-        guard let window = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .flatMap({ $0.windows })
-                .first(where: { $0.isKeyWindow }) ?? UIApplication.shared.windows.first
+        // R105 (Xcode 26): flatMap({ $0.windows }) 有 Sequence/Optional 重载歧义
+        // + UIApplication.shared.windows iOS 15 deprecated. 改用 reduce 显式拼接
+        // + 只走 scene-based 查询, 去掉 shared.windows fallback。
+        let allWindows: [UIWindow] = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .reduce(into: [UIWindow]()) { $0.append(contentsOf: $1.windows) }
+        guard let window = allWindows.first(where: { $0.isKeyWindow }) ?? allWindows.first
         else {
             log("findReactView: no key window")
             return nil
@@ -243,11 +246,13 @@ public class CairnFogLayerModule: Module {
 
         self.lastExtractFailureTree = ""
         var innerView: UIView? = view
-        if view.responds(to: Selector(("mapView"))) {
+        // R105 (Xcode 26): Selector(("mapView")) 双括号绕 #selector 检查有时报 warning-as-error,
+        // 改用 NSSelectorFromString 更明确, 跟 line 209 保持一致。
+        if view.responds(to: NSSelectorFromString("mapView")) {
             // Looks like RNMBXMapView already.
             innerView = view
         } else if let contentView = view.value(forKey: "contentView") as? UIView,
-                  contentView.responds(to: Selector(("mapView"))) {
+                  contentView.responds(to: NSSelectorFromString("mapView")) {
             innerView = contentView
         }
         guard let host = innerView,

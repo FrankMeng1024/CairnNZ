@@ -392,23 +392,22 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         // example 的 .simdFloat4x4 写法。
         let pm = parameters.projectionMatrix
         let proj: float4x4
+        // R105 (2026-08-05): 删过度防御的 [[NSNumber]] 兼容分支。
+        // 原代码 `let nums = pm.flatMap { $0 as? [NSNumber] }` +
+        // `let flat: [NSNumber] = nums.isEmpty ? (pm as? [NSNumber] ?? []) : nums`
+        // Swift 编译器 Xcode 26 严格类型推断: flatMap 结果被推为 [[NSNumber]],
+        // ternary 两侧类型 [NSNumber] vs [[NSNumber]] 不匹配 → build fail.
+        // 注释 391 行本身就说 "Mapbox 内部声明就是扁平 NSArray of NSNumber",
+        // 兼容分支永远不执行, 删掉不影响运行时。
         if pm.count >= 16 {
-            // Swift bridge: pm 是 [NSNumber]。`pm[i]` 返回 NSNumber,
-            // .floatValue 转 Float。column-major 16 个数 → simd_float4x4(cols)。
-            let nums = pm.flatMap { $0 as? [NSNumber] } // 兼容 [[NSNumber]] 旧 SDK
-            let flat: [NSNumber] = nums.isEmpty ? (pm as? [NSNumber] ?? []) : nums
-            if flat.count >= 16 {
-                proj = float4x4(
-                    SIMD4<Float>(flat[0].floatValue, flat[1].floatValue, flat[2].floatValue, flat[3].floatValue),
-                    SIMD4<Float>(flat[4].floatValue, flat[5].floatValue, flat[6].floatValue, flat[7].floatValue),
-                    SIMD4<Float>(flat[8].floatValue, flat[9].floatValue, flat[10].floatValue, flat[11].floatValue),
-                    SIMD4<Float>(flat[12].floatValue, flat[13].floatValue, flat[14].floatValue, flat[15].floatValue)
-                )
-            } else {
-                // 真的拿不到 — 用 identity,fog 不会偏但也不会跟地图对齐
-                proj = matrix_identity_float4x4
-                if renderFrameCount < 5 { NSLog("[CairnFog] WARN projectionMatrix flat count=%d", flat.count) }
-            }
+            // Swift bridge: pm 是 [NSNumber]. `pm[i]` 返回 NSNumber,
+            // .floatValue 转 Float. column-major 16 个数 → simd_float4x4(cols)。
+            proj = float4x4(
+                SIMD4<Float>(pm[0].floatValue, pm[1].floatValue, pm[2].floatValue, pm[3].floatValue),
+                SIMD4<Float>(pm[4].floatValue, pm[5].floatValue, pm[6].floatValue, pm[7].floatValue),
+                SIMD4<Float>(pm[8].floatValue, pm[9].floatValue, pm[10].floatValue, pm[11].floatValue),
+                SIMD4<Float>(pm[12].floatValue, pm[13].floatValue, pm[14].floatValue, pm[15].floatValue)
+            )
         } else {
             proj = matrix_identity_float4x4
             if renderFrameCount < 5 { NSLog("[CairnFog] WARN projectionMatrix count=%d", pm.count) }
@@ -427,7 +426,8 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         // 2. inverseProjection (64 bytes)
         memcpy(contents.advanced(by: offset), [inv], 64);  offset += 64
         // 3. circles (256 × 16 = 4096 bytes)
-        circlesCopy.withUnsafeBufferPointer { ptr in
+        // R105 (Xcode 26): 显式丢弃 withUnsafeBufferPointer 返回值防止 warning-as-error
+        _ = circlesCopy.withUnsafeBufferPointer { ptr in
             memcpy(contents.advanced(by: offset), ptr.baseAddress, 256 * 16)
         }
         offset += 256 * 16
@@ -437,7 +437,8 @@ public class CairnFogCustomLayer: NSObject, CustomLayerHost {
         // 5. feather (4)
         // v303 四轮 fix (Serious #5): modeFlag=2 (sharp) 时 effective feather
         // = min(feather, 0.02),保留 sharp 视觉但不再覆盖用户 setFeather。
-        var f: Float = (modeFlag == 2) ? min(feather, 0.02) : feather
+        // R105 (Xcode 26): 0.02 literal 明确 Float, 避免类型推断歧义。
+        var f: Float = (modeFlag == 2) ? min(feather, Float(0.02)) : feather
         memcpy(contents.advanced(by: offset), &f, 4); offset += 4
         // 6. time (4)
         var t = now; memcpy(contents.advanced(by: offset), &t, 4); offset += 4
