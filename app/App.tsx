@@ -364,6 +364,86 @@ function AppRoot() {
       console.warn('[hydrate failed sync]', err);
     }
 
+    // R113 restore: expose Zustand stores to Playwright web QA (Round loop
+    // for docs/feature-map/flows). Original hooks were removed in O11 pre-
+    // launch cleanup (commit 6bb108e) but R113 needs them to drive ~300
+    // hike/run/memory/plant/replay cases programmatically. Guarded on
+    // Platform.OS==='web' — native iOS/Android bundles never touch these
+    // lines because Metro tree-shakes Platform.OS branches.
+    // MUST DELETE before App Store submission (final production build).
+    // Track: memory/feedback_sleep_map_round_2026_08_05.md.
+    try {
+      if (Platform.OS === 'web' && typeof globalThis !== 'undefined') {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const trackingStore = require('./src/store/useTrackingStore').useTrackingStore;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const sessionStore = require('./src/store/useSessionStore').useSessionStore;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const memoryStore = require('./src/features/memory/store/useMemoryStore').useMemoryStore;
+        (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = {
+          useAppStore,
+          useTrackingStore: trackingStore,
+          useSessionStore: sessionStore,
+          useMemoryStore: memoryStore,
+        };
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const offlineQueue = require('./src/services/offlineQueue');
+          (globalThis as unknown as { __cairnOfflineQueue?: unknown }).__cairnOfflineQueue = {
+            readSnapshot: offlineQueue.readQueueSnapshot,
+            clear: offlineQueue.clearQueue,
+            drain: offlineQueue.drain,
+            enqueue: offlineQueue.enqueue,
+            makeOp: offlineQueue.makeOp,
+          };
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const hikeTrackWriter = require('./src/services/hikeTrackWriter');
+          (globalThis as unknown as { __cairnHikeWriter?: unknown }).__cairnHikeWriter = {
+            getWriterState: hikeTrackWriter.getWriterState,
+            listActiveHikes: hikeTrackWriter.listActiveHikes,
+            readActiveHikeTail: hikeTrackWriter.readActiveHikeTail,
+            flushNow: hikeTrackWriter.flushNow,
+            startHikeTrack: hikeTrackWriter.startHikeTrack,
+            appendHikePoint: hikeTrackWriter.appendHikePoint,
+            renameToCompleted: hikeTrackWriter.renameToCompleted,
+            discardActiveHike: hikeTrackWriter.discardActiveHike,
+            markUploaded: hikeTrackWriter.markUploaded,
+            resumeHikeTrack: hikeTrackWriter.resumeHikeTrack,
+          };
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const hikeTracksCache = require('./src/services/hikeTracksCache');
+          (globalThis as unknown as { __cairnHikeCache?: unknown }).__cairnHikeCache = {
+            getDiskUsage: hikeTracksCache.getDiskUsage,
+            enforceSizeCap: hikeTracksCache.enforceSizeCap,
+            enforceTTL: hikeTracksCache.enforceTTL,
+            clearUploaded: hikeTracksCache.clearUploaded,
+            clearAll: hikeTracksCache.clearAll,
+          };
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const pendingSyncStore = require('./src/services/pendingSyncStore');
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const syncDaemon = require('./src/services/syncDaemon');
+            (globalThis as unknown as { __cairnPendingSync?: unknown }).__cairnPendingSync = {
+              savePending: pendingSyncStore.savePending,
+              listPending: pendingSyncStore.listPending,
+              removePending: pendingSyncStore.removePending,
+              markAttempt: pendingSyncStore.markAttempt,
+              updateRemoteId: pendingSyncStore.updateRemoteId,
+              drainPending: syncDaemon.drainPending,
+              abandonPending: syncDaemon.abandonPending,
+            };
+          } catch (v412Err) {
+            console.warn('[R113 v412 web hooks failed]', v412Err);
+          }
+        } catch (innerErr) {
+          console.warn('[R113 v409 web hooks failed]', innerErr);
+        }
+      }
+    } catch (err) {
+      console.warn('[R113 __cairnStores web hook failed]', err);
+    }
+
     // Configure debug logger device info + start network monitor
     try {
       markBootPhase('ue_main_before_debuglogger_configure');

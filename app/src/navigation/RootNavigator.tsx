@@ -10,8 +10,19 @@
  * inside the existing tools row, not a wholesale tab-bar swap.
  */
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { Platform } from 'react-native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+// R113 restore: navigationRef for Playwright web QA (Round loop). Removed
+// in O11 pre-launch cleanup (commit 6bb108e), restored here for the 433-
+// case reverse-test loop. Guarded on Platform.OS==='web' — native/production
+// bundles get null because Metro tree-shakes Platform.OS branches.
+// MUST DELETE before App Store submission (production build).
+// Track memory feedback_sleep_map_round_2026_08_05.md.
+export const navigationRef = Platform.OS === 'web'
+  ? createNavigationContainerRef()
+  : null as unknown as ReturnType<typeof createNavigationContainerRef>;
 
 import { AuthScreen } from '../screens/AuthScreen';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -93,8 +104,33 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer
+      ref={navigationRef ?? undefined}
       onReady={() => {
         markBootPhase('navigation_container_ready', { isLoggedIn: !!isLoggedIn });
+        // R113 restore: expose nav helpers + settings/sim-walker stores
+        // to __cairnStores for Playwright web QA. Guarded on Platform.OS==='web'.
+        try {
+          if (Platform.OS === 'web' && typeof globalThis !== 'undefined') {
+            const stores = (globalThis as unknown as { __cairnStores?: Record<string, unknown> }).__cairnStores ?? {};
+            stores.navigationRef = navigationRef;
+            stores.getCurrentRoute = () => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const ref: any = navigationRef;
+              if (!ref || typeof ref.isReady !== 'function' || !ref.isReady()) return null;
+              const r = ref.getCurrentRoute();
+              return r ? r.name : null;
+            };
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.useSettingsStore = require('../store/useSettingsStore').useSettingsStore;
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.useSimWalkerStore = require('../dev/simWalker/useSimWalkerStore').useSimWalkerStore;
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.gpsInjector = require('../dev/simWalker/gpsInjector').gpsInjector;
+            } catch { /* ignore */ }
+            (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = stores;
+          }
+        } catch { /* ignore */ }
       }}
     >
       <Stack.Navigator
