@@ -739,7 +739,7 @@ export function MemoryScreen() {
         </View>
       ) : (
         <View style={styles.waitingForGps}>
-          <ActivityIndicator color={MemoryColors.sepia} size="large" />
+          <ActivityIndicator color={Colors.primary} size="large" />
           <Text style={[styles.waitingTitle, { marginTop: 16 }]}>Looking for your position…</Text>
           <Text style={styles.waitingSub}>
             We need a GPS fix to draw your memory map.
@@ -846,7 +846,7 @@ export function MemoryScreen() {
         >
           <View style={styles.loadingInner}>
             <View style={styles.loadingLogoCircle}>
-              <Icon name="Mountain" size={44} color={MemoryColors.sepia} strokeWidth={1.5} />
+              <Icon name="Mountain" size={44} color={Colors.primary} strokeWidth={1.5} />
             </View>
             <Text style={styles.loadingTitle}>Cairn</Text>
             <Text style={styles.loadingSub}>
@@ -857,7 +857,7 @@ export function MemoryScreen() {
                   : 'Network is slow, please wait…'}
             </Text>
             <ActivityIndicator
-              color={MemoryColors.sepia}
+              color={Colors.primary}
               size="small"
               style={styles.loadingSpinner}
             />
@@ -1039,16 +1039,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   waitingForGps: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  waitingTitle: { fontSize: 16, fontWeight: '500', color: MemoryColors.sepiaDeep },
-  waitingSub:   { fontSize: 13, color: MemoryColors.cairnPublic, marginTop: 8, textAlign: 'center' },
+  waitingTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
+  waitingSub:   { fontSize: 13, color: Colors.textSecondary, marginTop: 8, textAlign: 'center' },
   primaryBtn: {
     marginTop: 20,
-    backgroundColor: MemoryColors.sepia,
+    backgroundColor: Colors.primary,
     paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12,
   },
   primaryBtnText: { color: '#fff', fontSize: 14, fontWeight: '500' },
   secondaryBtn: { marginTop: 10, paddingVertical: 10, paddingHorizontal: 18 },
-  secondaryBtnText: { color: MemoryColors.cairnPublic, fontSize: 13 },
+  secondaryBtnText: { color: Colors.textSecondary, fontSize: 13 },
   recenterBtn: {
     position: 'absolute',
     right: 16, bottom: 110,
@@ -1092,9 +1092,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 18, padding: 22,
     width: '100%', maxWidth: 360,
   },
-  hintTitle: { fontSize: 17, fontWeight: '600', color: MemoryColors.sepiaDeep, marginBottom: 10 },
+  hintTitle: { fontSize: 17, fontWeight: '600', color: Colors.textPrimary, marginBottom: 10 },
   hintBody:  { fontSize: 13, lineHeight: 19, color: Colors.textSecondary, marginBottom: 18 },
-  hintBtn:   { backgroundColor: MemoryColors.sepia, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
+  hintBtn:   { backgroundColor: Colors.primary, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
   hintBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   // v359: loading overlay — covers the entire MemoryMap during the
   // map+fog hydrate window. Cream background matches the screen root
@@ -1128,13 +1128,13 @@ const styles = StyleSheet.create({
   loadingTitle: {
     fontSize: 22,
     fontWeight: '600',
-    color: MemoryColors.sepiaDeep,
+    color: Colors.textPrimary,
     letterSpacing: 1.2,
     marginBottom: 6,
   },
   loadingSub: {
     fontSize: 13,
-    color: MemoryColors.sepia,
+    color: Colors.textSecondary,
     textAlign: 'center',
     marginBottom: 18,
   },

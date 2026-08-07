@@ -15,11 +15,14 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Platform, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import { sampleGpsWindow, SampleResult } from '../services/gpsSampler';
 import { GpsSamplingConfig } from '../config/plantConfig';
-import { MemoryColors } from '../../memory/config/memoryConfig';
+// R114 (2026-08-07): MemoryColors import removed — all refs migrated to
+// Colors.* tokens per design §12.
+import { Colors, Spacing, Radius, FontSize } from '../../../components/tokens';
+import { Icon } from '../../../components/Icon';
 import { useMemoryStore } from '../../memory/store/useMemoryStore';
 import { log } from '../../../services/appLog';
 
@@ -226,7 +229,8 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
       </Text>
 
       <View style={styles.progressBox}>
-        <ActivityIndicator color={MemoryColors.sepia} size="large" />
+        {/* R114 (2026-08-07): spinner color migrated to Colors.primary. */}
+        <ActivityIndicator color={Colors.primary} size="large" />
         <View style={styles.progressBar}>
           <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
         </View>
@@ -240,15 +244,53 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
       </View>
 
       {failed && (
-        <View style={styles.failBox}>
-          <Text style={styles.failTitle}>{describeFailure(result)}</Text>
-          <Text style={styles.failSub}>
-            Move to a more open spot and try again.
-          </Text>
-          <TouchableOpacity style={styles.retry} onPress={() => setRetryToken((n) => n + 1)}>
-            <Text style={styles.retryText}>Try again</Text>
-          </TouchableOpacity>
-        </View>
+        /* R114 (2026-08-07): retry card overhaul (design §7).
+           Was: red-on-red danger box with a single unhelpful "Try again"
+           button. Users reported not knowing why the retry might work
+           differently the second time. Now: warm-orange warning tone,
+           per-reason explainer copy, actual accuracy diagnostic when
+           available, primary-color CTA, and a dedicated "Open Settings"
+           ghost button when permission was denied. */
+        (() => {
+          const info = describeFailure(result);
+          const showAccuracy =
+            (result?.reason === 'accuracy-too-poor' || result?.reason === 'too-jumpy') &&
+            typeof result?.accuracyMeters === 'number' &&
+            result.accuracyMeters > 0;
+          const showSettings = result?.reason === 'permission-denied';
+          return (
+            <View style={styles.failBox}>
+              <View style={styles.failHeader}>
+                <Icon name="TriangleAlert" size={18} color={Colors.warning} strokeWidth={2.2} />
+                <Text style={styles.failTitle}>{info.title}</Text>
+              </View>
+              <Text style={styles.failSub}>{info.explainer}</Text>
+              {showAccuracy && (
+                <Text style={styles.failDiag}>
+                  Current accuracy: ±{result!.accuracyMeters.toFixed(0)} m
+                </Text>
+              )}
+              <TouchableOpacity
+                style={styles.retry}
+                onPress={() => setRetryToken((n) => n + 1)}
+                accessibilityRole="button"
+                accessibilityLabel="Search again"
+              >
+                <Text style={styles.retryText}>Search again</Text>
+              </TouchableOpacity>
+              {showSettings && (
+                <TouchableOpacity
+                  style={styles.settingsBtn}
+                  onPress={() => Linking.openSettings()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open Settings"
+                >
+                  <Text style={styles.settingsBtnText}>Open Settings</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })()
       )}
 
       {/* v420: removed field note per user preference. Loading state
@@ -262,20 +304,47 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
   );
 }
 
-function describeFailure(res: SampleResult | null): string {
+function describeFailure(res: SampleResult | null): { title: string; explainer: string } {
+  // R114 (2026-08-07): 5-reason copy table per design §7.4. Each reason
+  // now has an actionable explainer, not just a title. "Try again" alone
+  // was uninformative — the explainer tells the user WHAT will make the
+  // second attempt work.
   switch (res?.reason) {
-    case 'accuracy-too-poor': return 'GPS signal is weak';
-    case 'too-jumpy':         return 'GPS is jumping around';
-    case 'no-readings':       return 'No GPS readings received';
-    case 'permission-denied': return 'Location permission needed';
-    default:                  return 'Could not lock GPS';
+    case 'accuracy-too-poor':
+      return {
+        title: 'Weak GPS signal',
+        explainer: 'Move outside or away from buildings for a better lock.',
+      };
+    case 'too-jumpy':
+      return {
+        title: 'GPS is drifting',
+        explainer: 'Stand still for a moment. Trees and cliffs can bounce the signal.',
+      };
+    case 'no-readings':
+      return {
+        title: 'No GPS readings yet',
+        explainer: 'Check that Location is on for Cairn in Settings.',
+      };
+    case 'permission-denied':
+      return {
+        title: 'Location permission needed',
+        explainer: 'Open Settings → Cairn → Location and choose "While Using".',
+      };
+    default:
+      return {
+        title: "Couldn't lock GPS",
+        explainer: 'Move to a more open spot and try again.',
+      };
   }
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  title: { fontSize: 22, fontWeight: '500', color: MemoryColors.sepiaDeep, marginBottom: 8 },
-  sub:   { fontSize: 13, color: MemoryColors.cairnPublic, marginBottom: 20 },
+  // R114 (2026-08-07): retokenized — MemoryColors sepia palette removed
+  // per design §12 migration table. Mark surfaces standardize on
+  // Colors.primary + Colors.textPrimary/Secondary.
+  title: { fontSize: 22, fontWeight: '500', color: Colors.textPrimary, marginBottom: 8 },
+  sub:   { fontSize: 13, color: Colors.textSecondary, marginBottom: 20 },
   progressBox: {
     backgroundColor: '#fff',
     borderRadius: 14,
@@ -292,27 +361,65 @@ const styles = StyleSheet.create({
     marginTop: 16,
     overflow: 'hidden',
   },
-  progressFill: { height: '100%', backgroundColor: MemoryColors.sepia },
-  progressText: { fontSize: 12, color: MemoryColors.cairnPublic, marginTop: 10 },
+  // R114 (2026-08-07): progress fill switches to Colors.primary (forest
+  // green) to match the app-wide "go" color instead of MemoryColors.sepia.
+  progressFill: { height: '100%', backgroundColor: Colors.primary },
+  progressText: { fontSize: 12, color: Colors.textSecondary, marginTop: 10 },
+  // R114 (2026-08-07): retry card retokenized — warning tone (orange)
+  // replaces red danger. TriangleAlert icon + explainer + diagnostic +
+  // primary-color CTA. Design §7.
   failBox: {
-    backgroundColor: '#fee5e0',
-    borderColor: '#c44545',
+    backgroundColor: Colors.warningBg,
+    borderColor: Colors.warning,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 16,
+    borderRadius: Radius.card,
+    padding: Spacing.base,
+    marginTop: Spacing.base,
+    gap: Spacing.sm,
   },
-  failTitle: { fontSize: 13, fontWeight: '500', color: '#c44545' },
-  failSub:   { fontSize: 12, color: '#a83838', marginTop: 4 },
+  failHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  failTitle: {
+    fontSize: FontSize.body,
+    fontWeight: '600',
+    color: Colors.warning,
+  },
+  failSub: {
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
+    lineHeight: 18,
+  },
+  failDiag: {
+    fontSize: FontSize.small,
+    color: Colors.textMuted,
+    fontFamily: 'Courier',
+  },
   retry: {
-    marginTop: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: MemoryColors.sepia,
-    borderRadius: 10,
+    marginTop: 6,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.base,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.button,
     alignItems: 'center',
   },
-  retryText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  retryText: { color: '#fff', fontSize: FontSize.body, fontWeight: '600' },
+  settingsBtn: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: Radius.button,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  settingsBtnText: {
+    color: Colors.primary,
+    fontSize: FontSize.caption,
+    fontWeight: '600',
+  },
   cancel: { padding: 14, alignItems: 'center' },
-  cancelText: { fontSize: 14, color: MemoryColors.cairnPublic },
+  // R114 (2026-08-07): Cancel copy color migrated to Colors.textSecondary.
+  cancelText: { fontSize: 14, color: Colors.textSecondary },
 });

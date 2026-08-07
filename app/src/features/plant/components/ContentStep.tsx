@@ -1,32 +1,32 @@
 /**
  * ContentStep — Step 3 of plant flow.
  *
- * v0.2.6.6 (V3+V4+V5):
- *   - Cairn TYPE picker (danger / junction / water / hut / cairn) above
- *     the title/text inputs. Type is part of MarkerType (single source
- *     in src/config/markerTypes).
- *   - Visibility picker now includes 'Anyone' (Public) — was hidden.
- *   - KeyboardAvoidingView lifts the Plant Cairn button above the
- *     keyboard.
- *   - Tap anywhere outside the inputs dismisses the keyboard.
- *   - keyboardAppearance + returnKeyType='done' so the OS keyboard
- *     has a clean dismiss path.
- *   - returnKeyType='done' submits inputs without an explicit close.
+ * R114 (2026-08-07): body swapped to shared <MarkForm> component.
+ * Previously had inline TextInputs + typeRow + chipRow with
+ * MemoryColors.sepia tokens that clashed with MarkerDetailScreen edit
+ * mode. Now uses the same MarkForm mount as edit mode = pixel-identical
+ * form UX everywhere content is authored (design §5).
+ *
+ * ContentStep now owns only:
+ *   - Screen orchestration (back row, title, subtitle, ScrollView)
+ *   - Keyboard-avoidance shell
+ *   - Sticky bottom bar with Plant Cairn primary button
+ *   - Draft state (type/title/text/visibility) — passed as controlled
+ *     props to MarkForm
  */
 
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback,
   ScrollView,
 } from 'react-native';
 import { MarkerPermission } from '../../../store/useMarkerStore';
 import { ContentConfig, VisibilityConfig } from '../config/plantConfig';
-import { MemoryColors } from '../../memory/config/memoryConfig';
-import { Icon, IconName } from '../../../components/Icon';
-import { MARKER_TYPE_ORDER, MARKER_TYPES, MarkerType } from '../../../config/markerTypes';
-import { log } from '../../../services/appLog';
+import { Colors, Spacing, Radius, FontSize } from '../../../components/tokens';
+import { MarkerType } from '../../../config/markerTypes';
 import { BackButton } from '../../../components/BackButton';
+import { MarkForm } from '../../marks/components/MarkForm';
 
 interface Props {
   initialTitle: string;
@@ -70,8 +70,8 @@ export function ContentStep({
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View style={styles.container}>
-          {/* v299 N5b: top BackButton — replaces the bottom-of-screen
-              text Back link. Matches PinAdjustStep step 2 layout. */}
+          {/* R114 (2026-08-07): back row keeps existing pill variant so
+              plant flow feels continuous with PinAdjustStep. */}
           <View style={styles.backRow}>
             <BackButton variant="pill" onPress={() => { Keyboard.dismiss(); onBack(); }} />
           </View>
@@ -83,66 +83,31 @@ export function ContentStep({
             <Text style={styles.title}>Leave a mark</Text>
             <Text style={styles.sub}>A few words, and a photo if you'd like.</Text>
 
-            {/* V5: cairn type picker */}
-            <Text style={styles.label}>Type</Text>
-            <View style={styles.typeRow}>
-              {MARKER_TYPE_ORDER.map((t) => {
-                const meta = MARKER_TYPES[t];
-                const active = type === t;
-                return (
-                  <TouchableOpacity
-                    key={t}
-                    style={[styles.typeChip, active && {
-                      backgroundColor: meta.bg,
-                      borderColor: meta.color,
-                    }]}
-                    onPress={() => { log('plant.type_select', { type: t }); setType(t); }}
-                  >
-                    <Icon name={meta.icon as IconName} size={16} color={active ? meta.color : MemoryColors.cairnPublic} strokeWidth={2} />
-                    <Text style={[styles.typeChipLabel, active && { color: meta.color, fontWeight: '500' }]}>
-                      {meta.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <TextInput
-              style={styles.input}
-              placeholder={`Title (max ${ContentConfig.titleMaxChars})`}
-              maxLength={ContentConfig.titleMaxChars}
-              value={title}
-              onChangeText={setTitle}
-              returnKeyType="next"
-              blurOnSubmit={false}
+            {/* R114 (2026-08-07): all field authoring routed through the
+                shared MarkForm component. Autofocus title on entry so
+                keyboard is up as soon as the step mounts. */}
+            <MarkForm
+              type={type}
+              title={title}
+              note={text}
+              visibility={visibility}
+              onTypeChange={setType}
+              onTitleChange={setTitle}
+              onNoteChange={setText}
+              onVisibilityChange={setVisibility}
+              mode="create"
+              disableVisibilityPublic={!VisibilityConfig.enablePublicOption}
+              showLocationLockedNotice={false}
+              autoFocus="title"
+              titleMaxChars={ContentConfig.titleMaxChars}
+              noteMaxChars={ContentConfig.textMaxChars}
             />
-            <Text style={styles.charCounter}>{title.length} / {ContentConfig.titleMaxChars}</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Tell whoever finds this…"
-              maxLength={ContentConfig.textMaxChars}
-              value={text}
-              onChangeText={setText}
-              multiline
-              returnKeyType="default"
-              blurOnSubmit={false}
-            />
-            <Text style={styles.charCounter}>{text.length} / {ContentConfig.textMaxChars}</Text>
 
             {__DEV__ && (
               <View style={styles.voiceBox}>
                 <Text style={styles.voiceTodo}>Voice memo (dev-only preview — coming in a later release)</Text>
               </View>
             )}
-
-            <Text style={styles.label}>Who can see this</Text>
-            <View style={styles.chipRow}>
-              <VisChip label="Just me"  active={visibility === 'personal'} onPress={() => setVisibility('personal')} iconName="Lock" />
-              <VisChip label="Friends"  active={visibility === 'group'}    onPress={() => setVisibility('group')}    iconName="Users" />
-              {VisibilityConfig.enablePublicOption && (
-                <VisChip label="Anyone" active={visibility === 'public'}   onPress={() => setVisibility('public')}   iconName="Globe" />
-              )}
-            </View>
           </ScrollView>
 
           <View style={styles.bottomBar}>
@@ -170,6 +135,9 @@ export function ContentStep({
                   voiceMs: null,
                 });
               }}
+              accessibilityRole="button"
+              accessibilityLabel={submitting ? 'Planting' : 'Plant Cairn'}
+              accessibilityState={{ disabled: !canSubmit }}
             >
               <Text style={styles.primaryText}>{submitting ? 'Planting…' : 'Plant Cairn'}</Text>
             </TouchableOpacity>
@@ -180,79 +148,54 @@ export function ContentStep({
   );
 }
 
-interface ChipProps {
-  label: string; active: boolean; onPress: () => void; iconName: IconName;
-}
-function VisChip({ label, active, onPress, iconName }: ChipProps) {
-  return (
-    <TouchableOpacity style={[styles.chip, active && styles.chipActive]} onPress={onPress}>
-      <Icon name={iconName} size={14} color={active ? MemoryColors.sepia : MemoryColors.cairnPublic} strokeWidth={2} />
-      <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  title: { fontSize: 22, fontWeight: '500', color: MemoryColors.sepiaDeep, marginBottom: 6 },
-  sub:   { fontSize: 13, color: MemoryColors.cairnPublic, marginBottom: 16 },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1, borderColor: '#e8dfc8',
-    borderRadius: 12, padding: 12, fontSize: 13,
-    color: MemoryColors.sepiaDeep, marginBottom: 12,
+  // R114 (2026-08-07): retokenized from MemoryColors.sepia* → Colors.*.
+  // Consistent with MarkerDetailScreen / MarkDetailSheet after refactor.
+  title: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 6,
   },
-  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  sub: {
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
+  },
   voiceBox: {
-    backgroundColor: '#fff',
-    borderRadius: 12, borderWidth: 1, borderColor: '#e8dfc8',
-    padding: 14, alignItems: 'center', marginBottom: 14,
-  },
-  voiceTodo: { fontSize: 12, color: MemoryColors.cairnPublic },
-  charCounter: {
-    fontSize: 10,
-    color: MemoryColors.cairnPublic,
-    textAlign: 'right',
-    marginTop: -8, marginBottom: 8,
-  },
-  label: { fontSize: 11, color: MemoryColors.cairnPublic, marginBottom: 8, marginTop: 4 },
-  typeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 14,
-  },
-  typeChip: {
-    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.button,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10, paddingVertical: 7,
-    backgroundColor: '#fff',
-    borderWidth: 1, borderColor: '#e8dfc8',
-    borderRadius: 18,
+    marginTop: 14,
   },
-  typeChipLabel: { fontSize: 12, color: MemoryColors.cairnPublic },
-  chipRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  chip: {
-    flex: 1, padding: 10, alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1, borderColor: '#e8dfc8', borderRadius: 10,
+  voiceTodo: {
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
   },
-  chipActive: { backgroundColor: '#fff5e0', borderColor: MemoryColors.sepia },
-  chipLabel: { fontSize: 11, color: MemoryColors.cairnPublic },
-  chipLabelActive: { color: MemoryColors.sepia, fontWeight: '500' },
   bottomBar: {
     paddingTop: 8,
   },
+  // R114 (2026-08-07): primary CTA now Colors.primary (forest green) —
+  // was MemoryColors.sepia. Unifies with all other Mark surfaces.
   primary: {
-    backgroundColor: MemoryColors.sepia,
-    padding: 14, borderRadius: 12, alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: Radius.button,
+    alignItems: 'center',
   },
   primaryDisabled: { opacity: 0.4 },
-  primaryText: { color: '#fff', fontSize: 14, fontWeight: '500' },
+  primaryText: {
+    color: '#ffffff',
+    fontSize: FontSize.body,
+    fontWeight: '600',
+  },
   permanentHint: {
-    fontSize: 11,
-    color: MemoryColors.cairnPublic,
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
     textAlign: 'center',
     marginBottom: 8,
     fontStyle: 'italic',

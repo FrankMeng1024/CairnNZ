@@ -406,9 +406,35 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
       // Background permission for lock-screen tracking — best effort, app keeps
       // working even if user denies (just no background updates).
+      //
+      // R114 (2026-08-07): user reported "为什么 running 单独一个权限" — iOS
+      // was surfacing a fresh Always-Allow dialog on every startTracking call
+      // if background was never granted. Once the user has denied Always
+      // Allow (or granted only While-Using-App), iOS will not honour further
+      // requestBackgroundPermissionsAsync calls with a dialog anyway (silent
+      // deny), but reading current status via getBackgroundPermissionsAsync
+      // still lets us know the state without triggering any dialog. We now
+      // only actively `request` on the very first call (SecureStore flag not
+      // set yet); on subsequent calls we `get` current status silently.
       try {
-        const bg = await loc.requestBackgroundPermissionsAsync();
-        backgroundGrantedCached = bg.status === 'granted';
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const SecureStore = require('expo-secure-store');
+        const KEY = 'cairn_has_seen_always_allow_education';
+        let hasSeen = false;
+        try {
+          hasSeen = (await SecureStore.getItemAsync(KEY)) === '1';
+        } catch { /* silent */ }
+        if (hasSeen) {
+          // Silent read — no dialog. Whatever the user chose (Deny, While
+          // Using, Always), we honour it without re-prompting.
+          const bg = await loc.getBackgroundPermissionsAsync();
+          backgroundGrantedCached = bg.status === 'granted';
+        } else {
+          // First tracking session ever: ask once. iOS will show the
+          // Always-Allow dialog. Subsequent sessions read silently.
+          const bg = await loc.requestBackgroundPermissionsAsync();
+          backgroundGrantedCached = bg.status === 'granted';
+        }
       } catch {
         // Background permission not available on this build (e.g. web, simulator).
         backgroundGrantedCached = false;

@@ -1218,22 +1218,25 @@ export function AuthScreen() {
                     <Text style={{ fontSize: 16, color: Colors.primary, fontWeight: '600' }}>Done</Text>
                   </TouchableOpacity>
                 </View>
-                <DateTimePicker
-                  value={dob ? new Date(dob) : new Date(Date.now() - 25 * 365 * 24 * 60 * 60 * 1000)}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  maximumDate={new Date(Date.now() - 13 * 365 * 24 * 60 * 60 * 1000)}
-                  minimumDate={new Date('1900-01-01')}
-                  onChange={(_, selected) => {
-                    if (selected) {
-                      const y = selected.getFullYear();
-                      const m = String(selected.getMonth() + 1).padStart(2, '0');
-                      const d = String(selected.getDate()).padStart(2, '0');
-                      setDob(`${y}-${m}-${d}`);
-                      if (dobError) setDobError('');
-                    }
-                  }}
-                />
+                {/* R113 fix: iOS spinner picker 需要固定高度容器才渲染滚轮 (同 Create Account 屏 DOB) */}
+                <View style={{ height: 220, justifyContent: 'center' }}>
+                  <DateTimePicker
+                    value={dob ? new Date(dob) : new Date(Date.now() - 25 * 365 * 24 * 60 * 60 * 1000)}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    maximumDate={new Date(Date.now() - 13 * 365 * 24 * 60 * 60 * 1000)}
+                    minimumDate={new Date('1900-01-01')}
+                    onChange={(_, selected) => {
+                      if (selected) {
+                        const y = selected.getFullYear();
+                        const m = String(selected.getMonth() + 1).padStart(2, '0');
+                        const d = String(selected.getDate()).padStart(2, '0');
+                        setDob(`${y}-${m}-${d}`);
+                        if (dobError) setDobError('');
+                      }
+                    }}
+                  />
+                </View>
               </TouchableOpacity>
             </TouchableOpacity>
           </Modal>
@@ -1467,8 +1470,10 @@ export function AuthScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoFocus={!isRegister}
-            textContentType="emailAddress"
-            autoComplete="email"
+            // R113 fix: 只在 Sign In 让 iOS autofill 已保存邮箱;
+            // Create Account 时禁用 autofill 以避免 100% 干净新用户看到别人的旧邮箱.
+            textContentType={isRegister ? 'none' : 'emailAddress'}
+            autoComplete={isRegister ? 'off' : 'email'}
           />
 
           <Text style={formStyles.label}>Password</Text>
@@ -1602,22 +1607,26 @@ export function AuthScreen() {
                         <Text style={{ fontSize: 16, color: Colors.primary, fontWeight: '600' }}>Done</Text>
                       </TouchableOpacity>
                     </View>
-                    <DateTimePicker
-                      value={dob ? new Date(dob) : new Date(Date.now() - 25 * 365 * 24 * 60 * 60 * 1000)}
-                      mode="date"
-                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                      maximumDate={new Date(Date.now() - 13 * 365 * 24 * 60 * 60 * 1000)}
-                      minimumDate={new Date('1900-01-01')}
-                      onChange={(_, selected) => {
-                        if (selected) {
-                          const y = selected.getFullYear();
-                          const m = String(selected.getMonth() + 1).padStart(2, '0');
-                          const d = String(selected.getDate()).padStart(2, '0');
-                          setDob(`${y}-${m}-${d}`);
-                          if (dobError) setDobError('');
-                        }
-                      }}
-                    />
+                    {/* R113 fix: iOS spinner picker 需要固定高度容器才渲染滚轮; 之前 container
+                        没高度 picker collapse 到 0px, 用户只看到 Cancel/Done 看不到日期滚轮. */}
+                    <View style={{ height: 220, justifyContent: 'center' }}>
+                      <DateTimePicker
+                        value={dob ? new Date(dob) : new Date(Date.now() - 25 * 365 * 24 * 60 * 60 * 1000)}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        maximumDate={new Date(Date.now() - 13 * 365 * 24 * 60 * 60 * 1000)}
+                        minimumDate={new Date('1900-01-01')}
+                        onChange={(_, selected) => {
+                          if (selected) {
+                            const y = selected.getFullYear();
+                            const m = String(selected.getMonth() + 1).padStart(2, '0');
+                            const d = String(selected.getDate()).padStart(2, '0');
+                            setDob(`${y}-${m}-${d}`);
+                            if (dobError) setDobError('');
+                          }
+                        }}
+                      />
+                    </View>
                   </TouchableOpacity>
                 </TouchableOpacity>
               </Modal>
@@ -1686,15 +1695,25 @@ export function AuthScreen() {
             </View>
           </PressBtn>
 
-          {/* Social login — Sign In only, not on Create Account */}
-          {!isRegister && (
-            <>
-              {/* R110 P2-12: 删掉 "You'll stay signed in for 30 days" 文案 (Issue E) —— 用户不需要知道 token 有效期, 和下方 Remember me checkbox 逻辑重叠增加认知负担 */}
+          {/* Social login — Sign In and Create Account both. Apple Sign-In handles
+              both new + returning users transparently (backend upserts on apple_sub_id),
+              so showing on both screens follows industry norm (Instagram/Twitter).
+              R113 change (2026-08-06): removed `!isRegister` gate. */}
+          <>
+              {!isRegister && (
               <View style={formStyles.divider}>
                 <View style={formStyles.divLine} />
                 <Text style={formStyles.divText}>or continue with</Text>
                 <View style={formStyles.divLine} />
               </View>
+              )}
+              {isRegister && (
+              <View style={formStyles.divider}>
+                <View style={formStyles.divLine} />
+                <Text style={formStyles.divText}>or sign up with</Text>
+                <View style={formStyles.divLine} />
+              </View>
+              )}
 
               {/* Apple — real Sign in with Apple (O18 batch 6.6). Only
                   offered on iOS + physical device. Web/Android/simulator
@@ -1715,11 +1734,12 @@ export function AuthScreen() {
                 </View>
               </PressBtn>
 
-              {/* Google — R99: hidden until O2 R1 wires real OAuth.
-                  App Store Guideline 4.8 rejects stub sign-in buttons that
-                  only show 'coming soon' alerts. Hide until backing OAuth
-                  is fully implemented. Email + Apple remain visible. */}
-              {false && (
+              {/* Google — R99 隐藏(App Store 4.8 禁 stub 按钮), R113 用户测试期要求
+                  能看到占位按钮但不做实际动作. __DEV__ gate: dev/测试环境显示;
+                  生产 build __DEV__=false 时 Metro 会 dead-code-eliminate 整段.
+                  等 Google OAuth 后端做完(需要 Google Cloud Console client + backend
+                  endpoint), 把 __DEV__ gate 去掉即可上线. */}
+              {__DEV__ && (
               <PressBtn style={formStyles.googleBtn} onPress={handleGoogleAuth} scale={0.98} disabled={googleLoading || loading}>
                 <View style={styles.btnContent}>
                   {googleLoading
@@ -1731,7 +1751,6 @@ export function AuthScreen() {
               </PressBtn>
               )}
             </>
-          )}
 
         </ScrollView>
       </KeyboardAvoidingView>

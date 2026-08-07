@@ -475,7 +475,12 @@ export function RunningScreen() {
           )}
           <TouchableOpacity onPress={() => { setStoppedSessionId(null); setRunState('pre'); }}>
               <LinearGradient
-                colors={[Colors.primary, Colors.primaryDark]}
+                // R114 (2026-08-07): Running theme is blue (Colors.running).
+                // Start button was using primary (forest green), inconsistent
+                // with the rest of the Running UI. Now uses running blue
+                // gradient to match hike's own pattern (hike blue-scheme
+                // uses primary, running uses running).
+                colors={[Colors.running, Colors.runningDark]}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                 style={preStyles.startBtn}
               >
@@ -594,7 +599,7 @@ export function RunningScreen() {
                   onPressOut={onStartPressOut}
                 >
                   <LinearGradient
-                    colors={[Colors.primary, Colors.primaryDark]}
+                    colors={[Colors.running, Colors.runningDark]}
                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                     style={preStyles.startBtn}
                   >

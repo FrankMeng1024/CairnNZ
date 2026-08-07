@@ -15,6 +15,8 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useRouteStore } from '../store/useRouteStore';
 import { useSessionStore } from '../store/useSessionStore';
 import { useMarkerStore, type Marker, type MarkerPermission } from '../store/useMarkerStore';
+// R114 (2026-08-07): splitTitleBody import removed — RoutesScreen no
+// longer decodes marker.note directly; MarkCard owns that.
 import { useTrackingStore } from '../store/useTrackingStore';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { getPrimaryMapStyle } from '../config/mapbox';
@@ -24,7 +26,11 @@ import { BackButton } from '../components/BackButton';
 import { PressBtn } from '../components/PressBtn';
 import { formatDuration, haversineM } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
+// R114 (2026-08-07): MARKER_META still needed for FLAG_TYPES filter panel.
+// MarkerType kept for MarkerPermission-adjacent typing.
 import { MARKER_META, type MarkerType } from '../data/mockData';
+// R114 (2026-08-07): canonical MarkCard import (post-Metro-restart).
+import { MarkCard } from '../features/marks/components/MarkCard';
 import { EmptyRoutes, EmptyMarkers, IllustrationHalo } from '../components/Illustrations';
 
 // ── Mapbox conditional import (for RouteSheet preview) ────────────────────
@@ -1001,6 +1007,10 @@ const PERM_FILTERS: { id: MarkerPermission | 'all'; icon: IconName }[] = [
   { id: 'public',   icon: 'Globe' },
 ];
 
+// R114 (2026-08-07): MarkCard is imported from features/marks/components/MarkCard
+// — the canonical single-source-of-truth. Inline duplicate removed after
+// Metro restart. Design ref: docs/design/r114-mark-redesign.md §9.
+
 function FlagsTab() {
   const markers = useMarkerStore(s => s.markers);
   // Sprint 69 STORY-00537: circle markers slice + loader.
@@ -1172,31 +1182,20 @@ function FlagsTab() {
         keyExtractor={m => m.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => {
-          const meta = MARKER_META[item.type] || MARKER_META.free;
-          const perm = (item.permission ?? 'personal') as MarkerPermission;
-          const permIcon: IconName = perm === 'public' ? 'Globe' : perm === 'group' ? 'Users' : 'Lock';
-          const permColor = perm === 'personal' ? Colors.textMuted : perm === 'group' ? Colors.info : Colors.success;
+          // R114 (2026-08-07): renderItem delegates to MarkCard so the
+          // list card has one canonical implementation. splitTitleBody
+          // + type badge + note preview + perm icon all live in MarkCard.
           let distanceStr = '';
           if (lastCoord) {
             const distM = haversineM({ lat: lastCoord.lat, lng: lastCoord.lng }, { lat: item.lat, lng: item.lng });
             distanceStr = userUnit.formatShort(distM);
           }
           return (
-            <PressBtn style={[styles.card, { borderLeftColor: meta.color }]} onPress={() => nav.navigate('MarkerDetail', { markerId: item.id })} scaleTo={0.97}>
-              <View style={[styles.cardBadge, { backgroundColor: meta.bg }]}>
-                <Icon name={(FLAG_TYPES.find(f => f.id === item.type)?.icon ?? 'Flag') as IconName} size={16} color={meta.color} strokeWidth={2} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.flagName} numberOfLines={1} ellipsizeMode="tail">{item.note || 'No note yet'}</Text>
-                  {item.approximate && <View style={styles.approxChip}><Text style={styles.approxChipText}>~</Text></View>}
-                </View>
-                <Text style={[styles.cardMeta, { color: meta.color }]}>{meta.label}</Text>
-              </View>
-              {distanceStr ? <Text style={styles.distanceText}>{distanceStr}</Text> : null}
-              <Icon name={permIcon} size={12} color={permColor} strokeWidth={1.8} />
-              <Icon name="ChevronRight" size={14} color={Colors.textMuted} strokeWidth={2} />
-            </PressBtn>
+            <MarkCard
+              marker={item}
+              distance={distanceStr}
+              onPress={() => nav.navigate('MarkerDetail', { markerId: item.id })}
+            />
           );
         }}
         ListEmptyComponent={<View style={{ padding: Spacing.xl, alignItems: 'center' }}><Text style={styles.emptyHint}>No matching cairns. Try a different filter.</Text></View>}
@@ -1322,7 +1321,6 @@ const styles = StyleSheet.create({
   cardBadge: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   cardTitle: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
   cardMeta: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
-  flagName: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
   distanceText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary, marginRight: 2 },
   filterColumn: {
     paddingHorizontal: Spacing.base,
@@ -1343,8 +1341,6 @@ const styles = StyleSheet.create({
   permToggleGroup: { flexDirection: 'row', gap: 2, backgroundColor: Colors.surface, borderRadius: Radius.pill, borderWidth: 1, borderColor: Colors.border, padding: 2 },
   permToggle: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   permToggleActive: { backgroundColor: Colors.primaryBg },
-  approxChip: { width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.severityCaution, alignItems: 'center', justifyContent: 'center' },
-  approxChipText: { fontSize: 10, fontWeight: '800', color: '#fff' },
   empty: { flex: 1, alignItems: 'center', paddingTop: 80 },
   emptyIconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md, ...Shadow.card },
   emptyTitle: { fontSize: FontSize.h3, fontWeight: '600', color: Colors.textSecondary },

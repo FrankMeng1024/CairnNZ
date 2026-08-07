@@ -22,7 +22,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Dimensions, Platform, Alert,
-  TouchableOpacity, TextInput,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -31,13 +31,19 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useMarkerStore, type MarkerPermission } from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
-import { MARKER_TYPES, MARKER_TYPE_ORDER, type MarkerType } from '../config/markerTypes';
+import { MARKER_TYPES, type MarkerType } from '../config/markerTypes';
 import { splitTitleBody, encodeTitleBody } from '../features/plant/services/noteEncoding';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
-import { MemoryColors } from '../features/memory/config/memoryConfig';
+// R114 (2026-08-07): MemoryColors import removed — the last sepia
+// residual (root bg) migrated to Colors.bg per design §12 for full
+// Mark theme unification.
+// R114 (2026-08-07): edit mode now uses the shared MarkForm — same
+// component ContentStep uses at plant time, so create + edit are
+// pixel-identical (design §6).
+import { MarkForm } from '../features/marks/components/MarkForm';
 // v381: use the v10 reliquary medallion pin in detail page too, not just
 // on Memory map. Pre-fix the detail page rendered a v300 hollow pin which
 // looked nothing like the v10 design users see on the Memory map — visual
@@ -298,61 +304,28 @@ export function MarkerDetailScreen() {
         </View>
 
         {isEditing ? (
-          /* ─── EDIT MODE ─── */
+          /* ─── EDIT MODE ───
+             R114 (2026-08-07): entire inline form (typeRow + title +
+             body + permRow + lockedField) replaced by a single MarkForm
+             mount. Cancel/Save actions kept below — MarkForm is body
+             only, screen owns the action row. */
           <View>
-            <Text style={styles.fieldLabel}>Type</Text>
-            <View style={styles.chipRow}>
-              {MARKER_TYPE_ORDER.map((t) => {
-                const m = MARKER_TYPES[t];
-                const active = editType === t;
-                return (
-                  <TouchableOpacity
-                    key={t}
-                    style={[styles.typeChip, active && { backgroundColor: m.bg, borderColor: m.color }]}
-                    onPress={() => setEditType(t)}
-                  >
-                    <Icon name={m.icon as IconName} size={14} color={active ? m.color : Colors.textSecondary} strokeWidth={2} />
-                    <Text style={[styles.typeChipLabel, active && { color: m.color, fontWeight: '600' }]}>
-                      {m.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={styles.fieldLabel}>Title</Text>
-            <TextInput
-              style={styles.input}
-              value={editTitle}
-              onChangeText={setEditTitle}
-              maxLength={ContentConfig.titleMaxChars}
-              placeholder={`Title (max ${ContentConfig.titleMaxChars})`}
+            <MarkForm
+              type={editType}
+              title={editTitle}
+              note={editBody}
+              visibility={editPermission}
+              onTypeChange={setEditType}
+              onTitleChange={setEditTitle}
+              onNoteChange={setEditBody}
+              onVisibilityChange={setEditPermission}
+              mode="edit"
+              disableVisibilityPublic={!VisibilityConfig.enablePublicOption}
+              showLocationLockedNotice
+              autoFocus={null}
+              titleMaxChars={ContentConfig.titleMaxChars}
+              noteMaxChars={ContentConfig.textMaxChars}
             />
-
-            <Text style={styles.fieldLabel}>Note</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={editBody}
-              onChangeText={setEditBody}
-              maxLength={ContentConfig.textMaxChars}
-              placeholder="Tell whoever finds this…"
-              multiline
-            />
-
-            <Text style={styles.fieldLabel}>Who can see this</Text>
-            <View style={styles.chipRow}>
-              <PermChip label="Just me" active={editPermission === 'personal'} iconName="Lock" onPress={() => setEditPermission('personal')} />
-              <PermChip label="Friends" active={editPermission === 'group'}    iconName="Users" onPress={() => setEditPermission('group')} />
-              {VisibilityConfig.enablePublicOption && (
-                <PermChip label="Anyone" active={editPermission === 'public'}  iconName="Globe" onPress={() => setEditPermission('public')} />
-              )}
-            </View>
-
-            {/* Location locked notice */}
-            <View style={styles.lockedField}>
-              <Icon name="Lock" size={12} color={Colors.textMuted} strokeWidth={2} />
-              <Text style={styles.lockedFieldText}>Location is fixed where you planted it.</Text>
-            </View>
 
             {/* Save / Cancel actions */}
             <View style={styles.actionRow}>
@@ -442,17 +415,11 @@ function MetaRow({ iconName, text }: { iconName: IconName; text: string }) {
   );
 }
 
-function PermChip({ label, active, iconName, onPress }: { label: string; active: boolean; iconName: IconName; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={[styles.typeChip, active && { backgroundColor: Colors.primaryBg, borderColor: Colors.primary }]} onPress={onPress}>
-      <Icon name={iconName} size={13} color={active ? Colors.primary : Colors.textSecondary} strokeWidth={2} />
-      <Text style={[styles.typeChipLabel, active && { color: Colors.primary, fontWeight: '600' }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: MemoryColors.cream },
+  // R114 (2026-08-07): root bg migrated from MemoryColors.cream to
+  // Colors.bg (design §12) — completes the sepia purge across the Mark
+  // feature.
+  root: { flex: 1, backgroundColor: Colors.bg },
   mapWrap: {
     width: '100%',
     backgroundColor: Colors.mapBg,
@@ -463,7 +430,7 @@ const styles = StyleSheet.create({
     flex: 1, alignItems: 'center', justifyContent: 'center',
   },
   mapFallbackText: {
-    fontFamily: 'Courier', fontSize: FontSize.caption, color: MemoryColors.sepiaDeep,
+    fontFamily: 'Courier', fontSize: FontSize.caption, color: Colors.textPrimary,
   },
   backRowOverlay: {
     position: 'absolute',
@@ -509,22 +476,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   visBadgeText: { fontSize: 11, color: Colors.textSecondary, fontWeight: '500' },
+  // R114 (2026-08-07): retokenized title/body/actionBtnPrimary from
+  // MemoryColors.sepia* → Colors.* per design §12.
   title: {
     fontSize: 24,
     fontWeight: '600',
-    color: MemoryColors.sepiaDeep,
+    color: Colors.textPrimary,
     marginBottom: 8,
   },
   titleEmpty: {
     fontSize: 22,
     fontWeight: '500',
-    color: MemoryColors.cairnPublic,
+    color: Colors.textMuted,
     fontStyle: 'italic',
     marginBottom: 8,
   },
   body: {
     fontSize: 14,
-    color: MemoryColors.sepiaDeep,
+    color: Colors.textPrimary,
     lineHeight: 20,
     marginBottom: 18,
   },
@@ -564,7 +533,7 @@ const styles = StyleSheet.create({
   },
   snapshotBody: {
     fontSize: 12,
-    color: MemoryColors.sepiaDeep,
+    color: Colors.textPrimary,
     marginBottom: 4,
   },
   snapshotFootnote: {
@@ -587,7 +556,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   actionBtnPrimary: {
-    backgroundColor: MemoryColors.sepia,
+    // R114 (2026-08-07): sepia → primary green per design §12.
+    backgroundColor: Colors.primary,
   },
   actionBtnPrimaryText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   actionBtnGhost: {
@@ -595,61 +565,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  actionBtnGhostText: { color: MemoryColors.sepiaDeep, fontSize: 14, fontWeight: '500' },
-  // Edit-mode fields
-  fieldLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-    marginBottom: 6,
-    marginTop: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1, borderColor: Colors.border,
-    borderRadius: Radius.md, padding: 12, fontSize: 14,
-    color: MemoryColors.sepiaDeep, marginBottom: 8,
-  },
-  textArea: { minHeight: 90, textAlignVertical: 'top' },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 10,
-  },
-  typeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    backgroundColor: '#fff',
-    borderWidth: 1, borderColor: Colors.border,
-    borderRadius: 18,
-  },
-  typeChipLabel: { fontSize: 12, color: Colors.textSecondary },
-  lockedField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: 'rgba(0,0,0,0.03)',
-    borderRadius: Radius.sm,
-    marginVertical: 10,
-  },
-  lockedFieldText: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontStyle: 'italic',
-  },
+  actionBtnGhostText: { color: Colors.textPrimary, fontSize: 14, fontWeight: '500' },
   notFoundBox: {
     flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.lg,
   },
   notFoundTitle: {
-    fontSize: 18, fontWeight: '500', color: MemoryColors.sepiaDeep, marginBottom: 8,
+    fontSize: 18, fontWeight: '500', color: Colors.textPrimary, marginBottom: 8,
   },
   notFoundSub: {
     fontSize: 13, color: Colors.textSecondary, textAlign: 'center',

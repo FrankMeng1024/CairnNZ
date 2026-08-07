@@ -56,8 +56,23 @@ import { FlagMarkerIcon } from '../../components/ActivityIcons/FlagMarkerIcon';
 import { HikingIcon } from '../../components/ActivityIcons/HikingIcon';
 import { storage } from '../../store/storage';
 import { haptic } from '../../services/hapticService';
+import { useAppStore } from '../../store/useAppStore';
 
-const STORAGE_KEY = 'cairn_onboarding_v1_done';
+const LEGACY_STORAGE_KEY = 'cairn_onboarding_v1_done';
+
+/** R114 (2026-08-07): per-account key. User reported that uninstall+reinstall
+ *  re-triggered onboarding because AsyncStorage was cleared on uninstall.
+ *  Onboarding should be tied to the account, not the device. Per-user key
+ *  ensures the same person on a new device / after reinstall doesn't see
+ *  onboarding again. Legacy key (device-level) is migrated at first read. */
+function storageKey(userId: string | number | null | undefined): string {
+  if (userId === null || userId === undefined || userId === '') {
+    // Fallback for pre-login checks — should be very rare because
+    // RootNavigator only calls hasCompletedOnboarding after isLoggedIn.
+    return LEGACY_STORAGE_KEY;
+  }
+  return `cairn_onboarding_v1_done_${userId}`;
+}
 
 interface Props {
   visible: boolean;
@@ -128,7 +143,9 @@ export function OnboardingModal({ visible, onFinish }: Props) {
 
   const finish = async () => {
     try {
-      await storage.setItem(STORAGE_KEY, 'true');
+      // R114: per-account key.
+      const uid = useAppStore.getState().user?.id;
+      await storage.setItem(storageKey(uid), 'true');
     } catch { /* best-effort */ }
     onFinish();
   };
@@ -250,9 +267,19 @@ export function OnboardingModal({ visible, onFinish }: Props) {
                     {isLastIntro ? (locationGranted === true ? 'Done' : 'Enable Location') : 'Continue'}
                   </Text>
                 </TouchableOpacity>
-                {isLastIntro && locationGranted !== true && (
-                  <Text style={styles.ctaHint}>iOS will ask for permission next.</Text>
-                )}
+                {/* R114 (2026-08-07): reserved-space hint slot. User reported
+                    the Enable Location button on screen 4 sits higher than
+                    the Continue button on screens 1-3 because screen 4
+                    appended a hint line under the button, growing ctaWrap.
+                    Fix: give the hint a fixed slot height so button y is
+                    identical across all four intro screens. Text is only
+                    rendered on last intro when permission is not yet
+                    granted; the slot is always reserved. */}
+                <View style={styles.ctaHintSlot}>
+                  {isLastIntro && locationGranted !== true ? (
+                    <Text style={styles.ctaHint}>iOS will ask for permission next.</Text>
+                  ) : null}
+                </View>
               </View>
             </View>
           )}
@@ -293,11 +320,29 @@ export function OnboardingModal({ visible, onFinish }: Props) {
   );
 }
 
-/** Check whether onboarding has already been completed for this install. */
-export async function hasCompletedOnboarding(): Promise<boolean> {
+/** R114 (2026-08-07): per-account check. Pass the current user's id — the
+ *  onboarding-done flag is stored per user so reinstall / new-device / new
+ *  account no longer skips onboarding for a different person. A legacy
+ *  device-level key from earlier OTAs is honored ONCE per user as a
+ *  migration convenience: if the user has the legacy flag set and no
+ *  per-account flag, we migrate on read and mark the per-account key so
+ *  the same user won't see onboarding again. */
+export async function hasCompletedOnboarding(
+  userId: string | number | null | undefined,
+): Promise<boolean> {
   try {
-    const value = await storage.getItem(STORAGE_KEY);
-    return value === 'true';
+    // Prefer per-account key.
+    const perAcct = await storage.getItem(storageKey(userId));
+    if (perAcct === 'true') return true;
+    // Legacy migration: if the previous install marked done at device
+    // level, treat as done for this user AND write the per-account key
+    // so we never rely on the legacy key again.
+    const legacy = await storage.getItem(LEGACY_STORAGE_KEY);
+    if (legacy === 'true' && userId !== null && userId !== undefined && userId !== '') {
+      try { await storage.setItem(storageKey(userId), 'true'); } catch { /* best-effort */ }
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -387,10 +432,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   ctaHint: {
-    marginTop: Spacing.sm,
     fontSize: FontSize.small,
     color: Colors.textMuted,
     textAlign: 'center',
+  },
+  ctaHintSlot: {
+    // R114: reserved fixed height so button y-position is identical across
+    // all 4 intro screens regardless of whether the hint text is rendered.
+    // Value = ctaHint fontSize (11) + line-height buffer (~4) + top margin
+    // matching the pre-R114 marginTop: Spacing.sm (8) = 24pt total.
+    height: 24,
+    marginTop: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   secondaryBtn: {
     marginTop: Spacing.md,

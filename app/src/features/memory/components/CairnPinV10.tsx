@@ -58,17 +58,21 @@ const SIZES = {
 } as const;
 type PinSize = keyof typeof SIZES;
 
-// v387: scale derived from current zoom. PointAnnotation's host view
-// auto-sizes to the child View's measured frame on iOS, so by setting
-// width/height/border/glyph as scaled px values (not via RN transform
-// which iOS PointAnnotation silently ignores) we get true visible
-// re-sizing across pinches.
-function scaleForZoom(z: number): number {
-  // z=11 → 0.35, z=13 → 0.55, z=15 → 0.78, z=17 → 1.0, z=19 → 1.15
-  if (z <= 11) return 0.35;
-  if (z >= 19) return 1.15;
-  if (z < 17) return 0.35 + (z - 11) * (1.0 - 0.35) / (17 - 11);
-  return 1.0 + (z - 17) * (1.15 - 1.0) / (19 - 17);
+// R114 (2026-08-07): removed zoom-based scaling entirely.
+// User reported "缩放后 mark 会变得极小 然后又自动会弹 很怪" — the previous
+// scaleForZoom clamp (0.35 at z<=11, 1.15 at z>=19) made pins collapse to
+// 35% at low zoom, then abruptly bounce back on any small zoom-in due to
+// the 0.5-magnitude gate in useMapZoom.ts.
+//
+// User direction: pins should NOT track zoom in most cases (users rarely
+// zoom, and the "auto-bounce" ruined the experience when they did).
+// Fixed pin size regardless of zoom is the standard behavior in
+// Google Maps / Apple Maps / Mapbox default markers.
+//
+// Kept `zoom` as an unused parameter so the call sites don't need to
+// change (still passes `z` from useMapZoom for future re-tuning).
+function scaleForZoom(_z: number): number {
+  return 1;
 }
 
 function computeFrame(size: PinSize) {

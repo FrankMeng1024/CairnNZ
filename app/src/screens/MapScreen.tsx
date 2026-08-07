@@ -906,7 +906,11 @@ const styles = StyleSheet.create({
   // ── Map (Sprint 42 — Real Mapbox + Fallback) ────────────────────────────────
   mapContainer: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: Colors.primaryBg, overflow: 'hidden',
+    // R114 (2026-08-07): map placeholder color changed from Colors.primaryBg
+    // (near-white pale green) to a neutral map-gray so tile-load in poor
+    // network doesn't read as "the app is broken / earth is white".
+    backgroundColor: '#dcd8d1',
+    overflow: 'hidden',
   },
   // O18 MAP-01: floating layer toggle overlay.
   layerToggle: {

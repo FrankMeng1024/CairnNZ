@@ -472,7 +472,17 @@ export function HikingMap({
 }
 
 const mapStyles = StyleSheet.create({
-  mapBg: { flex: 1, backgroundColor: Colors.primaryBg, overflow: 'hidden' },
+  mapBg: {
+    flex: 1,
+    // R114 (2026-08-07): map placeholder colour changed from Colors.primaryBg
+    // (very pale green rgba 0.08 → reads as near-white on light theme) to a
+    // muted map-tone gray. User reported that on poor network the Earth
+    // area shows as "black or white" while Mapbox tiles fail to load. A
+    // neutral map-gray communicates "map is loading" and blends when
+    // tiles arrive.
+    backgroundColor: '#dcd8d1',
+    overflow: 'hidden',
+  },
   // v447: 60x60 dashed circle centered on the map viewport. Marks the
   // point that ⟲ will teleport injector.currentPos to. Semi-transparent
   // so it doesn't hide underlying map features. pointerEvents:'none' so

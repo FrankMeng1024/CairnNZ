@@ -264,8 +264,17 @@
     pointer-events: auto;
     white-space: normal;
   }
-  .status-pill:hover .evidence-tooltip {
+  /* Click to pin; click outside to close. Hover no longer shows tooltip. */
+  .status-pill.pinned .evidence-tooltip {
     display: block;
+  }
+  .status-pill.pinned {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  /* AI pill readonly but clickable for tooltip */
+  .status-pill {
+    cursor: pointer;
   }
   .evidence-tooltip::before {
     content: ""; position: absolute; top: -8px;
@@ -680,6 +689,9 @@ function renderMain() {
   const manualUntested = total - manualPass - manualFail;
   const aiPass = s.rows.filter(r => r.ai_status === 'pass').length;
   const aiFail = s.rows.filter(r => r.ai_status === 'fail').length;
+  const aiBlocked = s.rows.filter(r => r.ai_status === 'blocked').length;
+  const aiTested = aiPass + aiFail + aiBlocked;
+  const manualTested = manualPass + manualFail;
   const pct = total ? Math.round(manualPass / total * 100) : 0;
 
   const block = document.createElement('div');
@@ -687,13 +699,17 @@ function renderMain() {
   block.innerHTML = `
     <div class="page-progress">
       <span class="title">${escapeHtml(s.name)}</span>
-      <span style="font-size:12px;">
-        <span style="color:var(--pass);font-weight:600">AI 过 ${aiPass}</span>
-        · <span style="color:var(--fail);font-weight:600">不过 ${aiFail}</span>
+      <span style="font-size:14px; font-weight:700; color:var(--fg); margin-left:8px">
+        ${aiTested}<span style="color:var(--dim);font-weight:400">/</span>${manualTested}<span style="color:var(--dim);font-weight:400">/</span>${total}
+        <span style="color:var(--dim); font-weight:400; font-size:11px; margin-left:4px">(AI 测 / 人工测 / 总数)</span>
+      </span>
+      <span style="font-size:12px; margin-left:8px">
+        <span style="color:var(--pass);font-weight:600">AI 通过 ${aiPass}</span>
+        · <span style="color:var(--fail);font-weight:600">不通过 ${aiFail}</span>
+        ${aiBlocked > 0 ? `· <span style="color:var(--muted);font-weight:600">阻塞 ${aiBlocked}</span>` : ''}
         <span style="color:var(--dim); margin:0 6px">|</span>
-        <span style="color:var(--pass);font-weight:600">人工 过 ${manualPass}</span>
-        · <span style="color:var(--fail);font-weight:600">不过 ${manualFail}</span>
-        · <span style="color:var(--muted)">未测 ${manualUntested}</span>
+        <span style="color:var(--pass);font-weight:600">人工通过 ${manualPass}</span>
+        · <span style="color:var(--fail);font-weight:600">不通过 ${manualFail}</span>
       </span>
       <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div>
       <span style="font-weight:600;color:var(--accent)">${pct}%</span>
@@ -744,8 +760,20 @@ function renderMain() {
       <div><button class="btn-del" title="删除此行">✕</button></div>
     `;
 
-    // AI status: READ ONLY (只显示, 不响应点击)
-    // 用户不能改 AI 状态; AI 只由主 agent 测试后写入
+    // AI status: click to pin tooltip; click outside closes.
+    // (Previously hover — user requested click-to-pin per 2026-08-06 feedback.)
+    const aiPill = row.querySelector('[data-role=ai]');
+    if (aiPill) {
+      aiPill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasPinned = aiPill.classList.contains('pinned');
+        // Close any other pinned pill first
+        document.querySelectorAll('.status-pill.pinned').forEach(el => {
+          if (el !== aiPill) el.classList.remove('pinned');
+        });
+        aiPill.classList.toggle('pinned', !wasPinned);
+      });
+    }
 
     // 人工 状态: 循环点击 untested → pass → fail → untested
     row.querySelector('[data-role=manual]').addEventListener('click', (e) => {
@@ -899,6 +927,15 @@ document.getElementById('btnResetAll').addEventListener('click', () => {
 })();
 
 loadData();
+
+// Click-outside listener: close any pinned AI tooltip when clicking outside
+// (2026-08-06 UX per user: hover → click-to-pin + click-outside-to-close).
+document.addEventListener('click', (e) => {
+  const clickedInside = e.target.closest('.status-pill.readonly');
+  if (!clickedInside) {
+    document.querySelectorAll('.status-pill.pinned').forEach(el => el.classList.remove('pinned'));
+  }
+});
 </script>
 
 </body>

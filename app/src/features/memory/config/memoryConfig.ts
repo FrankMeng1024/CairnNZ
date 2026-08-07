@@ -15,8 +15,16 @@
 
 // ── Unlock geometry ───────────────────────────────────────────────────
 export const UnlockConfig = {
-  /** Radius (meters) around each GPS point that becomes "explored". */
-  radiusMeters: 25,
+  /** Radius (meters) around each GPS point that becomes "explored".
+   *  R114 (2026-08-07): 25 → 30. User feedback: 25m corridors are too
+   *  narrow — walking around a large building or down a wide two-lane
+   *  road leaves a black stripe in the middle you can't clear without
+   *  physically walking through the middle. 30m matches typical
+   *  building perimeters + wide road widths while still requiring
+   *  actual on-foot traversal (not drive-by). Enlarging much beyond
+   *  30m risks privacy leaks (rough position becomes obvious from
+   *  reveal shape). */
+  radiusMeters: 30,
 
   /**
    * Speed gate — readings above this are presumed to be vehicle / transit

@@ -1,12 +1,17 @@
 /**
  * BackButton — shared back navigation chip used by all screens.
  *
- * variant="pill"   — frosted-glass pill chip (BlurView + soft shadow), for
- *                    screens that overlay a map (HikingScreen, MapHistoryScreen).
- *                    Falls back to a translucent white pill on platforms
- *                    where BlurView is unavailable.
- * variant="inline" — plain text+icon, for screens with a dedicated top bar
- *                    (SettingsScreen, FriendsScreen, RunningScreen)
+ * variant="pill"        — frosted-glass pill chip (BlurView + soft shadow), for
+ *                         screens that overlay a map (HikingScreen, MapHistoryScreen).
+ *                         Falls back to a translucent white pill on platforms
+ *                         where BlurView is unavailable.
+ * variant="inline"      — plain text+icon, for screens with a dedicated top bar
+ *                         (SettingsScreen, FriendsScreen, RunningScreen)
+ * variant="ghostRound"  — R114 (2026-08-07): 36px round quiet back button
+ *                         (iOS-style). Used on PinAdjustStep so the "Where's
+ *                         your cairn?" title reads as the page anchor and
+ *                         back reads as subordinate but has a proper hit
+ *                         target. Design §8.
  */
 import React, { useRef } from 'react';
 import { TouchableOpacity, Text, StyleSheet, Animated, View, Platform } from 'react-native';
@@ -25,7 +30,7 @@ if (Platform.OS !== 'web') {
 }
 
 interface BackButtonProps {
-  variant?: 'pill' | 'inline';
+  variant?: 'pill' | 'inline' | 'ghostRound';
   label?: string;
   onPress?: () => void;
 }
@@ -57,6 +62,29 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress }: Back
         >
           <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
           <Text style={styles.inlineText}>{label}</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+
+  // R114 (2026-08-07): ghostRound — 36px round quiet variant.
+  // Used on PinAdjustStep. Sits above the page title so the title reads
+  // as the anchor. Icon-only (no label) so it takes minimal visual
+  // weight but still meets the 44pt-effective hit target with hitSlop.
+  if (variant === 'ghostRound') {
+    return (
+      <Animated.View style={[{ transform: [{ scale }] }, styles.ghostRoundShadow]}>
+        <TouchableOpacity
+          style={styles.ghostRound}
+          onPress={handlePress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          activeOpacity={1}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Icon name="ChevronLeft" size={22} color={Colors.textPrimary} strokeWidth={2.4} />
         </TouchableOpacity>
       </Animated.View>
     );
@@ -114,4 +142,19 @@ const styles = StyleSheet.create({
     paddingVertical: 6, paddingRight: Spacing.sm,
   },
   inlineText: { fontSize: FontSize.caption, fontWeight: '600', color: Colors.primary },
+  // R114 (2026-08-07): ghostRound variant styles.
+  ghostRoundShadow: {
+    borderRadius: 18,
+    ...Shadow.card,
+  },
+  ghostRound: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

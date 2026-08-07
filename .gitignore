@@ -73,3 +73,7 @@ backend/storage/
 
 # v383 mock script preview output — produced fresh on every dry-run, do not commit
 backend/scripts/seed/output/
+
+# R114/O21: debug artifacts (do not commit)
+bundle-inspect.js
+scripts/r113/.testuser.json

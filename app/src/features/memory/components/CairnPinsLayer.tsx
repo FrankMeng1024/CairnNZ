@@ -28,17 +28,22 @@
  */
 
 import React, { useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, Share } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
+import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useMarkerStore, Marker, type MarkerPermission } from '../../../store/useMarkerStore';
+import { useFriendStore } from '../../../store/useFriendStore';
 import { useTrackingStore } from '../../../store/useTrackingStore';
 import { MysteryVisibilityConfig } from '../config/memoryConfig';
 import { haversineM } from '../../../utils/geo';
 import { MysteryCairnSheet } from './MysteryCairnSheet';
-import { RevealedCairnSheet } from './RevealedCairnSheet';
+// R114 (2026-08-07): unified detail sheet — RevealedCairnSheet deleted,
+// callers migrate to MarkDetailSheet (features/marks/components).
+import { MarkDetailSheet } from '../../marks/components/MarkDetailSheet';
+import { useMarkLikeStore } from '../../marks/store/useMarkLikeStore';
 import { CairnPinV10, MysteryPinV10, StrangerBlurredPinV10 } from './CairnPinV10';
 import { splitTitleBody } from '../../plant/services/noteEncoding';
 import { likeMarker, reportMarker, MarkerInteractionError } from '../../../services/markerInteractionService';
@@ -88,6 +93,24 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const lastCoordinate = useTrackingStore((s) => s.lastCoordinate);
 
+  // R114 (2026-08-07): plumbing for unified MarkDetailSheet. Mirrors
+  // MapScreen's wiring so the memory-map sheet behaves identically to
+  // the main map sheet (form A/B/C, permission-gated like/report, iron
+  // law §4.11 enforced in one place).
+  const viewerId = useMarkerStore((s) => s.userId);
+  const friends = useFriendStore((s) => s.friends);
+  const friendIds = useMemo(() => friends.map((f) => f.id), [friends]);
+  const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
+  const subscribedFriendIds = useMemo<ReadonlyArray<string | number>>(
+    () => subscriptions.map((s) => s.friend_id),
+    [subscriptions],
+  );
+  const likedSetForSheet = useMarkLikeStore((s) => s.liked);
+  const isMarkLikedForSheet = useCallback(
+    (id: string) => likedSetForSheet.includes(id) || likedIds.has(id),
+    [likedSetForSheet, likedIds],
+  );
+
   // v413: friend memory union — 勾选 friend 后, friend 走过的地方也应视为 explored
   // (marker "?" 会变成真实内容). 反勾即时回缩.
   // v413 (4-eye fix E2): union 只在 Friends tab 生效, Mine tab 保 self-only.
@@ -96,8 +119,10 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   const friendPointsExploredCheck = useMemo(() => {
     if (scope !== 'friends') return (_lat: number, _lng: number) => false;
     const fpts = useFriendMemoryStore.getState().getEnabledFriendPoints();
-    // 25m unlock radius (与 UnlockConfig.radiusMeters 一致)
-    const R2 = 25 * 25;
+    // R114 (2026-08-07): friend memory unlock radius kept in sync with
+    // UnlockConfig.radiusMeters (memoryConfig.ts) — 25m → 30m per user
+    // report that walking around a large building leaves a black stripe.
+    const R2 = 30 * 30;
     return (lat: number, lng: number): boolean => {
       // 简单线性扫描 (friend points 数量通常 < 1000)
       for (const p of fpts) {
@@ -200,9 +225,12 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   }, [markers, ownIds]);
 
   // B6 — Like handler (optimistic, rollback on network failure).
-  const handleLike = useCallback(() => {
-    if (selection.kind !== 'revealed') return;
-    const { id } = selection.marker;
+  // R114 (2026-08-07): accepts marker arg so MarkDetailSheet can call
+  // it with the mark it's rendering (was: reading from `selection` which
+  // is no longer a discriminated union with 'revealed' after the sheet
+  // swap).
+  const handleLike = useCallback((mark: Marker) => {
+    const id = mark.id;
     if (likedIds.has(id)) return; // already liked in this session
     if (!lastCoordinate) {
       Alert.alert('Finding your location', 'Finding your location — please wait a moment.');
@@ -226,13 +254,12 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       }
       // NONCE_INVALID + SERVER_ERROR: silent — network/server blip, don't alarm user.
     });
-  }, [selection, likedIds, lastCoordinate]);
+  }, [likedIds, lastCoordinate]);
 
   // B6 — Report handler: show reason picker then send.
-  const handleReport = useCallback(() => {
-    if (selection.kind !== 'revealed') return;
-    // Capture ID at call time (Alert fires async; closure must not see stale selection).
-    const targetId = selection.marker.id;
+  // R114 (2026-08-07): accepts marker arg (same reason as handleLike).
+  const handleReport = useCallback((mark: Marker) => {
+    const targetId = mark.id;
     if (reportedIds.has(targetId)) {
       Alert.alert('Already reported', 'You have already reported this cairn.');
       return;
@@ -269,17 +296,38 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       { text: "Don't like it", onPress: () => sendReport('dislike') },
       { text: 'Cancel', style: 'cancel' },
     ]);
-  }, [selection, reportedIds, lastCoordinate]);
+  }, [reportedIds, lastCoordinate]);
 
-  // B6 — Share handler.
-  const handleShare = useCallback(() => {
-    if (selection.kind !== 'revealed') return;
-    const { title } = splitTitleBody(selection.marker.note ?? '');
-    const message = title.length > 0
-      ? `"${title}" — shared via Cairn`
-      : 'Check out this cairn on Cairn';
-    Share.share({ message });
-  }, [selection]);
+  // R114 (2026-08-07): handleShare removed — MarkDetailSheet's action
+  // surface does not currently expose Share. If Share needs to be
+  // reinstated, add an onShare prop to MarkDetailSheet, don't reintroduce
+  // it here.
+
+  // R114 (2026-08-07): unified delete/hide handler for MarkDetailSheet.
+  // - semantic 'own': owner deleting their own mark → deleteMarker
+  //   (form A path; delete confirmation modal happens inline here).
+  // - semantic 'hide': non-owner hiding a mark from their view →
+  //   noop for now (Sprint-68 Story-534 will wire cache wipe). Close
+  //   the sheet so the user sees their action was received.
+  const deleteMarker = useMarkerStore((s) => s.deleteMarker);
+  const handleDeleteOrHide = useCallback((mark: Marker, semantic: 'own' | 'hide') => {
+    if (semantic === 'own') {
+      Alert.alert(
+        'Delete this cairn?',
+        'This cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: () => {
+            deleteMarker(mark.id);
+            setSelection({ kind: 'none' });
+          } },
+        ],
+      );
+    } else {
+      // Non-owner "Hide from my map" — full cache wipe pending Story-534.
+      setSelection({ kind: 'none' });
+    }
+  }, [deleteMarker]);
 
   if (!Mapbox.available) return null;
   const { SymbolLayer, ShapeSource, Images, Image: MbxImage, PointAnnotation, MarkerView } = Mapbox;
@@ -410,15 +458,21 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
             onClose={() => setSelection({ kind: 'none' })}
           />
         )}
+        {/* R114 (2026-08-07): unified sheet replaces RevealedCairnSheet.
+            MarkDetailSheet handles forms A/B/C internally, enforces
+            the public-only Like/Report gate (iron law §4.11). */}
         {selection.kind === 'revealed' && (
-          <RevealedCairnSheet
+          <MarkDetailSheet
             marker={selection.marker}
-            isLiked={likedIds.has(selection.marker.id)}
-            isReported={reportedIds.has(selection.marker.id)}
+            viewerId={viewerId}
+            subscribedFriendIds={subscribedFriendIds}
+            friendIds={friendIds}
+            inMyFog={isExplored}
+            isLiked={isMarkLikedForSheet}
+            onClose={() => setSelection({ kind: 'none' })}
             onLike={handleLike}
             onReport={handleReport}
-            onShare={handleShare}
-            onClose={() => setSelection({ kind: 'none' })}
+            onDelete={handleDeleteOrHide}
           />
         )}
       </>
@@ -471,15 +525,21 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
             onClose={() => setSelection({ kind: 'none' })}
           />
         )}
+        {/* R114 (2026-08-07): unified sheet replaces RevealedCairnSheet.
+            MarkDetailSheet handles forms A/B/C internally, enforces
+            the public-only Like/Report gate (iron law §4.11). */}
         {selection.kind === 'revealed' && (
-          <RevealedCairnSheet
+          <MarkDetailSheet
             marker={selection.marker}
-            isLiked={likedIds.has(selection.marker.id)}
-            isReported={reportedIds.has(selection.marker.id)}
+            viewerId={viewerId}
+            subscribedFriendIds={subscribedFriendIds}
+            friendIds={friendIds}
+            inMyFog={isExplored}
+            isLiked={isMarkLikedForSheet}
+            onClose={() => setSelection({ kind: 'none' })}
             onLike={handleLike}
             onReport={handleReport}
-            onShare={handleShare}
-            onClose={() => setSelection({ kind: 'none' })}
+            onDelete={handleDeleteOrHide}
           />
         )}
       </>
@@ -524,15 +584,20 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
           onClose={() => setSelection({ kind: 'none' })}
         />
       )}
+      {/* R114 (2026-08-07): unified sheet replaces RevealedCairnSheet.
+          See parallel block above. */}
       {selection.kind === 'revealed' && (
-        <RevealedCairnSheet
+        <MarkDetailSheet
           marker={selection.marker}
-          isLiked={likedIds.has(selection.marker.id)}
-          isReported={reportedIds.has(selection.marker.id)}
+          viewerId={viewerId}
+          subscribedFriendIds={subscribedFriendIds}
+          friendIds={friendIds}
+          inMyFog={isExplored}
+          isLiked={isMarkLikedForSheet}
+          onClose={() => setSelection({ kind: 'none' })}
           onLike={handleLike}
           onReport={handleReport}
-          onShare={handleShare}
-          onClose={() => setSelection({ kind: 'none' })}
+          onDelete={handleDeleteOrHide}
         />
       )}
     </>

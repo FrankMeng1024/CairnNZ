@@ -35,8 +35,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { getMapbox } from '../../memory/services/mapboxAdapter';
 import { PinNudgeConfig } from '../config/plantConfig';
-import { MemoryColors } from '../../memory/config/memoryConfig';
-import { Colors } from '../../../components/tokens';
+// R114 (2026-08-07): MemoryColors import removed — all sepia refs
+// migrated to Colors tokens per design §12.
+import { Colors, Spacing, FontSize } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
 import { getPrimaryMapStyle } from '../../../config/mapbox';
 import { log } from '../../../services/appLog';
@@ -418,11 +419,14 @@ export function PinAdjustStep({
 
   return (
     <View style={styles.container}>
-      {/* v299 N3: BackButton in the top area, above the title — not
-          overlaid on the map. Matches the user's preference of "back
-          不是在图层里的 是在 you are here 上方的". */}
+      {/* R114 (2026-08-07): header rebalanced per design §8 (Bug #6).
+          Was: pill BackButton above a light title — title looked like
+          the anchor but back was above it, confusing hierarchy. Now:
+          ghostRound 36px quiet back button + title bumped to
+          fontWeight 700 with extra top margin so title reads as the
+          page anchor and back reads as subordinate but tappable. */}
       <View style={styles.backRow}>
-        <BackButton variant="pill" onPress={onBack} />
+        <BackButton variant="ghostRound" onPress={onBack} />
       </View>
       <Text style={styles.title}>Where's your cairn?</Text>
       <Text style={styles.sub}>
@@ -510,7 +514,7 @@ export function PinAdjustStep({
           <Icon
             name={mapStyle === 'satellite' ? 'Map' : 'Globe'}
             size={18}
-            color={MemoryColors.sepiaDeep}
+            color={Colors.textPrimary}
             strokeWidth={2}
           />
         </TouchableOpacity>
@@ -529,7 +533,7 @@ export function PinAdjustStep({
             <Icon
               name="Plus"
               size={18}
-              color={zoom >= MAX_ZOOM ? Colors.textSecondary : MemoryColors.sepiaDeep}
+              color={zoom >= MAX_ZOOM ? Colors.textSecondary : Colors.textPrimary}
               strokeWidth={2.5}
             />
           </TouchableOpacity>
@@ -545,7 +549,7 @@ export function PinAdjustStep({
             <Icon
               name="Minus"
               size={18}
-              color={zoom <= MIN_ZOOM ? Colors.textSecondary : MemoryColors.sepiaDeep}
+              color={zoom <= MIN_ZOOM ? Colors.textSecondary : Colors.textPrimary}
               strokeWidth={2.5}
             />
           </TouchableOpacity>
@@ -631,7 +635,8 @@ function PinAdjustFallback({
   return (
     <View style={styles.container}>
       <View style={styles.backRow}>
-        <BackButton variant="pill" onPress={onBack} />
+        {/* R114 (2026-08-07): fallback matches new ghostRound header. */}
+        <BackButton variant="ghostRound" onPress={onBack} />
       </View>
       <Text style={styles.title}>Where's your cairn?</Text>
       <Text style={styles.sub}>Map preview not available on this platform.</Text>
@@ -648,8 +653,22 @@ function PinAdjustFallback({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  title: { fontSize: 22, fontWeight: '500', color: MemoryColors.sepiaDeep, marginBottom: 6 },
-  sub:   { fontSize: 13, color: MemoryColors.cairnPublic, marginBottom: 16 },
+  // R114 (2026-08-07): title bumped to weight 700 + retokenized to
+  // Colors.textPrimary. Extra top margin so it visually separates from
+  // the ghostRound back button and reads as the page anchor (design §8).
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+  },
+  sub: {
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: Spacing.base,
+  },
   mapWrap: {
     // v419: was fixed 300px which left 227-347px empty below on iPhone
     // 14/15 Pro Max. Now flex:1 lets the map absorb remaining vertical
@@ -738,9 +757,10 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border,
     padding: 16, alignItems: 'center',
   },
-  fallbackCoord: { fontFamily: 'Courier', fontSize: 13, color: MemoryColors.sepiaDeep },
+  fallbackCoord: { fontFamily: 'Courier', fontSize: 13, color: Colors.textPrimary },
   primaryBtn: {
-    backgroundColor: MemoryColors.sepia,
+    // R114 (2026-08-07): sepia → primary green per design §12.
+    backgroundColor: Colors.primary,
     padding: 14, borderRadius: 12, alignItems: 'center',
   },
   primaryBtnDisabled: {

@@ -64,9 +64,11 @@ interface Props {
 }
 
 // Corridor width in meters around each GPS line — this is the "trail width"
-// visible to the user. 25m feels generous on hiking-zoom (z14-z16) without
-// looking absurdly wide on city streets.
-const CORRIDOR_WIDTH_M = 25;
+// visible to the user. R114 (2026-08-07): 25 → 30. User reported that 25m
+// leaves a black stripe in the middle when walking around a building or
+// along a wide road (path only clears a narrow ribbon). Kept in sync with
+// UnlockConfig.radiusMeters (memoryConfig.ts).
+const CORRIDOR_WIDTH_M = 30;
 // Douglas-Peucker simplification tolerance — 5m smooths jitter without
 // distorting visible path shape.
 const SIMPLIFY_TOLERANCE_DEG = 5 / 111320;
@@ -468,106 +470,61 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
   if (!Mapbox.available) return null;
   if (!fogShape) return null;
 
-  const { ShapeSource, FillLayer, LineLayer, CircleLayer } = Mapbox as any;
-
-  // v(post-O2) 方案 B: halo layer.
-  // Storage remains 25m precise (memoryConfig.UnlockConfig.radiusMeters);
-  // this halo is a RENDER-ONLY visual widening — a soft green glow around
-  // each unlocked point that extends into the fog area, so a walked road
-  // reads as "cleared with a warm aura" instead of "narrow black-bordered
-  // ribbon". Rendered ON TOP of the fog FillLayer so the glow bleeds into
-  // the fringe fog (25m-60m band). Inside the 25m corridor the basemap is
-  // already fully visible (fog hole), so the halo alpha 0.35 gently tints
-  // it but never obscures road detail.
-  //
-  // Uses point features (one Circle per unlocked GPS point) rather than
-  // buffering the path — turf.buffer+union already runs for the fog
-  // corridor, doubling that cost for the halo is wasteful. CircleLayer
-  // renders in screen-space pixels so the halo also feels natural when
-  // zooming.
-  //
-  // Tuning: circle-radius 40px + blur 0.8 gives an aura of roughly
-  // 60-80px total diameter at z14-z16 (~30-40m at NZ latitudes), matching
-  // the user's target "+50% visual width". Values chosen conservatively;
-  // real device tune may want to move them to memoryConfig.ts.
-  const haloFeatures = points.map((p, i) => ({
-    type: 'Feature' as const,
-    id: `halo-${i}`,
-    geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] },
-    properties: {},
-  }));
-  const haloShape = { type: 'FeatureCollection' as const, features: haloFeatures };
+  const { ShapeSource, FillLayer, LineLayer } = Mapbox as any;
 
   return (
-    <>
-      <ShapeSource id="memory-fog-src" shape={fogShape}>
-        <FillLayer
-          id="memory-fog"
+    <ShapeSource id="memory-fog-src" shape={fogShape}>
+      <FillLayer
+        id="memory-fog"
+        style={{
+          // v349: fog color back to warm dark-brown. User feedback on v347
+          // cool slate rgba(28,32,48,0.78): "很冷血" — fog of war is a
+          // hiking exploration metaphor, warm earth tones read as
+          // "unexplored wilderness" (Diablo, AoE, Civ all use dark-brown
+          // ~#2A1F12-#3D2C1A range). #3A2A18 is the original Skia design
+          // value (fogMaskRenderer.ts:282 pre-v346), at alpha 0.78 it
+          // sits between v346's too-muddy 0.80 and a too-light 0.70.
+          fillColor: 'rgba(58, 42, 24, 0.78)',
+          fillOpacity: 1,
+          // Disable AA to avoid 1px seams along hole edges (mapbox-gl-js#7023
+          // workaround per Simon Sat 2019).
+          fillAntialias: false,
+        }}
+      />
+      {/* v350: Fragment-wrapped LineLayers were silently broken in v346-v349.
+          rnmapbox/maps/src/utils/index.ts:93-96 explicitly skips React.Fragment
+          when iterating children to inject sourceID. Result: both LineLayers
+          fell back to defaultProps.sourceID (NOT 'memory-fog-src') and never
+          rendered on our polygon source. v350 inlines them as direct ShapeSource
+          children so cloneReactChildrenWithProps injects sourceID correctly.
+
+          Two-pass corridor halo (mirrors the original Skia fog renderer's
+          two-pass cream halo design — see fogMaskRenderer.ts:351-364 pre-v346):
+          wide soft outer glow hides the jagged fillAntialias:false stairsteps
+          + a tight inner gold rim crisps the cutout edge. Reads as "lantern
+          light on a trail through fog" rather than "hole punched in fog". */}
+      {LineLayer ? (
+        <LineLayer
+          id="memory-fog-edge-outer"
           style={{
-            // v349: fog color back to warm dark-brown. User feedback on v347
-            // cool slate rgba(28,32,48,0.78): "很冷血" — fog of war is a
-            // hiking exploration metaphor, warm earth tones read as
-            // "unexplored wilderness" (Diablo, AoE, Civ all use dark-brown
-            // ~#2A1F12-#3D2C1A range). #3A2A18 is the original Skia design
-            // value (fogMaskRenderer.ts:282 pre-v346), at alpha 0.78 it
-            // sits between v346's too-muddy 0.80 and a too-light 0.70.
-            fillColor: 'rgba(58, 42, 24, 0.78)',
-            fillOpacity: 1,
-            // Disable AA to avoid 1px seams along hole edges (mapbox-gl-js#7023
-            // workaround per Simon Sat 2019).
-            fillAntialias: false,
+            lineColor: 'rgba(247, 232, 200, 0.35)',
+            lineWidth: 7,
+            lineBlur: 8,
+            lineOpacity: 0.85,
           }}
         />
-        {/* v350: Fragment-wrapped LineLayers were silently broken in v346-v349.
-            rnmapbox/maps/src/utils/index.ts:93-96 explicitly skips React.Fragment
-            when iterating children to inject sourceID. Result: both LineLayers
-            fell back to defaultProps.sourceID (NOT 'memory-fog-src') and never
-            rendered on our polygon source. v350 inlines them as direct ShapeSource
-            children so cloneReactChildrenWithProps injects sourceID correctly.
-
-            Two-pass corridor halo (mirrors the original Skia fog renderer's
-            two-pass cream halo design — see fogMaskRenderer.ts:351-364 pre-v346):
-            wide soft outer glow hides the jagged fillAntialias:false stairsteps
-            + a tight inner gold rim crisps the cutout edge. Reads as "lantern
-            light on a trail through fog" rather than "hole punched in fog". */}
-        {LineLayer ? (
-          <LineLayer
-            id="memory-fog-edge-outer"
-            style={{
-              lineColor: 'rgba(247, 232, 200, 0.35)',
-              lineWidth: 7,
-              lineBlur: 8,
-              lineOpacity: 0.85,
-            }}
-          />
-        ) : null}
-        {LineLayer ? (
-          <LineLayer
-            id="memory-fog-edge-inner"
-            style={{
-              lineColor: 'rgba(255, 220, 165, 0.85)',
-              lineWidth: 1.6,
-              lineBlur: 1.2,
-              lineOpacity: 0.9,
-            }}
-          />
-        ) : null}
-      </ShapeSource>
-      {CircleLayer && haloFeatures.length > 0 ? (
-        <ShapeSource id="memory-halo-src" shape={haloShape}>
-          <CircleLayer
-            id="memory-halo"
-            style={{
-              circleRadius: 40,
-              circleColor: '#5A7A46',
-              circleOpacity: 0.35,
-              circleBlur: 0.8,
-              // Prevent pin/label interaction — pure decorative layer.
-              circlePitchAlignment: 'map',
-            }}
-          />
-        </ShapeSource>
       ) : null}
-    </>
+      {LineLayer ? (
+        <LineLayer
+          id="memory-fog-edge-inner"
+          style={{
+            lineColor: 'rgba(255, 220, 165, 0.85)',
+            lineWidth: 1.6,
+            lineBlur: 1.2,
+            lineOpacity: 0.9,
+          }}
+        />
+      ) : null}
+    </ShapeSource>
   );
 }

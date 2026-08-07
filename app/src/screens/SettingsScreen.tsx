@@ -322,6 +322,22 @@ export function SettingsScreen() {
         setNameSaving(false);
         return;
       }
+      // R114 (2026-08-07): user reported "edit name 没落到数据库". The
+      // backend patchName endpoint IS wired correctly (verified against
+      // aliyun /api/auth/me — SQL UPDATE fires). Root cause suspected:
+      // after setUser(r.user) below, other flows (hydrate on app relaunch)
+      // could overwrite from a stale server response if backend hadn't
+      // fully committed by then. We now:
+      //   1) verify the returned user.name matches what we sent (else
+      //      report inconsistency rather than silently succeed);
+      //   2) update local state.
+      // If the server returns a name that doesn't match what we sent, we
+      // treat it as a save failure so the user isn't misled.
+      if (r.user.name !== trimmed) {
+        setNameError('Server returned a different name — please try again.');
+        setNameSaving(false);
+        return;
+      }
       setUser(r.user);
       setShowEditNameModal(false);
       setNameToast('Name updated');

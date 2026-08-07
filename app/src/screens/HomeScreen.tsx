@@ -209,7 +209,12 @@ function ActivityCard({
           <View style={cardStyles.textCol}>
             <Text style={[cardStyles.title, { color: Colors.textPrimary }]}>{title}</Text>
             <Text style={cardStyles.subtitle}>{subtitle}</Text>
-            <View style={[cardStyles.accentLine, { backgroundColor: accentColor }]} />
+            {/* R114 (2026-08-07): removed the 28x3 accentLine that sat under
+                the card subtitle. User reported "hike/running/plant 字下方的
+                短线意义是什么" — it was a decorative accent with no meaning,
+                which violated the "zero learning cost" principle. The card's
+                left-side coloured panel + chevron already provide enough
+                visual identity per card. */}
           </View>
           <View style={[cardStyles.chevron, { backgroundColor: lightBg }]}>
             <Icon name="ChevronRight" size={16} color={accentColor} strokeWidth={2.5} />
@@ -330,15 +335,21 @@ export function HomeScreen() {
   // may seed insets.bottom = 0 → first frame paddingBottom is wrong
   // → tabs visually clipped under home indicator → onInsetsChange
   // fires one layout pass later → tabs visibly jump up.
-  // Fix: defer first render until insets.bottom has been measured
-  // (or 250ms timeout fallback). User sees splash background for
-  // up to one extra frame instead of jumping tabs. Pure JS, OTA.
+  //
+  // R114 (2026-08-07): user reported first-time Home also flickered
+  // "偏高" (0.5s of vertical offset before settling). Root cause: we
+  // only gated on insets.bottom, but the same JS-init race affects
+  // insets.top (status bar). If top comes in 0 → StatusBar-adjacent
+  // header starts flush with the notch → after one layout pass, top
+  // insets fires the correct ~50pt → header slides down, reads as
+  // "偏高 → 偏正" flicker. Fix: also require insets.top > 0 on iOS.
+  // On Android insets.top is guaranteed by StatusBar height at init.
   const [insetsReady, setInsetsReady] = useState(
-    () => Platform.OS !== 'ios' || insets.bottom > 0,
+    () => Platform.OS !== 'ios' || (insets.bottom > 0 && insets.top > 0),
   );
   useEffect(() => {
     if (insetsReady) return;
-    if (insets.bottom > 0) {
+    if (insets.bottom > 0 && insets.top > 0) {
       setInsetsReady(true);
       return;
     }
@@ -347,7 +358,7 @@ export function HomeScreen() {
     // legitimately 0).
     const t = setTimeout(() => setInsetsReady(true), 250);
     return () => clearTimeout(t);
-  }, [insets.bottom, insetsReady]);
+  }, [insets.bottom, insets.top, insetsReady]);
 
   // v320: beacon right before JSX return — if app dies between selectors
   // and JSX render, we'll see home_after_selectors but no home_before_jsx.
@@ -596,7 +607,7 @@ export function HomeScreen() {
             subtitle="Route planning · Lock mode"
             accentColor={Colors.running}
             lightBg={Colors.runningLight}
-            cardBg="#e8f1f8"
+            cardBg="#e8f4ec"
             onPress={() => nav.navigate('Running')}
             anim={card2}
           />
@@ -623,7 +634,7 @@ export function HomeScreen() {
           <ToolBtn iconName="Route" label="Trails" onPress={() => nav.navigate('Routes')} />
           <ToolBtn iconName="Users" label="Friends" onPress={() => nav.navigate('Friends')} />
           <ToolBtn iconName="Footprints" label="Memory" onPress={() => nav.navigate('Memory')} />
-          <ToolBtn iconName="Settings2" label="Settings" onPress={() => nav.navigate('Settings')} />
+          <ToolBtn iconName="Cog" label="Settings" onPress={() => nav.navigate('Settings')} />
         </View>
 
         {/* Sprint 68 STORY-00532 dev preview entry — only renders in __DEV__ */}

@@ -34,6 +34,10 @@ import {
   getMarkDetailForm,
   type MarkDetailForm,
 } from '../utils/markVisibility';
+// R114 (2026-08-07): use canonical splitTitleBody so the U+001E-encoded
+// wire format is honoured (previous inline splitNote used \n as separator,
+// which loses the title for any note that used the encodeTitleBody path).
+import { splitTitleBody } from '../../plant/services/noteEncoding';
 
 interface Props {
   /** The mark to show. null = closed. */
@@ -123,10 +127,17 @@ export function MarkDetailSheet(props: Props) {
 
   // Action surface per iron law 2 + 3:
   //   form A: Edit + Delete; Like/Report if Public
-  //   form B: Like + Report + Delete-from-view
+  //   form B: Like + Report + Delete-from-view (public only)
   //   form C: Delete-from-view only + "(Walk here to like/report)" hint
+  //
+  // R114 (2026-08-07): tightened gate — Like/Report only when marker is
+  // PUBLIC. Previously `form === 'B'` allowed Like/Report on any visited
+  // mark including Friend tier, which contradicted iron law §4.11 (Like
+  // counts + Report queue are public-facing accountability signals).
+  // Now: personal + friend marks never expose Like/Report, regardless of
+  // whether the viewer visited the spot.
   const canLikeReport =
-    form === 'B' || (form === 'A' && permDisplay === 'public');
+    permDisplay === 'public' && (form === 'A' || form === 'B');
   const canEdit = form === 'A';
   const deleteSemantic: 'own' | 'hide' = form === 'A' ? 'own' : 'hide';
   const liked = isLiked?.(marker.id) ?? false;
@@ -136,19 +147,10 @@ export function MarkDetailSheet(props: Props) {
   // can be liked per v4 §4.11 simplified rule).
   const showReport = canLikeReport && form !== 'A';
 
-  // Split note → title + body (existing convention from PlantScreen).
-  // Inline split: first line up to 30 chars is the title, rest is body.
-  const splitNote = (note: string): { title: string; body: string } => {
-    const trimmed = (note ?? '').trim();
-    if (!trimmed) return { title: '', body: '' };
-    const newlineIdx = trimmed.indexOf('\n');
-    if (newlineIdx === -1) return { title: trimmed.slice(0, 60), body: '' };
-    return {
-      title: trimmed.slice(0, newlineIdx).slice(0, 60),
-      body: trimmed.slice(newlineIdx + 1).trim(),
-    };
-  };
-  const { title, body } = splitNote(marker.note);
+  // R114 (2026-08-07): canonical splitTitleBody. Honours U+001E record
+  // separator produced by encodeTitleBody in PlantScreen; falls back
+  // gracefully for legacy title-only notes (design §11 invariant).
+  const { title, body } = splitTitleBody(marker.note ?? '');
 
   return (
     <Modal

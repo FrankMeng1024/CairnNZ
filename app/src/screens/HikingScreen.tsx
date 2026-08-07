@@ -32,12 +32,18 @@ import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { StopSummarySheet } from './StopSummarySheet';
-import { MarkerDetailSheet } from './MarkerDetailSheet';
+// R114 (2026-08-07): legacy screens/MarkerDetailSheet retired — replaced by
+// unified features/marks/components/MarkDetailSheet. On the Hiking map,
+// the tapped marker is (usually) the user's own just-planted flag → form A.
+import { MarkDetailSheet } from '../features/marks/components/MarkDetailSheet';
+import { useMemoryStore } from '../features/memory/store/useMemoryStore';
+import { useMemorySubscriptionsStore } from '../features/memory/store/useMemorySubscriptionsStore';
+import { useMarkLikeStore } from '../features/marks/store/useMarkLikeStore';
+import { useFriendStore } from '../store/useFriendStore';
 import { CompassNeedle } from './CompassNeedle';
 import { BackButton } from '../components/BackButton';
 import { PulseDot } from '../components/PulseDot';
 import { PressBtn } from '../components/PressBtn';
-import { FLAG_TYPES } from '../data/flagTypes';
 import { HikingMap } from './HikingMap';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
@@ -112,6 +118,23 @@ export function HikingScreen() {
   const getMarkersForRegion = useMarkerStore(s => s.getMarkersForRegion);
   const allMarkers = useMarkerStore(s => s.markers);
   const region = getCurrentRegion();
+  // R114 (2026-08-07): plumbing for unified MarkDetailSheet — mirrors
+  // MapScreen so the sheet renders the correct 4-form variant when a
+  // user taps their own or someone else's flag on the Hiking map.
+  const viewerId = useMarkerStore(s => s.userId);
+  const friends = useFriendStore(s => s.friends);
+  const friendIds = useMemo(() => friends.map(f => f.id), [friends]);
+  const subscriptions = useMemorySubscriptionsStore(s => s.subscriptions);
+  const subscribedFriendIds = useMemo<ReadonlyArray<string | number>>(
+    () => subscriptions.map(s => s.friend_id),
+    [subscriptions],
+  );
+  const isExploredFn = useMemoryStore(s => s.isExplored);
+  const likedSetForSheet = useMarkLikeStore(s => s.liked);
+  const isMarkLikedForSheet = useMemo(
+    () => (id: string) => likedSetForSheet.includes(id),
+    [likedSetForSheet],
+  );
   // 2026-07-20 perf: memoize markers filter so trackPoints updates (every 3s
   // during hike) don't force downstream <MarkerList> to see a new array ref.
   const markers = useMemo(
@@ -1367,21 +1390,49 @@ export function HikingScreen() {
       </View>
 
       {/* Marker Detail Sheet */}
+      {/* R114 (2026-08-07): swapped legacy screens/MarkerDetailSheet for
+          unified MarkDetailSheet. onOpenDetail (jump to full
+          MarkerDetailScreen for edit) now flows through onEdit — the
+          sheet's Edit button navigates to the screen instead of opening
+          an inline editor, preserving the previous "See details" UX. */}
       {ui === 'detail' && selectedMarker && (
-        <MarkerDetailSheet
+        <MarkDetailSheet
           marker={selectedMarker}
+          viewerId={viewerId}
+          subscribedFriendIds={subscribedFriendIds}
+          friendIds={friendIds}
+          inMyFog={isExploredFn}
+          isLiked={isMarkLikedForSheet}
           onClose={() => { setSelectedMarkerId(null); setUi('map'); }}
-          onDelete={handleDeleteMarker}
-          onOpenDetail={() => {
-            // O18 MARK-02: dismiss sheet + open full MarkerDetailScreen for
-            // edit / permission / snapshot management.
-            const id = selectedMarker.id;
+          onEdit={(m) => {
+            // Preserve v299 "See details" behavior: Edit on the sheet
+            // jumps into the full MarkerDetailScreen so edits happen
+            // there, not inline. Sheet stays as quick-view surface.
+            const id = m.id;
             setSelectedMarkerId(null);
             setUi('map');
             nav.navigate('MarkerDetail', { markerId: id });
           }}
-          lastCoordinate={lastCoordinate}
-          flagTypes={FLAG_TYPES}
+          onDelete={(m, semantic) => {
+            if (semantic === 'own') {
+              // R114 review fix: destructive action needs confirmation.
+              // Matches CairnPinsLayer.handleDeleteOrHide + MarkerDetailScreen.
+              Alert.alert(
+                'Delete this cairn?',
+                'This cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete', style: 'destructive', onPress: handleDeleteMarker },
+                ]
+              );
+            } else {
+              // Non-owner hide — Hiking map generally only shows own
+              // markers, so this branch is rare; wipe cache pending
+              // Story-534.
+              setSelectedMarkerId(null);
+              setUi('map');
+            }
+          }}
         />
       )}
 

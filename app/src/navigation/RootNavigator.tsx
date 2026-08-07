@@ -94,7 +94,9 @@ export function RootNavigator() {
     }
     let cancelled = false;
     (async () => {
-      const done = await hasCompletedOnboarding();
+      // R114 (2026-08-07): per-account onboarding key.
+      const uid = useAppStore.getState().user?.id;
+      const done = await hasCompletedOnboarding(uid);
       if (cancelled) return;
       setShowOnboarding(!done);
       setOnboardingChecked(true);

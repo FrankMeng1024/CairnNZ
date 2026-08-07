@@ -55,11 +55,13 @@ import {
   Vibrate, Ruler, Cloud, MessageSquare, Shield, FileText, Wrench, ExternalLink,
   // O18 HIST-01 — history list search box
   Search,
+  // R114/O21 — Home shortcut Settings replaces Settings2 which reads as sliders (confused with Route icon on the Trails tile)
+  Cog,
 } from 'lucide-react-native';
 import { IconSize } from './tokens';
 
 const ICON_MAP = {
-  Mountain, Map, Users, Settings2,
+  Mountain, Map, Users, Settings2, Cog,
   ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Play, Square, Flag,
   TriangleAlert, Star, Navigation, Lock,
   Target, Timer, Heart, Zap, MapPin, Route,
