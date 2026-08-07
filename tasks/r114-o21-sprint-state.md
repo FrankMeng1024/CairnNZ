@@ -71,11 +71,14 @@ trails / 导航 / friends / offline / mark 算法 / 后台异常关闭 / 离线�
 - [x] **Phase G: Settings edit name** (磁盘代码)
 - [x] **Phase H: 4-eyes OTA 前 review** (完成 2026-08-07)
 - [x] **Phase F 前置: Playwright login 走通** (完成 2026-08-07)
-- [ ] **Phase I: 未测领域 14 项全测** (下一步)
-- [ ] **Phase J: OTA 推送** (最后, 待 Phase I 完成)
-- [ ] **Phase K: 最终报告**
-
-## Phase F 3-subagent 盲评汇总 (最终)
+- [x] **Phase I: 未测领域 14 项全测** (完成 2026-08-07, `docs/qa/r114-untested-areas/PHASE_I_REPORT.md`)
+- [x] **Phase J: OTA 推送** ✅ **完成 2026-08-07**
+  - Update group ID: `73690023-f2f6-4afa-87e3-a057f873a589`
+  - iOS update ID: `019fdaab-2fec-7fe6-a1bc-37ccea6750d2`
+  - Android update ID: `019fdaab-2fec-7d2d-aeed-864433910ab0`
+  - Commit: `66c8ec1`
+  - Dashboard: https://expo.dev/accounts/frankmeng920313/projects/cairn/updates/73690023-f2f6-4afa-87e3-a057f873a589
+- [x] **Phase K: 最终报告** (完成 2026-08-07, `tasks/r114-o21-final-report.md`)
 
 ### Round 3 分数 (all 3 subagents)
 - **Subagent A (paying user)**: 9.4/9.2/9.3, mean **9.30**, CONDITIONAL

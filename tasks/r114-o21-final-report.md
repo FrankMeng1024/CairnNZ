@@ -12,7 +12,13 @@
 - ✅ **R114 Mark 大重构完成**, 3-subagent 盲评 **mean 9.55/10** 过 9.5+ gate (2 PASS, 1 CONDITIONAL)
 - ✅ **Phase H 4-eyes review** 修完 2 Critical + 5 dead-code + Memory 8 处 sepia 迁移
 - ✅ **Phase I 未测领域全测** 15 项 findings, 主 agent 二次核实标注 subagent 错读
-- ⚠️ **OTA 决策待用户 review** — 主 agent 建议 **READY 推送**
+- ✅ **Phase J OTA 已推送** (2026-08-07)
+  - **Update group ID**: `73690023-f2f6-4afa-87e3-a057f873a589`
+  - **iOS update ID**: `019fdaab-2fec-7fe6-a1bc-37ccea6750d2`
+  - **Android update ID**: `019fdaab-2fec-7d2d-aeed-864433910ab0`
+  - **Commit**: `66c8ec1`
+  - **Runtime version**: 0.2.6 (native semver 保留, OTA-only release)
+  - **Dashboard**: https://expo.dev/accounts/frankmeng920313/projects/cairn/updates/73690023-f2f6-4afa-87e3-a057f873a589
 
 ---
 
@@ -30,7 +36,7 @@
 | H | 4-eyes OTA 前 review | ✅ | 2 subagent CONDITIONAL → 修完 → PASS |
 | F 前置 | Playwright login | ✅ | password placeholder root cause 修 |
 | I | 未测领域 14 项全测 | ✅ | `docs/qa/r114-untested-areas/PHASE_I_REPORT.md` |
-| J | OTA 推送 | ⏸ 待用户决定 | 需 `git commit` + `eas update --branch production` |
+| J | OTA 推送 | ✅ Published 2026-08-07 | Update group `73690023-...`, iOS + Android |
 | K | 最终报告 | ✅ | 本文件 |
 
 ---
