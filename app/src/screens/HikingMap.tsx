@@ -10,7 +10,7 @@
  */
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, Platform,
+  View, Text, StyleSheet, Platform, ActivityIndicator,
 } from 'react-native';
 import { Colors, Spacing, FontSize, Shadow } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
@@ -96,11 +96,17 @@ export function HikingMap({
   // O18 MAP-01: react to user's saved map layer preference (outdoors / satellite).
   const mapLayer = useSettingsStore((s) => s.mapLayer);
 
-  // R114/O22 STORY-73011 (K1): watch network state. When offline, Mapbox
+  // R114/O22 (2026-08-08) Bug 4: watch network state. When offline, Mapbox
   // tiles fail to fetch → map renders black/white. Overlay a friendly
   // banner so the user knows why the map isn't drawing and can decide
   // whether to keep hiking. Non-fatal for GPS recording — track continues.
   const [isOffline, setIsOffline] = useState(false);
+  // R114/O22 Bug 4: also track "map has finished rendering at least once".
+  // On first launch tiles must download from Mapbox — if the CDN is slow
+  // (common in China) the user stares at a white canvas thinking the app
+  // is broken. This state drives a "Loading map…" overlay that hides
+  // itself as soon as the native side reports the map is fully rendered.
+  const [mapFirstRender, setMapFirstRender] = useState(false);
   useEffect(() => {
     let cancelled = false;
     let unsub: (() => void) | undefined;
@@ -346,6 +352,14 @@ export function HikingMap({
             onUserGesture?.();
           }
         }}
+        // R114/O22 Bug 4: fires once when Mapbox has rendered all tiles in
+        // the current viewport at their native LOD. That's the earliest
+        // moment "there's a real map on screen". Prior code had no signal
+        // so the initial cream/white canvas could sit for many seconds on
+        // slow CDN with no user feedback.
+        onDidFinishRenderingMapFully={() => {
+          if (!mapFirstRender) setMapFirstRender(true);
+        }}
       >
         <CameraComponent
           ref={cameraRef}
@@ -486,6 +500,20 @@ export function HikingMap({
           </PointAnnotation>
         ))}
       </MapView>
+      {/* R114/O22 Bug 4: first-load overlay. Sits over the still-loading
+          map until Mapbox reports mapFirstRender. On slow networks (China
+          CDN, first hike after fresh install) tile download can take 5–20s;
+          without this overlay the user sees a blank white/cream canvas
+          and thinks the app is broken. When offline, the offline banner
+          below takes priority so we don't double-message. */}
+      {!mapFirstRender && !isOffline && (
+        <View style={mapStyles.mapLoadingOverlay} pointerEvents="none">
+          <View style={mapStyles.mapLoadingCard}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={mapStyles.mapLoadingText}>Loading map…</Text>
+          </View>
+        </View>
+      )}
       {/* R114/O22 STORY-73011 (K1): offline banner. Shown when NetInfo
           reports no internet — Mapbox tiles won't fetch so the map is
           effectively blank. GPS recording is unaffected; this banner
@@ -526,6 +554,32 @@ export function HikingMap({
 }
 
 const mapStyles = StyleSheet.create({
+  // R114/O22 Bug 4: loading overlay (first tile render).
+  mapLoadingOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Not fully opaque — the cream mapBg shows through faintly so the
+    // transition to real tiles feels like a fade-in rather than a blink.
+    backgroundColor: 'rgba(220, 216, 209, 0.85)',
+  },
+  mapLoadingCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 18, paddingVertical: 12,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  mapLoadingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
   // R114/O22 STORY-73011: offline banner overlay. Sits mid-screen so it's
   // impossible to miss without covering the entire viewport.
   offlineOverlay: {

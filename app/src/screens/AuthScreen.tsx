@@ -24,7 +24,9 @@ import {
 import Svg, { Path, Ellipse, Line, G } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import DateTimePicker from '@react-native-community/datetimepicker';
+// R114/O22 (2026-08-08) Bug 2: DateTimePicker removed. See DobInputs
+// helper below — replaced with three plain TextInputs (Year / Month / Day)
+// so the DOB picker works over OTA without a native binary rebuild.
 // v412: UnfinishedSessionBanner 已被 v412 UnfinishedRecoveryModal 取代 (HikingScreen 内)
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -331,6 +333,114 @@ function PasswordInput({ value, onChangeText, placeholder, error, onBlur, isNew 
   );
 }
 
+// ── DOB three-field input (Year / Month / Day) ─────────────────────────────
+// R114/O22 (2026-08-08): replaces @react-native-community/datetimepicker
+// so we can ship the DOB picker over OTA without a new native binary.
+// Contract with parent: `value` is 'YYYY-MM-DD' string or empty. On any
+// valid change we call `onChange(newValue)`. If the parsed date fails
+// the 13+ age gate we call `onError(msg)` — parent still stores what the
+// user typed so the fields show it back.
+function DobInputs({ value, onChange, onError, error }: {
+  value: string;
+  onChange: (v: string) => void;
+  onError: (msg: string) => void;
+  error?: string;
+}) {
+  // Split the incoming 'YYYY-MM-DD' string into fields. Missing/invalid
+  // parts render as empty so the user sees the placeholder.
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const [y, setY] = React.useState(parts ? parts[1] : '');
+  const [m, setM] = React.useState(parts ? parts[2] : '');
+  const [d, setD] = React.useState(parts ? parts[3] : '');
+
+  const commit = (yy: string, mm: string, dd: string) => {
+    // Only emit a change when all three fields have 4 / 2 / 2 digits.
+    // Otherwise clear parent's dob so the submit button knows it's empty.
+    if (yy.length === 4 && mm.length >= 1 && dd.length >= 1) {
+      const mmPadded = mm.padStart(2, '0');
+      const ddPadded = dd.padStart(2, '0');
+      const iso = `${yy}-${mmPadded}-${ddPadded}`;
+      const yNum = Number(yy);
+      const mNum = Number(mm);
+      const dNum = Number(dd);
+      // Simple range checks. Backend enforces 13+ and calendar validity
+      // definitively; here we just guide the user.
+      if (yNum < 1900 || yNum > new Date().getFullYear()) {
+        onError('Please enter a valid year.');
+      } else if (mNum < 1 || mNum > 12) {
+        onError('Month must be 01–12.');
+      } else if (dNum < 1 || dNum > 31) {
+        onError('Day must be 01–31.');
+      } else {
+        // Age gate — 13+ per backend rule.
+        const birth = new Date(iso);
+        const age = (Date.now() - birth.getTime()) / (365.25 * 24 * 3600 * 1000);
+        if (Number.isNaN(age)) {
+          onError('Please enter a valid date.');
+        } else if (age < 13) {
+          onError('Cairn is only available for people aged 13 and up.');
+        }
+      }
+      onChange(iso);
+    } else {
+      onChange('');
+    }
+  };
+
+  const baseStyle = [formStyles.input, error ? formStyles.inputError : null,
+    { flex: 1, textAlign: 'center' as const, paddingHorizontal: 8 }];
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      <TextInput
+        value={y}
+        onChangeText={(v) => {
+          const clean = v.replace(/\D/g, '').slice(0, 4);
+          setY(clean);
+          commit(clean, m, d);
+        }}
+        placeholder="YYYY"
+        placeholderTextColor={Colors.textMuted}
+        keyboardType="number-pad"
+        maxLength={4}
+        style={[...baseStyle, { flex: 1.4 }]}
+        testID="input-dob-year"
+        returnKeyType="next"
+      />
+      <TextInput
+        value={m}
+        onChangeText={(v) => {
+          const clean = v.replace(/\D/g, '').slice(0, 2);
+          setM(clean);
+          commit(y, clean, d);
+        }}
+        placeholder="MM"
+        placeholderTextColor={Colors.textMuted}
+        keyboardType="number-pad"
+        maxLength={2}
+        style={baseStyle}
+        testID="input-dob-month"
+        returnKeyType="next"
+      />
+      <TextInput
+        value={d}
+        onChangeText={(v) => {
+          const clean = v.replace(/\D/g, '').slice(0, 2);
+          setD(clean);
+          commit(y, m, clean);
+        }}
+        placeholder="DD"
+        placeholderTextColor={Colors.textMuted}
+        keyboardType="number-pad"
+        maxLength={2}
+        style={baseStyle}
+        testID="input-dob-day"
+        returnKeyType="done"
+      />
+    </View>
+  );
+}
+
 // ── Inline text input with error ───────────────────────────────────────────
 function FieldInput({ icon, placeholder, value, onChangeText, error, onBlur, keyboardType, autoCapitalize, autoFocus, textContentType, autoComplete }: {
   icon: string; placeholder: string; value: string; onChangeText: (v: string) => void;
@@ -445,7 +555,8 @@ export function AuthScreen() {
   // string (matches backend Joi.isoDate schema). Empty until user picks.
   const [dob, setDob] = useState('');
   const [dobError, setDobError] = useState('');
-  const [dobPickerOpen, setDobPickerOpen] = useState(false);  // R110 P1-9: native date picker modal
+  // R114/O22 (2026-08-08) Bug 2: DateTimePicker modal state removed —
+  // inline DobInputs (Year / Month / Day fields) replaces the picker.
   // O18 AUTH-04: forgot-password state — reset email, 6-digit code, new pw.
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotCode, setForgotCode] = useState('');
@@ -603,12 +714,32 @@ export function AuthScreen() {
     setPrivacyError(''); setApiError('');
   };
 
+  // R114/O22 post-verify fix: clear form input state so switching views
+  // (splash → register, login → register, signout → register, etc.) always
+  // starts with a blank form. Prior behavior kept the previously-typed
+  // email/name/password across view changes, which meant a signout-then-
+  // create-account showed prefill from the previous session. Reset all
+  // user-input state fields; auth-flow state (verifyEmail, view, cooldown)
+  // is untouched so mid-flow transitions still work.
+  const resetFormInputs = () => {
+    setName('');
+    setEmail('');
+    setPassword('');
+    setConfirm('');
+    setDob('');
+    setDobError('');
+    setPrivacyChecked(false);
+    setShowPassword(false);
+    submitAttempted.current = false;
+  };
+
   const handleViewChange = (v: AuthView) => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require('../services/bootDiagnostics').markBootPhase('auth_view_change', { to: v });
     } catch {/* ignore */}
     resetErrors();
+    resetFormInputs();
     submitAttempted.current = false;
     setView(v);
   };
@@ -709,16 +840,11 @@ export function AuthScreen() {
         return;
       }
 
-      // O18 AUTH-06: legacy account with no DOB on file (pre-migration
-      // user) — prompt them to backfill before proceeding. Only fires
-      // once because DOB is immutable once set.
-      if (!isRegister && result.user && result.user.dateOfBirth == null) {
-        crashLogger.breadcrumb(`dob_backfill:trigger user_id=${result.user.id} — dateOfBirth null`);
-        setDob('');
-        setDobError('');
-        setView('dob_backfill');
-        return;
-      }
+      // R114/O22 user directive (2026-08-08): remove DOB backfill for old
+      // accounts. Per user: "老账户你帮我 migrate 随便什么 birthday. 因为
+      // 我们上限必定是有 birthday 的, 简化这里, 不要有多余的, 容易出问题".
+      // Backend migration writes a sentinel DOB (2000-01-01) for any legacy
+      // user whose dateOfBirth is NULL. Client no longer prompts.
 
       // Persist or clear remember-me credentials based on the checkbox.
       // O1 batch 28.5: 用 credentialsStore (SecureStore 加密)。rememberMe=true
@@ -1203,128 +1329,9 @@ export function AuthScreen() {
     );
   }
 
-  // ── O18 AUTH-06: legacy DOB backfill modal ──────────────────────────────
-  // Only shown once (immutable once set). Same >= 13 validation as register.
-  if (view === 'dob_backfill') {
-    crashLogger.breadcrumb('dob_backfill:view_render');
-    return (
-      <SafeAreaView style={[styles.container, { padding: 24 }]} edges={['top', 'bottom']}>
-        <View style={{ marginTop: 40 }}>
-          <Text style={[styles.appName, { marginBottom: 8 }]}>One quick thing</Text>
-          <Text style={[styles.tagline, { color: Colors.textSecondary, marginBottom: 24 }]}>
-            We ask new members to confirm they're 13 or older. This is a one-time step.
-          </Text>
-          {/* R110 P1-9: DOB backfill 也用 native picker (跟注册流程一致) */}
-          <TouchableOpacity
-            testID="input-dob-backfill"
-            style={[formStyles.input, { justifyContent: 'center' }]}
-            onPress={() => setDobPickerOpen(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={{ color: dob ? Colors.textPrimary : Colors.textMuted, fontSize: 16 }}>
-              {dob || 'Tap to select your birthday'}
-            </Text>
-          </TouchableOpacity>
-          <Modal
-            visible={dobPickerOpen}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setDobPickerOpen(false)}
-          >
-            <TouchableOpacity
-              style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
-              activeOpacity={1}
-              onPress={() => setDobPickerOpen(false)}
-            >
-              <TouchableOpacity activeOpacity={1} style={{ backgroundColor: '#fff', paddingBottom: 30 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
-                  <TouchableOpacity onPress={() => setDobPickerOpen(false)}>
-                    <Text style={{ fontSize: 16, color: Colors.textMuted }}>Cancel</Text>
-                  </TouchableOpacity>
-                  <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.textPrimary }}>Date of birth</Text>
-                  <TouchableOpacity onPress={() => setDobPickerOpen(false)}>
-                    <Text style={{ fontSize: 16, color: Colors.primary, fontWeight: '600' }}>Done</Text>
-                  </TouchableOpacity>
-                </View>
-                {/* R113 fix: iOS spinner picker 需要固定高度容器才渲染滚轮 (同 Create Account 屏 DOB)
-                    R114/O21 post-real-device fix: user reported spinner rendered blank on iOS.
-                    Root cause: iOS 15+ DateTimePicker spinner uses adaptive text color that
-                    may resolve to white on the modal's white surface (invisible). Setting
-                    `textColor` + `themeVariant="light"` explicitly forces dark text so
-                    numerals are visible against the white sheet background. */}
-                <View style={{ height: 220, justifyContent: 'center', alignItems: 'center' }}>
-                  <DateTimePicker
-                    value={dob ? new Date(dob) : new Date(Date.now() - 25 * 365 * 24 * 60 * 60 * 1000)}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    themeVariant="light"
-                    textColor={Colors.textPrimary}
-                    accentColor={Colors.primary}
-                    style={{ width: '100%', height: 220 }}
-                    maximumDate={new Date(Date.now() - 13 * 365 * 24 * 60 * 60 * 1000)}
-                    minimumDate={new Date('1900-01-01')}
-                    onChange={(_, selected) => {
-                      if (selected) {
-                        const y = selected.getFullYear();
-                        const m = String(selected.getMonth() + 1).padStart(2, '0');
-                        const d = String(selected.getDate()).padStart(2, '0');
-                        setDob(`${y}-${m}-${d}`);
-                        if (dobError) setDobError('');
-                      }
-                    }}
-                  />
-                </View>
-              </TouchableOpacity>
-            </TouchableOpacity>
-          </Modal>
-          {dobError ? <Text style={formStyles.errorText}>{dobError}</Text> : null}
-          <TouchableOpacity
-            testID="btn-save-dob"
-            style={[styles.primaryBtn, { marginTop: 24 }]}
-            disabled={loading}
-            onPress={async () => {
-              crashLogger.breadcrumb(`dob_backfill:btn_press dob_len=${dob.length}`);
-              const err = validateDob(dob);
-              if (err) {
-                crashLogger.breadcrumb(`dob_backfill:validate_fail err=${err.slice(0, 40)}`);
-                setDobError(err); return;
-              }
-              crashLogger.breadcrumb('dob_backfill:validate_ok');
-              setLoading(true);
-              try {
-                crashLogger.breadcrumb('dob_backfill:patchdob_call');
-                const r = await patchDob(dob.trim());
-                crashLogger.breadcrumb(`dob_backfill:patchdob_returned has_err=${!!r.error} has_user=${!!r.user}`);
-                if (r.error) {
-                  crashLogger.breadcrumb(`dob_backfill:patchdob_error ${String(r.error).slice(0, 60)}`);
-                  setDobError(r.error);
-                  return;
-                }
-                if (r.user) {
-                  crashLogger.breadcrumb(`dob_backfill:setUser user_id=${r.user.id}`);
-                  setUser(r.user);
-                }
-                crashLogger.breadcrumb('dob_backfill:hydrate_start');
-                await hydrate();
-                crashLogger.breadcrumb('dob_backfill:hydrate_done');
-                setLoggedIn(true);
-                crashLogger.breadcrumb('dob_backfill:setLoggedIn_done');
-              } catch (loopErr: any) {
-                // 这个 catch 是防御性: 如果 patchDob/hydrate/setLoggedIn 中
-                // 任一 throw uncaught，我们至少能在 crashLogger 里看到。
-                crashLogger.breadcrumb(`dob_backfill:handler_catch ${String(loopErr?.message || loopErr).slice(0, 100)}`);
-                throw loopErr;
-              } finally {
-                setLoading(false);
-                crashLogger.breadcrumb('dob_backfill:finally_loading_cleared');
-              }
-            }}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Continue</Text>}
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // ── R114/O22 (2026-08-08): DOB backfill view REMOVED per user directive.
+  // Legacy users get sentinel 2000-01-01 via migration 032_backfill_null_dob.sql.
+  // Client never prompts for backfill.
 
   // ── O18 AUTH-04: forgot password step 1 — request code by email ─────────
   if (view === 'forgot_request') {
@@ -1612,71 +1619,23 @@ export function AuthScreen() {
                 onBlur={() => { if (confirm && confirm !== password) setConfirmError('Passwords do not match'); }}
                 isNew
               />
-              {/* O18 AUTH-06 + R110 P1-9: date of birth — native picker (iOS wheel / Android calendar).
-                  用户体验从"手打 YYYY-MM-DD"改成"点一下弹选择器", 注册转化率显著提升.
-                  内部 state 保持 YYYY-MM-DD string 格式, 后端 API 无变化. */}
+              {/* R114/O22 (2026-08-08) Bug 2 fix: DateTimePicker native
+                  module was "unimplemented (pink screen)" on the current
+                  EAS build because @react-native-community/datetimepicker
+                  is a native dep and this bundle predates when it was
+                  added. User rule "不 eas build" means we cannot ship a
+                  new native binary in this OTA. Replaced with three
+                  numeric inputs (Year / Month / Day) — plain JS, works
+                  over OTA, no native module needed. Validation builds
+                  the YYYY-MM-DD string in `dob` state so backend contract
+                  is unchanged. */}
               <Text style={formStyles.label}>Date of birth</Text>
-              <TouchableOpacity
-                testID="input-dob"
-                style={[formStyles.input, dobError ? formStyles.inputError : null, { justifyContent: 'center' }]}
-                onPress={() => setDobPickerOpen(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={{ color: dob ? Colors.textPrimary : Colors.textMuted, fontSize: 16 }}>
-                  {dob || 'Tap to select'}
-                </Text>
-              </TouchableOpacity>
-              {/* R110 P1-9: 独立 Modal 装 DateTimePicker, iOS/Android 都用同一 UX */}
-              <Modal
-                visible={dobPickerOpen}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setDobPickerOpen(false)}
-              >
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
-                  activeOpacity={1}
-                  onPress={() => setDobPickerOpen(false)}
-                >
-                  <TouchableOpacity activeOpacity={1} style={{ backgroundColor: '#fff', paddingBottom: 30 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
-                      <TouchableOpacity onPress={() => setDobPickerOpen(false)}>
-                        <Text style={{ fontSize: 16, color: Colors.textMuted }}>Cancel</Text>
-                      </TouchableOpacity>
-                      <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.textPrimary }}>Date of birth</Text>
-                      <TouchableOpacity onPress={() => setDobPickerOpen(false)}>
-                        <Text style={{ fontSize: 16, color: Colors.primary, fontWeight: '600' }}>Done</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {/* R113 fix: iOS spinner picker 需要固定高度容器才渲染滚轮; 之前 container
-                        没高度 picker collapse 到 0px, 用户只看到 Cancel/Done 看不到日期滚轮.
-                        R114/O21 post-real-device fix: also force light theme + explicit textColor
-                        so numerals are visible on white modal (iOS 15+ adaptive text color bug). */}
-                    <View style={{ height: 220, justifyContent: 'center', alignItems: 'center' }}>
-                      <DateTimePicker
-                        value={dob ? new Date(dob) : new Date(Date.now() - 25 * 365 * 24 * 60 * 60 * 1000)}
-                        mode="date"
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        themeVariant="light"
-                        textColor={Colors.textPrimary}
-                        accentColor={Colors.primary}
-                        style={{ width: '100%', height: 220 }}
-                        maximumDate={new Date(Date.now() - 13 * 365 * 24 * 60 * 60 * 1000)}
-                        minimumDate={new Date('1900-01-01')}
-                        onChange={(_, selected) => {
-                          if (selected) {
-                            const y = selected.getFullYear();
-                            const m = String(selected.getMonth() + 1).padStart(2, '0');
-                            const d = String(selected.getDate()).padStart(2, '0');
-                            setDob(`${y}-${m}-${d}`);
-                            if (dobError) setDobError('');
-                          }
-                        }}
-                      />
-                    </View>
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              </Modal>
+              <DobInputs
+                value={dob}
+                onChange={(v) => { setDob(v); if (dobError) setDobError(''); }}
+                onError={setDobError}
+                error={dobError}
+              />
               {dobError ? <Text style={formStyles.errorText}>{dobError}</Text> : (
                 <Text style={formStyles.hintText}>You must be 13+ to use Cairn.</Text>
               )}
