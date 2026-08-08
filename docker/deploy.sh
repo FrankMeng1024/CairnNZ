@@ -65,8 +65,9 @@ for mig_path in $(ls "$MIGRATIONS_DIR"/[0-9]*.sql 2>/dev/null | sort); do
   mig_file=$(basename "$mig_path")
   mig_num=$(echo "$mig_file" | grep -oE '^[0-9]+')
   if [ -z "$mig_num" ]; then continue; fi
-  # Skip if numerically ≤ last applied.
-  if [ "$mig_num" \< "$LAST_APPLIED" ] || [ "$mig_num" = "$LAST_APPLIED" ]; then
+  # Numeric compare — 031 > 004, not string "031" > "004" (both are 3-digit
+  # so it happens to work either way, but the intent is numeric).
+  if [ "$((10#$mig_num))" -le "$((10#$LAST_APPLIED))" ]; then
     continue
   fi
   echo "  ▸ applying $mig_file"
@@ -75,7 +76,7 @@ for mig_path in $(ls "$MIGRATIONS_DIR"/[0-9]*.sql 2>/dev/null | sort); do
   # error doesn't crash deploy — but the operator sees the error and can
   # investigate. Better error handling per-migration is future work.
   if ! mysql -h127.0.0.1 -uroot -p"$DB_PASSWORD" cairn < "$mig_path" 2>&1 | tee /tmp/mig_out_$$; then
-    if grep -q 'Duplicate column\|already exists' /tmp/mig_out_$$; then
+    if grep -qE 'Duplicate column|already exists|Duplicate key|Duplicate entry|Cannot drop table.*referenced by' /tmp/mig_out_$$; then
       echo "    (already applied — skipping)"
     else
       echo "❌ Migration $mig_file failed. Fix and re-run."
