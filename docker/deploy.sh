@@ -56,6 +56,14 @@ cd "$SCRIPT_DIR"
 # Migrations live in backend/src/migrations/NNN_*.sql and are numbered
 # strictly increasing. We store the last-applied number in a file so a
 # rerun only picks up new migrations.
+#
+# CRITICAL (R114/O22 2026-08-08 post-mortem): destructive migrations
+# (DROP TABLE / TRUNCATE / DELETE without WHERE) MUST NOT run
+# automatically. On 2026-08-08 the initial deploy ran 004_auth_rebuild.sql
+# on an existing populated DB — its unconditional `DROP TABLE sessions`
+# succeeded and only `DROP TABLE users` failed (FK), destroying real
+# hike data. Guard: if a migration file contains DROP/TRUNCATE, skip
+# it and print a warning unless MIGRATION_ALLOW_DESTRUCTIVE=1 is set.
 echo "→ Step 2/6: running pending DB migrations…"
 LAST_APPLIED_FILE="$SCRIPT_DIR/.migrations_applied"
 LAST_APPLIED=$(cat "$LAST_APPLIED_FILE" 2>/dev/null || echo "000")
@@ -70,11 +78,24 @@ for mig_path in $(ls "$MIGRATIONS_DIR"/[0-9]*.sql 2>/dev/null | sort); do
   if [ "$((10#$mig_num))" -le "$((10#$LAST_APPLIED))" ]; then
     continue
   fi
-  echo "  ▸ applying $mig_file"
-  # Idempotency: some migrations may already have partial state (columns
-  # that pre-exist etc). We use `|| true` on the whole file so a partial
-  # error doesn't crash deploy — but the operator sees the error and can
-  # investigate. Better error handling per-migration is future work.
+  # ── Destructive guard ─────────────────────────────────────────────────
+  # Detect DROP TABLE / TRUNCATE / DELETE-without-WHERE. These are OK for
+  # fresh-install migrations but catastrophic on a populated production
+  # DB. Skip by default with a warning; operator can re-run with
+  # MIGRATION_ALLOW_DESTRUCTIVE=1 after verifying it's safe.
+  if grep -qiE '^\s*(DROP\s+TABLE|TRUNCATE\s+TABLE)' "$mig_path" \
+     || grep -qiE '^\s*DELETE\s+FROM\s+\w+\s*;' "$mig_path"; then
+    if [ "${MIGRATION_ALLOW_DESTRUCTIVE:-0}" != "1" ]; then
+      echo "  ⚠️  SKIP $mig_file — contains destructive statements (DROP/TRUNCATE)."
+      echo "     If this is a fresh install, run with MIGRATION_ALLOW_DESTRUCTIVE=1"
+      echo "     Marking as applied to prevent repeat warning."
+      echo "$mig_num" > "$LAST_APPLIED_FILE"
+      continue
+    fi
+    echo "  ▸ applying $mig_file (destructive — allowed by env flag)"
+  else
+    echo "  ▸ applying $mig_file"
+  fi
   if ! mysql -h127.0.0.1 -uroot -p"$DB_PASSWORD" cairn < "$mig_path" 2>&1 | tee /tmp/mig_out_$$; then
     if grep -qE 'Duplicate column|already exists|Duplicate key|Duplicate entry|Cannot drop table.*referenced by' /tmp/mig_out_$$; then
       echo "    (already applied — skipping)"
