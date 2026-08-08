@@ -412,6 +412,41 @@ export async function patchDob(dateOfBirth: string): Promise<AuthResult> {
   }
 }
 
+// R114/O22 STORY-73006 (H2): mark onboarding done on the server so it
+// follows the user account across devices and reinstalls. Backend adds
+// `users.onboarding_done_at TIMESTAMP NULL` + `PATCH /api/auth/onboarding`.
+// Client calls this after the user finishes the 4-screen intro.
+// Non-fatal: local per-account AsyncStorage key is still written first
+// so the user isn't blocked if the endpoint is unreachable.
+export async function patchOnboardingDone(): Promise<AuthResult> {
+  crashLogger.breadcrumb('h2:patch_onboarding_start');
+  const token = await getToken();
+  if (!token) {
+    crashLogger.breadcrumb('h2:no_token');
+    return { error: 'not_signed_in' };
+  }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/onboarding`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ done: true }),
+    });
+    crashLogger.breadcrumb(`h2:response status=${res.status} ok=${res.ok}`);
+    if (!res.ok) {
+      // Non-fatal: local flag is still set. Silently note the failure.
+      return { error: `HTTP ${res.status}` };
+    }
+    const data = await res.json();
+    return { user: data.user };
+  } catch (err: any) {
+    crashLogger.breadcrumb(`h2:catch ${String(err?.message || err).slice(0, 80)}`);
+    return { error: 'network' };
+  }
+}
+
 // R100 SETTINGS: update display name from Settings screen. Called by
 // Edit Name modal after user types + hits Save. Backend enforces
 // length 1..32 + strips control chars. Returns updated user on success.

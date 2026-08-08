@@ -11,13 +11,14 @@ export const Colors = {
   primaryMuted: 'rgba(93,124,70,0.40)', // medium transparency for borders/dividers
   primaryDim: 'rgba(93,124,70,0.20)',   // topo ring layer 2
   primaryDeep: 'rgba(93,124,70,0.30)',  // topo ring layer 3 (deepest)
-  // Running — R114/O21: aligned with primary green family per user
-  // feedback "类比 hike 绿色". Uses a brighter, cooler emerald so Running
-  // still visually distinct from Hike's forest green while both live in
-  // the green-family palette (no more blue/green split on Home).
-  running: '#3d9b6f',
-  runningLight: 'rgba(61,155,111,0.12)',
-  runningDark: '#2e7a54',         // darker shade for start-button gradient
+  // Running — activity identity color. Blue distinguishes running (cardio,
+  // pace, urban) from Hike's forest green (endurance, terrain, backcountry).
+  // Card LAYOUT/structure must match Hike (see HomeScreen ActivityCard) —
+  // color stays blue per user direction 2026-08-07: "风格一样但依旧蓝色".
+  running: '#3d7ab5',
+  runningLight: 'rgba(61,122,181,0.12)',
+  runningDark: '#2f5f8e',         // darker shade for start-button gradient
+  runningMuted: 'rgba(61,122,181,0.40)', // medium transparency for borders (mirrors primaryMuted for Running)
   // Running dark screen tokens — locked dark mode for running activity
   runningBg: '#0a1a0a',           // full-screen dark background
   runningText: '#e8f5e8',         // light text on dark running screen
@@ -53,7 +54,7 @@ export const Colors = {
   // Aliases for the most-used colors above
   docOrange:       '#F26522',   // alias of severityWarning — for DOC waymarker pin
   night: '#5a4fcf',               // night/sleep mode icon color
-  runningCardBg: 'rgba(61,155,111,0.08)', // running selected card background tint
+  runningCardBg: 'rgba(61,122,181,0.08)', // running selected card background tint
   // Map / outdoor surface tokens
   mapBg: '#e8f0e0',               // topo map background (sage green)
   trail: '#b5823d',               // route trail line color (warm brown)

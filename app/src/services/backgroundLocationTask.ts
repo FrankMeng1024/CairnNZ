@@ -18,9 +18,17 @@
  * Web fallback: import is no-op — TaskManager not available.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { debugLogger } from './debugLogger';
+import { crashLogger } from './crashLogger';
 
 export const BACKGROUND_LOCATION_TASK = 'cairn-background-location';
+
+// R114/O22 STORY-73003 (K10): capture module-load timestamp so we can
+// quantify the registration-lag hypothesis. If a `k10:task_fire` breadcrumb
+// arrives with a timing shorter than this, iOS actually did wake us before
+// registration completed — that would be a smoking gun.
+const moduleLoadTs = Date.now();
 
 // AsyncStorage keys for crash-survival of session metadata
 const STORAGE_KEY_SESSION = 'cairn_bg_active_session_id';
@@ -128,83 +136,97 @@ async function appendDirectlyToHikeTrack(events: object[]): Promise<void> {
 }
 
 let registered = false;
+
+// R114/O22 STORY-73003 (K10) root cause hypothesis #1: register the
+// TaskManager handler SYNCHRONOUSLY at module load time. iOS's docs
+// require `defineTask` to be called before JS runtime is asked to
+// dispatch — the previous `await import('expo-task-manager')` inside
+// an async function created a microtask-gap window where headless wakes
+// could arrive before registration completed. We now use a synchronous
+// `require()` guarded by Platform check.
+const handleBackgroundLocationTask = async ({ data, error }: { data: any; error: any }) => {
+  crashLogger.breadcrumb(
+    `k10:task_fire loc_count=${data?.locations?.length ?? 0} err=${error ? String(error).slice(0, 40) : 'none'} elapsed_ms=${Date.now() - moduleLoadTs}`
+  );
+  if (error) {
+    try { debugLogger.logError(error, 'BackgroundLocationTask'); } catch { /* ignore */ }
+    return;
+  }
+  const payload = data as { locations?: Array<{ coords: LocationCoords; timestamp: number }> };
+  const locations = payload?.locations ?? [];
+  const events: object[] = [];
+  for (const loc of locations) {
+    const coords: LocationCoords = {
+      ...loc.coords,
+      timestamp: loc.timestamp,
+    };
+    pendingBackgroundLocations.push(coords);
+    events.push({
+      ts: loc.timestamp || Date.now(),
+      event: 'gps_fix',
+      lat: coords.latitude,
+      lon: coords.longitude,
+      accuracy_m: coords.accuracy,
+      altitude_m: coords.altitude,
+      altitude_accuracy_m: coords.altitudeAccuracy,
+      speed_mps: coords.speed,
+      heading_deg: coords.heading,
+      raw_or_filtered: 'raw',
+      source: 'background',
+    });
+  }
+  if (events.length === 0) return;
+  if (debugLogger.isEnabled() && debugLogger.getCurrentSessionId()) {
+    crashLogger.breadcrumb(`k10:path_a sid=${debugLogger.getCurrentSessionId()}`);
+    for (const e of events) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      debugLogger.log(e as any);
+    }
+    return;
+  }
+  try {
+    const hikeActive = (await AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE)) === '1';
+    const hasActiveSid = !!(await AsyncStorage.getItem(STORAGE_KEY_SESSION));
+    const legacyEnabled = (await AsyncStorage.getItem(STORAGE_KEY_LEGACY_ENABLED)) === '1';
+    crashLogger.breadcrumb(
+      `k10:path_b hikeActive=${hikeActive} hasSid=${hasActiveSid} legacy=${legacyEnabled}`
+    );
+    if (!hikeActive && !(legacyEnabled && hasActiveSid)) return;
+    await appendDirectlyToHikeTrack(events);
+    crashLogger.breadcrumb(`k10:path_b_write n=${events.length}`);
+  } catch (e: any) {
+    crashLogger.breadcrumb(`k10:path_b_err ${String(e?.message || e).slice(0, 60)}`);
+  }
+};
+
+// Synchronous top-level registration. Guarded by Platform + try/catch so
+// web / Expo Go without dev client don't crash on import.
+if (Platform.OS === 'ios' || Platform.OS === 'android') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const TaskManager = require('expo-task-manager');
+    if (!TaskManager.isTaskDefined(BACKGROUND_LOCATION_TASK)) {
+      TaskManager.defineTask(BACKGROUND_LOCATION_TASK, handleBackgroundLocationTask);
+      registered = true;
+      crashLogger.breadcrumb(`k10:register_sync_done elapsed_ms=${Date.now() - moduleLoadTs}`);
+    }
+  } catch (err: any) {
+    crashLogger.breadcrumb(`k10:register_sync_err ${String(err?.message || err).slice(0, 60)}`);
+  }
+}
+
 export async function registerBackgroundTask(): Promise<boolean> {
+  // Kept for backward compat with callers that await this. The actual
+  // registration already happened synchronously above at module load.
   if (registered) return true;
   try {
     const TaskManager = await import('expo-task-manager');
     if (!TaskManager.isTaskDefined(BACKGROUND_LOCATION_TASK)) {
-      TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
-        if (error) {
-          // Try logging via debugLogger first; if no session, write to file directly
-          try { debugLogger.logError(error, 'BackgroundLocationTask'); } catch { /* ignore */ }
-          return;
-        }
-        const payload = data as { locations?: Array<{ coords: LocationCoords; timestamp: number }> };
-        const locations = payload?.locations ?? [];
-
-        // Build event objects (without session_id — added per path below)
-        const events: object[] = [];
-        for (const loc of locations) {
-          const coords: LocationCoords = {
-            ...loc.coords,
-            timestamp: loc.timestamp,
-          };
-          pendingBackgroundLocations.push(coords);
-          events.push({
-            // Use GPS-fix timestamp when available so events sort correctly,
-            // even if the task was queued for a few seconds before firing.
-            ts: loc.timestamp || Date.now(),
-            event: 'gps_fix',
-            lat: coords.latitude,
-            lon: coords.longitude,
-            accuracy_m: coords.accuracy,
-            altitude_m: coords.altitude,
-            altitude_accuracy_m: coords.altitudeAccuracy,
-            speed_mps: coords.speed,
-            heading_deg: coords.heading,
-            raw_or_filtered: 'raw',
-            source: 'background',
-          });
-        }
-
-        if (events.length === 0) return;
-
-        // Path A — debugLogger has active session in memory (app alive)
-        if (debugLogger.isEnabled() && debugLogger.getCurrentSessionId()) {
-          for (const e of events) {
-            // log() will add session_id from currentSessionId
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            debugLogger.log(e as any);
-          }
-          return;
-        }
-
-        // Path B — app was killed by iOS; debugLogger has no session.
-        // Read persisted context from AsyncStorage and append to file directly.
-        //
-        // v409 fix #6: gate 从 debug logger enabled 换成 STORAGE_KEY_HIKE_ACTIVE。
-        // 语义清晰: 只要 hike 在跑 (startTracking 后 stopTracking 前),就写 GPS
-        // 到 hike-tracks 目录,不依赖用户是否开 debug mode。这修复 194 session
-        // 后 56 分钟数据丢失的根因: hikeActive='1' 但 debug='0' 时数据丢了。
-        //
-        // 迁移兼容: 老用户可能只有 legacy STORAGE_KEY_ENABLED='1' (来自 debugMode)
-        // 而无新 STORAGE_KEY_HIKE_ACTIVE。此时如果 STORAGE_KEY_SESSION 存在,认为
-        // 是 legacy active hike,也允许写盘。
-        try {
-          const hikeActive = (await AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE)) === '1';
-          const hasActiveSid = !!(await AsyncStorage.getItem(STORAGE_KEY_SESSION));
-          const legacyEnabled = (await AsyncStorage.getItem(STORAGE_KEY_LEGACY_ENABLED)) === '1';
-          if (!hikeActive && !(legacyEnabled && hasActiveSid)) return;
-          await appendDirectlyToHikeTrack(events);
-        } catch {
-          // swallow
-        }
-      });
+      TaskManager.defineTask(BACKGROUND_LOCATION_TASK, handleBackgroundLocationTask);
     }
     registered = true;
     return true;
-  } catch (err) {
-    // expo-task-manager not available (web/Expo Go without dev client)
+  } catch {
     return false;
   }
 }

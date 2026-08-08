@@ -13,7 +13,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, Animated, Easing,
+  Alert, Animated, Easing, Linking,
 } from 'react-native';
 import { haptic } from '../services/hapticService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -112,6 +112,12 @@ export function HikingScreen() {
   const saveLostPayload = useTrackingStore(s => s.saveLostPayload);
   const discardCurrentSession = useTrackingStore(s => s.discardCurrentSession);
   const activityMode = useTrackingStore(s => s.activityMode);
+  // R114/O22 STORY-73012 (K2): overspeed flag from the tracking store.
+  // True when the last few fixes exceeded 15 km/h during hiking mode.
+  const overSpeedActive = useTrackingStore(s => s.overSpeedActive);
+  // R114/O22 STORY-73017 (K9): live save-progress step from the tracking
+  // store. Rendered on the StopSummarySheet during long uploads.
+  const savingHikeStep = useTrackingStore(s => s.savingHikeStep);
 
   // Real marker store
   const deleteMarker = useMarkerStore(s => s.deleteMarker);
@@ -168,6 +174,16 @@ export function HikingScreen() {
   // rejects GPS on the initial prime effect (line ~525) or on Start Hike,
   // show a modal with Open Settings + Not now instead of silent return.
   const [permissionDeniedVisible, setPermissionDeniedVisible] = useState(false);
+  // R114/O22 STORY-73009 (H3): persistent permission state for the inline
+  // banner. When location was denied, the shared modal in HikingScreen only
+  // shows once and then vanishes — user reports "no prompt / no explanation
+  // / no way to fix". This state drives an inline banner above the route
+  // pill that stays visible until permission is granted, offering both
+  // Grant (re-prompt) and Open Settings (deep-link) CTAs.
+  //   null   → not yet probed (during initial mount effect)
+  //   true   → foreground location granted
+  //   false  → user denied; banner is shown
+  const [hasLocationPermission, setHasLocationPermission] = useState<boolean | null>(null);
   // O14 Bug 4: keep the sheet mounted with a "Saving…" spinner during
   // stopTracking's async flush+rename chain. Pre-fix, the sheet dismissed
   // immediately on tap-Save and the user saw the Hiking screen with the
@@ -704,9 +720,17 @@ export function HikingScreen() {
             // they know why hiking won't start, and offer Open Settings.
             // Prior behavior silently returned; users tapped Start Hiking
             // and nothing visible happened.
-            if (!cancelled) setPermissionDeniedVisible(true);
+            // R114/O22 STORY-73009: also set persistent hasLocationPermission
+            // = false so the inline banner (above the route pill) renders.
+            if (!cancelled) {
+              setPermissionDeniedVisible(true);
+              setHasLocationPermission(false);
+            }
             return;
           }
+          if (!cancelled) setHasLocationPermission(true);
+        } else {
+          if (!cancelled) setHasLocationPermission(true);
         }
         const fix = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
@@ -969,6 +993,34 @@ export function HikingScreen() {
     />
   );
 
+  // R114/O22 STORY-73009 (H3): banner CTA handlers. When user has previously
+  // denied location and now returns to Hike, the banner offers Grant (re-run
+  // the OS permission request) and Open Settings (deep-link to the app's
+  // permission screen for OS-level enable). If Grant is tapped and the OS
+  // returns granted, we clear the banner and re-run the initial prime to
+  // seed lastCoordinate so distance labels update.
+  const handleGrantLocation = async () => {
+    try {
+      const req = await Location.requestForegroundPermissionsAsync();
+      if (req.granted) {
+        setHasLocationPermission(true);
+        try {
+          const fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const cur = useTrackingStore.getState();
+          if (cur.status !== 'tracking') {
+            useTrackingStore.setState({
+              lastCoordinate: { lat: fix.coords.latitude, lng: fix.coords.longitude, alt: fix.coords.altitude ?? null },
+              lastCoordinateTime: Date.now(),
+            });
+          }
+        } catch { /* non-fatal */ }
+      }
+    } catch { /* non-fatal */ }
+  };
+  const handleOpenSettings = () => {
+    try { Linking.openSettings(); } catch { /* non-fatal */ }
+  };
+
   // ── Phase 1: Route Selection ─────────────────────────────────────────────
   if (phase === 'select') {
     return (
@@ -989,6 +1041,40 @@ export function HikingScreen() {
             </View>
           </View>
         </View>
+
+        {/* R114/O22 STORY-73009 (H3): inline permission banner. Shown when
+            user has denied foreground location. Explains why hiking won't
+            work and offers Grant (retry OS prompt) + Open Settings (deep
+            link). Prior behavior was a one-shot modal that vanished on
+            dismiss, leaving the user with no path forward. */}
+        {hasLocationPermission === false && (
+          <View style={[styles.permBanner, { top: insets.top + 56 }]} pointerEvents="box-none">
+            <View style={styles.permBannerCard}>
+              <Text style={styles.permBannerTitle}>Location needed for Hiking</Text>
+              <Text style={styles.permBannerBody}>
+                Cairn needs your location to track hikes and reveal your map. Grant permission or open Settings to enable it.
+              </Text>
+              <View style={styles.permBannerRow}>
+                <TouchableOpacity
+                  style={[styles.permBannerBtn, styles.permBannerBtnPrimary]}
+                  onPress={handleGrantLocation}
+                  accessibilityRole="button"
+                  accessibilityLabel="Grant location permission"
+                >
+                  <Text style={styles.permBannerBtnPrimaryText}>Grant</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.permBannerBtn, styles.permBannerBtnSecondary]}
+                  onPress={handleOpenSettings}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open device Settings"
+                >
+                  <Text style={styles.permBannerBtnSecondaryText}>Open Settings</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Bottom: route selector pill + start button */}
         <View style={[styles.bottomOverlay, { paddingBottom: insets.bottom + 8 }]} pointerEvents="box-none">
@@ -1166,6 +1252,22 @@ export function HikingScreen() {
           </View>
         </View>
 
+        {/* R114/O22 STORY-73012 (K2): overspeed banner. Second row below
+            the top chips (per user spec: "顶部第二行 banner, numberOfLines=1").
+            Shown when active hike detects sustained speed > 15 km/h — user
+            is likely in a vehicle. The offending points are already dropped
+            from the clean track by the store's OVERSPEED gate; this banner
+            makes the drop visible. Auto-clears when a real hiking-speed
+            fix arrives. */}
+        {isTracking && overSpeedActive && (
+          <View style={styles.overSpeedBanner}>
+            <Icon name="AlertTriangle" size={12} color={Colors.severityWarning} strokeWidth={2.5} />
+            <Text style={styles.overSpeedBannerText} numberOfLines={1}>
+              Moving too fast for a hike — pausing recording
+            </Text>
+          </View>
+        )}
+
         {/* v78 #1: Signal-lost pill — appears above the stats bar when
             the latest accepted GPS fix is older than 30s. Hidden during
             normal operation. */}
@@ -1181,7 +1283,7 @@ export function HikingScreen() {
             the user crosses a 1 km / 1 mi boundary during tracking. */}
         {isTracking && lapToast && (
           <View style={styles.lapToast}>
-            <Icon name="Milestone" size={11} color={Colors.primary} strokeWidth={2.2} />
+            <Icon name="Milestone" size={12} color="#fff" strokeWidth={2.5} />
             <Text style={styles.lapToastText}>{lapToast}</Text>
           </View>
         )}
@@ -1444,6 +1546,7 @@ export function HikingScreen() {
         <StopSummarySheet
           summary={stopSummary}
           saving={savingHike}
+          savingStep={savingHikeStep}
           onCancel={() => {
             // v120: Resume — un-pause and dismiss the sheet. Tracking
             // resumes from where it left off. The gap between Stop
@@ -1609,6 +1712,64 @@ export function HikingScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
+  // R114/O22 STORY-73009: permission banner (denied state)
+  permBanner: {
+    position: 'absolute',
+    left: Spacing.base,
+    right: Spacing.base,
+    zIndex: 10,
+  },
+  permBannerCard: {
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: Radius.card,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.severityWarning,
+    ...Shadow.card,
+    gap: Spacing.sm,
+  },
+  permBannerTitle: {
+    fontSize: FontSize.body,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  permBannerBody: {
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
+    lineHeight: 18,
+  },
+  permBannerRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: 4,
+  },
+  permBannerBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permBannerBtnPrimary: {
+    backgroundColor: Colors.primary,
+  },
+  permBannerBtnPrimaryText: {
+    color: '#fff',
+    fontSize: FontSize.small,
+    fontWeight: '700',
+  },
+  permBannerBtnSecondary: {
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  permBannerBtnSecondaryText: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.small,
+    fontWeight: '700',
+  },
+
   // Route selection (phase 1)
   bottomPanel: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.sm, gap: Spacing.sm },
   routePill: {
@@ -1705,6 +1866,23 @@ const styles = StyleSheet.create({
   trackingStat: { alignItems: 'center', flex: 1 },
   // v78 #1: Signal-lost pill — amber chip above the stats bar.
   // Self-aligned start, only visible when GPS hasn't fixed in 30s+.
+  // R114/O22 STORY-73012: overspeed banner (top second row). numberOfLines=1
+  // per user spec — must never wrap. Padding kept snug to fit typical
+  // 40-char English message on the narrowest device (iPhone SE 375pt).
+  overSpeedBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginHorizontal: Spacing.base, marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md, paddingVertical: 6,
+    backgroundColor: Colors.severityWarningBg,
+    borderRadius: 999,
+    borderWidth: 1, borderColor: Colors.severityWarning,
+  },
+  overSpeedBannerText: {
+    fontSize: FontSize.small,
+    fontWeight: '700',
+    color: Colors.severityWarning,
+    flexShrink: 1,
+  },
   signalLostPill: {
     flexDirection: 'row', alignItems: 'center',
     alignSelf: 'flex-start',
@@ -1731,16 +1909,21 @@ const styles = StyleSheet.create({
   },
   accuracyText: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary, letterSpacing: 0.2 },
   // O18 HIKE-07: lap toast — brief celebration when 1 km / 1 mi crossed.
+  // R114/O22 STORY-73025 (K6): position the "3 km signpost" toast at
+  // top-center below the GPS chip, distinct from left-aligned warning
+  // pills (signal-lost / overspeed). Larger horizontal padding + higher
+  // contrast border reads as an achievement badge rather than a warning.
   lapToast: {
     flexDirection: 'row', alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginHorizontal: Spacing.base, marginTop: Spacing.sm,
-    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
-    backgroundColor: Colors.primaryLight, borderRadius: Radius.chip,
-    borderWidth: 1, borderColor: Colors.primary,
+    alignSelf: 'center',
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md, paddingVertical: 8,
+    backgroundColor: Colors.primary, borderRadius: 999,
     gap: 6,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18, shadowRadius: 12, elevation: 5,
   },
-  lapToastText: { fontSize: 11, fontWeight: '700', color: Colors.primary, letterSpacing: 0.2 },
+  lapToastText: { fontSize: 13, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
   // Tracking stats panel — values intentionally compact (14pt) so the
   // panel doesn't dominate the map view. The numbers are reference
   // information; users glance at them, they don't read them like a

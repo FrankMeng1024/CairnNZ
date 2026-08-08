@@ -143,9 +143,19 @@ export function OnboardingModal({ visible, onFinish }: Props) {
 
   const finish = async () => {
     try {
-      // R114: per-account key.
+      // R114: per-account local key. Always written first so the local
+      // gate never blocks the user even if the server call fails.
       const uid = useAppStore.getState().user?.id;
       await storage.setItem(storageKey(uid), 'true');
+    } catch { /* best-effort */ }
+    // R114/O22 STORY-73006 (H2): also mark server-side so the flag
+    // follows the account across devices and reinstalls. Fire and forget —
+    // failure is non-fatal because the local key covers this device.
+    // Server backfills as source of truth on next hydrate.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { patchOnboardingDone } = require('../../services/authService');
+      void patchOnboardingDone();
     } catch { /* best-effort */ }
     onFinish();
   };
@@ -331,6 +341,17 @@ export async function hasCompletedOnboarding(
   userId: string | number | null | undefined,
 ): Promise<boolean> {
   try {
+    // R114/O22 STORY-73006 (H2): server user.onboardingDoneAt is source
+    // of truth. If backend has flagged this user done, cache locally and
+    // return true immediately. This handles the cross-device / reinstall
+    // case: same account on a new device sees onboarding as done.
+    try {
+      const user = useAppStore.getState().user as { onboardingDoneAt?: string | null } | null;
+      if (user && user.onboardingDoneAt) {
+        try { await storage.setItem(storageKey(userId), 'true'); } catch { /* best-effort */ }
+        return true;
+      }
+    } catch { /* fall through */ }
     // Prefer per-account key.
     const perAcct = await storage.getItem(storageKey(userId));
     if (perAcct === 'true') return true;

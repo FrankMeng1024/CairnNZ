@@ -92,6 +92,14 @@ const ACCURACY_REJECT_M = 25;             // drop fixes worse than this — typi
 const TELEPORT_SPEED_MPS = 10;
 const STATIONARY_SPEED_MPS = 0.5;         // below this, we treat as standing still
 const STATIONARY_RADIUS_MIN_M = 8;        // suppress fixes within this circle of last accepted
+// R114/O22 STORY-73012 (K2): 15 km/h = 4.17 m/s upper bound for hiking.
+// Above this the user is driving (car / bike / bus) — the segment should
+// not count toward the hike. Points at overspeed are dropped from the
+// clean track (still logged raw for audit). We also set an `overSpeed`
+// state flag so HikingScreen can render a "too fast to be a hike" banner.
+// Applies only when activityMode === 'hiking' (running can legitimately
+// exceed 15 km/h in short sprints).
+const HIKING_OVERSPEED_MPS = 4.17;
 // v77: avgSpeedMps removed. We now use GPS-reported `coords.speed`
 // (Doppler-derived, immune to position drift) instead of computing
 // speed from position history — which produced false-positive "you're
@@ -155,6 +163,24 @@ interface TrackingState {
    *  - null        : initial state, or after the consuming screen has shown the notice and cleared it
    *  Screens watch this to surface a friendly explanation when a stop produces no Activities-list entry. */
   lastStopReason: 'saved' | 'saved_pending' | 'too-short' | 'save_lost' | null;
+
+  /**
+   * R114/O22 STORY-73012 (K2): when the active hike session detects that
+   * GPS speed exceeds the hiking upper bound (15 km/h ≈ 4.17 m/s), we drop
+   * the point from the clean track AND set this flag so HikingScreen can
+   * render a banner ("You're moving too fast to be hiking — this segment
+   * won't count"). Auto-clears after a real hiking-speed fix comes in.
+   */
+  overSpeedActive: boolean;
+
+  /**
+   * R114/O22 STORY-73017 (K9): save-in-progress state. When the user taps
+   * Save on a long hike, the atomic upload can take 10-20s. UI subscribes
+   * to this to render a determinate progress hint ("Uploading points…",
+   * "Building memory…", "Finalising…") instead of a spinner-with-no-info.
+   * null = not saving; string = current sub-step description.
+   */
+  savingHikeStep: string | null;
 
   /**
    * O18 SAF-01: when both saveHikeAtomic AND its pendingSyncStore fallback
@@ -224,6 +250,12 @@ const initialState = {
   lastCoordinateTime: null,
   lastFixTimestamp: null,
   lastStopReason: null as 'saved' | 'saved_pending' | 'too-short' | 'save_lost' | null,
+  // R114/O22 STORY-73012 (K2): default false. Set true when active hike
+  // ingests a fix with GPS speed > HIKING_OVERSPEED_MPS (~15 km/h). Cleared
+  // when a real hiking-speed fix is accepted, or on stopTracking.
+  overSpeedActive: false,
+  // R114/O22 STORY-73017 (K9): default null (not saving).
+  savingHikeStep: null as string | null,
   saveLostSessionId: null as string | null,
   saveLostPayload: null as null | {
     localId: string;
@@ -570,7 +602,45 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               deactivateBackgroundSource();
             });
           }, 2000);
+          // R114/O22 STORY-73015 (K7): after screen wake, if GPS has
+          // been silent >60s (signal was lost or watcher stalled during
+          // sleep), kick a one-shot getCurrentPositionAsync to force
+          // re-acquisition. Without this, the watcher can appear active
+          // but never deliver a fresh fix, and the user sees a "frozen"
+          // dot until they interact.
+          try {
+            const lastT = get().lastCoordinateTime;
+            const stale = lastT === null || Date.now() - lastT > 60_000;
+            if (stale) {
+              crashLogger.breadcrumb(`k7:wake_stale_gps last_ms_ago=${lastT === null ? 'null' : Date.now() - lastT}`);
+              (async () => {
+                try {
+                  const Loc = await getLocation();
+                  if (!Loc) return;
+                  const fix = await Loc.getCurrentPositionAsync({ accuracy: Loc.Accuracy.Balanced });
+                  crashLogger.breadcrumb('k7:wake_kick_ok');
+                  // Feed the fresh fix through the same path a watcher
+                  // update would take — this updates lastCoordinate, the
+                  // clean track, distance accumulation, etc.
+                  get().addTrackPoint(
+                    {
+                      lat: fix.coords.latitude,
+                      lng: fix.coords.longitude,
+                      alt: fix.coords.altitude,
+                      accuracy: fix.coords.accuracy ?? null,
+                      speed: fix.coords.speed ?? null,
+                    },
+                    fix.timestamp,
+                  );
+                } catch (err) {
+                  crashLogger.breadcrumb(`k7:wake_kick_err ${String(err).slice(0, 60)}`);
+                }
+              })();
+            }
+          } catch { /* silent — non-fatal */ }
         } else if (nextState === 'background' || nextState === 'inactive') {
+          // R114/O22 STORY-73003 (K10) breadcrumb: entry to bg branch.
+          crashLogger.breadcrumb(`k10:appstate_bg_branch state=${nextState}`);
           // Cancel any pending active-flip timer — user dropped back
           // to background within the debounce window.
           if (activeDebounceTimer) {
@@ -1154,20 +1224,31 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         try {
           // v412 M5: wall-clock 20s timeout, 防切后台 setTimeout 暂停
           const startedAt = Date.now();
+          // R114/O22 STORY-73017: publish save progress steps so UI can
+          // render "Uploading points… (12s)" etc instead of a mystery spinner.
+          set({ savingHikeStep: 'Uploading your hike…' });
           v412Result = await new Promise<any>((resolve, reject) => {
             let done = false;
             const timer = setInterval(() => {
               if (done) return;
-              if (Date.now() - startedAt > 20000) {
+              const elapsed = Date.now() - startedAt;
+              if (elapsed > 20000) {
                 clearInterval(timer);
                 done = true;
                 reject(new Error('v412 wall-clock timeout 20s'));
+                return;
+              }
+              // Update the step message with elapsed seconds — reassures
+              // the user on long uploads that progress is happening.
+              if (elapsed > 5000) {
+                set({ savingHikeStep: `Uploading your hike… (${Math.floor(elapsed / 1000)}s)` });
               }
             }, 500);
             saveHikeAtomic(remoteId, v412Payload, idempotencyKey)
               .then((r) => { if (!done) { done = true; clearInterval(timer); resolve(r); } })
               .catch((e) => { if (!done) { done = true; clearInterval(timer); reject(e); } });
           });
+          set({ savingHikeStep: 'Finalising…' });
           v412Success = true;
           crashLogger.breadcrumb(`v412:save_atomic ok sid=${v412Result?.session_id} replay=${!!v412Result?.idempotent_replay} mem_acc=${v412Result?.memory?.accepted}`);
           // 服务器已把 memory 落库 → 标 client 端 memoryStore 里对应的点为 synced
@@ -1645,11 +1726,37 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         };
       }
 
+      // ── R114/O22 STORY-73012 (K2) GATE 2.5: HIKING OVERSPEED
+      // If active mode is 'hiking' and GPS-reported speed > 15 km/h, the
+      // user is driving/biking — drop from clean track, keep in raw for
+      // audit, and set overSpeedActive so the UI can render a "too fast"
+      // banner. Auto-clear when a real hiking-speed fix arrives.
+      if (
+        s.activityMode === 'hiking' &&
+        speed !== null &&
+        speed > HIKING_OVERSPEED_MPS
+      ) {
+        return {
+          ...s,
+          trackPointsRaw: [...s.trackPointsRaw, rawPoint],
+          overSpeedActive: true,
+          lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
+          lastCoordinateTime: t,
+        };
+      }
+
       // ── v77 GATE 3: STATIONARY SUPPRESSION (drop from clean, keep in raw)
       // Use GPS-reported speed (Doppler-derived, immune to position drift)
       // — when the user is standing still the speed is genuinely ~0 even
       // though the position drifts ±10m. If speed is null (rare, some
       // Android, or first fix), skip this gate entirely (over-record).
+      //
+      // R114/O22 STORY-73016 (K8): airport / indoor GPS often reports
+      // speed=null AND drifts wildly. If we've moved <15m over the last
+      // ~30s AND accuracy is poor (>12m), treat as stationary regardless
+      // of speed reading. This prevents "walking at the airport" false
+      // positives without penalising legitimate slow-moving hikers whose
+      // GPS is accurate (acc ≤ 12m).
       const distFromLastAccepted = s.lastCoordinate
         ? haversineM(s.lastCoordinate, coord)
         : Infinity;
@@ -1666,6 +1773,30 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           // lastCoordinate stays unchanged so next non-stationary fix
           // is measured against the original anchor, not the drifting
           // suppress points.
+          lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
+          lastCoordinateTime: t,
+        };
+      }
+      // R114/O22 STORY-73016 (K8): indoor / airport jitter gate. When
+      // speed is null (Doppler unavailable) or accuracy is bad enough
+      // that a real-world hiker would show >12m error, suppress fixes
+      // that drift <15m in <30s from the anchor. Deliberately conservative
+      // — outdoor hikers with clear-sky signal typically have acc ≤ 8m.
+      if (
+        s.lastCoordinate &&
+        (acc === null || acc > 12) &&
+        distFromLastAccepted < 15 &&
+        s.lastCoordinateTime !== null &&
+        t - s.lastCoordinateTime < 30_000
+      ) {
+        try {
+          crashLogger.breadcrumb(
+            `k8:indoor_suppress acc=${acc ?? 'na'} dist_m=${Math.round(distFromLastAccepted)}`
+          );
+        } catch { /* silent */ }
+        return {
+          ...s,
+          trackPointsRaw: [...s.trackPointsRaw, rawPoint],
           lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
           lastCoordinateTime: t,
         };
@@ -1717,6 +1848,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
         distanceM: s.distanceM + addedDistance,
         elevationGainM,
+        // R114/O22 STORY-73012: real hiking-speed fix accepted → clear
+        // overSpeed banner. Reason: banner should only be visible while
+        // the user is currently moving too fast; when they slow down and
+        // GPS confirms hiking speed, banner goes away.
+        overSpeedActive: false,
       };
     });
     // v409 fix #3: 每次 addTrackPoint 后 append 一行 JSONL 到磁盘。
@@ -2114,6 +2250,12 @@ function deactivateForegroundSource(): void {
  */
 async function activateBackgroundSource(): Promise<void> {
   if (!Location || !backgroundGrantedCached) return;
+  // R114/O22 STORY-73003 (K10) breadcrumb: entry with permission +
+  // interval snapshot. Enables us to reconstruct on-device why background
+  // recording didn't produce points.
+  crashLogger.breadcrumb(
+    `k10:bg_activate_enter granted=${backgroundGrantedCached} interval_ms=${lastSamplingIntervalMs}`
+  );
   try {
     const already = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
     if (already) {
@@ -2124,6 +2266,15 @@ async function activateBackgroundSource(): Promise<void> {
       timeInterval: lastSamplingIntervalMs,
       distanceInterval: 5,
       showsBackgroundLocationIndicator: true,
+      // R114/O22 STORY-73003 (K10) root cause hypothesis #2: default iOS
+      // behavior pauses location updates whenever CoreLocation decides
+      // the user is stationary (e.g. resting at a viewpoint). Without an
+      // explicit resume trigger, "stopped" turns into "silent, forever".
+      // Setting pausesUpdatesAutomatically=false keeps GPS active for
+      // the whole hike. activityType=Fitness tells iOS this is walking/
+      // running so power management is calibrated for that use case.
+      pausesUpdatesAutomatically: false,
+      activityType: Location.ActivityType.Fitness,
       foregroundService: {
         notificationTitle: 'Cairn is tracking',
         notificationBody: 'Recording your route in the background.',
@@ -2131,7 +2282,9 @@ async function activateBackgroundSource(): Promise<void> {
       },
     });
     backgroundTaskActive = true;
-  } catch (err) {
+    crashLogger.breadcrumb('k10:bg_activate_ok');
+  } catch (err: any) {
+    crashLogger.breadcrumb(`k10:bg_activate_err ${String(err?.message || err).slice(0, 80)}`);
     debugLogger.logError(err, 'activateBackgroundSource');
   }
 }

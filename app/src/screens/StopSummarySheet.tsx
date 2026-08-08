@@ -35,9 +35,14 @@ type Props = {
    *  a spinner so the user sees "Saving…" while stopTracking runs its
    *  async flush → rename chain (up to 15s). */
   saving?: boolean;
+  /** R114/O22 STORY-73017 (K9): detailed step from the tracking store
+   *  (e.g. "Uploading your hike… (8s)"). Renders in place of the generic
+   *  "Saving…" so users on long uploads get progress signal instead of
+   *  a mystery spinner. */
+  savingStep?: string | null;
 };
 
-export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard, saving = false }: Props) {
+export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard, saving = false, savingStep = null }: Props) {
   const [name, setName] = useState('');
   const insets = useSafeAreaInsets();
   const slideY = useRef(new Animated.Value(500)).current;
@@ -175,7 +180,9 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard, savi
               {saving ? (
                 <>
                   <ActivityIndicator size="small" color="#fff" />
-                  <Text style={stopSheetStyles.saveText}>Saving…</Text>
+                  <Text style={stopSheetStyles.saveText} numberOfLines={1}>
+                    {savingStep || 'Saving…'}
+                  </Text>
                 </>
               ) : (
                 <>

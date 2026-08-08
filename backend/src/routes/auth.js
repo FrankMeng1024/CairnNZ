@@ -1045,6 +1045,28 @@ router.patch('/dob', authenticate, validateBody(schemas.auth.setDob), async (req
   }
 });
 
+// ── PATCH /api/auth/onboarding (R114/O22 STORY-73006 H2) ─────────────────
+// Marks the intro-flow onboarding as complete for the current user, so it
+// follows the account across devices and reinstalls. Idempotent: setting
+// done=true when already done is a no-op returning current user.
+router.patch('/onboarding', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) return res.status(404).json({ error: 'Account not found.' });
+    const done = req.body?.done === true;
+    if (!done) return res.status(400).json({ error: 'Missing or false `done` flag.' });
+    // Idempotent: don't overwrite the existing timestamp if already set.
+    if (!user.onboarding_done_at) {
+      await User.setOnboardingDone(user.id, new Date());
+    }
+    const updated = await User.findById(user.id);
+    return res.json({ user: User.toPublic(updated) });
+  } catch (err) {
+    console.error('[onboarding patch]', err);
+    return res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
 // ── PATCH /api/auth/me (R100 SETTINGS) ────────────────────────────────────
 // Update display name. Users who register with email + password can pick
 // any name at registration, but Apple sign-in path may set name=null →

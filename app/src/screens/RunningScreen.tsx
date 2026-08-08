@@ -111,6 +111,14 @@ export function RunningScreen() {
   // Without this, Mapbox UserLocation silently fails (no blue dot) and the
   // map shows the default region instead of the user's location.
   const [foregroundGranted, setForegroundGranted] = useState(false);
+  // R114/O22 STORY-73018 (R1) UX-review fix: separate "denied and cannot
+  // ask again" state so the pre-start UI can show a persistent inline
+  // hint pointing to Settings. Without this, users who previously denied
+  // saw NOTHING when re-entering Running — no map dot, no explanation,
+  // no path forward. Mirrors HikingScreen's H3 hasLocationPermission=false
+  // banner but lightweight (chip, not full card) because the pre-start
+  // map is already useful without GPS.
+  const [permissionBlocked, setPermissionBlocked] = useState(false);
   const routePickerSlide = useRef(new Animated.Value(300)).current;
   const routePickerOpacity = useRef(new Animated.Value(0)).current;
   const [isLocked, setIsLocked] = useState(true);
@@ -154,6 +162,15 @@ export function RunningScreen() {
 
   // Request foreground location permission on mount so the pre-start map's
   // UserLocation dot can render. If denied, dot is hidden but map still shows.
+  //
+  // R114/O22 STORY-73018 (R1): do NOT re-request if the user previously
+  // denied. iOS's requestForegroundPermissionsAsync silently returns denied
+  // when canAskAgain=false, but on some paths the shared permission-denied
+  // modal was re-shown every time the user re-entered Running, which the
+  // user reports as annoying ("拒绝后每次进都弹"). Now we only show the
+  // modal on the FIRST denial (perm.canAskAgain === true implies we can
+  // still ask). If canAskAgain=false, we skip both the ask AND the modal —
+  // the user has already made their choice and can enable via Settings.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -162,16 +179,27 @@ export function RunningScreen() {
         const perm = await Location.getForegroundPermissionsAsync();
         if (cancelled) return;
         let granted = perm.status === 'granted';
+        let didAskThisMount = false;
         if (!granted && perm.canAskAgain) {
+          didAskThisMount = true;
           const ask = await Location.requestForegroundPermissionsAsync();
           if (!cancelled && ask.status === 'granted') granted = true;
         }
-        // O18 ONB-04: if the user denied (either via canAskAgain=false or
-        // explicit deny), surface the shared modal so they know why the
-        // map won't center + can jump to Settings. Prior behavior was
-        // silent — foregroundGranted stayed false with no user feedback.
-        if (!granted && !cancelled) {
+        // O18 ONB-04 + R114/O22 STORY-73018: only surface the shared
+        // permission-denied modal when the denial happened in THIS mount
+        // (didAskThisMount=true) — i.e. the user just tapped deny in the
+        // OS dialog. If they had denied on a prior visit (canAskAgain=false
+        // now), do not re-open the modal; that behavior was the "re-prompt"
+        // annoyance the user reported.
+        if (!granted && didAskThisMount && !cancelled) {
           setPermissionDeniedVisible(true);
+        }
+        // R114/O22 STORY-73018 UX fix: track "denied, cannot ask again"
+        // so the pre-start UI can show a small persistent chip pointing
+        // to Settings. Without this the user would see no reason why
+        // their GPS dot isn't rendering.
+        if (!granted && !perm.canAskAgain && !cancelled) {
+          setPermissionBlocked(true);
         }
         if (granted) {
           if (!cancelled) setForegroundGranted(true);
@@ -473,20 +501,13 @@ export function RunningScreen() {
               </Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={() => { setStoppedSessionId(null); setRunState('pre'); }}>
-              <LinearGradient
-                // R114 (2026-08-07): Running theme is blue (Colors.running).
-                // Start button was using primary (forest green), inconsistent
-                // with the rest of the Running UI. Now uses running blue
-                // gradient to match hike's own pattern (hike blue-scheme
-                // uses primary, running uses running).
-                colors={[Colors.running, Colors.runningDark]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={preStyles.startBtn}
-              >
-                <Icon name="PlayCircle" size={IconSize.md} color="#fff" strokeWidth={2} />
-                <Text style={preStyles.startBtnText}>New Run</Text>
-              </LinearGradient>
+          <TouchableOpacity onPress={() => { setStoppedSessionId(null); setRunState('pre'); }} style={preStyles.startBtn}>
+              {/* R114/O22 STORY-73005: mirror Hiking trackBtn — light surface +
+                  colored border + colored icon/text. Only accent color differs
+                  (Running blue vs Hike green). Removes dark LinearGradient per
+                  user direction: "风格一致 只是 hike 是绿色 running 是蓝色". */}
+              <Icon name="PlayCircle" size={IconSize.md} color={Colors.running} strokeWidth={2} />
+              <Text style={preStyles.startBtnText}>New Run</Text>
             </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -567,10 +588,28 @@ export function RunningScreen() {
               if (nav.canGoBack()) nav.goBack();
               else nav.navigate('Home' as never);
             }} />
-            <View style={preStyles.gpsChip}>
-              <View style={[preStyles.gpsDot, { backgroundColor: Colors.severityWarning }]} />
-              <Text style={preStyles.gpsText}>Enable GPS</Text>
-            </View>
+            {/* R114/O22 STORY-73018 UX fix: when permission is denied AND
+                the OS won't let us re-prompt (canAskAgain=false), turn the
+                "Enable GPS" chip into a tappable Settings deep-link so the
+                user has a path forward instead of a dead-end. Non-blocked
+                state (permission granted, or not yet asked) keeps the
+                static chip. */}
+            {permissionBlocked ? (
+              <TouchableOpacity
+                style={preStyles.gpsChip}
+                onPress={() => { try { require('react-native').Linking.openSettings(); } catch { /* silent */ } }}
+                accessibilityRole="button"
+                accessibilityLabel="Open device Settings to enable location"
+              >
+                <View style={[preStyles.gpsDot, { backgroundColor: Colors.severityWarning }]} />
+                <Text style={preStyles.gpsText}>Enable in Settings</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={preStyles.gpsChip}>
+                <View style={[preStyles.gpsDot, { backgroundColor: Colors.severityWarning }]} />
+                <Text style={preStyles.gpsText}>Enable GPS</Text>
+              </View>
+            )}
           </View>
         </SafeAreaView>
 
@@ -597,15 +636,10 @@ export function RunningScreen() {
                   onPress={handleStart}
                   onPressIn={onStartPressIn}
                   onPressOut={onStartPressOut}
+                  style={preStyles.startBtn}
                 >
-                  <LinearGradient
-                    colors={[Colors.running, Colors.runningDark]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                    style={preStyles.startBtn}
-                  >
-                    <Icon name="Play" size={IconSize.sm} color="#fff" strokeWidth={2.5} />
-                    <Text style={preStyles.startBtnText}>Start Running</Text>
-                  </LinearGradient>
+                  <Icon name="Play" size={IconSize.sm} color={Colors.running} strokeWidth={2.5} />
+                  <Text style={preStyles.startBtnText}>Start Running</Text>
                 </TouchableOpacity>
               </Animated.View>
             </View>
@@ -906,12 +940,21 @@ const preStyles = StyleSheet.create({
   routePickerMeta: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
 
   footer: { padding: Spacing.xl, gap: Spacing.sm },
+  // R114/O21 post-review: Running startBtn now mirrors Hiking trackBtn style
+  // (light surface + colored border + colored text/icon) instead of dark
+  // gradient. Only the accent color differs (Running blue vs Hike green) —
+  // per user direction "点到 Running 里, button 应该和上方一致 风格一致,
+  // 只是 hike 是绿色 running 是蓝色".
   startBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: Radius.pill,
-    height: 60, alignItems: 'center',
-    flexDirection: 'row', gap: Spacing.sm, justifyContent: 'center',
+    height: 60,
+    paddingHorizontal: Spacing.xl,
+    borderWidth: 2, borderColor: Colors.runningMuted,
+    ...Shadow.card,
   },
-  startBtnText: { color: '#fff', fontWeight: '700', fontSize: FontSize.body },
+  startBtnText: { fontSize: FontSize.body, fontWeight: '700', color: Colors.running },
   lockHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
   lockHint: { fontSize: FontSize.small, color: Colors.textMuted, textAlign: 'center' },
   // O1 batch 34: shareBtn, shareBtnText removed — 0 JSX references.

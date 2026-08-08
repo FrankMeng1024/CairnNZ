@@ -96,6 +96,29 @@ export function HikingMap({
   // O18 MAP-01: react to user's saved map layer preference (outdoors / satellite).
   const mapLayer = useSettingsStore((s) => s.mapLayer);
 
+  // R114/O22 STORY-73011 (K1): watch network state. When offline, Mapbox
+  // tiles fail to fetch → map renders black/white. Overlay a friendly
+  // banner so the user knows why the map isn't drawing and can decide
+  // whether to keep hiking. Non-fatal for GPS recording — track continues.
+  const [isOffline, setIsOffline] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    let unsub: (() => void) | undefined;
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const NetInfo = require('@react-native-community/netinfo').default;
+        const state = await NetInfo.fetch();
+        if (!cancelled) setIsOffline(!(state.isConnected && state.isInternetReachable !== false));
+        unsub = NetInfo.addEventListener((st: { isConnected: boolean; isInternetReachable: boolean | null }) => {
+          if (cancelled) return;
+          setIsOffline(!(st.isConnected && st.isInternetReachable !== false));
+        });
+      } catch { /* NetInfo not available on this platform — treat as online */ }
+    })();
+    return () => { cancelled = true; if (unsub) unsub(); };
+  }, []);
+
   // v79 #1 fix: split the track into solid + gap segments by time AND
   // distance. v78 used 30s alone, but real walking data showed 30-90s
   // gaps with <10m distance (user standing at a light, slow walk
@@ -116,6 +139,15 @@ export function HikingMap({
   // Runs O(N) over trackPoints; without memo this fires every render even
   // when trackPoints reference is unchanged. `trackPoints` gets a new
   // reference every 3s during a hike so the memo dep is intentional.
+  //
+  // R114/O22 STORY-73014 (K4): during LIVE hike, do NOT draw dashed gap
+  // segments. User spec: "hike realtime polyline gap 段完全不画" — a
+  // dashed line across signal-loss regions was misleading users who
+  // thought the app was tracking during the gap. Finished activities
+  // (MapHistoryScreen) still render dashes because there the user is
+  // reviewing a completed hike and the dash correctly conveys "we lost
+  // signal here". This file (HikingMap) is only mounted during live
+  // hikes, so we simply return an empty gapGeoJSON.
   const { solidGeoJSON, gapGeoJSON } = useMemo(() => {
     const segs: Segment[] = [];
     if (trackPoints.length >= 2) {
@@ -136,8 +168,19 @@ export function HikingMap({
           if (cur.coords.length >= 2) segs.push(cur);
           cur = { coords: [[p.lng, p.lat]], gap: false };
         } else if (isGap) {
+          // R114/O22 STORY-73014: break the polyline cleanly. Do NOT
+          // push a gap segment — during live hike we want zero visual
+          // connection across signal loss. Also emit a crashLogger
+          // breadcrumb so post-hoc debugging can see which fixes were
+          // treated as gaps.
           if (cur.coords.length >= 2) segs.push(cur);
-          segs.push({ coords: [[prev.lng, prev.lat], [p.lng, p.lat]], gap: true });
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const cl = require('../services/crashLogger');
+            (cl.crashLogger ?? cl.default)?.breadcrumb?.(
+              `k4:gap dt_ms=${dt} dist_m=${Math.round(distM)}`
+            );
+          } catch { /* silent */ }
           cur = { coords: [[p.lng, p.lat]], gap: false };
         } else {
           cur.coords.push([p.lng, p.lat]);
@@ -154,13 +197,10 @@ export function HikingMap({
           properties: {},
         })),
       },
+      // R114/O22 STORY-73014: always empty during live hike — see comment above.
       gapGeoJSON: {
         type: 'FeatureCollection' as const,
-        features: segs.filter(s => s.gap).map(s => ({
-          type: 'Feature' as const,
-          geometry: { type: 'LineString' as const, coordinates: s.coords },
-          properties: {},
-        })),
+        features: [] as Array<{ type: 'Feature'; geometry: { type: 'LineString'; coordinates: number[][] }; properties: Record<string, never> }>,
       },
     };
   }, [trackPoints]);
@@ -446,6 +486,20 @@ export function HikingMap({
           </PointAnnotation>
         ))}
       </MapView>
+      {/* R114/O22 STORY-73011 (K1): offline banner. Shown when NetInfo
+          reports no internet — Mapbox tiles won't fetch so the map is
+          effectively blank. GPS recording is unaffected; this banner
+          tells the user "the map is offline but we're still tracking". */}
+      {isOffline && (
+        <View style={mapStyles.offlineOverlay} pointerEvents="box-none">
+          <View style={mapStyles.offlineCard}>
+            <Text style={mapStyles.offlineTitle}>No connection</Text>
+            <Text style={mapStyles.offlineBody}>
+              The map can't load without internet. Your hike is still being tracked — the map will fill in when you're back online.
+            </Text>
+          </View>
+        </View>
+      )}
       {/* Touch shield during the welcome fly-in. Absolutely positioned
           over the map and intercepts all touches so Mapbox's native
           gesture handler can't cancel the running camera animation
@@ -472,6 +526,38 @@ export function HikingMap({
 }
 
 const mapStyles = StyleSheet.create({
+  // R114/O22 STORY-73011: offline banner overlay. Sits mid-screen so it's
+  // impossible to miss without covering the entire viewport.
+  offlineOverlay: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    top: 80,
+    alignItems: 'center',
+  },
+  offlineCard: {
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+    maxWidth: 320,
+  },
+  offlineTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111',
+  },
+  offlineBody: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+  },
   mapBg: {
     flex: 1,
     // R114 (2026-08-07): map placeholder colour changed from Colors.primaryBg

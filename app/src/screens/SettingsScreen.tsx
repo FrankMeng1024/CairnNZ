@@ -36,6 +36,8 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppStore } from '../store/useAppStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
+// R114/O22 STORY-73024 (S3): Memory always-on toggle read/write.
+import { useMemorySettingsStore } from '../features/memory/store/useMemorySettingsStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 // O24 SETTINGS-JOURNEY: sessions count for the new Your journey section.
 import { useSessionStore } from '../store/useSessionStore';
@@ -244,6 +246,14 @@ export function SettingsScreen() {
 
   // Memory stats (readonly display)
   const memoryPointCount = useMemoryStore((s) => s.points.length);
+  // R114/O22 STORY-73024 (S3): Memory always-on GPS toggle. Reads
+  // `foregroundAutoUnlockEnabled` from the memory settings store (default
+  // true). When on, the ForegroundUnlockManager subscribes to
+  // watchPositionAsync while the app is running so memory tiles unlock
+  // automatically without a hike being started. Off = memory only grows
+  // via Save Hike (flushHikingToMemory).
+  const memoryAlwaysOn = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
+  const setMemorySetting = useMemorySettingsStore((s) => s.set);
   const allMarkers = useMarkerStore((s) => s.markers);
   const myCairnCount = user?.id ? allMarkers.filter((m) => m.authorId === user.id).length : 0;
   // O24 SETTINGS-JOURNEY: total activity counts for the Your journey section.
@@ -310,6 +320,14 @@ export function SettingsScreen() {
 
   const handleSaveName = async () => {
     const trimmed = nameDraft.trim();
+    // R114/O22 STORY-73022 (S1): breadcrumb every step so we can trace
+    // "name didn't save to DB" root cause post-hoc if the backend echoes
+    // wrong value or the local setUser is later overwritten by hydrate.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { crashLogger } = require('../services/crashLogger');
+      crashLogger?.breadcrumb?.(`s1:save_name_start len=${trimmed.length}`);
+    } catch { /* silent */ }
     if (!trimmed) { setNameError('Name cannot be empty'); return; }
     if (trimmed.length > 32) { setNameError('Name too long (max 32 characters)'); return; }
     if (trimmed === (user?.name || '')) { setShowEditNameModal(false); return; }
@@ -317,6 +335,13 @@ export function SettingsScreen() {
     setNameError('');
     try {
       const r = await patchName(trimmed);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { crashLogger } = require('../services/crashLogger');
+        crashLogger?.breadcrumb?.(
+          `s1:patch_name_result has_err=${!!r.error} has_user=${!!r.user} echo_name_len=${r.user?.name?.length ?? 'na'}`
+        );
+      } catch { /* silent */ }
       if (r.error || !r.user) {
         setNameError(r.error || 'Could not save name.');
         setNameSaving(false);
@@ -334,6 +359,11 @@ export function SettingsScreen() {
       // If the server returns a name that doesn't match what we sent, we
       // treat it as a save failure so the user isn't misled.
       if (r.user.name !== trimmed) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { crashLogger } = require('../services/crashLogger');
+          crashLogger?.breadcrumb?.('s1:echo_mismatch');
+        } catch { /* silent */ }
         setNameError('Server returned a different name — please try again.');
         setNameSaving(false);
         return;
@@ -342,7 +372,17 @@ export function SettingsScreen() {
       setShowEditNameModal(false);
       setNameToast('Name updated');
       setTimeout(() => setNameToast(''), 2000);
-    } catch {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { crashLogger } = require('../services/crashLogger');
+        crashLogger?.breadcrumb?.('s1:save_name_ok');
+      } catch { /* silent */ }
+    } catch (err: any) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { crashLogger } = require('../services/crashLogger');
+        crashLogger?.breadcrumb?.(`s1:save_name_catch msg=${String(err?.message || err).slice(0, 60)}`);
+      } catch { /* silent */ }
       setNameError('Unable to connect. Please try again.');
     } finally {
       setNameSaving(false);
@@ -782,6 +822,20 @@ export function SettingsScreen() {
           {/* ── Preferences ── */}
           <SectionHeader title="Preferences" />
           <View style={styles.card}>
+            {/* R114/O22 STORY-73024 (S3): Memory always-on GPS. When on,
+                the app records memory points whenever it's open (foreground
+                or lock-screen resume), not just during Hike/Run sessions.
+                Default on. */}
+            <ToggleRow
+              iconName="MapPin"
+              iconColor={Colors.primary}
+              iconBg={Colors.primaryLight}
+              label="Memory always-on GPS"
+              hint="Fill in your map whenever the app is open, not just during hikes."
+              value={memoryAlwaysOn}
+              onToggle={() => setMemorySetting('foregroundAutoUnlockEnabled', !memoryAlwaysOn)}
+            />
+            <View style={styles.divider} />
             <ActionRow
               iconName="Ruler"
               iconColor={Colors.primary}

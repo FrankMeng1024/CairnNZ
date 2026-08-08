@@ -842,18 +842,27 @@ export function AuthScreen() {
   // Uses expo-apple-authentication. iOS only (Apple restricts the API).
   // Web + Android fall back to the "coming soon" alert.
   const handleAppleAuth = async () => {
+    // R114/O22 STORY-73002: comprehensive breadcrumb coverage. User reports
+    // Apple SI causes app crash on Create Account screen — not a JS-catchable
+    // error, so we need boot-ok upload of breadcrumbs to reconstruct which
+    // step crashed. Every branch and every await is instrumented.
+    crashLogger.breadcrumb('apple:handler_start');
     resetErrors();
     if (Platform.OS !== 'ios') {
+      crashLogger.breadcrumb(`apple:platform_skip os=${Platform.OS}`);
       Alert.alert('Apple Sign In', 'Apple Sign In is available on iOS only. Please use email or Google on this device.');
       return;
     }
     setAppleLoading(true);
     try {
+      crashLogger.breadcrumb('apple:require_modules');
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const AppleAuthentication = require('expo-apple-authentication');
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Crypto = require('expo-crypto');
+      crashLogger.breadcrumb('apple:isAvailable_call');
       const available = await AppleAuthentication.isAvailableAsync();
+      crashLogger.breadcrumb(`apple:isAvailable_result=${available}`);
       if (!available) {
         Alert.alert('Apple Sign In', 'Apple Sign In is not available on this device (older iOS or unsupported region).');
         return;
@@ -862,12 +871,15 @@ export function AuthScreen() {
       // pass the hash to Apple. Apple echoes the hash in the identity_token
       // and the backend verifies it matches. This prevents identity_token
       // replay attacks — App Store review checklist item.
+      crashLogger.breadcrumb('apple:nonce_gen_start');
       const rawNonce = Math.random().toString(36).slice(2) + Date.now().toString(36) +
                        Math.random().toString(36).slice(2);
       const hashedNonce = await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
         rawNonce,
       );
+      crashLogger.breadcrumb(`apple:nonce_gen_ok raw_len=${rawNonce.length} hash_len=${hashedNonce.length}`);
+      crashLogger.breadcrumb('apple:signInAsync_start');
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -875,8 +887,10 @@ export function AuthScreen() {
         ],
         nonce: hashedNonce,
       });
+      crashLogger.breadcrumb(`apple:signInAsync_ok has_id_token=${!!credential.identityToken} has_fullName=${!!credential.fullName} has_user=${!!credential.user}`);
       const idToken = credential.identityToken;
       if (!idToken) {
+        crashLogger.breadcrumb('apple:no_id_token');
         Alert.alert('Apple Sign In failed', 'No identity token returned. Please try again.');
         return;
       }
@@ -887,35 +901,49 @@ export function AuthScreen() {
       if (credential.fullName && (credential.fullName.givenName || credential.fullName.familyName)) {
         providedName = [credential.fullName.givenName, credential.fullName.familyName]
           .filter(Boolean).join(' ').trim() || undefined;
+        crashLogger.breadcrumb(`apple:fullName_extracted name_len=${(providedName || '').length}`);
         try { await storage.setItem(`cairn_apple_name_${credential.user}`, providedName || ''); } catch { /* silent */ }
       } else {
         try {
           const cached = await storage.getItem(`cairn_apple_name_${credential.user}`);
           if (cached) providedName = cached;
+          crashLogger.breadcrumb(`apple:fullName_from_cache has_cached=${!!cached}`);
         } catch { /* silent */ }
       }
+      crashLogger.breadcrumb('apple:loginWithApple_start');
       const { loginWithApple } = require('../services/authService');
       const result = await loginWithApple(idToken, providedName, rawNonce);
+      crashLogger.breadcrumb(`apple:loginWithApple_result has_err=${!!result.error} has_user=${!!result.user} hint=${result.hint || 'none'}`);
       if (result.error) {
         Alert.alert('Apple Sign In failed', result.error);
         return;
       }
       if (result.hint === 'pending_deletion' && result.restoreDeadline) {
+        crashLogger.breadcrumb('apple:pending_deletion_redirect');
         setRestoreDeadline(result.restoreDeadline);
         setView('restore_confirm');
         return;
       }
-      if (result.user) setUser(result.user);
+      if (result.user) {
+        crashLogger.breadcrumb(`apple:setUser user_id=${result.user.id}`);
+        setUser(result.user);
+      }
+      crashLogger.breadcrumb('apple:hydrate_start');
       await hydrate();
+      crashLogger.breadcrumb('apple:setLoggedIn');
       setLoggedIn(true);
+      crashLogger.breadcrumb('apple:complete');
     } catch (err: any) {
       // Apple returns an error whose `code` includes ERR_REQUEST_CANCELED
       // when the user swipes away — suppress the alert in that case.
       const code = err?.code || '';
+      const msg = String(err?.message || '').slice(0, 80);
+      crashLogger.breadcrumb(`apple:catch code=${code} msg=${msg}`);
       if (code === 'ERR_REQUEST_CANCELED' || code === 'ERR_CANCELED') return;
       Alert.alert('Apple Sign In failed', err?.message || 'Please try again.');
     } finally {
       setAppleLoading(false);
+      crashLogger.breadcrumb('apple:finally');
     }
   };
 
@@ -1218,12 +1246,21 @@ export function AuthScreen() {
                     <Text style={{ fontSize: 16, color: Colors.primary, fontWeight: '600' }}>Done</Text>
                   </TouchableOpacity>
                 </View>
-                {/* R113 fix: iOS spinner picker 需要固定高度容器才渲染滚轮 (同 Create Account 屏 DOB) */}
-                <View style={{ height: 220, justifyContent: 'center' }}>
+                {/* R113 fix: iOS spinner picker 需要固定高度容器才渲染滚轮 (同 Create Account 屏 DOB)
+                    R114/O21 post-real-device fix: user reported spinner rendered blank on iOS.
+                    Root cause: iOS 15+ DateTimePicker spinner uses adaptive text color that
+                    may resolve to white on the modal's white surface (invisible). Setting
+                    `textColor` + `themeVariant="light"` explicitly forces dark text so
+                    numerals are visible against the white sheet background. */}
+                <View style={{ height: 220, justifyContent: 'center', alignItems: 'center' }}>
                   <DateTimePicker
                     value={dob ? new Date(dob) : new Date(Date.now() - 25 * 365 * 24 * 60 * 60 * 1000)}
                     mode="date"
                     display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    themeVariant="light"
+                    textColor={Colors.textPrimary}
+                    accentColor={Colors.primary}
+                    style={{ width: '100%', height: 220 }}
                     maximumDate={new Date(Date.now() - 13 * 365 * 24 * 60 * 60 * 1000)}
                     minimumDate={new Date('1900-01-01')}
                     onChange={(_, selected) => {
@@ -1454,7 +1491,11 @@ export function AuthScreen() {
                 value={name}
                 onChangeText={(v) => { setName(v); if (nameError) setNameError(''); }}
                 error={nameError}
-                autoFocus={isRegister}
+                // R114/O21 post-real-device fix: no auto-focus on Name in
+                // Create Account — user reported "进去就默认点开第一个 name
+                // 键盘会出来 不雅观 让用户自己来操作就好了". Explicit tap
+                // required to open keyboard, matching iOS Settings sign-up
+                // patterns (Apple ID, iCloud, etc).
               />
             </>
           )}
@@ -1608,12 +1649,18 @@ export function AuthScreen() {
                       </TouchableOpacity>
                     </View>
                     {/* R113 fix: iOS spinner picker 需要固定高度容器才渲染滚轮; 之前 container
-                        没高度 picker collapse 到 0px, 用户只看到 Cancel/Done 看不到日期滚轮. */}
-                    <View style={{ height: 220, justifyContent: 'center' }}>
+                        没高度 picker collapse 到 0px, 用户只看到 Cancel/Done 看不到日期滚轮.
+                        R114/O21 post-real-device fix: also force light theme + explicit textColor
+                        so numerals are visible on white modal (iOS 15+ adaptive text color bug). */}
+                    <View style={{ height: 220, justifyContent: 'center', alignItems: 'center' }}>
                       <DateTimePicker
                         value={dob ? new Date(dob) : new Date(Date.now() - 25 * 365 * 24 * 60 * 60 * 1000)}
                         mode="date"
                         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        themeVariant="light"
+                        textColor={Colors.textPrimary}
+                        accentColor={Colors.primary}
+                        style={{ width: '100%', height: 220 }}
                         maximumDate={new Date(Date.now() - 13 * 365 * 24 * 60 * 60 * 1000)}
                         minimumDate={new Date('1900-01-01')}
                         onChange={(_, selected) => {

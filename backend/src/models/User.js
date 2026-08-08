@@ -90,6 +90,15 @@ async function updateName(userId, name) {
   );
 }
 
+// R114/O22 STORY-73006 (H2): mark onboarding done. Column
+// `onboarding_done_at TIMESTAMP NULL` — see migration below the file.
+async function setOnboardingDone(userId, at) {
+  await pool.execute(
+    'UPDATE users SET onboarding_done_at = ? WHERE id = ?',
+    [at, userId]
+  );
+}
+
 // O18 AUTH-01: schedule the account for hard-delete via the cron sweep.
 // Idempotent — a second call within grace period keeps the original
 // deleted_at (cron uses the earliest timestamp).
@@ -186,6 +195,11 @@ function toPublic(user) {
     // O18 AUTH-01: expose soft-delete state so the client can show the
     // "Restore account?" modal on login when the row is pending deletion.
     deletedAt: user.deleted_at ? new Date(user.deleted_at).toISOString() : null,
+    // R114/O22 STORY-73006 (H2): expose onboarding completion timestamp
+    // so the client can gate the intro flow on server state, not just on
+    // per-device AsyncStorage. null = user has never finished onboarding
+    // on any device.
+    onboardingDoneAt: user.onboarding_done_at ? new Date(user.onboarding_done_at).toISOString() : null,
   };
 }
 
@@ -276,6 +290,8 @@ module.exports = {
   // O18 batch 6.3
   setDateOfBirth, softDelete, restoreDeleted, findHardDeleteCandidates, hardDelete,
   bumpTokenVersion,
+  // R114/O22 STORY-73006 (H2)
+  setOnboardingDone,
   // R100 SETTINGS
   updateName,
   // user_oauth

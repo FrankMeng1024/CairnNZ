@@ -607,7 +607,7 @@ export function HomeScreen() {
             subtitle="Route planning · Lock mode"
             accentColor={Colors.running}
             lightBg={Colors.runningLight}
-            cardBg="#e8f4ec"
+            cardBg="#e8f1f8"
             onPress={() => nav.navigate('Running')}
             anim={card2}
           />
@@ -727,7 +727,6 @@ const cardStyles = StyleSheet.create({
   textCol: { flex: 1, gap: 5 },
   title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   subtitle: { fontSize: FontSize.small, color: Colors.textSecondary, lineHeight: 17 },
-  accentLine: { width: 28, height: 3, borderRadius: 2, marginTop: 4, opacity: 0.8 },
   chevron: {
     width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',

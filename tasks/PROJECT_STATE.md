@@ -176,3 +176,20 @@ Type-check clean across all 5 modified files. Sprint 70 follow-up explicit: wire
 - STORY-552 auto-pause real notification delivery
 - STORY-553 real battery savings measurement
 - STORY-556 LPM real device alert
+
+## Sprint 73 — R114/O22 用户真机 bug 全修 (IN_PROGRESS 2026-08-07)
+
+**Sprint Goal**: 用户 2026-08-07 真机测 O21 报的 25 条 P0+P1 bug 全部高质量修复, 一次性 OTA O22.
+
+**Mode**: acceptance_mode: auto (`/project --auto`)
+
+**Spec 真源**: `tasks/r114-o22-spec-locked.md` (25 条完整 spec, 用户 confirm)
+**Bug matrix**: `tasks/r114-o22-bug-matrix.md`
+**工作流铁律**: memory `feedback_r114_o22_sprint_rules.md`
+
+**Sprint 前置已完成**:
+- Spec 冻结 + 铁律 memory 写
+- 磁盘已改 3 处 (L1 DOB / L2 keyboard / R2 Running button, 待 Playwright verify)
+- Clip copy button HTML leak fix deployed to clip.yiiling.cn (2026-08-07 23:53)
+
+**Status**: 25 stories 排好, P0 优先, 中间不停顿, 全修完一次 commit + push + eas update → O22.
