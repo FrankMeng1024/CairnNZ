@@ -721,6 +721,11 @@ export function AuthScreen() {
   // create-account showed prefill from the previous session. Reset all
   // user-input state fields; auth-flow state (verifyEmail, view, cooldown)
   // is untouched so mid-flow transitions still work.
+  //
+  // O22 hotfix (2026-08-08): earlier version called setShowPassword which
+  // does not exist in this component (the password-visibility state lives
+  // inside PasswordInput's own useState `show`). That undefined reference
+  // crashed the app on every view change. Removed.
   const resetFormInputs = () => {
     setName('');
     setEmail('');
@@ -729,7 +734,6 @@ export function AuthScreen() {
     setDob('');
     setDobError('');
     setPrivacyChecked(false);
-    setShowPassword(false);
     submitAttempted.current = false;
   };
 

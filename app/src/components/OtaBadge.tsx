@@ -317,7 +317,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //
 // Verified: TypeScript --noEmit clean (only pre-existing test / turf-helpers
 // warnings unchanged). Ready for real-device TestFlight verification.
-export const OTA_VERSION = 'O21';
+export const OTA_VERSION = 'O22';
 
 
 type OtaState =
