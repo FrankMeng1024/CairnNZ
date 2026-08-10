@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { MemoryColors } from '../config/memoryConfig';
@@ -257,6 +257,10 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   // onDidFinishLoadingMap 里 setMapReady(true) → UserLocation 直到
   // mapReady 才 visible=true → basemap + blue dot 一起出。
   const [mapReady, setMapReady] = useState(false);
+  // Tile-loading overlay: hides the blank canvas on slow CDN / fresh install.
+  // Same pattern as HikingMap. Cleared on first onDidFinishRenderingMapFully
+  // (or onDidFinishLoadingMap as backup — ref guard prevents duplicate).
+  const [mapFirstRender, setMapFirstRender] = useState(false);
 
   // v336: when recenterToken bumps, fly the camera back to the current
   // GPS coord WITHOUT remounting Camera (the old cameraKey strategy
@@ -387,6 +391,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           log('v357.mapbox_didFinishLoadingMap', {});
           // O1 batch 28.3: gate blue dot 一起出
           setMapReady(true);
+          if (!mapFirstRender) setMapFirstRender(true);
           // v361 fix: onDidFinishRenderingMapFully is unreliable —
           // v357 telemetry showed it never fired in a normal session
           // while onDidFinishLoadingMap did. The 8s timeout was being
@@ -404,6 +409,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           // Backup: also fire here in case didFinishLoadingMap was
           // somehow missed (defensive — ref guard prevents duplicate).
           setMapReady(true);
+          if (!mapFirstRender) setMapFirstRender(true);
           if (!mapFullyReadyFiredRef.current && onMapFullyReady) {
             mapFullyReadyFiredRef.current = true;
             onMapFullyReady();
@@ -517,6 +523,16 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           now owns this UI (decision E: "icon like Hiking, only after I
           move the map, taps it to go back"). MemoryMap stays as a pure
           map renderer; pan/zoom signals bubble up via onMapMoved prop. */}
+      {/* Tile-loading overlay: same as HikingMap. Hides blank canvas on
+          slow CDN / fresh install until Mapbox first-render fires. */}
+      {!mapFirstRender && (
+        <View style={styles.mapLoadingOverlay} pointerEvents="none">
+          <View style={styles.mapLoadingCard}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={styles.mapLoadingText}>Loading map…</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 });
@@ -525,4 +541,25 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
   webStub: { flex: 1, backgroundColor: MemoryColors.cream },
+  mapLoadingOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(220, 216, 209, 0.85)',
+  },
+  mapLoadingCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 18, paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, shadowRadius: 10,
+    elevation: 4,
+  },
+  mapLoadingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
 });
