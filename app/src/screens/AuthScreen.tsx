@@ -334,6 +334,103 @@ function PasswordInput({ value, onChangeText, placeholder, error, onBlur, isNew 
   );
 }
 
+// ── OTP 6-cell input with auto-focus + auto-submit ─────────────────────────
+// R114/O22 (2026-08-10) Bug D: replaces the single-input verification code
+// field. Six independent boxes look cleaner and support:
+//   - Auto-focus next box after each digit
+//   - Backspace to prior box
+//   - Paste a 6-digit code into any box → fills all
+//   - When 6 digits are complete → onComplete(code) fires; parent auto-verifies
+function OtpInput({ value, onChange, onComplete, error, autoFocus }: {
+  value: string;
+  onChange: (v: string) => void;
+  onComplete: (code: string) => void;
+  error?: boolean;
+  autoFocus?: boolean;
+}) {
+  const refs = React.useRef<Array<any>>([]);
+  const digits: string[] = [];
+  for (let i = 0; i < 6; i++) digits.push(value[i] ?? '');
+
+  const applyValue = (next: string) => {
+    // Only digits, max 6.
+    const clean = next.replace(/\D/g, '').slice(0, 6);
+    onChange(clean);
+    if (clean.length === 6) {
+      // Fire completion callback on the next microtask so parent state
+      // (verifyCode_) has time to update before the verify request goes out.
+      // Also blur the last input so the keyboard closes cleanly.
+      setTimeout(() => {
+        try { refs.current[5]?.blur?.(); } catch { /* silent */ }
+        onComplete(clean);
+      }, 0);
+    }
+  };
+
+  const onCellChange = (idx: number, raw: string) => {
+    // Native paste handler: if raw > 1 char (autofill or paste), replace whole value.
+    const clean = raw.replace(/\D/g, '');
+    if (clean.length > 1) {
+      applyValue(clean);
+      // Focus the last non-empty cell (or 5 if fully filled).
+      const focusIdx = Math.min(clean.length, 5);
+      setTimeout(() => { try { refs.current[focusIdx]?.focus?.(); } catch { /* silent */ } }, 0);
+      return;
+    }
+    // Single-char change: replace digit at idx.
+    const arr = value.split('');
+    while (arr.length < 6) arr.push('');
+    arr[idx] = clean; // may be '' when clearing
+    const merged = arr.slice(0, 6).join('');
+    applyValue(merged);
+    // Advance focus if a digit was entered and we're not at the last box.
+    if (clean && idx < 5) {
+      try { refs.current[idx + 1]?.focus?.(); } catch { /* silent */ }
+    }
+  };
+
+  const onKeyPress = (idx: number, key: string) => {
+    // Backspace on an empty cell goes back to previous cell.
+    if (key === 'Backspace' && !digits[idx] && idx > 0) {
+      try { refs.current[idx - 1]?.focus?.(); } catch { /* silent */ }
+    }
+  };
+
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
+      {digits.map((d, i) => (
+        <TextInput
+          key={i}
+          ref={(r) => { refs.current[i] = r; }}
+          value={d}
+          onChangeText={(v) => onCellChange(i, v)}
+          onKeyPress={(e) => onKeyPress(i, e.nativeEvent.key)}
+          keyboardType="number-pad"
+          maxLength={1}
+          textContentType={i === 0 ? 'oneTimeCode' : 'none'}
+          autoComplete={i === 0 ? 'sms-otp' : 'off'}
+          autoFocus={autoFocus && i === 0}
+          style={{
+            flex: 1,
+            aspectRatio: 1,
+            maxWidth: 56,
+            borderWidth: 2,
+            borderColor: error ? Colors.danger : (d ? Colors.primary : Colors.border),
+            borderRadius: 12,
+            textAlign: 'center',
+            fontSize: 22,
+            fontWeight: '700',
+            color: Colors.textPrimary,
+            backgroundColor: 'rgba(255,255,255,0.95)',
+          }}
+          returnKeyType={i === 5 ? 'done' : 'next'}
+          selectTextOnFocus
+        />
+      ))}
+    </View>
+  );
+}
+
 // ── DOB three-field input (Year / Month / Day) ─────────────────────────────
 // R114/O22 (2026-08-08): replaces @react-native-community/datetimepicker
 // so we can ship the DOB picker over OTA without a new native binary.
@@ -1092,8 +1189,12 @@ export function AuthScreen() {
     return () => clearTimeout(t);
   }, [resendCooldown]);
 
-  const handleVerify = async () => {
-    const trimmed = verifyCode_.replace(/\s/g, '');
+  const handleVerify = async (codeOverride?: string) => {
+    // R114/O22 (2026-08-10) Bug D: 支持从 OtpInput 自动传入完整 code, 不再
+    // 依赖 verifyCode_ state. 因为 setState 是异步的, 用户输完第 6 位后
+    // 立即触发 verify 时 verifyCode_ 可能还是上一次的值. 优先使用 codeOverride.
+    const raw = codeOverride ?? verifyCode_;
+    const trimmed = raw.replace(/\s/g, '');
     if (trimmed.length !== 6) { setVerifyError('Please enter the 6-digit code.'); return; }
     setVerifyLoading(true);
     setVerifyError('');
@@ -1228,36 +1329,23 @@ export function AuthScreen() {
             )}
 
             <Text style={formStyles.label}>Verification Code</Text>
-            <View style={[formStyles.inputWrap, verifyError ? formStyles.inputError : null]}>
-              <View style={formStyles.inputIcon}>
-                <Icon name="Lock" size={IconSize.sm} color={Colors.textSecondary} strokeWidth={1.8} />
+            {/* R114/O22 Bug D (2026-08-10): 6 独立格子 OTP + 输完自动 verify.
+                去掉 Verify Email button — 用户输完 6 位就直接判断, 不需要
+                多一步点击. 每个格子输入后自动 focus 下一格; 删除时自动
+                focus 上一格. 粘贴 6 位数字支持一次填满. */}
+            <OtpInput
+              value={verifyCode_}
+              onChange={(v) => { setVerifyCode_(v); if (verifyError) setVerifyError(''); }}
+              onComplete={(code) => { void handleVerify(code); }}
+              error={!!verifyError}
+              autoFocus
+            />
+            {verifyLoading && (
+              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: Spacing.md, gap: 8 }}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={{ fontSize: FontSize.small, color: Colors.textSecondary }}>Verifying…</Text>
               </View>
-              <TextInput
-                style={formStyles.inputInner}
-                placeholder="123456"
-                placeholderTextColor={Colors.textMuted}
-                value={verifyCode_}
-                onChangeText={(v) => { setVerifyCode_(v.replace(/[^0-9]/g, '').slice(0, 6)); setVerifyError(''); }}
-                keyboardType="number-pad"
-                maxLength={6}
-                autoFocus
-                textContentType="oneTimeCode"
-              />
-            </View>
-
-            <PressBtn
-              style={[styles.primaryBtn, formStyles.submitBtn]}
-              onPress={handleVerify}
-              disabled={verifyLoading}
-            >
-              <View style={styles.btnContent}>
-                {verifyLoading
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Icon name="CircleCheck" size={IconSize.sm} color="#fff" strokeWidth={2} />
-                }
-                <Text style={styles.primaryBtnText}>Verify Email</Text>
-              </View>
-            </PressBtn>
+            )}
 
             <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: Spacing.md, alignItems: 'center', gap: 4 }}>
               <Text style={{ fontSize: FontSize.small, color: Colors.textSecondary }}>Didn't receive it?</Text>

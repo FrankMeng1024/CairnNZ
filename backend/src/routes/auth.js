@@ -158,9 +158,20 @@ router.post('/register', authLimiter, validateBody(schemas.auth.register), async
     const code = await User.upsertPending(normalEmail, name.trim(), passwordHash, dateOfBirth);
 
     // Send email (non-blocking — don't fail registration if email fails)
-    sendVerificationCode(normalEmail, name.trim(), code).catch(err =>
-      console.error('[email] failed to send verification code:', err.message)
-    );
+    // R114/O22 (2026-08-10) Bug B: log more email failure detail so we can
+    // diagnose "delivery incomplete" reports. Gmail SMTP occasionally rejects
+    // (rate limit / spam heuristics / app-password revoked). Full error text
+    // hits aliyun logs; user still gets a normal response so they can Resend.
+    sendVerificationCode(normalEmail, name.trim(), code).catch(err => {
+      console.error('[email] verification send failed:', {
+        to: normalEmail,
+        code_prefix: String(code).slice(0, 2) + '***',
+        errName: err && err.name,
+        errCode: err && err.code,
+        errResp: err && err.response,
+        errMsg: err && err.message,
+      });
+    });
 
     // DEV MODE: return code in response so dev can test without email setup
     const devPayload = process.env.NODE_ENV !== 'production' ? { dev_code: code } : {};

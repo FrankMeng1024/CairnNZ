@@ -28,34 +28,61 @@ function escapeHtml(s) {
   ));
 }
 
+// R114/O22 (2026-08-10): capitalize first letter so lowercase name inputs
+// ("frank" → "Frank") don't look sloppy in the greeting. Also handles the
+// "Hi H2" case a user reported by keeping the actual first name if it's
+// at least 2 chars — really short "names" now render as "Hi there,".
+function normalizeFirstName(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return 'there';
+  const first = s.split(/\s+/)[0];
+  if (first.length < 2) return 'there';
+  return first.charAt(0).toUpperCase() + first.slice(1);
+}
+
 async function sendVerificationCode(toEmail, name, code) {
-  const firstName = name.split(' ')[0];
+  const firstName = normalizeFirstName(name);
   const safeFirstName = escapeHtml(firstName);
 
   await transporter.sendMail({
     from: `"Cairn" <${process.env.EMAIL_FROM}>`,
     to: toEmail,
-    subject: `${code} is your Cairn verification code`,
-    text: `Hi ${firstName},\n\nYour verification code is: ${code}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this, you can safely ignore this email.\n\n— The Cairn Team`,
+    // R114/O22 (2026-08-10) Bug C: subject no longer starts with digits.
+    // Gmail's spam filter penalises numeric-prefixed subjects and the code
+    // in subject is a phishing-style pattern. Cleaner subject + code
+    // stays prominent inside the body.
+    subject: 'Verify your Cairn account',
+    text:
+      `Hi ${firstName},\n\n` +
+      `Welcome to Cairn — your trail memory app.\n\n` +
+      `Your verification code is: ${code}\n\n` +
+      `This code expires in 10 minutes.\n\n` +
+      `If you didn't create a Cairn account, you can safely ignore this email.\n\n` +
+      `— The Cairn Team\n` +
+      `https://api.yiiling.cn`,
     html: `
       <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#faf7f2;">
         <div style="text-align:center;margin-bottom:32px;">
           <span style="font-size:28px;font-weight:900;color:#2d2d2d;letter-spacing:-1px;">Cairn</span>
+          <div style="font-size:12px;color:#9b9b9b;margin-top:4px;letter-spacing:1px;text-transform:uppercase;">Trail memory app</div>
         </div>
         <div style="background:#fff;border-radius:16px;padding:32px;border:1px solid #e8e4de;">
-          <p style="margin:0 0 8px;font-size:16px;color:#2d2d2d;">Hi ${safeFirstName},</p>
+          <p style="margin:0 0 8px;font-size:16px;color:#2d2d2d;font-weight:600;">Hi ${safeFirstName},</p>
           <p style="margin:0 0 24px;font-size:15px;color:#6b6b6b;line-height:1.5;">
-            Your verification code for Cairn is:
+            Welcome to Cairn. Enter this code in the app to verify your account:
           </p>
-          <div style="text-align:center;margin:0 0 24px;">
-            <span style="font-size:40px;font-weight:800;letter-spacing:12px;color:#5d7c46;font-family:monospace;">${code}</span>
+          <div style="text-align:center;margin:0 0 24px;padding:20px 0;background:#f7f5f0;border-radius:12px;">
+            <span style="font-size:40px;font-weight:800;letter-spacing:12px;color:#5d7c46;font-family:'SF Mono',Menlo,monospace;">${code}</span>
           </div>
           <p style="margin:0;font-size:13px;color:#9b9b9b;text-align:center;">
-            Expires in 10 minutes · Do not share this code
+            Expires in 10 minutes · Never share this code
           </p>
         </div>
-        <p style="margin:24px 0 0;font-size:12px;color:#b0b0b0;text-align:center;">
+        <p style="margin:24px 0 8px;font-size:12px;color:#b0b0b0;text-align:center;">
           If you didn't create a Cairn account, you can safely ignore this email.
+        </p>
+        <p style="margin:0;font-size:11px;color:#c0c0c0;text-align:center;">
+          Cairn · Kia ora from Aotearoa
         </p>
       </div>
     `,
