@@ -311,8 +311,15 @@ function PasswordInput({ value, onChangeText, placeholder, error, onBlur, isNew 
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={!show}
-          textContentType={isNew ? 'newPassword' : 'password'}
-          autoComplete={isNew ? 'password-new' : 'password'}
+          // R114/O22 (2026-08-10) Bug X: user reported password field
+          // auto-clears after submit error. Root cause: iOS Strong-Password
+          // Autofill (triggered by textContentType='newPassword' +
+          // autoComplete='password-new') decides the user "rejected" its
+          // suggestion when the form fails validation and wipes the field.
+          // We disable iOS's password-manager interference so the value
+          // the user typed stays put after an error — they just edit it.
+          textContentType="none"
+          autoComplete="off"
           autoCorrect={false}
           autoCapitalize="none"
           spellCheck={false}
@@ -1188,6 +1195,48 @@ export function AuthScreen() {
     const t = setTimeout(() => setResendCooldown(s => s - 1), 1000);
     return () => clearTimeout(t);
   }, [resendCooldown]);
+
+  // R114/O22 (2026-08-10) Bug Y: auto-fill OTP from clipboard.
+  // Typical flow: user gets email → opens mail app → long-presses code
+  // → Copy → switches back to Cairn. When the app foregrounds on the
+  // verify view, we read the clipboard. If it contains exactly 6 digits
+  // we fill the OTP inputs and immediately auto-verify. Non-6-digit
+  // clipboard content is ignored (never trigger verify on random text).
+  //
+  // Triggered on: (a) entering verify view, (b) AppState → active while
+  // on verify view (user tabs back from mail). We also skip if the user
+  // has already typed something (to avoid overwriting mid-typing).
+  useEffect(() => {
+    if (view !== 'verify') return;
+    let cancelled = false;
+    const tryAutoFill = async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const Clipboard = require('expo-clipboard');
+        const txt = await Clipboard.getStringAsync();
+        if (cancelled) return;
+        const digits = String(txt || '').replace(/\D/g, '');
+        // Only autofill if:
+        //   - clipboard has EXACTLY 6 digits
+        //   - user hasn't typed anything yet (respect manual input)
+        //   - not already verifying
+        if (digits.length === 6 && !verifyCode_ && !verifyLoading) {
+          setVerifyCode_(digits);
+          void handleVerify(digits);
+        }
+      } catch { /* silent — clipboard access may be denied */ }
+    };
+    // Fire once on view entry.
+    void tryAutoFill();
+    // Fire again when user comes back from another app (mail app).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { AppState } = require('react-native');
+    const sub = AppState.addEventListener('change', (s: string) => {
+      if (s === 'active') void tryAutoFill();
+    });
+    return () => { cancelled = true; sub.remove(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   const handleVerify = async (codeOverride?: string) => {
     // R114/O22 (2026-08-10) Bug D: 支持从 OtpInput 自动传入完整 code, 不再
