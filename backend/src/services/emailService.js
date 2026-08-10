@@ -1,20 +1,47 @@
 /**
- * Email service — nodemailer + Gmail SMTP
+ * Email service — Resend HTTP API (R114/O22 2026-08-10)
  *
- * Setup: create a Gmail App Password at https://myaccount.google.com/apppasswords
- * Add to .env:
- *   EMAIL_FROM=your@gmail.com
- *   EMAIL_PASS=your_app_password_16chars
+ * Migrated from nodemailer + gmail SMTP because aliyun China VPC cannot
+ * reach smtp.gmail.com:465 (ETIMEDOUT — GFW blocks the port). Resend
+ * uses HTTPS 443 which is not blocked; also has US IP pool with high
+ * gmail/icloud deliverability, matches our NZ/AU target users.
+ *
+ * Setup:
+ *   1. Domain yiiling.cn verified at resend.com/domains (SPF + DKIM +
+ *      DMARC TXT records in aliyun DNS)
+ *   2. .env:
+ *        EMAIL_FROM=noreply@yiiling.cn
+ *        RESEND_API_KEY=re_xxxxx
+ *
+ * Future migration (AU server): no code change needed — RESEND_API_KEY
+ * is server-agnostic. Domain stays yiiling.cn (or move to au.yiiling.cn
+ * later). Deliverability may improve slightly on AU IP but Resend
+ * dominates the send anyway.
  */
-const nodemailer = require('nodemailer');
+const RESEND_API = 'https://api.resend.com/emails';
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_FROM,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+async function resendSend({ from, to, subject, text, html }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY missing — cannot send email');
+  }
+  const res = await fetch(RESEND_API, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from, to: Array.isArray(to) ? to : [to], subject, text, html }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    // Resend surfaces structured errors — include the whole JSON so the
+    // aliyun log line captures the reason.
+    throw new Error(`Resend ${res.status}: ${JSON.stringify(body)}`);
+  }
+  return body;
+}
+
 
 // O1 (2026-07-26) security fix: escape user-controlled `firstName` before
 // interpolating into the HTML template. Attack vector: attacker registers
@@ -44,7 +71,7 @@ async function sendVerificationCode(toEmail, name, code) {
   const firstName = normalizeFirstName(name);
   const safeFirstName = escapeHtml(firstName);
 
-  await transporter.sendMail({
+  await resendSend({
     from: `"Cairn" <${process.env.EMAIL_FROM}>`,
     to: toEmail,
     // R114/O22 (2026-08-10) Bug C: subject no longer starts with digits.
@@ -92,7 +119,7 @@ async function sendVerificationCode(toEmail, name, code) {
 // O18 AUTH-04: password reset code email. Same visual language as the
 // register verification email; different subject + copy.
 async function sendPasswordResetCode(toEmail, code) {
-  await transporter.sendMail({
+  await resendSend({
     from: `"Cairn" <${process.env.EMAIL_FROM}>`,
     to: toEmail,
     subject: `${code} — reset your Cairn password`,
@@ -125,7 +152,7 @@ async function sendPasswordResetCode(toEmail, code) {
 // O18 AUTH-01: account deletion confirmation with restore instructions.
 async function sendAccountDeletionConfirmation(toEmail, name, restoreDeadline) {
   const firstName = escapeHtml(name.split(' ')[0]);
-  await transporter.sendMail({
+  await resendSend({
     from: `"Cairn" <${process.env.EMAIL_FROM}>`,
     to: toEmail,
     subject: 'Your Cairn account is scheduled for deletion',
@@ -194,7 +221,7 @@ async function sendDataExportReady(toEmail, name, downloadUrl) {
     `Your Cairn data export is ready. Download the JSON bundle here:\n${urlStr}\n\n` +
     `The link expires in 24 hours.\n\n` +
     `If you didn't request this, you can safely ignore this email.\n\n— Cairn`;
-  await transporter.sendMail({
+  await resendSend({
     from: `"Cairn" <${process.env.EMAIL_FROM}>`,
     to: toEmail,
     subject,

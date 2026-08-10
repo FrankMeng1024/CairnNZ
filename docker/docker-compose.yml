@@ -42,6 +42,10 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - EMAIL_FROM=${EMAIL_FROM:-}
       - EMAIL_PASS=${EMAIL_PASS:-}
+      # R114/O22 (2026-08-10): Resend HTTP API replaces gmail SMTP because
+      # aliyun China cannot reach smtp.gmail.com:465 (ETIMEDOUT). Required
+      # for verification code delivery.
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
       - TRUST_PROXY=${TRUST_PROXY:-1}
     # On Linux, host.docker.internal needs to be mapped explicitly to the host
     # gateway so the backend container can reach the host's MySQL.
