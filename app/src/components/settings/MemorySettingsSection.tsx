@@ -45,7 +45,7 @@ export function MemorySettingsSection() {
             const ok = await deleteAllMemoryFromServer();
             setClearing(false);
             if (!ok) {
-              Alert.alert('Could not clear memory', 'Check your connection and try again.');
+              Alert.alert('Could not clear memory', 'Check your connection and try again.', [{ text: 'OK' }]);
             }
           },
         },

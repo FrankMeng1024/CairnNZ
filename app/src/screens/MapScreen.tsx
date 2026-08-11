@@ -646,14 +646,14 @@ export function MapScreen() {
   const region = getCurrentRegion();
 
   const doReport = async (m: Marker, reason: 'fake_ad' | 'info_mismatch' | 'dislike') => {
-    if (!lastCoord) { Alert.alert('Location unavailable', 'Turn on location to report this cairn.'); return; }
+    if (!lastCoord) { Alert.alert('Location unavailable', 'Turn on location to report this cairn.', [{ text: 'OK' }]); return; }
     try {
       await reportMarker(m.id, reason, lastCoord.lat, lastCoord.lng, lastCoord.accuracy);
-      Alert.alert('Report sent', "Thanks — we'll look into it.");
+      Alert.alert('Report sent', "Thanks — we'll look into it.", [{ text: 'OK' }]);
     } catch (err) {
       if (err instanceof MarkerInteractionError) {
-        if (err.code === 'TOO_FAR') Alert.alert('Too far', 'Move closer to report this mark.');
-        else Alert.alert('Error', 'Could not report this mark.');
+        if (err.code === 'TOO_FAR') Alert.alert('Too far', 'Move closer to report this mark.', [{ text: 'OK' }]);
+        else Alert.alert('Error', 'Could not report this mark.', [{ text: 'OK' }]);
       }
     }
   };
@@ -799,7 +799,7 @@ export function MapScreen() {
         onClose={() => setDetailMarker(null)}
         onEdit={(m) => { setDetailMarker(null); setEditMarker(m); }}
         onLike={async (m) => {
-          if (!lastCoord) { Alert.alert('Location unavailable', 'Turn on location to like this cairn.'); return; }
+          if (!lastCoord) { Alert.alert('Location unavailable', 'Turn on location to like this cairn.', [{ text: 'OK' }]); return; }
           // Optimistic: toggle immediately for instant UI feedback on spotty networks.
           // Revert only on hard business-rule errors (TOO_FAR / RATE_LIMITED).
           // 409 already-liked is treated as success (no revert) — the server agrees the like exists.
@@ -810,10 +810,10 @@ export function MapScreen() {
             if (err instanceof MarkerInteractionError) {
               if (err.code === 'TOO_FAR') {
                 likeToggle(m.id); // revert
-                Alert.alert('Too far', 'Move closer to like this mark.');
+                Alert.alert('Too far', 'Move closer to like this mark.', [{ text: 'OK' }]);
               } else if (err.code === 'RATE_LIMITED') {
                 likeToggle(m.id); // revert
-                Alert.alert('Slow down', 'You\'ve liked too many marks recently.');
+                Alert.alert('Slow down', 'You\'ve liked too many marks recently.', [{ text: 'OK' }]);
               }
               // Other errors (network): keep optimistic state — over-record beats data-loss on trails
             }

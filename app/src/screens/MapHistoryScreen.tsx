@@ -1164,7 +1164,7 @@ export function MapHistoryScreen() {
           {!targetSessionId && __DEV__ ? (
             <TouchableOpacity
               style={styles.planBtn}
-              onPress={() => Alert.alert('Plan Route', 'Route planning coming soon')}
+              onPress={() => Alert.alert('Plan Route', 'Route planning coming soon', [{ text: 'OK' }])}
               accessibilityLabel="Plan a new route (dev preview)"
             >
               <Icon name="Route" size={14} color="#fff" strokeWidth={2} />

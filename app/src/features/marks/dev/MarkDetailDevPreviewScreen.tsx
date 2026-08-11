@@ -214,9 +214,9 @@ export function MarkDetailDevPreviewScreen() {
         inMyFog={activeScenario ? activeScenario.inMyFog : (() => false)}
         isLiked={isMarkLiked}
         onClose={() => setActive(null)}
-        onEdit={(m) => Alert.alert('Edit', `Edit triggered for ${m.id}`)}
+        onEdit={(m) => Alert.alert('Edit', `Edit triggered for ${m.id}`, [{ text: 'OK' }])}
         onLike={(m) => { likeToggle(m.id); }}
-        onReport={(_m) => Alert.alert('Thank you', 'Thank you for reporting.')}
+        onReport={(_m) => Alert.alert('Thank you', 'Thank you for reporting.', [{ text: 'OK' }])}
         onDelete={(m, semantic) =>
           Alert.alert(
             semantic === 'own' ? 'Delete this cairn?' : 'Hide this cairn permanently?',

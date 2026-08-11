@@ -117,13 +117,21 @@ async function softDelete(userId) {
 // after soft-delete, silently bypassing the 7-day policy. Now: SQL
 // itself refuses the UPDATE if deleted_at is older than 7 days.
 // Caller (auth.js /account/restore) already handles affectedRows === 0.
-async function restoreDeleted(userId) {
+// AUTH-2 (2026-08-11) TEST-MODE: gate switched from `INTERVAL 7 DAY`
+// to `INTERVAL ? MINUTE` (parameterized) to match the cooling-off period
+// controlled by a single call-site constant (auth.js RESTORE_GRACE_MS).
+// Caller (auth.js /account/restore) passes graceMinutes derived from
+// RESTORE_GRACE_MS. Consolidating the 5-min literal into one place per
+// 4-eyes review — LAUNCH_GATE is now a single revert.
+// TODO: LAUNCH_GATE — revert to `INTERVAL ? DAY` + graceDays default = 7
+// before app store launch (or keep MINUTE and pass 10080 = 7*24*60).
+async function restoreDeleted(userId, graceMinutes = 5) {
   const [result] = await pool.execute(
     `UPDATE users SET deleted_at = NULL
       WHERE id = ?
         AND deleted_at IS NOT NULL
-        AND deleted_at > DATE_SUB(NOW(), INTERVAL 7 DAY)`,
-    [userId]
+        AND deleted_at > DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
+    [userId, graceMinutes]
   );
   return result.affectedRows > 0;
 }
@@ -146,10 +154,13 @@ async function bumpTokenVersion(userId) {
 // are pending-delete simultaneously (mass event / migration), the DB
 // returns 100k rows and Node holds them all briefly before slicing.
 // Query-side LIMIT bounds memory usage upstream.
-async function findHardDeleteCandidates(graceDays = 7) {
+// AUTH-2 (2026-08-11) TEST-MODE: findHardDeleteCandidates + hardDelete
+// use MINUTES not DAYS during the 5-minute cooling-off test window.
+// TODO: LAUNCH_GATE — revert to `INTERVAL ? DAY` + `INTERVAL 7 DAY` before app store launch.
+async function findHardDeleteCandidates(graceMinutes = 5) {
   const [rows] = await pool.execute(
-    'SELECT id FROM users WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT 1000',
-    [graceDays]
+    'SELECT id FROM users WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL ? MINUTE) LIMIT 1000',
+    [graceMinutes]
   );
   return rows.map(r => r.id);
 }
@@ -161,12 +172,16 @@ async function findHardDeleteCandidates(graceDays = 7) {
 // without re-checking deleted_at. If /restore commits between the two
 // steps (rare but possible during boot-catchup + user manual retry),
 // the row's deleted_at is now NULL, hardDelete blindly kills the row
-// anyway. Now: gate the DELETE on `deleted_at < NOW() - 7 DAY` — if
-// the row was restored in the window, DELETE finds nothing (correct).
-async function hardDelete(userId) {
+// anyway. Now: gate the DELETE on the grace window — if the row was
+// restored inside the window, DELETE finds nothing (correct).
+// AUTH-2 (2026-08-11) TEST-MODE: gate switched from `INTERVAL 7 DAY`
+// to `INTERVAL ? MINUTE` (parameterized) — cron passes graceMinutes.
+// TODO: LAUNCH_GATE — revert to `INTERVAL ? DAY` + pass graceDays=7
+// before app store launch (or keep MINUTE and pass 10080).
+async function hardDelete(userId, graceMinutes = 5) {
   const [result] = await pool.execute(
-    'DELETE FROM users WHERE id = ? AND deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL 7 DAY)',
-    [userId]
+    'DELETE FROM users WHERE id = ? AND deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)',
+    [userId, graceMinutes]
   );
   return result.affectedRows > 0;
 }

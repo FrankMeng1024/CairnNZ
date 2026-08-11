@@ -523,7 +523,7 @@ export function RouteEditorScreen() {
     if (saving) return;
     const result = useRouteEditStore.getState().commitEditDraft();
     if (!result.ok) {
-      Alert.alert('Couldn\'t save your route', 'Check your connection and try again.');
+      Alert.alert('Couldn\'t save your route', 'Check your connection and try again.', [{ text: 'OK' }]);
       return;
     }
     setEditMode(false);
@@ -537,7 +537,7 @@ export function RouteEditorScreen() {
     if (saving) return;
     const trimmed = name.trim();
     if (trimmed.length === 0) {
-      Alert.alert('Name required', 'Please name this route before saving.');
+      Alert.alert('Name required', 'Please name this route before saving.', [{ text: 'OK' }]);
       return;
     }
     setSaving(true);
@@ -553,7 +553,7 @@ export function RouteEditorScreen() {
           ? draft.workingPoints
           : (existingRoute?.points ?? sessionTrackPoints);
       if (finalPoints.length < 2) {
-        Alert.alert('No route', 'Route has no geometry to save.');
+        Alert.alert('No route', 'Route has no geometry to save.', [{ text: 'OK' }]);
         return;
       }
       const { haversineM } = await import('../utils/geo');
@@ -604,7 +604,7 @@ export function RouteEditorScreen() {
           permission,
         });
         if (!createdId) {
-          Alert.alert('Save failed', 'Could not save route — check your connection.');
+          Alert.alert('Save failed', 'Could not save route — check your connection.', [{ text: 'OK' }]);
           return;
         }
         savedRouteId = createdId;
@@ -652,7 +652,7 @@ export function RouteEditorScreen() {
       } else {
         body = 'Something got lost between here and our server. Try again in a moment.';
       }
-      Alert.alert('Save failed', body);
+      Alert.alert('Save failed', body, [{ text: 'OK' }]);
     } finally {
       setSaving(false);
     }

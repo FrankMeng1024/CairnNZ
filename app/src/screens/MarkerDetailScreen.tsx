@@ -154,7 +154,7 @@ export function MarkerDetailScreen() {
       log('marker.edit_save', { id: marker.id, type: editType, perm: editPermission });
       setIsEditing(false);
     } catch (e: any) {
-      Alert.alert('Could not save', e?.message ?? 'Please try again in a moment.');
+      Alert.alert('Could not save', e?.message ?? 'Please try again in a moment.', [{ text: 'OK' }]);
     } finally {
       setSaving(false);
     }

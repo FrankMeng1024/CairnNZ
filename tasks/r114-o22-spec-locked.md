@@ -326,6 +326,53 @@ M1-M7 全部**已修**推 O21 (Round 3 subagent 9.55/10 PASS)。**保持**。
 ### P2 (Nice-to-have)
 - 无
 
+### AUTH batch (2026-08-11 追加, O23 OTA 汇总)
+
+#### AUTH-1. Password 输错后清空重填 (P0)
+- **现象**: 密码错误提示后, 用户点密码框想改一下, 但内容被清空了, 只能整体重输
+- **根因**: `PasswordInput` `<TextInput textContentType="none" autoComplete="off">` 已阻止 iOS Strong-Password Autofill 清空, 但仍缺常规 X 清空按钮 (industry standard)
+- **fix**:
+  - a. 密码错误后 **保留原文** (已在 R114/O22 commit 20fd60f 做), 补 clipboard OTP 也保留原文
+  - b. `PasswordInput` 右侧在 eye icon 之外 **加 X 清空按钮**: value 非空时显示, 点击 → `onChangeText('')` + `focus()`
+  - c. 位置: eye 按钮左侧, 与 eye 同样 `hitSlop`, 用 `X` (lucide) icon
+- **文件**: `app/src/screens/AuthScreen.tsx:295-342` PasswordInput
+- **verify**: Playwright — 输错密码 → 提示出现 → 密码内容保留 → 点 X → 清空 + focus 保持, 输入 → X 出现 → 点 eye 不干扰
+
+#### AUTH-2. Delete account 冷静期 7d → 5min (测试用)
+- **原因**: 用户测 restore 流程, 7 天太长, 改 5 分钟方便测试. 上线前改回 7d.
+- **改动**:
+  - a. `backend/src/routes/auth.js:374,470,586,950` 4 处 `7 * 24 * 60 * 60 * 1000` → 提取 `RESTORE_GRACE_MS` 常量 (5 分钟 = `5 * 60 * 1000`)
+  - b. `backend/src/cron/authSweep.js` `graceDays = 7` 参数改为 `graceMinutes`, `findHardDeleteCandidates` SQL `INTERVAL ? DAY` → `INTERVAL ? MINUTE`
+  - c. `backend/src/models/User.js:149-155` `findHardDeleteCandidates(graceDays)` 签名改 `findHardDeleteCandidates(graceMinutes = 5)`, SQL 也改 MINUTE
+  - d. `emailService.js` 邮件模板文案确认无硬编码 "7 天" (用参数)
+  - e. **添加 TODO 注释**: `// TODO: LAUNCH_GATE — revert RESTORE_GRACE_MS = 7 * 24 * 60 * 60 * 1000 before app store launch`
+- **文件**: `backend/src/routes/auth.js`, `backend/src/cron/authSweep.js`, `backend/src/models/User.js`
+- **verify**: (1) delete account → 拿 restore_deadline (约 5min 后), (2) `docker exec cairn-backend sh -c "cd /app && node -e 'require(\"./src/cron/authSweep\").run({verbose:true, graceMinutes: 5}).then(console.log)'"`, (3) 6min 后 hardDelete cron 应触发
+
+#### AUTH-3. Restore 页面重做 + 修 not_signed_in + 去中文 "好"
+- **现象**:
+  - a. Restore 页面丑, 不符合 Natural Warm 风格 (`SafeAreaView` 平铺, 无卡片, 无 GlassPanel)
+  - b. 点 "Restore account" 报 "restore failed / not_signed_in" (token 已被 `logout()` 或 `deleteAccount` 后 SecureStore 清了导致 `getToken()` return null)
+  - c. Alert.alert 按钮显示中文 "好" (iOS 中文系统对没显式 buttons 的 Alert.alert 自动补默认 label; app 全英, 违反 `feedback_code_english_chat_chinese`)
+- **fix**:
+  - a. **视觉重做** `AuthScreen.tsx:1428-1479`:
+    - `<GlassPanel>` 包裹整个内容, `borderRadius: 20`, padding 24
+    - 顶部 icon: TriangleAlert 从 danger 改 `Colors.warning` (更温和, Natural Warm), size 48
+    - Title `styles.appName` 保留, subtitle 用 `Colors.textSecondary` line-height 22
+    - Primary btn 沿用 AuthScreen 现有 `styles.primaryBtn` (确保和 login 一致), Not-now 用 `Colors.textMuted` 12px
+    - 加背景 gradient / warm tint 让整个页面不刺眼
+  - b. **修 not_signed_in 根因**: `restoreAccount` 走 login 后应保留 token 至 restore 成功再切换. login 已在 authService.ts 里存 token (line 356 `saveToken(data.token)`), 说明 token **存在** — 若 `getToken() === null` 是 SecureStore race. 加 fallback: 如果 authService.ts 里 `getToken()` 拿不到, 从 result cache 里拿 (login 时 in-memory 存)
+  - c. **修 not_signed_in 症状**: 若真的 token 无了, error message 改成用户能看懂的 "Your session ended. Please sign in again to restore." + Not now → sign in 页 (不是 splash)
+  - d. **Alert 显式 buttons** (global fix, 见 AUTH-4)
+- **文件**: `app/src/screens/AuthScreen.tsx:1428-1479`, `app/src/services/authService.ts:288-315`
+- **verify**: Playwright — 走 delete flow → 5min 后 login → restore modal 出现 (卡片 + 玻璃) → 点 restore → 成功或 "Your session ended" (英文, 无中文)
+
+#### AUTH-4. Alert.alert global 显式 buttons (去中文)
+- **根因**: `Alert.alert(title, message)` 不传 buttons array 时, iOS 用系统 locale 默认 label — 中文系统 = "好", 英文 = "OK". Cairn 全英 app 面向 NZ 用户, 但中文用户测试机会看到中文按钮 → 品质 bug.
+- **fix**: 全项目 60+ 处 `Alert.alert(title, message)` (无 buttons array) → `Alert.alert(title, message, [{ text: 'OK' }])`. 已有 buttons 的检查 label 全英文
+- **文件**: (grep 出的 60+ 处) AuthScreen, FriendsScreen, HikingScreen, MapScreen, SettingsScreen, PaywallSheet, CairnPinsLayer, MemorySettingsSection, MarkerDetailScreen, PlantScreen, RouteEditorScreen, MapHistoryScreen, RoutesScreen, DebugScreen, EditOverlayV274, OfflineMapSheet, MarkDetailDevPreviewScreen, useTrackingStore.ts, lowPowerModeWarn.ts
+- **verify**: (1) grep 确保 `Alert\.alert\([^,]+,\s*[^,]+\)$` 模式为 0 (全部至少 3 参), (2) Playwright web 触发 restore failed 一路 → 按钮显示 "OK" 而非 "好"
+
 ---
 
 ## Rules

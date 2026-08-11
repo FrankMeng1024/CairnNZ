@@ -261,7 +261,7 @@ export function PlantScreen() {
         } else {
           body = 'Your draft is saved — try again in a moment.';
         }
-        Alert.alert("Couldn't plant this cairn", body);
+        Alert.alert("Couldn't plant this cairn", body, [{ text: 'OK' }]);
       }
     },
     [addMarker, userId, nav, submitting]

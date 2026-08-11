@@ -427,7 +427,7 @@ export function FriendsScreen() {
                   onPress: async () => {
                     const r = await blockUser(friend.id);
                     if (r.error) {
-                      Alert.alert('Block failed', r.error);
+                      Alert.alert('Block failed', r.error, [{ text: 'OK' }]);
                       return;
                     }
                     await loadFriendsFromBackend();

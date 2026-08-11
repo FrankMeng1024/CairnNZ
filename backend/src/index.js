@@ -247,14 +247,17 @@ async function start() {
     }, { timezone: 'UTC' });
     console.log('✓ Cron registered: cleanHiddenItemsOrphans (0 3 * * 0 UTC)');
 
-    // O18 batch 6.3: daily auth sweep — hard-delete past grace, purge
+    // O18 batch 6.3: auth sweep — hard-delete past grace, purge
     // token_blacklist expired, purge stale password_reset_codes.
-    cron.schedule('15 3 * * *', () => {
+    // AUTH-2 (2026-08-11) TEST-MODE: bumped from daily (15 3 * * *) to
+    // every minute so 5-min cooling-off period can be exercised in tests.
+    // TODO: LAUNCH_GATE — revert to '15 3 * * *' before app store launch.
+    cron.schedule('* * * * *', () => {
       authSweep({ verbose: true }).catch((err) => {
         console.error('[cron/scheduler] authSweep failed:', err.message);
       });
     }, { timezone: 'UTC' });
-    console.log('✓ Cron registered: authSweep (15 3 * * * UTC)');
+    console.log('✓ Cron registered: authSweep (* * * * * UTC — TEST-MODE, revert before launch)');
 
     // O18 batch 6.5: push drain every minute + daily purge at 03:30 UTC.
     // Drain is aggressive so notifications feel real-time; if transport

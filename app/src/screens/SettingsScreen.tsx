@@ -588,7 +588,7 @@ export function SettingsScreen() {
       if (aboutTapTimer.current) clearTimeout(aboutTapTimer.current);
       if (!debugMode) {
         updateSetting('debugMode', true);
-        Alert.alert('Developer mode', 'Debug tools unlocked. Scroll down to see them.');
+        Alert.alert('Developer mode', 'Debug tools unlocked. Scroll down to see them.', [{ text: 'OK' }]);
       } else {
         // If already on, do nothing (avoid accidental disable via re-tap)
       }
@@ -1013,7 +1013,7 @@ export function SettingsScreen() {
               label="Check the weather"
               hint="Opens MetService NZ"
               external
-              onPress={() => Linking.openURL('https://www.metservice.com/rural').catch(() => Alert.alert('Cannot open link', 'Please try again later.'))}
+              onPress={() => Linking.openURL('https://www.metservice.com/rural').catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))}
             />
             <View style={styles.divider} />
             {/* O13 bug 5: unified in-app feedback / safety / bug row.
@@ -1177,7 +1177,7 @@ export function SettingsScreen() {
               label="Privacy Policy"
               hint="How we handle your data"
               external
-              onPress={() => Linking.openURL(PRIVACY_URL).catch(() => Alert.alert('Cannot open link', 'Please try again later.'))}
+              onPress={() => Linking.openURL(PRIVACY_URL).catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))}
             />
             <View style={styles.divider} />
             <ActionRow
@@ -1187,7 +1187,7 @@ export function SettingsScreen() {
               label="Terms of Service"
               hint="Apple's standard app terms — a Cairn-specific version is coming"
               external
-              onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/').catch(() => Alert.alert('Cannot open link', 'Please try again later.'))}
+              onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/').catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))}
             />
             <View style={styles.divider} />
             <ActionRow
@@ -1224,15 +1224,16 @@ export function SettingsScreen() {
                             const { requestDataExport } = require('../services/authService');
                             const r = await requestDataExport();
                             if (r.error) {
-                              Alert.alert('Export failed', r.error);
+                              Alert.alert('Export failed', r.error, [{ text: 'OK' }]);
                               return;
                             }
                             Alert.alert(
                               'Export requested',
                               'You\'ll receive an email within a few minutes with a download link. The link is valid for 24 hours.',
+                              [{ text: 'OK' }],
                             );
                           } catch {
-                            Alert.alert('Export failed', 'Please try again.');
+                            Alert.alert('Export failed', 'Please try again.', [{ text: 'OK' }]);
                           }
                         },
                       },
@@ -1490,7 +1491,7 @@ export function SettingsScreen() {
           }
           setShowResetMemoryModal(false);
           if (!ok) {
-            Alert.alert('Could not reset memory', 'Check your connection and try again.');
+            Alert.alert('Could not reset memory', 'Check your connection and try again.', [{ text: 'OK' }]);
           }
         }}
       />
@@ -1505,10 +1506,16 @@ export function SettingsScreen() {
        * days, backend returns hint='pending_deletion' and AuthScreen
        * routes to the restore modal.
        */}
+      {/* AUTH-2 TEST-MODE (2026-08-11): body copy says "a short grace period"
+          instead of "7 days" so it stays honest during the 5-minute test
+          window. The exact deadline is still shown in the post-delete
+          confirmation alert (uses server-returned restoreDeadline).
+          TODO: LAUNCH_GATE — revert body to "7 days to sign in and restore"
+          before app store launch. */}
       <TypeToConfirmModal
         visible={showDeleteAccountModal}
         title="Delete your account?"
-        body="Your account will be scheduled for permanent deletion. You'll have 7 days to sign in and restore it before all your hikes, cairns, and memory are permanently erased."
+        body="Your account will be scheduled for permanent deletion. You'll have a short grace period to sign in and restore it — we'll show the exact deadline next — before all your hikes, cairns, and memory are permanently erased."
         keyword="delete account"
         confirmLabel="Delete account"
         onCancel={() => setShowDeleteAccountModal(false)}
@@ -1521,13 +1528,18 @@ export function SettingsScreen() {
             const r = await deleteAccount();
             if (r.error) {
               crashLogger.breadcrumb(`settings:delete_account_error ${String(r.error).slice(0, 60)}`);
-              Alert.alert('Could not delete account', r.error);
+              Alert.alert('Could not delete account', r.error, [{ text: 'OK' }]);
               return;
             }
             crashLogger.breadcrumb(`settings:delete_account_scheduled deadline=${r.restoreDeadline}`);
+            // AUTH-2 TEST-MODE: fallback wording no longer claims "7 days"
+            // since server may return 5-min deadline during test window.
+            // Server should always return a real deadline; fallback only
+            // fires on unexpected missing field. TODO: LAUNCH_GATE —
+            // revert fallback to '7 days' string before launch.
             const deadlineStr = r.restoreDeadline
               ? new Date(r.restoreDeadline).toLocaleDateString()
-              : '7 days';
+              : 'the deadline shown in your email';
             // Clear stored credentials so this device does not auto-fill.
             try { await storage.removeItem('cairn_remember_me'); } catch { /* swallow */ }
             // Local logout — deleteAccount already revoked the jti server-side,

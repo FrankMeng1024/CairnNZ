@@ -3,10 +3,11 @@
  *
  * Daily cron job (03:15 UTC) that maintains all three auth-related tables:
  *
- *   1. AUTH-01 — hard-delete users past the 7-day grace period.
+ *   1. AUTH-01 — hard-delete users past the grace window.
  *      Users soft-deleted via DELETE /api/auth/account get their deleted_at
  *      set. Cron finds rows older than the grace window and hard-deletes
  *      them (which cascades to sessions / user_oauth via FK).
+ *      AUTH-2 (2026-08-11): grace window is TEST-MODE 5 minutes. Prod = 7 days.
  *
  *   2. AUTH-08 — purge expired token_blacklist rows.
  *      Once a JWT's `exp` has passed, the blacklist entry serves no purpose
@@ -22,7 +23,8 @@
  *
  * Manual invocation (used by integration test):
  *   const { run } = require('./cron/authSweep');
- *   await run({ verbose: true, graceDays: 7 });
+ *   await run({ verbose: true, graceMinutes: 5 });   // TEST-MODE
+ *   // await run({ verbose: true, graceMinutes: 10080 });  // 7 days (LAUNCH)
  *
  * Schedule registration (in index.js):
  *   const cron = require('node-cron');
@@ -40,13 +42,13 @@ const pool = require('../config/db');
 // Anything beyond this defers to the next day's run.
 const MAX_HARD_DELETES_PER_RUN = 500;
 
-async function sweepHardDeletes(graceDays, verbose) {
+async function sweepHardDeletes(graceMinutes, verbose) {
   let hardDeleted = 0;
-  const candidates = await User.findHardDeleteCandidates(graceDays);
+  const candidates = await User.findHardDeleteCandidates(graceMinutes);
   const capped = candidates.slice(0, MAX_HARD_DELETES_PER_RUN);
   for (const userId of capped) {
     try {
-      await User.hardDelete(userId);
+      await User.hardDelete(userId, graceMinutes);
       hardDeleted += 1;
     } catch (err) {
       // Per-user failure — log and continue. FK-cascade errors here
@@ -63,7 +65,9 @@ async function sweepHardDeletes(graceDays, verbose) {
   return hardDeleted;
 }
 
-async function run({ verbose = false, graceDays = 7 } = {}) {
+// AUTH-2 (2026-08-11) TEST-MODE: cooling-off window is 5 MINUTES not 7 DAYS.
+// TODO: LAUNCH_GATE — revert graceMinutes → graceDays = 7 + swap MINUTE → DAY in User.js queries before app store launch.
+async function run({ verbose = false, graceMinutes = 5 } = {}) {
   const startedAt = new Date();
   let hardDeleted = 0;
   let blacklistPurged = 0;
@@ -71,7 +75,7 @@ async function run({ verbose = false, graceDays = 7 } = {}) {
 
   // Run each sub-task in isolation — one failing does not block the others.
   try {
-    hardDeleted = await sweepHardDeletes(graceDays, verbose);
+    hardDeleted = await sweepHardDeletes(graceMinutes, verbose);
   } catch (err) {
     console.error('[authSweep] hardDelete sweep failed:', err.message, err.stack);
   }

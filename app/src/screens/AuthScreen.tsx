@@ -39,6 +39,7 @@ import { login, register, loginWithGoogle, verifyCode, resendCode,
   passwordResetRequest, passwordResetVerify, patchDob, restoreAccount,
 } from '../services/authService';
 import { CairnLogo } from '../components/ActivityIcons/CairnLogo';
+import { GlassPanel } from '../components/GlassPanel';
 // O1 batch 39: Google + makeRedirectUri + Prompt imports removed — 0 actual code references (Google OAuth deferred).
 import { crashLogger } from '../services/crashLogger';
 import { OtaBadge } from '../components/OtaBadge';
@@ -298,6 +299,7 @@ function PasswordInput({ value, onChangeText, placeholder, error, onBlur, isNew 
 }) {
   const [show, setShow] = useState(false);
   const [focused, setFocused] = useState(false);
+  const inputRef = React.useRef<TextInput>(null);
   return (
     <>
       <View style={[formStyles.inputWrap, !!error && formStyles.inputError, focused && !error && formStyles.inputFocused]}>
@@ -305,6 +307,7 @@ function PasswordInput({ value, onChangeText, placeholder, error, onBlur, isNew 
           <Icon name="KeyRound" size={IconSize.sm} color={focused ? Colors.primary : Colors.textMuted} strokeWidth={1.8} />
         </View>
         <TextInput
+          ref={inputRef}
           style={formStyles.inputInner}
           placeholder={placeholder}
           placeholderTextColor={Colors.textMuted}
@@ -326,12 +329,29 @@ function PasswordInput({ value, onChangeText, placeholder, error, onBlur, isNew 
           onFocus={() => setFocused(true)}
           onBlur={() => { setFocused(false); onBlur?.(); }}
         />
+        {/* AUTH-1 (2026-08-11): X clear button — industry-standard affordance
+            so the user can wipe the field in one tap when a password error
+            makes them want a fresh start (instead of long-press-select-all).
+            Only visible when the field has content. Keeps focus so the
+            keyboard doesn't collapse. */}
+        {value.length > 0 && (
+          <TouchableOpacity
+            testID="btn-password-clear"
+            style={formStyles.clearBtn}
+            onPress={() => { onChangeText(''); inputRef.current?.focus(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear password"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+          >
+            <Icon name="X" size={IconSize.sm} color={Colors.textMuted} strokeWidth={2} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={formStyles.eyeBtn}
           onPress={() => setShow(v => !v)}
           accessibilityRole="button"
           accessibilityLabel={show ? 'Hide password' : 'Show password'}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
         >
           <Icon name={show ? 'EyeOff' : 'Eye'} size={IconSize.sm} color={Colors.textMuted} strokeWidth={1.8} />
         </TouchableOpacity>
@@ -706,6 +726,7 @@ export function AuthScreen() {
     Alert.alert(
       'Google Sign In',
       'Google Sign In needs a build configured with your Google OAuth client. Use email sign-in in the meantime.',
+      [{ text: 'OK' }],
     );
     return { type: 'dismiss' as const };
   };
@@ -846,6 +867,12 @@ export function AuthScreen() {
     setDob('');
     setDobError('');
     setPrivacyChecked(false);
+    // AUTH-3 (2026-08-11, 4-eyes review #2): also clear restoreDeadline so
+    // if user A's soft-deleted deadline is cached and user B logs in fresh
+    // with no restore state, user B never sees User A's deadline flash on
+    // stale render. /login handler sets restoreDeadline on hint='pending_deletion',
+    // otherwise it stays empty — but we defensively clear on every view change.
+    setRestoreDeadline('');
     submitAttempted.current = false;
   };
 
@@ -1092,7 +1119,7 @@ export function AuthScreen() {
     resetErrors();
     if (Platform.OS !== 'ios') {
       crashLogger.breadcrumb(`apple:platform_skip os=${Platform.OS}`);
-      Alert.alert('Apple Sign In', 'Apple Sign In is available on iOS only. Please use email or Google on this device.');
+      Alert.alert('Apple Sign In', 'Apple Sign In is available on iOS only. Please use email or Google on this device.', [{ text: 'OK' }]);
       return;
     }
     setAppleLoading(true);
@@ -1106,7 +1133,7 @@ export function AuthScreen() {
       const available = await AppleAuthentication.isAvailableAsync();
       crashLogger.breadcrumb(`apple:isAvailable_result=${available}`);
       if (!available) {
-        Alert.alert('Apple Sign In', 'Apple Sign In is not available on this device (older iOS or unsupported region).');
+        Alert.alert('Apple Sign In', 'Apple Sign In is not available on this device (older iOS or unsupported region).', [{ text: 'OK' }]);
         return;
       }
       // Sprint 6 review C7 fix: generate a random nonce, SHA-256 it, and
@@ -1133,7 +1160,7 @@ export function AuthScreen() {
       const idToken = credential.identityToken;
       if (!idToken) {
         crashLogger.breadcrumb('apple:no_id_token');
-        Alert.alert('Apple Sign In failed', 'No identity token returned. Please try again.');
+        Alert.alert('Apple Sign In failed', 'No identity token returned. Please try again.', [{ text: 'OK' }]);
         return;
       }
       // Apple only sends `fullName` on the very first authorize. Persist
@@ -1157,7 +1184,7 @@ export function AuthScreen() {
       const result = await loginWithApple(idToken, providedName, rawNonce);
       crashLogger.breadcrumb(`apple:loginWithApple_result has_err=${!!result.error} has_user=${!!result.user} hint=${result.hint || 'none'}`);
       if (result.error) {
-        Alert.alert('Apple Sign In failed', result.error);
+        Alert.alert('Apple Sign In failed', result.error, [{ text: 'OK' }]);
         return;
       }
       if (result.hint === 'pending_deletion' && result.restoreDeadline) {
@@ -1182,7 +1209,7 @@ export function AuthScreen() {
       const msg = String(err?.message || '').slice(0, 80);
       crashLogger.breadcrumb(`apple:catch code=${code} msg=${msg}`);
       if (code === 'ERR_REQUEST_CANCELED' || code === 'ERR_CANCELED') return;
-      Alert.alert('Apple Sign In failed', err?.message || 'Please try again.');
+      Alert.alert('Apple Sign In failed', err?.message || 'Please try again.', [{ text: 'OK' }]);
     } finally {
       setAppleLoading(false);
       crashLogger.breadcrumb('apple:finally');
@@ -1429,51 +1456,116 @@ export function AuthScreen() {
   // Shown after login when backend flagged hint='pending_deletion'. User
   // must choose Restore (undo soft-delete, continue as normal) or Cancel
   // (sign out without restoring — account hard-deletes on cron sweep).
+  //
+  // AUTH-3 (2026-08-11): visual redo — Natural Warm glass card matching
+  // the AuthScreen system (GlassPanel + warning icon + primary rounded
+  // button + subtle secondary text button). Previously the modal was a
+  // bare SafeAreaView with danger-red icon and inline styles that did
+  // not match the rest of the auth flow.
   if (view === 'restore_confirm') {
     const deadlineStr = restoreDeadline
-      ? new Date(restoreDeadline).toLocaleDateString()
+      ? (() => {
+          // AUTH-3: with the 5-minute cooling-off test window, showing a
+          // date alone is useless (deadline is minutes away). Show
+          // date + time so the user sees an actionable countdown.
+          const d = new Date(restoreDeadline);
+          const now = new Date();
+          const sameDay = d.toDateString() === now.toDateString();
+          return sameDay
+            ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+        })()
       : '';
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]} edges={['top', 'bottom']}>
-        <Icon name="TriangleAlert" size={56} color={Colors.danger} strokeWidth={1.5} />
-        <Text style={[styles.appName, { marginTop: 16, marginBottom: 8 }]}>Restore your account?</Text>
-        <Text style={[styles.tagline, { textAlign: 'center', color: Colors.textSecondary, marginBottom: 16 }]}>
-          You scheduled this account for deletion. It will be permanently deleted on {deadlineStr}. Restore to keep it.
-        </Text>
-        <TouchableOpacity
-          testID="btn-restore-account"
-          style={{ backgroundColor: Colors.primary, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 999, marginTop: 12 }}
-          disabled={restoreLoading}
-          onPress={async () => {
-            setRestoreLoading(true);
-            try {
-              const r = await restoreAccount();
-              if (r.error) {
-                Alert.alert('Restore failed', r.error);
-                return;
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: Spacing.lg }]} edges={['top', 'bottom']}>
+        <LinearGradient
+          colors={['rgba(250, 247, 242, 0.4)', 'rgba(250, 247, 242, 0)']}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 240 }}
+          pointerEvents="none"
+        />
+        <GlassPanel
+          tint="light"
+          borderRadius={24}
+          style={{ padding: Spacing.xl, alignItems: 'center', width: '100%', maxWidth: 400, ...Shadow.fab }}
+        >
+          <View style={{
+            width: 72, height: 72, borderRadius: 36,
+            backgroundColor: Colors.warningBg || 'rgba(255, 178, 100, 0.15)',
+            alignItems: 'center', justifyContent: 'center',
+            marginBottom: Spacing.base,
+          }}>
+            <Icon name="TriangleAlert" size={40} color={Colors.warning} strokeWidth={1.6} />
+          </View>
+          <Text style={[styles.appName, { marginBottom: Spacing.xs, textAlign: 'center' }]}>Restore your account?</Text>
+          <Text style={{
+            fontSize: FontSize.body,
+            textAlign: 'center',
+            color: Colors.textSecondary,
+            lineHeight: 22,
+            marginBottom: Spacing.lg,
+          }}>
+            You scheduled this account for deletion. It will be permanently deleted on <Text style={{ fontWeight: '700', color: Colors.textPrimary }}>{deadlineStr}</Text>. Restore to keep your hikes and marks.
+          </Text>
+          <TouchableOpacity
+            testID="btn-restore-account"
+            style={[styles.primaryBtn, { width: '100%', marginTop: Spacing.xs }]}
+            disabled={restoreLoading}
+            onPress={async () => {
+              setRestoreLoading(true);
+              try {
+                const r = await restoreAccount();
+                if (r.error) {
+                  // AUTH-3: explicit English OK button — no Chinese "好" from
+                  // system locale default. If session missing, guide user
+                  // back to sign-in rather than leaving them stuck in the modal.
+                  if (r.hint === 'session_missing') {
+                    Alert.alert('Session ended', r.error, [
+                      { text: 'Sign in', onPress: () => setView('login') },
+                    ]);
+                  } else if (r.hint === 'account_gone') {
+                    // AUTH-3 4:59-race fix (4-eyes review #2): row was
+                    // hard-deleted between login and Restore tap. Modal
+                    // is now unrecoverable — route user back to sign-in
+                    // with a fresh form so they don't loop on a Restore
+                    // button for an account that no longer exists.
+                    Alert.alert('Account permanently deleted', r.error, [
+                      { text: 'Sign in', onPress: () => handleViewChange('login') },
+                    ]);
+                  } else {
+                    Alert.alert('Restore failed', r.error, [{ text: 'OK' }]);
+                  }
+                  return;
+                }
+                if (r.user) setUser(r.user);
+                await hydrate();
+                setLoggedIn(true);
+              } finally {
+                setRestoreLoading(false);
               }
-              if (r.user) setUser(r.user);
-              await hydrate();
-              setLoggedIn(true);
-            } finally {
-              setRestoreLoading(false);
-            }
-          }}>
-          <Text style={{ color: '#fff', fontWeight: '600' }}>{restoreLoading ? 'Restoring…' : 'Restore account'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          testID="btn-cancel-restore"
-          style={{ paddingHorizontal: 24, paddingVertical: 12, marginTop: 8 }}
-          onPress={async () => {
-            // Just sign out — do not restore. Account will hard-delete on cron.
-            try {
-              const { logout: logoutSvc } = require('../services/authService');
-              await logoutSvc();
-            } catch { /* silent */ }
-            setView('splash');
-          }}>
-          <Text style={{ color: Colors.textSecondary }}>Not now</Text>
-        </TouchableOpacity>
+            }}>
+            {restoreLoading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.primaryBtnText}>Restore account</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="btn-cancel-restore"
+            style={{ paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm, marginTop: Spacing.sm }}
+            onPress={async () => {
+              // Just sign out — do not restore. Account will hard-delete on cron.
+              try {
+                const { logout: logoutSvc } = require('../services/authService');
+                await logoutSvc();
+              } catch { /* silent */ }
+              // AUTH-3 (2026-08-11): use handleViewChange so form inputs +
+              // errors reset (previously setView('login') left stale
+              // email/password prefilled from the account that was just
+              // scheduled for deletion — tapping Sign In immediately
+              // re-triggered the same restore modal loop).
+              handleViewChange('login');
+            }}>
+            <Text style={{ color: Colors.textMuted, fontSize: FontSize.caption }}>Not now</Text>
+          </TouchableOpacity>
+        </GlassPanel>
       </SafeAreaView>
     );
   }
@@ -1554,15 +1646,19 @@ export function AuthScreen() {
             keyboardType="number-pad"
             maxLength={6}
           />
-          <TextInput
-            testID="input-forgot-new-password"
-            style={[formStyles.input, { marginTop: 12 }]}
-            placeholder="New password (8+ characters)"
-            placeholderTextColor={Colors.textMuted}
-            value={forgotNewPassword}
-            onChangeText={(v) => { setForgotNewPassword(v); if (forgotError) setForgotError(''); }}
-            secureTextEntry
-          />
+          {/* AUTH-1 (2026-08-11): use PasswordInput so the reset flow
+              inherits the same iOS-Autofill guard, X clear button, and
+              eye toggle as login/register. Previously a raw <TextInput
+              secureTextEntry /> here re-introduced the "password wipes
+              on error" bug on the reset code+password step. */}
+          <View style={{ marginTop: 12 }}>
+            <PasswordInput
+              value={forgotNewPassword}
+              onChangeText={(v) => { setForgotNewPassword(v); if (forgotError) setForgotError(''); }}
+              placeholder="New password (8+ characters)"
+              isNew
+            />
+          </View>
           {forgotError ? <Text style={formStyles.errorText}>{forgotError}</Text> : null}
           <TouchableOpacity
             testID="btn-reset-password"
@@ -2016,6 +2112,7 @@ const formStyles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   eyeBtn: { padding: Spacing.xs },
+  clearBtn: { padding: Spacing.xs, marginRight: 2 },
   fieldError: { fontSize: FontSize.small, color: Colors.danger, fontWeight: '600', marginTop: 3, marginLeft: 2 },
 
   privacyRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.base },

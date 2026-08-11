@@ -233,7 +233,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
     const id = mark.id;
     if (likedIds.has(id)) return; // already liked in this session
     if (!lastCoordinate) {
-      Alert.alert('Finding your location', 'Finding your location — please wait a moment.');
+      Alert.alert('Finding your location', 'Finding your location — please wait a moment.', [{ text: 'OK' }]);
       return;
     }
 
@@ -248,9 +248,9 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       setLikedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
       const code = err instanceof MarkerInteractionError ? err.code : 'SERVER_ERROR';
       if (code === 'TOO_FAR') {
-        Alert.alert('Too far', 'Get closer to the cairn to like it.');
+        Alert.alert('Too far', 'Get closer to the cairn to like it.', [{ text: 'OK' }]);
       } else if (code === 'RATE_LIMITED') {
-        Alert.alert('Slow down', 'Too many actions. Try again in a moment.');
+        Alert.alert('Slow down', 'Too many actions. Try again in a moment.', [{ text: 'OK' }]);
       }
       // NONCE_INVALID + SERVER_ERROR: silent — network/server blip, don't alarm user.
     });
@@ -261,11 +261,11 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   const handleReport = useCallback((mark: Marker) => {
     const targetId = mark.id;
     if (reportedIds.has(targetId)) {
-      Alert.alert('Already reported', 'You have already reported this cairn.');
+      Alert.alert('Already reported', 'You have already reported this cairn.', [{ text: 'OK' }]);
       return;
     }
     if (!lastCoordinate) {
-      Alert.alert('Finding your location', 'Finding your location — please wait a moment before reporting.');
+      Alert.alert('Finding your location', 'Finding your location — please wait a moment before reporting.', [{ text: 'OK' }]);
       return;
     }
 
@@ -277,15 +277,15 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       setReportedIds((prev) => new Set([...prev, targetId]));
       reportMarker(targetId, reason, lat, lng, accuracy)
         .then(() => {
-          Alert.alert('Report sent', "Thanks — we'll look into it.");
+          Alert.alert('Report sent', "Thanks — we'll look into it.", [{ text: 'OK' }]);
         })
         .catch((err) => {
           setReportedIds((prev) => { const n = new Set(prev); n.delete(targetId); return n; });
           const code = err instanceof MarkerInteractionError ? err.code : 'SERVER_ERROR';
           if (code === 'TOO_FAR') {
-            Alert.alert('Too far', 'Get closer to the cairn to report it.');
+            Alert.alert('Too far', 'Get closer to the cairn to report it.', [{ text: 'OK' }]);
           } else if (code === 'RATE_LIMITED') {
-            Alert.alert('Slow down', 'Too many reports. Try again later.');
+            Alert.alert('Slow down', 'Too many reports. Try again later.', [{ text: 'OK' }]);
           }
         });
     };

@@ -68,6 +68,7 @@ export function DebugScreen() {
     Alert.alert(
       r.ok ? 'Uploaded ✓' : 'Upload failed',
       r.ok ? `Sent ${r.bytes} bytes.` : (r.error || 'Unknown error'),
+      [{ text: 'OK' }],
     );
     refresh();
   }
@@ -81,12 +82,12 @@ export function DebugScreen() {
       }
       const path = await debugLogger.getSessionFilePath(s.session_id);
       if (!path) {
-        Alert.alert('Export failed', 'Session file not found.');
+        Alert.alert('Export failed', 'Session file not found.', [{ text: 'OK' }]);
         return;
       }
       const canShare = await Sharing.isAvailableAsync();
       if (!canShare) {
-        Alert.alert('Sharing unavailable', 'This platform does not support sharing.');
+        Alert.alert('Sharing unavailable', 'This platform does not support sharing.', [{ text: 'OK' }]);
         return;
       }
       await Sharing.shareAsync(path, {
@@ -94,7 +95,7 @@ export function DebugScreen() {
         dialogTitle: `Cairn session ${s.session_id}`,
       });
     } catch (err) {
-      Alert.alert('Export failed', String(err));
+      Alert.alert('Export failed', String(err), [{ text: 'OK' }]);
     } finally {
       setBusyId(null);
     }
@@ -144,6 +145,7 @@ export function DebugScreen() {
     Alert.alert(
       'Upload finished',
       `${okCount} / ${results.length} sessions uploaded successfully.`,
+      [{ text: 'OK' }],
     );
     refresh();
   }

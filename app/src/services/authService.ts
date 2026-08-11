@@ -287,7 +287,16 @@ export async function deleteAccount(): Promise<{
 // which we can retry saving with a clean keychain slot).
 export async function restoreAccount(): Promise<AuthResult> {
   const token = await getToken();
-  if (!token) return { error: 'not_signed_in' };
+  // AUTH-3 (2026-08-11): user-facing English message replaces internal
+  // 'not_signed_in' sentinel. Root cause: restore modal is entered right
+  // after login (with hint='pending_deletion'), so getToken() should
+  // return a fresh token — but if SecureStore race / stale hydration
+  // leaves the slot empty, the modal surfaces `not_signed_in` to the
+  // Alert which the user cannot act on. We now return a message that
+  // (a) is plain English (no snake_case) and (b) tells the user exactly
+  // what to do next. AuthScreen inspects hint='session_missing' to
+  // route back to the sign-in view instead of splash.
+  if (!token) return { error: 'Your session ended. Please sign in again to restore your account.', hint: 'session_missing' };
   let res: Response;
   let data: any;
   try {
@@ -299,7 +308,27 @@ export async function restoreAccount(): Promise<AuthResult> {
   } catch {
     return { error: 'Unable to connect. Please try again.' };
   }
-  if (!res.ok) return { error: data?.error || 'Restore failed.' };
+  if (!res.ok) {
+    // AUTH-3 4:59-race (2026-08-11, 4-eyes review #2): if the row was
+    // hard-deleted between login and Restore tap (cron sweeps every
+    // minute; happens easily in 5-min TEST-MODE), backend returns:
+    //   - authenticate middleware 401 `{ message: 'Account not found.', code: 'TOKEN_INVALID' }`
+    //   - or /restore route 404 `{ error: 'Account not found. It may have been permanently deleted.' }`
+    // Either way, the account is gone. Surface a distinct hint so the
+    // modal shows an actionable "Sign in" button rather than looping on
+    // a generic "Restore failed" Alert.
+    const backendMsg = data?.error || data?.message || '';
+    const isAccountGone =
+      res.status === 404 ||
+      (res.status === 401 && /account\s*not\s*found/i.test(backendMsg));
+    if (isAccountGone) {
+      return {
+        error: 'This account has been permanently deleted. Please sign in with a different account or create a new one.',
+        hint: 'account_gone',
+      };
+    }
+    return { error: backendMsg || 'Restore failed.' };
+  }
   if (data.token) {
     try {
       await saveToken(data.token);

@@ -27,6 +27,12 @@ const {
 const { validateBody } = require('../middleware/validate');
 const schemas = require('../middleware/schemas');
 
+// AUTH-2 (2026-08-11) TEST-MODE: Delete-account cooling-off period. Users
+// can restore their soft-deleted account for this long. Cron authSweep
+// hard-deletes rows past this window (see cron/authSweep.js findHardDeleteCandidates).
+// TODO: LAUNCH_GATE — revert RESTORE_GRACE_MS = 7 * 24 * 60 * 60 * 1000 before app store launch.
+const RESTORE_GRACE_MS = 5 * 60 * 1000; // 5 minutes for testing (prod = 7 days)
+
 const router = express.Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -371,7 +377,7 @@ router.post('/login', authLimiter, validateBody(schemas.auth.login), async (req,
 
     if (user.deleted_at) {
       const deletedAt = new Date(user.deleted_at);
-      const restoreDeadline = new Date(deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const restoreDeadline = new Date(deletedAt.getTime() + RESTORE_GRACE_MS);
       return res.json({
         user: publicUser,
         token,
@@ -467,7 +473,7 @@ router.post('/google', oauthLimiter, validateBody(schemas.auth.google), async (r
     // O18 AUTH-01: soft-deleted account — same restore-modal hint as /login.
     if (user.deleted_at) {
       const deletedAt = new Date(user.deleted_at);
-      const restoreDeadline = new Date(deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const restoreDeadline = new Date(deletedAt.getTime() + RESTORE_GRACE_MS);
       return res.json({
         user: publicUser,
         token,
@@ -583,7 +589,7 @@ router.post('/apple', oauthLimiter, validateBody(schemas.auth.apple), async (req
     // Soft-delete handoff (same as /login and /google).
     if (user.deleted_at) {
       const deletedAt = new Date(user.deleted_at);
-      const restoreDeadline = new Date(deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const restoreDeadline = new Date(deletedAt.getTime() + RESTORE_GRACE_MS);
       return res.json({
         user: publicUser,
         token,
@@ -916,7 +922,9 @@ router.post('/password-reset/verify', authLimiter, validateBody(schemas.auth.pas
 });
 
 // ── DELETE /api/auth/account (O18 AUTH-01) ─────────────────────────────────
-// Soft-delete: sets users.deleted_at. Cron sweep hard-deletes after 7 days.
+// Soft-delete: sets users.deleted_at. Cron sweep hard-deletes after
+// RESTORE_GRACE_MS (currently 5 min TEST-MODE — see LAUNCH_GATE TODO
+// at top of file; prod = 7 days).
 // User can restore during grace period via POST /account/restore. Also
 // revokes the current jti so the token is immediately unusable.
 //
@@ -947,7 +955,7 @@ router.delete('/account', authenticate, deleteAccountLimiter, async (req, res) =
       deletedAtIso = new Date(updated.deleted_at).toISOString();
     }
 
-    const restoreDeadline = new Date(new Date(deletedAtIso).getTime() + 7 * 24 * 60 * 60 * 1000);
+    const restoreDeadline = new Date(new Date(deletedAtIso).getTime() + RESTORE_GRACE_MS);
 
     // Send confirmation email with restore instructions (non-blocking).
     sendAccountDeletionConfirmation(user.email, user.name, restoreDeadline).catch(err =>
@@ -983,15 +991,19 @@ router.delete('/account', authenticate, deleteAccountLimiter, async (req, res) =
 });
 
 // ── POST /api/auth/account/restore (O18 AUTH-01) ──────────────────────────
-// Undoes soft-delete during grace period. After 7 days the cron sweep has
-// already hard-deleted the row; this returns 404 in that case.
+// Undoes soft-delete during grace period. After RESTORE_GRACE_MS the cron
+// sweep has already hard-deleted the row; this returns 404 in that case.
+// TEST-MODE grace window is 5 minutes (LAUNCH_GATE TODO — prod = 7 days).
 // Called from the restore modal which is triggered by hint: 'pending_deletion'
 // on login. Token in Authorization header is the one just issued by /login,
 // which is still valid because auth middleware allows it (row exists, jti
 // not blacklisted).
 router.post('/account/restore', authenticate, async (req, res) => {
   try {
-    const restored = await User.restoreDeleted(req.user.userId);
+    // AUTH-2 (2026-08-11): pass graceMinutes derived from RESTORE_GRACE_MS
+    // so the SQL WHERE clause enforces the same window as the client-facing
+    // deadline. One source of truth = RESTORE_GRACE_MS constant.
+    const restored = await User.restoreDeleted(req.user.userId, RESTORE_GRACE_MS / 60000);
     if (!restored) {
       // Either the user was never soft-deleted, or the row is already gone
       // (past grace period). Either way, no-op — return current state.

@@ -63,11 +63,11 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
       const r = await purchasePackage(primaryPkg);
       if (r.cancelled) return;   // silent — user tapped X
       if (r.error) {
-        Alert.alert('Purchase failed', r.error);
+        Alert.alert('Purchase failed', r.error, [{ text: 'OK' }]);
         return;
       }
       if (r.hasEntitlement) {
-        Alert.alert('Welcome to Memory Pro', 'You now have unlimited friend slots. Thank you for supporting Cairn!');
+        Alert.alert('Welcome to Memory Pro', 'You now have unlimited friend slots. Thank you for supporting Cairn!', [{ text: 'OK' }]);
         onEntitled?.();
         onClose();
       } else if (r.success) {
@@ -91,11 +91,11 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
     try {
       const r = await restorePurchases();
       if (r.hasEntitlement) {
-        Alert.alert('Restored', 'Your Memory Pro subscription is active.');
+        Alert.alert('Restored', 'Your Memory Pro subscription is active.', [{ text: 'OK' }]);
         onEntitled?.();
         onClose();
       } else {
-        Alert.alert('Nothing to restore', 'No active subscription found on this account.');
+        Alert.alert('Nothing to restore', 'No active subscription found on this account.', [{ text: 'OK' }]);
       }
     } finally {
       setPurchasing(false);

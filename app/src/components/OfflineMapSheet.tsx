@@ -50,7 +50,7 @@ export function OfflineMapSheet({ visible, onClose }: Props) {
       },
       (id, error) => {
         setDownloadingId(null);
-        Alert.alert("Couldn't download this map pack", 'Check your Wi-Fi or try a smaller region.');
+        Alert.alert("Couldn't download this map pack", 'Check your Wi-Fi or try a smaller region.', [{ text: 'OK' }]);
       },
     );
   }, []);
