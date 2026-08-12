@@ -56,12 +56,12 @@ export const ContentConfig = {
 // ── Visibility default ────────────────────────────────────────────────
 export const VisibilityConfig = {
   /** Initial selection in the visibility chip row.
-   *  Sprint 68 STORY-00530 (Friend System v1 v4.U): default is 'friends'.
-   *  Reasoning: v4 product binding — Friend is the social default. v1 UI
-   *  exposes only Personal vs Friend (Public hidden, see enablePublicOption).
-   *  Pre-Sprint 68 was 'self' (v299 user request). v1 supersedes that.
+   *  R114/O24 (2026-08-12): user requested default → 'self' (Just me).
+   *  Sprint 68 v1 briefly defaulted to 'friends' for social binding; the
+   *  user found this too eager — a fresh cairn should be private by
+   *  default and the user consciously opts in to sharing.
    */
-  defaultLevel: 'friends' as 'self' | 'friends' | 'public',
+  defaultLevel: 'self' as 'self' | 'friends' | 'public',
   /**
    * Sprint 68 STORY-00530 (Friend System v1 v4 §11): 'public' option is
    * hidden in v1 UI. Backend also rejects POST permission='public' via the

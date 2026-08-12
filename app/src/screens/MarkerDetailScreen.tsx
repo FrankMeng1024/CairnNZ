@@ -22,7 +22,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Dimensions, Platform, Alert,
-  TouchableOpacity,
+  TouchableOpacity, Modal, KeyboardAvoidingView, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -233,7 +233,11 @@ export function MarkerDetailScreen() {
             <CameraComponent
               defaultSettings={{
                 centerCoordinate: [marker.lng, marker.lat],
-                zoomLevel: 16.5,
+                // R114/O24 (2026-08-12): zoom 16.5 → 15 so the user sees
+                // more surrounding streets / place names for context.
+                // Previous zoom was too tight — cairn floated in a blank
+                // green area with no landmarks.
+                zoomLevel: 15,
               }}
             />
             {MarkerView ? (
@@ -280,136 +284,195 @@ export function MarkerDetailScreen() {
       </View>
 
       {/* ── Detail panel ──────────────────────────────────────── */}
+      {/* R114/O24 (2026-08-12): rebuilt information hierarchy per user
+          feedback ("Danger Retry Just me test 123 lat/lng 都不知道是什么").
+          New order (top → bottom):
+            1. Title (large, primary weight) — anchors the page
+            2. Note body (secondary, comfortable line-height)
+            3. Meta pills row (type + visibility + sync) — small, tinted,
+               reads as "attributes" not primary content
+            4. Divider — separates content from metadata
+            5. Date / location — quiet grey meta rows
+            6. Public snapshot banner (owner only, only if diverges)
+            7. Sticky bottom Edit / Delete row (owner only) — outside
+               ScrollView so keyboard doesn't hide it in edit modal.
+          Edit is now a Modal (see below) rather than inline replacement —
+          user reported the inline edit form got hidden by the keyboard. */}
       <ScrollView
         style={styles.panel}
         contentContainerStyle={styles.panelContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Type + meta row */}
+        {/* 1. Title */}
+        {privateTitle ? (
+          <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">{privateTitle}</Text>
+        ) : (
+          <Text style={styles.titleEmpty}>Untitled cairn</Text>
+        )}
+
+        {/* 2. Body */}
+        {privateBody ? <Text style={styles.body}>{privateBody}</Text> : null}
+
+        {/* 3. Meta pills row: type, visibility, sync state */}
         <View style={styles.headerRow}>
           <View style={[styles.typeBadge, { backgroundColor: meta.bg, borderColor: meta.color }]}>
             <Icon name={meta.icon as IconName} size={14} color={meta.color} strokeWidth={2} />
             <Text style={[styles.typeBadgeText, { color: meta.color }]}>{meta.label}</Text>
           </View>
-          {/* v422: 离线同步状态 badge. synced 状态不显示 (hideWhenSynced=true).
-              pending → 用户看到 "Waiting to sync" 知道已保存本地待上传. */}
-          {marker.syncState && marker.syncState !== 'synced' ? (
-            <SyncBadge state={marker.syncState} />
-          ) : null}
           <View style={[styles.visBadge, { borderColor: Colors.border }]}>
             <Icon name={vis.iconName} size={12} color={Colors.textSecondary} strokeWidth={2} />
             <Text style={styles.visBadgeText}>{vis.label}</Text>
           </View>
+          {marker.syncState && marker.syncState !== 'synced' ? (
+            <SyncBadge state={marker.syncState} />
+          ) : null}
         </View>
 
-        {isEditing ? (
-          /* ─── EDIT MODE ───
-             R114 (2026-08-07): entire inline form (typeRow + title +
-             body + permRow + lockedField) replaced by a single MarkForm
-             mount. Cancel/Save actions kept below — MarkForm is body
-             only, screen owns the action row. */
-          <View>
-            <MarkForm
-              type={editType}
-              title={editTitle}
-              note={editBody}
-              visibility={editPermission}
-              onTypeChange={setEditType}
-              onTitleChange={setEditTitle}
-              onNoteChange={setEditBody}
-              onVisibilityChange={setEditPermission}
-              mode="edit"
-              disableVisibilityPublic={!VisibilityConfig.enablePublicOption}
-              showLocationLockedNotice
-              autoFocus={null}
-              titleMaxChars={ContentConfig.titleMaxChars}
-              noteMaxChars={ContentConfig.textMaxChars}
-            />
+        {/* 4. Divider */}
+        <View style={styles.metaDivider} />
 
-            {/* Save / Cancel actions */}
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnGhost]} onPress={cancelEdit} disabled={saving}>
-                <Text style={styles.actionBtnGhostText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary, saving && { opacity: 0.6 }]} onPress={saveEdit} disabled={saving}>
-                <Text style={styles.actionBtnPrimaryText}>{saving ? 'Saving…' : 'Save'}</Text>
-              </TouchableOpacity>
+        {/* 5. Date / location — with clear labels */}
+        <View style={styles.metaList}>
+          <MetaRow iconName="Calendar" label="Planted" text={dateStr} />
+          <MetaRow
+            iconName="MapPin"
+            label="Location"
+            text={`${marker.lat.toFixed(5)}, ${marker.lng.toFixed(5)}`}
+          />
+        </View>
+
+        {/* 6. Public snapshot divergence banner (owner only) */}
+        {snap && snapDiffers && isOwner && (
+          <View style={styles.snapshotBanner}>
+            <View style={styles.snapshotHeaderRow}>
+              <Icon name="Globe" size={12} color={Colors.textSecondary} strokeWidth={2} />
+              <Text style={styles.snapshotHeader}>Public viewers see</Text>
             </View>
-          </View>
-        ) : (
-          /* ─── VIEW MODE ─── */
-          <View>
-            {privateTitle ? (
-              <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{privateTitle}</Text>
-            ) : (
-              <Text style={styles.titleEmpty}>Untitled cairn</Text>
-            )}
-
-            {privateBody ? <Text style={styles.body}>{privateBody}</Text> : null}
-
-            <View style={styles.metaList}>
-              <MetaRow iconName="Calendar" text={dateStr} />
-              <MetaRow iconName="MapPin" text={`${marker.lat.toFixed(5)}, ${marker.lng.toFixed(5)}`} />
-            </View>
-
-            {/* Public snapshot divergence banner (owner only) */}
-            {snap && snapDiffers && isOwner && (
-              <View style={styles.snapshotBanner}>
-                <View style={styles.snapshotHeaderRow}>
-                  <Icon name="Globe" size={12} color={Colors.textSecondary} strokeWidth={2} />
-                  <Text style={styles.snapshotHeader}>Public viewers see</Text>
-                </View>
-                <Text style={styles.snapshotBody}>
-                  {(() => {
-                    const sm = MARKER_TYPES[snap.type];
-                    const sn = splitTitleBody(snap.note);
-                    return `"${sn.title || sn.body || 'Untitled'}", pinned as ${sm?.label ?? snap.type}.`;
-                  })()}
-                </Text>
-                <Text style={styles.snapshotFootnote}>
-                  Public content is frozen at the moment you first shared.
-                </Text>
-              </View>
-            )}
-
-            {/* Owner-only actions.
-                v422: edit/delete 是"回家做"的动作 (D 类), 无网禁用 + 显示提示. */}
-            {isOwner && (
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionBtnGhost, !online && { opacity: 0.4 }]}
-                  onPress={handleDelete}
-                  disabled={!online}
-                >
-                  <Icon name="Trash2" size={14} color={Colors.danger} strokeWidth={2} />
-                  <Text style={[styles.actionBtnGhostText, { color: Colors.danger }]}>
-                    {online ? 'Delete' : 'Delete · Needs internet'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionBtnPrimary, !online && { opacity: 0.4 }]}
-                  onPress={enterEdit}
-                  disabled={!online}
-                >
-                  <Icon name="Pencil" size={14} color="#fff" strokeWidth={2} />
-                  <Text style={styles.actionBtnPrimaryText}>
-                    {online ? 'Edit' : 'Edit · Needs internet'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+            <Text style={styles.snapshotBody}>
+              {(() => {
+                const sm = MARKER_TYPES[snap.type];
+                const sn = splitTitleBody(snap.note);
+                return `"${sn.title || sn.body || 'Untitled'}", pinned as ${sm?.label ?? snap.type}.`;
+              })()}
+            </Text>
+            <Text style={styles.snapshotFootnote}>
+              Public content is frozen at the moment you first shared.
+            </Text>
           </View>
         )}
       </ScrollView>
+
+      {/* 7. Sticky bottom action row (owner only). Outside ScrollView so
+          Edit modal keyboard never covers it.
+          4-eyes review: Delete + Edit were both flex:1 with equal visual
+          weight — dangerous action co-equal with primary action = misfire
+          risk. Fix: Delete becomes icon-only ghost, small (fixed 48pt
+          square), Edit becomes the wide primary. */}
+      {isOwner && (
+        <View style={styles.stickyActionRow}>
+          <TouchableOpacity
+            style={[styles.deleteIconBtn, !online && { opacity: 0.4 }]}
+            onPress={handleDelete}
+            disabled={!online}
+            accessibilityRole="button"
+            accessibilityLabel={online ? 'Delete cairn' : 'Delete cairn (needs internet)'}
+          >
+            <Icon name="Trash2" size={18} color={Colors.danger} strokeWidth={2} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnPrimary, styles.editPrimaryBtn, !online && { opacity: 0.4 }]}
+            onPress={enterEdit}
+            disabled={!online}
+          >
+            <Icon name="Pencil" size={14} color="#fff" strokeWidth={2} />
+            <Text style={styles.actionBtnPrimaryText}>
+              {online ? 'Edit' : 'Edit · Needs internet'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Edit Modal ────────────────────────────────────────────
+          R114/O24 (2026-08-12): edit UI moved from inline replacement
+          to a bottom-sheet Modal. User reported keyboard hid the Save
+          button and dismissing keyboard was annoying. Modal has its
+          own SafeAreaView + KeyboardAvoidingView + full-height card
+          so the Save button always sits above the keyboard. */}
+      <Modal
+        visible={isEditing}
+        transparent
+        animationType="slide"
+        onRequestClose={() => (saving ? null : cancelEdit())}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.editBackdrop}>
+            <View style={styles.editSheet}>
+              {/* Sheet header — grabber + title + close */}
+              <View style={styles.editHeader}>
+                <View style={styles.editGrabber} />
+                <View style={styles.editHeaderRow}>
+                  <Text style={styles.editHeaderTitle}>Edit cairn</Text>
+                  <TouchableOpacity
+                    onPress={cancelEdit}
+                    disabled={saving}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    accessibilityLabel="Close edit"
+                  >
+                    <Icon name="X" size={22} color={Colors.textSecondary} strokeWidth={2} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <ScrollView
+                contentContainerStyle={styles.editBody}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <MarkForm
+                  type={editType}
+                  title={editTitle}
+                  note={editBody}
+                  visibility={editPermission}
+                  onTypeChange={setEditType}
+                  onTitleChange={setEditTitle}
+                  onNoteChange={setEditBody}
+                  onVisibilityChange={setEditPermission}
+                  mode="edit"
+                  disableVisibilityPublic={!VisibilityConfig.enablePublicOption}
+                  showLocationLockedNotice
+                  autoFocus={null}
+                  titleMaxChars={ContentConfig.titleMaxChars}
+                  noteMaxChars={ContentConfig.textMaxChars}
+                />
+              </ScrollView>
+
+              {/* Save button — sits above the keyboard, always visible */}
+              <View style={styles.editFooter}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnPrimary, saving && { opacity: 0.6 }]}
+                  onPress={saveEdit}
+                  disabled={saving}
+                >
+                  <Text style={styles.actionBtnPrimaryText}>{saving ? 'Saving…' : 'Save changes'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-function MetaRow({ iconName, text }: { iconName: IconName; text: string }) {
+function MetaRow({ iconName, label, text }: { iconName: IconName; label: string; text: string }) {
   return (
     <View style={styles.metaItem}>
       <Icon name={iconName} size={13} color={Colors.textSecondary} strokeWidth={2} />
+      <Text style={styles.metaLabel}>{label}</Text>
       <Text style={styles.metaText}>{text}</Text>
     </View>
   );
@@ -498,17 +561,32 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   metaList: {
-    gap: 8,
+    gap: 10,
     marginBottom: 18,
+  },
+  metaDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginTop: 4,
+    marginBottom: 16,
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  // R114/O24 (2026-08-12): meta rows now have a small quiet label so the
+  // user knows what the value means (was: bare "2025-08-01 · 40.71,-74.01").
+  metaLabel: {
+    fontSize: FontSize.small,
+    color: Colors.textMuted,
+    fontWeight: '500',
+    minWidth: 62,
+  },
   metaText: {
     fontSize: FontSize.caption,
     color: Colors.textSecondary,
+    flex: 1,
   },
   snapshotBanner: {
     backgroundColor: '#fff',
@@ -546,6 +624,71 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 6,
   },
+  // R114/O24 (2026-08-12): sticky bottom action row — sits outside the
+  // ScrollView so Edit/Delete are always reachable without scrolling.
+  stickyActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 12,
+    paddingBottom: Spacing.md,
+    backgroundColor: Colors.bg,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  // R114/O24 (2026-08-12): edit modal — bottom sheet card with rounded
+  // top corners. Sits above the keyboard via KeyboardAvoidingView.
+  editBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
+  },
+  editSheet: {
+    backgroundColor: Colors.bg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    // R114/O24 4-eyes: removed minHeight so sheet grows with content
+    // (iOS medium-detent style). maxHeight caps at 88% so backdrop stays
+    // visible above the sheet, preserving "this is a sheet, map is still
+    // there" mental model rather than "this took over the screen".
+    maxHeight: '88%',
+  },
+  editHeader: {
+    paddingTop: 10,
+    paddingHorizontal: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingBottom: 12,
+  },
+  editGrabber: {
+    alignSelf: 'center',
+    width: 40, height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    marginBottom: 12,
+  },
+  editHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  editHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  editBody: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.lg,
+  },
+  editFooter: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 12,
+    paddingBottom: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.bg,
+  },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -566,6 +709,22 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   actionBtnGhostText: { color: Colors.textPrimary, fontSize: 14, fontWeight: '500' },
+  // R114/O24 4-eyes: Delete demoted to a small square icon-only ghost so
+  // it's clearly a secondary/destructive action, not co-equal with Edit.
+  // Reduces misfire risk while keeping delete reachable in one tap.
+  deleteIconBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editPrimaryBtn: {
+    flex: 1,
+  },
   notFoundBox: {
     flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.lg,
   },

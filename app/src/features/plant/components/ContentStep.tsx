@@ -70,22 +70,23 @@ export function ContentStep({
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View style={styles.container}>
-          {/* R114 (2026-08-07): back row keeps existing pill variant so
-              plant flow feels continuous with PinAdjustStep. */}
-          <View style={styles.backRow}>
+          {/* R114/O24 (2026-08-12): back button moved inline with title
+              (was in a separate row above). User feedback: back on its
+              own row felt disconnected from the page header. */}
+          <View style={styles.headerRow}>
             <BackButton variant="pill" onPress={() => { Keyboard.dismiss(); onBack(); }} />
+            <Text style={styles.title}>Leave a mark</Text>
           </View>
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: 16 }}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.title}>Leave a mark</Text>
             <Text style={styles.sub}>A few words, and a photo if you'd like.</Text>
 
-            {/* R114 (2026-08-07): all field authoring routed through the
-                shared MarkForm component. Autofocus title on entry so
-                keyboard is up as soon as the step mounts. */}
+            {/* R114/O24 (2026-08-12): autoFocus="title" removed — user
+                requested no page ever pop the keyboard automatically on
+                mount. User taps into the field to open it. */}
             <MarkForm
               type={type}
               title={title}
@@ -98,7 +99,7 @@ export function ContentStep({
               mode="create"
               disableVisibilityPublic={!VisibilityConfig.enablePublicOption}
               showLocationLockedNotice={false}
-              autoFocus="title"
+              autoFocus={null}
               titleMaxChars={ContentConfig.titleMaxChars}
               noteMaxChars={ContentConfig.textMaxChars}
             />
@@ -152,11 +153,20 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   // R114 (2026-08-07): retokenized from MemoryColors.sepia* → Colors.*.
   // Consistent with MarkerDetailScreen / MarkDetailSheet after refactor.
+  // R114/O24 (2026-08-12): headerRow — back button + title on same line.
+  // Title marginBottom kept 0 so subtitle below still hugs it.
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingBottom: 8,
+  },
   title: {
     fontSize: 22,
     fontWeight: '600',
     color: Colors.textPrimary,
-    marginBottom: 6,
+    marginBottom: 0,
+    flexShrink: 1,
   },
   sub: {
     fontSize: FontSize.caption,
@@ -201,6 +211,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   backRow: {
+    // Retained for reference only; back moved to headerRow (R114/O24).
     flexDirection: 'row',
     paddingBottom: 8,
   },

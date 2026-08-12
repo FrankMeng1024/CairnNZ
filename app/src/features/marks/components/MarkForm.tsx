@@ -11,7 +11,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { Colors, Spacing, Radius, FontSize } from '../../../components/tokens';
 import { Icon, IconName } from '../../../components/Icon';
 import { MARKER_TYPE_ORDER, MARKER_TYPES, MarkerType } from '../../../config/markerTypes';
@@ -69,9 +69,19 @@ export function MarkForm(props: MarkFormProps) {
 
   return (
     <View>
-      {/* TYPE row */}
+      {/* TYPE row — R114/O24 (2026-08-12): horizontal scroll instead of
+          wrap so chips stay on one line. Prior flexWrap caused the last
+          chip to break to a second row on narrower phones.
+          4-eyes review add-on: paddingRight=40 leaves the last visible
+          chip peeking under the edge of the viewport so users see there
+          is more to scroll — otherwise the row looked like a fixed set. */}
       <Text style={styles.fieldLabel}>Type</Text>
-      <View style={styles.typeRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.typeRow}
+      >
         {MARKER_TYPE_ORDER.map((t) => {
           const meta = MARKER_TYPES[t];
           const active = type === t;
@@ -108,7 +118,7 @@ export function MarkForm(props: MarkFormProps) {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       {/* TITLE */}
       <Text style={styles.fieldLabel}>Title</Text>
@@ -257,21 +267,28 @@ function VisChip({ label, iconName, active, activeTone, disabled, onPress }: Vis
 }
 
 const styles = StyleSheet.create({
-  // R114: single field-label spec — referenced everywhere.
+  // R114/O24 (2026-08-12): field labels changed from ALL CAPS to sentence
+  // case per user request — the aggressive uppercase felt out of place in
+  // the app's warm typographic voice. Kept small + secondary color so
+  // labels still recede visually below the input.
   fieldLabel: {
     fontSize: FontSize.small,           // 11
     fontWeight: '600',
     color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: 0.2,
     marginBottom: Spacing.xs,
     marginTop: Spacing.md,
   },
+  // R114/O24 (2026-08-12): Type row — was flexWrap causing the 6th chip
+  // to break to a new line. Switched to a horizontal ScrollView (see
+  // MarkForm render) so chips stay on one row and the user can scroll.
+  // 4-eyes review add-on: paddingRight=40 so the last-visible chip is
+  // partially clipped, telling users "there's more →" visually.
   typeRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 6,
     marginBottom: Spacing.xs,
+    paddingRight: 40,
   },
   typeChip: {
     flexDirection: 'row',

@@ -760,8 +760,11 @@ const styles = StyleSheet.create({
   fallbackCoord: { fontFamily: 'Courier', fontSize: 13, color: Colors.textPrimary },
   primaryBtn: {
     // R114 (2026-08-07): sepia → primary green per design §12.
+    // R114/O24 (2026-08-12): marginTop breathing room — user reported
+    // the button felt glued to the bottom of the map with no separation.
     backgroundColor: Colors.primary,
     padding: 14, borderRadius: 12, alignItems: 'center',
+    marginTop: 16,
   },
   primaryBtnDisabled: {
     backgroundColor: '#d4ccbd',

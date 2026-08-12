@@ -302,20 +302,30 @@ export function SettingsScreen() {
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
 
-  // R100 SETTINGS: Edit Name modal state. Opens from ActionRow in the
-  // profile card. Draft holds the pending edit; saving fires patchName
-  // and updates useAppStore.user so the profile card reflects it
-  // immediately without a reload.
-  const [showEditNameModal, setShowEditNameModal] = useState(false);
+  // R100 SETTINGS: Edit Name inline panel state. R114/O24 (2026-08-12):
+  // migrated from Modal to inline accordion panel matching the Change
+  // password UX — user found the modal jarring vs the smooth in-page
+  // Change password flow. Opens from ActionRow in the profile card.
+  // Draft holds the pending edit; saving fires patchName and updates
+  // useAppStore.user so the profile card reflects it immediately.
+  const [showEditName, setShowEditName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
   const [nameError, setNameError] = useState('');
   const [nameToast, setNameToast] = useState('');
 
   const openEditName = () => {
+    // Accordion toggle: if already open, collapse; else prime the draft
+    // with the current user name and open. Match Change password toggle
+    // pattern (line ~645 setShowChangePw(v => !v)).
+    if (showEditName) {
+      setShowEditName(false);
+      setNameError('');
+      return;
+    }
     setNameDraft(user?.name || '');
     setNameError('');
-    setShowEditNameModal(true);
+    setShowEditName(true);
   };
 
   const handleSaveName = async () => {
@@ -330,7 +340,7 @@ export function SettingsScreen() {
     } catch { /* silent */ }
     if (!trimmed) { setNameError('Name cannot be empty'); return; }
     if (trimmed.length > 32) { setNameError('Name too long (max 32 characters)'); return; }
-    if (trimmed === (user?.name || '')) { setShowEditNameModal(false); return; }
+    if (trimmed === (user?.name || '')) { setShowEditName(false); return; }
     setNameSaving(true);
     setNameError('');
     try {
@@ -369,7 +379,7 @@ export function SettingsScreen() {
         return;
       }
       setUser(r.user);
-      setShowEditNameModal(false);
+      setShowEditName(false);
       setNameToast('Name updated');
       setTimeout(() => setNameToast(''), 2000);
       try {
@@ -640,6 +650,44 @@ export function SettingsScreen() {
                 label="Edit name"
                 onPress={openEditName}
               />
+              {/* R114/O24 (2026-08-12): inline edit-name panel, mirrors the
+                  Change password accordion below. Uses pwStyles so both
+                  panels share the same visual language. */}
+              {showEditName && (
+                <View style={pwStyles.form}>
+                  {!!nameError && <Text style={pwStyles.error}>{nameError}</Text>}
+                  <Text style={pwStyles.label}>Your name</Text>
+                  <View style={pwStyles.inputRow}>
+                    <TextInput
+                      style={pwStyles.inputFlex}
+                      value={nameDraft}
+                      onChangeText={(v) => { setNameDraft(v); if (nameError) setNameError(''); }}
+                      placeholder="How friends will see you"
+                      placeholderTextColor={Colors.textMuted}
+                      maxLength={32}
+                      autoCorrect={false}
+                      returnKeyType="done"
+                      onSubmitEditing={handleSaveName}
+                    />
+                  </View>
+                  <PressBtn
+                    style={[pwStyles.btn, (nameSaving || !nameDraft.trim()) && { opacity: 0.6 }]}
+                    onPress={handleSaveName}
+                    disabled={nameSaving || !nameDraft.trim()}
+                    scaleTo={0.96}
+                  >
+                    {nameSaving
+                      ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <ActivityIndicator size="small" color="#fff" />
+                          <Text style={pwStyles.btnText}>Saving…</Text>
+                        </View>
+                      )
+                      : <Text style={pwStyles.btnText}>Save name</Text>
+                    }
+                  </PressBtn>
+                </View>
+              )}
               <ActionRow
                 label="Change password"
                 onPress={() => {
@@ -1399,69 +1447,9 @@ export function SettingsScreen() {
         </Pressable>
       </Modal>
 
-      {/* R100 SETTINGS: Edit Name modal. Opens from profile card
-          ActionRow. Simple text input with inline validation and
-          save/cancel. Not a type-to-confirm — this is a low-risk edit. */}
-      <Modal
-        visible={showEditNameModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => (nameSaving ? null : setShowEditNameModal(false))}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <Pressable
-            style={modalStyles.backdrop}
-            onPress={() => (nameSaving ? null : setShowEditNameModal(false))}
-            accessibilityLabel="Dismiss"
-          >
-            <Pressable style={modalStyles.card} onPress={() => { /* absorb */ }}>
-              <Text style={modalStyles.title} accessibilityRole="header">Edit name</Text>
-              <Text style={modalStyles.body}>
-                This is how friends will see you across Cairn.
-              </Text>
-              <TextInput
-                style={modalStyles.input}
-                value={nameDraft}
-                onChangeText={(v) => { setNameDraft(v); if (nameError) setNameError(''); }}
-                placeholder="Your name"
-                placeholderTextColor={Colors.textMuted}
-                maxLength={32}
-                autoFocus
-                autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={handleSaveName}
-              />
-              {!!nameError && (
-                <Text style={pwStyles.error}>{nameError}</Text>
-              )}
-              <View style={modalStyles.actions}>
-                <TouchableOpacity
-                  style={modalStyles.btnCancel}
-                  onPress={() => setShowEditNameModal(false)}
-                  disabled={nameSaving}
-                >
-                  <Text style={modalStyles.btnCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    modalStyles.btnConfirm,
-                    (nameSaving || !nameDraft.trim()) && modalStyles.btnConfirmDisabled,
-                  ]}
-                  onPress={handleSaveName}
-                  disabled={nameSaving || !nameDraft.trim()}
-                >
-                  {nameSaving
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={modalStyles.btnConfirmText}>Save</Text>}
-                </TouchableOpacity>
-              </View>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* R114/O24 (2026-08-12): Edit Name modal removed — replaced with
+          inline accordion panel next to Edit name row (matches Change
+          password UX). See panel at ~line 645. */}
 
       {/* R100 SETTINGS: tiny transient toast after save. */}
       {!!nameToast && (

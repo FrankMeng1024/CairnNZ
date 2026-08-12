@@ -107,6 +107,17 @@ export function HikingMap({
   // is broken. This state drives a "Loading map…" overlay that hides
   // itself as soon as the native side reports the map is fully rendered.
   const [mapFirstRender, setMapFirstRender] = useState(false);
+  // R114/O24 (2026-08-12) Hiking Loading Map fix: onDidFinishRenderingMapFully
+  // alone is unreliable — matches Memory v361 lesson (v357 telemetry showed
+  // that event never fires in a normal session). Add onDidFinishLoadingMap
+  // (fires when style + first tile batch ready = basemap visible) as the
+  // primary trigger, keep onDidFinishRenderingMapFully as backup, and add
+  // an 8s wall-clock fallback so the overlay never gets stuck permanently.
+  useEffect(() => {
+    if (mapFirstRender) return;
+    const t = setTimeout(() => setMapFirstRender(true), 8000);
+    return () => clearTimeout(t);
+  }, [mapFirstRender]);
   useEffect(() => {
     let cancelled = false;
     let unsub: (() => void) | undefined;
@@ -352,11 +363,15 @@ export function HikingMap({
             onUserGesture?.();
           }
         }}
-        // R114/O22 Bug 4: fires once when Mapbox has rendered all tiles in
-        // the current viewport at their native LOD. That's the earliest
-        // moment "there's a real map on screen". Prior code had no signal
-        // so the initial cream/white canvas could sit for many seconds on
-        // slow CDN with no user feedback.
+        // R114/O24 (2026-08-12): primary trigger — fires when style +
+        // first tile batch loaded (basemap visible). More reliable than
+        // onDidFinishRenderingMapFully across Mapbox SDK versions.
+        onDidFinishLoadingMap={() => {
+          if (!mapFirstRender) setMapFirstRender(true);
+        }}
+        // R114/O22 Bug 4: backup event — fires once when Mapbox has
+        // rendered all tiles in the current viewport at their native LOD.
+        // Kept as defensive fallback (some SDK builds only fire this one).
         onDidFinishRenderingMapFully={() => {
           if (!mapFirstRender) setMapFirstRender(true);
         }}

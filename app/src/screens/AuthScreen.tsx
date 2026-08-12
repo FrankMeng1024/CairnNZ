@@ -326,22 +326,34 @@ function PasswordInput({ value, onChangeText, placeholder, error, onBlur, isNew 
           autoCorrect={false}
           autoCapitalize="none"
           spellCheck={false}
+          // R114/O24 (2026-08-12) defense-in-depth: explicitly opt out of
+          // iOS behaviors that could wipe the buffer on refocus. These
+          // are the platform defaults but stating them documents intent
+          // and prevents future regressions if RN changes defaults.
+          clearTextOnFocus={false}
+          selectTextOnFocus={false}
           onFocus={() => setFocused(true)}
           onBlur={() => { setFocused(false); onBlur?.(); }}
         />
         {/* AUTH-1 (2026-08-11): X clear button — industry-standard affordance
             so the user can wipe the field in one tap when a password error
             makes them want a fresh start (instead of long-press-select-all).
-            Only visible when the field has content. Keeps focus so the
-            keyboard doesn't collapse. */}
-        {value.length > 0 && (
+            R114/O24 (2026-08-12) refinement: 4-eyes review flagged the
+            original hitSlop.left=8 caused iOS users to hit the X when
+            aiming at the right end of the input, then their next keystroke
+            replaced the (now-cleared) field with a single char. Fix:
+            (a) shrink hitSlop.left to 0 so X only accepts taps on itself;
+            (b) hide X while the field is focused (typing users don't need
+            it; they can backspace). Only visible when field has content
+            AND is blurred = user is clearly deciding to wipe. */}
+        {value.length > 0 && !focused && (
           <TouchableOpacity
             testID="btn-password-clear"
             style={formStyles.clearBtn}
             onPress={() => { onChangeText(''); inputRef.current?.focus(); }}
             accessibilityRole="button"
             accessibilityLabel="Clear password"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+            hitSlop={{ top: 8, bottom: 8, left: 0, right: 4 }}
           >
             <Icon name="X" size={IconSize.sm} color={Colors.textMuted} strokeWidth={2} />
           </TouchableOpacity>
@@ -672,6 +684,18 @@ export function AuthScreen() {
   const [verifyError, setVerifyError] = useState('');
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0); // seconds remaining
+  // R114/O24 (2026-08-12) Bug 3 fix: wall-clock deadline instead of a
+  // JS setInterval-driven decrement. setInterval/setTimeout are throttled
+  // (and often paused entirely) when the app goes to background on iOS,
+  // so a 60s countdown started before backgrounding could still show
+  // "45s left" 5 minutes later. Now we store an absolute epoch ms
+  // deadline; the ticker + AppState listener both recompute against
+  // Date.now() so wall-clock time is what counts, background or not.
+  const resendDeadlineRef = useRef<number>(0);
+  const startResendCooldown = React.useCallback((seconds: number) => {
+    resendDeadlineRef.current = Date.now() + seconds * 1000;
+    setResendCooldown(seconds);
+  }, []);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -967,7 +991,7 @@ export function AuthScreen() {
         setVerifyEmail(result.email || email.trim().toLowerCase());
         setVerifyCode_('');
         setVerifyError('');
-        setResendCooldown(60);
+        startResendCooldown(60);
         setView('verify');
         return;
       }
@@ -1216,12 +1240,33 @@ export function AuthScreen() {
     }
   };
 
-  // Resend cooldown countdown
+  // Resend cooldown countdown — R114/O24: wall-clock recompute + AppState
+  // resync so backgrounded time still counts down.
   useEffect(() => {
     if (resendCooldown <= 0) return;
-    const t = setTimeout(() => setResendCooldown(s => s - 1), 1000);
+    const t = setTimeout(() => {
+      const remaining = Math.max(
+        0,
+        Math.ceil((resendDeadlineRef.current - Date.now()) / 1000)
+      );
+      setResendCooldown(remaining);
+    }, 1000);
     return () => clearTimeout(t);
   }, [resendCooldown]);
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { AppState } = require('react-native');
+    const sub = AppState.addEventListener('change', (state: string) => {
+      if (state !== 'active') return;
+      if (resendDeadlineRef.current <= 0) return;
+      const remaining = Math.max(
+        0,
+        Math.ceil((resendDeadlineRef.current - Date.now()) / 1000)
+      );
+      setResendCooldown(remaining);
+    });
+    return () => sub.remove();
+  }, []);
 
   // R114/O22 (2026-08-10) Bug Y: auto-fill OTP from clipboard.
   // Typical flow: user gets email → opens mail app → long-presses code
@@ -1297,7 +1342,7 @@ export function AuthScreen() {
     setVerifyError('');
     const result = await resendCode(verifyEmail);
     if (result.error) { setVerifyError(result.error); return; }
-    setResendCooldown(60);
+    startResendCooldown(60);
   };
 
   // ── Splash ─────────────────────────────────────────────────────────────
@@ -1762,7 +1807,8 @@ export function AuthScreen() {
             onBlur={() => { if (!googleFlowActive.current && submitAttempted.current) setEmailError(validateEmail(email)); }}
             keyboardType="email-address"
             autoCapitalize="none"
-            autoFocus={!isRegister}
+            // R114/O24 (2026-08-12): autoFocus removed per user rule —
+            // no page auto-pops keyboard. User taps into the field.
             // R113 fix: 只在 Sign In 让 iOS autofill 已保存邮箱;
             // Create Account 时禁用 autofill 以避免 100% 干净新用户看到别人的旧邮箱.
             textContentType={isRegister ? 'none' : 'emailAddress'}
