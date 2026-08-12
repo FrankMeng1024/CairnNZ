@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: Colors.textMuted,
-    textTransform: 'uppercase',
+    
     letterSpacing: 1.2,
     marginTop: 24,
     marginBottom: 8,

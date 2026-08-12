@@ -2106,7 +2106,7 @@ const sheetStyles = StyleSheet.create({
     paddingHorizontal: Spacing.md, paddingVertical: 8,
   },
   typeBadgeText: { fontSize: FontSize.body, fontWeight: '700' },
-  noteLabel: { fontSize: FontSize.small, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8 },
+  noteLabel: { fontSize: FontSize.small, fontWeight: '700', color: Colors.textSecondary,  letterSpacing: 0.8 },
   noteText: { fontSize: FontSize.body, color: Colors.textPrimary, lineHeight: 22 },
   dateLine: { fontSize: FontSize.caption, color: Colors.textMuted },
   deleteBtn: {

@@ -606,7 +606,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textSecondary,
     fontWeight: '600',
-    textTransform: 'uppercase',
+    
     letterSpacing: 0.4,
   },
   snapshotBody: {

@@ -1807,7 +1807,7 @@ const styles = StyleSheet.create({
     width: 36, height: 4, borderRadius: 2,
     backgroundColor: Colors.border, alignSelf: 'center', marginBottom: Spacing.xs,
   },
-  routePickerTitle: { fontSize: FontSize.caption, fontWeight: '700', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 },
+  routePickerTitle: { fontSize: FontSize.caption, fontWeight: '700', color: Colors.textMuted,  letterSpacing: 0.8, marginBottom: 4 },
   routePickerRow: {
     backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: Radius.card,
     flexDirection: 'row', alignItems: 'center',

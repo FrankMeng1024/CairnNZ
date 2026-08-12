@@ -1573,8 +1573,11 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: Spacing.xxl },
 
   sectionHeader: {
-    fontSize: FontSize.small, fontWeight: '700', color: Colors.textMuted,
-    textTransform: 'uppercase', letterSpacing: 1,
+    // R114/O24 (2026-08-12): removed uppercase per user rule — every page's
+    // titles should be sentence case, not shouted caps. Bumped weight and
+    // color slightly so the header still reads as a header without caps.
+    fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary,
+    letterSpacing: 0.2,
     marginHorizontal: Spacing.base, marginTop: Spacing.xl, marginBottom: 4,
   },
 

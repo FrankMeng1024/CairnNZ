@@ -653,7 +653,7 @@ export function FriendsScreen() {
             {/* O18 FRI-out: outbound requests section — only when non-empty. */}
             {outboundRequests.length > 0 && (
               <View style={{ marginTop: Spacing.md }}>
-                <Text style={{ fontSize: FontSize.small, fontWeight: '700', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: Spacing.xs }}>
+                <Text style={{ fontSize: FontSize.small, fontWeight: '700', color: Colors.textMuted,  letterSpacing: 1, marginBottom: Spacing.xs }}>
                   Sent
                 </Text>
                 {outboundRequests.map((r) => (
@@ -824,7 +824,7 @@ const styles = StyleSheet.create({
   requestSummarySub: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
   sectionLabel: {
     fontSize: FontSize.small, fontWeight: '700', color: Colors.textMuted,
-    textTransform: 'uppercase', letterSpacing: 0.8,
+     letterSpacing: 0.8,
     paddingHorizontal: 4, paddingBottom: 4,
   },
   requestCard: {
