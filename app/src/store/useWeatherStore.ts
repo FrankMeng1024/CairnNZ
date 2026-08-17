@@ -12,6 +12,7 @@
  * Weather source: Open-Meteo (free, no API key, <300ms typical)
  */
 import { create } from 'zustand';
+import { storage } from './storage';
 
 // WMO Weather Interpretation Codes → simplified condition bucket
 // https://open-meteo.com/en/docs#weathervariables
@@ -82,8 +83,38 @@ interface WeatherState {
 }
 
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const WEATHER_STORAGE_KEY = 'cairn_weather_cache';
+
+// Async cache load — called once at app boot (App.tsx) before Home mounts.
+// Seeds the store with the last real condition so Home renders the correct
+// bg immediately instead of flashing from sunny → real on first fetch.
+export async function hydrateWeatherCache(): Promise<void> {
+  try {
+    const raw = await storage.getItem(WEATHER_STORAGE_KEY);
+    if (!raw) return;
+    const p = JSON.parse(raw);
+    if (p?.condition && typeof p.fetchedAt === 'number') {
+      // Only restore if cache is still fresh enough to be meaningful.
+      // Stale cache (>2h) = let fetch run fresh, keep sunny default.
+      const age = Date.now() - p.fetchedAt;
+      if (age < 2 * 60 * 60 * 1000) {
+        useWeatherStore.setState({
+          condition: p.condition,
+          temperature: p.temperature ?? null,
+          fetchedAt: p.fetchedAt,
+        });
+      }
+    }
+  } catch { /* silent */ }
+}
+
+function saveCachedWeather(condition: WeatherCondition, temperature: number | null, fetchedAt: number) {
+  storage.setItem(WEATHER_STORAGE_KEY, JSON.stringify({ condition, temperature, fetchedAt })).catch(() => {});
+}
 
 export const useWeatherStore = create<WeatherState>((set, get) => ({
+  // Starts at 'sunny' default; hydrateWeatherCache() in App.tsx patches this
+  // before Home first renders so no bg flash occurs on cold boot.
   condition: 'sunny',
   temperature: null,
   isDaytime: computeIsDaytime(),
@@ -121,13 +152,18 @@ export const useWeatherStore = create<WeatherState>((set, get) => ({
       const code: number = json?.current?.weathercode ?? 0;
       const temp: number | null = json?.current?.temperature_2m ?? null;
 
+      const newCondition = wmoToCondition(code);
+      const newTemp = temp != null ? Math.round(temp) : null;
+      const newFetchedAt = Date.now();
       set({
-        condition: wmoToCondition(code),
-        temperature: temp != null ? Math.round(temp) : null,
+        condition: newCondition,
+        temperature: newTemp,
         isDaytime: computeIsDaytime(),
-        fetchedAt: Date.now(),
+        fetchedAt: newFetchedAt,
         loading: false,
       });
+      // Persist so next cold boot reads real condition immediately.
+      saveCachedWeather(newCondition, newTemp, newFetchedAt);
     } catch {
       // Network error or timeout — keep existing condition, unblock loading.
       set({ loading: false, isDaytime: computeIsDaytime() });

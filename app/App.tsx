@@ -22,6 +22,7 @@ import { networkMonitor } from './src/services/networkMonitor';
 import { isPlaywrightBypass } from './src/utils/devFlags';
 import { crashLogger } from './src/services/crashLogger';
 import { OTA_VERSION } from './src/components/OtaBadge';
+import { hydrateWeatherCache } from './src/store/useWeatherStore';
 import { API_BASE_URL } from './src/config/api';
 // v300 DIAG: jetsam-resistant boot tracing. ANY heavy module above
 // this line that crashes will leave no trace — but the next cold
@@ -340,6 +341,9 @@ function AppRoot() {
       // eslint-disable-next-line no-console
       console.warn('[hydrateSettings failed sync]', err);
     }
+    // R21 fix (2026-08-17): load cached weather condition before Home mounts
+    // so the correct bg variant renders immediately — no sunny→real flash.
+    hydrateWeatherCache().catch(() => {});
     // v0.2.6 — hydrate Memory settings (foreground unlock + friend overlay
     // toggles) and Memory tile data (explored fog) for the current user.
     // Memory tile hydration deferred until after auth resolves so we know

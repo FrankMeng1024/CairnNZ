@@ -43,6 +43,7 @@ import { GlassPanel } from '../components/GlassPanel';
 // O1 batch 39: Google + makeRedirectUri + Prompt imports removed — 0 actual code references (Google OAuth deferred).
 import { crashLogger } from '../services/crashLogger';
 import { prewarmMapTiles } from '../services/mapboxPrewarm';
+import { OtaBadge } from '../components/OtaBadge';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -1663,6 +1664,11 @@ export function AuthScreen() {
                 so thumb sees it first; social auth methods rank by likelihood
                 (Google > Apple for NZ market). */}
             <View style={styles.splashActions}>
+              {/* OTA version badge — shows update group + auto-update trigger.
+                  Positioned above Continue with Email so it's easily reachable
+                  for confirming the running version. */}
+              <OtaBadge inline />
+
               {/* Continue with Email — deep green primary CTA.
                   R22 iter-9 (2026-08-17 user request): route to 'login'
                   (Sign In), not 'register'. Sign In is the default action
