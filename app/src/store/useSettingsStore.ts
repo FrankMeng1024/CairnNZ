@@ -26,6 +26,10 @@ export type DateFormatPref = 'dmy' | 'mdy' | 'ymd';
 // O18 MAP-01: user-selectable map layer (outdoors vs satellite).
 // Default 'outdoors' — matches existing getPrimaryMapStyle() behaviour.
 export type MapLayerPref = 'outdoors' | 'satellite';
+// R21 (2026-08-17): app-wide Light/Dark/Auto appearance mode. Auto follows
+// local time (day/night). Explicit Light or Dark overrides both time and
+// weather-adaptive Home tokens. Default 'auto'.
+export type AppearancePref = 'light' | 'dark' | 'auto';
 
 interface Settings {
   // Preferences
@@ -34,6 +38,21 @@ interface Settings {
   mapLayer: MapLayerPref;
   nightMode: boolean;
   hapticFeedback: boolean;
+  // R21 (2026-08-17): app-wide appearance. See AppearancePref type comment.
+  appearance: AppearancePref;
+
+  // Route following (added when Cairn gained turn-by-turn navigation).
+  // Naming: NOT `voiceBroadcasts` / `routeDeviation` — those are in REMOVED_KEYS
+  // above and would be stripped on hydrate. New names deliberately avoid the collision.
+  voiceGuidance: boolean;                // TTS turn-by-turn cues while following a route
+  offRouteThresholdM: number;            // deviation distance that triggers off-route banner + voice
+
+  // R21 (2026-08-17 user "在settings里添加一个 可以隐藏首页的探索百分比的设置
+  // 防止压力太大 默认开 用户可以选"): hide the "% of country" toggle icon on
+  // Home. Default true (feature visible). When false, Home only shows km² and
+  // hides the swap icon. Settings shows a demo when user turns OFF so they
+  // understand what they're hiding (first-time users have no data to see it).
+  showExplorationPercent: boolean;
 
   // Debug / Telemetry (real-device test)
   debugMode: boolean;                    // master switch — 5-tap on About Cairn to unlock
@@ -59,6 +78,10 @@ const DEFAULTS: Settings = {
   mapLayer: 'outdoors',  // default map style (topographic-ish)
   nightMode: false,
   hapticFeedback: true,
+  appearance: 'auto',    // R21 (2026-08-17): default follows local time
+  voiceGuidance: true,   // on by default — matches user expectation for a nav app
+  offRouteThresholdM: 50, // 50m — user-chosen "更宽松" band for GPS-noisy trails
+  showExplorationPercent: true, // R21 (2026-08-17): default on — visible on Home
   debugMode: false,
   debugAnnotationFabVisible: true,
   telemetryUploadEnabled: true,
@@ -147,13 +170,24 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         if (migrated.mapLayer !== 'outdoors' && migrated.mapLayer !== 'satellite') {
           delete migrated.mapLayer;
         }
+        if (migrated.appearance !== 'light' && migrated.appearance !== 'dark' && migrated.appearance !== 'auto') {
+          delete migrated.appearance;
+        }
         const boolFields = [
-          'nightMode', 'hapticFeedback', 'debugMode',
+          'nightMode', 'hapticFeedback', 'voiceGuidance', 'debugMode',
           'debugAnnotationFabVisible', 'telemetryUploadEnabled', 'telemetryWifiOnly',
+          'showExplorationPercent',
         ] as const;
         for (const k of boolFields) {
           if (k in migrated && typeof migrated[k] !== 'boolean') {
             delete migrated[k];
+          }
+        }
+        // offRouteThresholdM: number 0..500 (defensive band)
+        if ('offRouteThresholdM' in migrated) {
+          const v = migrated.offRouteThresholdM;
+          if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 500) {
+            delete migrated.offRouteThresholdM;
           }
         }
         const stringFields = ['telemetryBackendUrl', 'telemetryApiKey'] as const;
@@ -195,6 +229,10 @@ function pick(state: SettingsState): Settings {
     mapLayer: state.mapLayer,
     nightMode: state.nightMode,
     hapticFeedback: state.hapticFeedback,
+    appearance: state.appearance,
+    voiceGuidance: state.voiceGuidance,
+    offRouteThresholdM: state.offRouteThresholdM,
+    showExplorationPercent: state.showExplorationPercent,
     debugMode: state.debugMode,
     debugAnnotationFabVisible: state.debugAnnotationFabVisible,
     telemetryUploadEnabled: state.telemetryUploadEnabled,

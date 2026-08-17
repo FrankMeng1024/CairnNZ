@@ -99,10 +99,10 @@ export function RouteEditorScreen() {
   const [enterEditLoading, setEnterEditLoading] = useState(false);
   const [enterEditError, setEnterEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  // Sprint 69 STORY-00535: route visibility toggle. Default 'friend' per
-  // v4.U binding (social default). No 'public' option in v1 UI per §11;
-  // backend H1 also rejects (Sprint 67 STORY-00528).
-  const [permission, setPermission] = useState<'personal' | 'friend'>('friend');
+  // Sprint 69 STORY-00535: route visibility toggle. Original default 'friend'.
+  // 2026-08-16 concept: default changed to 'personal' ('Just me') per
+  // RouteEditor-1.png — safer/more private default per Playwright QA finding.
+  const [permission, setPermission] = useState<'personal' | 'friend'>('personal');
 
   const editIsOpen = useRouteEditStore(s => s.isOpen);
   const editRouteId = useRouteEditStore(s => s.routeId);
@@ -868,11 +868,25 @@ export function RouteEditorScreen() {
       </View>
 
       {/* Top floating BackButton — same in view-mode and edit-mode for
-          consistency with the rest of the app. */}
+          consistency with the rest of the app.
+          2026-08-16 T-C06: in edit mode, show "Edit Route" title + gear icon. */}
       <View style={[styles.topOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <View style={styles.topRow} pointerEvents="box-none">
-          <BackButton variant="pill" />
-          <View style={{ flex: 1 }} />
+          <BackButton variant="inline" />
+          {isEditing ? (
+            <>
+              <Text style={styles.topTitle}>Edit Route</Text>
+              <TouchableOpacity
+                style={styles.gearBtn}
+                onPress={() => { /* TODO route settings */ }}
+                activeOpacity={0.85}
+              >
+                <Icon name="Settings" size={20} color="#3E5F3A" strokeWidth={2} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={{ flex: 1 }} />
+          )}
         </View>
       </View>
 
@@ -1023,6 +1037,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.base,
+  },
+  // 2026-08-16 T-C06: Edit Route title + gear
+  topTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1E2A24',
+  },
+  gearBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(20,42,30,0.08)',
   },
 
   // Bottom: rounded white card panel

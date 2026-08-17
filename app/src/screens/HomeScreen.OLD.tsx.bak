@@ -1,0 +1,978 @@
+/**
+ * HomeScreen — R114/O26 concept-image redesign (2026-08-14)
+ *
+ * Rebuilt to match the Master Concept moodboard while strictly preserving
+ * existing product behaviour (per GPT concept doc rule):
+ *   - Hero band: mountain photo backdrop + "You've explored X of {country}"
+ *     adaptive exploration badge (see useExplorationStats).
+ *   - Last Hike card: shows last activity or a "Your first trail starts
+ *     here" empty state with a Start Hiking CTA.
+ *   - Activity cards: Hiking / Running / Leave a Cairn now HORIZONTAL 3-up.
+ *   - Tools row: Trails / Friends / Memory / Settings bottom tabs unchanged.
+ *
+ * NOT introduced by this pass (per GPT rules):
+ *   - No camera / no photo upload.
+ *   - No Nature tab.
+ *   - No cairn-tier gamification.
+ *   - No AI-generated fake landscape imagery.
+ *
+ * Asset placeholders (colored blocks) fill in for GPT-supplied PNG until
+ * A1/A3/A4/A5/A7 land in app/assets/ui-redesign/. Replacing them is a
+ * single `require()` swap per component.
+ */
+import React, { useRef, useState, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Platform, ActivityIndicator,
+  Image,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/RootNavigator';
+import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
+import { Icon, type IconName } from '../components/Icon';
+import { useSessionStore } from '../store/useSessionStore';
+import { useMarkerStore } from '../store/useMarkerStore';
+import { useTrackingStore } from '../store/useTrackingStore';
+import { useAppStore } from '../store/useAppStore';
+import { formatDuration, getRelativeTime } from '../utils/geo';
+import { useDistance } from '../utils/distanceFormat';
+import { OtaBadge } from '../components/OtaBadge';
+import { useExplorationStats } from '../hooks/useExplorationStats';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useWeatherStore } from '../store/useWeatherStore';
+import type { WeatherCondition } from '../store/useWeatherStore';
+
+// ── Weather hero image map ────────────────────────────────────────────────────
+// All conditions currently point to the same asset. Swap individual entries
+// once GPT-generated images arrive (one require() change per condition).
+const HERO_IMAGES: Record<WeatherCondition, any> = {
+  sunny:  require('../../assets/ui-redesign/home-hero.jpg'),
+  cloudy: require('../../assets/ui-redesign/home-hero.jpg'),
+  rain:   require('../../assets/ui-redesign/home-hero.jpg'),
+  snow:   require('../../assets/ui-redesign/home-hero.jpg'),
+  fog:    require('../../assets/ui-redesign/home-hero.jpg'),
+};
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+// O24: plural helper no longer used — stats chips (only consumer) moved to Settings.
+// const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+function getGreeting() {
+  const h = new Date().getHours();
+  // O12: uiMode removed — greeting no longer branches on Explorer/Navigator.
+  // PRD3 E-014: occasional Te Reo touch — Kia ora as morning variant
+  // (registered translator review pending — Kia ora is a well-established greeting)
+  if (h >= 5 && h < 12) return 'Good morning';
+  if (h >= 12 && h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+// ── Tool button ───────────────────────────────────────────────────────────────
+// R114/O26 v9: A6 tab icons restored from GPT V4 (MasterFaithful Vector) —
+// 512×512 pure RGBA line vectors, alpha_extrema [0,255], 0 non-black
+// visible pixels (verified in V4 ALPHA_QA.json). No paper contamination,
+// no crop residue. Safe to render with tintColor.
+const TAB_ICONS: Record<string, any> = {
+  Route: require('../../assets/ui-redesign/tab-trails.png'),
+  Users: require('../../assets/ui-redesign/tab-friends.png'),
+  Footprints: require('../../assets/ui-redesign/tab-memory.png'),
+  Cog: require('../../assets/ui-redesign/tab-settings.png'),
+};
+function ToolBtn({ iconName, label, onPress }: { iconName: IconName; label: string; onPress: () => void }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const src = TAB_ICONS[iconName as string];
+  return (
+    <Animated.View style={{ flex: 1, transform: [{ scale }] }}>
+      <TouchableOpacity
+        style={toolStyles.btn}
+        onPress={onPress}
+        activeOpacity={1}
+        onPressIn={() => Animated.spring(scale, { toValue: 0.93, useNativeDriver: true, tension: 300, friction: 10 }).start()}
+        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 8 }).start()}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+      >
+        <View style={toolStyles.iconWrap}>
+          {src ? (
+            <Image source={src} style={toolStyles.iconImage} resizeMode="contain" />
+          ) : (
+            <Icon name={iconName} size={24} color={Colors.textSecondary} strokeWidth={1.75} />
+          )}
+        </View>
+        <Text style={toolStyles.label} numberOfLines={1}>{label}</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+export function HomeScreen() {
+  // v302 boot diag: probe first thing in render — if app dies after
+  // navigation_container_ready but no home_screen_render_start, mount is dying
+  // in react-navigation transition, not user code.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('home_screen_render_start');
+  } catch {/* ignore */}
+
+  // R100 (2026-08-05): boot-ok snapshot upload — fires ONCE per app lifetime
+  // on the first Home render. Uploads recent breadcrumbs so we can validate
+  // the full auth → hydrate → Home flow completed without a crash, and
+  // confirm the currently-running bundle's BUILD_HASH matches what we pushed.
+  //
+  // Wrapped in try + fire-and-forget so nothing blocks Home mount. crashLogger
+  // internally debounces via global flag so re-renders don't re-fire.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { crashLogger } = require('../services/crashLogger');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { API_BASE_URL } = require('../config/api');
+    crashLogger.breadcrumb('home:render_reached — trigger boot_ok upload');
+    crashLogger.uploadBootSnapshot(API_BASE_URL, 'home_first_render').catch(() => {});
+  } catch { /* silent — best effort */ }
+  const nav = useNavigation<Nav>();
+  // O12: uiMode removed
+  const sessions = useSessionStore(s => s.sessions);
+  const allMarkers = useMarkerStore(s => s.markers);
+  // O18 SAF-06 (2026-07-29): filesystem pending-sync is the authoritative
+  // source for "hikes waiting to upload". Reading only useSessionStore
+  // missed the case where hydrate replaced the local pending row with the
+  // remote list (which never contains never-uploaded hikes), leaving the
+  // banner invisible even though pendingSyncStore had the payload on disk.
+  // Sprint 6 round-7 review R7B2: refetch on any syncState change, not
+  // just sessions.length. markSynced flips syncState in-place without
+  // adding/removing rows, so length-based deps kept the banner stuck at
+  // stale count after a successful drain.
+  const pendingCountSignal = sessions
+    .filter(s => s.syncState === 'pending' || s.syncState === 'syncing')
+    .map(s => s.id).join(',');
+  const [fsPendingCount, setFsPendingCount] = useState<number>(0);
+  // O21 HOME-SYNC-UX: banner tap now shows real progress + error feedback.
+  // syncing != null → "Syncing done/total..." + spinner (debounces re-taps).
+  // syncError !== null → red message auto-clears after 3s.
+  const [syncing, setSyncing] = useState<{ done: number; total: number } | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { listPending } = require('../services/pendingSyncStore');
+        const list = await listPending();
+        if (!cancelled) setFsPendingCount(Array.isArray(list) ? list.length : 0);
+      } catch {
+        if (!cancelled) setFsPendingCount(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pendingCountSignal]);
+  // v320: beacon after selectors read — confirms zustand subscriptions
+  // worked without throw. Heavy computation goes here (filter/sort/derive).
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('home_after_selectors', {
+      sessions_n: sessions.length,
+      markers_n: allMarkers.length,
+    });
+  } catch {/* ignore */}
+  // O24 HOME-SIMPLIFY: period toggle + stats strip removed from Home
+  // (moved to Settings › Your journey). Home stays clean: greeting →
+  // pending banner → recent → cards → tools.
+  // markerCount / region were only consumed by the removed stats chips.
+  const hasRecent = sessions.length > 0;
+
+  const opacity = useRef(new Animated.Value(1)).current;
+  const card1 = useRef(new Animated.Value(1)).current;
+  const card2 = useRef(new Animated.Value(1)).current;
+  const insets = useSafeAreaInsets();
+
+  // ── Weather-driven hero background with crossfade ─────────────────────────
+  // Two Image layers stacked: "back" (previous) fades out, "front" (current)
+  // fades in. This gives a smooth transition when the condition changes after
+  // a location override in Settings or when GPS resolves post-mount.
+  // NOTE: previous version returned a fresh { condition, loading } object
+  // per render — Zustand's default equality check saw a new reference every
+  // time and triggered infinite rerenders. Subscribe to each field on its
+  // own so Zustand can shallow-compare a primitive and short-circuit.
+  const weatherCondition = useWeatherStore(s => s.condition);
+  const weatherLoading = useWeatherStore(s => s.loading);
+  const [displayedCondition, setDisplayedCondition] = useState<WeatherCondition>(weatherCondition);
+  const [prevCondition, setPrevCondition] = useState<WeatherCondition>(weatherCondition);
+  const crossfadeAnim = useRef(new Animated.Value(1)).current; // 1 = front fully visible
+
+  useEffect(() => {
+    if (weatherCondition === displayedCondition) return;
+    // Swap: current front becomes back, new condition becomes front (at 0 opacity)
+    setPrevCondition(displayedCondition);
+    setDisplayedCondition(weatherCondition);
+    crossfadeAnim.setValue(0);
+    Animated.timing(crossfadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weatherCondition]);
+
+  // v354 fix: OTA-reload-first-signin tab-jump root cause.
+  // iOS doesn't guarantee window.safeAreaInsets is final at JS-init
+  // time after OTA reloadAsync. SafeAreaProvider's initialMetrics
+  // may seed insets.bottom = 0 → first frame paddingBottom is wrong
+  // → tabs visually clipped under home indicator → onInsetsChange
+  // fires one layout pass later → tabs visibly jump up.
+  //
+  // R114 (2026-08-07): user reported first-time Home also flickered
+  // "偏高" (0.5s of vertical offset before settling). Root cause: we
+  // only gated on insets.bottom, but the same JS-init race affects
+  // insets.top (status bar). If top comes in 0 → StatusBar-adjacent
+  // header starts flush with the notch → after one layout pass, top
+  // insets fires the correct ~50pt → header slides down, reads as
+  // "偏高 → 偏正" flicker. Fix: also require insets.top > 0 on iOS.
+  // On Android insets.top is guaranteed by StatusBar height at init.
+  const [insetsReady, setInsetsReady] = useState(
+    () => Platform.OS !== 'ios' || (insets.bottom > 0 && insets.top > 0),
+  );
+  useEffect(() => {
+    if (insetsReady) return;
+    if (insets.bottom > 0 && insets.top > 0) {
+      setInsetsReady(true);
+      return;
+    }
+    // Fallback: paint after 250ms even if insets still 0 (iPhone SE
+    // or other no-home-indicator devices where insets.bottom is
+    // legitimately 0).
+    const t = setTimeout(() => setInsetsReady(true), 250);
+    return () => clearTimeout(t);
+  }, [insets.bottom, insets.top, insetsReady]);
+
+  // v320: beacon right before JSX return — if app dies between selectors
+  // and JSX render, we'll see home_after_selectors but no home_before_jsx.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/bootDiagnostics').markBootPhase('home_before_jsx');
+  } catch {/* ignore */}
+
+  // v320: schedule alive heartbeats — if these fire, JS thread survived.
+  // If 500ms fires but 2000ms doesn't, we know death was between.
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../services/bootDiagnostics').markBootPhase('home_mounted_useEffect');
+    } catch {/* ignore */}
+    const t500 = setTimeout(() => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('home_alive_500ms');
+      } catch {/* ignore */}
+    }, 500);
+    const t2000 = setTimeout(() => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('home_alive_2000ms');
+      } catch {/* ignore */}
+    }, 2000);
+    const t5000 = setTimeout(() => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('home_alive_5000ms');
+      } catch {/* ignore */}
+    }, 5000);
+    return () => {
+      clearTimeout(t500);
+      clearTimeout(t2000);
+      clearTimeout(t5000);
+    };
+  }, []);
+
+  // v324: unified GPS permission request on Home mount.
+  // User feedback 2026-06-25: "我们的 hiking 也好 plant 也好 memory 也好
+  // 这几个都是需要位置和 GPS 这些的权限的 那我们是否应该在 homepage 去
+  // 做这个事情". Confirmed via AskUserQuestion: yes, Home unified request.
+  //
+  // Trade-off accepted: permission prompt appears once when user reaches
+  // Home (first time after login or fresh install). All downstream
+  // screens (Hiking/Plant/Memory) can then assume permission granted
+  // and skip the prompt + UI-already-rendered-before-prompt problem.
+  //
+  // Delay 800ms after mount so Home renders first; user has visual
+  // context before iOS permission dialog appears (better UX than
+  // dialog-on-blank-screen).
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        // Lazy-import expo-location to avoid pulling it into Home's
+        // initial render path.
+        const Location = await import('expo-location');
+        const existing = await Location.getForegroundPermissionsAsync();
+        if (existing.status !== 'granted' && existing.canAskAgain) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            require('../services/bootDiagnostics').markBootPhase('home_requesting_location_permission');
+          } catch {/* ignore */}
+          await Location.requestForegroundPermissionsAsync();
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            require('../services/bootDiagnostics').markBootPhase('home_location_permission_responded');
+          } catch {/* ignore */}
+        }
+      } catch {
+        // expo-location unavailable (web) — silent skip.
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // v354: defer first paint until insets are ready (or 250ms timeout).
+  // Prevents the OTA-reload-first-signin tab-jump bug where iOS hasn't
+  // yet provided real safeAreaInsets to JS at the moment HomeScreen
+  // mounts. With insetsReady gate, when we DO render we already have
+  // correct paddingBottom and tabs are positioned right on the first
+  // pixel the user sees.
+  // O2 flicker fix: return null (not a white View) so the underlying
+  // OnboardingModal slide-out completes without a white flash. The
+  // 250ms timeout logic is preserved for the tab-jump fix.
+  if (!insetsReady) {
+    return null;
+  }
+
+  return (
+    // R114/O26 v5 TWO-ZONE per concept moodboard:
+    //   TOP zone   (photo)  : mountain hero photo + greeting + YOUR WORLD badge (light text on photo)
+    //   BOTTOM zone (cream) : 3 action cards + Last Hike card + tab bar (dark text on cream #faf7f2)
+    // The seam is a rounded top-radius on the cream panel that overlaps
+    // the photo, giving the classic "paper card lifted off a landscape"
+    // feel from the moodboard.
+    <View style={styles.safe}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      {/* ── Layer 1: full-screen hero photo with crossfade ──────────── */}
+      {/* Two Image layers: back (previous condition) + front (current, animates in).
+          Both absoluteFill so they stack. When condition changes, front fades from
+          0→1 over 600ms — smooth, no jarring cut. */}
+      <View style={styles.heroZone}>
+        {/* Back layer — previous condition, stays at full opacity */}
+        <Image
+          source={HERO_IMAGES[prevCondition]}
+          style={styles.heroFullBg}
+          resizeMode="cover"
+        />
+        {/* Front layer — current condition, animates in */}
+        <Animated.Image
+          source={HERO_IMAGES[displayedCondition]}
+          style={[styles.heroFullBg, { opacity: crossfadeAnim }]}
+          resizeMode="cover"
+        />
+        <View style={styles.heroScrim} pointerEvents="none" />
+      </View>
+
+      {/* ── Layer 2: content flexbox on top of photo ──────────────── */}
+      <SafeAreaView style={styles.flexOverlay} edges={['top', 'bottom']}>
+        <OtaBadge />
+        <View style={styles.heroInner}>
+          <HeroGreeting />
+          <ExplorationHero />
+        </View>
+        {/* Spacer pushes 3 action + Last Hike + tab down. Concept moodboard
+            does not include a floating share FAB on the Home screen — user
+            explicitly asked to remove the white circle that was sitting on
+            top-right of the Leave a Cairn card. */}
+        <View style={styles.heroSpacer} />
+
+        <View style={styles.creamPanel}>
+          <Animated.View style={[styles.creamInner, { opacity }]}>
+            {/* pending banner (rare) */}
+            {(() => {
+              const inMemoryPending = sessions.filter((s: any) => {
+                const isPending = s.syncState === 'pending' || s.syncState === 'syncing';
+                if (!isPending) return false;
+                const hasContent = (s.distanceM ?? 0) > 0 || (s.durationS ?? 0) > 0;
+                return hasContent;
+              }).length;
+              const pendingCount = Math.max(inMemoryPending, fsPendingCount);
+              if (pendingCount === 0 && !syncing && !syncError) return null;
+              const handleSyncTap = async () => {
+                if (syncing) return;
+                setSyncError(null);
+                setSyncing({ done: 0, total: pendingCount });
+                try {
+                  // eslint-disable-next-line @typescript-eslint/no-require-imports
+                  const { drainPending } = require('../services/syncDaemon');
+                  const result = await drainPending({
+                    onProgress: (done: number, total: number) => setSyncing({ done, total }),
+                  });
+                  try {
+                    // eslint-disable-next-line @typescript-eslint/no-require-imports
+                    const { listPending } = require('../services/pendingSyncStore');
+                    const list = await listPending();
+                    setFsPendingCount(Array.isArray(list) ? list.length : 0);
+                  } catch { /* silent */ }
+                  if (result && result.failed > 0) {
+                    setSyncError(`${result.failed} failed — check connection`);
+                    setTimeout(() => setSyncError(null), 3000);
+                  } else if (result && result.skipped > 0 && result.succeeded === 0) {
+                    setSyncError(
+                      result.skipped === 1
+                        ? '1 hike belongs to another account'
+                        : `${result.skipped} hikes belong to another account`,
+                    );
+                    setTimeout(() => setSyncError(null), 3000);
+                  }
+                } catch (e) {
+                  console.warn('[HOME-SYNC-UX] manual sync trigger failed:', e);
+                  setSyncError('Sync failed');
+                  setTimeout(() => setSyncError(null), 3000);
+                } finally {
+                  setSyncing(null);
+                }
+              };
+              const label = syncing
+                ? `Syncing ${syncing.done}/${syncing.total}...`
+                : syncError
+                  ? `Sync failed — ${syncError}`
+                  : pendingCount === 1
+                    ? '1 hike pending sync — tap to retry now'
+                    : `${pendingCount} hikes pending sync — tap to retry now`;
+              return (
+                <TouchableOpacity
+                  style={styles.pendingBanner}
+                  onPress={handleSyncTap}
+                  disabled={!!syncing}
+                  activeOpacity={0.7}
+                >
+                  {syncing ? (
+                    <ActivityIndicator size="small" color={Colors.textSecondary} />
+                  ) : (
+                    <Icon name="CloudOff" size={14} color={Colors.textSecondary} strokeWidth={2} />
+                  )}
+                  <Text style={styles.pendingBannerText}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })()}
+
+            {/* 3 action cards */}
+            <View style={styles.actionRow}>
+              <ActionCard label="Hiking" iconName="hiking" onPress={() => nav.navigate('Hiking')} />
+              <ActionCard label="Running" iconName="running" onPress={() => nav.navigate('Running')} />
+              <ActionCard
+                label="Leave a Cairn"
+                iconName="cairn"
+                onPress={() => {
+                  import('../services/appLog').then(({ log }) => log('home.tap_plant'));
+                  nav.navigate('Plant');
+                }}
+              />
+            </View>
+
+            {/* Last Hike card */}
+            <LastHikeCard
+              onOpenHike={(id) => nav.navigate('MapHistory', { sessionId: id })}
+              onStartHiking={() => nav.navigate('Hiking')}
+            />
+
+            <View style={{ flex: 1 }} />
+
+            {/* Tab bar */}
+            <View style={styles.toolsRow}>
+              <ToolBtn iconName="Route" label="Trails" onPress={() => nav.navigate('Routes')} />
+              <ToolBtn iconName="Users" label="Friends" onPress={() => nav.navigate('Friends')} />
+              <ToolBtn iconName="Footprints" label="Memory" onPress={() => nav.navigate('Memory')} />
+              <ToolBtn iconName="Cog" label="Settings" onPress={() => nav.navigate('Settings')} />
+            </View>
+          </Animated.View>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+// ── Greeting: "kia ora, {name}" + avatar circle ─────────────────────────
+function HeroGreeting() {
+  const user = useAppStore(s => s.user);
+  const firstName = (user?.name || 'Explorer').split(' ')[0];
+  const initial = firstName.charAt(0).toUpperCase() || 'E';
+  return (
+    <View style={greetStyles.row}>
+      <View style={greetStyles.textCol}>
+        <Text style={greetStyles.eyebrow}>kia ora,</Text>
+        <Text style={greetStyles.name}>{firstName}</Text>
+      </View>
+      <View style={greetStyles.avatar}>
+        <Text style={greetStyles.avatarText}>{initial}</Text>
+      </View>
+    </View>
+  );
+}
+// ── Hero: exploration badge over hero image ─────────────────────────────
+function ExplorationHero() {
+  const stats = useExplorationStats();
+
+  const subtitle = 'Keep going. There are more stories out there.';
+
+  // R114/O26 v7: NZ-first launch — fallback country is 'New Zealand', not
+  // the abstract 'world'. When GPS resolves a real country (e.g. China,
+  // Japan) that wins; otherwise assume the user is in the target market.
+  const country = stats.hasCountry && stats.countryName ? stats.countryName : 'New Zealand';
+  const line = `You've explored ${stats.primaryText} of ${country}`;
+
+  return (
+    <View style={heroStyles.wrap}>
+      <Text style={heroStyles.eyebrow}>YOUR WORLD</Text>
+      <Text style={heroStyles.line} numberOfLines={2}>{line}</Text>
+      <Text style={heroStyles.subtitle} numberOfLines={2}>{subtitle}</Text>
+    </View>
+  );
+}
+
+// ── Last Hike / Empty state ─────────────────────────────────────────────
+// One card shell, two content states. The transparent decorative PNG sits
+// on the right; text lives on the left. When data exists we show the last
+// activity's name + stats; when the user is fresh we show the encouragement
+// copy + Start button. This keeps the visual weight identical between an
+// empty account and a returning user (concept moodboard rule: one card,
+// two moods) and lets us swap the decoration image once without rewriting
+// the layout. Future: user-supplied cover photo drops into the same slot.
+function LastHikeCard({ onOpenHike, onStartHiking }: {
+  onOpenHike: (id: string) => void;
+  onStartHiking: () => void;
+}) {
+  const sessions = useSessionStore(s => s.sessions);
+  const dist = useDistance();
+
+  const validSessions = sessions.filter((s) =>
+    (s.distanceM > 0 || s.durationS > 0) && s.startedAt
+      && s.syncState !== 'pending' && s.syncState !== 'syncing'
+  );
+  const hasData = validSessions.length > 0;
+  const last = hasData
+    ? validSessions.reduce((best, s) => s.startedAt > best.startedAt ? s : best)
+    : null;
+  const isRun = last?.activityMode === 'running';
+  const distText = last && last.distanceM > 10
+    ? `${dist.format(last.distanceM, 1)} ${dist.unit}`
+    : last ? formatDuration(last.durationS) : '';
+  const when = last ? getRelativeTime(last.startedAt) : '';
+
+  const body = (
+    <>
+      <View style={lastHikeStyles.textCol}>
+        {hasData ? (
+          <>
+            <Text style={lastHikeStyles.eyebrow}>LAST {isRun ? 'RUN' : 'HIKE'}</Text>
+            <Text style={lastHikeStyles.title} numberOfLines={1}>
+              {last!.name || (isRun ? 'Recent run' : 'Recent hike')}
+            </Text>
+            <Text style={lastHikeStyles.meta} numberOfLines={1}>
+              {distText} · {formatDuration(last!.durationS)} · {when}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={lastHikeStyles.title}>Your first trail starts here</Text>
+            <Text style={lastHikeStyles.emptySub}>Head outside and begin unraveling your world.</Text>
+            <TouchableOpacity
+              style={lastHikeStyles.startBtn}
+              onPress={onStartHiking}
+              accessibilityRole="button"
+              accessibilityLabel="Start hiking"
+            >
+              <Text style={lastHikeStyles.startBtnText}>Start your first hike →</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+      {/* Shared decorative image slot. Transparent PNG. Same asset in both
+          states so the card visual weight is constant. Moss-covered rock +
+          fern from the concept moodboard top-right — matches the "still
+          landscape" mood better than the small cairn icon. */}
+      <Image
+        source={require('../../assets/ui-redesign/empty-state-rock.png')}
+        style={lastHikeStyles.decor}
+        resizeMode="contain"
+        accessibilityIgnoresInvertColors
+      />
+    </>
+  );
+
+  if (hasData) {
+    return (
+      <TouchableOpacity
+        style={lastHikeStyles.card}
+        onPress={() => onOpenHike(last!.id)}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={`Open last ${isRun ? 'run' : 'hike'}`}
+      >
+        {body}
+      </TouchableOpacity>
+    );
+  }
+  return <View style={lastHikeStyles.card}>{body}</View>;
+}
+
+// ── Compact horizontal action card ──────────────────────────────────────
+function ActionCard({ label, iconName, onPress }: {
+  label: string;
+  iconName: 'hiking' | 'running' | 'cairn';
+  onPress: () => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  return (
+    <Animated.View style={{ flex: 1, transform: [{ scale }] }}>
+      <TouchableOpacity
+        activeOpacity={1}
+        style={actionStyles.card}
+        onPress={onPress}
+        onPressIn={() => Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, tension: 200, friction: 10 }).start()}
+        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 8 }).start()}
+        accessibilityRole="button"
+        accessibilityLabel={label.replace('\n', ' ')}
+      >
+        {/* Icon sits directly on the card surface — concept moodboard has no
+            colored circle behind the icon. Any container was over-engineering. */}
+        {iconName === 'hiking' && (
+          <Image
+            source={require('../../assets/ui-redesign/action-hiking.png')}
+            style={actionStyles.iconImage}
+            resizeMode="contain"
+          />
+        )}
+        {iconName === 'running' && (
+          <Image
+            source={require('../../assets/ui-redesign/action-running.png')}
+            style={actionStyles.iconImage}
+            resizeMode="contain"
+          />
+        )}
+        {iconName === 'cairn' && (
+          <Image
+            source={require('../../assets/ui-redesign/action-cairn.png')}
+            style={actionStyles.iconImage}
+            resizeMode="contain"
+          />
+        )}
+        <Text style={actionStyles.label} numberOfLines={2}>{label}</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+const heroStyles = StyleSheet.create({
+  // Sampled + scaled from concept: title font ~30 concept → 27 real.
+  // YOUR WORLD eyebrow ~10 concept → 11 real.
+  wrap: {
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.md,
+  },
+  eyebrow: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1.8,
+    marginBottom: 8,
+  },
+  line: {
+    color: '#ffffff',
+    fontSize: 27,
+    fontWeight: '800',
+    lineHeight: 32,
+    marginBottom: 10,
+    letterSpacing: -0.5,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
+  subtitle: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13,
+    lineHeight: 18,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+});
+
+// R114/O26 v4: greeting is over the hero photo; small lowercase eyebrow
+// "kia ora," + large first-name + circular avatar on the right.
+const greetStyles = StyleSheet.create({
+  // Sampled + scaled from concept: greeting starts at y ~85 (10.5% of 812);
+  // name font ~ 17px (concept 15 * 1.07 y-scale).
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Spacing.xs,
+  },
+  textCol: { flexShrink: 1 },
+  eyebrow: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: 2,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  name: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#ffffff',
+    letterSpacing: -0.3,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
+  avatar: {
+    // Concept avatar diameter ~35 * 1.29 scale = 45.
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    backgroundColor: 'rgba(90,80,68,0.6)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: '#ffffff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+});
+
+const lastHikeStyles = StyleSheet.create({
+  // Single card shell for both data and empty state. Same paint, same
+  // border, same padding — only the text inside changes. Keeps visual
+  // weight identical between "fresh install" and "1000 hikes logged".
+  card: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: Spacing.sm,
+    // Concept-sampled median from 12 grid points: #ccc4b2 (Last Hike card
+    // interior has slight top-left brighter gradient but the tone the eye
+    // reads is the mid-tone).
+    backgroundColor: '#ccc4b2',
+    borderRadius: 12,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    // Concept-scaled: card height ~180 (concept 180 * 1.07 y-scale = 192).
+    minHeight: 180,
+  },
+  textCol: { flex: 1, gap: 2 },
+  eyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  title: { fontSize: FontSize.body, fontWeight: '700', color: Colors.textPrimary },
+  meta: {
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  emptySub: {
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  startBtn: {
+    // Concept moodboard empty state has no oversized pill button — a
+    // small subtle text link is enough. Kept as TouchableOpacity for tap
+    // area but styled flat.
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 0,
+    paddingVertical: 2,
+  },
+  startBtnText: {
+    color: Colors.primary,
+    fontSize: FontSize.small,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+    textDecorationColor: 'rgba(93,124,70,0.4)',
+  },
+  // Decor image runs full height of card, fixed square-ish footprint.
+  // Concept: rock takes right ~40% of card and hits top+bottom edges.
+  decor: {
+    width: 130,
+    height: '100%',
+    flexShrink: 0,
+  },
+});
+
+const actionStyles = StyleSheet.create({
+  card: {
+    // Concept moodboard verification (Aug 15): sampling 3 action cards at
+    // same y showed different RGB — so cards ARE translucent, letting the
+    // hero mountain photo bleed through. Solid #dcdcd6 was wrong.
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderRadius: 12,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 128,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  iconImage: {
+    // Concept icon ~40 * 1.29 = ~52. Slightly under to leave breathing.
+    width: 48, height: 48,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+});
+
+const styles = StyleSheet.create({
+  // R114/O26 v5 two-zone layout:
+  //   heroZone  → top ~55% of screen, mountain photo + light UI
+  //   creamPanel → bottom ~45%, warm off-white with rounded top edge
+  //                that overlaps the photo (paper-lifted-off-landscape)
+  safe: { flex: 1, backgroundColor: '#000' },
+
+  heroZone: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroFullBg: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  heroScrim: {
+    // Removed the darkening overlay entirely. Asset is already brighter
+    // than the concept moodboard (68% vs 47% luminance at top band).
+    // Text still has textShadow so contrast is preserved.
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+  },
+  // heroSpacer takes up the remaining vertical space between hero band and
+  // cream panel. FAB sits at its bottom-right so it always tucks just above
+  // the paper edge, regardless of screen height.
+  heroSpacer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    paddingHorizontal: Spacing.base,
+    paddingBottom: Spacing.sm,
+  },
+  shareFab: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  // v9: layer 2 content sits above the photo via SafeArea + flex.
+  flexOverlay: {
+    flex: 1,
+  },
+  heroInner: {
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.sm,
+    gap: Spacing.md,
+  },
+  creamPanel: {
+    // Concept moodboard: panel bg is a warm gray-tan (#d3ccc0), NOT
+    // transparent and NOT the earlier cool gray-green. Cards sit inside
+    // with visible edge padding so this color reads through and defines
+    // the "paper card" separation.
+    backgroundColor: '#bfb9ab',
+    borderTopLeftRadius: Radius.card,
+    borderTopRightRadius: Radius.card,
+    paddingBottom: Spacing.xs,
+  },
+  creamInner: {
+    paddingHorizontal: Spacing.base,
+    paddingBottom: Spacing.xs,
+    gap: Spacing.md,
+  },
+
+  // legacy — retained but no longer applied in JSX
+  screen: { flex: 1 },
+
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    backgroundColor: Colors.surfaceMuted ?? '#F5F0E5',
+    borderRadius: Radius.chip,
+    marginBottom: Spacing.xs,
+  },
+  pendingBannerText: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.caption,
+    flex: 1,
+  },
+
+  cardsArea: { flex: 1, gap: Spacing.sm },
+
+  actionRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+
+  toolsRow: {
+    flexDirection: 'row',
+    gap: 0,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+    paddingHorizontal: Spacing.xs,
+    marginTop: Spacing.sm,
+    marginHorizontal: -Spacing.base,
+    marginBottom: -Spacing.xs,
+    // Concept-scaled: tab bar ~80 tall (concept y=680-760 * 1.07 = 85).
+    minHeight: 85,
+    backgroundColor: '#181b19',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+});
+
+
+
+
+const toolStyles = StyleSheet.create({
+  // Concept moodboard: tab bar is a dark near-black strip, so icons and
+  // labels must be light for contrast. Sampled label pixels from concept:
+  // #efece3 warm off-white.
+  btn: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.xs,
+    gap: 4,
+    minHeight: 52,
+  },
+  iconWrap: {
+    width: 32, height: 32,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  iconImage: {
+    width: 26, height: 26,
+    tintColor: '#efece3',
+  },
+  label: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#efece3',
+  },
+});

@@ -4,7 +4,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, Alert, TextInput,
-  KeyboardAvoidingView, Platform, Animated, Easing,
+  KeyboardAvoidingView, Platform, Animated, Easing, Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -32,6 +32,7 @@ import { MARKER_META, type MarkerType } from '../data/mockData';
 // R114 (2026-08-07): canonical MarkCard import (post-Metro-restart).
 import { MarkCard } from '../features/marks/components/MarkCard';
 import { EmptyRoutes, EmptyMarkers, IllustrationHalo } from '../components/Illustrations';
+import { useAppearance } from '../hooks/useAppearance';
 
 // ── Mapbox conditional import (for RouteSheet preview) ────────────────────
 // Native-only — on web fallback to a static placeholder.
@@ -161,10 +162,32 @@ const scopeStyles = StyleSheet.create({
 });
 
 // ── Empty State ──────────────────────────────────────────────────────────────
-function EmptyState({ icon, title, hint, illustration }: { icon: IconName; title: string; hint: string; illustration?: React.ReactNode }) {
+// Concept-aligned (sleep-run-2026-08-15 Routes-1-activities-empty.png):
+// a large hero illustration sits above bold title + muted sub-text. When an
+// image asset is provided, the halo/svg fallback is skipped.
+function EmptyState({
+  icon,
+  title,
+  hint,
+  illustration,
+  heroImage,
+}: {
+  icon: IconName;
+  title: string;
+  hint: string;
+  illustration?: React.ReactNode;
+  heroImage?: any;
+}) {
   return (
     <View style={styles.empty}>
-      {illustration ? (
+      {heroImage ? (
+        <Image
+          source={heroImage}
+          style={styles.emptyHeroImage}
+          resizeMode="contain"
+          accessible={false}
+        />
+      ) : illustration ? (
         <View style={{ marginBottom: Spacing.md }}>{illustration}</View>
       ) : (
         <View style={styles.emptyIconWrap}>
@@ -182,6 +205,12 @@ function EmptyState({ icon, title, hint, illustration }: { icon: IconName; title
 // a sort-direction chip on the right. Each tab passes its own filters
 // and sort options. Pure UI — no data shaping happens here, just
 // state callbacks.
+//
+// Concept-aligned (sleep-run-2026-08-15 trails-scan row-01/row-02):
+//   Chips appear as: [All (green filled)] [🚶 Hiking] [🏃 Running] [Recent ▼]
+//   - "All" chip when active: solid primary-green fill, white label.
+//   - Hiking / Running chips: neutral outline pill, optional inline icon.
+//   - Sort chip: neutral outline pill on the right, chevron-down glyph.
 function FilterSortBar<F extends string, S extends string>({
   filters,
   filterValue,
@@ -190,7 +219,7 @@ function FilterSortBar<F extends string, S extends string>({
   sortValue,
   onSortChange,
 }: {
-  filters: { id: F; label: string }[];
+  filters: { id: F; label: string; renderIcon?: (color: string) => React.ReactNode }[];
   filterValue: F;
   onFilterChange: (id: F) => void;
   sorts: { id: S; label: string }[];
@@ -204,18 +233,48 @@ function FilterSortBar<F extends string, S extends string>({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={filterBarStyles.filtersScroll}
       >
-        {filters.map(f => (
-          <TouchableOpacity
-            key={f.id}
-            style={[filterBarStyles.chip, filterValue === f.id && filterBarStyles.chipActive]}
-            onPress={() => onFilterChange(f.id)}
-            activeOpacity={0.7}
-          >
-            <Text style={[filterBarStyles.chipText, filterValue === f.id && filterBarStyles.chipTextActive]}>
-              {f.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {filters.map(f => {
+          const isActive = filterValue === f.id;
+          // The "All" chip uses a solid primary fill when active to match
+          // the concept (row-01 first chip). Other chips use the softer
+          // primaryBg tint when active.
+          const isAllChip = f.id === ('all' as F);
+          const chipStyle = [
+            filterBarStyles.chip,
+            isActive && (isAllChip ? filterBarStyles.chipActiveSolid : filterBarStyles.chipActive),
+          ];
+          const textColor = isActive
+            ? isAllChip
+              ? '#fff'
+              : Colors.primary
+            : Colors.textSecondary;
+          const iconColor = isActive
+            ? isAllChip
+              ? '#fff'
+              : Colors.primary
+            : Colors.textSecondary;
+          return (
+            <TouchableOpacity
+              key={f.id}
+              style={chipStyle}
+              onPress={() => onFilterChange(f.id)}
+              activeOpacity={0.7}
+            >
+              {f.renderIcon ? (
+                <View style={filterBarStyles.chipIconWrap}>{f.renderIcon(iconColor)}</View>
+              ) : null}
+              <Text
+                style={[
+                  filterBarStyles.chipText,
+                  isActive && filterBarStyles.chipTextActive,
+                  { color: textColor },
+                ]}
+              >
+                {f.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
       <TouchableOpacity
         style={filterBarStyles.sortChip}
@@ -227,8 +286,8 @@ function FilterSortBar<F extends string, S extends string>({
         }}
         activeOpacity={0.7}
       >
-        <Icon name="ArrowUpDown" size={12} color={Colors.primary} strokeWidth={2} />
         <Text style={filterBarStyles.sortText}>{sorts.find(s => s.id === sortValue)?.label}</Text>
+        <Icon name="ChevronDown" size={12} color={Colors.textSecondary} strokeWidth={2} />
       </TouchableOpacity>
     </View>
   );
@@ -600,14 +659,15 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
           filter (用户 v375 反馈: filter 不应该在没有数据时出现)。 */}
       {scope === 'mine' && routes.length === 0 ? (
         <View style={styles.emptyHero}>
+          {/* Concept-aligned circle icon: soft neutral fill, thin route glyph */}
           <View style={styles.emptyHeroIcon}>
-            <Icon name="Route" size={40} color={Colors.primary} strokeWidth={1.5} />
+            <Icon name="Route" size={32} color={Colors.primary} strokeWidth={1.8} />
           </View>
           <Text style={styles.emptyHeroTitle}>No saved routes yet</Text>
           <Text style={styles.emptyHeroBody}>
             Routes are paths you've already walked.{'\n'}
             Open an Activity, tap{' '}
-            <Text style={{ fontWeight: '700', color: Colors.primary }}>Save as Route</Text>
+            <Text style={styles.emptyHeroBodyStrong}>Save as Route</Text>
             , and it'll show up here.
           </Text>
           <TouchableOpacity
@@ -627,13 +687,16 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
       ) : null}
       {scope === 'friends' && hasFetchedFriends && circleRoutes.length === 0 ? (
         <View style={styles.emptyHero}>
-          <View style={styles.emptyHeroIcon}>
-            <Icon name="Route" size={40} color={Colors.primary} strokeWidth={1.5} />
-          </View>
-          <Text style={styles.emptyHeroTitle}>No routes from your friends yet</Text>
+          {/* 2026-08-16 T-C01: mountain-hero watercolor per concept row-03 col 4 */}
+          <Image
+            source={require('../../assets/routes/mountain-hero.png')}
+            style={styles.emptyHeroImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.emptyHeroTitle}>No routes from friends yet</Text>
           <Text style={styles.emptyHeroBody}>
-            Routes your friends share at Friend tier{'\n'}
-            will show up here.
+            When your friends share routes,{'\n'}
+            they'll appear here.
           </Text>
         </View>
       ) : null}
@@ -657,8 +720,16 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
       <FilterSortBar
         filters={[
           { id: 'all', label: 'All' },
-          { id: 'hiking', label: 'Hiking' },
-          { id: 'running', label: 'Running' },
+          {
+            id: 'hiking',
+            label: 'Hiking',
+            renderIcon: (color) => <HikingIcon size={14} color={color} />,
+          },
+          {
+            id: 'running',
+            label: 'Running',
+            renderIcon: (color) => <RunningIcon size={14} color={color} />,
+          },
         ]}
         filterValue={filter}
         onFilterChange={setFilter}
@@ -673,7 +744,7 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
       <FlatList
         data={visible}
         keyExtractor={r => r.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={styles.routeListContent}
         /* v124 fix #8: search field removed — typical route counts are
            low enough that filter chips + sort are sufficient. New Route
            button is also gone (per route-rules.md §2.3 manual drawing
@@ -689,17 +760,23 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
         }
         renderItem={({ item }) => (
           <PressBtn
-            style={styles.card}
-            onPress={() => nav.navigate('RouteEditor', { routeId: item.id })}
+            style={styles.routeRow}
+            onPress={() => nav.navigate('MapHistory', { routeId: item.id })}
             onLongPress={() => setSelectedRoute(item)}
             scaleTo={0.97}
           >
-            <LinearGradient colors={[Colors.primaryLight, Colors.primaryDeep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardBadge}>
-              <Icon name="Route" size={18} color={Colors.primary} strokeWidth={1.8} />
-            </LinearGradient>
+            {/* Concept crops/03-routes-mine.png: soft-fill circle with deep-green
+                route glyph — replaced the cairn-stack raster which mismatched
+                the reference. */}
+            <View style={styles.routeIconWrap}>
+              <Icon name="Route" size={18} color={Colors.primary} strokeWidth={2} />
+            </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.cardMeta}>{dist.format(item.distanceM, 1)} {dist.unit} · {item.waypoints.length} waypoints</Text>
+              <Text style={styles.routeTitle} numberOfLines={1}>{item.name}</Text>
+              <Text style={styles.routeMeta} numberOfLines={1}>
+                {dist.format(item.distanceM, 1)} {dist.unit}
+                {item.elevationGainM ? ` · +${dist.formatElevation(item.elevationGainM)}${dist.elevUnit}` : ''}
+              </Text>
             </View>
             <Icon name="ChevronRight" size={16} color={Colors.textMuted} strokeWidth={2} />
           </PressBtn>
@@ -746,7 +823,14 @@ function ActivitiesTab() {
   }, [sessions, filter, sort]);
 
   if (sessions.length === 0) {
-    return <EmptyState icon="Map" title="No tracks walked yet" hint="Start hiking or running. Your tracks will live here." illustration={<IllustrationHalo><EmptyRoutes size={192} /></IllustrationHalo>} />;
+    return (
+      <EmptyState
+        icon="Map"
+        title="No tracks walked yet"
+        hint="Start hiking or running. Your tracks will live here."
+        heroImage={require('../../assets/routes/mountain-hero.png')}
+      />
+    );
   }
 
   return (
@@ -754,8 +838,16 @@ function ActivitiesTab() {
       <FilterSortBar
         filters={[
           { id: 'all', label: 'All' },
-          { id: 'hiking', label: 'Hiking' },
-          { id: 'running', label: 'Running' },
+          {
+            id: 'hiking',
+            label: 'Hiking',
+            renderIcon: (color) => <HikingIcon size={14} color={color} />,
+          },
+          {
+            id: 'running',
+            label: 'Running',
+            renderIcon: (color) => <RunningIcon size={14} color={color} />,
+          },
         ]}
         filterValue={filter}
         onFilterChange={setFilter}
@@ -770,7 +862,7 @@ function ActivitiesTab() {
       <FlatList
         data={visible}
         keyExtractor={s => s.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={styles.activityListContent}
         ListEmptyComponent={
           <View style={{ alignItems: 'center', paddingTop: 40 }}>
             <Text style={styles.emptyHint}>No activities match this filter.</Text>
@@ -784,26 +876,25 @@ function ActivitiesTab() {
           const dateStr = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
           return (
             <PressBtn
-              style={[styles.card, { borderLeftColor: accent }]}
+              style={styles.activityRow}
               onPress={() => nav.navigate('MapHistory', { sessionId: item.id })}
               onLongPress={() => setSelectedSession(item)}
               scaleTo={0.97}
             >
-              <View style={[styles.cardBadge, { backgroundColor: bg }]}>
+              {/* Concept crops/01-activities-list.png: bare walker/runner glyph
+                  in deep green, no tinted bg, no badge — single-line dense row. */}
+              <View style={styles.activityIconWrap}>
                 {isRun
-                  ? <RunningIcon size={18} color={accent} />
-                  : <HikingIcon size={18} color={accent} />
+                  ? <RunningIcon size={20} color={accent} />
+                  : <HikingIcon size={20} color={accent} />
                 }
               </View>
               <View style={{ flex: 1 }}>
-                {/* Show the user-assigned name when present, falling
-                    back to the activity type. Previously this was
-                    hardcoded to 'Run' / 'Hike' which silently dropped
-                    whatever the user typed in the stop-summary sheet. */}
-                <Text style={styles.cardTitle} numberOfLines={1}>{item.name || (isRun ? 'Run' : 'Hike')}</Text>
-                <Text style={styles.cardMeta}>{dateStr} · {dist.format(item.distanceM, 1)} {dist.unit} · {formatDuration(item.durationS)}</Text>
+                <Text style={styles.activityTitle} numberOfLines={1}>{item.name || (isRun ? 'Run' : 'Hike')}</Text>
+                <Text style={styles.activityMeta} numberOfLines={1}>
+                  {dateStr} · {dist.format(item.distanceM, 1)} {dist.unit} · {formatDuration(item.durationS)}
+                </Text>
               </View>
-              <Icon name="ChevronRight" size={16} color={Colors.textMuted} strokeWidth={2} />
             </PressBtn>
           );
         }}
@@ -1221,6 +1312,14 @@ export function RoutesScreen() {
   const loadCircleRoutes = useRouteStore(s => s.loadCircleRoutes);
   const loadCircleMarkers = useMarkerStore(s => s.loadCircleMarkers);
   const nav = useNavigation<Nav>();
+  // R21 (2026-08-17): dark mode support — swap paper cream bg + deep-green
+  // text for slate bg + cream text when isDark. Uses inline overrides on the
+  // main container + title; list items already use tokens that read okay on
+  // both variants (deep glyphs on light-neutral row backgrounds).
+  const { isDark } = useAppearance();
+  const darkBg = '#0F1620';
+  const darkText = '#E8ECF2';
+  const darkMuted = 'rgba(232,236,242,0.68)';
   // O18 HOME-03: manual refresh state — spins the icon during network work,
   // avoids duplicate concurrent calls, and gives users a way to re-check
   // when they know they should have new data (friend just shared).
@@ -1246,11 +1345,11 @@ export function RoutesScreen() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={{ flex: 1, backgroundColor: isDark ? darkBg : undefined }}>
+    <SafeAreaView style={[styles.container, isDark ? { backgroundColor: darkBg } : null]} edges={['top']}>
       <View style={styles.header}>
-        <BackButton variant="pill" onPress={() => nav.goBack()} />
-        <Text style={styles.title}>Routes</Text>
+        <BackButton variant="inline" onPress={() => nav.goBack()} />
+        <Text style={[styles.title, isDark ? { color: darkText } : null]}>Routes</Text>
         {/* O18 HOME-03: manual refresh — visible on Routes / Cairns tabs
             (Activities uses local sessions, no server refresh). */}
         {tab !== 'activities' ? (
@@ -1321,6 +1420,55 @@ const styles = StyleSheet.create({
   cardBadge: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   cardTitle: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
   cardMeta: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
+  // Concept crops/01-activities-list.png — dense single-line row with
+  // hairline divider between items (no card, no left color-bar, no badge bg).
+  activityListContent: {
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xl,
+  },
+  activityRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 12, gap: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  activityIconWrap: {
+    width: 28, alignItems: 'center', justifyContent: 'center',
+  },
+  activityTitle: {
+    fontSize: FontSize.body, fontWeight: '700', color: Colors.textPrimary,
+  },
+  activityMeta: {
+    fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2,
+  },
+  // Concept crops/03-routes-mine.png — soft-fill circle + deep-green route
+  // glyph, roomier padding than activities so the row breathes.
+  routeListContent: {
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xl,
+    gap: Spacing.xs,
+  },
+  routeRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 14, paddingHorizontal: Spacing.sm,
+    gap: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  routeIconWrap: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(93,124,70,0.10)',
+    alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+  },
+  routeTitle: {
+    fontSize: FontSize.body, fontWeight: '700', color: Colors.textPrimary,
+  },
+  routeMeta: {
+    fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2,
+  },
   distanceText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary, marginRight: 2 },
   filterColumn: {
     paddingHorizontal: Spacing.base,
@@ -1341,26 +1489,48 @@ const styles = StyleSheet.create({
   permToggleGroup: { flexDirection: 'row', gap: 2, backgroundColor: Colors.surface, borderRadius: Radius.pill, borderWidth: 1, borderColor: Colors.border, padding: 2 },
   permToggle: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   permToggleActive: { backgroundColor: Colors.primaryBg },
-  empty: { flex: 1, alignItems: 'center', paddingTop: 80 },
+  empty: { flex: 1, alignItems: 'center', paddingTop: 96, paddingHorizontal: Spacing.xl },
   emptyIconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md, ...Shadow.card },
-  emptyTitle: { fontSize: FontSize.h3, fontWeight: '600', color: Colors.textSecondary },
-  emptyHint: { fontSize: FontSize.caption, color: Colors.textMuted, marginTop: 8, textAlign: 'center', paddingHorizontal: Spacing.xl },
+  // Concept hero illustration (mountain scene). Width matches the empty state
+  // frame; height is intrinsic-locked via aspect ratio so the artwork keeps
+  // its balance across viewports.
+  emptyHeroImage: {
+    width: 260,
+    height: 150,
+    marginBottom: Spacing.xl,
+  },
+  emptyTitle: {
+    fontSize: FontSize.h3,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  emptyHint: {
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: Spacing.xl,
+    lineHeight: 20,
+  },
   // v118: hero empty-state when there are no routes at all (vs the
   // narrower "no match" message when filter/search hides everything).
+  // Concept-aligned (Routes-2-routes-empty.png): tighter vertical rhythm
+  // and a soft neutral circle instead of primary-tinted disc.
   emptyHero: {
     alignItems: 'center',
-    paddingTop: 64,
+    paddingTop: 96,
     paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
   emptyHeroIcon: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: Colors.primaryBg,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: 'rgba(93,124,70,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   emptyHeroTitle: {
     fontSize: FontSize.h2,
@@ -1373,6 +1543,11 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
+    marginTop: 4,
+  },
+  emptyHeroBodyStrong: {
+    fontWeight: '700',
+    color: Colors.primary,
   },
   emptyHeroCta: {
     flexDirection: 'row',
@@ -1381,8 +1556,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingVertical: 12,
     paddingHorizontal: Spacing.xl,
-    borderRadius: Radius.button,
-    marginTop: Spacing.sm,
+    borderRadius: Radius.pill,
+    marginTop: Spacing.lg,
   },
   emptyHeroCtaText: {
     color: '#fff',
@@ -1489,39 +1664,88 @@ const filterBarStyles = StyleSheet.create({
   },
   filtersScroll: {
     gap: Spacing.xs, paddingRight: Spacing.sm,
+    alignItems: 'center',
   },
   chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 7,
     borderRadius: Radius.pill,
     backgroundColor: Colors.surface,
     borderWidth: 1, borderColor: Colors.border,
   },
+  chipIconWrap: {
+    alignItems: 'center', justifyContent: 'center',
+  },
   chipActive: {
     backgroundColor: Colors.primaryBg,
     borderColor: Colors.primary,
   },
+  // Concept row-01: the "All" chip when active is a solid primary-green
+  // pill with white label (higher visual weight than Hiking/Running).
+  chipActiveSolid: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
   chipText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary },
-  chipTextActive: { color: Colors.primary, fontWeight: '700' },
+  chipTextActive: { fontWeight: '700' },
+  // Concept row-01: "Recent ▼" sits as a neutral outline pill (matches the
+  // Hiking/Running chip visual weight) rather than the previous primary-
+  // tinted look. Chevron-down on the right hints at the dropdown affordance.
   sortChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 7,
+    paddingHorizontal: 12, paddingVertical: 7,
     borderRadius: Radius.pill,
-    backgroundColor: Colors.primaryBg,
-    borderWidth: 1, borderColor: Colors.primaryMuted,
+    backgroundColor: Colors.surface,
+    borderWidth: 1, borderColor: Colors.border,
   },
-  sortText: { fontSize: FontSize.small, fontWeight: '700', color: Colors.primary },
+  sortText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary },
   flagSortRow: {
     flexDirection: 'row', justifyContent: 'flex-end',
     paddingHorizontal: Spacing.base, paddingBottom: Spacing.sm,
   },
 });
 
+// Concept-aligned pill-shaped segmented control (sleep-run-2026-08-15 Routes).
+// Container is a rounded 20-radius pill with a subtle border; the active tab
+// gets a soft primary-tinted fill and forest-green bold label.
 const segStyles = StyleSheet.create({
-  container: { flexDirection: 'row', marginHorizontal: Spacing.base, backgroundColor: Colors.surface, borderRadius: Radius.card, padding: 4, borderWidth: 1, borderColor: Colors.border },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: Radius.card - 2 },
-  tabActive: { backgroundColor: Colors.primaryBg, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
-  tabText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textMuted },
-  tabTextActive: { color: Colors.primary, fontWeight: '700' },
+  container: {
+    flexDirection: 'row',
+    marginHorizontal: Spacing.base,
+    marginTop: Spacing.xs,
+    // 2026-08-16 concept: deeper paper #E6E2D6 container (was translucent white)
+    backgroundColor: '#E6E2D6',
+    borderRadius: 20,
+    padding: 4,
+    borderWidth: 0,
+    height: 40,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  tabActive: {
+    // 2026-08-16 concept: solid deep green (#3E5F3A) fill + white label
+    backgroundColor: '#3E5F3A',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    letterSpacing: 0.1,
+  },
+  tabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
 });
 
 const routePreviewStyles = StyleSheet.create({

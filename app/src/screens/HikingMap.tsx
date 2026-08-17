@@ -10,7 +10,7 @@
  */
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, Platform, ActivityIndicator,
+  View, Text, StyleSheet, Platform, ActivityIndicator, Image,
 } from 'react-native';
 import { Colors, Spacing, FontSize, Shadow } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
@@ -66,6 +66,11 @@ type HikingMapProps = {
   // user can see how far away the trailhead is.
   routeStart?: { lat: number; lng: number } | null;
   userPos?: { lat: number; lng: number } | null;
+  // 2026-08-17 concept H1/R1: green dot marker placed at trackPoints[0]
+  // so the user can see where they started. Rendered via PointAnnotation
+  // with the extracted concept asset (assets/map/marker-start.png).
+  // Passing `null` disables it (used pre-tracking on H0/R0).
+  trackStartVariant?: 'hike' | 'run' | null;
   // When true, skip the camera fly-in animation. Used when resuming
   // an in-progress hike — the user already knows where they are, the
   // 1-second zoom-in feels slow.
@@ -91,6 +96,7 @@ type HikingMapProps = {
 export function HikingMap({
   markers, trackPoints, onMarkerPress, routeStart, userPos,
   instantCamera, followUser = true, onUserGesture, recenterImperativeRef, debugMode,
+  trackStartVariant = null,
 }: HikingMapProps) {
   const region = getCurrentRegion();
   // O18 MAP-01: react to user's saved map layer preference (outdoors / satellite).
@@ -315,10 +321,10 @@ export function HikingMap({
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md }}>
           <Icon name="Map" size={48} color={Colors.primaryMuted} />
           <Text style={{ fontSize: FontSize.h3, fontWeight: '600', color: Colors.textPrimary }}>
-            Real Map (EAS Build)
+            Map unavailable
           </Text>
           <Text style={{ fontSize: FontSize.body, color: Colors.textSecondary, textAlign: 'center' }}>
-            Build with EAS to enable live tracking map
+            Live map appears when GPS is enabled
           </Text>
         </View>
         {markers.map((m, i) => (
@@ -418,7 +424,13 @@ export function HikingMap({
             <LineLayer
               id="track-line-layer"
               style={{
-                lineColor: Colors.primary,
+                // 2026-08-17 concept H1: track polyline reads as a
+                // dark forest green (#3F5D37) on the topo map. Sampled
+                // from the concept sheet — the previous Colors.primary
+                // (#5D7C46) read as too olive/light against the paper
+                // background. Kept a single color (no gradient) to match
+                // the concept exactly.
+                lineColor: '#3F5D37',
                 lineWidth: 5,
                 lineCap: 'round',
                 lineJoin: 'round',
@@ -490,6 +502,27 @@ export function HikingMap({
             <View style={mapStyles.routeStartPin}>
               <Icon name="Flag" size={12} color="#fff" strokeWidth={2.5} />
             </View>
+          </PointAnnotation>
+        )}
+
+        {/* 2026-08-17 concept H1/R1: track start dot. Rendered at
+            trackPoints[0] once we have at least one recorded GPS point.
+            Hike variant = blue dot (matches concept H1 blue puck at
+            trailhead), Run variant = green dot (matches concept R1
+            green marker at trailhead). Kept as PointAnnotation so
+            Mapbox scales it correctly across zoom levels. */}
+        {trackStartVariant && trackPoints.length > 0 && (
+          <PointAnnotation
+            id="track-start-dot"
+            coordinate={[trackPoints[0].lng, trackPoints[0].lat]}
+          >
+            <Image
+              source={trackStartVariant === 'run'
+                ? require('../../assets/map/marker-start.png')
+                : require('../../assets/map/marker-current.png')}
+              style={mapStyles.trackStartDot}
+              resizeMode="contain"
+            />
           </PointAnnotation>
         )}
 
@@ -668,5 +701,11 @@ const mapStyles = StyleSheet.create({
     borderWidth: 2, borderColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
     ...Shadow.card,
+  },
+  // 2026-08-17 concept H1/R1 track-start dot. Sized to match the
+  // concept (dot ~14pt with subtle halo ring, source PNG is 108x108
+  // for 3x retina crispness).
+  trackStartDot: {
+    width: 26, height: 26,
   },
 });

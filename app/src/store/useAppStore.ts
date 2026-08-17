@@ -9,7 +9,8 @@ import { fetchSessions } from '../services/sessionService';
 import { useSessionStore, type ActivityMode as SessionActivityMode, type TrackPoint } from './useSessionStore';
 import { useMarkerStore } from './useMarkerStore';
 // v417: useArOriginStore + runA8Migration deleted
-import { isPlaywrightBypass } from '../utils/devFlags';
+// R21 (2026-08-17): isPlaywrightBypass import removed — bypass block deleted
+// below. Real auth flow only, dev + prod identical.
 import { crashLogger } from '../services/crashLogger';
 // v405: memorySync attach 从 FGUM 提前到 hydrate,让 stopTracking →
 // pushMemoryNow 无论用户是否进过 Memory tab 都能 push。见 happy-path
@@ -61,8 +62,12 @@ interface AppState {
   user: UserProfile | null;
   setUser: (user: UserProfile | null) => void;
   hydrated: boolean;
-  // O1 batch 37: sessionExpired + setSessionExpired removed — field written by apiService.ts
-  // but 0 external readers; logout() reset also removed below.
+  // R21 (2026-08-17): re-added sessionExpired flag. When hydrate finds a
+  // token but getMe returns 401 (token expired/revoked), we set this true
+  // so AuthScreen can show a "Your session has expired" banner above the
+  // Sign In form. Cleared on next successful login.
+  sessionExpired: boolean;
+  setSessionExpired: (v: boolean) => void;
   logout: () => void;
 
   // v412 4-eye fix (Critical #4): hydrationTs 供 HikingScreen 的 v412 unfinished recovery
@@ -119,6 +124,9 @@ export const useAppStore = create<AppState>((set) => ({
   user: null,
   setUser: (user) => set({ user }),
   hydrated: false,
+  // R21 (2026-08-17): sessionExpired flag, default false.
+  sessionExpired: false,
+  setSessionExpired: (v) => set({ sessionExpired: v }),
   // O1 batch 37: sessionExpired + setSessionExpired removed (0 external readers)
 
   // v412 4-eye fix (Critical #4): 供 HikingScreen recovery useEffect 依赖数组用
@@ -194,13 +202,10 @@ export const useAppStore = create<AppState>((set) => ({
       // O12: uiMode restore removed. STORAGE_KEY_UI_MODE key on old installs
       // will remain as orphaned MMKV entry — harmless.
 
-      // Playwright bypass: only allowed in __DEV__ to prevent leaking into production builds.
-      // Production builds ignore EXPO_PUBLIC_PLAYWRIGHT_BYPASS even if env leaks in.
-      if (isPlaywrightBypass) {
-        const playwrightUser: UserProfile = { id: '0', name: 'Playwright', email: 'pw@cairn.nz' };
-        set({ isLoggedIn: true, user: playwrightUser, hydrated: true });
-        return;
-      }
+      // R21 (2026-08-17): Playwright bypass removed. All boots (dev + prod)
+      // follow the same real flow: cold boot → AuthScreen. If a valid JWT
+      // is on disk, AuthScreen's own effect calls getMe() and auto-navigates
+      // to Home. If not, user signs in manually. No more bypass fake user.
 
       // ── Auth policy (v404 — kill 后必登 / warm 无感) ──────────────────
       // hydrate 只在 App.tsx mount 时跑一次（cold boot）。切后台/回前台
@@ -232,9 +237,15 @@ export const useAppStore = create<AppState>((set) => ({
       try {
         const user = await getMe();
         if (user) {
-          // Token 有效 —— pre-warm user-scoped 缓存，但 **不** flip isLoggedIn。
-          // AuthScreen 会显示；用户登录成功后 setLoggedIn(true) 即刻可见数据。
-          set({ user });
+          // R21 (2026-08-17): unified auth flow — if getMe succeeds during
+          // hydrate, we set BOTH user AND isLoggedIn=true. Previously
+          // (v404 rule) hydrate only pre-warmed user and left isLoggedIn
+          // false so the user always had to sign in again after a cold boot.
+          // User now wants auto-login on cold boot when a valid token
+          // exists (matches modern mobile app UX). AuthScreen's mount
+          // useEffect will nav.replace('Home') on the same tick because
+          // the RootNavigator gate `isLoggedIn && user` now flips true.
+          set({ user, isLoggedIn: true });
           crashLogger.breadcrumb(`hydrate:cold_boot_prewarm user_id=${user.id}`);
           try { await useMarkerStore.getState().hydrate(user.id); } catch { /* swallow */ }
           // v405: hydrate memory points from AsyncStorage + attach memory
@@ -388,6 +399,20 @@ export const useAppStore = create<AppState>((set) => ({
         } else {
           // getMe returned null — token invalid or missing.
           crashLogger.breadcrumb('hydrate:token_invalid_back_to_auth');
+          // R21 (2026-08-17): distinguish "no token" (fresh install / signed
+          // out) from "invalid token" (session expired). Check disk for a
+          // token; if one exists, backend rejected it → flag session
+          // expired so AuthScreen shows the "Your session has expired"
+          // banner above Sign In.
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { getToken } = require('../services/tokenStore');
+            const t = await getToken();
+            if (t) {
+              set({ sessionExpired: true });
+              crashLogger.breadcrumb('hydrate:session_expired_flag_set');
+            }
+          } catch { /* swallow */ }
           // Not logged in — load from guest slots only
           try { await useSessionStore.getState().hydrate('guest'); } catch { /* swallow */ }
           try { await useMarkerStore.getState().hydrate('guest'); } catch { /* swallow */ }
@@ -478,6 +503,26 @@ export const useAppStore = create<AppState>((set) => ({
       const { drainPending } = require('../services/syncDaemon');
       void drainPending().catch(() => {});
     } catch { /* best effort */ }
+
+    // Weather pre-fetch: fire-and-forget in parallel with hydrate completion.
+    // Uses locationOverride if set (dev/testing), otherwise tries GPS.
+    // 4s internal timeout in fetchWeather — never blocks app boot.
+    try {
+      const { useWeatherStore } = require('./useWeatherStore');
+      const { locationOverride, fetchWeather } = useWeatherStore.getState();
+      if (locationOverride) {
+        void fetchWeather(locationOverride.lat, locationOverride.lon);
+      } else {
+        // Try last-known coords from expo-location (fast, no new permission needed).
+        import('expo-location').then((Location) => {
+          Location.getLastKnownPositionAsync({}).then((pos) => {
+            if (pos?.coords) {
+              void fetchWeather(pos.coords.latitude, pos.coords.longitude);
+            }
+          }).catch(() => {/* no cached position — weather stays at default */});
+        }).catch(() => {/* expo-location unavailable on web */});
+      }
+    } catch { /* swallow — weather is non-critical */ }
 
     // Always mark hydrated so App.tsx unblocks the loading View.
     crashLogger.breadcrumb('hydrate:end');

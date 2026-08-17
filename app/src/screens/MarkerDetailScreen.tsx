@@ -184,7 +184,7 @@ export function MarkerDetailScreen() {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
         <View style={styles.backRowTop}>
-          <BackButton variant="pill" />
+          <BackButton variant="inline" />
         </View>
         <View style={styles.notFoundBox}>
           <Text style={styles.notFoundTitle}>Cairn not found</Text>
@@ -279,7 +279,7 @@ export function MarkerDetailScreen() {
           </View>
         )}
         <View style={styles.backRowOverlay} pointerEvents="box-none">
-          <BackButton variant="pill" />
+          <BackButton variant="inline" />
         </View>
       </View>
 

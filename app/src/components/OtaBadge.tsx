@@ -317,7 +317,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 //
 // Verified: TypeScript --noEmit clean (only pre-existing test / turf-helpers
 // warnings unchanged). Ready for real-device TestFlight verification.
-export const OTA_VERSION = 'O22';
+//
+// R21 (2026-08-17): app-wide dark mode. New Appearance setting (Light/Dark/
+// Auto), 8-variant weather-adaptive Home + Settings bg, night-variant Friends
+// backdrop + Add Friend hero, unified inline BackButton across every screen,
+// Hiking H2 tray auto-expand + collapse on entry, Trails list visual rework
+// (Activities/Routes/Cairns), Route Detail time stat, Show-exploration-%
+// preference with demo, Routes/Plant/Memory dark bg support.
+export const OTA_VERSION = 'R21';
 
 
 type OtaState =

@@ -316,6 +316,14 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
         <Icon name="Target" size={20} color={Colors.primary} strokeWidth={2} />
       </TouchableOpacity>
     )}
+    {/* 2026-08-16 T-C03: layers FAB per concept row-02 col 2/5 */}
+    <TouchableOpacity
+      onPress={() => { /* layer toggle - todo */ }}
+      activeOpacity={0.85}
+      style={trackStyles.layersBtn}
+    >
+      <Icon name="Layers" size={20} color={Colors.primary} strokeWidth={2} />
+    </TouchableOpacity>
     </View>
   );
 }
@@ -756,6 +764,12 @@ export function MapHistoryScreen() {
   const nav = useNavigation<Nav>();
   const route = useRoute<any>();
   const targetSessionId = route.params?.sessionId as string | undefined;
+  const targetRouteId = (route.params as { routeId?: string } | undefined)?.routeId;
+  // 2026-08-16 Round 13: Route Detail (concept T5) — look up route object
+  // by targetRouteId. Renders a full-screen route detail view with Edit Route
+  // + Preview + Delete stacked buttons per row-03 col 5.
+  const allRoutes = useRouteStore(s => s.routes);
+  const selectedRoute = targetRouteId ? allRoutes.find(r => r.id === targetRouteId) : null;
   // O12: settings-aware distance format for detail modal + stat displays.
   const dist = useDistance();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -1080,22 +1094,23 @@ export function MapHistoryScreen() {
               ? <NativeTrackMap session={sessionRender} markers={routeFlags} />
               : <TrackPolyline session={sessionRender} />
         ) : (
-          // Decorative lines when no session selected
-          <>
-            <View style={styles.routeLine1} />
-            <View style={styles.routeLine2} />
-            <View style={styles.routeLine3} />
-          </>
+          // 2026-08-16: 3 decorative lines only render when there are sessions
+          // available (they hint at abstracted route swatches). Empty state
+          // (sessions.length === 0) hides them — subagent QA feedback said the
+          // 3 lines read as broken UI without context on true empty state.
+          sessions.length > 0 ? (
+            <>
+              <View style={styles.routeLine1} />
+              <View style={styles.routeLine2} />
+              <View style={styles.routeLine3} />
+            </>
+          ) : null
         )}
 
-        {/* Map placeholder label */}
-        {!selectedSession && (
-          <View style={styles.mapLabelWrap}>
-            <Icon name="Map" size={32} color={Colors.primary} strokeWidth={1.3} />
-            <Text style={styles.mapLabel}>History</Text>
-            <Text style={styles.mapSubLabel}>Select a route below to view</Text>
-          </View>
-        )}
+        {/* User decision 2026-08-16: Trails index view has NO map placeholder
+            label (previously showed "History" + "Select a route below to view").
+            The tab bar (Activities/Routes/Cairns) below already anchors context.
+            Only the decorative offset lines render in the empty map area. */}
 
         {/* Selected session stat bar on map */}
         {selectedSession && (
@@ -1155,28 +1170,24 @@ export function MapHistoryScreen() {
       {/* Top bar — overlays map */}
       <SafeAreaView style={styles.topBar} edges={['top']}>
         <View style={styles.topRow}>
-          <BackButton variant="pill" />
-          <Text style={styles.topTitle}>{targetSessionId ? 'Activity Detail' : 'History'}</Text>
-          {/* O17 COPY:C-70: Plan Route button was a stub — hidden in prod, dev-only preview */}
-          {/* O18 VER-07: always render a right-side spacer matching the
-              BackButton pill width so the centered title stays visually
-              centered whether Plan is shown or not. */}
-          {!targetSessionId && __DEV__ ? (
-            <TouchableOpacity
-              style={styles.planBtn}
-              onPress={() => Alert.alert('Plan Route', 'Route planning coming soon', [{ text: 'OK' }])}
-              accessibilityLabel="Plan a new route (dev preview)"
-            >
-              <Icon name="Route" size={14} color="#fff" strokeWidth={2} />
-              <Text style={styles.planBtnText}>Plan</Text>
-            </TouchableOpacity>
+          <BackButton variant="inline" />
+          {/* User decision 2026-08-16: Trails index view (no targetSessionId)
+              has NO top title — the tab bar (Activities/Routes/Cairns) below
+              already anchors the context. Only detail views show a title.
+              Type-specific label based on which detail is open. */}
+          <Text style={styles.topTitle}>{targetRouteId ? 'Route Detail' : targetSessionId ? 'Activity Detail' : (tab === 'flags' ? 'Cairns' : 'Routes')}</Text>
+          {/* User decision 2026-08-16: Plan button removed from Trails top row.
+              Also drop the right-side spacer — nothing to balance now. */}
+          {!targetSessionId && !targetRouteId ? (
+            <View style={{ width: 40 }} />
           ) : (
-            <View style={{ width: 68 }} />
+            <View style={{ width: 40 }} />
           )}
         </View>
 
-        {/* Tab bar — only show when viewing all sessions */}
-        {!targetSessionId && (
+        {/* Tab bar — only show when viewing all sessions (Trails index). Hide
+            for both Activity Detail (targetSessionId) and Route Detail (targetRouteId). */}
+        {!targetSessionId && !targetRouteId && (
           <View style={styles.tabBar}>
             <TouchableOpacity
               style={[styles.tabItem, tab === 'routes' && styles.tabItemActive]}
@@ -1192,9 +1203,129 @@ export function MapHistoryScreen() {
       </SafeAreaView>
 
       {/* Bottom panel — simplified for single session, full list for all sessions */}
-      {targetSessionId && selectedSession ? (
+      {/* 2026-08-17 Route Detail (concept crops/05): panel handle + title with
+          pencil (rename via updateRoute) + 3-col stats (km / points / elev) +
+          Edit Route (deep green pill, full width) stacked above Delete
+          (red outline pill, full width). Pill radius 14, minHeight 54 — Auth
+          submit style. */}
+      {targetRouteId && selectedRoute ? (
         <View style={styles.singleSessionPanel}>
-          {/* O18 HIST-03: hike name + rename affordance. Tap the title to edit. */}
+          <View style={styles.panelHandle} />
+          <View style={{ marginBottom: Spacing.md }}>
+            {renameEditing ? (
+              <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
+                <TextInput
+                  style={styles.renameInput}
+                  value={renameText}
+                  onChangeText={setRenameText}
+                  autoFocus
+                  maxLength={60}
+                  onSubmitEditing={() => {
+                    const t = renameText.trim();
+                    if (t) useRouteStore.getState().updateRoute(selectedRoute.id, { name: t });
+                    setRenameEditing(false);
+                  }}
+                  returnKeyType="done"
+                  placeholder="Route name"
+                  placeholderTextColor={Colors.textMuted}
+                />
+                <TouchableOpacity
+                  onPress={() => {
+                    const t = renameText.trim();
+                    if (t) useRouteStore.getState().updateRoute(selectedRoute.id, { name: t });
+                    setRenameEditing(false);
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Save new route name"
+                >
+                  <Icon name="Check" size={20} color={Colors.primary} strokeWidth={2.5} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setRenameEditing(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Cancel rename"
+                >
+                  <Icon name="X" size={20} color={Colors.textMuted} strokeWidth={2.5} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={() => {
+                  setRenameText(selectedRoute.name || 'Route');
+                  setRenameEditing(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Rename route"
+                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.detailTitle} numberOfLines={1}>{selectedRoute.name || 'Route'}</Text>
+                  <Icon name="Pencil" size={14} color={Colors.textMuted} strokeWidth={2} />
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.singleSessionStats}>
+            <View style={styles.singleStat}>
+              <Text style={styles.singleStatValue}>{dist.format(selectedRoute.distanceM ?? 0, 2)}</Text>
+              <Text style={styles.singleStatLabel}>{dist.unit}</Text>
+            </View>
+            <View style={styles.singleStat}>
+              {/* Concept crops/05 middle stat = estimated time. Routes carry no
+                  recorded duration, so estimate from distance + typical pace
+                  per activity mode (hiking 4 km/h, running 10 km/h). */}
+              <Text style={styles.singleStatValue}>
+                {formatDuration(
+                  Math.round(
+                    (selectedRoute.distanceM ?? 0) /
+                    (selectedRoute.activityMode === 'running' ? 2.78 : 1.11)
+                  )
+                )}
+              </Text>
+              <Text style={styles.singleStatLabel}>time</Text>
+            </View>
+            <View style={styles.singleStat}>
+              <Text style={styles.singleStatValue}>+{dist.formatElevation(selectedRoute.elevationGainM ?? 0)}{dist.elevUnit}</Text>
+              <Text style={styles.singleStatLabel}>elev</Text>
+            </View>
+          </View>
+          <View style={{ gap: Spacing.sm, marginTop: Spacing.lg }}>
+            <TouchableOpacity
+              style={styles.actionPillPrimary}
+              onPress={() => {
+                (nav as any).navigate('RouteEditor', { routeId: selectedRoute.id });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Edit route"
+            >
+              <Icon name="Edit3" size={IconSize.sm} color="#fff" strokeWidth={2} />
+              <Text style={styles.actionPillPrimaryText}>Edit Route</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionPillDanger, deleteConfirm && styles.actionPillDangerActive]}
+              onPress={() => {
+                if (!deleteConfirm) { setDeleteConfirm(true); return; }
+                // deleteRoute API — falls back to nav goBack on missing
+                const rs = useRouteStore.getState();
+                if (rs.deleteRoute) rs.deleteRoute(selectedRoute.id);
+                nav.goBack();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Delete route"
+            >
+              <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
+              <Text style={[styles.actionPillDangerText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : targetSessionId && selectedSession ? (
+        <View style={styles.singleSessionPanel}>
+          <View style={styles.panelHandle} />
+          {/* 2026-08-17 Activity Detail (concept crops/02): panel handle +
+              title with pencil (rename) + 3-col stats (km / time / elev) +
+              meta row (activity icon · date · time-of-day) + Delete (red
+              outline pill) left / Save as Route (deep green pill) right.
+              Pill radius 14, minHeight 54 — Auth submit style. */}
           <View style={{ marginBottom: Spacing.sm }}>
             {renameEditing ? (
               <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
@@ -1233,73 +1364,23 @@ export function MapHistoryScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <TouchableOpacity
-                  style={{ flex: 1 }}
-                  onPress={() => {
-                    setRenameText(selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike'));
-                    setRenameEditing(true);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Rename hike"
-                  accessibilityHint="Double tap to edit the hike name"
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.sessionTitle} numberOfLines={1}>
-                      {selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike')}
-                    </Text>
-                    <Icon name="Pencil" size={14} color={Colors.textMuted} strokeWidth={2} />
-                  </View>
-                </TouchableOpacity>
-                {/* O18 SHR-01: text-based share for a hike. Bundles the name +
-                    core stats + a cairnapp.nz link into the system share sheet.
-                    Image capture (react-native-view-shot) is installed and
-                    will be wired in a follow-up sprint after the EAS build
-                    picks up the native module. */}
-                <TouchableOpacity
-                  onPress={async () => {
-                    try {
-                      const { default: Sharing } = await import('expo-sharing');
-                      const isAvailable = await Sharing.isAvailableAsync();
-                      // Sprint 6 round-5 review R5B3: use formatDate so
-                      // the shared text respects the user's dateFormat
-                      // setting. Pre-fix, toLocaleDateString used device
-                      // locale which could disagree with the pref.
-                      const { formatDate } = require('../utils/dateFormat');
-                      const dateStr = formatDate(selectedSession.startedAt);
-                      const kmOrMi = dist.imperial ? 'mi' : 'km';
-                      const distValue = dist.imperial
-                        ? (selectedSession.distanceM / 1609.344).toFixed(2)
-                        : (selectedSession.distanceM / 1000).toFixed(2);
-                      const durationH = Math.floor(selectedSession.durationS / 3600);
-                      const durationM = Math.floor((selectedSession.durationS % 3600) / 60);
-                      const durationStr = durationH > 0 ? `${durationH}h ${durationM}m` : `${durationM}m`;
-                      const activityLabel = selectedSession.activityMode === 'running' ? 'run' : 'hike';
-                      const message = `I went for a ${activityLabel} on ${dateStr}: ${distValue} ${kmOrMi} in ${durationStr}. Tracked with Cairn — cairnapp.nz`;
-                      if (isAvailable) {
-                        // expo-sharing is meant for files. For text-only share
-                        // fall back to Share.share (react-native built-in).
-                        // eslint-disable-next-line @typescript-eslint/no-require-imports
-                        const { Share } = require('react-native');
-                        await Share.share({ message, title: 'Cairn hike' });
-                      } else {
-                        // eslint-disable-next-line @typescript-eslint/no-require-imports
-                        const { Share } = require('react-native');
-                        await Share.share({ message, title: 'Cairn hike' });
-                      }
-                    } catch (e) {
-                      // eslint-disable-next-line no-console
-                      console.warn('[SHR-01] share failed:', e);
-                    }
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Share this hike"
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={{ marginLeft: Spacing.sm }}
-                >
-                  <Icon name="Send" size={18} color={Colors.primary} strokeWidth={2} />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setRenameText(selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike'));
+                  setRenameEditing(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Rename hike"
+                accessibilityHint="Double tap to edit the hike name"
+                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.detailTitle} numberOfLines={1}>
+                    {selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike')}
+                  </Text>
+                  <Icon name="Pencil" size={14} color={Colors.textMuted} strokeWidth={2} />
+                </View>
+              </TouchableOpacity>
             )}
           </View>
           <View style={styles.singleSessionStats}>
@@ -1316,49 +1397,49 @@ export function MapHistoryScreen() {
               <Text style={styles.singleStatLabel}>elev</Text>
             </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-            {/* v119: Save as Route on the LEFT, Delete on the RIGHT.
-                Equal sizes (flex: 1 each).
-                v120: disable check uses loadedTrackPoints (the array
-                hydrated from the server in the effect at line ~650),
-                NOT selectedSession.trackPoints which is always [] for
-                sessions hydrated from the backend (the local
-                sessionStore summary doesn't carry track points). This
-                was the "Save as Route always grey" bug. */}
+          {/* Meta row: activity type · date · time-of-day (concept crops/02). */}
+          <View style={styles.detailMetaRow}>
+            {selectedSession.activityMode === 'running' ? (
+              <RunningIcon size={14} color={Colors.textSecondary} />
+            ) : (
+              <HikingIcon size={14} color={Colors.textSecondary} />
+            )}
+            <Text style={styles.detailMetaText}>
+              {selectedSession.activityMode === 'running' ? 'Running' : 'Hiking'}
+              {'  ·  '}
+              {formatDate(selectedSession.startedAt)}
+              {'  ·  '}
+              {new Date(selectedSession.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+            </Text>
+          </View>
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.actionPillDanger, { flex: 1 }, deleteConfirm && styles.actionPillDangerActive]}
+              onPress={() => {
+                if (!deleteConfirm) { setDeleteConfirm(true); return; }
+                deleteSession(selectedSession.id);
+                nav.goBack();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Delete hike"
+            >
+              <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
+              <Text style={[styles.actionPillDangerText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete'}</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={[
-                cardStyles.deleteBtn,
-                { flex: 1, borderColor: Colors.primary, backgroundColor: Colors.primaryBg },
+                styles.actionPillPrimary,
+                { flex: 1 },
                 loadedTrackPoints == null || loadedTrackPoints.length < 2 ? { opacity: 0.4 } : undefined,
               ]}
               disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}
               onPress={() => {
                 // v198 Bug 1+2 fix: open RouteEditorScreen in save-as-route
                 // draft mode (fromSessionId) instead of persisting directly.
-                // The user wants to edit the name + see the route polyline
-                // BEFORE saving — previous direct-addRoute path lost the
-                // name (forced to activity.name) and dropped them into a
-                // view-mode showing stats=0 because waypoints array is
-                // empty (geometry lives in route.points which view-mode
-                // doesn't read for the waypoint counter).
-                //
-                // RouteEditorScreen with fromSessionId:
-                //   - opens in editMode=true (drafting mode, not view-mode)
-                //   - hydrates sessionTrackPoints from snapToRoadAndTrim
-                //   - pre-fills name with `Hike Jun 9` / `Run Jun 9` style
-                //   - camera now fits to the session polyline (v198 bug 3+4)
-                //   - main button is Save (handleSave); user can edit name
                 const ts = selectedSession;
                 crashLogger.breadcrumb(`saveroute:nav-to-editor session=${ts.id}`);
                 (nav as any).navigate('RouteEditor', {
                   fromSessionId: ts.id,
-                  // v198 fix-2: pass already-server-hydrated trackPoints
-                  // so RouteEditor doesn't fall back to the unreliable
-                  // local-AsyncStorage loadTrackPoints (which returns []
-                  // for any server-synced session — fresh OTA installs
-                  // and multi-device users would be unable to save).
-                  // MapHistoryScreen has the authoritative server-fetched
-                  // trace already loaded for the polyline render.
                   fromSessionTrackPoints: (loadedTrackPoints ?? []).map(p => ({
                     lat: p.lat,
                     lng: p.lng,
@@ -1368,24 +1449,11 @@ export function MapHistoryScreen() {
                   })),
                 });
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Save as route"
             >
-              <Icon name="Route" size={IconSize.sm} color={Colors.primary} strokeWidth={2} />
-              <Text style={[cardStyles.deleteBtnText, { color: Colors.primary }]}>Save as Route</Text>
-            </TouchableOpacity>
-            {/* v118: Edit button removed entirely. Per route-rules.md §4 the
-                edit engine (1km node corridor + dual-line UI) lives on Route
-                Detail, not Activity. Activity is the immutable raw GPS record.
-                Editing here had no meaningful semantics so it's gone. */}
-            <TouchableOpacity
-              style={[cardStyles.deleteBtn, { flex: 1 }, deleteConfirm && { backgroundColor: Colors.danger }]}
-              onPress={() => {
-                if (!deleteConfirm) { setDeleteConfirm(true); return; }
-                deleteSession(selectedSession.id);
-                nav.goBack();
-              }}
-            >
-              <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
-              <Text style={[cardStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete'}</Text>
+              <Icon name="Route" size={IconSize.sm} color="#fff" strokeWidth={2} />
+              <Text style={styles.actionPillPrimaryText}>Save as Route</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1491,7 +1559,10 @@ export function MapHistoryScreen() {
             {filteredSessions.length === 0 ? (
               sessions.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Icon name="Route" size={40} color={Colors.textMuted} strokeWidth={1.2} />
+                  {/* Concept MapHistory-1.png: hand-drawn route icon (waypoints
+                      linked by a line) rendered in a muted primary tint so it
+                      reads as an illustrative anchor rather than a UI control. */}
+                  <Icon name="Route" size={44} color={Colors.primary + '99'} strokeWidth={1.4} />
                   <Text style={styles.emptyTitle}>No hikes yet</Text>
                   <Text style={styles.emptySubtitle}>Start hiking or running to see your routes here</Text>
                   <PressBtn
@@ -1554,18 +1625,34 @@ export function MapHistoryScreen() {
               ))
             )}
             {selectedSession && (
-              <TouchableOpacity
-                style={[cardStyles.deleteBtn, deleteConfirm && { backgroundColor: Colors.danger }]}
-                onPress={() => {
-                  if (!deleteConfirm) { setDeleteConfirm(true); return; }
-                  deleteSession(selectedSession.id);
-                  setSelectedSessionId(null);
-                  setDeleteConfirm(false);
-                }}
-              >
-                <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
-                <Text style={[cardStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Route'}</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                {/* 2026-08-16 CONCEPT_TRUTH alignment (Route Detail):
+                    Delete on LEFT (red outline), Edit Route on RIGHT
+                    (filled deep green). Concept row-02 shows this pair. */}
+                <TouchableOpacity
+                  style={[cardStyles.deleteBtn, { flex: 1 }, deleteConfirm && { backgroundColor: Colors.danger }]}
+                  onPress={() => {
+                    if (!deleteConfirm) { setDeleteConfirm(true); return; }
+                    deleteSession(selectedSession.id);
+                    setSelectedSessionId(null);
+                    setDeleteConfirm(false);
+                  }}
+                >
+                  <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
+                  <Text style={[cardStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Route'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[cardStyles.deleteBtn, { flex: 1, borderColor: Colors.primary, backgroundColor: Colors.primary }]}
+                  onPress={() => {
+                    // Route edit lives in RouteEditorScreen (per route-rules.md §4).
+                    // Concept row-02 shows an Edit Route CTA on Route Detail.
+                    (nav as any).navigate('RouteEditor', { fromSessionId: selectedSession.id });
+                  }}
+                >
+                  <Icon name="Edit3" size={IconSize.sm} color="#fff" strokeWidth={2} />
+                  <Text style={[cardStyles.deleteBtnText, { color: '#fff' }]}>Edit Route</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </ScrollView>
         ) : (
@@ -1635,27 +1722,40 @@ export function MapHistoryScreen() {
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.mapBg },
+  // 2026-08-16 Round 6: concept uses paper bg (#F4EFE6), not Colors.mapBg (sage green).
+  // sage green mapBg was designed for the topo map layer but leaks through
+  // in empty state / web fallback where no mapbox tiles are rendered.
+  container: { flex: 1, backgroundColor: '#F4EFE6' },
 
-  mapArea: { flex: 1, backgroundColor: Colors.mapBg, position: 'relative', overflow: 'hidden' },
+  mapArea: { flex: 1, backgroundColor: '#F4EFE6', position: 'relative', overflow: 'hidden' },
+  // Concept: MapHistory-1.png (2026-08-15 UI overhaul).
+  // Three staggered decorative offset lines act as an abstract topo/trail
+  // stack behind the History empty state:
+  //   line1 — sage GREEN (Colors.primary), long, LEFT-anchored at top
+  //   line2 — warm BROWN (Colors.trail), shorter, RIGHT-anchored, offset
+  //           down + right so it overlaps line1's tail
+  //   line3 — cool  BLUE  (Colors.running), medium, LEFT-anchored, sits
+  //           below the other two so the stack reads left→right→left.
+  // Vertical rhythm: 28px between lines; y-anchor at ~19% of viewport so
+  // the composition breathes above the centered Map icon + label.
   routeLine1: {
-    position: 'absolute', top: 160, left: 40, width: W - 80,
-    height: 3, backgroundColor: Colors.primary + '70', borderRadius: 2,
+    position: 'absolute', top: 158, left: 40, width: W - 100,
+    height: 3, backgroundColor: Colors.primary + '80', borderRadius: 2,
   },
   routeLine2: {
-    position: 'absolute', top: 200, left: 40, width: W * 0.6,
-    height: 3, backgroundColor: Colors.running + '70', borderRadius: 2,
+    position: 'absolute', top: 190, right: 40, width: W * 0.42,
+    height: 3, backgroundColor: Colors.trail + '80', borderRadius: 2,
   },
   routeLine3: {
-    position: 'absolute', top: 180, right: 40, width: W * 0.4,
-    height: 3, backgroundColor: Colors.trail + '70', borderRadius: 2,
+    position: 'absolute', top: 222, left: 40, width: W * 0.58,
+    height: 3, backgroundColor: Colors.running + '80', borderRadius: 2,
   },
   mapLabelWrap: {
     position: 'absolute', alignItems: 'center',
-    top: '38%', left: 0, right: 0, gap: 6,
+    top: '32%', left: 0, right: 0, gap: 8,
   },
-  mapLabel: { fontSize: FontSize.h3, fontWeight: '600', color: Colors.primary, opacity: 0.7 },
-  mapSubLabel: { fontSize: FontSize.small, color: Colors.textMuted, opacity: 0.8 },
+  mapLabel: { fontSize: FontSize.h3, fontWeight: '700', color: Colors.primary, opacity: 0.72 },
+  mapSubLabel: { fontSize: FontSize.small, color: Colors.textMuted, opacity: 0.85 },
   markerPin: {
     position: 'absolute', width: 30, height: 30, borderRadius: 15,
     borderWidth: 2.5, alignItems: 'center', justifyContent: 'center',
@@ -1738,7 +1838,7 @@ const styles = StyleSheet.create({
   singleStatLabel: { fontSize: FontSize.small, color: Colors.textSecondary },
 
   listPanel: {
-    backgroundColor: 'rgba(255,255,255,0.90)',
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     maxHeight: 380,
     paddingTop: Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.xxl,
@@ -1758,12 +1858,15 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     paddingVertical: Spacing.xxl, gap: Spacing.sm,
   },
-  emptyTitle: { fontSize: FontSize.body, fontWeight: '700', color: Colors.textSecondary },
+  // Concept MapHistory-1.png: empty-state title reads as a soft forest
+  // green (matching the Hike identity) rather than plain textSecondary
+  // so the "No hikes yet" line ties into the rest of the History surface.
+  emptyTitle: { fontSize: FontSize.body, fontWeight: '700', color: Colors.primary },
   emptySubtitle: { fontSize: FontSize.small, color: Colors.textMuted, textAlign: 'center', maxWidth: 260 },
   emptyCta: {
     flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.sm,
-    backgroundColor: Colors.primary, borderRadius: Radius.button ?? 12,
-    paddingHorizontal: Spacing.lg, paddingVertical: 10,
+    backgroundColor: Colors.primary, borderRadius: Radius.pill ?? 28,
+    paddingHorizontal: Spacing.lg, paddingVertical: 12,
   },
   emptyCtaText: { fontSize: FontSize.caption, fontWeight: '700', color: '#fff' },
   // O18 HIST-01: search input above the history list.
@@ -1821,6 +1924,55 @@ const styles = StyleSheet.create({
   // O18 HIST-03: rename hike UI.
   sessionTitle: {
     fontSize: FontSize.body, fontWeight: '700', color: Colors.textPrimary,
+  },
+  // 2026-08-17 Route/Activity Detail — concept crops/02 + crops/05.
+  // Title is 26pt/700 per project font rule (Title 26pt/700 / Body 15pt/400 /
+  // Label 13pt/600). Not FontSize.h1 (28) or h2 (20) — the concept crop
+  // reads at ~26pt with a slightly tighter line height.
+  detailTitle: {
+    fontSize: 26, fontWeight: '700', color: Colors.textPrimary,
+  },
+  // Meta row under the stats: activity icon + "Hiking · 7/8/2036 · 08:21".
+  // 13pt/600 Label style per project font rule.
+  detailMetaRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: Spacing.xs, marginBottom: Spacing.lg,
+  },
+  detailMetaText: {
+    fontSize: FontSize.caption, fontWeight: '600', color: Colors.textSecondary,
+  },
+  // Concept action row: Delete (red outline pill) + Save as Route (deep
+  // green pill), side-by-side, equal flex. Route Detail uses the same
+  // pill styles stacked (gap wraps them). Auth submit pill spec:
+  // radius 14, minHeight 54, no shadow, 13pt/600 label per project rule.
+  actionRow: {
+    flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs,
+  },
+  actionPillPrimary: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    minHeight: 54,
+    paddingHorizontal: Spacing.base,
+  },
+  actionPillPrimaryText: {
+    color: '#fff', fontWeight: '600', fontSize: FontSize.caption,
+  },
+  actionPillDanger: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderWidth: 1.5, borderColor: Colors.danger,
+    borderRadius: 14,
+    minHeight: 54,
+    paddingHorizontal: Spacing.base,
+  },
+  actionPillDangerActive: {
+    backgroundColor: Colors.danger, borderColor: Colors.danger,
+  },
+  actionPillDangerText: {
+    color: Colors.danger, fontWeight: '600', fontSize: FontSize.caption,
   },
   renameInput: {
     flex: 1,
@@ -2027,6 +2179,19 @@ const trackStyles = StyleSheet.create({
   recenterBtn: {
     position: 'absolute',
     bottom: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.elevated,
+  },
+  // 2026-08-16 T-C03: layers FAB stacked above recenter
+  layersBtn: {
+    position: 'absolute',
+    bottom: 68,
     right: 16,
     width: 44,
     height: 44,

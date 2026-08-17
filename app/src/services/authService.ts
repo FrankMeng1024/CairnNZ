@@ -217,11 +217,19 @@ export async function logout(): Promise<void> {
 }
 
 // O18 AUTH-04: request a 6-digit password reset code by email.
-// Returns 200 always (privacy — do not leak account existence).
-export async function passwordResetRequest(email: string): Promise<{ error?: string; devCode?: string }> {
+// R21 (2026-08-17): backend now surfaces rate-limit info (10 codes /
+// 15 min max, then 429 with retryAfterSeconds).
+export async function passwordResetRequest(email: string): Promise<{ error?: string; devCode?: string; rateLimited?: boolean; retryAfterSeconds?: number }> {
   try {
     const res = await post('/api/auth/password-reset/request', { email });
     const data = await res.json();
+    if (res.status === 429 && data?.rateLimited) {
+      return {
+        error: data.error || 'Too many code requests. Please wait a bit.',
+        rateLimited: true,
+        retryAfterSeconds: data.retryAfterSeconds || 900,
+      };
+    }
     if (!res.ok) return { error: data?.error || 'Could not send reset code.' };
     return { devCode: data.dev_code };
   } catch {

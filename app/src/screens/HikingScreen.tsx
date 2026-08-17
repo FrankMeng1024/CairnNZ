@@ -13,13 +13,13 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, Animated, Easing, Linking,
+  Alert, Animated, Easing, Image,
 } from 'react-native';
 import { haptic } from '../services/hapticService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { useKeepAwake } from 'expo-keep-awake';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { useNavigation, CommonActions, useIsFocused } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppStore } from '../store/useAppStore';
@@ -72,6 +72,7 @@ export function HikingScreen() {
   const showSimWalker = debugMode && simWalkerActive;
 
   const nav = useNavigation<Nav>();
+  const isFocused = useIsFocused();
   // O12: uiMode/isExpert removed — was dead double-switch (only 'brg' placeholder used it)
   const insets = useSafeAreaInsets();
 
@@ -208,6 +209,14 @@ export function HikingScreen() {
   // a small amount of battery. Tap to open.
   const [heading, setHeading] = useState<number | null>(null);
   const [compassEnabled, setCompassEnabled] = useState(false);
+
+  // H2 concept: middle-of-screen tap during tracking expands a bottom
+  // action tray with 3 large circular buttons — Pause / Cairn / Done.
+  // 2026-08-16 UI overhaul: this is now the SOLE entry point for
+  // pause/stop actions (legacy inline trackingBar controls removed).
+  // Lock state was dropped in the same overhaul — the tray collapses
+  // to a chevron by default, which already prevents pocket-taps.
+  const [actionsExpanded, setActionsExpanded] = useState(false);
   useEffect(() => {
     if (!compassEnabled) {
       setHeading(null);
@@ -770,6 +779,18 @@ export function HikingScreen() {
     }
   }, [status, phase]);
 
+  // R21 (2026-08-17 user "进入前 3 秒展开, 之后自动收起"): when the tracking
+  // phase first mounts, open the action tray so the user sees what buttons
+  // exist (Pause / Cairn / Done). Auto-collapse after 3 seconds so it doesn't
+  // hog map real-estate. Runs only on the phase transition into tracking, not
+  // every render.
+  useEffect(() => {
+    if (phase !== 'tracking') return;
+    setActionsExpanded(true);
+    const t = setTimeout(() => setActionsExpanded(false), 3000);
+    return () => clearTimeout(t);
+  }, [phase]);
+
   // v118: too-short modal replaced the v116 system Alert. The session is
   // now preserved by stopTracking's pre-check (see useTrackingStore), so
   // tapping "Got it" leaves the user back on the still-running tracking
@@ -778,7 +799,6 @@ export function HikingScreen() {
 
   // Spring press scales
   const trackBtnScale = useRef(new Animated.Value(1)).current;
-  const fabScale = useRef(new Animated.Value(1)).current;
   const springIn = (val: Animated.Value) =>
     Animated.spring(val, { toValue: 0.95, useNativeDriver: true, tension: 300, friction: 10 }).start();
   const springOut = (val: Animated.Value) =>
@@ -795,6 +815,83 @@ export function HikingScreen() {
     }
     setSelectedMarkerId(null);
     setUi('map');
+  }
+
+  // 2026-08-16 (H4 redesign): unified save-then-navigate helper. Both
+  // sheet CTAs ("View Activity" and "Done") save via stopTracking; only
+  // the post-save destination differs. Extracted from the two former
+  // inline callbacks to avoid duplicating the wall-clock timeout + nav
+  // guard logic (v405/v407 fixes) in two places.
+  async function saveHikeAndNav(name: string, dest: 'activity' | 'home') {
+    // O14 Bug 4 fix: flip saving state BEFORE dismissing the sheet so
+    // the sheet shows "Saving…" spinner + disabled buttons while
+    // stopTracking runs its flush+rename chain (up to 15s wall).
+    setSavingHike(true);
+    // v405: Snapshot sessionId + trackPoints BEFORE stopTracking clears
+    // the store. Needed for auto-nav below and for "too-short" defensive
+    // check (skip nav if session was discarded).
+    const preState = useTrackingStore.getState();
+    const capturedSessionId = preState.sessionId;
+    const wasTooShort = preState.trackPoints.length < 2 || preState.distanceM < 20;
+
+    // v407 fix #5 / O7 (2026-07-26): 30s wall-clock around stopTracking.
+    // Under weak network, pushMemoryNow + finalize can each stall 30s;
+    // the wall lets the UI unstick while the store's own memorySync
+    // backoff loop continues in the background.
+    const STOP_WALL_TIMEOUT_MS = 30000;
+    try {
+      await Promise.race([
+        stopTracking(name),
+        new Promise<void>((_, reject) => setTimeout(() => reject(new Error('stopTracking_timeout_30s')), STOP_WALL_TIMEOUT_MS)),
+      ]);
+    } catch (err) {
+      // stopTracking's local addSession is synchronous — data is safe on
+      // disk. Server sync retries via memorySync backoff.
+      // eslint-disable-next-line no-console
+      console.warn('[v407] stopTracking wall-timeout / error:', String(err));
+    }
+    // O14 Bug 4: clear saving state + dismiss sheet in one go once
+    // stopTracking has finished (or wall-timed out).
+    setSavingHike(false);
+    setStopSummary(null);
+
+    // v407 fix #3: snapshot isLoggedIn before nav — auto-logout during
+    // stopTracking would leave only Auth in the stack and reset would
+    // throw.
+    const stillLoggedIn = useAppStore.getState().isLoggedIn;
+    if (wasTooShort || !stillLoggedIn) {
+      // Too-short: TooShortSheet will render via lastStopReason observer.
+      // Not-logged-in: auto-logout handler owns the redirect to Auth.
+      return;
+    }
+
+    try {
+      if (dest === 'activity' && capturedSessionId) {
+        // Primary "View Activity" — land on MapHistory detail with the
+        // Routes(activities) list as the back-stack target.
+        nav.dispatch(
+          CommonActions.reset({
+            index: 2,
+            routes: [
+              { name: 'Home' },
+              { name: 'Routes', params: { initialTab: 'activities' } },
+              { name: 'MapHistory', params: { sessionId: capturedSessionId } },
+            ],
+          })
+        );
+      } else {
+        // Secondary "Done" — save is complete, just go Home. Clean stack.
+        nav.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Home' }],
+          })
+        );
+      }
+    } catch (navErr) {
+      // eslint-disable-next-line no-console
+      console.warn('[v407] nav.reset failed:', String(navErr));
+    }
   }
 
   // O12: settings-aware distance format (metric vs imperial).
@@ -993,33 +1090,32 @@ export function HikingScreen() {
     />
   );
 
-  // R114/O22 STORY-73009 (H3): banner CTA handlers. When user has previously
-  // denied location and now returns to Hike, the banner offers Grant (re-run
-  // the OS permission request) and Open Settings (deep-link to the app's
-  // permission screen for OS-level enable). If Grant is tapped and the OS
-  // returns granted, we clear the banner and re-run the initial prime to
-  // seed lastCoordinate so distance labels update.
-  const handleGrantLocation = async () => {
-    try {
-      const req = await Location.requestForegroundPermissionsAsync();
-      if (req.granted) {
-        setHasLocationPermission(true);
-        try {
-          const fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          const cur = useTrackingStore.getState();
-          if (cur.status !== 'tracking') {
-            useTrackingStore.setState({
-              lastCoordinate: { lat: fix.coords.latitude, lng: fix.coords.longitude, alt: fix.coords.altitude ?? null },
-              lastCoordinateTime: Date.now(),
-            });
-          }
-        } catch { /* non-fatal */ }
-      }
-    } catch { /* non-fatal */ }
-  };
-  const handleOpenSettings = () => {
-    try { Linking.openSettings(); } catch { /* non-fatal */ }
-  };
+  // 2026-08-17 R21: handleGrantLocation / handleOpenSettings removed with
+  // the inline permission banner. GPS state now surfaces via the amber chip
+  // at top-right (matches Running R0). If user returns after granting in
+  // Settings, the focus-recheck useEffect below clears permissionDeniedVisible.
+
+  // 2026-08-17 R21: re-check permission when screen regains focus. Handles
+  // the case where user goes to iOS Settings, grants location, and returns —
+  // without this, permissionDeniedVisible modal could re-appear or
+  // hasLocationPermission stays false (dot stays amber).
+  useEffect(() => {
+    if (!isFocused) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (cancelled) return;
+        if (perm.granted) {
+          setHasLocationPermission(true);
+          setPermissionDeniedVisible(false);
+        } else {
+          setHasLocationPermission(false);
+        }
+      } catch { /* non-fatal */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isFocused]);
 
   // ── Phase 1: Route Selection ─────────────────────────────────────────────
   if (phase === 'select') {
@@ -1028,83 +1124,78 @@ export function HikingScreen() {
       <View style={styles.container}>
         <HikingMap markers={[]} trackPoints={[]} onMarkerPress={() => {}} />
 
-        {/* Top overlay — uses safe-area inset directly so the chips
-            never sit under the Dynamic Island / status bar regardless
-            of the device. SafeAreaView inside an absolute parent
-            doesn't reliably report insets, so we add them ourselves. */}
-        <View style={[styles.topOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+        {/* Top overlay: concept-locked stats strip (4 items in one row).
+            Values are live even before tracking starts (all zero) so the
+            layout stays stable when the user taps Start. Back button is
+            preserved as a floating chip anchored to the safe-area inset. */}
+        <View style={[styles.topOverlay, { paddingTop: insets.top + Spacing.lg }]} pointerEvents="box-none">
           <View style={styles.topRow}>
-            <BackButton variant="pill" onPress={() => nav.goBack()} />
+            <BackButton variant="inline" onPress={() => nav.goBack()} />
             <View style={[styles.gpsChip, styles.gpsChipAmber]}>
               <View style={[styles.gpsDot, { backgroundColor: Colors.severityWarning }]} />
               <Text style={[styles.gpsText, styles.gpsTextAmber]}>Enable GPS</Text>
             </View>
           </View>
-        </View>
-
-        {/* R114/O22 STORY-73009 (H3): inline permission banner. Shown when
-            user has denied foreground location. Explains why hiking won't
-            work and offers Grant (retry OS prompt) + Open Settings (deep
-            link). Prior behavior was a one-shot modal that vanished on
-            dismiss, leaving the user with no path forward. */}
-        {hasLocationPermission === false && (
-          <View style={[styles.permBanner, { top: insets.top + 56 }]} pointerEvents="box-none">
-            <View style={styles.permBannerCard}>
-              <Text style={styles.permBannerTitle}>Location needed for Hiking</Text>
-              <Text style={styles.permBannerBody}>
-                Cairn needs your location to track hikes and reveal your map. Grant permission or open Settings to enable it.
-              </Text>
-              <View style={styles.permBannerRow}>
-                <TouchableOpacity
-                  style={[styles.permBannerBtn, styles.permBannerBtnPrimary]}
-                  onPress={handleGrantLocation}
-                  accessibilityRole="button"
-                  accessibilityLabel="Grant location permission"
-                >
-                  <Text style={styles.permBannerBtnPrimaryText}>Grant</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.permBannerBtn, styles.permBannerBtnSecondary]}
-                  onPress={handleOpenSettings}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open device Settings"
-                >
-                  <Text style={styles.permBannerBtnSecondaryText}>Open Settings</Text>
-                </TouchableOpacity>
-              </View>
+          <View style={styles.statsStrip} pointerEvents="none">
+            <Text style={styles.statsStripKm}>{distDisplay} {dist.unit}</Text>
+            <Text style={styles.statsStripTime}>{durationDisplay}</Text>
+            <Text style={styles.statsStripElev}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
+            <View style={styles.statsStripGpsWrap}>
+              <View style={[styles.statsStripGpsDot, { backgroundColor: hasLocationPermission === false ? Colors.severityWarning : Colors.primary }]} />
+              <Text style={styles.statsStripGpsText}>GPS</Text>
             </View>
           </View>
-        )}
+        </View>
 
-        {/* Bottom: route selector pill + start button */}
-        <View style={[styles.bottomOverlay, { paddingBottom: insets.bottom + 8 }]} pointerEvents="box-none">
+        {/* R114/O22 STORY-73009 (H3): inline permission banner removed.
+            2026-08-17 R21: chip at top-right already signals GPS state.
+            Matches Running R0 which relies on chip alone. */}
+
+        {/* Bottom: FREE HIKE pill card + Route row + solid green Start button.
+            Concept-locked from H0-start.png. Card + row background is
+            Paper 94% opacity so the map still peeks through. */}
+        <View style={[styles.bottomOverlay, { paddingBottom: insets.bottom + Spacing.base }]} pointerEvents="box-none">
           <View style={styles.bottomPanel}>
-            {/* Route selector pill — single row, card style */}
-            <TouchableOpacity style={styles.routePill} onPress={openRoutePicker} activeOpacity={0.85}>
-              <View style={styles.routePillIcon}>
-                <Icon name={selectedRoute ? 'Route' : 'Target'} size={20} color={Colors.primary} strokeWidth={1.8} />
+            {/* FREE HIKE pill card — 2026-08-17 concept H0: adds a
+                small fern-leaf glyph on the left. The leaf reinforces
+                the "Explore freely" story before the user commits to
+                a saved route, and mirrors the fern used on the
+                complete screen. */}
+            <TouchableOpacity style={styles.freeHikePill} onPress={openRoutePicker} activeOpacity={0.9}>
+              <Image
+                source={require('../../assets/hiking/fern-leaf.png')}
+                style={styles.freeHikeGlyph}
+                resizeMode="contain"
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.freeHikeEyebrow}>
+                  {selectedRoute ? 'ROUTE' : 'FREE HIKE'}
+                </Text>
+                <Text style={styles.freeHikeSub} numberOfLines={1}>
+                  {selectedRoute ? selectedRouteName : 'Explore freely'}
+                </Text>
               </View>
-              <View style={styles.routePillTextGroup}>
-                <Text style={styles.routePillText} numberOfLines={1}>{selectedRouteName}</Text>
-                <Text style={styles.routePillHint}>Tap to change route</Text>
-              </View>
-              <Icon name="ChevronUp" size={16} color={Colors.primary} strokeWidth={2.5} />
+              <Icon name="ChevronUp" size={18} color={Colors.textSecondary} strokeWidth={2.5} />
             </TouchableOpacity>
 
-            {/* Start button — full-width before tracking begins. The
-                Place Flag FAB only makes sense once a session is live
-                (you can't drop a flag at "your current GPS" if the
-                session hasn't started recording yet). */}
-            <Animated.View style={[{ height: 56 }, { transform: [{ scale: trackBtnScale }] }]}>
+            {/* Route row */}
+            <TouchableOpacity style={styles.routeRow} onPress={openRoutePicker} activeOpacity={0.9}>
+              <Text style={styles.routeRowLabel} numberOfLines={1}>
+                Route: {selectedRoute ? selectedRouteName : 'None'}
+              </Text>
+              <Icon name="ChevronRight" size={20} color={Colors.textMuted} strokeWidth={2} />
+            </TouchableOpacity>
+
+            {/* Start Hiking — solid pill button (concept color #455D3C) */}
+            <Animated.View style={[{ height: 52 }, { transform: [{ scale: trackBtnScale }] }]}>
               <TouchableOpacity
-                style={styles.trackBtn}
+                style={styles.startHikeBtn}
                 onPress={() => { haptic.impact('medium'); startTracking(); setPhase('tracking'); }}
                 activeOpacity={1}
                 onPressIn={() => springIn(trackBtnScale)}
                 onPressOut={() => springOut(trackBtnScale)}
               >
-                <Icon name="Play" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
-                <Text style={styles.trackBtnText}>Start Hiking</Text>
+                <Text style={styles.startHikeBtnText}>Start Hiking</Text>
               </TouchableOpacity>
             </Animated.View>
           </View>
@@ -1209,6 +1300,10 @@ export function HikingScreen() {
           : null}
         userPos={lastCoordinate ? { lat: lastCoordinate.lat, lng: lastCoordinate.lng } : null}
         debugMode={debugMode}
+        // 2026-08-17 concept H1: blue dot at track start once we
+        // have at least one recorded GPS point. The blue variant
+        // matches the hiking screen's palette in the concept sheet.
+        trackStartVariant={isTrackingOrPaused ? 'hike' : null}
         // Skip the globe → location fly-in whenever we already know
         // where the user is. This covers all the cases where the user
         // expects the map to "just be there":
@@ -1224,12 +1319,14 @@ export function HikingScreen() {
         recenterImperativeRef={recenterImperativeRef}
       />
 
-      {/* Top overlay: back button (left) + GPS chip (right). Uses
-          inset-aware paddingTop so chips never touch the Dynamic
-          Island. */}
-      <View style={[styles.topOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+      {/* Top overlay: back + GPS chip + concept stats strip. Concept H1/H2
+          places 4 stats (km / time / elev / GPS) as a single row on the
+          Paper surface just below the safe-area top. Existing stats bar
+          (tracking) is kept below so pause/stop buttons still have their
+          host row, but its visual weight is reduced. */}
+      <View style={[styles.topOverlay, { paddingTop: insets.top + Spacing.lg }]} pointerEvents="box-none">
         <View style={styles.topRow}>
-          <BackButton variant="pill" onPress={() => nav.goBack()} />
+          <BackButton variant="inline" onPress={() => nav.goBack()} />
           <View style={[
             styles.gpsChip,
             status === 'idle' ? styles.gpsChipAmber : (!locationAvailable && styles.gpsChipOffline),
@@ -1249,6 +1346,17 @@ export function HikingScreen() {
                 ? 'GPS'
                 : status === 'idle' ? 'Enable GPS' : 'GPS Offline'}
             </Text>
+          </View>
+        </View>
+
+        {/* Concept stats strip — always visible while on Hiking. */}
+        <View style={styles.statsStrip} pointerEvents="none">
+          <Text style={styles.statsStripKm}>{distDisplay} {dist.unit}</Text>
+          <Text style={styles.statsStripTime}>{durationDisplay}</Text>
+          <Text style={styles.statsStripElev}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
+          <View style={styles.statsStripGpsWrap}>
+            <View style={[styles.statsStripGpsDot, { backgroundColor: locationAvailable ? Colors.primary : Colors.severityWarning }]} />
+            <Text style={styles.statsStripGpsText}>GPS</Text>
           </View>
         </View>
 
@@ -1299,104 +1407,13 @@ export function HikingScreen() {
           </View>
         )}
 
-        {/* Tracking stats bar */}
-        {isTrackingOrPaused && (
-          <View style={styles.trackingBar}>
-            <View style={styles.trackingStat}>
-              <Text style={styles.trackingValueLg}>{distDisplay}</Text>
-              <Text style={styles.trackingUnit}>{dist.unit}</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.trackingStat}>
-              <Text style={styles.trackingValue}>{durationDisplay}</Text>
-              <Text style={styles.trackingUnit}>elapsed</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.trackingStat}>
-              <Text style={styles.trackingValue}>+{dist.formatElevation(elevationGainM)}{dist.elevUnit}</Text>
-              <Text style={styles.trackingUnit}>elev</Text>
-            </View>
-            {/* O12: isExpert 'brg' stat removed — was hardcoded '--' dead placeholder */}
-            {selectedRoute && (
-              <PressBtn
-                style={styles.routeSwitchBtn}
-                onPress={() => Alert.alert('Route', activeRoute?.name ?? 'Free Hike', [
-                  { text: 'Switch to Free', onPress: () => setSelectedRoute(null) },
-                  { text: 'Cancel', style: 'cancel' },
-                ])}
-                scaleTo={0.9}
-              >
-                <Icon name="Route" size={12} color={Colors.primary} strokeWidth={2.5} />
-              </PressBtn>
-            )}
-            {/* O18 HIKE-01: Independent Pause / Resume button. Tapping
-                Pause halts timer + GPS accumulation without opening the
-                summary sheet — user can answer a call and continue.
-                When paused, this button becomes Resume. */}
-            {status === 'tracking' && (
-              <PressBtn
-                style={styles.pauseBtn}
-                accessibilityLabel="Pause hike"
-                accessibilityRole="button"
-                onPress={() => {
-                  haptic.impact('light');
-                  pauseTracking();
-                }}
-                scaleTo={0.95}
-              >
-                <Icon name="Pause" size={12} color={Colors.primary} strokeWidth={3} />
-                <Text style={styles.pauseBtnText}>Pause</Text>
-              </PressBtn>
-            )}
-            {status === 'paused' && !stopSummary && (
-              <PressBtn
-                style={styles.resumeBtn}
-                accessibilityLabel="Resume hike"
-                accessibilityRole="button"
-                onPress={() => {
-                  haptic.impact('light');
-                  resumeTracking();
-                }}
-                scaleTo={0.95}
-              >
-                <Icon name="Play" size={12} color="#fff" strokeWidth={3} />
-                <Text style={styles.resumeBtnText}>Resume</Text>
-              </PressBtn>
-            )}
-            <PressBtn
-              style={styles.stopBtn}
-              accessibilityLabel="Stop hike"
-              accessibilityRole="button"
-              onPress={() => {
-                haptic.impact('medium');
-                // v120: tapping Stop = pause everything immediately.
-                // Timer freezes, GPS stops accumulating distance. The
-                // summary sheet opens; user picks Resume (un-pause) or
-                // Save & End (real stop). Time/GPS during the sheet is
-                // intentionally lost — treated as signal-loss gap.
-                const ts = useTrackingStore.getState();
-                if (!ts.startedAt) {
-                  // Fallback: malformed state, just stop.
-                  stopTracking();
-                  return;
-                }
-                pauseTracking();
-                setStopSummary({
-                  distanceM: ts.distanceM,
-                  durationS: ts.durationS,
-                  elevationGainM: ts.elevationGainM,
-                  activityMode: ts.activityMode,
-                  trackPoints: ts.trackPoints.map(p => ({ lat: p.lat, lng: p.lng })),
-                  startedAt: ts.startedAt,
-                });
-              }}
-              scaleTo={0.95}
-            >
-              <Icon name="Square" size={12} color="#fff" strokeWidth={3} />
-              <Text style={styles.stopBtnText}>Stop</Text>
-            </PressBtn>
-          </View>
-        )}
+        {/* 2026-08-16 UI overhaul: legacy trackingBar removed. Its
+            distance/time/elev readouts duplicated the top statsStrip,
+            and its inline Pause/Resume/Stop buttons are now surfaced
+            via the H2 chevron tray (Pause / Cairn / Done). Route-switch
+            control moved into H2 flow as well (accessible via long-press
+            or dedicated tray future entry — for now, route switching
+            happens pre-Start via the picker). */}
       </View>
 
       {/* Bottom controls. Two-column layout when tracking:
@@ -1421,75 +1438,213 @@ export function HikingScreen() {
             </Animated.View>
           </View>
         ) : (
-          // Tracking: two evenly-spaced controls — Compass (left) +
-          // Place Flag (right). Both 56x56 frosted-glass circles. The
-          // compass tap recentres the camera bearing to north; flag
-          // opens the plant sheet.
+          // Tracking: concept H1 layout — 44x44 pale compass FAB (left) +
+          // 44x44 pale layers FAB (right). Both edges align with the
+          // top-row Back / GPS chips so the page reads as a single grid.
+          // Cairn quick-drop lives in the H2 tray (chevron pull-up).
           <View style={styles.controlRow}>
             <View style={styles.controlSlot}>
               <TouchableOpacity
-                style={styles.circleBtn}
+                style={styles.fabPale}
                 activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Toggle compass"
                 onPress={() => {
                   haptic.selection();
                   setCompassEnabled(v => !v);
                 }}
               >
                 {compassEnabled ? (
-                  // Live compass needle — north stays red, south grey,
-                  // and a static "N" letter on the bezel anchors the
-                  // user's mental direction even when the needle is
-                  // moving.
                   <CompassNeedle heading={heading} size={22} />
                 ) : (
-                  // "Closed lid" state — sensor off, but the icon
-                  // still uses the primary colour so users can tell
-                  // it's an interactive compass button (not a broken
-                  // greyed-out element). Tap to open the lid.
-                  <Icon name="Compass" size={22} color={Colors.primary} strokeWidth={2} />
+                  <Icon name="Compass" size={20} color={Colors.primary} strokeWidth={2} />
                 )}
               </TouchableOpacity>
             </View>
-            {/* v118+v119: recenter button — only shown after the user has
-                manually panned/zoomed (followUser=false). Tapping fires
-                the imperative recenter (HikingMap → cameraRef.setCamera)
-                AND flips followUser back to true so subsequent GPS fixes
-                keep the camera locked. */}
+            {/* Recenter button — only shown after the user has manually
+                panned/zoomed (followUser=false). Concept: pale FAB with a
+                target glyph, sits between compass (left) and flag (right). */}
             {!followUser && (
               <View style={styles.controlSlot}>
                 <TouchableOpacity
-                  style={styles.circleBtn}
+                  style={styles.fabPale}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Recenter map on current location"
                   onPress={() => {
                     haptic.selection();
                     recenterImperativeRef.current?.();
-                    // Re-enable follow after the flyTo animation has
-                    // settled — otherwise the in-flight gesture from
-                    // setCamera trips onCameraChanged and immediately
-                    // sets followUser=false again.
                     setTimeout(() => setFollowUser(true), 700);
                   }}
                 >
-                  <Icon name="Target" size={22} color={Colors.primary} strokeWidth={2} />
+                  <Icon name="Target" size={20} color={Colors.primary} strokeWidth={2} />
                 </TouchableOpacity>
               </View>
             )}
             <View style={styles.controlSlot}>
-              <Animated.View style={{ transform: [{ scale: fabScale }] }}>
-                <TouchableOpacity
-                  style={styles.circleBtnPrimary}
-                  onPress={() => nav.navigate('Plant')}
-                  activeOpacity={1}
-                  onPressIn={() => springIn(fabScale)}
-                  onPressOut={() => springOut(fabScale)}
-                >
-                  <Icon name="Flag" size={22} color="#fff" strokeWidth={2} />
-                </TouchableOpacity>
-              </Animated.View>
+              <TouchableOpacity
+                style={styles.fabPale}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Toggle map layers"
+                onPress={() => {
+                  haptic.selection();
+                  // TODO: basemap layer toggle — concept placeholder, no target UX yet
+                  console.log('[HikingScreen] layer toggle - todo');
+                }}
+              >
+                <Icon name="Layers" size={20} color={Colors.primary} strokeWidth={2} />
+              </TouchableOpacity>
             </View>
           </View>
         )}
       </View>
+
+      {/* H2 concept: expandable action tray during tracking.
+          Chevron handle sits just above the bottom FAB row; tapping it
+          expands 3 large circular buttons — Pause / Cairn / Done.
+          This is now the SOLE entry point for pause/stop (2026-08-16 UI
+          overhaul removed the legacy inline trackingBar controls).
+          Renders while tracking or paused (not gated by lock — Lock
+          state was removed as part of the same overhaul). */}
+      {isTrackingOrPaused && (
+        <View
+          style={[styles.h2Layer, { paddingBottom: insets.bottom + 88 }]}
+          pointerEvents="box-none"
+        >
+          {actionsExpanded ? (
+            <View style={styles.h2Tray} pointerEvents="auto">
+              <TouchableOpacity
+                style={styles.h2ChevronHandle}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Hide quick actions"
+                onPress={() => {
+                  haptic.selection();
+                  setActionsExpanded(false);
+                }}
+              >
+                <Icon name="ChevronDown" size={18} color={Colors.textSecondary} strokeWidth={2.2} />
+              </TouchableOpacity>
+              <View style={styles.h2Row}>
+                <View style={styles.h2Slot}>
+                  <TouchableOpacity
+                    style={styles.h2Fab}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel={status === 'paused' ? 'Resume hike' : 'Pause hike'}
+                    onPress={() => {
+                      haptic.impact('light');
+                      // Paused → Resume; tracking → Pause. Single button
+                      // toggle keeps the tray tidy while covering both
+                      // states (concept H2 pause button role).
+                      if (status === 'paused') {
+                        resumeTracking();
+                      } else {
+                        pauseTracking();
+                      }
+                      setActionsExpanded(false);
+                    }}
+                  >
+                    <Icon
+                      name={status === 'paused' ? 'Play' : 'Pause'}
+                      size={22}
+                      color={Colors.primary}
+                      strokeWidth={2.2}
+                    />
+                  </TouchableOpacity>
+                  <Text style={styles.h2FabLabel}>
+                    {status === 'paused' ? 'Resume' : 'Pause'}
+                  </Text>
+                </View>
+                <View style={styles.h2Slot}>
+                  <TouchableOpacity
+                    style={styles.h2Fab}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Leave a Cairn"
+                    onPress={() => {
+                      haptic.selection();
+                      setActionsExpanded(false);
+                      nav.navigate('Plant');
+                    }}
+                  >
+                    <Image
+                      source={require('../../assets/hiking/cairn-stack.png')}
+                      style={{ width: 28, height: 28 }}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                  <Text style={styles.h2FabLabel}>Cairn</Text>
+                </View>
+                <View style={styles.h2Slot}>
+                  <TouchableOpacity
+                    style={styles.h2Fab}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Lock — prevent accidental taps"
+                    accessibilityHint="Long-press to finish the hike"
+                    onPress={() => {
+                      // 2026-08-17 concept H2: third slot returns to
+                      // Lock (concept-locked). Tap collapses the tray
+                      // so accidental Pause/Cairn taps stop working
+                      // until the user pulls the chevron up again —
+                      // that's the intended pocket-tap guard.
+                      haptic.selection();
+                      setActionsExpanded(false);
+                    }}
+                    onLongPress={() => {
+                      // Finish-hike affordance preserved as long-press
+                      // on Lock. Same StopSummarySheet path the previous
+                      // Done button opened — behaviorally identical.
+                      haptic.impact('medium');
+                      const ts = useTrackingStore.getState();
+                      setActionsExpanded(false);
+                      if (!ts.startedAt) {
+                        stopTracking();
+                        return;
+                      }
+                      pauseTracking();
+                      setStopSummary({
+                        distanceM: ts.distanceM,
+                        durationS: ts.durationS,
+                        elevationGainM: ts.elevationGainM,
+                        activityMode: ts.activityMode,
+                        trackPoints: ts.trackPoints.map(p => ({ lat: p.lat, lng: p.lng })),
+                        startedAt: ts.startedAt,
+                      });
+                    }}
+                    delayLongPress={600}
+                  >
+                    <Icon name="Lock" size={22} color={Colors.primary} strokeWidth={2.2} />
+                  </TouchableOpacity>
+                  <Text style={styles.h2FabLabel}>Lock</Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.h2ChevronHandle}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Show quick actions"
+              onPress={() => {
+                haptic.selection();
+                setActionsExpanded(true);
+              }}
+            >
+              <Icon name="ChevronUp" size={18} color={Colors.textSecondary} strokeWidth={2.2} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* 2026-08-16 UI overhaul: H2 lock overlay removed.
+          Rationale: Lock added a UI gate that solved a pocket-tap edge
+          case but confused first-time users (no visible affordance to
+          unlock, 800ms long-press was undiscoverable). The new H2 tray
+          is collapsed by default (chevron only), which already prevents
+          accidental Pause/Cairn/Done taps during a hike. */}
 
       {/* Marker Detail Sheet */}
       {/* R114 (2026-08-07): swapped legacy screens/MarkerDetailSheet for
@@ -1587,83 +1742,16 @@ export function HikingScreen() {
             setStopSummary(null);
           }}
           onConfirm={async (name) => {
-            // O14 Bug 4 fix: flip saving state BEFORE dismissing the
-            // sheet so the sheet shows "Saving…" spinner + disabled
-            // buttons while stopTracking runs its flush+rename chain
-            // (up to 15s wall).
-            setSavingHike(true);
-            // v405: Snapshot sessionId + trackPoints BEFORE stopTracking
-            // clears the store. Needed for auto-nav to MapHistory below,
-            // and for "too-short" defensive check (skip nav if session
-            // was discarded).
-            const preState = useTrackingStore.getState();
-            const capturedSessionId = preState.sessionId;
-            const wasTooShort = preState.trackPoints.length < 2 || preState.distanceM < 20;
-
-            // v407 fix #5: wrap the whole stopTracking → nav chain in try/catch
-            // + 5s wall-clock timeout. Prior version: 弱网下 pushMemoryNow +
-            // finalize 各挂 30s → sheet 卡 60 秒,onConfirm 抛错 UI 不 unmount。
-            // 现在: 最多 5 秒 sheet 关闭,数据本地写入(addSession 已 sync),
-            // 网络重推交给 memorySync 自然的 backoff+schedulePush 重试。
-            // O7 (2026-07-26): 5s → 30s。用户 12:11 真实 hike Save 后 session
-            // 消失,aliyun log 显示 too_short_check 后 zero save events。5s
-            // wall-clock 比 stopTracking 内部的 snapTrack(8s) + saveHikeAtomic
-            // (20s) 都短 → 5s 后 HikingScreen 认为失败,nav 到 activity detail,
-            // 但 stopTracking 内部继续跑; 内部若在某个 await 抛错 (未 catch),
-            // addSession 永远不跑 → session 永远丢。改 30s 让 stopTracking 内
-            // 部预算充足,避免 UI 提前放弃。UI 期间 sheet 保持 open 用户看到
-            // 保存中状态。若 30s 内还完成不了,用户可再手动继续。
-            const STOP_WALL_TIMEOUT_MS = 30000;
-            let stopFailed = false;
-            try {
-              await Promise.race([
-                stopTracking(name),
-                new Promise<void>((_, reject) => setTimeout(() => reject(new Error('stopTracking_timeout_30s')), STOP_WALL_TIMEOUT_MS)),
-              ]);
-            } catch (err) {
-              stopFailed = true;
-              // stopTracking 内部本地写入(addSession)已完成,只是 server sync
-              // 挂了。memorySync 有自己的 backoff 重推循环。用户可见:
-              // sheet 关闭+回 activity detail,细节由 memorySync 后台完成。
-              // eslint-disable-next-line no-console
-              console.warn('[v407] stopTracking wall-timeout / error:', String(err));
-              // NB: stopTracking 内部的 promise 依然在后台跑(未 abort),
-              // finalize + pushMemoryNow 该重试就重试。
-            }
-            // O14 Bug 4: clear saving state + dismiss sheet in one go
-            // once stopTracking has finished (or wall-timed out).
-            setSavingHike(false);
-            setStopSummary(null);
-
-            // v405 fix (Happy Path bug #7,#8): 自动跳 Activity Detail,
-            // back stack 补 Routes(activities) 让 back 直接回列表页。
-            // - 太短 session: 不 nav (TooShortSheet 会展示)
-            // - 正常保存: nav.reset 到 [Home, Routes(activities), MapHistory{sessionId}]
-            //
-            // v407 fix #3: dispatch 前 snapshot isLoggedIn。若 stopTracking
-            // 期间 401_invalid 触发 auto-logout → RootNavigator 只剩 Auth
-            // 一个 stack → reset 到 Home/Routes/MapHistory 会 throw。
-            // 未登录时依赖 auto-logout 已把用户送 Auth,不做 nav。
-            const stillLoggedIn = useAppStore.getState().isLoggedIn;
-            if (!wasTooShort && capturedSessionId && stillLoggedIn) {
-              try {
-                nav.dispatch(
-                  CommonActions.reset({
-                    index: 2,
-                    routes: [
-                      { name: 'Home' },
-                      { name: 'Routes', params: { initialTab: 'activities' } },
-                      { name: 'MapHistory', params: { sessionId: capturedSessionId } },
-                    ],
-                  })
-                );
-              } catch (navErr) {
-                // eslint-disable-next-line no-console
-                console.warn('[v407] nav.reset failed:', String(navErr));
-              }
-            }
-            // else: 依赖 status === idle observer 回 selection 屏 +
-            // TooShortSheet 提示 (line 1826 useEffect)
+            // 2026-08-16 (H4 redesign): primary "View Activity" CTA —
+            // save then nav.reset into MapHistory detail (existing v405
+            // behavior).
+            await saveHikeAndNav(name, 'activity');
+          }}
+          onConfirmAndHome={async (name) => {
+            // 2026-08-16 (H4 redesign): secondary "Done" CTA — save,
+            // then land on Home instead of MapHistory. Same save path
+            // as onConfirm; only the post-save nav differs.
+            await saveHikeAndNav(name, 'home');
           }}
           // O1: removed onSaveAsRoute prop — hike is activity not template
         />
@@ -1681,7 +1769,7 @@ export function HikingScreen() {
       {/* O18 ONB-04: permission-denied modal — shown when GPS was rejected
           during the initial hiking prime. Replaces prior silent return. */}
       <PermissionDeniedModal
-        visible={permissionDeniedVisible}
+        visible={permissionDeniedVisible && isFocused}
         featureName="Hiking"
         onDismiss={() => setPermissionDeniedVisible(false)}
       />
@@ -1709,83 +1797,179 @@ export function HikingScreen() {
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────
+// Concept-lock color tokens (sleep-run 2026-08-15):
+//   Paper:   #F9F6F3
+//   Ink:     #1E2A24
+//   Muted:   #5F6B62 / #8A8579
+//   HikeAccent: #455D3C
+const CONCEPT = {
+  paper: '#F9F6F3',
+  paper94: 'rgba(249,246,243,0.94)',
+  ink: '#1E2A24',
+  mutedInk: '#5F6B62',
+  mutedText: '#8A8579',
+  hike: '#455D3C',
+  hikeDark: '#2F3F28',
+  hairline: 'rgba(20,42,30,0.10)',
+} as const;
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  // R114/O22 STORY-73009: permission banner (denied state)
-  permBanner: {
-    position: 'absolute',
-    left: Spacing.base,
-    right: Spacing.base,
-    zIndex: 10,
+  // ── Concept stats strip (H0-H4 shared) ────────────────────────────────
+  // One row anchored just below Back/GPS chips. Values sit on the map's
+  // topmost translucent Paper band. Text is bold ink; numbers use
+  // tabular-nums so widths don't jitter as digits change.
+  statsStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xs,
   },
-  permBannerCard: {
-    backgroundColor: 'rgba(255,255,255,0.97)',
-    borderRadius: Radius.card,
+  statsStripKm: {
+    fontSize: 14, fontWeight: '700', color: CONCEPT.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  statsStripTime: {
+    fontSize: 14, fontWeight: '700', color: CONCEPT.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  statsStripElev: {
+    fontSize: 14, fontWeight: '600', color: CONCEPT.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  statsStripGpsWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+  },
+  statsStripGpsDot: {
+    width: 8, height: 8, borderRadius: 4,
+  },
+  statsStripGpsText: {
+    fontSize: 12, fontWeight: '700', color: CONCEPT.hike, letterSpacing: 0.2,
+  },
+
+  // ── H0 bottom stack (FREE HIKE pill + Route row + Start button) ───────
+  freeHikePill: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: CONCEPT.paper94,
+    borderWidth: 1, borderColor: CONCEPT.hairline,
+    borderRadius: 18,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    minHeight: 72,
+    gap: Spacing.md,
+    ...Shadow.card,
+  },
+  // 2026-08-17 concept H0: fern-leaf glyph sits at 28pt on the left of
+  // the FREE HIKE pill. Uses the shared PNG (assets/hiking/fern-leaf)
+  // so it stays in sync with the botanical vocabulary used on the
+  // TooShort sheet and the complete-screen feedback card.
+  freeHikeGlyph: {
+    width: 28, height: 28,
+  },
+  freeHikeEyebrow: {
+    fontSize: 12, fontWeight: '800',
+    color: CONCEPT.ink, letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  freeHikeSub: {
+    fontSize: 13, fontWeight: '500',
+    color: CONCEPT.mutedInk,
+  },
+  routeRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: CONCEPT.paper94,
+    borderWidth: 1, borderColor: CONCEPT.hairline,
+    borderRadius: 12,
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.severityWarning,
-    ...Shadow.card,
-    gap: Spacing.sm,
+    minHeight: 44,
   },
-  permBannerTitle: {
-    fontSize: FontSize.body,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  permBannerBody: {
-    fontSize: FontSize.small,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-  },
-  permBannerRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: 4,
-  },
-  permBannerBtn: {
+  routeRowLabel: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: Radius.pill,
+    fontSize: 14, fontWeight: '600', color: CONCEPT.ink,
+  },
+  startHikeBtn: {
+    height: 52, borderRadius: 26,
+    backgroundColor: CONCEPT.hike,
+    alignItems: 'center', justifyContent: 'center',
+    ...Shadow.card,
+  },
+  startHikeBtnText: {
+    color: CONCEPT.paper,
+    fontSize: 17, fontWeight: '700', letterSpacing: 0.2,
+  },
+
+  // ── H1 tracking FABs (44x44) ──────────────────────────────────────────
+  fabPale: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: CONCEPT.paper94,
+    borderWidth: 1, borderColor: CONCEPT.hairline,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10, shadowRadius: 12, elevation: 4,
+  },
+
+  // H2 concept: expandable action tray during tracking.
+  // Sits above the H1 bottom FAB row. Chevron pull-up handle
+  // reveals 3 large 56x56 circular buttons (Pause / Cairn / Lock).
+  h2Layer: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: 0,
     alignItems: 'center',
-    justifyContent: 'center',
+    pointerEvents: 'box-none',
   },
-  permBannerBtnPrimary: {
-    backgroundColor: Colors.primary,
+  h2Tray: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.base,
+    paddingBottom: Spacing.sm,
   },
-  permBannerBtnPrimaryText: {
-    color: '#fff',
-    fontSize: FontSize.small,
-    fontWeight: '700',
+  h2ChevronHandle: {
+    width: 44, height: 20, borderRadius: 10,
+    backgroundColor: CONCEPT.paper94,
+    borderWidth: 1, borderColor: CONCEPT.hairline,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: Spacing.xs,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, shadowRadius: 6, elevation: 2,
   },
-  permBannerBtnSecondary: {
-    backgroundColor: 'rgba(0,0,0,0.04)',
-    borderWidth: 1,
-    borderColor: Colors.border,
+  h2Row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing.lg,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
   },
-  permBannerBtnSecondaryText: {
-    color: Colors.textPrimary,
-    fontSize: FontSize.small,
-    fontWeight: '700',
+  h2Slot: {
+    alignItems: 'center',
   },
+  h2Fab: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: CONCEPT.paper94,
+    borderWidth: 1, borderColor: CONCEPT.hairline,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12, shadowRadius: 14, elevation: 5,
+  },
+  h2FabLabel: {
+    marginTop: Spacing.xs,
+    fontSize: FontSize.tiny,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+
+  // 2026-08-16 UI overhaul: h2 lock overlay removed with the Lock button.
+  // Tray collapses to chevron by default which already prevents pocket-taps.
+
+  // R114/O22 STORY-73009: permission banner styles removed 2026-08-17 R21.
+  // Banner was gated by `false &&` (dead code). GPS state now shown via chip
+  // at top-right only.
 
   // Route selection (phase 1)
   bottomPanel: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.sm, gap: Spacing.sm },
-  routePill: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.97)', borderRadius: Radius.card,
-    padding: Spacing.md,
-    borderWidth: 1.5, borderColor: Colors.primary + '40',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.10, shadowRadius: 14, elevation: 5,
-  },
-  routePillIcon: {
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center',
-  },
-  routePillTextGroup: { flex: 1, gap: 1 },
-  routePillText: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
-  routePillHint: { fontSize: FontSize.small, color: Colors.primary, fontWeight: '500' },
 
   // Route picker sheet
   routePickerBackdrop: {
@@ -1830,7 +2014,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     // paddingTop is supplied by the topOverlay container inline
-    // (insets.top + 8). Don't double-pad here, otherwise Back/GPS
+    // (insets.top + Spacing.lg). Don't double-pad here, otherwise Back/GPS
     // chips drift further from the status bar than the rest of the
     // app (Home uses inset + Spacing.sm only).
     paddingHorizontal: Spacing.base, gap: Spacing.sm,
@@ -1854,16 +2038,11 @@ const styles = StyleSheet.create({
   gpsTextAmber: { color: Colors.severityWarning },
 
   trackingBar: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.65)',
-    marginHorizontal: Spacing.base, marginTop: Spacing.sm,
-    borderRadius: Radius.card, padding: Spacing.md,
-    gap: Spacing.sm,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 24, elevation: 6,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    borderLeftWidth: 3, borderLeftColor: Colors.primary,
+    // Deprecated 2026-08-16 (kept as harmless stub in case a legacy
+    // reference lingers in a hot-reload cache). Safe to fully remove
+    // after next full rebuild cycle. No consumers in current code.
+    display: 'none',
   },
-  trackingStat: { alignItems: 'center', flex: 1 },
   // v78 #1: Signal-lost pill — amber chip above the stats bar.
   // Self-aligned start, only visible when GPS hasn't fixed in 30s+.
   // R114/O22 STORY-73012: overspeed banner (top second row). numberOfLines=1
@@ -1924,41 +2103,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18, shadowRadius: 12, elevation: 5,
   },
   lapToastText: { fontSize: 13, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
-  // Tracking stats panel — values intentionally compact (14pt) so the
-  // panel doesn't dominate the map view. The numbers are reference
-  // information; users glance at them, they don't read them like a
-  // dashboard. Unit row stays small for the same reason.
-  trackingValueLg: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, fontVariant: ['tabular-nums'], lineHeight: 18 },
-  trackingValue: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, fontVariant: ['tabular-nums'], lineHeight: 18 },
-  trackingUnit: { fontSize: 9, color: Colors.textSecondary, marginTop: 1, fontWeight: '500', letterSpacing: 0.2 },
-  statDivider: { width: 1, height: 28, backgroundColor: Colors.border },
-  routeSwitchBtn: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: Colors.primary,
-  },
-  stopBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.danger, borderRadius: Radius.button,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
-  },
-  stopBtnText: { color: '#fff', fontWeight: '700', fontSize: FontSize.small },
-  // O18 HIKE-01: independent Pause + Resume buttons alongside Stop.
-  pauseBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primaryLight, borderRadius: Radius.button,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
-    borderWidth: 1, borderColor: Colors.primary,
-    marginRight: Spacing.xs,
-  },
-  pauseBtnText: { color: Colors.primary, fontWeight: '700', fontSize: FontSize.small },
-  resumeBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primary, borderRadius: Radius.button,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
-    marginRight: Spacing.xs,
-  },
-  resumeBtnText: { color: '#fff', fontWeight: '700', fontSize: FontSize.small },
+  // 2026-08-16 UI overhaul: trackingBar + inline Pause/Resume/Stop
+  // controls removed. All action affordances now live in the H2 tray.
+  // These styles (trackingBar, trackingStat, trackingValueLg, trackingValue,
+  // trackingUnit, statDivider, routeSwitchBtn, stopBtn/text, pauseBtn/text,
+  // resumeBtn/text) are intentionally omitted — no consumers remain.
 
   // Bottom overlay
   bottomOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, pointerEvents: 'box-none' },
@@ -1978,32 +2127,6 @@ const styles = StyleSheet.create({
   controlSlot: {
     alignItems: 'center', justifyContent: 'center',
   },
-  // Two control buttons share one consistent shape — 56x56 circles
-  // with a frosted-glass effect (translucent white + soft border +
-  // diffuse shadow) so they read as floating UI on top of the map
-  // rather than solid buttons. Same dimensions for both so the layout
-  // is perfectly balanced left/right.
-  circleBtn: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.65)',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18, shadowRadius: 16, elevation: 6,
-  },
-  circleBtnPrimary: {
-    width: 56, height: 56, borderRadius: 28,
-    // Translucent green to match the compass button's frosted-glass
-    // language. Was solid hex (#5d7c46) which read as a "stop sign"
-    // glued to the map. Now: same alpha as compass (0.78), with a
-    // subtle white inner border so the icon contrast still pops over
-    // varied terrain.
-    backgroundColor: 'rgba(93,124,70,0.78)',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: Colors.primary, shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.20, shadowRadius: 16, elevation: 8,
-  },
   // Compass chip — bottom-left slot, mirrors the GPS chip in the top
   // overlay (same shadow, border, surface colour) so the page reads as
   // a coherent system rather than a pile of buttons.
@@ -2017,4 +2140,4 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
   trackBtnText: { fontSize: FontSize.body, fontWeight: '700', color: Colors.primary },
-});
+});

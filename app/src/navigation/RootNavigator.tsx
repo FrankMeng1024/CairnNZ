@@ -35,6 +35,11 @@ import { RouteEditorScreen } from '../screens/RouteEditorScreen';
 import { DebugScreen } from '../screens/DebugScreen';
 import { PlantScreen } from '../screens/PlantScreen';
 import { FriendsScreen } from '../screens/FriendsScreen';
+import { FriendsPreviewScreen } from '../screens/FriendsPreviewScreen';
+import { HomePreviewScreen } from '../screens/HomePreviewScreen';
+import { HikingPreviewScreen } from '../screens/HikingPreviewScreen';
+import { RunningPreviewScreen } from '../screens/RunningPreviewScreen';
+import { RoutesPreviewScreen } from '../screens/RoutesPreviewScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { MemoryScreen } from '../features/memory/screens/MemoryScreen';
 import { MarkDetailDevPreviewScreen } from '../features/marks/dev/MarkDetailDevPreviewScreen';
@@ -42,6 +47,8 @@ import { MarkerDetailScreen } from '../screens/MarkerDetailScreen';
 import { OnboardingModal, hasCompletedOnboarding } from '../features/onboarding/OnboardingModal';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useAppStore } from '../store/useAppStore';
+// R21 (2026-08-17): isPlaywrightBypass import removed — no more bypass in
+// nav gate. Real login flow only.
 import { markBootPhase } from '../services/bootDiagnostics';
 
 // v302: mark immediately after all transitive imports above resolved.
@@ -54,13 +61,27 @@ export type RootStackParamList = {
   Home: undefined;
   Hiking: undefined;
   Running: undefined;
-  MapHistory: { sessionId?: string } | undefined;
+  MapHistory: { sessionId?: string; routeId?: string } | undefined;
   Map: { focusLat?: number; focusLng?: number; focusMarkerId?: string } | undefined;
   Routes: { initialTab?: 'routes' | 'activities' | 'flags' } | undefined;
   RouteEditor: { routeId?: string; fromSessionId?: string } | undefined;
   Plant: undefined;
   MarkerDetail: { markerId: string };
   Friends: undefined;
+  /** dev-only preview: renders the auto-generated FriendsScreen from spec.json.
+   *  Query param 'state' picks which of F0-F6 to render. */
+  FriendsPreview: { state?: string } | undefined;
+  /** dev-only preview: renders the auto-generated HomeScreen from Home.spec.json. */
+  HomePreview: { state?: string } | undefined;
+  /** dev-only preview: renders the auto-generated HikingScreen from Hiking.spec.json.
+   *  Query param 'state' picks which of H0-H4 to render. */
+  HikingPreview: { state?: string } | undefined;
+  /** dev-only preview: renders the auto-generated RunningScreen from Running.spec.json.
+   *  Query param 'state' picks which of R0-R4 to render. */
+  RunningPreview: { state?: string } | undefined;
+  /** dev-only preview: renders the auto-generated RoutesScreen from Routes.spec.json.
+   *  Query param 'state' picks which of R0-R9 to render (10 Trails-Flow screens). */
+  RoutesPreview: { state?: string } | undefined;
   Settings: undefined;
   Memory: undefined;
   Debug: undefined;
@@ -71,7 +92,7 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
-  const { isLoggedIn } = useAppStore();
+  const { isLoggedIn, user } = useAppStore();
   markBootPhase('navigator_body_running', { isLoggedIn: !!isLoggedIn });
 
   // v312 anchor: just before NavigationContainer JSX. If we see this
@@ -129,6 +150,17 @@ export function RootNavigator() {
               stores.useSimWalkerStore = require('../dev/simWalker/useSimWalkerStore').useSimWalkerStore;
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.gpsInjector = require('../dev/simWalker/gpsInjector').gpsInjector;
+              // Route-following: exposed so Playwright can drive turn-by-turn
+              // scenarios without going through the simWalker UI. Both stores
+              // stay accessible for the whole session; test cleans up.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.useTrackingStore = require('../store/useTrackingStore').useTrackingStore;
+              // Auth screen QA hook — expose useAppStore so Playwright can
+              // toggle isLoggedIn / setUser(null) to preview Auth without
+              // going through the real sign-in flow. 2026-08-15 sleep run.
+              stores.useAppStore = useAppStore;
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.useRouteStore = require('../store/useRouteStore').useRouteStore;
             } catch { /* ignore */ }
             (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = stores;
           }
@@ -143,7 +175,15 @@ export function RootNavigator() {
           gestureEnabled: false,
         }}
       >
-        {isLoggedIn ? (
+        {/* R21 (2026-08-17): removed isPlaywrightBypass gate. The bypass
+            let a non-authenticated user reach Home/Settings without a real
+            user object, which broke Profile / Sign out state assumptions
+            downstream. Real flow only: no token → Auth; token → app.
+            R21 review fix: also require `user` to be non-null so screens
+            that dereference user (e.g. Settings user!.name) don't crash
+            during the race window where setLoggedIn(true) fires before
+            setUser is called. */}
+        {(isLoggedIn && user) ? (
           <>
             <Stack.Screen name="Home"        component={HomeScreen} />
             <Stack.Screen name="Hiking"      component={HikingScreen} />
@@ -155,6 +195,11 @@ export function RootNavigator() {
             <Stack.Screen name="Plant"       component={PlantScreen} />
             <Stack.Screen name="MarkerDetail" component={MarkerDetailScreen} />
             <Stack.Screen name="Friends"     component={FriendsScreen} />
+            {__DEV__ && <Stack.Screen name="FriendsPreview" component={FriendsPreviewScreen} />}
+            {__DEV__ && <Stack.Screen name="HomePreview" component={HomePreviewScreen} />}
+            {__DEV__ && <Stack.Screen name="HikingPreview" component={HikingPreviewScreen} />}
+            {__DEV__ && <Stack.Screen name="RunningPreview" component={RunningPreviewScreen} />}
+            {__DEV__ && <Stack.Screen name="RoutesPreview" component={RoutesPreviewScreen} />}
             <Stack.Screen name="Settings"    component={SettingsScreen} />
             <Stack.Screen name="Memory"      component={MemoryScreen} />
             <Stack.Screen name="Debug"       component={DebugScreen} />

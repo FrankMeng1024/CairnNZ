@@ -28,6 +28,7 @@ import { haversineM } from '../utils/geo';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { PressBtn } from '../components/PressBtn';
 import { Icon } from '../components/Icon';
+import { BackButton } from '../components/BackButton';
 import { getMarkerTierVisuals } from '../features/marks/utils/markTier';
 import { MarkDetailSheet } from '../features/marks/components/MarkDetailSheet';
 import { useMarkLikeStore } from '../features/marks/store/useMarkLikeStore';
@@ -63,6 +64,12 @@ if (Platform.OS !== 'web') {
 }
 
 const { width: W, height: H } = Dimensions.get('window');
+
+// ── Concept colors (sleep-run 2026-08-15 UI redesign) ────────────────────────
+// Local overrides so Map screen matches the concept exactly without disturbing
+// global Colors tokens consumed by other screens/APIs.
+const CONCEPT_PRIMARY = '#3E5F3A';   // deep sage — Back chevron/text, FAB
+const CONCEPT_ALERT   = '#C74A3A';   // warm red — Enable GPS dot + text
 
 // ── Pressable map marker with scale feedback ─────────────────────────────────
 function PressableMarker({ x, y, borderColor, bg, iconColor, iconName, onPress }: {
@@ -106,10 +113,10 @@ function RealMap({
     return (
       <View style={styles.mapContainer}>
         <View style={[styles.mapFallback]}>
-          <Icon name="Map" size={48} color={Colors.primaryMuted} />
-          <Text style={styles.mapFallbackTitle}>Real Map Available</Text>
+          <Icon name="Map" size={48} color={CONCEPT_PRIMARY} strokeWidth={1.5} />
+          <Text style={styles.mapFallbackTitle}>Map unavailable</Text>
           <Text style={styles.mapFallbackText}>
-            Build with EAS to enable Mapbox{'\n'}outdoor maps with offline support
+            Live map appears when GPS is enabled
           </Text>
         </View>
         {/* Show markers in approximate positions for dev/testing */}
@@ -715,17 +722,20 @@ export function MapScreen() {
       {/* Map — full bleed topo placeholder */}
       <RealMap markers={mapMarkers} onMarkerPress={(m) => setDetailMarker(m)} viewerId={viewerId} friendIds={friendIds} />
 
-      {/* Top bar — STORY-00099: rgba(255,255,255,0.95) overlay chips */}
+      {/* Top bar — concept-aligned: white pill Back (green) + white pill Enable GPS (red dot + red text) */}
       <SafeAreaView style={styles.topBar} edges={['top']} pointerEvents="box-none">
         {/* Left: back + GPS */}
         <View style={styles.topLeft}>
-          <TouchableOpacity style={styles.backChip} onPress={() => nav.goBack()}>
-            <Icon name="ChevronLeft" size={16} color={Colors.primary} strokeWidth={2.5} />
-            <Text style={styles.backChipText}>Back</Text>
-          </TouchableOpacity>
+          {/* R21 v3 (2026-08-17): unified with app-wide BackButton (variant
+              "pill") — was a bespoke backChip TouchableOpacity that
+              duplicated the pill style with hardcoded CONCEPT_PRIMARY,
+              diverging subtly from BackButton (font weight 600 vs 700,
+              gap 3 vs 2, custom shadow). Now identical across all
+              map-overlay screens. */}
+          <BackButton variant="inline" onPress={() => nav.goBack()} />
           <View style={styles.gpsChip}>
-            <View style={[styles.gpsDot, { backgroundColor: Colors.severityWarning }]} />
-            <Text style={[styles.chipText, styles.chipTextAmber]}>Enable GPS</Text>
+            <View style={[styles.gpsDot, { backgroundColor: CONCEPT_ALERT }]} />
+            <Text style={[styles.chipText, styles.chipTextAlert]}>Enable GPS</Text>
           </View>
         </View>
 
@@ -964,23 +974,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.base, paddingTop: Spacing.lg,
   },
   topLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  backChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: 'rgba(255,255,255,0.82)', borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.md, paddingVertical: 7,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-  },
-  backChipText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.primary },
+  // R21 v3 (2026-08-17): backChip / backChipText removed — replaced by
+  // shared <BackButton variant="inline" />. See MapBottomPanel for consumer.
   gpsChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.82)', borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: Radius.pill,
     paddingHorizontal: Spacing.md, paddingVertical: 7,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
   },
-  chipTextAmber: { color: Colors.severityWarning },
-  gpsDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success },
+  chipTextAlert: { color: CONCEPT_ALERT },
+  chipTextAmber: { color: Colors.severityWarning }, // retained for any external ref
+  gpsDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: CONCEPT_ALERT },
   // O12 Round-3: modeChip / trackingBar / trackingStatItem / trackingValueLg /
   // trackingValue / trackingUnit / statDivider / stopBtn / stopBtnText /
   // startTrackingBtn / startTrackingText / gpsChipAmber styles removed —
@@ -995,7 +1000,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.base, paddingBottom: Spacing.lg, gap: Spacing.sm,
   },
   fab: {
-    backgroundColor: Colors.primary, borderRadius: Radius.circle,
+    backgroundColor: CONCEPT_PRIMARY, borderRadius: Radius.circle,
     width: 60, height: 60, alignItems: 'center', justifyContent: 'center',
     ...Shadow.fab,
   },

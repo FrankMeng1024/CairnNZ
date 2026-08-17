@@ -18,11 +18,18 @@
  */
 import React, { useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Animated, Easing,
+  View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon } from './Icon';
 import { Colors, Spacing, Radius, FontSize, Shadow } from './tokens';
+
+// Concept H3/R3 (sleep-run-2026-08-15): two botanical icons at the top of the
+// modal — footprints + fern-leaf — replace the previous MapPin circle. Same
+// PNGs are shipped under both assets/hiking and assets/running; we always
+// pull from the hiking set so Hike + Run render identically (concept-lock:
+// same green, same botanical vocabulary, no per-mode divergence).
+const FOOTPRINTS_ICON = require('../../assets/hiking/footprints.png');
+const FERN_ICON = require('../../assets/hiking/fern-leaf.png');
 
 interface Props {
   visible: boolean;
@@ -58,6 +65,12 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
   };
 
   const label = activityMode === 'running' ? 'Run' : 'Hike';
+  // 2026-08-17 concept H3/R3: body copy matches the concept sheet word
+  // for word. The verb ("Walk"/"Run") swaps with the activity so the
+  // sentence still reads naturally, and the trailing clause drops the
+  // previous "when you stop" hedge to match the concept exactly.
+  const verb = activityMode === 'running' ? 'Run' : 'Walk';
+  const bodyCopy = `We haven't captured enough GPS points to draw your path yet. ${verb} a few more seconds and your ${label.toLowerCase()} will save automatically.`;
 
   return (
     <Animated.View style={[styles.scrim, { opacity }]} pointerEvents="auto">
@@ -65,14 +78,12 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
       <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => dismiss(onContinue)} />
       <Animated.View style={[styles.sheet, { transform: [{ translateY: slideY }], paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
         <View style={styles.handle} />
-        <View style={styles.iconWrap}>
-          <Icon name="MapPin" size={28} color={Colors.primary} strokeWidth={2} />
+        <View style={styles.botanicalRow}>
+          <Image source={FOOTPRINTS_ICON} style={styles.botanicalFootprints} resizeMode="contain" />
+          <Image source={FERN_ICON} style={styles.botanicalFern} resizeMode="contain" />
         </View>
-        <Text style={styles.title}>Keep going a little longer</Text>
-        <Text style={styles.body}>
-          We haven't captured enough GPS points to draw your path yet.
-          Walk a few more seconds and your {label.toLowerCase()} will save automatically when you stop.
-        </Text>
+        <Text style={styles.title}>Keep going{'\n'}a little longer</Text>
+        <Text style={styles.body}>{bodyCopy}</Text>
         <TouchableOpacity
           style={styles.btnPrimary}
           activeOpacity={0.85}
@@ -112,12 +123,26 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border, alignSelf: 'center',
     marginBottom: Spacing.xs,
   },
-  iconWrap: {
+  // Concept H3/R3: two small botanical images centered, side-by-side with a
+  // gentle overlap that echoes the frame illustration. Footprints leads
+  // (activity metaphor), fern-leaf trails (rest / nature). Sized ~44px so
+  // the pair reads as a single motif rather than two competing icons.
+  botanicalRow: {
+    flexDirection: 'row',
     alignSelf: 'center',
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: Colors.primaryBg,
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: Spacing.xs,
+    height: 56,
+  },
+  botanicalFootprints: {
+    width: 44,
+    height: 44,
+    marginRight: -6,
+  },
+  botanicalFern: {
+    width: 48,
+    height: 48,
   },
   title: {
     fontSize: FontSize.h2, fontWeight: '800',
@@ -130,19 +155,30 @@ const styles = StyleSheet.create({
   },
   btnPrimary: {
     marginTop: Spacing.md,
-    backgroundColor: Colors.primary,
-    paddingVertical: 14, borderRadius: Radius.button,
+    // 2026-08-17 R21 concept H3/R3: primary CTA uses the same dark forest
+    // green (#455D3C) as the HikingScreen "Start Hiking" button so all
+    // Hike-flow primary CTAs read as one family. Colors.primary (#5d7c46)
+    // is a lighter sage used elsewhere (chips, links) but reads too light
+    // on this sheet where the fern illustration already carries green.
+    // Concept uses pill radius to match the H0 "Start Hiking" button.
+    backgroundColor: '#455D3C',
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center', justifyContent: 'center',
   },
   btnPrimaryText: {
     color: '#FFFFFF',
-    fontSize: FontSize.body, fontWeight: '700',
+    fontSize: 16, fontWeight: '700', letterSpacing: 0.2,
   },
   btnSecondary: {
     paddingVertical: 12, alignItems: 'center', justifyContent: 'center',
   },
   btnSecondaryText: {
-    color: Colors.textSecondary,
-    fontSize: FontSize.body, fontWeight: '500',
+    // 2026-08-17 R21 concept H3/R3: "End hike anyway" is rendered in the
+    // same dark forest green as the primary CTA (concept color #455D3C),
+    // not muted gray. This gives the link visual weight while its
+    // hierarchy stays secondary via lack of button background.
+    color: '#455D3C',
+    fontSize: FontSize.body, fontWeight: '600',
   },
 });

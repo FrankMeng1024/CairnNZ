@@ -21,7 +21,7 @@ import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpaci
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
@@ -108,6 +108,12 @@ export function MemoryScreen() {
   const [recenterToken, setRecenterToken] = useState(0);
   const [mountKey, setMountKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
+  // 2026-08-16 Round 5 fix: MemoryScreen is kept mounted by react-navigation
+  // (native-stack keeps prev screens alive), and React Native <Modal> is a
+  // root-level overlay. Without an isFocused gate the "Walk to unlock" modal
+  // leaks over Settings/Friends/Map when user navigates away with the hint
+  // still open. Gate Modal `visible={showHint && isFocused}`.
+  const isMemoryFocused = useIsFocused();
 
   // v434 hierarchy panel state (2-layer tree: World → Country → City)
   const [hierarchyOpen, setHierarchyOpen] = useState(false);
@@ -665,8 +671,8 @@ export function MemoryScreen() {
       <ForegroundUnlockManager />
       {/* V9: Back button matches Hiking — pill variant + safe-area top inset
           so it doesn't intrude into the Dynamic Island area. */}
-      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <BackButton variant="pill" onPress={() => nav.goBack()} />
+      <View style={[styles.topBar, { paddingTop: insets.top + 24 }]} pointerEvents="box-none">
+        <BackButton variant="inline" onPress={() => nav.goBack()} />
         {/* v376: Pick icon 移到 MemoryScopeToggle 内部作为第三个 segment,
             scope=friends 时 width+opacity 展开,scope=mine 时 collapse 到 0
             (用户 v375 反馈: 之前的 fixed-position 占位空白难看)。 */}
@@ -711,37 +717,49 @@ export function MemoryScreen() {
           key={`map-${mountKey}`}
         />
       ) : failReason === 'permission' ? (
-        <View style={styles.waitingForGps}>
-          <Text style={styles.waitingTitle}>Location permission needed</Text>
-          <Text style={styles.waitingSub}>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>Location permission needed</Text>
+          <Text style={styles.emptySub}>
             Memory needs your location to draw the map.
           </Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => Linking.openSettings()}>
-            <Text style={styles.primaryBtnText}>Open Settings</Text>
+          <TouchableOpacity
+            style={styles.emptyPrimaryBtn}
+            onPress={() => Linking.openSettings()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.emptyPrimaryBtnText}>Open Settings</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => setRefetchToken((n) => n + 1)}>
-            <Text style={styles.secondaryBtnText}>Try again</Text>
+          <TouchableOpacity
+            style={styles.emptySecondaryBtn}
+            onPress={() => setRefetchToken((n) => n + 1)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.emptySecondaryBtnText}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : failReason === 'timeout' || failReason === 'error' ? (
-        <View style={styles.waitingForGps}>
-          <Text style={styles.waitingTitle}>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>
             {failReason === 'timeout' ? 'Could not get a GPS fix' : 'Location unavailable'}
           </Text>
-          <Text style={styles.waitingSub}>
+          <Text style={styles.emptySub}>
             {failReason === 'timeout'
               ? 'GPS signal is weak. Move outside or near a window and try again.'
               : 'We could not read your location. Check that location services are on.'}
           </Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => setRefetchToken((n) => n + 1)}>
-            <Text style={styles.primaryBtnText}>Try again</Text>
+          <TouchableOpacity
+            style={styles.emptyPrimaryBtn}
+            onPress={() => setRefetchToken((n) => n + 1)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.emptyPrimaryBtnText}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={styles.waitingForGps}>
+        <View style={styles.emptyState}>
           <ActivityIndicator color={Colors.primary} size="large" />
-          <Text style={[styles.waitingTitle, { marginTop: 16 }]}>Looking for your position…</Text>
-          <Text style={styles.waitingSub}>
+          <Text style={[styles.emptyTitle, { marginTop: 16 }]}>Looking for your position…</Text>
+          <Text style={styles.emptySub}>
             We need a GPS fix to draw your memory map.
           </Text>
         </View>
@@ -906,7 +924,7 @@ export function MemoryScreen() {
         </View>
       )}
 
-      <Modal visible={showHint} transparent animationType="fade" onRequestClose={dismissHint}>
+      <Modal visible={showHint && isMemoryFocused} transparent animationType="fade" onRequestClose={dismissHint}>
         <View style={styles.hintBackdrop}>
           <View style={styles.hintCard}>
             <Text style={styles.hintTitle}>Walk to unlock your memory</Text>
@@ -1038,17 +1056,62 @@ const styles = StyleSheet.create({
     // to right via space-between. Both pill-shaped so they balance visually.
     justifyContent: 'space-between',
   },
-  waitingForGps: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  waitingTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
-  waitingSub:   { fontSize: 13, color: Colors.textSecondary, marginTop: 8, textAlign: 'center' },
-  primaryBtn: {
-    marginTop: 20,
-    backgroundColor: Colors.primary,
-    paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12,
+  // Concept-aligned empty state (2026-08-16 sleep-run redesign):
+  //   - Centered vertically on paper background
+  //   - Title: 18px, dark textPrimary, weight 500
+  //   - Sub:   14px, muted textSecondary
+  //   - Primary CTA: fully-rounded green pill, 14px medium white
+  //   - Secondary: plain text link, muted, no chrome
+  // Matches Memory-1.png exactly.
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
   },
-  primaryBtnText: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  secondaryBtn: { marginTop: 10, paddingVertical: 10, paddingHorizontal: 18 },
-  secondaryBtnText: { color: Colors.textSecondary, fontSize: 13 },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  emptySub: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginTop: 10,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  emptyPrimaryBtn: {
+    marginTop: 22,
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 999,
+    minWidth: 168,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  emptyPrimaryBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  emptySecondaryBtn: {
+    marginTop: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  emptySecondaryBtnText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '400',
+  },
   recenterBtn: {
     position: 'absolute',
     right: 16, bottom: 110,
@@ -1085,7 +1148,10 @@ const styles = StyleSheet.create({
   // — Pick icon is now an internal segment of MemoryScopeToggle (third
   // expand-out segment), no external button cluster.
   hintBackdrop: {
-    flex: 1, backgroundColor: 'rgba(20,20,20,0.55)',
+    // 2026-08-16 Round 8: reduced from rgba(20,20,20,0.55) — Memory concept
+    // shows modal as first-run onboarding sitting on the cream Memory bg,
+    // not as a heavy grey dim. Softer backdrop lets the map/cream show through.
+    flex: 1, backgroundColor: 'rgba(20,20,20,0.35)',
     alignItems: 'center', justifyContent: 'center', padding: 28,
   },
   hintCard: {

@@ -503,26 +503,29 @@ export function PinAdjustStep({
           </View>
         )}
 
-        <TouchableOpacity
-          style={styles.styleToggle}
-          onPress={onToggleStyle}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel={mapStyle === 'outdoors' ? 'Switch to satellite view' : 'Switch to outdoor map'}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Icon
-            name={mapStyle === 'satellite' ? 'Map' : 'Globe'}
-            size={18}
-            color={Colors.textPrimary}
-            strokeWidth={2}
-          />
-        </TouchableOpacity>
-
-        {/* +/- zoom buttons — v297 replacement for native pinch zoom */}
-        <View style={styles.zoomCol} pointerEvents="box-none">
+        {/* Concept alignment (2026-08-16): Globe + Plus + Minus (+ Target)
+            unified into ONE vertical stack in the top-right of the map,
+            matching Plant-1 concept. Previously styleToggle was orphaned
+            at top:8 with a 44px gap before the zoom column; concept shows
+            an even 6px rhythm between all three (four) buttons. */}
+        <View style={styles.mapCtrlCol} pointerEvents="box-none">
           <TouchableOpacity
-            style={[styles.zoomBtn, zoom >= MAX_ZOOM && styles.zoomBtnDisabled]}
+            style={styles.mapCtrlBtn}
+            onPress={onToggleStyle}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={mapStyle === 'outdoors' ? 'Switch to satellite view' : 'Switch to outdoor map'}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Icon
+              name={mapStyle === 'satellite' ? 'Map' : 'Globe'}
+              size={18}
+              color={Colors.textPrimary}
+              strokeWidth={2}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.mapCtrlBtn, { marginTop: 6 }, zoom >= MAX_ZOOM && styles.mapCtrlBtnDisabled]}
             onPress={() => doZoom(+ZOOM_STEP)}
             disabled={zoom >= MAX_ZOOM}
             activeOpacity={0.7}
@@ -538,7 +541,7 @@ export function PinAdjustStep({
             />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.zoomBtn, { marginTop: 6 }, zoom <= MIN_ZOOM && styles.zoomBtnDisabled]}
+            style={[styles.mapCtrlBtn, { marginTop: 6 }, zoom <= MIN_ZOOM && styles.mapCtrlBtnDisabled]}
             onPress={() => doZoom(-ZOOM_STEP)}
             disabled={zoom <= MIN_ZOOM}
             activeOpacity={0.7}
@@ -558,7 +561,7 @@ export function PinAdjustStep({
               is a no-op. */}
           {hasMoved && (
             <TouchableOpacity
-              style={[styles.zoomBtn, { marginTop: 6 }]}
+              style={[styles.mapCtrlBtn, { marginTop: 6 }]}
               onPress={doRecenter}
               activeOpacity={0.7}
               accessibilityRole="button"
@@ -683,22 +686,17 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   map: { flex: 1 },
-  styleToggle: {
+  // Concept alignment (2026-08-16): unified map-control column — Globe
+  // toggle + Plus/Minus zoom + optional Target recenter, all stacked
+  // top-right with 6px rhythm. Replaces the split styleToggle (top:8)
+  // + zoomCol (top:52) layout that had an inconsistent 44px gap between
+  // the first button and the rest.
+  mapCtrlCol: {
     position: 'absolute',
     top: 8, right: 8,
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: Colors.border,
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 }, elevation: 3,
-  },
-  zoomCol: {
-    position: 'absolute',
-    top: 52, right: 8,
     alignItems: 'center',
   },
-  zoomBtn: {
+  mapCtrlBtn: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.95)',
     alignItems: 'center', justifyContent: 'center',
@@ -706,7 +704,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 }, elevation: 3,
   },
-  zoomBtnDisabled: {
+  mapCtrlBtnDisabled: {
     backgroundColor: 'rgba(240,240,240,0.95)',
     opacity: 0.6,
   },

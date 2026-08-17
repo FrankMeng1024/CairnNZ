@@ -57,6 +57,12 @@ import {
   Search,
   // R114/O21 — Home shortcut Settings replaces Settings2 which reads as sliders (confused with Route icon on the Trails tile)
   Cog,
+  // Turn-by-turn navigation banners (added when Cairn gained route-following).
+  CornerUpLeft, CornerUpRight,
+  // Sleep-run 2026-08-16: H4/R4 completion screens — share action + feedback card.
+  Share2, Leaf,
+  // R21 (2026-08-17) — Home swap icon between km² / % of country
+  ArrowLeftRight,
 } from 'lucide-react-native';
 import { IconSize } from './tokens';
 
@@ -89,6 +95,12 @@ const ICON_MAP = {
   Vibrate, Ruler, Cloud, MessageSquare, Shield, FileText, Wrench, ExternalLink,
   // O18 HIST-01
   Search,
+  // Turn-by-turn navigation banners
+  CornerUpLeft, CornerUpRight,
+  // Sleep-run 2026-08-16 — H4/R4 completion
+  Share2, Leaf,
+  // R21 (2026-08-17) — Home swap icon km² / %
+  ArrowLeftRight,
 } as const;
 
 export type IconName = keyof typeof ICON_MAP;

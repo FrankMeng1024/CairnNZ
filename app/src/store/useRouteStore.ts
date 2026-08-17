@@ -92,6 +92,14 @@ interface RouteStore {
   circleRoutes: Route[];
   loadingCircleRoutes: boolean;
 
+  /** Route the user has selected to be guided along during the current
+   *  tracking session. `null` = free hike/run (no navigation). Set by
+   *  Hiking/Running screens when the user picks a route from the sheet
+   *  and starts tracking; cleared on stopTracking or when the user picks
+   *  "Free hike". Session-scoped only — not persisted. */
+  followingRouteId: string | null;
+  setFollowingRoute: (id: string | null) => void;
+
   // Load from backend
   loadRoutes: () => Promise<void>;
   /** Sprint 69 STORY-00538: load friend routes. */
@@ -118,6 +126,9 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
   // Sprint 69 STORY-00538: initial empty until first loadCircleRoutes().
   circleRoutes: [],
   loadingCircleRoutes: false,
+  followingRouteId: null,
+
+  setFollowingRoute: (id) => set({ followingRouteId: id }),
 
   loadRoutes: async () => {
     try {
@@ -260,6 +271,9 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     }
     set((s) => ({
       routes: s.routes.filter(r => r.id !== id),
+      // If the deleted route was being followed, drop the follow so the
+      // Hiking/Running screens don't hold a dangling id.
+      followingRouteId: s.followingRouteId === id ? null : s.followingRouteId,
     }));
     try {
       const { deleteExtras } = await import('../services/LocalRouteExtras');

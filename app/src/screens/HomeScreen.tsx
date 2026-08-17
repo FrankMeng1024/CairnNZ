@@ -1,772 +1,402 @@
 /**
- * HomeScreen — Sprint 41 full-screen layout
+ * HomeScreen — spec-driven implementation.
  *
- * Layout: flex column, no ScrollView, fills SafeArea exactly.
- * Hierarchy: Header → Stats? → Recent? → Activity Cards (dominant) → Tools row
- * Design: Golden ratio φ=1.618 applied to card proportions and spacing.
+ * This screen used to be 978 lines of hand-crafted layout. That version is
+ * archived at HomeScreen.OLD.tsx.bak. The new flow:
+ *   1. docs/ui-redesign/Home.spec.json  (single source of truth)
+ *   2. spike/spec_to_rn.py  generates  screens/home_generated/*
+ *   3. this file wires nav + real store data + navigation callbacks into
+ *      the generated component
+ *
+ * When the concept changes: edit spec.json → rerun spec_to_rn.py → nothing
+ * to touch here unless a new prop appears.
  */
-import React, { useRef, useState, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, useWindowDimensions, Platform, ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useMemo, useState, useEffect } from 'react';
+import { View, StyleSheet, LayoutChangeEvent, TouchableOpacity, Text, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
-import { Icon, type IconName } from '../components/Icon';
-import { HikingIcon, RunningIcon, FlagMarkerIcon, CairnLogo } from '../components/ActivityIcons';
-// O12: useAppStore import removed — uiMode was the only consumer.
+import { HomeScreen as GeneratedHome } from './home_generated/HomeScreen.generated';
 import { useSessionStore } from '../store/useSessionStore';
-import { useMarkerStore } from '../store/useMarkerStore';
-import { useTrackingStore } from '../store/useTrackingStore';
-import { formatDuration, getRelativeTime } from '../utils/geo';
-import { useDistance } from '../utils/distanceFormat';
-// O24: getCurrentRegion no longer used — stats chips (only consumer) moved to Settings.
-// import { getCurrentRegion } from '../config/regions';
-import { OtaBadge } from '../components/OtaBadge';
-// v412: UnfinishedSessionBanner 已被 v412 UnfinishedRecoveryModal 取代 (HikingScreen 内)
+import { useAppStore } from '../store/useAppStore';
+import { useMemoryStore } from '../features/memory/store/useMemoryStore';
+import { useWeatherStore, NZ_TEST_CITIES } from '../store/useWeatherStore';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { useAppearance } from '../hooks/useAppearance';
+import { resolveCurrentCountry } from '../services/countryService';
+import { getHomeBackground } from '../utils/homeBackground';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-// O24: plural helper no longer used — stats chips (only consumer) moved to Settings.
-// const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const DESIGN_W = 375;
+const DESIGN_H = 812;
 
-function getGreeting() {
-  const h = new Date().getHours();
-  // O12: uiMode removed — greeting no longer branches on Explorer/Navigator.
-  // PRD3 E-014: occasional Te Reo touch — Kia ora as morning variant
-  // (registered translator review pending — Kia ora is a well-established greeting)
-  if (h >= 5 && h < 12) return 'Good morning';
-  if (h >= 12 && h < 18) return 'Good afternoon';
-  return 'Good evening';
+// R21 (2026-08-17): country area (km²) for percentage-of-country stat.
+// Wikipedia data, hard-coded lookup for common target markets.
+const COUNTRY_AREA_KM2: Record<string, number> = {
+  'NZ': 268021,
+  'AU': 7692024,
+  'US': 9833520,
+  'CA': 9984670,
+  'GB': 243610,
+  'CN': 9596961,
+  'JP': 377975,
+  'DE': 357022,
+  'FR': 643801,
+  'IN': 3287263,
+  'BR': 8515767,
+  'ZA': 1221037,
+};
+
+function formatDistanceKm(meters: number): string {
+  return (meters / 1000).toFixed(1) + ' km';
+}
+function formatDuration(secs: number): string {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m} min`;
+}
+function formatRelativeDay(startedAt: number | string): string {
+  const t = typeof startedAt === 'number' ? startedAt : new Date(startedAt).getTime();
+  const days = Math.floor((Date.now() - t) / 86400000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  return new Date(t).toLocaleDateString();
 }
 
-// ── Recent / Live activity row ───────────────────────────────────────────
-// Single row that occupies one fixed slot on the home dashboard.
-//   • If a hike/run is actively recording → show "Hiking in progress" with
-//     live distance + duration, tap → resume the in-progress screen.
-//     Replaces (does NOT stack on top of) the most-recent-activity row,
-//     so the user sees one row in one position no matter the state.
-//   • Else if the most recent activity was within 24h → show it.
-//   • Else render nothing.
-// This unification fixes the "stacked Resume + Last activity" duplication
-// reported on V8.
-function RecentRow({ onPress }: { onPress: (id: string) => void }) {
-  const sessions = useSessionStore(s => s.sessions);
-  const status = useTrackingStore(s => s.status);
-  const liveActivityMode = useTrackingStore(s => s.activityMode);
-  const liveDistanceM = useTrackingStore(s => s.distanceM);
-  const liveDurationS = useTrackingStore(s => s.durationS);
-  const nav = useNavigation<Nav>();
-  const pulse = useRef(new Animated.Value(1)).current;
-  // O12: user Units preference (metric/imperial).
-  const dist = useDistance();
-
-  // Pulse the dot when live so the row visually communicates "this is
-  // moving right now" rather than feeling identical to a stale entry.
-  useEffect(() => {
-    if (status !== 'tracking') {
-      pulse.setValue(1);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.4, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1.0, duration: 900, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [status]);
-
-  // ── Live mode ──
-  // v450: only show "in progress" when there's actual tracked content.
-  // Previously, opening Hiking → tapping Start → tapping Back to Home
-  // would leave status='tracking' with 0 points and show a confusing
-  // "Hiking in progress · Resume" row with no info. Now: require at
-  // least some distance or duration before advertising an ongoing hike.
-  if (status === 'tracking' && (liveDistanceM > 0 || liveDurationS > 5)) {
-    const isRun = liveActivityMode === 'running';
-    const accent = isRun ? Colors.running : Colors.primary;
-    const bg = isRun ? Colors.runningLight : Colors.primaryLight;
-    const label = isRun ? 'Running' : 'Hiking';
-    const target = isRun ? 'Running' : 'Hiking';
-    return (
-      <TouchableOpacity
-        style={recentStyles.row}
-        onPress={() => nav.navigate(target as any)}
-        activeOpacity={0.85}
-        accessibilityRole="button"
-        accessibilityLabel={`Resume ${label.toLowerCase()} in progress`}
-        accessibilityHint="Returns to the live tracking screen"
-      >
-        <Animated.View
-          style={[recentStyles.dot, { backgroundColor: bg, transform: [{ scale: pulse }] }]}
-        >
-          {isRun
-            ? <RunningIcon size={14} color={accent} />
-            : <HikingIcon size={14} color={accent} />
-          }
-        </Animated.View>
-        <View style={recentStyles.textGroup}>
-          <Text style={[recentStyles.badge, { color: accent }]}>{label} in progress</Text>
-          <Text style={recentStyles.stat}>
-            {`${dist.format(liveDistanceM, 2)} ${dist.unit} · ${formatDuration(liveDurationS)}`}
-          </Text>
-        </View>
-        <Text style={[recentStyles.when, { color: accent, fontWeight: '700' }]}>Resume</Text>
-        <Icon name="ChevronRight" size={14} color={accent} strokeWidth={2.5} />
-      </TouchableOpacity>
-    );
-  }
-
-  // ── Last activity mode (only within 24h) ──
-  // v413 UX fix (Bug A): filter out zombie sessions (name=undefined + distance=0 + duration=0).
-  // 这些是 offline pending 从未 drain 成功的残余 (case-6 test data 之类).
-  // 显示"Hike 00:00 · Nh ago"对用户是无信息噪音, 应该隐藏直到真数据.
-  //
-  // Sprint 6 round-20 R20B2: also filter out pending/syncing sessions.
-  // The Recent pill navigates to Activity Detail on tap; a pending
-  // session has no remoteId, so the detail screen would call
-  // fetchSessionDetail(undefined) and show "Route data unavailable".
-  // User-visible bug: tapping a hike they know they just finished to
-  // land on a broken screen. Only surface fully synced hikes here.
-  const validSessions = sessions.filter((s) =>
-    (s.distanceM > 0 || s.durationS > 0) && s.startedAt
-      && s.syncState !== 'pending' && s.syncState !== 'syncing'
-  );
-  if (validSessions.length === 0) return null;
-  const last = validSessions.reduce((best, s) => s.startedAt > best.startedAt ? s : best);
-  const ageMs = Date.now() - last.startedAt;
-  if (ageMs > 24 * 60 * 60 * 1000) return null;
-
-  const isRun = last.activityMode === 'running';
-  const accent = isRun ? Colors.running : Colors.primary;
-  const bg = isRun ? Colors.runningLight : Colors.primaryLight;
-  const label = isRun ? 'Run' : 'Hike';
-  const stat = last.distanceM > 10
-    ? `${dist.format(last.distanceM, 1)} ${dist.unit}`
-    : formatDuration(last.durationS);
-  const when = getRelativeTime(last.startedAt);
-
-  return (
-    <TouchableOpacity style={recentStyles.row} onPress={() => onPress(last.id)} activeOpacity={0.7}>
-      <View style={[recentStyles.dot, { backgroundColor: bg }]}>
-        {isRun
-          ? <RunningIcon size={14} color={accent} />
-          : <HikingIcon size={14} color={accent} />
-        }
-      </View>
-      <View style={recentStyles.textGroup}>
-        <Text style={[recentStyles.badge, { color: accent }]}>{label}</Text>
-        <Text style={recentStyles.stat}>{stat}</Text>
-      </View>
-      <Text style={recentStyles.when}>{when}</Text>
-      <Icon name="ChevronRight" size={14} color={Colors.textMuted} strokeWidth={2} />
-    </TouchableOpacity>
-  );
-}
-
-// ── Big activity card — flex-based, no parent height dependency ──────────────
-function ActivityCard({
-  icon, title, subtitle, accentColor, lightBg, cardBg, onPress, anim, flex = 1,
-}: {
-  icon: (size: number) => React.ReactNode;
-  title: string;
-  subtitle: string;
-  accentColor: string;
-  lightBg: string;
-  cardBg: string;
-  onPress: () => void;
-  anim: Animated.Value;
-  flex?: number;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const { width: screenW } = useWindowDimensions();
-  const panelW = Math.min(Math.round(screenW * 0.32), 130);
-  const iconSize = Math.round(panelW * 0.55);
-
-  return (
-    <Animated.View style={{ flex, opacity: anim, transform: [{ scale }] }}>
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={onPress}
-        onPressIn={() => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, tension: 200, friction: 10 }).start()}
-        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 8 }).start()}
-        style={[cardStyles.card, { backgroundColor: cardBg, flex: 1 }]}
-        accessibilityRole="button"
-        accessibilityLabel={title}
-        accessibilityHint={subtitle}
-      >
-        {/* Left panel */}
-        <View style={[cardStyles.leftPanel, { width: panelW, backgroundColor: lightBg }]}>
-          {icon(iconSize)}
-        </View>
-
-        {/* Text area */}
-        <View style={[cardStyles.innerRow, { marginLeft: panelW }]}>
-          <View style={cardStyles.textCol}>
-            <Text style={[cardStyles.title, { color: Colors.textPrimary }]}>{title}</Text>
-            <Text style={cardStyles.subtitle}>{subtitle}</Text>
-            {/* R114 (2026-08-07): removed the 28x3 accentLine that sat under
-                the card subtitle. User reported "hike/running/plant 字下方的
-                短线意义是什么" — it was a decorative accent with no meaning,
-                which violated the "zero learning cost" principle. The card's
-                left-side coloured panel + chevron already provide enough
-                visual identity per card. */}
-          </View>
-          <View style={[cardStyles.chevron, { backgroundColor: lightBg }]}>
-            <Icon name="ChevronRight" size={16} color={accentColor} strokeWidth={2.5} />
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-// ── Tool button ───────────────────────────────────────────────────────────────
-function ToolBtn({ iconName, label, onPress }: { iconName: IconName; label: string; onPress: () => void }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  return (
-    <Animated.View style={{ flex: 1, transform: [{ scale }] }}>
-      <TouchableOpacity
-        style={toolStyles.btn}
-        onPress={onPress}
-        activeOpacity={1}
-        onPressIn={() => Animated.spring(scale, { toValue: 0.93, useNativeDriver: true, tension: 300, friction: 10 }).start()}
-        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 8 }).start()}
-        accessibilityRole="button"
-        accessibilityLabel={label}
-      >
-        <View style={toolStyles.iconWrap}>
-          <Icon name={iconName} size={20} color={Colors.primary} strokeWidth={1.8} />
-        </View>
-        <Text style={toolStyles.label} numberOfLines={1}>{label}</Text>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-// ── Main ──────────────────────────────────────────────────────────────────────
 export function HomeScreen() {
-  // v302 boot diag: probe first thing in render — if app dies after
-  // navigation_container_ready but no home_screen_render_start, mount is dying
-  // in react-navigation transition, not user code.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../services/bootDiagnostics').markBootPhase('home_screen_render_start');
-  } catch {/* ignore */}
-
-  // R100 (2026-08-05): boot-ok snapshot upload — fires ONCE per app lifetime
-  // on the first Home render. Uploads recent breadcrumbs so we can validate
-  // the full auth → hydrate → Home flow completed without a crash, and
-  // confirm the currently-running bundle's BUILD_HASH matches what we pushed.
-  //
-  // Wrapped in try + fire-and-forget so nothing blocks Home mount. crashLogger
-  // internally debounces via global flag so re-renders don't re-fire.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { crashLogger } = require('../services/crashLogger');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { API_BASE_URL } = require('../config/api');
-    crashLogger.breadcrumb('home:render_reached — trigger boot_ok upload');
-    crashLogger.uploadBootSnapshot(API_BASE_URL, 'home_first_render').catch(() => {});
-  } catch { /* silent — best effort */ }
   const nav = useNavigation<Nav>();
-  // O12: uiMode removed
+  const user = useAppStore(s => s.user);
   const sessions = useSessionStore(s => s.sessions);
-  const allMarkers = useMarkerStore(s => s.markers);
-  // O18 SAF-06 (2026-07-29): filesystem pending-sync is the authoritative
-  // source for "hikes waiting to upload". Reading only useSessionStore
-  // missed the case where hydrate replaced the local pending row with the
-  // remote list (which never contains never-uploaded hikes), leaving the
-  // banner invisible even though pendingSyncStore had the payload on disk.
-  // Sprint 6 round-7 review R7B2: refetch on any syncState change, not
-  // just sessions.length. markSynced flips syncState in-place without
-  // adding/removing rows, so length-based deps kept the banner stuck at
-  // stale count after a successful drain.
-  const pendingCountSignal = sessions
-    .filter(s => s.syncState === 'pending' || s.syncState === 'syncing')
-    .map(s => s.id).join(',');
-  const [fsPendingCount, setFsPendingCount] = useState<number>(0);
-  // O21 HOME-SYNC-UX: banner tap now shows real progress + error feedback.
-  // syncing != null → "Syncing done/total..." + spinner (debounces re-taps).
-  // syncError !== null → red message auto-clears after 3s.
-  const [syncing, setSyncing] = useState<{ done: number; total: number } | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
+  const memoryPointCount = useMemoryStore(s => s.points.length);
+  const weatherCondition = useWeatherStore(s => s.condition);
+  const conditionOverride = useWeatherStore(s => s.conditionOverride);
+  const locationOverride = useWeatherStore(s => s.locationOverride);
+  const dayNightOverride = useWeatherStore(s => s.dayNightOverride);
+  const fetchWeather = useWeatherStore(s => s.fetchWeather);
+  // Effective condition = override if set, else real. Drives bg + tokens.
+  const effectiveCondition = conditionOverride ?? weatherCondition;
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+  const [country, setCountry] = useState<{ name: string; code: string } | null>(null);
+  const [showPercent, setShowPercent] = useState(false);
+  // R21 (2026-08-17 user "在settings里添加一个 可以隐藏首页的探索百分比的设置"):
+  // when Settings toggle is off, hide the % swap icon and force km² display.
+  const showExplorationPercent = useSettingsStore(s => s.showExplorationPercent);
+
+  const validSessions = useMemo(
+    () => sessions.filter((s: any) => (s.distanceM > 0 || s.durationS > 0) && s.startedAt),
+    [sessions],
+  );
+  const hasHike = validSessions.length > 0;
+  const state = hasHike ? 'H1' : 'H0';
+
+  // R21 (2026-08-17 user "你没索要地理 GPS 位置么"): actively request
+  // foreground location permission on Home mount so we can read GPS for
+  // country name + real weather. If user grants, resolveCurrentCountry
+  // + fetchWeather will succeed. If they deny, we silently fall back to
+  // "Your world" copy and default sunny bg.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { listPending } = require('../services/pendingSyncStore');
-        const list = await listPending();
-        if (!cancelled) setFsPendingCount(Array.isArray(list) ? list.length : 0);
-      } catch {
-        if (!cancelled) setFsPendingCount(0);
+        const Location = require('expo-location');
+        const existing = await Location.getForegroundPermissionsAsync();
+        if (existing.status !== 'granted' && existing.canAskAgain !== false) {
+          await Location.requestForegroundPermissionsAsync();
+        }
+        // Whether or not it granted, resolve/fetch below will handle both paths.
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // R21 (2026-08-17): resolve current country from GPS. If location override
+  // is active, use that instead. Cached 24h so first-render doesn't wait.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (locationOverride) {
+        // Use overridden city name as country — dev/test.
+        setCountry({ name: locationOverride.label, code: 'NZ' });
+        return;
+      }
+      const result = await resolveCurrentCountry();
+      if (!cancelled && result) {
+        setCountry({ name: result.countryName, code: result.countryCode });
       }
     })();
     return () => { cancelled = true; };
-  }, [pendingCountSignal]);
-  // v320: beacon after selectors read — confirms zustand subscriptions
-  // worked without throw. Heavy computation goes here (filter/sort/derive).
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../services/bootDiagnostics').markBootPhase('home_after_selectors', {
-      sessions_n: sessions.length,
-      markers_n: allMarkers.length,
-    });
-  } catch {/* ignore */}
-  // O24 HOME-SIMPLIFY: period toggle + stats strip removed from Home
-  // (moved to Settings › Your journey). Home stays clean: greeting →
-  // pending banner → recent → cards → tools.
-  // markerCount / region were only consumed by the removed stats chips.
-  const hasRecent = sessions.length > 0;
+  }, [locationOverride]);
 
-  const opacity = useRef(new Animated.Value(1)).current;
-  const card1 = useRef(new Animated.Value(1)).current;
-  const card2 = useRef(new Animated.Value(1)).current;
-  const insets = useSafeAreaInsets();
-
-  // v354 fix: OTA-reload-first-signin tab-jump root cause.
-  // iOS doesn't guarantee window.safeAreaInsets is final at JS-init
-  // time after OTA reloadAsync. SafeAreaProvider's initialMetrics
-  // may seed insets.bottom = 0 → first frame paddingBottom is wrong
-  // → tabs visually clipped under home indicator → onInsetsChange
-  // fires one layout pass later → tabs visibly jump up.
-  //
-  // R114 (2026-08-07): user reported first-time Home also flickered
-  // "偏高" (0.5s of vertical offset before settling). Root cause: we
-  // only gated on insets.bottom, but the same JS-init race affects
-  // insets.top (status bar). If top comes in 0 → StatusBar-adjacent
-  // header starts flush with the notch → after one layout pass, top
-  // insets fires the correct ~50pt → header slides down, reads as
-  // "偏高 → 偏正" flicker. Fix: also require insets.top > 0 on iOS.
-  // On Android insets.top is guaranteed by StatusBar height at init.
-  const [insetsReady, setInsetsReady] = useState(
-    () => Platform.OS !== 'ios' || (insets.bottom > 0 && insets.top > 0),
-  );
+  // R21 (2026-08-17): fire real weather fetch on mount if no override.
+  // If GPS available, use real lat/lon; else fall back to a default. Real
+  // condition drives the bg + text tokens.
   useEffect(() => {
-    if (insetsReady) return;
-    if (insets.bottom > 0 && insets.top > 0) {
-      setInsetsReady(true);
-      return;
-    }
-    // Fallback: paint after 250ms even if insets still 0 (iPhone SE
-    // or other no-home-indicator devices where insets.bottom is
-    // legitimately 0).
-    const t = setTimeout(() => setInsetsReady(true), 250);
-    return () => clearTimeout(t);
-  }, [insets.bottom, insets.top, insetsReady]);
-
-  // v320: beacon right before JSX return — if app dies between selectors
-  // and JSX render, we'll see home_after_selectors but no home_before_jsx.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../services/bootDiagnostics').markBootPhase('home_before_jsx');
-  } catch {/* ignore */}
-
-  // v320: schedule alive heartbeats — if these fire, JS thread survived.
-  // If 500ms fires but 2000ms doesn't, we know death was between.
-  useEffect(() => {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require('../services/bootDiagnostics').markBootPhase('home_mounted_useEffect');
-    } catch {/* ignore */}
-    const t500 = setTimeout(() => {
+    if (locationOverride) return; // dev override handles its own fetch
+    let cancelled = false;
+    (async () => {
       try {
+        // R21 (2026-08-17): defensive — on web + when expo-location's web
+        // shim has limited API, some methods can throw. Guard the whole
+        // block; failure just means bg stays default. Fixes crash user
+        // reported: "进了 memory 返回 他报错了".
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../services/bootDiagnostics').markBootPhase('home_alive_500ms');
-      } catch {/* ignore */}
-    }, 500);
-    const t2000 = setTimeout(() => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../services/bootDiagnostics').markBootPhase('home_alive_2000ms');
-      } catch {/* ignore */}
-    }, 2000);
-    const t5000 = setTimeout(() => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../services/bootDiagnostics').markBootPhase('home_alive_5000ms');
-      } catch {/* ignore */}
-    }, 5000);
-    return () => {
-      clearTimeout(t500);
-      clearTimeout(t2000);
-      clearTimeout(t5000);
-    };
-  }, []);
-
-  // v324: unified GPS permission request on Home mount.
-  // User feedback 2026-06-25: "我们的 hiking 也好 plant 也好 memory 也好
-  // 这几个都是需要位置和 GPS 这些的权限的 那我们是否应该在 homepage 去
-  // 做这个事情". Confirmed via AskUserQuestion: yes, Home unified request.
-  //
-  // Trade-off accepted: permission prompt appears once when user reaches
-  // Home (first time after login or fresh install). All downstream
-  // screens (Hiking/Plant/Memory) can then assume permission granted
-  // and skip the prompt + UI-already-rendered-before-prompt problem.
-  //
-  // Delay 800ms after mount so Home renders first; user has visual
-  // context before iOS permission dialog appears (better UX than
-  // dialog-on-blank-screen).
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      try {
-        // Lazy-import expo-location to avoid pulling it into Home's
-        // initial render path.
-        const Location = await import('expo-location');
-        const existing = await Location.getForegroundPermissionsAsync();
-        if (existing.status !== 'granted' && existing.canAskAgain) {
+        const Location = require('expo-location');
+        if (!Location || typeof Location.getForegroundPermissionsAsync !== 'function') return;
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (cancelled) return;
+        if (!perm?.granted) return;
+        let pos: any = null;
+        try {
+          pos = await Location.getLastKnownPositionAsync({});
+        } catch { /* fallback */ }
+        if (!pos) {
           try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            require('../services/bootDiagnostics').markBootPhase('home_requesting_location_permission');
-          } catch {/* ignore */}
-          await Location.requestForegroundPermissionsAsync();
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            require('../services/bootDiagnostics').markBootPhase('home_location_permission_responded');
-          } catch {/* ignore */}
+            pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy?.Lowest ?? 1 });
+          } catch { /* silent */ }
         }
-      } catch {
-        // expo-location unavailable (web) — silent skip.
-      }
-    }, 800);
-    return () => clearTimeout(timer);
-  }, []);
+        if (!cancelled && pos?.coords) {
+          fetchWeather(pos.coords.latitude, pos.coords.longitude);
+        }
+      } catch { /* silent — bg stays sunny default */ }
+    })();
+    return () => { cancelled = true; };
+  }, [locationOverride, fetchWeather]);
 
-  // v354: defer first paint until insets are ready (or 250ms timeout).
-  // Prevents the OTA-reload-first-signin tab-jump bug where iOS hasn't
-  // yet provided real safeAreaInsets to JS at the moment HomeScreen
-  // mounts. With insetsReady gate, when we DO render we already have
-  // correct paddingBottom and tabs are positioned right on the first
-  // pixel the user sees.
-  // O2 flicker fix: return null (not a white View) so the underlying
-  // OnboardingModal slide-out completes without a white flash. The
-  // 250ms timeout logic is preserved for the tab-jump fix.
-  if (!insetsReady) {
-    return null;
-  }
+  // exploredKm² = memoryPointCount × 0.000541 (each 25m hex cell ≈ 541 m²)
+  const exploredKm2 = useMemo(() => memoryPointCount * 0.000541, [memoryPointCount]);
+
+  // R21 (2026-08-17 user "0.0 不要写", "走了一段写 0.1 km 这种"):
+  // display precision + suppression. Below 0.05 km² → no digits (H0).
+  // 0.05–0.1 → 0.1 (round up so users see progress right away).
+  // Above → normal .toFixed(1).
+  // Also: if state is H1 but exploredKm2 < 0.05, fall back to H0-like
+  // greeting (no digits) — user's "0.0" complaint.
+  const hasMeaningfulExploration = exploredKm2 >= 0.05;
+  const displayState = hasHike && hasMeaningfulExploration ? 'H1' : 'H0';
+
+  const lastHike = useMemo(() => {
+    if (!hasHike) return null;
+    const sorted = [...validSessions].sort((a: any, b: any) => {
+      const ta = typeof a.startedAt === 'number' ? a.startedAt : new Date(a.startedAt).getTime();
+      const tb = typeof b.startedAt === 'number' ? b.startedAt : new Date(b.startedAt).getTime();
+      return tb - ta;
+    });
+    return sorted[0];
+  }, [hasHike, validSessions]);
+
+  const lastHikeTitle = lastHike?.name || 'Recent hike';
+  const lastHikeMeta = lastHike
+    ? `${formatDistanceKm(lastHike.distanceM || 0)} · ${formatDuration(lastHike.durationS || 0)} · ${formatRelativeDay(lastHike.startedAt)}`
+    : '';
+
+  const initial = ((user?.name ?? user?.email ?? '?').charAt(0) || '?').toUpperCase();
+  const greetingName = user?.name || 'Explorer';
+
+  // R21 (2026-08-17 user "右上角小转换 icon 切百分比"): compute % of country
+  // area. Only meaningful if we resolved a country. Uses hardcoded area map.
+  const countryAreaKm2 = country ? COUNTRY_AREA_KM2[country.code] : undefined;
+  const percentOfCountry = countryAreaKm2 ? (exploredKm2 / countryAreaKm2) * 100 : null;
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0 && (dims?.w !== width || dims?.h !== height)) {
+      setDims({ w: width, h: height });
+    }
+  };
+
+  const scale = dims ? Math.min(dims.w / DESIGN_W, dims.h / DESIGN_H) : 1;
+
+  // R21 (2026-08-17): weather-adaptive tokens now respect user Appearance
+  // preference. When user explicitly picks Light/Dark, we override the
+  // clock-based day/night; DEV toggle still wins over both.
+  const appearance = useAppearance();
+  const bgTokens = useMemo(
+    () => {
+      // Priority: DEV dayNightOverride > user Appearance (light/dark) > real clock (auto)
+      let forced: 'day' | 'night' | undefined = undefined;
+      if (dayNightOverride === 'day' || dayNightOverride === 'night') {
+        forced = dayNightOverride;
+      } else if (appearance.mode === 'light') {
+        forced = 'day';
+      } else if (appearance.mode === 'dark') {
+        forced = 'night';
+      }
+      return getHomeBackground(effectiveCondition, Date.now(), forced);
+    },
+    [effectiveCondition, dayNightOverride, appearance.mode],
+  );
+
+  // R21 (2026-08-17 user "DEV 改的是我的当前 GPS location + 切白天黑夜 + reset"):
+  // DEV menu supports two independent overrides:
+  //  - Location: 5 NZ cities → triggers real weather fetch → real condition
+  //  - Day/Night: force UI to render day or night variant (independent of clock)
+  //  - Reset: clear both, back to real GPS + real time
+  // TODO: LAUNCH_GATE — remove before App Store submission.
+  const setLocationOverride = useWeatherStore(s => s.setLocationOverride);
+  const setDayNightOverride = useWeatherStore(s => s.setDayNightOverride);
+  const setConditionOverride = useWeatherStore(s => s.setConditionOverride);
+  const [devMenuOpen, setDevMenuOpen] = useState(false);
+  // R21 (2026-08-17 user "二次点击就是取消"): each toggle is idempotent —
+  // click city A once = override, click A again = clear. Same for weather
+  // and day/night. No "reset" button needed.
 
   return (
-    // v351: REVERTED v350 edges={['top']} change. v350 was based on
-    // "double-padding race" hypothesis — wrong. v346-v349 design was
-    // intentional: SafeAreaView provides ~34px native bottom padding
-    // (home indicator) AND manual paddingBottom inset.bottom + 12px
-    // provides a second tier. Total ~72px buffer keeps toolsRow above
-    // the home indicator visual strip with comfortable margin. v350
-    // removing one tier left only 12-38px → tabs visually pressed
-    // against home indicator (or under on devices with insets=0 first
-    // frame). Restore double-tier.
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
-      <OtaBadge />
-      {/* v412: v409 UnfinishedSessionBanner 已删除, 恢复流程走 HikingScreen 的 UnfinishedRecoveryModal */}
-      <Animated.View
-        style={[
-          styles.screen,
-          {
-            // Honour the device's bottom inset (home indicator). We can't
-            // rely on SafeAreaView edges:['bottom'] alone — on Pro Max the
-            // indicator strip was eating the toolsRow labels.
-            paddingBottom: Math.max(insets.bottom, Spacing.sm) + Spacing.xs,
-          },
-          { opacity },
-        ]}
-      >
-
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.logoRow}>
-            {/* Match Sign In page exactly: size=28 + marginTop:-7 + center
-                alignment + gap=Spacing.xs. Keeps the brand mark visually
-                consistent across the whole app. */}
-            <View style={{ marginTop: -7 }}>
-              <CairnLogo size={28} color={Colors.primary} />
-            </View>
-            <Text style={styles.logo}>Cairn</Text>
-          </View>
-          <Text style={styles.greeting}>{getGreeting()}</Text>
-        </View>
-
-        {/* v412: pending-sync banner — only when there are real pending
-             hikes. v450 (a) English copy — Cairn UI is English; the
-             pending banner was the last stray Chinese string. (b) filter
-             out zombie shell sessions (distanceM===0 && durationS===0):
-             those are startSession placeholders that never got real
-             points, they can't sync anything so they shouldn't count. */}
-        {(() => {
-          const inMemoryPending = sessions.filter((s: any) => {
-            const isPending = s.syncState === 'pending' || s.syncState === 'syncing';
-            if (!isPending) return false;
-            const hasContent = (s.distanceM ?? 0) > 0 || (s.durationS ?? 0) > 0;
-            return hasContent;
-          }).length;
-          // O18 SAF-06: use max(in-memory, filesystem) so the banner survives
-          // hydrate wiping the in-memory pending row.
-          const pendingCount = Math.max(inMemoryPending, fsPendingCount);
-          // O21 HOME-SYNC-UX: keep banner visible while syncing/error so the
-          // user sees the outcome. Hide only when idle AND 0 pending.
-          if (pendingCount === 0 && !syncing && !syncError) return null;
-
-          // O21 HOME-SYNC-UX: real-progress tap handler. Awaits drainPending,
-          // displays "Syncing N/M..." during, then refreshes fsPendingCount
-          // from disk (so banner drops the moment the store is empty), then
-          // shows a 3s error/skip message if not everything succeeded.
-          const handleSyncTap = async () => {
-            if (syncing) return; // debounce concurrent taps
-            setSyncError(null);
-            setSyncing({ done: 0, total: pendingCount });
-            try {
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              const { drainPending } = require('../services/syncDaemon');
-              const result = await drainPending({
-                onProgress: (done: number, total: number) => setSyncing({ done, total }),
-              });
-              // Force-refresh fs count so the banner drops immediately when
-              // the disk store is empty, without waiting for the sessions
-              // signal effect to re-fire.
-              try {
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                const { listPending } = require('../services/pendingSyncStore');
-                const list = await listPending();
-                setFsPendingCount(Array.isArray(list) ? list.length : 0);
-              } catch { /* silent */ }
-              if (result && result.failed > 0) {
-                setSyncError(`${result.failed} failed — check connection`);
-                setTimeout(() => setSyncError(null), 3000);
-              } else if (result && result.skipped > 0 && result.succeeded === 0) {
-                setSyncError(
-                  result.skipped === 1
-                    ? '1 hike belongs to another account'
-                    : `${result.skipped} hikes belong to another account`,
-                );
-                setTimeout(() => setSyncError(null), 3000);
-              }
-            } catch (e) {
-              // eslint-disable-next-line no-console
-              console.warn('[HOME-SYNC-UX] manual sync trigger failed:', e);
-              setSyncError('Sync failed');
-              setTimeout(() => setSyncError(null), 3000);
-            } finally {
-              setSyncing(null);
-            }
-          };
-
-          const label = syncing
-            ? `Syncing ${syncing.done}/${syncing.total}...`
-            : syncError
-              ? `Sync failed — ${syncError}`
-              : pendingCount === 1
-                ? '1 hike pending sync — tap to retry now'
-                : `${pendingCount} hikes pending sync — tap to retry now`;
-
-          return (
-            <TouchableOpacity
-              style={styles.pendingBanner}
-              onPress={handleSyncTap}
-              disabled={!!syncing}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={syncing ? 'Sync in progress' : 'Retry pending sync now'}
-            >
-              {syncing ? (
-                <ActivityIndicator size="small" color={Colors.textSecondary} />
-              ) : (
-                <Icon name="CloudOff" size={14} color={Colors.textSecondary} strokeWidth={2} />
+    <View style={styles.root} onLayout={onLayout}>
+      {dims && (
+        <View
+          style={[
+            styles.canvas,
+            {
+              width: DESIGN_W,
+              height: DESIGN_H,
+              transform: [{ scale }],
+            },
+          ]}
+        >
+          <GeneratedHome
+            state={displayState}
+            initial={initial}
+            greetingName={greetingName}
+            exploredKm2={exploredKm2}
+            countryName={country?.name}
+            percentOfCountry={percentOfCountry ?? undefined}
+            showPercent={showExplorationPercent && showPercent}
+            onToggleUnit={showExplorationPercent ? () => setShowPercent(v => !v) : undefined}
+            lastHikeTitle={lastHikeTitle}
+            lastHikeMeta={lastHikeMeta}
+            bgAsset={bgTokens.bgAsset}
+            bgTokens={bgTokens}
+          />
+          {/* DEV-only weather cycler — top-right circular button.
+              TODO: LAUNCH_GATE — remove this block before App Store. */}
+          {__DEV__ && (
+            <View style={{ position: 'absolute', right: 20, top: 56 }}>
+              <TouchableOpacity
+                onPress={() => setDevMenuOpen(v => !v)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{
+                  width: 34, height: 34, borderRadius: 17,
+                  backgroundColor: 'rgba(255,255,255,0.7)',
+                  alignItems: 'center', justifyContent: 'center',
+                  borderWidth: 1, borderColor: 'rgba(33,54,44,0.15)',
+                }}
+                accessibilityLabel="DEV weather cycler"
+              >
+                <Text style={{ fontSize: 10, fontWeight: '900', color: '#21362C', letterSpacing: 0.5 }}>DEV</Text>
+              </TouchableOpacity>
+              {devMenuOpen && (
+                <View style={{
+                  position: 'absolute', right: 0, top: 42,
+                  backgroundColor: 'rgba(255,255,255,0.97)',
+                  borderRadius: 12,
+                  paddingVertical: 6,
+                  paddingHorizontal: 8,
+                  width: 230,
+                  shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+                  elevation: 6,
+                }}>
+                  <Text style={{ paddingHorizontal: 4, paddingTop: 2, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>
+                    LOCATION
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+                    {NZ_TEST_CITIES.map((city) => {
+                      const active = locationOverride?.label === city.label;
+                      return (
+                        <TouchableOpacity
+                          key={city.label}
+                          onPress={() => {
+                            // Second click = toggle off (real GPS)
+                            if (active) {
+                              setLocationOverride(null);
+                            } else {
+                              setLocationOverride({ label: city.label, lat: city.lat, lon: city.lon });
+                            }
+                            setDevMenuOpen(false);
+                          }}
+                          style={{
+                            paddingVertical: 4, paddingHorizontal: 8,
+                            borderRadius: 8,
+                            backgroundColor: active ? 'rgba(33,54,44,0.15)' : 'rgba(33,54,44,0.05)',
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: '#21362C' }}>
+                            {city.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <Text style={{ paddingHorizontal: 4, paddingTop: 2, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>
+                    WEATHER
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
+                    {(['sunny','cloudy','rain','snow'] as const).map((c) => {
+                      const active = conditionOverride === c;
+                      return (
+                        <TouchableOpacity
+                          key={c}
+                          onPress={() => {
+                            setConditionOverride(active ? null : c);
+                            setDevMenuOpen(false);
+                          }}
+                          style={{
+                            flex: 1, paddingVertical: 4, paddingHorizontal: 4,
+                            borderRadius: 8,
+                            alignItems: 'center',
+                            backgroundColor: active ? 'rgba(33,54,44,0.15)' : 'rgba(33,54,44,0.05)',
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: '#21362C', textTransform: 'capitalize' }}>
+                            {c}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <Text style={{ paddingHorizontal: 4, paddingTop: 2, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>
+                    TIME
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setDayNightOverride(dayNightOverride === 'day' ? null : 'day');
+                        setDevMenuOpen(false);
+                      }}
+                      style={{
+                        flex: 1, paddingVertical: 4, alignItems: 'center', borderRadius: 8,
+                        backgroundColor: dayNightOverride === 'day' ? 'rgba(33,54,44,0.15)' : 'rgba(33,54,44,0.05)',
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#21362C' }}>Day</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setDayNightOverride(dayNightOverride === 'night' ? null : 'night');
+                        setDevMenuOpen(false);
+                      }}
+                      style={{
+                        flex: 1, paddingVertical: 4, alignItems: 'center', borderRadius: 8,
+                        backgroundColor: dayNightOverride === 'night' ? 'rgba(33,54,44,0.15)' : 'rgba(33,54,44,0.05)',
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#21362C' }}>Night</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               )}
-              <Text style={styles.pendingBannerText}>{label}</Text>
-            </TouchableOpacity>
-          );
-        })()}
-
-        {/* O24 HOME-SIMPLIFY: period toggle + stats strip removed —
-            these have moved to Settings › Your journey. Home stays
-            visually calm: greeting → pending banner → recent → cards. */}
-
-        {/* Recent activity — above the cards so user sees it before cards */}
-        {hasRecent && <RecentRow onPress={(id) => nav.navigate('MapHistory', { sessionId: id })} />}
-
-        {/* Activity Cards — fill remaining vertical space, two equal halves */}
-        <View style={styles.cardsArea}>
-          <ActivityCard
-            icon={(sz) => <HikingIcon size={sz} color={Colors.primary} />}
-            title="Hiking"
-            subtitle="Track your route · Explore at your pace"
-            accentColor={Colors.primary}
-            lightBg={Colors.primaryLight}
-            cardBg="#eef4e8"
-            onPress={() => nav.navigate('Hiking')}
-            anim={card1}
-          />
-          <ActivityCard
-            icon={(sz) => <RunningIcon size={sz} color={Colors.running} />}
-            title="Running"
-            subtitle="Route planning · Lock mode"
-            accentColor={Colors.running}
-            lightBg={Colors.runningLight}
-            cardBg="#e8f1f8"
-            onPress={() => nav.navigate('Running')}
-            anim={card2}
-          />
-          {/* R110 P2-10: Plant cairn entry —— 视觉权重与 Hiking/Running 同级 (三张卡都是主动作).
-              原来 flex=0.4 让它视觉降级但导航地位不降, 用户困惑.
-              Flag/cairn palette 保留区分色, 但尺寸对齐. */}
-          <ActivityCard
-            icon={(sz) => <FlagMarkerIcon size={sz} stoneColor={Colors.flag} flagColor={Colors.primary} />}
-            title="Leave a Cairn here"
-            subtitle="Drop a note for friends or your future self"
-            accentColor={Colors.flag}
-            lightBg="#fbe9d8"
-            cardBg="#fff5e9"
-            onPress={() => {
-              import('../services/appLog').then(({ log }) => log('home.tap_plant'));
-              nav.navigate('Plant');
-            }}
-            anim={card2}
-          />
+            </View>
+          )}
         </View>
-
-        {/* Tools — Trails / Friends / Memory / Settings */}
-        <View style={styles.toolsRow}>
-          <ToolBtn iconName="Route" label="Trails" onPress={() => nav.navigate('Routes')} />
-          <ToolBtn iconName="Users" label="Friends" onPress={() => nav.navigate('Friends')} />
-          <ToolBtn iconName="Footprints" label="Memory" onPress={() => nav.navigate('Memory')} />
-          <ToolBtn iconName="Cog" label="Settings" onPress={() => nav.navigate('Settings')} />
-        </View>
-
-        {/* Sprint 68 STORY-00532 dev preview entry — only renders in __DEV__ */}
-        {__DEV__ ? (
-          <TouchableOpacity
-            onPress={() => nav.navigate('MarkDetailDevPreview')}
-            style={{ marginTop: 8, alignSelf: 'center', paddingVertical: 6, paddingHorizontal: 12 }}
-            testID="dev-mark-detail-preview"
-          >
-            <Text style={{ color: '#8c7e72', fontSize: 11 }}>[dev] MarkDetail preview</Text>
-          </TouchableOpacity>
-        ) : null}
-
-      </Animated.View>
-    </SafeAreaView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg },
-  screen: {
-    flex: 1,
-    paddingHorizontal: Spacing.base,
-    paddingTop: Spacing.sm,
-    // paddingBottom set inline using useSafeAreaInsets — see the JSX.
-    gap: Spacing.sm,
-  },
-
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  logo: {
-    fontSize: FontSize.h1, fontWeight: '900', color: Colors.textPrimary,
-    letterSpacing: -1, lineHeight: 32, includeFontPadding: false,
-  },
-  greeting: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textSecondary },
-
-  // O24 HOME-SIMPLIFY: statsRow / periodToggle / periodChip* / statChip / statText
-  // styles removed — the stats strip they styled moved to Settings › Your journey.
-  // v412: 离线未同步提示条
-  pendingBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    backgroundColor: Colors.surfaceMuted ?? '#F5F0E5',
-    borderRadius: Radius.chip,
-    marginBottom: Spacing.xs,
-  },
-  pendingBannerText: {
-    color: Colors.textSecondary,
-    fontSize: FontSize.caption,
-    flex: 1,
-  },
-
-  cardsArea: { flex: 1, gap: Spacing.sm },
-
-  toolsRow: { flexDirection: 'row', gap: Spacing.sm },
-});
-
-const cardStyles = StyleSheet.create({
-  card: {
-    borderRadius: Radius.cardLg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    overflow: 'hidden',
-    flexDirection: 'row',
-    // Upgraded shadow: deeper, more layered (elevation-3 feel)
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 6,
-  },
-  leftPanel: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  innerRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.base,
-    gap: Spacing.sm,
-  },
-  textCol: { flex: 1, gap: 5 },
-  title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  subtitle: { fontSize: FontSize.small, color: Colors.textSecondary, lineHeight: 17 },
-  chevron: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-});
-
-const recentStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: Radius.card,
-    paddingHorizontal: Spacing.md, paddingVertical: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
-  },
-  dot: {
-    width: 28, height: 28, borderRadius: 8,
-    alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-  },
-  textGroup: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
-  badge: { fontSize: FontSize.small, fontWeight: '700' },
-  stat: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textPrimary },
-  when: { fontSize: FontSize.small, color: Colors.textMuted, flexShrink: 0 },
-});
-
-const toolStyles = StyleSheet.create({
-  btn: {
-    flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.card,
-    alignItems: 'center', justifyContent: 'center',
-    paddingVertical: Spacing.sm, gap: 4,
-    minHeight: 64,
-    borderWidth: 1, borderColor: Colors.border, ...Shadow.card,
-  },
-  iconWrap: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  label: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary },
+  root: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  canvas: { overflow: 'hidden' },
 });

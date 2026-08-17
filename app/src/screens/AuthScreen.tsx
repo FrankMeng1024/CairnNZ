@@ -19,7 +19,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   KeyboardAvoidingView, Platform, Animated, ScrollView, Dimensions, Alert,
-  ActivityIndicator, Modal,
+  ActivityIndicator, Modal, Image, ImageBackground,
 } from 'react-native';
 import Svg, { Path, Ellipse, Line, G } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -42,7 +42,6 @@ import { CairnLogo } from '../components/ActivityIcons/CairnLogo';
 import { GlassPanel } from '../components/GlassPanel';
 // O1 batch 39: Google + makeRedirectUri + Prompt imports removed — 0 actual code references (Google OAuth deferred).
 import { crashLogger } from '../services/crashLogger';
-import { OtaBadge } from '../components/OtaBadge';
 import { prewarmMapTiles } from '../services/mapboxPrewarm';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -114,6 +113,31 @@ function calcFlagPaths(t: number, fadeIn: number): { flagD: string; sheenD: stri
 
 // Full logo: stones rise sequentially, then flag drops + waves
 // size prop scales the whole SVG (used for small version in verify screen)
+// R21 (2026-08-17): official Google "G" mark — 4-color SVG per Google
+// brand guidelines. Used on the Landing "Continue with Google" button so
+// the mark is recognisable, not a monochrome placeholder.
+// R21 (2026-08-17): official Apple glyph — filled silhouette per Apple
+// HIG "Sign in with Apple" button spec. Icon-only monochrome, meant to
+// sit on white pill next to "Continue with Apple" text.
+function AppleIcon({ size = 18, color = '#000' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path fill={color} d="M17.523 12.632c.03 2.964 2.598 3.945 2.626 3.958-.021.068-.407 1.4-1.343 2.775-.808 1.19-1.646 2.375-2.966 2.4-1.297.024-1.713-.77-3.196-.77-1.482 0-1.945.746-3.172.794-1.274.048-2.244-1.286-3.06-2.47C4.75 16.885 3.481 12.408 5.194 9.4c.85-1.492 2.371-2.437 4.023-2.461 1.25-.024 2.43.842 3.196.842.764 0 2.198-1.041 3.707-.888.631.026 2.402.255 3.541 1.924-.091.057-2.115 1.235-2.138 3.815M15.093 5.42c.678-.821 1.135-1.964.99-3.1-.977.04-2.157.65-2.858 1.47-.628.725-1.177 1.887-1.03 3.001 1.088.084 2.201-.552 2.898-1.371" />
+    </Svg>
+  );
+}
+
+function GoogleGIcon({ size = 18 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48">
+      <Path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
+      <Path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" />
+      <Path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
+      <Path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571.001-.001.002-.001.003-.002l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
+    </Svg>
+  );
+}
+
 function AnimatedCairn({ size = 4, noFlag = false, onComplete, staticMode = false }: { size?: number; noFlag?: boolean; onComplete?: () => void; staticMode?: boolean }) {
   // Stone visibility: starts FAR off the bottom (y=30 = pushed entirely
   // out of the 22×30 viewBox) and opacity 0. Initialising y far below the
@@ -380,12 +404,17 @@ function PasswordInput({ value, onChangeText, placeholder, error, onBlur, isNew 
 //   - Backspace to prior box
 //   - Paste a 6-digit code into any box → fills all
 //   - When 6 digits are complete → onComplete(code) fires; parent auto-verifies
-function OtpInput({ value, onChange, onComplete, error, autoFocus }: {
+function OtpInput({ value, onChange, onComplete, error, autoFocus, autoSubmit = true }: {
   value: string;
   onChange: (v: string) => void;
   onComplete: (code: string) => void;
   error?: boolean;
   autoFocus?: boolean;
+  // R21 (2026-08-17 user "reset password 6 位和注册不一样"): let caller
+  // opt out of auto-submit-on-complete. Register verify auto-verifies
+  // (autoSubmit=true, default). Forgot verify has a New Password input
+  // below, so it needs the user to tap Reset button manually.
+  autoSubmit?: boolean;
 }) {
   const refs = React.useRef<Array<any>>([]);
   const digits: string[] = [];
@@ -401,7 +430,7 @@ function OtpInput({ value, onChange, onComplete, error, autoFocus }: {
       // Also blur the last input so the keyboard closes cleanly.
       setTimeout(() => {
         try { refs.current[5]?.blur?.(); } catch { /* silent */ }
-        onComplete(clean);
+        if (autoSubmit) onComplete(clean);
       }, 0);
     }
   };
@@ -524,56 +553,79 @@ function DobInputs({ value, onChange, onError, error }: {
     }
   };
 
-  const baseStyle = [formStyles.input, error ? formStyles.inputError : null,
-    { flex: 1, textAlign: 'center' as const, paddingHorizontal: 8 }];
+  // R114 concept polish (2026-08-16): DOB fields now use inputWrap
+  // shell (matches other form fields exactly) with a bare TextInput
+  // inside — visual parity with Email / Name / Password pills per
+  // Auth-3-signup.png concept.
+  // 2026-08-16 fix: 3-input DOB row is tight on 375. Override inputWrap's
+  // Spacing.md paddingHorizontal to a smaller value so the placeholder text
+  // (YYYY / MM / DD) fits inside each pill without clipping.
+  const wrapStyle = [formStyles.inputWrap, !!error && formStyles.inputError,
+    { flex: 1, paddingHorizontal: 4 }];
+  const innerStyle = {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: 0,
+    fontSize: FontSize.body,
+    color: Colors.textPrimary,
+    textAlign: 'center' as const,
+    backgroundColor: 'transparent' as const,
+    minWidth: 0,  // web fix: prevent flex shrink from clipping
+  };
 
   return (
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      <TextInput
-        value={y}
-        onChangeText={(v) => {
-          const clean = v.replace(/\D/g, '').slice(0, 4);
-          setY(clean);
-          commit(clean, m, d);
-        }}
-        placeholder="YYYY"
-        placeholderTextColor={Colors.textMuted}
-        keyboardType="number-pad"
-        maxLength={4}
-        style={[...baseStyle, { flex: 1.4 }]}
-        testID="input-dob-year"
-        returnKeyType="next"
-      />
-      <TextInput
-        value={m}
-        onChangeText={(v) => {
-          const clean = v.replace(/\D/g, '').slice(0, 2);
-          setM(clean);
-          commit(y, clean, d);
-        }}
-        placeholder="MM"
-        placeholderTextColor={Colors.textMuted}
-        keyboardType="number-pad"
-        maxLength={2}
-        style={baseStyle}
-        testID="input-dob-month"
-        returnKeyType="next"
-      />
-      <TextInput
-        value={d}
-        onChangeText={(v) => {
-          const clean = v.replace(/\D/g, '').slice(0, 2);
-          setD(clean);
-          commit(y, m, clean);
-        }}
-        placeholder="DD"
-        placeholderTextColor={Colors.textMuted}
-        keyboardType="number-pad"
-        maxLength={2}
-        style={baseStyle}
-        testID="input-dob-day"
-        returnKeyType="done"
-      />
+    <View style={{ flexDirection: 'row', gap: 6 }}>
+      <View style={[...wrapStyle, { flex: 1.3 }]}>
+        <TextInput
+          value={y}
+          onChangeText={(v) => {
+            const clean = v.replace(/\D/g, '').slice(0, 4);
+            setY(clean);
+            commit(clean, m, d);
+          }}
+          placeholder="YYYY"
+          placeholderTextColor={Colors.textMuted}
+          keyboardType="number-pad"
+          maxLength={4}
+          style={innerStyle}
+          testID="input-dob-year"
+          returnKeyType="next"
+        />
+      </View>
+      <View style={wrapStyle}>
+        <TextInput
+          value={m}
+          onChangeText={(v) => {
+            const clean = v.replace(/\D/g, '').slice(0, 2);
+            setM(clean);
+            commit(y, clean, d);
+          }}
+          placeholder="MM"
+          placeholderTextColor={Colors.textMuted}
+          keyboardType="number-pad"
+          maxLength={2}
+          style={innerStyle}
+          testID="input-dob-month"
+          returnKeyType="next"
+        />
+      </View>
+      <View style={wrapStyle}>
+        <TextInput
+          value={d}
+          onChangeText={(v) => {
+            const clean = v.replace(/\D/g, '').slice(0, 2);
+            setD(clean);
+            commit(y, m, clean);
+          }}
+          placeholder="DD"
+          placeholderTextColor={Colors.textMuted}
+          keyboardType="number-pad"
+          maxLength={2}
+          style={innerStyle}
+          testID="input-dob-day"
+          returnKeyType="done"
+        />
+      </View>
     </View>
   );
 }
@@ -658,7 +710,44 @@ privacy@cairnapp.nz`;
 type AuthView =
   | 'splash' | 'login' | 'register' | 'verify' | 'welcome'
   | 'forgot_request' | 'forgot_verify'
-  | 'dob_backfill' | 'restore_confirm';
+  | 'dob_backfill' | 'restore_confirm'
+  // Concept 1.6 Account Created success screen. Auto-shown after
+  // register completes; auto-navigates to Home ~2s later.
+  | 'success'
+  // Concept 3.4 Network Error screen. Shown when an API request fails
+  // with a network-level error. Tap "Try Again" returns to the previous
+  // view so the user can retry.
+  | 'network_error'
+  // ── 2026-08-16 concept batch (rows 01–06 of auth-scan) ────────────────
+  // Concept 1.4 Verify Email — dedicated 6-digit OTP UI (paper bg, pill
+  //   boxes, wall-clock resend countdown). Reuses handleVerify + handleResend
+  //   under the hood; API unchanged.
+  | 'verify_email'
+  // Concept 1.5 Complete Profile — standalone Display Name + DOB collector.
+  //   Currently accessible as a demo view; Continue triggers setView('success').
+  //   API unchanged; register happy path still submits name+DOB inline.
+  | 'complete_profile'
+  // Concept 1.7 Go to Home — mountain-landscape transition screen shown
+  //   after 'success' with "YOUR WORLD / 12.6 km²". Auto-navigates to Home
+  //   after 2s. No button.
+  | 'go_to_home'
+  // Concept 2.2 Restore Session — landscape bg + white spinner + "Restoring
+  //   your journey". Displayed during hydrate; auto-transitions after ~2s.
+  | 'restore_session'
+  // Concept 2.4 Session Expired — paper bg + green lock icon + Sign In pill.
+  | 'session_expired'
+  // Concept 3.2 Code Sent — paper bg + green send icon + email echoed +
+  //   wall-clock resend timer + Back to Sign In.
+  | 'code_sent'
+  // Concept 3.3 Invalid Code — paper bg + coral circle with white X +
+  //   resend timer + Back to Sign In.
+  | 'invalid_code';
+
+// R21 (2026-08-17): apple_confirm / google_confirm views removed. Apple &
+// Google OAuth already show system-native full-screen modals (Sign in with
+// Apple sheet, in-app Safari for Google), so an in-app intermediate confirm
+// screen was redundant friction. Landing buttons now call the OAuth handler
+// directly.
 
 // Remember-me persistence key. Stored value is a JSON-encoded
 // { email, password } pair. Cleared on Sign Out or when the user
@@ -677,7 +766,23 @@ export function AuthScreen() {
   } catch {/* ignore */}
   const nav = useNavigation<Nav>();
   const { setLoggedIn, setUser, hydrate } = useAppStore();
+  // R21 v2 (2026-08-17): AuthScreen only mounts when hydrate() finished
+  // with isLoggedIn=false (no token OR invalid token). Initial view is
+  // 'splash' — the Landing screen. Old logic that started at
+  // 'restore_session' and ran a second getMe on mount is gone: hydrate
+  // in useAppStore already did the token check and flipped isLoggedIn
+  // if valid, so if we get here, we're definitely not signed in.
   const [view, setView] = useState<AuthView>('splash');
+  // R21 v2 (2026-08-17): removed the mount-time getMe check. hydrate() in
+  // useAppStore already ran on App mount, did getToken + getMe, and
+  // flipped isLoggedIn if valid. If we're rendering AuthScreen at all,
+  // it means hydrate decided we're NOT signed in — so just show splash.
+  // No second getMe here (was causing double API round-trip + longer
+  // restore_session flash).
+  // Concept 3.4: remember the view before switching to 'network_error'
+  // so "Try Again" can restore where the user was. Defaults to 'splash'
+  // as a safe fallback.
+  const [previousView, setPreviousView] = useState<AuthView>('splash');
   const [welcomeName, setWelcomeName] = useState('');
   const [verifyEmail, setVerifyEmail] = useState('');   // email to verify after register
   const [verifyCode_, setVerifyCode_] = useState('');   // 6-digit code input
@@ -730,6 +835,18 @@ export function AuthScreen() {
   const googleFlowActive = useRef(false);
   const submitAttempted = useRef(false);  // STORY-00133: only validate on blur after first submit
 
+  // ── 2026-08-16 concept views (rows 01–06 of auth-scan) ────────────────
+  // Concept 1.5 Complete Profile — separate Display Name + DOB collector.
+  // Kept isolated from the register form state (name / dob) so the
+  // existing register happy path is not disturbed.
+  const [profileName, setProfileName] = useState('');
+  const [profileDob, setProfileDob] = useState('');
+  const [profileError, setProfileError] = useState('');
+  // Concept 3.2 Code Sent / 3.3 Invalid Code — email echoed on the screen.
+  // Populated by whoever navigates to those views (default falls back to
+  // verifyEmail so the screens still render meaningfully).
+  const [codeSentEmail, setCodeSentEmail] = useState('');
+
   // Google OAuth hook — CONFIRMED as sign-out crash root cause via OTA
   // bisect on 2026-05-21. Re-disabled. Real fix requires app.json scheme
   // for makeRedirectUri to work — coming in next build. Until then,
@@ -759,6 +876,18 @@ export function AuthScreen() {
 
   const splashFade = useRef(new Animated.Value(0)).current;
   const splashTranslate = useRef(new Animated.Value(8)).current;
+  // R21 perf (2026-08-17): hero image fades in 180ms after decode. Prior to
+  // this, cold start showed a brief paper-only frame while the JPEG decoded
+  // from disk (~40-80ms on iPhone), then the image popped in with the RN
+  // built-in Android fade (~300ms). Now: container is paper-colored so the
+  // pre-decode frame is invisible; onLoad flips this Animated.Value to 1
+  // over 180ms for a controlled, subtle fade instead of an abrupt pop.
+  // R21 (2026-08-17): heroImageFade initial value 1 (opaque). Previously
+  // started at 0 and animated to 1 on Image onLoad, which caused the
+  // background to lag behind the text by ~180ms — user reported "背景 文字
+  // 整体 都不是同一个时间出现的 有先后 这个不好". Now the JPG (187 KB)
+  // decodes fast enough that even without fade-in the appear is instant.
+  const heroImageFade = useRef(new Animated.Value(1)).current;
   // v312 anchor: splash refs created.
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -839,30 +968,33 @@ export function AuthScreen() {
     return () => { cancelled = true; };
   }, []);
 
+  const isFirstSplashMount = useRef(true);
   useEffect(() => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require('../services/bootDiagnostics').markBootPhase('auth_view_effect', { view });
     } catch {/* ignore */}
     if (view === 'splash') {
-      // Reset every animation back to its starting state so re-entering the
-      // splash from Sign In replays the full sequence from scratch.
-      splashFade.setValue(0);
-      splashTranslate.setValue(8);
-      wordmarkOpacity.setValue(0);
-      wordmarkTranslate.setValue(-8);
-      tagline1Opacity.setValue(0);
-      tagline1Translate.setValue(-8);
-      tagline2Opacity.setValue(0);
-      tagline2Translate.setValue(-8);
-      setSplashMountKey(k => k + 1);
-      Animated.parallel([
-        Animated.timing(splashFade, { toValue: 1, duration: 400, useNativeDriver: true }),
-        Animated.timing(splashTranslate, { toValue: 0, duration: 400, useNativeDriver: true }),
-      ]).start();
-      // Wordmark + tagline animate in parallel with the first stone — the
-      // word "Cairn" should appear together with the base stone landing.
-      animateWordmark();
+      // R21 (2026-08-17): all splash elements appear SIMULTANEOUSLY.
+      // R21 v2 (2026-08-17 user "从 sign in back 到首页不柔和 有个很突兀的闪烁"):
+      // only fade in on FIRST splash mount. When user backs from login →
+      // splash we skip the fade so the transition is instant (feels like
+      // a native stack pop, not a reload).
+      splashTranslate.setValue(0);
+      wordmarkOpacity.setValue(1);
+      wordmarkTranslate.setValue(0);
+      tagline1Opacity.setValue(1);
+      tagline1Translate.setValue(0);
+      tagline2Opacity.setValue(1);
+      tagline2Translate.setValue(0);
+      if (isFirstSplashMount.current) {
+        splashFade.setValue(0);
+        setSplashMountKey(k => k + 1);
+        Animated.timing(splashFade, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+        isFirstSplashMount.current = false;
+      } else {
+        splashFade.setValue(1);
+      }
     }
   }, [view]);
 
@@ -920,7 +1052,16 @@ export function AuthScreen() {
 
   const validatePassword = (val: string) => {
     if (!val) return 'Password is required';
-    if (view === 'register' && val.length < 8) return 'Minimum 8 characters';
+    if (view === 'register') {
+      // R21 (2026-08-17 user "注册时候的密码没满足要求也通过了"): concept
+      // 1.3 shows 3 rules (8 chars / uppercase / number) as a green
+      // checklist. Previously only length was enforced client-side and
+      // backend also only checks length, so users could bypass the
+      // stricter rules. Now client blocks submit unless all 3 pass.
+      if (val.length < 8) return 'Password must be at least 8 characters';
+      if (!/[A-Z]/.test(val)) return 'Password must contain an uppercase letter';
+      if (!/[0-9]/.test(val)) return 'Password must contain a number';
+    }
     return '';
   };
 
@@ -968,6 +1109,22 @@ export function AuthScreen() {
     }
     if (isRegister && !privacyChecked) { setPrivacyError('Please agree to continue'); valid = false; }
     if (!valid) return;
+
+    // R21 (2026-08-17): request GPS permission IN the button click's user-
+    // gesture context. Web browsers only show the permission prompt when
+    // the request happens inside a user-initiated event; async setTimeout
+    // loses the gesture context and Chrome silently drops the prompt.
+    // Fire-and-forget: don't await, don't block login on grant/deny.
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const Location = require('expo-location');
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (perm.status !== 'granted' && perm.canAskAgain !== false) {
+          await Location.requestForegroundPermissionsAsync();
+        }
+      } catch { /* silent */ }
+    })();
 
     setLoading(true);
     setApiError('');
@@ -1059,17 +1216,22 @@ export function AuthScreen() {
         await storage.removeItem('cairn_logout_marker');
         crashLogger.breadcrumb('login:marker_cleared');
       } catch {/* ignore */}
+      // R21 (2026-08-17): setUser first, then setLoggedIn. Reversed order
+      // prevents RootNavigator gate `isLoggedIn && user` from evaluating
+      // true-and-null for one render.
+      if (result.user) setUser(result.user);
       setLoggedIn(true);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../services/bootDiagnostics').markBootPhase('login_after_setLoggedIn');
       } catch {/* ignore */}
       if (isRegister) {
-        // O12: setUIMode removed — uiMode field deleted from useAppStore.
-        // Fallback greeting uses 'friend' (was 'Explorer' — dead uiMode label).
-        setWelcomeName(result.user?.name || name.trim() || 'friend');
-        setView('welcome');
-        setTimeout(() => nav.replace('Home'), 1800);
+        // R21 (2026-08-17): register happy path — but authService.register
+        // actually always returns step='verify' + no token, so this branch
+        // is unreachable in production. Keeping the code path here as a
+        // safety net if backend contract ever changes to return token
+        // directly. Straight to Home; OnboardingModal handles welcome.
+        nav.replace('Home');
       } else {
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1092,6 +1254,20 @@ export function AuthScreen() {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             require('../services/bootDiagnostics').markBootPhase('login_settimeout_fired');
           } catch {/* ignore */}
+          // R21 (2026-08-17 user "sign in 后应该索要各种权限"): request
+          // foreground location permission after successful sign in so
+          // Home can immediately show real weather + city name. Fire-and-
+          // forget: nav.replace happens regardless of grant/deny.
+          (async () => {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const Location = require('expo-location');
+              const perm = await Location.getForegroundPermissionsAsync();
+              if (perm.status !== 'granted' && perm.canAskAgain !== false) {
+                await Location.requestForegroundPermissionsAsync();
+              }
+            } catch { /* silent */ }
+          })();
           nav.replace('Home');
           try {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1101,8 +1277,21 @@ export function AuthScreen() {
       }
     } catch (e: any) {
       const msg: string = e?.message || '';
-      // TypeError / "Failed to fetch" / "Network request failed" = network unreachable
-      if (
+      const status: number | undefined = e?.status;
+      // Sleep-run 2026-08-16: 401 = session/token invalid → dedicated
+      // Concept 2.4 Session Expired screen. Prefer explicit status code;
+      // fall back to string sniffing so authService errors that only
+      // surface as `Error("401 …")` still route correctly.
+      const is401 =
+        status === 401 ||
+        msg.includes('401') ||
+        /unauthori[sz]ed/i.test(msg) ||
+        /session expired/i.test(msg);
+      if (is401) {
+        setPreviousView(view);
+        setView('session_expired');
+      } else if (
+        // TypeError / "Failed to fetch" / "Network request failed" = network unreachable
         e?.name === 'TypeError' ||
         msg.includes('Network request failed') ||
         msg.includes('Failed to fetch') ||
@@ -1112,6 +1301,11 @@ export function AuthScreen() {
         msg.includes('ENOTFOUND')
       ) {
         setApiError('Cannot reach the server. Check your internet connection and try again.');
+        // Concept 3.4 Network Error: swap the whole screen to the
+        // dedicated no-connection view instead of a small inline error.
+        // Remember where we were so Try Again can bring the user back.
+        setPreviousView(view);
+        setView('network_error');
       } else if (msg) {
         setApiError(msg);
       } else {
@@ -1268,6 +1462,29 @@ export function AuthScreen() {
     return () => sub.remove();
   }, []);
 
+  // 2026-08-16 concept batch — auto-advance for transitional views.
+  //   • go_to_home    : 2s, then nav.replace('Home')
+  //   • restore_session: 2s, then setView('splash') as safe default
+  //   • code_sent     : 2s, then setView('forgot_verify') so the user
+  //                     can enter the code they just received. Without
+  //                     this the Code Sent screen would be a dead-end.
+  // All three are pure UI transitions with no side effects on auth state.
+  useEffect(() => {
+    if (view !== 'go_to_home') return;
+    const t = setTimeout(() => { nav.replace('Home'); }, 2000);
+    return () => clearTimeout(t);
+  }, [view, nav]);
+  // R21 (2026-08-17): removed the 2s auto-timeout on 'restore_session'.
+  // The mount-time useEffect above owns this view now — it either advances
+  // to Home (token valid) or to 'splash' (no token / invalid). A dumb 2s
+  // timeout would race the getMe call and could kick users to splash mid-
+  // request.
+  useEffect(() => {
+    if (view !== 'code_sent') return;
+    const t = setTimeout(() => { setView('forgot_verify'); }, 2000);
+    return () => clearTimeout(t);
+  }, [view]);
+
   // R114/O22 (2026-08-10) Bug Y: auto-fill OTP from clipboard.
   // Typical flow: user gets email → opens mail app → long-presses code
   // → Copy → switches back to Cairn. When the app foregrounds on the
@@ -1321,20 +1538,31 @@ export function AuthScreen() {
     setVerifyError('');
     const result = await verifyCode(verifyEmail, trimmed);
     setVerifyLoading(false);
-    if (result.error) { setVerifyError(result.error); return; }
+    if (result.error) {
+      // R21 (2026-08-17 user "invalid code 页面不对 应该停留在 6 位验证码页面
+      // 让我可以改 继续输"): stay on verify_email view, show error inline
+      // below the OTP boxes. Previously routed to a dedicated 'invalid_code'
+      // splash which was a dead-end — user had to Back to Sign In and
+      // restart the entire flow.
+      setVerifyError(result.error);
+      return;
+    }
     // Sprint 72 STORY-00549: verify (registration) also counts as fresh login
     try {
       await storage.removeItem('cairn_logout_marker');
       crashLogger.breadcrumb('login:marker_cleared');
     } catch {/* ignore */}
-    setLoggedIn(true);
+    // R21 (2026-08-17): setUser FIRST, then setLoggedIn — reversed order.
+    // RootNavigator gate is `isLoggedIn && user`; if we flipped isLoggedIn
+    // first, gate could evaluate true-and-null for one render, breaking
+    // screens that assert user!.  Order matters.
     if (result.user) setUser(result.user);
+    setLoggedIn(true);
     await hydrate();
-    // O12: setUIMode removed — uiMode field deleted from useAppStore.
-    // Fallback greeting uses 'friend' (was 'Explorer' — dead uiMode label).
-    setWelcomeName(result.user?.name || 'friend');
-    setView('welcome');
-    setTimeout(() => nav.replace('Home'), 1800);
+    // R21 (2026-08-17): register verify success → straight to Home.
+    // OnboardingModal (4-page tour, gated by hasCompletedOnboarding)
+    // covers any settling / welcome moment. No welcome view / no timeout.
+    nav.replace('Home');
   };
 
   const handleResend = async () => {
@@ -1345,78 +1573,160 @@ export function AuthScreen() {
     startResendCooldown(60);
   };
 
+  // ── Google / Apple Sign-in Confirmation (Concept 1.3) ──────────────────
+  // R114/O25 (2026-08-17): pixel-scanned from signinapple.png (Google concept —
+  // filenames were swapped) and signingoogle.png (Apple concept).
+  // Layout (430×932pt device):
+  //   • Logo + Title inline row: y_top ≈ 177pt (logo x=49..83, ~34pt wide;
+  //     title text starts x=114pt, ~30pt tall). Deep-forest title #22362D.
+  //   • 3 checklist rows: y_top 358 / 437 / 515 (≈ 78pt gap). Each row is
+  //     a green Check icon (16pt, #22362D) + gray body text (14pt, #8C8C8C).
+  //   • Primary Continue button: y_top 672..765 band (~54pt effective button
+  //     inside; button color #21362C, radius 14pt, white text).
+  //   • Cancel link: y ≈ 843pt, centered, gray 14pt.
+  //   • Paper bg #F4EFE6.
+  // R21 (2026-08-17): apple_confirm / google_confirm views removed —
+  // Apple & Google OAuth show system-native full-screen modals so an
+  // in-app confirm was redundant. Landing buttons call OAuth directly.
+
+  // ── Splash ─────────────────────────────────────────────────────────────
+
   // ── Splash ─────────────────────────────────────────────────────────────
   if (view === 'splash') {
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* v412: v409 UnfinishedSessionBanner 已删除, 恢复流程走 HikingScreen 的 UnfinishedRecoveryModal */}
-      <Animated.View style={[styles.splashInner, { opacity: splashFade, transform: [{ translateY: splashTranslate }] }]}>
-          {/* Hero area */}
-          <View style={styles.logoArea}>
-            <View style={styles.logoGlowWrap} pointerEvents="none">
-              <LinearGradient
-                colors={[Colors.primaryLight, 'transparent']}
-                style={styles.logoGlow}
-                start={{ x: 0.5, y: 0.5 }}
-                end={{ x: 1, y: 1 }}
-              />
-            </View>
-            {/* Trail path draws first, then cairn stacks up. The key forces
-                a fresh mount when the user returns to splash via Back so
-                the rise animation replays. */}
-            <View style={{ position: 'relative', alignItems: 'center' }}>
-              <AnimatedCairn key={splashMountKey} />
-            </View>
-            {/* Wordmark fades in after cairn completes */}
-            <Animated.Text style={[styles.appName, {
-              opacity: wordmarkOpacity,
-              transform: [{ translateY: wordmarkTranslate }],
-            }]}>Cairn</Animated.Text>
-            <View style={styles.taglineWrap}>
-              <Animated.Text style={[styles.tagline, {
-                opacity: tagline1Opacity,
-                transform: [{ translateY: tagline1Translate }],
-              }]}>Leave a mark.</Animated.Text>
-              <Animated.Text style={[styles.tagline, {
-                opacity: tagline2Opacity,
-                transform: [{ translateY: tagline2Translate }],
-              }]}>Guide the next.</Animated.Text>
-            </View>
-          </View>
-          {/* CTA buttons + OTA status above them */}
-          <View style={styles.splashActions}>
-            <View style={styles.splashOtaWrap}>
-              <OtaBadge inline />
-            </View>
-            <PressBtn style={styles.primaryBtn} onPress={() => handleViewChange('login')}>
-              <View style={styles.btnContent}>
-                <Icon name="LogIn" size={IconSize.sm} color="#fff" strokeWidth={2} />
-                <Text style={styles.primaryBtnText}>Sign In</Text>
-              </View>
-            </PressBtn>
-            <PressBtn style={styles.secondaryBtn} onPress={() => handleViewChange('register')}>
-              <View style={styles.btnContent}>
-                <Icon name="UserPlus" size={IconSize.sm} color={Colors.textPrimary} strokeWidth={2} />
-                <Text style={styles.secondaryBtnText}>Create Account</Text>
-              </View>
-            </PressBtn>
-            {/* Sprint 72 STORY-00556: reassurance that local data survives 30-day token expiry */}
-            <Text
-              testID="auth-data-local-hint"
-              style={{
-                marginTop: 12,
-                fontSize: 12,
-                color: Colors.textSecondary,
-                textAlign: 'center',
-                paddingHorizontal: 24,
-                lineHeight: 16,
-              }}
-            >
-              Your hiking data is securely stored on your account. Sign in to access it on any device.
-            </Text>
-          </View>
+      <View style={[styles.container, { flex: 1, backgroundColor: '#F4EFE6' }]}>
+        {/* 1.1 Welcome (Landing) — CONCEPT_TRUTH sleep-run-2026-08-15
+            R21 (2026-08-17): switched bg from o3-auth-background.png (290×147
+            landscape, only sky visible cropped to portrait) to
+            home-background.jpg (941×1672 portrait — full mountain valley
+            landscape, matches concept 1.1 which shows peaks + lake + fore-
+            ground rocks). Same image the Home + Settings screens already
+            use, so the world feels continuous across landing → home.
+
+            R21 perf (2026-08-17): source switched from landing-hero.png
+            (1.9 MB, 853×1844) to landing-hero.jpg (187 KB, JPEG q85, same
+            dimensions). PNG had alpha channel but landscape needs none;
+            visual identical, decode ~10× faster on iPhone. Container
+            backgroundColor is paper (#F4EFE6) so the pre-decode frame
+            shows paper (not white flash), then image fades in via
+            Animated.timing on onLoad. */}
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: heroImageFade }]}>
+          <ImageBackground
+            source={require('../../assets/auth/landing-hero.jpg')}
+            style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
+            resizeMode="cover"
+            fadeDuration={0}
+          >
+          >
+            {/* R21 (2026-08-17): softer top-to-bottom fade to paper. Landing
+                hero is landscape (702×358); on portrait phones it fills as
+                cover with center-crop showing the valley + lake. Gradient
+                fades to paper #F4EFE6 so the 3 button pills sit on solid
+                ground and don't fight the image. */}
+            <LinearGradient
+              colors={['rgba(255,255,255,0.15)', 'transparent', 'rgba(244,239,230,0.5)', '#F4EFE6']}
+              locations={[0, 0.4, 0.75, 1]}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
+          </ImageBackground>
         </Animated.View>
-      </SafeAreaView>
+
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+          <Animated.View style={[styles.splashInner, { opacity: splashFade, transform: [{ translateY: splashTranslate }] }]}>
+              {/* Hero area — cairn stack + CairnNZ wordmark + tagline */}
+              <View style={styles.logoArea}>
+                <View style={{ position: 'relative', alignItems: 'center' }}>
+                {/* R22 iter-10 (2026-08-17 user request): "logo 也稍微放大
+                    一点 往下一点". size 3 → 4 for bigger cairn stack. */}
+                <AnimatedCairn key={splashMountKey} size={4} />
+              </View>
+              {/* Wordmark: "CairnNZ" per CONCEPT_TRUTH brand */}
+              <Animated.Text style={[styles.appName, {
+                opacity: wordmarkOpacity,
+                transform: [{ translateY: wordmarkTranslate }],
+              }]}>CairnNZ</Animated.Text>
+              <View style={styles.taglineWrap}>
+                <Animated.Text style={[styles.tagline, {
+                  opacity: tagline1Opacity,
+                  transform: [{ translateY: tagline1Translate }],
+                }]}>Leave your mark,</Animated.Text>
+                <Animated.Text style={[styles.tagline, {
+                  opacity: tagline2Opacity,
+                  transform: [{ translateY: tagline2Translate }],
+                }]}>find your path.</Animated.Text>
+              </View>
+            </View>
+
+            {/* CTA buttons — R21 v2 (2026-08-17): reordered per user preference
+                to Email (primary CTA) → Google → Apple. Primary sits topmost
+                so thumb sees it first; social auth methods rank by likelihood
+                (Google > Apple for NZ market). */}
+            <View style={styles.splashActions}>
+              {/* Continue with Email — deep green primary CTA.
+                  R22 iter-9 (2026-08-17 user request): route to 'login'
+                  (Sign In), not 'register'. Sign In is the default action
+                  because most users are returning; new users tap the
+                  "Create an account" link inside the Sign In view. */}
+              <PressBtn
+                style={styles.landingEmailBtn}
+                onPress={() => handleViewChange('login')}
+                scale={0.98}
+              >
+                <View style={styles.btnContent}>
+                  <Icon name="Mail" size={IconSize.sm} color="#fff" strokeWidth={2} />
+                  <Text style={styles.landingEmailBtnText}>Continue with Email</Text>
+                </View>
+              </PressBtn>
+
+              {/* Continue with Google — white pill, official Google G mark
+                  R114/O25 (2026-08-17): route to intermediate 'google_confirm'
+                  screen (concept 1.3) instead of firing OAuth directly. The
+                  confirm screen tells the user what data is shared before we
+                  invoke the real Google OAuth flow. */}
+              <PressBtn
+                style={styles.landingGoogleBtn}
+                onPress={handleGoogleAuth}
+                scale={0.98}
+                disabled={googleLoading || loading}
+              >
+                <View style={styles.btnContent}>
+                  {googleLoading
+                    ? <ActivityIndicator size="small" color={Colors.primary} />
+                    : <GoogleGIcon />}
+                  <Text style={styles.landingGoogleBtnText}>
+                    {googleLoading ? 'Connecting…' : 'Continue with Google'}
+                  </Text>
+                </View>
+              </PressBtn>
+
+              {/* Continue with Apple — white pill, official Apple glyph
+                  R114/O25 (2026-08-17): same as Google — routes to 'apple_confirm'
+                  intermediate screen before firing real Sign in with Apple. */}
+              <PressBtn
+                style={styles.landingAppleBtn}
+                onPress={handleAppleAuth}
+                scale={0.98}
+                disabled={appleLoading || loading}
+              >
+                <View style={styles.btnContent}>
+                  {appleLoading
+                    ? <ActivityIndicator size="small" color={Colors.textPrimary} />
+                    : <AppleIcon size={18} color="#000" />}
+                  <Text style={styles.landingAppleBtnText}>
+                    {appleLoading ? 'Connecting…' : 'Continue with Apple'}
+                  </Text>
+                </View>
+              </PressBtn>
+
+              {/* R21 (2026-08-17): removed "Already have an account? Sign in"
+                  link. Concept 1.1 shows only 3 buttons, no bottom link.
+                  Sign In flow lives at Concept 1.2 (Choose Sign In Method)
+                  which the Sign Up flow's own footer handles. */}
+            </View>
+          </Animated.View>
+        </SafeAreaView>
+      </View>
     );
   }
 
@@ -1493,6 +1803,498 @@ export function AuthScreen() {
         <Icon name="CircleCheck" size={56} color={Colors.primary} strokeWidth={1.5} />
         <Text style={[styles.appName, { marginTop: 16, marginBottom: 8 }]}>Welcome, {welcomeName}!</Text>
         <Text style={[styles.tagline, { textAlign: 'center', color: Colors.textSecondary }]}>Welcome to Cairn. Ready for your first hike?</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Concept 1.6 Account Created (success) ──────────────────────────────
+  // R22 (2026-08-17) UI-refinement — pixel-scanned concept success.png:
+  //   Circle y0=284/888 → ~30% from top (298pt on 932pt phone)
+  //   Circle 84px diameter → 160pt (was 120)
+  //   Title y=428  → 449pt
+  //   Subtitle y=464 → 487pt
+  //   BG mountain valley (landing-hero.jpg reused) w/ light paper fade
+  // Auto-shown after register completes. Register handler schedules
+  // setTimeout(() => nav.replace('Home'), 2000).
+  if (view === 'success') {
+    return (
+      <View style={[styles.container, { backgroundColor: '#F4EFE6' }]}>
+        <ImageBackground
+          source={require('../../assets/auth/landing-hero.jpg')}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          fadeDuration={0}
+        >
+          {/* Fade valley to paper so type stays readable — matches concept
+              where upper 40% is high-key sky/mountains (title area) and
+              lower half fades to darker foreground. Concept has NO scrim
+              over check circle area, so keep top clear. */}
+          <LinearGradient
+            colors={['rgba(244,239,230,0.32)', 'rgba(244,239,230,0.10)', 'rgba(244,239,230,0.05)', 'rgba(244,239,230,0.20)']}
+            locations={[0, 0.35, 0.55, 1]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+        </ImageBackground>
+        <SafeAreaView
+          style={{ flex: 1, alignItems: 'center', paddingTop: SCREEN_H * 0.29, paddingHorizontal: Spacing.xl }}
+          edges={['top', 'bottom']}
+        >
+          {/* Deep-green disc with white check.
+              R22 iter-2: concept scan 84/226 = 37% of viewport width →
+              on 430pt phone = 160pt. But concept image itself is only 226px
+              wide (proportionally cropped) so the DISC visible reads
+              ~110-120pt in real UX terms. Sample color RGB(33,54,44) → #21362C. */}
+          <View
+            style={{
+              width: 112, height: 112, borderRadius: 56,
+              backgroundColor: '#21362C',
+              alignItems: 'center', justifyContent: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.22, shadowRadius: 18, elevation: 7,
+            }}
+          >
+            {/* Check stroke thick+rounded to match concept ~4-5px stroke */}
+            <Icon name="Check" size={52} color="#FFFFFF" strokeWidth={3.2} />
+          </View>
+          {/* Title — 24pt semibold near-black (matches concept dark text).
+              R22 iter-2: bumped 22 → 24 to match concept title feel — reads
+              as a proper H1 not a card heading. */}
+          <Text
+            style={{
+              fontSize: 24, fontWeight: '700', color: '#1C1C1C',
+              textAlign: 'center', marginTop: 32, letterSpacing: -0.3,
+            }}
+          >
+            You're all set!
+          </Text>
+          {/* Subtitle — 15pt grey ~#8A8F95. R22 iter-2: marginTop 6 → 8. */}
+          <Text
+            style={{
+              fontSize: 15, color: '#8A8F95',
+              textAlign: 'center', marginTop: 8, letterSpacing: 0.1,
+            }}
+          >
+            Welcome to your world.
+          </Text>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // ── Concept 3.4 Network Error ──────────────────────────────────────────
+  // Shown when an API request fails with a network-level error. Gray
+  // cloud-off icon, "No connection" title, guidance subtitle, and a
+  // deep-green "Try Again" pill that returns the user to the previous
+  // view so they can retry the same action.
+  if (view === 'network_error') {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: '#F4EFE6', justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing.xl }]}
+        edges={['top', 'bottom']}
+      >
+        <Icon name="CloudOff" size={64} color="#8A8F95" strokeWidth={1.5} />
+        <Text
+          style={{
+            fontSize: 24, fontWeight: '700', color: '#1C1C1C',
+            textAlign: 'center', marginTop: Spacing.lg, marginBottom: Spacing.sm,
+          }}
+        >
+          No connection
+        </Text>
+        <Text
+          style={{
+            fontSize: 16, color: '#8A8F95',
+            textAlign: 'center', marginBottom: Spacing.xxl,
+          }}
+        >
+          Please check your network and try again.
+        </Text>
+        <TouchableOpacity
+          testID="btn-network-retry"
+          style={[styles.primaryBtn, { alignSelf: 'stretch', backgroundColor: '#3E5F3A' }]}
+          onPress={() => {
+            // Return the user to whichever view they were on before the
+            // network error interrupted them. Fallback to splash if we
+            // somehow lost that state.
+            setApiError('');
+            setView(previousView || 'splash');
+          }}
+        >
+          <Text style={styles.primaryBtnText}>Try Again</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 2026-08-16 concept batch (rows 01–06 of auth-scan) — 8 additional views.
+  // All views use the concept-locked deep green #3E5F3A hard-coded per the
+  // spec ("每个新 view 硬编码这个 hex"). API surface is unchanged; new
+  // views reuse existing handlers (handleVerify, handleResend) where
+  // applicable and drive setView transitions only.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── Concept 1.4 Verify Email ────────────────────────────────────────────
+  // R22 (2026-08-17): pixel-scan of verfiy 6.png concept refined layout:
+  //   Title y0 =132 → 22pt bold near-black
+  //   Sub line 1 y=184 grey  "We've sent a code to"
+  //   Sub line 2 y=208 email — same size, darker/semibold
+  //   OTP row y=264, 6 boxes h=32px → 48pt
+  //   Resend y=380 grey "Resend code in 00:45"
+  //   NO Continue button — auto-verify on 6 digits (matches concept).
+  if (view === 'verify_email') {
+    const mm = String(Math.floor(resendCooldown / 60)).padStart(2, '0');
+    const ss = String(resendCooldown % 60).padStart(2, '0');
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: '#F4EFE6' }]}
+        edges={['top', 'bottom']}
+      >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={formStyles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            {/* R21 v3 (2026-08-17): back color unified to Colors.primary
+                (Auth Sign In/Up standard). Was hardcoded '#3E5F3A' from
+                the verify_email concept scan — inconsistent with register/
+                login/verify backs in the same flow. */}
+            <TouchableOpacity style={formStyles.backBtn} onPress={() => handleViewChange('register')}>
+              <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
+              <Text style={formStyles.backText}>Back</Text>
+            </TouchableOpacity>
+
+            {/* Title — concept 22pt bold, dark near-black #1C1C1C.
+                Concept scan y=132/904 (14.6% viewport top) → 136pt on 932pt. */}
+            <Text style={{ fontSize: 22, fontWeight: '700', color: '#1C1C1C', marginTop: Spacing.xl, letterSpacing: -0.2 }}>
+              Enter the 6-digit code
+            </Text>
+            {/* Subtitle: line 1 grey, line 2 email semibold dark, tight leading.
+                R22 iter-1: split to 2 rows per concept.
+                R22 iter-2: email line bumped to 15pt semibold, matches concept
+                where "name@example.com" reads visibly larger than the grey line above. */}
+            <Text style={{ fontSize: 14, color: '#8A8F95', marginTop: 10 }}>
+              We've sent a code to
+            </Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#1C1C1C', marginTop: 2, marginBottom: 8 }}>
+              {verifyEmail || 'name@example.com'}
+            </Text>
+            {/* R21 (2026-08-17 user "加一句提示 如果找不到应该去垃圾邮件里找"):
+                Gmail/Outlook sometimes route Cairn's verification email to
+                Spam or Promotions. Tell the user upfront so they don't
+                stall waiting for a mail that's already there. */}
+            <Text style={{ fontSize: 13, color: '#8A8F95', marginBottom: 32, fontStyle: 'italic' }}>
+              Can't find it? Check your spam or promotions folder.
+            </Text>
+
+            {!!verifyError && (
+              <View style={formStyles.apiBanner}>
+                <Icon name="TriangleAlert" size={14} color={Colors.danger} strokeWidth={2} />
+                <Text style={formStyles.apiError}>{verifyError}</Text>
+              </View>
+            )}
+
+            <OtpInput
+              value={verifyCode_}
+              onChange={(v) => { setVerifyCode_(v); if (verifyError) setVerifyError(''); }}
+              onComplete={(code) => { void handleVerify(code); }}
+              error={!!verifyError}
+              autoFocus
+            />
+
+            {verifyLoading && (
+              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: Spacing.md, gap: 8 }}>
+                <ActivityIndicator size="small" color="#3E5F3A" />
+                <Text style={{ fontSize: 13, color: '#8A8F95' }}>Verifying…</Text>
+              </View>
+            )}
+
+            {/* Resend row — concept centered single line grey, or link when cooldown=0.
+                R22 iter-3: gap tightened 36 → 28 to match concept visual (resend
+                sits closer to OTP than initially thought — OTP y=272, resend y=380
+                in concept = ~108px = ~28pt). */}
+            <View style={{ marginTop: 28, alignItems: 'center' }}>
+              {resendCooldown > 0 ? (
+                <Text style={{ fontSize: 14, color: '#8A8F95' }}>
+                  {`Resend code in ${mm}:${ss}`}
+                </Text>
+              ) : (
+                <TouchableOpacity onPress={handleResend} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>Resend code</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* R22 (2026-08-17): removed manual Continue button. Concept shows
+                only OTP + Resend + native keyboard — no CTA. Auto-verify already
+                fires on 6th digit via OtpInput onComplete. */}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Concept 1.5 Complete Profile ────────────────────────────────────────
+  // Standalone Display Name + DOB collector. Continue triggers setView(
+  // 'success'). No API call — this view is decoupled from the register
+  // happy path (which still collects name+DOB inline for the actual
+  // register() request). Kept isolated per the "不改 API" rule.
+  if (view === 'complete_profile') {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: '#F4EFE6' }]}
+        edges={['top', 'bottom']}
+      >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={formStyles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', marginTop: Spacing.xl }}>
+              Tell us about yourself
+            </Text>
+            <Text style={{ fontSize: 15, color: '#8A8F95', marginTop: Spacing.sm, marginBottom: Spacing.xl }}>
+              This helps personalize your experience.
+            </Text>
+
+            {!!profileError && (
+              <View style={formStyles.apiBanner}>
+                <Icon name="TriangleAlert" size={14} color={Colors.danger} strokeWidth={2} />
+                <Text style={formStyles.apiError}>{profileError}</Text>
+              </View>
+            )}
+
+            <Text style={formStyles.label}>Display name</Text>
+            <FieldInput
+              icon="User"
+              placeholder="Your name"
+              value={profileName}
+              onChangeText={(v) => { setProfileName(v); if (profileError) setProfileError(''); }}
+            />
+
+            <Text style={[formStyles.label, { marginTop: Spacing.lg }]}>Date of birth</Text>
+            <DobInputs
+              value={profileDob}
+              onChange={(v) => { setProfileDob(v); if (profileError) setProfileError(''); }}
+              onError={setProfileError}
+              error={profileError}
+            />
+
+            <TouchableOpacity
+              testID="btn-complete-profile-continue"
+              style={[styles.primaryBtn, { backgroundColor: '#3E5F3A', marginTop: Spacing.xxl }]}
+              onPress={() => {
+                if (!profileName.trim()) { setProfileError('Please enter your name'); return; }
+                const dErr = validateDob(profileDob);
+                if (dErr) { setProfileError(dErr); return; }
+                setProfileError('');
+                setView('success');
+              }}
+            >
+              <Text style={styles.primaryBtnText}>Continue</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Concept 1.7 Go to Home ──────────────────────────────────────────────
+  // Mountain-landscape transition. No button; a useEffect below auto-navs
+  // to Home after 2s. Rendered as the "success → home" bridge — kick off
+  // by setView('go_to_home') and the effect will fire.
+  if (view === 'go_to_home') {
+    return (
+      <View style={styles.container}>
+        <ImageBackground
+          source={require('../../assets/auth/o3-auth-background.png')}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top', 'bottom']}>
+          <Text
+            style={{
+              fontSize: 12, fontWeight: '700', color: '#FFFFFF',
+              letterSpacing: 2, marginBottom: 4, opacity: 0.9,
+            }}
+          >
+            YOUR WORLD
+          </Text>
+          <Text style={{ fontSize: 15, color: '#FFFFFF', marginBottom: Spacing.md, opacity: 0.9 }}>
+            You&apos;ve explored
+          </Text>
+          <Text
+            style={{
+              fontSize: 48, fontWeight: '800', color: '#FFFFFF',
+              textShadowColor: 'rgba(0,0,0,0.35)',
+              textShadowOffset: { width: 0, height: 2 },
+              textShadowRadius: 6,
+            }}
+          >
+            12.6 km²
+          </Text>
+          <Text style={{ fontSize: 16, color: '#FFFFFF', marginTop: 4, opacity: 0.9 }}>
+            New Zealand
+          </Text>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // ── Concept 2.2 Restore Session ─────────────────────────────────────────
+  // Landscape background + white spinner + "Restoring your journey".
+  // Kept as a standalone view so it can be manually entered; the app's
+  // real hydration gate lives in App.tsx.
+  if (view === 'restore_session') {
+    return (
+      <View style={styles.container}>
+        <ImageBackground
+          source={require('../../assets/auth/o3-auth-background.png')}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top', 'bottom']}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          <Text
+            style={{
+              fontSize: 16, fontWeight: '600', color: '#FFFFFF',
+              marginTop: Spacing.lg,
+              textShadowColor: 'rgba(0,0,0,0.35)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 4,
+            }}
+          >
+            Restoring your journey
+          </Text>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // ── Concept 2.4 Session Expired ─────────────────────────────────────────
+  // Paper bg + large deep-green lock + "Session expired" + Sign In pill.
+  if (view === 'session_expired') {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: '#F4EFE6', justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing.xl }]}
+        edges={['top', 'bottom']}
+      >
+        <View
+          style={{
+            width: 96, height: 96, borderRadius: 48,
+            backgroundColor: 'rgba(62,95,58,0.10)',
+            alignItems: 'center', justifyContent: 'center',
+            marginBottom: Spacing.xl,
+          }}
+        >
+          <Icon name="Lock" size={48} color="#3E5F3A" strokeWidth={1.8} />
+        </View>
+        <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', textAlign: 'center', marginBottom: Spacing.sm }}>
+          Session expired
+        </Text>
+        <Text style={{ fontSize: 16, color: '#8A8F95', textAlign: 'center', marginBottom: Spacing.xxl }}>
+          Please sign in again.
+        </Text>
+        <TouchableOpacity
+          testID="btn-session-expired-signin"
+          style={[styles.primaryBtn, { alignSelf: 'stretch', backgroundColor: '#3E5F3A' }]}
+          onPress={() => setView('login')}
+        >
+          <Text style={styles.primaryBtnText}>Sign In</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Concept 3.2 Code Sent ───────────────────────────────────────────────
+  // Paper bg + deep-green circle w/ white paper-plane + "Check your email"
+  // + email echoed + wall-clock resend timer + Back to Sign In link.
+  if (view === 'code_sent') {
+    const mm = String(Math.floor(resendCooldown / 60)).padStart(2, '0');
+    const ss = String(resendCooldown % 60).padStart(2, '0');
+    const shownEmail = codeSentEmail || forgotEmail || verifyEmail || 'name@example.com';
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: '#F4EFE6', justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing.xl }]}
+        edges={['top', 'bottom']}
+      >
+        <View
+          style={{
+            width: 96, height: 96, borderRadius: 48,
+            backgroundColor: '#3E5F3A',
+            alignItems: 'center', justifyContent: 'center',
+            marginBottom: Spacing.xl,
+            ...Shadow.fab,
+          }}
+        >
+          <Icon name="Send" size={44} color="#FFFFFF" strokeWidth={2} />
+        </View>
+        <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', textAlign: 'center', marginBottom: Spacing.sm }}>
+          Check your email
+        </Text>
+        <Text style={{ fontSize: 16, color: '#8A8F95', textAlign: 'center', marginBottom: Spacing.lg }}>
+          {"We've sent a 6-digit code to "}
+          <Text style={{ fontWeight: '600', color: '#1C1C1C' }}>{shownEmail}</Text>
+        </Text>
+        {resendCooldown > 0 ? (
+          <Text style={{ fontSize: 14, color: '#8A8F95', marginBottom: Spacing.xxl }}>
+            {`Resend code in ${mm}:${ss}`}
+          </Text>
+        ) : (
+          <TouchableOpacity onPress={handleResend} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginBottom: Spacing.xxl }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>Resend code</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          testID="link-code-sent-back"
+          onPress={() => setView('login')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>Back to Sign In</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Concept 3.3 Invalid Code ────────────────────────────────────────────
+  // Paper bg + peach/coral circle with white X + "Invalid code" +
+  // resend timer + Back to Sign In link.
+  if (view === 'invalid_code') {
+    const mm = String(Math.floor(resendCooldown / 60)).padStart(2, '0');
+    const ss = String(resendCooldown % 60).padStart(2, '0');
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: '#F4EFE6', justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing.xl }]}
+        edges={['top', 'bottom']}
+      >
+        <View
+          style={{
+            width: 96, height: 96, borderRadius: 48,
+            backgroundColor: '#F5D6C4',
+            alignItems: 'center', justifyContent: 'center',
+            marginBottom: Spacing.xl,
+          }}
+        >
+          <Icon name="X" size={48} color="#FFFFFF" strokeWidth={2.5} />
+        </View>
+        <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', textAlign: 'center', marginBottom: Spacing.sm }}>
+          Invalid code
+        </Text>
+        <Text style={{ fontSize: 16, color: '#8A8F95', textAlign: 'center', marginBottom: Spacing.lg }}>
+          Please check the code and try again.
+        </Text>
+        {resendCooldown > 0 ? (
+          <Text style={{ fontSize: 14, color: '#8A8F95', marginBottom: Spacing.xxl }}>
+            {`Resend code in ${mm}:${ss}`}
+          </Text>
+        ) : (
+          <TouchableOpacity onPress={handleResend} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginBottom: Spacing.xxl }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>Resend code</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          testID="link-invalid-code-back"
+          onPress={() => setView('login')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>Back to Sign In</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -1622,48 +2424,84 @@ export function AuthScreen() {
   // ── O18 AUTH-04: forgot password step 1 — request code by email ─────────
   if (view === 'forgot_request') {
     return (
-      <SafeAreaView style={[styles.container, { padding: 24 }]} edges={['top', 'bottom']}>
-        <TouchableOpacity onPress={() => handleViewChange('login')} style={{ marginTop: 16 }}>
-          <Text style={{ color: Colors.textSecondary }}>← Back to sign in</Text>
+      <SafeAreaView style={[styles.container, { paddingHorizontal: 28, paddingTop: 24 }]} edges={['top', 'bottom']}>
+        {/* R21 (2026-08-17 user "Sign in/up 等界面 back 都太靠上了 位置不好"):
+            rewritten to match Sign In / Register visual system —
+            Back chevron top-left, title 26pt/700/#21362C ("Reset password"),
+            subtitle 14pt/#8A8F95, form input using formStyles, primary
+            button #21362C radius 14 height 54 like Sign In button. */}
+        {/* R21 v3 (2026-08-17): unified to shared formStyles.backBtn/backText
+            (Auth Sign In/Up standard). Was inline styles with fontSize: 14
+            hardcoded — diverged from Sign In (uses FontSize.caption = 13). */}
+        <TouchableOpacity style={formStyles.backBtn} onPress={() => handleViewChange('login')}>
+          <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
+          <Text style={formStyles.backText}>Back</Text>
         </TouchableOpacity>
-        <View style={{ marginTop: 24 }}>
-          <Text style={[styles.appName, { marginBottom: 8 }]}>Reset password</Text>
-          <Text style={[styles.tagline, { color: Colors.textSecondary, marginBottom: 24 }]}>
+        <View style={{ marginTop: 40 }}>
+          <Text style={{ fontSize: 26, fontWeight: '700', color: '#21362C', letterSpacing: -0.3 }}>
+            Reset password
+          </Text>
+          <Text style={{ fontSize: 14, color: '#8A8F95', fontWeight: '400', marginTop: 6, marginBottom: 32 }}>
             Enter your account email. We'll send a 6-digit code.
           </Text>
-          <TextInput
-            testID="input-forgot-email"
-            style={formStyles.input}
-            placeholder="Email"
-            placeholderTextColor={Colors.textMuted}
+          <Text style={formStyles.label}>Email</Text>
+          <FieldInput
+            icon="Mail"
+            placeholder="your@email.com"
             value={forgotEmail}
             onChangeText={(v) => { setForgotEmail(v); if (forgotError) setForgotError(''); }}
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
+            error={forgotError}
           />
-          {forgotError ? <Text style={formStyles.errorText}>{forgotError}</Text> : null}
-          <TouchableOpacity
+          <PressBtn
             testID="btn-send-reset-code"
-            style={[styles.primaryBtn, { marginTop: 24 }]}
-            disabled={forgotLoading}
+            style={{
+              backgroundColor: '#21362C',
+              borderRadius: 14,
+              minHeight: 54,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 16,
+              marginTop: 32,
+              opacity: (forgotLoading || resendCooldown > 0) ? 0.6 : 1,
+            }}
+            disabled={forgotLoading || resendCooldown > 0}
             onPress={async () => {
               const eErr = validateEmail(forgotEmail);
               if (eErr) { setForgotError(eErr); return; }
               setForgotLoading(true);
               try {
                 const r = await passwordResetRequest(forgotEmail.trim().toLowerCase());
+                if (r.rateLimited) {
+                  // R21 (2026-08-17 user "限流了应该告诉我 多久后再试"):
+                  // Show explicit rate-limit message + start countdown so
+                  // the button reads "Resend in Xs" until unlocked.
+                  const secs = r.retryAfterSeconds || 900;
+                  setForgotError(`Too many requests. Please wait ${Math.ceil(secs / 60)} min.`);
+                  startResendCooldown(secs);
+                  return;
+                }
                 if (r.error) { setForgotError(r.error); return; }
-                // dev builds get the code back in the response — auto-fill.
                 if (r.devCode) setForgotCode(r.devCode);
                 setForgotError('');
+                setCodeSentEmail(forgotEmail.trim().toLowerCase());
+                startResendCooldown(60);
                 setView('forgot_verify');
               } finally {
                 setForgotLoading(false);
               }
-            }}>
-            {forgotLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Send code</Text>}
-          </TouchableOpacity>
+            }}
+            scale={0.98}
+          >
+            {forgotLoading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.2 }}>
+                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Send code'}
+                </Text>
+            }
+          </PressBtn>
         </View>
       </SafeAreaView>
     );
@@ -1672,42 +2510,58 @@ export function AuthScreen() {
   // ── O18 AUTH-04: forgot password step 2 — enter code + new password ─────
   if (view === 'forgot_verify') {
     return (
-      <SafeAreaView style={[styles.container, { padding: 24 }]} edges={['top', 'bottom']}>
-        <TouchableOpacity onPress={() => handleViewChange('forgot_request')} style={{ marginTop: 16 }}>
-          <Text style={{ color: Colors.textSecondary }}>← Back</Text>
+      <SafeAreaView style={[styles.container, { paddingHorizontal: 28, paddingTop: 24 }]} edges={['top', 'bottom']}>
+        {/* R21 v3 (2026-08-17): unified to shared formStyles.backBtn/backText. */}
+        <TouchableOpacity style={formStyles.backBtn} onPress={() => handleViewChange('forgot_request')}>
+          <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
+          <Text style={formStyles.backText}>Back</Text>
         </TouchableOpacity>
-        <View style={{ marginTop: 24 }}>
-          <Text style={[styles.appName, { marginBottom: 8 }]}>Enter code</Text>
-          <Text style={[styles.tagline, { color: Colors.textSecondary, marginBottom: 24 }]}>
+        <View style={{ marginTop: 40 }}>
+          <Text style={{ fontSize: 26, fontWeight: '700', color: '#21362C', letterSpacing: -0.3 }}>
+            Enter code
+          </Text>
+          <Text style={{ fontSize: 14, color: '#8A8F95', fontWeight: '400', marginTop: 6, marginBottom: 8 }}>
             Check {forgotEmail}. Enter the 6-digit code and choose a new password.
           </Text>
-          <TextInput
-            testID="input-forgot-code"
-            style={[formStyles.input, { letterSpacing: 8, textAlign: 'center', fontSize: 20 }]}
-            placeholder="000000"
-            placeholderTextColor={Colors.textMuted}
+          {/* R21 (2026-08-17): spam hint for reset flow too. */}
+          <Text style={{ fontSize: 13, color: '#8A8F95', fontStyle: 'italic', marginBottom: 24 }}>
+            Can't find it? Check your spam or promotions folder.
+          </Text>
+          <Text style={formStyles.label}>Verification code</Text>
+          {/* R21 (2026-08-17 user "reset password 6 位和注册的不一样, 参照注册,
+              复制也能自动粘贴 但不 auto-submit, 错了停留显示错误"): use the
+              same OtpInput 6-box component as register verify (auto-paste
+              support, per-cell focus), but pass autoSubmit={false} so the
+              user has to tap Reset password button. Errors show below
+              (setForgotError) instead of navigating away. */}
+          <OtpInput
             value={forgotCode}
-            onChangeText={(v) => { setForgotCode(v.replace(/[^0-9]/g, '').slice(0, 6)); if (forgotError) setForgotError(''); }}
-            keyboardType="number-pad"
-            maxLength={6}
+            onChange={(v) => { setForgotCode(v); if (forgotError) setForgotError(''); }}
+            onComplete={() => { /* no-op, autoSubmit=false */ }}
+            error={!!forgotError}
+            autoSubmit={false}
+            autoFocus
           />
-          {/* AUTH-1 (2026-08-11): use PasswordInput so the reset flow
-              inherits the same iOS-Autofill guard, X clear button, and
-              eye toggle as login/register. Previously a raw <TextInput
-              secureTextEntry /> here re-introduced the "password wipes
-              on error" bug on the reset code+password step. */}
-          <View style={{ marginTop: 12 }}>
-            <PasswordInput
-              value={forgotNewPassword}
-              onChangeText={(v) => { setForgotNewPassword(v); if (forgotError) setForgotError(''); }}
-              placeholder="New password (8+ characters)"
-              isNew
-            />
-          </View>
+          <Text style={[formStyles.label, { marginTop: 20 }]}>New password</Text>
+          <PasswordInput
+            value={forgotNewPassword}
+            onChangeText={(v) => { setForgotNewPassword(v); if (forgotError) setForgotError(''); }}
+            placeholder="At least 8 characters"
+            isNew
+          />
           {forgotError ? <Text style={formStyles.errorText}>{forgotError}</Text> : null}
-          <TouchableOpacity
+          <PressBtn
             testID="btn-reset-password"
-            style={[styles.primaryBtn, { marginTop: 24 }]}
+            style={{
+              backgroundColor: '#21362C',
+              borderRadius: 14,
+              minHeight: 54,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 16,
+              marginTop: 32,
+              opacity: forgotLoading ? 0.6 : 1,
+            }}
             disabled={forgotLoading}
             onPress={async () => {
               if (forgotCode.length !== 6) { setForgotError('Enter the 6-digit code'); return; }
@@ -1726,9 +2580,11 @@ export function AuthScreen() {
               } finally {
                 setForgotLoading(false);
               }
-            }}>
-            {forgotLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Reset password & sign in</Text>}
-          </TouchableOpacity>
+            }}
+            scale={0.98}
+          >
+            {forgotLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.2 }}>Reset password & sign in</Text>}
+          </PressBtn>
         </View>
       </SafeAreaView>
     );
@@ -1748,22 +2604,56 @@ export function AuthScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={formStyles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-          <TouchableOpacity style={formStyles.backBtn} onPress={() => handleViewChange('splash')}>
+          {/* R21 (2026-08-17 user "create account 的 back 是回 sign in
+              因为只有 sign in 的入口"): Back target depends on which view
+              we're in — register backs to login (only entry to Auth is
+              Sign In); login backs to splash. */}
+          <TouchableOpacity style={formStyles.backBtn} onPress={() => handleViewChange(isRegister ? 'login' : 'splash')}>
             <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
             <Text style={formStyles.backText}>Back</Text>
           </TouchableOpacity>
 
-          {/* Title row: small icon inline-left of title */}
-          <View style={formStyles.titleRow}>
-            {/* CairnLogo's viewBox has asymmetric vertical padding (7.8u top
-                vs 0.6u bottom out of 24u) AND its stones are top-light /
-                bottom-heavy. Pull it up so the cairn visually sits with
-                the title's optical center, not the geometric one. */}
-            <View style={{ marginTop: -7 }}>
-              <CairnLogo size={28} />
-            </View>
-            <Text style={formStyles.title}>{isRegister ? 'Create Account' : 'Sign In'}</Text>
-          </View>
+          {/* Title row: R22 (2026-08-17) concept-scanned Create Account layout:
+              - Concept 1 (createAccount1.png) shows NO cairn icon inline —
+                title alone, deep-green semibold, ~26pt.
+              - R114/O25 (2026-08-17): Sign In (concept signinemail.png) also
+                drops the cairn icon; concept shows plain deep-green title
+                "Welcome back" + gray subtitle "Glad to see you again."
+                Pixel-scanned: title y_top=123pt, subtitle y_top=178pt. */}
+          {isRegister ? (
+            <>
+              <Text
+                style={{
+                  fontSize: 26, fontWeight: '700', color: '#21362C',
+                  letterSpacing: -0.3, marginTop: Spacing.md, marginBottom: Spacing.lg,
+                }}
+              >
+                Create your account
+              </Text>
+              {/* R21 (2026-08-17 user "Let's get started. 去掉"): Register
+                  subtitle removed. Title alone is enough — subtitle only
+                  ate vertical space that we want for the form fields. */}
+            </>
+          ) : (
+            <>
+              <Text
+                style={{
+                  fontSize: 26, fontWeight: '700', color: '#21362C',
+                  letterSpacing: -0.3, marginTop: Spacing.md,
+                }}
+              >
+                Welcome back
+              </Text>
+              <Text
+                style={{
+                  fontSize: 14, color: '#8A8F95',
+                  marginTop: 6, marginBottom: Spacing.xl,
+                }}
+              >
+                Glad to see you again.
+              </Text>
+            </>
+          )}
           {/*
            * O12: removed the "You'll start in Explorer mode. Switch anytime in Settings."
            * hint — Explorer/Navigator mode system was deleted (was a dead double-switch).
@@ -1819,84 +2709,89 @@ export function AuthScreen() {
           <PasswordInput
             value={password}
             onChangeText={(v) => { setPassword(v); if (passwordError) setPasswordError(''); }}
-            placeholder={isRegister ? 'Min. 8 characters' : '••••••••'}
+            placeholder={'••••••••'}
             error={passwordError}
             onBlur={() => { if (!googleFlowActive.current && submitAttempted.current) setPasswordError(validatePassword(password)); }}
             isNew={isRegister}
           />
           {isRegister && !passwordError && (
             <>
-              <Text style={[formStyles.fieldError, { color: Colors.textSecondary, fontWeight: '400' }]}>Minimum 8 characters</Text>
-              {/* O18 AUTH-05: password strength meter. Simple heuristic
-                  (length + character variety), no external library. */}
-              {password.length > 0 && (() => {
-                const hasLower = /[a-z]/.test(password);
+              {/* R22 (2026-08-17): concept createAccount1.png shows a 3-rule
+                  green-check list (At least 8 chars / One uppercase / One
+                  number). Replaces the earlier single-line "Minimum 8
+                  characters" hint. Actual submit validation still uses
+                  validatePassword (which checks ≥8 chars) — the visible
+                  checklist is a live guidance UI, ticking rules green as
+                  they're satisfied. Deep green #21362C matches concept
+                  checkmarks (RGB 33,54,44 sampled). */}
+              {(() => {
+                const has8 = password.length >= 8;
                 const hasUpper = /[A-Z]/.test(password);
                 const hasDigit = /\d/.test(password);
-                const hasSymbol = /[^a-zA-Z0-9]/.test(password);
-                const variety = [hasLower, hasUpper, hasDigit, hasSymbol].filter(Boolean).length;
-                let strength: 'weak' | 'ok' | 'strong' = 'weak';
-                if (password.length >= 12 && variety >= 3) strength = 'strong';
-                else if (password.length >= 8 && variety >= 2) strength = 'ok';
-                const color = strength === 'strong' ? Colors.success : strength === 'ok' ? Colors.warning : Colors.danger;
-                const label = strength === 'strong' ? 'Strong' : strength === 'ok' ? 'OK' : 'Weak';
+                const rules = [
+                  { met: has8, label: 'At least 8 characters' },
+                  { met: hasUpper, label: 'One uppercase letter' },
+                  { met: hasDigit, label: 'One number' },
+                ];
                 return (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                    <View style={{ flexDirection: 'row', gap: 3, flex: 1 }}>
-                      {[0, 1, 2].map(i => (
-                        <View
-                          key={i}
-                          style={{
-                            flex: 1,
-                            height: 4,
-                            borderRadius: 2,
-                            backgroundColor: (strength === 'strong' || (strength === 'ok' && i < 2) || (strength === 'weak' && i < 1)) ? color : Colors.border,
-                          }}
+                  <View style={{ marginTop: 12, gap: 6 }}>
+                    {rules.map((r, i) => (
+                      <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Icon
+                          name="Check"
+                          size={14}
+                          color={r.met ? '#21362C' : '#C8C0B4'}
+                          strokeWidth={r.met ? 3 : 2}
                         />
-                      ))}
-                    </View>
-                    <Text style={{ fontSize: FontSize.tiny, fontWeight: '700', color, minWidth: 44 }}>{label}</Text>
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            color: r.met ? '#21362C' : '#8A8F95',
+                            fontWeight: r.met ? '500' : '400',
+                          }}
+                        >
+                          {r.label}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
                 );
               })()}
             </>
           )}
 
-          {/* Remember me — Sign In only. Saves email + password to local
-              storage on a successful Sign In so the form is pre-filled
-              next launch. The user must still tap Sign In every time —
-              we never bypass the auth screen. */}
+          {/* Remember me + Forgot password — Sign In only.
+              2026-08-16 Round 10: per concept Auth-2-signin.png, these two
+              share the same row (Remember me left / Forgot right).
+              Previously Forgot was on its own row above Remember me. */}
           {!isRegister && (
-            <View style={formStyles.rememberRow}>
+            <View style={[formStyles.rememberRow, { justifyContent: 'space-between', alignItems: 'center' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TouchableOpacity
+                  style={[formStyles.checkbox, rememberMe && formStyles.checkboxChecked]}
+                  onPress={() => setRememberMe(v => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+                >
+                  {rememberMe && <Icon name="Check" size={14} color="#fff" strokeWidth={3} />}
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setRememberMe(v => !v)} activeOpacity={0.7}>
+                  <Text style={[formStyles.rememberText, { marginLeft: 8 }]}>Remember me on this device</Text>
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity
-                style={[formStyles.checkbox, rememberMe && formStyles.checkboxChecked]}
-                onPress={() => setRememberMe(v => !v)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+                testID="link-forgot-password"
+                onPress={() => {
+                  setForgotEmail(email.trim().toLowerCase());
+                  setForgotCode('');
+                  setForgotNewPassword('');
+                  setForgotError('');
+                  setView('forgot_request');
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                {rememberMe && <Icon name="Check" size={14} color="#fff" strokeWidth={3} />}
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setRememberMe(v => !v)} activeOpacity={0.7}>
-                <Text style={formStyles.rememberText}>Remember me on this device</Text>
+                <Text style={{ color: Colors.primary, fontSize: FontSize.caption, fontWeight: '600' }}>Forgot password?</Text>
               </TouchableOpacity>
             </View>
-          )}
-
-          {/* O18 AUTH-04: Forgot password link — login view only. */}
-          {!isRegister && (
-            <TouchableOpacity
-              testID="link-forgot-password"
-              style={{ alignSelf: 'flex-end', marginTop: Spacing.xs, paddingVertical: 4, paddingHorizontal: 4 }}
-              onPress={() => {
-                setForgotEmail(email.trim().toLowerCase());
-                setForgotCode('');
-                setForgotNewPassword('');
-                setForgotError('');
-                setView('forgot_request');
-              }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={{ color: Colors.primary, fontSize: FontSize.caption, fontWeight: '600' }}>Forgot password?</Text>
-            </TouchableOpacity>
           )}
 
           {isRegister && (
@@ -1978,17 +2873,35 @@ export function AuthScreen() {
             </>
           )}
 
+          {/* R22 (2026-08-17): concept createAccount1.png button is deep forest
+              green #21362C (RGB 33,57,46 sampled), radius ~14pt, height ~54pt,
+              text "Continue" (not "Create Account").
+              R114/O25 (2026-08-17): Sign In concept signinemail.png shows the
+              SAME deep-green button (pixel-scanned RGB 34,54,45 = #22362D, band
+              y=301..342 = ~92 device-pt but effective button height ~54pt after
+              accounting for shadow band). Text is "Sign In" (no LogIn icon —
+              concept shows text-only button). */}
           <PressBtn
-            style={[styles.primaryBtn, formStyles.submitBtn]}
+            style={[
+              styles.primaryBtn,
+              formStyles.submitBtn,
+              {
+                backgroundColor: '#21362C',
+                borderRadius: 14,
+                minHeight: 54,
+                shadowOpacity: 0,
+                elevation: 0,
+              },
+            ]}
             onPress={handleAuth}
             disabled={loading}
           >
             <View style={styles.btnContent}>
               {loading
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Icon name={isRegister ? 'UserPlus' : 'LogIn'} size={IconSize.sm} color="#fff" strokeWidth={2} />
+                : null
               }
-              <Text style={styles.primaryBtnText}>{isRegister ? 'Create Account' : 'Sign In'}</Text>
+              <Text style={styles.primaryBtnText}>{isRegister ? 'Continue' : 'Sign In'}</Text>
             </View>
           </PressBtn>
 
@@ -2012,9 +2925,8 @@ export function AuthScreen() {
               </View>
               )}
 
-              {/* Apple — real Sign in with Apple (O18 batch 6.6). Only
-                  offered on iOS + physical device. Web/Android/simulator
-                  falls back to the "coming soon" message. */}
+              {/* Apple — R21 (2026-08-17): white pill + official Apple
+                  glyph, matches Landing button style. */}
               <PressBtn
                 style={formStyles.appleBtn}
                 onPress={handleAppleAuth}
@@ -2023,31 +2935,70 @@ export function AuthScreen() {
               >
                 <View style={styles.btnContent}>
                   {appleLoading
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Icon name="Apple" size={IconSize.sm} color="#fff" strokeWidth={1.8} />}
+                    ? <ActivityIndicator size="small" color={Colors.textPrimary} />
+                    : <AppleIcon size={18} color="#000" />}
                   <View>
                     <Text style={formStyles.appleBtnText}>{appleLoading ? 'Connecting…' : 'Continue with Apple'}</Text>
                   </View>
                 </View>
               </PressBtn>
 
-              {/* Google — R99 隐藏(App Store 4.8 禁 stub 按钮), R113 用户测试期要求
-                  能看到占位按钮但不做实际动作. __DEV__ gate: dev/测试环境显示;
-                  生产 build __DEV__=false 时 Metro 会 dead-code-eliminate 整段.
-                  等 Google OAuth 后端做完(需要 Google Cloud Console client + backend
-                  endpoint), 把 __DEV__ gate 去掉即可上线. */}
-              {__DEV__ && (
+              {/* Google — R21 (2026-08-17): white pill + official 4-color G
+                  logo, matches Landing button style. __DEV__ gate removed. */}
               <PressBtn style={formStyles.googleBtn} onPress={handleGoogleAuth} scale={0.98} disabled={googleLoading || loading}>
                 <View style={styles.btnContent}>
                   {googleLoading
                     ? <ActivityIndicator size="small" color={Colors.primary} />
-                    : <View style={formStyles.googleG}><Text style={formStyles.googleGText}>G</Text></View>
+                    : <GoogleGIcon size={18} />
                   }
                   <Text style={formStyles.googleBtnText}>{googleLoading ? 'Connecting…' : 'Continue with Google'}</Text>
                 </View>
               </PressBtn>
-              )}
             </>
+
+          {/* R22 (2026-08-17): concept createAccount1.png footer — "Already
+              have an account? Sign in". Register only. "Sign in" is deep
+              green underlined, taps to switch view. */}
+          {isRegister && (
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: Spacing.xxl, gap: 4 }}>
+              <Text style={{ fontSize: 13, color: '#8A8F95' }}>Already have an account?</Text>
+              <TouchableOpacity
+                onPress={() => handleViewChange('login')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13, color: '#21362C', fontWeight: '600',
+                    textDecorationLine: 'underline',
+                  }}
+                >
+                  Sign in
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* R114/O25 (2026-08-17): Sign In footer — "New here? Create account".
+              Concept signinemail.png shows this line centered ~y=846pt (bottom).
+              Mirror of the Register footer, but the CTA opens 'register'. */}
+          {!isRegister && (
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: Spacing.xxl, gap: 4 }}>
+              <Text style={{ fontSize: 13, color: '#8A8F95' }}>New here?</Text>
+              <TouchableOpacity
+                onPress={() => handleViewChange('register')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13, color: '#21362C', fontWeight: '600',
+                    textDecorationLine: 'underline',
+                  }}
+                >
+                  Create account
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -2063,10 +3014,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl, paddingBottom: Spacing.xxl,
     paddingTop: Spacing.xl,
   },
+  // R22 iter-11 (2026-08-17 user request): "标题再往上点 logo 不动"
+  // gap 12 → 0, logo pos unchanged. Title snaps up against cairn stack.
   logoArea: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
-    gap: Spacing.md,
-    minHeight: SCREEN_H * 0.42,
+    alignItems: 'center',
+    gap: 0,
+    paddingTop: SCREEN_H * 0.22,
   },
   logoGlowWrap: {
     position: 'absolute',
@@ -2076,24 +3029,41 @@ const styles = StyleSheet.create({
   logoGlow: {
     width: 200, height: 200, borderRadius: 100,
   },
+  // R22 iter-2 (2026-08-17): 22 → 30pt, bumped from Nunito-ish weight to
+  // proper display size. Concept wordmark is the visual anchor — reads
+  // as "brand" not "sub-label". letterSpacing tightened to -0.6 to match
+  // the compact, custom-carved feel in the concept.
+  // R22 iter-3 (2026-08-17): letterSpacing -0.6 → -0.8 (concept wordmark
+  // has notably tight kerning that gives it that carved-stone feel).
+  // marginTop 10 → 8 (concept shows tighter vertical stack).
+  // R22 iter-4 (2026-08-17): color tweaked #2e4a2e → #2a4b34 — a touch
+  // more saturated forest green (blue-shifted 4 pts). The old value was
+  // olive-drab; concept 1.1 wordmark reads as living-forest green,
+  // matching the fern/moss undertones in the hero image.
+  // R22 iter-11 (2026-08-17 user request): marginTop 12 → 0 to pull title
+  // up flush against cairn logo.
   appName: {
-    fontSize: 56, fontWeight: '900', color: Colors.textPrimary,
-    letterSpacing: -2.5, marginTop: -2,
+    fontSize: 48, fontWeight: '900', color: '#2a4b34',
+    letterSpacing: -1.5, marginTop: 0,
   },
-  taglineWrap: { alignItems: 'center', gap: 2 },
+  // R22 iter-3 (2026-08-17): marginTop 10 → 6. Concept tagline hugs
+  // wordmark much closer than a 10pt gap — reads as one grouped unit.
+  taglineWrap: { alignItems: 'center', gap: 2, marginTop: 6 },
+  // R22 iter-2 (2026-08-17): 12 → 13pt. Concept tagline reads noticeably
+  // (not micro), color shifted #6f7677 → #7a8285 (warmer neutral grey to
+  // match paper-toned foreground; the previous cool grey clashed with the
+  // warm wordmark green). lineHeight tightened.
   tagline: {
-    fontSize: FontSize.h3, color: Colors.textSecondary,
-    textAlign: 'center', lineHeight: 26, fontWeight: '400',
+    fontSize: 13, color: '#7a8285',
+    textAlign: 'center', lineHeight: 17, fontWeight: '400',
+    letterSpacing: 0.1,
   },
-  splashActions: { gap: Spacing.sm, paddingTop: Spacing.xl },
-  // OTA pill row — fixed height so the layout never shifts whether the
-  // pill is visible or not. Sits at the very top of the CTA stack.
-  splashOtaWrap: {
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xs,
-  },
+  // R22 iter-2 (2026-08-17): action gap 12 → 10pt (tighter cluster reads
+  // as one unit). paddingBottom bumped for more thumb-safe area.
+  // R22 iter-3 (2026-08-17): paddingBottom lg → xxl. Concept 1.1 shows
+  // buttons sit clearly above the home-indicator area (~40pt bottom
+  // breathe). Was hugging too close.
+  splashActions: { gap: 10, paddingTop: 0, paddingBottom: Spacing.xxl },
   primaryBtn: {
     backgroundColor: Colors.primary, borderRadius: 28,
     paddingVertical: Spacing.lg, alignItems: 'center', minHeight: 56,
@@ -2108,11 +3078,76 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: { color: Colors.textPrimary, fontWeight: '600', fontSize: FontSize.body },
   btnContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+
+  // ── Landing (splash / 1.1 Welcome) — CONCEPT_TRUTH 2026-08-15 ──────────
+  // R21 (2026-08-17): pixel-scanned concept 1.1. Buttons 40-49px in 748-tall
+  // mockup → 43-49pt real; scan showed:
+  //   Apple 485-530 (45px→49pt), gap 14pt, Google 545-581 (36px→39pt),
+  //   gap 23pt, Email 604-644 (40px→43pt).
+  // Normalized to 46pt uniform (readable + concept-close). borderRadius 14pt.
+  // R22 iter-2 (2026-08-17): pill radius 12 → 16pt (concept shows softer,
+  // more capsule-like pills), height 46 → 50pt (matches concept button
+  // presence — currently too thin against wordmark 30pt). Uniform across
+  // all three pills so vertical rhythm stays clean.
+  landingAppleBtn: {
+    backgroundColor: '#fff', borderRadius: 16,
+    paddingVertical: 14, alignItems: 'center', minHeight: 50,
+    justifyContent: 'center',
+    borderWidth: 1, borderColor: '#e5e0d5',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
+  },
+  landingAppleBtnText: { color: Colors.textPrimary, fontWeight: '600', fontSize: 15 },
+  landingGoogleBtn: {
+    backgroundColor: '#fff', borderRadius: 16,
+    paddingVertical: 14, alignItems: 'center', minHeight: 50,
+    justifyContent: 'center',
+    borderWidth: 1, borderColor: '#e5e0d5',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
+  },
+  landingGoogleBtnText: { color: Colors.textPrimary, fontWeight: '600', fontSize: 15 },
+  // R22 iter-2 (2026-08-17): filled Google blue circle (was white square
+  // with monochrome grey outline — read as unbranded "G"). Concept 1.1
+  // shows the recognisable multi-colour G; we approximate with a solid
+  // Google Blue #4285F4 circle + white G glyph — same 20pt footprint,
+  // instantly readable as "Google" without a 4-colour asset.
+  landingGoogleG: {
+    width: 20, height: 20, borderRadius: 10, backgroundColor: '#4285F4',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  landingGoogleGText: { fontSize: 13, fontWeight: '800', color: '#fff', marginTop: -1 },
+  landingEmailBtn: {
+    backgroundColor: '#2a4b34', borderRadius: 16,
+    paddingVertical: 14, alignItems: 'center', minHeight: 50,
+    justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 3,
+  },
+  landingEmailBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  landingSignInLink: {
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+  landingSignInLinkText: {
+    fontSize: FontSize.body,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  landingSignInLinkAccent: {
+    color: '#3E5F3A',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
 });
 
 const formStyles = StyleSheet.create({
-  scroll: { padding: Spacing.xl, paddingBottom: Spacing.xxl },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', marginBottom: Spacing.lg },
+  // R21 (2026-08-17 user "争取不要 scroll 一个页面做掉"): tightened paddings
+  // so register form fits on iPhone 14 Pro Max (932pt) without scroll on
+  // R21 (2026-08-17 user "Sign in/up 等界面 back 都太靠上了 位置不好"):
+  // Back button pushed down from top edge with paddingTop 24 (was 8).
+  // ScrollView paddingTop stays small so form content doesn't waste space
+  // — back gets its own vertical breathing room below the safe-area inset.
+  scroll: { paddingHorizontal: 28, paddingTop: 24, paddingBottom: Spacing.lg },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', marginBottom: Spacing.md, paddingVertical: 8 },
   backText: { fontSize: FontSize.caption, color: Colors.primary, fontWeight: '600' },
 
   // Title row: icon inline-left of title text
@@ -2131,13 +3166,19 @@ const formStyles = StyleSheet.create({
   },
   apiError: { flex: 1, fontSize: FontSize.small, color: Colors.danger, fontWeight: '500' },
 
-  label: { fontSize: FontSize.caption, fontWeight: '600', color: Colors.textSecondary, marginTop: Spacing.md, marginBottom: Spacing.xs },
+  // R22 (2026-08-17): concept createAccount1.png labels ("Email", "Password")
+  // read as small deep-green semibold — same forest #21362C as button. Tight
+  // 6pt gap below label to input. Previous olive Colors.textSecondary was
+  // low-contrast against paper bg.
+  // R21 (2026-08-17): marginTop base → sm to compress vertical stacking.
+  label: { fontSize: 13, fontWeight: '600', color: '#21362C', marginTop: Spacing.sm, marginBottom: 4 },
   // O18 AUTH-06: bare TextInput used by DOB field (no PasswordInput wrapper).
   // Matches inputWrap + inputInner combined so visual is consistent with the
   // rest of the form.
   input: {
-    backgroundColor: Colors.surface, borderRadius: Radius.button,
-    borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: Spacing.md,
+    // R22 (2026-08-17): match inputWrap paper tone.
+    backgroundColor: '#FDFAF3', borderRadius: 14,
+    borderWidth: 1, borderColor: '#EAE3D5', paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     fontSize: FontSize.body, color: Colors.textPrimary,
   },
@@ -2145,8 +3186,12 @@ const formStyles = StyleSheet.create({
   hintText: { fontSize: FontSize.small, color: Colors.textMuted, marginTop: 3, marginLeft: 2 },
   inputWrap: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.surface, borderRadius: Radius.button,
-    borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: Spacing.md,
+    // R22 (2026-08-17): concept createAccount1.png inputs use a very-slightly-
+    // lighter-than-paper fill (~#FDFAF3) with almost invisible border. Reads
+    // as "recessed slot on paper", not a hard white card. Sample shows
+    // input inner brightness ~253 vs paper bg 250 — a whisper of contrast.
+    backgroundColor: '#FDFAF3', borderRadius: 14,
+    borderWidth: 1, borderColor: '#EAE3D5', paddingHorizontal: Spacing.md,
     // No background color change on focus — only border changes
   },
   inputError: { borderColor: Colors.danger },
@@ -2191,22 +3236,27 @@ const formStyles = StyleSheet.create({
 
   // O1 batch 39: socialHint removed — 0 JSX references.
 
-  // Apple — black
+  // R21 (2026-08-17 user "sign in up 的 google apple 和首页颜色风格一致"):
+  // form-level Apple / Google buttons now mirror Landing style: white pill
+  // with subtle border + shadow, 12pt radius, 46pt minHeight. Was black
+  // Apple / grey border Google (inconsistent with Landing).
   appleBtn: {
-    backgroundColor: '#1a1a1a', borderRadius: 28,
-    paddingVertical: Spacing.md, alignItems: 'center', minHeight: 52,
-    justifyContent: 'center', marginBottom: 2,
+    backgroundColor: '#fff', borderRadius: 12,
+    paddingVertical: 12, alignItems: 'center', minHeight: 46,
+    justifyContent: 'center', marginBottom: 12,
+    borderWidth: 1, borderColor: '#e5e0d5',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 1,
   },
-  appleBtnText: { fontSize: FontSize.body, fontWeight: '600', color: '#fff' },
+  appleBtnText: { color: Colors.textPrimary, fontWeight: '600', fontSize: 14 },
 
-  // Google — white + border
   googleBtn: {
-    backgroundColor: Colors.surface, borderRadius: 28,
-    paddingVertical: Spacing.md, alignItems: 'center', minHeight: 52,
-    justifyContent: 'center', marginBottom: Spacing.sm,
-    borderWidth: 1.5, borderColor: Colors.border,
+    backgroundColor: '#fff', borderRadius: 12,
+    paddingVertical: 12, alignItems: 'center', minHeight: 46,
+    justifyContent: 'center', marginBottom: 12,
+    borderWidth: 1, borderColor: '#e5e0d5',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 1,
   },
-  googleBtnText: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
+  googleBtnText: { color: Colors.textPrimary, fontWeight: '600', fontSize: 14 },
   googleG: {
     width: 20, height: 20, borderRadius: 4, backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',

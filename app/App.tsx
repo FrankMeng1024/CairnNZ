@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { View, Platform, AppState, Text as RNText, TextInput as RNTextInput } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Platform, AppState, Text as RNText, TextInput as RNTextInput, Image as RNImage } from 'react-native';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { useFonts } from 'expo-font';
@@ -380,11 +380,17 @@ function AppRoot() {
         const sessionStore = require('./src/store/useSessionStore').useSessionStore;
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const memoryStore = require('./src/features/memory/store/useMemoryStore').useMemoryStore;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const friendStore = require('./src/store/useFriendStore').useFriendStore;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const weatherStore = require('./src/store/useWeatherStore').useWeatherStore;
         (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = {
           useAppStore,
           useTrackingStore: trackingStore,
           useSessionStore: sessionStore,
           useMemoryStore: memoryStore,
+          useFriendStore: friendStore,
+          useWeatherStore: weatherStore,
         };
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -693,7 +699,13 @@ function AppRoot() {
   // it falls back to system default.
   if (!hydrated || !settingsHydrated) {
     markBootPhase('render_wait_hydrate');
-    return <View style={{ flex: 1 }} />;
+    // R21 v3 (2026-08-17 user "boss 这么做的"): during hydrate, return
+    // null so the outer view (native launch screen on iOS/Android via
+    // Expo splash config, or WebPhoneFrame paper backdrop on web) is
+    // what the user sees. When hydrate finishes we snap straight to
+    // Auth or Home — no in-between loading screen. Matches BOSS 直聘 /
+    // Instagram / Twitter cold-start UX (native splash → destination).
+    return null;
   }
   markBootPhase('render_after_hydrate');
   // In Playwright bypass mode, skip the font-loading gate — fonts may never
@@ -702,7 +714,9 @@ function AppRoot() {
   const playwrightBypass = isPlaywrightBypass;
   if (!playwrightBypass && !fontsLoaded && !fontError) {
     markBootPhase('render_wait_fonts');
-    return <View style={{ flex: 1 }} />;
+    // R21 v3 (2026-08-17): return null so native launch screen (or web
+    // paper backdrop) shows during font loading. No JS-level filler.
+    return null;
   }
   markBootPhase('render_after_fonts');
 
@@ -744,6 +758,37 @@ function AppRoot() {
   );
 }
 
+// R21 (2026-08-17): app-level boot loading splash. Mountain valley
+// background + white spinner + "Restoring your journey" — same visual
+// as AuthScreen 'restore_session' view. Prevents "paper flash" during
+// hydrate. Used by AppRoot before hydrate() completes.
+function BootLoadingSplash() {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#3d5a52' }}>
+      <RNImage
+        source={require('./assets/auth/landing-hero.jpg')}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+        resizeMode="cover"
+      />
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.15)' }} />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{
+          width: 68, height: 68, borderRadius: 34,
+          borderWidth: 3, borderColor: 'rgba(255,255,255,0.35)',
+          borderTopColor: '#ffffff',
+        }} />
+        <RNText style={{
+          color: '#ffffff', fontSize: 16, fontWeight: '600',
+          marginTop: 20, letterSpacing: 0.2,
+          textShadowColor: 'rgba(0,0,0,0.3)', textShadowRadius: 4,
+        }}>
+          Restoring your journey
+        </RNText>
+      </View>
+    </View>
+  );
+}
+
 export default function App() {
   return (
     // v348: pass initialMetrics so useSafeAreaInsets returns real values
@@ -756,10 +801,89 @@ export default function App() {
     // never wrapped anywhere — a render error in RootNavigator subtree
     // would show the RN red box (dev) or a blank screen (prod). Now: caught,
     // logged to crashLogger, fallback banner shown. Guideline 2.5.1 stability.
-    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <ErrorBoundary tag="app_root">
-        <AppRoot />
-      </ErrorBoundary>
-    </SafeAreaProvider>
+    <WebPhoneFrame>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <ErrorBoundary tag="app_root">
+          <AppRoot />
+        </ErrorBoundary>
+      </SafeAreaProvider>
+    </WebPhoneFrame>
+  );
+}
+
+// R21 (2026-08-17): web-only phone frame. Concept: laptop viewer sees a
+// mini phone at natural laptop-friendly size WITHOUT needing browser zoom.
+// We shrink the phone container to 288×624 (67% of iPhone 14 Pro Max
+// 430×932) so it fits on screen at 100% zoom. RN Web layout inside the
+// container is anchored to the container's actual pixel size, so the
+// content scales down naturally along with it. On iOS/Android this is a
+// pass-through (returns children directly).
+// R21 (2026-08-17) v3: web-only phone frame with TRUE iPhone 14 Pro Max
+// logical dimensions. Container is 430×932 (real device pt), then CSS
+// transform: scale(0.67) shrinks the whole thing to 288×624 CSS pixels so
+// it fits on a laptop. Inside the frame RN Web reads Dimensions.get('window')
+// as 430×932 → identical to the real device. What you see on web = what
+// you see on iPhone 14 Pro Max, pixel-for-pixel proportional. On iOS/
+// Android this is a pass-through.
+function WebPhoneFrame({ children }: { children: React.ReactNode }) {
+  if (Platform.OS !== 'web') return <>{children}</>;
+  const SCALE = 0.67;
+  // R21 (2026-08-17 user "密码输入有 2 个 eyes"): inject global CSS to
+  // hide browser-native password reveal button (Chrome/Edge). We render
+  // our own eye toggle inside PasswordInput; the browser's second one
+  // was a duplicate. `::-ms-reveal` = Edge/IE, `::-webkit-textfield-
+  // decoration-container` + `::-webkit-credentials-auto-fill-button` =
+  // Safari. Runs once on mount.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('cairn-web-hide-native-eye')) return;
+    const style = document.createElement('style');
+    style.id = 'cairn-web-hide-native-eye';
+    style.textContent = `
+      input[type="password"]::-ms-reveal,
+      input[type="password"]::-ms-clear {
+        display: none !important;
+      }
+      input[type="password"]::-webkit-contacts-auto-fill-button,
+      input[type="password"]::-webkit-credentials-auto-fill-button,
+      input[type="password"]::-webkit-caps-lock-indicator {
+        visibility: hidden !important;
+        display: none !important;
+        pointer-events: none !important;
+        position: absolute !important;
+        right: 0 !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: '#2a2a2a',
+        alignItems: 'center',
+        justifyContent: 'center',
+        // @ts-expect-error web-only style
+        minHeight: '100vh',
+      }}
+    >
+      <View
+        style={{
+          width: 430,
+          height: 932,
+          backgroundColor: '#F4EFE6',
+          borderRadius: 48,
+          overflow: 'hidden',
+          // @ts-expect-error web-only shadow syntax
+          boxShadow: '0 30px 90px rgba(0,0,0,0.5), 0 0 0 12px #1a1a1a',
+          // @ts-expect-error web-only CSS transform + origin
+          transform: `scale(${SCALE})`,
+          // @ts-expect-error web-only transform-origin
+          transformOrigin: 'center center',
+        }}
+      >
+        {children}
+      </View>
+    </View>
   );
 }

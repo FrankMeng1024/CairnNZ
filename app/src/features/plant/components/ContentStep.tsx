@@ -74,7 +74,10 @@ export function ContentStep({
               (was in a separate row above). User feedback: back on its
               own row felt disconnected from the page header. */}
           <View style={styles.headerRow}>
-            <BackButton variant="pill" onPress={() => { Keyboard.dismiss(); onBack(); }} />
+            {/* R21 v3 (2026-08-17): unified to Auth back style —
+                ContentStep is a full-screen form, not a map overlay, so
+                the frosted pill diverged from the Auth reference. */}
+            <BackButton variant="inline" onPress={() => { Keyboard.dismiss(); onBack(); }} />
             <Text style={styles.title}>Leave a mark</Text>
           </View>
           <ScrollView
@@ -161,9 +164,11 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     paddingBottom: 8,
   },
+  // Concept alignment (2026-08-16): title bumped to 700 to read as the
+  // page anchor next to the pill back button, matching Plant-2 concept.
   title: {
     fontSize: 22,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textPrimary,
     marginBottom: 0,
     flexShrink: 1,
@@ -173,18 +178,22 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginBottom: Spacing.md,
   },
+  // Concept alignment (2026-08-16): voice memo box gets an info-blue
+  // tone (water blue) per Plant-2 concept — subtle blue-ink card that
+  // reads as a preview/dev-callout distinct from primary form fields.
   voiceBox: {
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.infoBg,
     borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(46,108,197,0.20)',
     padding: 14,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginTop: 14,
   },
   voiceTodo: {
     fontSize: FontSize.small,
-    color: Colors.textSecondary,
+    color: Colors.info,
+    fontStyle: 'italic',
   },
   bottomBar: {
     paddingTop: 8,

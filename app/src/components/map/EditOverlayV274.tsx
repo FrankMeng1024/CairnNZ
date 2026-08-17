@@ -135,21 +135,38 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
 
   return (
     <View pointerEvents="box-none" style={styles.container}>
-      {/* Top-right tool FAB (closed). v275 sizes preserved. */}
-      {!wheelOpen && (
-        <TouchableOpacity
-          style={[styles.fab, { top: insets.top + 8, backgroundColor: fabBg }]}
-          activeOpacity={0.85}
-          onPress={() => setWheelOpen(true)}
-        >
-          <Icon name={fabIcon as any} size={26} color={Colors.surface} strokeWidth={2.6} />
-        </TouchableOpacity>
-      )}
+      {/* 2026-08-16 CONCEPT_TRUTH Trails T6-T10 alignment.
+          Replaced top-right wheel + 3-button bottom bar with:
+          - top-right small Undo + Reset badges (secondary, low profile)
+          - bottom card with 4 tool tabs (Beautify / Trim / Draw / Move)
+          - bottom primary CTA that toggles between Preview / Save based on state
+          Wheel + FAB moved to zero-height wrappers so old code paths are
+          harmless but nothing renders. */}
 
-      {/* v277b wheel: Move sits where the FAB was (slightly bigger);
-          Draw / Undo / Reset stack to its bottom-left in a vertical
-          column so they don't run off-screen on the right edge.
-          PO: "move 变大一点点 另外3个都在左下". */}
+      {/* Small utility badges: Undo + Reset in top-right, small pale pills */}
+      <View
+        pointerEvents="box-none"
+        style={[styles.utilityRow, { top: insets.top + 8 }]}
+      >
+        <TouchableOpacity
+          activeOpacity={0.85}
+          disabled={!canUndo}
+          onPress={handleUndoTap}
+          style={[styles.utilityBadge, !canUndo && styles.btnDisabled]}
+        >
+          <Icon name="Undo2" size={16} color={CONCEPT_GREEN} strokeWidth={2.4} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={handleResetTap}
+          style={[styles.utilityBadge, { backgroundColor: Colors.dangerBg }]}
+        >
+          <Icon name="RotateCcw" size={16} color={Colors.danger} strokeWidth={2.4} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Legacy wheel — kept but never rendered post 2026-08-16 concept.
+          wheelOpen is initialized false and never toggled true. */}
       {wheelOpen && (
         <>
           <TouchableOpacity
@@ -303,7 +320,7 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
               {trimOpen && (
                 <View style={styles.trimPanel} pointerEvents="auto">
                   <View style={styles.trimHeaderRow}>
-                    <Icon name="Scissors" size={14} color={Colors.primary} strokeWidth={2.5} />
+                    <Icon name="Scissors" size={14} color={CONCEPT_GREEN} strokeWidth={2.5} />
                     <Text style={styles.trimHeaderText} numberOfLines={1}>Trim · drag handles</Text>
                     {totalLengthM > 0 && (trimStartFrac > 0 || trimEndFrac < 1) && (
                       <Text style={styles.trimReadout} numberOfLines={1}>
@@ -321,43 +338,71 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   />
                 </View>
               )}
-              <View style={styles.bottomRow}>
+              {/* 2026-08-16 CONCEPT_TRUTH Trails T6 Tools card — 4 tool tabs.
+                  Beautify (sparkles) / Trim (scissors) / Draw (pencil) / Move (crosshair).
+                  Beautify = one-shot runPreview (no strokes)
+                  Trim     = toggles trim slider panel
+                  Draw     = brush tool
+                  Move     = pan tool (map pan, no polyline translate) */}
+              <View style={styles.toolsCard} pointerEvents="auto">
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  style={[styles.thirdBtn, !canBeautify && styles.btnDisabled]}
+                  style={styles.toolTab}
                   disabled={!canBeautify}
                   onPress={() => { setTrimOpen(false); if (canBeautify) onBeautify(); }}
                 >
-                  {isComputing ? (
-                    <ActivityIndicator size="small" color={Colors.primary} />
-                  ) : (
-                    <>
-                      <Icon name="Star" size={16} color={Colors.primary} strokeWidth={2.5} />
-                      <Text style={styles.thirdBtnText} numberOfLines={1}>Beautify</Text>
-                    </>
-                  )}
+                  <View style={styles.toolIconWrap}>
+                    <Icon name="Sparkles" size={22} color={CONCEPT_GREEN} strokeWidth={2.2} />
+                  </View>
+                  <Text style={styles.toolTabLabel}>Beautify</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  style={[styles.thirdBtn, trimOpen && styles.thirdBtnActive]}
+                  style={[styles.toolTab, trimOpen && styles.toolTabActive]}
                   onPress={() => setTrimOpen(v => !v)}
                 >
-                  <Icon name="Scissors" size={16} color={trimOpen ? Colors.surface : Colors.primary} strokeWidth={2.5} />
-                  <Text
-                    style={[styles.thirdBtnText, trimOpen && styles.thirdBtnTextActive]}
-                    numberOfLines={1}
-                  >Trim</Text>
+                  <View style={[styles.toolIconWrap, trimOpen && styles.toolIconWrapActive]}>
+                    <Icon name="Scissors" size={22} color={trimOpen ? Colors.surface : CONCEPT_GREEN} strokeWidth={2.2} />
+                  </View>
+                  <Text style={[styles.toolTabLabel, trimOpen && styles.toolTabLabelActive]}>Trim</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  style={[styles.thirdBtn, !canSave && styles.btnDisabled]}
-                  disabled={!canSave}
-                  onPress={() => { setTrimOpen(false); if (canSave) onSave(); }}
+                  style={[styles.toolTab, safeTool === 'brush' && styles.toolTabActive]}
+                  onPress={() => { setTrimOpen(false); setActiveTool('brush'); }}
                 >
-                  <Icon name="Check" size={16} color={Colors.primary} strokeWidth={2.5} />
-                  <Text style={styles.thirdBtnText} numberOfLines={1}>Save</Text>
+                  <View style={[styles.toolIconWrap, safeTool === 'brush' && styles.toolIconWrapActive]}>
+                    <Icon name="Pencil" size={22} color={safeTool === 'brush' ? Colors.surface : CONCEPT_GREEN} strokeWidth={2.2} />
+                  </View>
+                  <Text style={[styles.toolTabLabel, safeTool === 'brush' && styles.toolTabLabelActive]}>Draw</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={[styles.toolTab, safeTool === 'pan' && styles.toolTabActive]}
+                  onPress={() => { setTrimOpen(false); setActiveTool('pan'); }}
+                >
+                  <View style={[styles.toolIconWrap, safeTool === 'pan' && styles.toolIconWrapActive]}>
+                    <Icon name="Move" size={22} color={safeTool === 'pan' ? Colors.surface : CONCEPT_GREEN} strokeWidth={2.2} />
+                  </View>
+                  <Text style={[styles.toolTabLabel, safeTool === 'pan' && styles.toolTabLabelActive]}>Move</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Primary CTA — Save (concept T6 shows "Preview" but only
+                  when there are unpreviewed strokes; here strokes have been
+                  previewed, so we surface Save). */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={[styles.primaryCta, !canSave && styles.btnDisabled]}
+                disabled={!canSave}
+                onPress={() => { setTrimOpen(false); if (canSave) onSave(); }}
+              >
+                <Icon name="Check" size={18} color={Colors.surface} strokeWidth={2.6} />
+                <Text style={styles.primaryCtaText} numberOfLines={1}>Save</Text>
+              </TouchableOpacity>
             </>
           )}
         </View>
@@ -408,6 +453,9 @@ const FAB_SIZE = 56;
 const BIG_CENTER_SIZE = 68;
 const SMALL_SIZE = 50;
 const ORBIT_R = 90;
+
+// 2026-08-16 CONCEPT_TRUTH — Trails page primary green.
+const CONCEPT_GREEN = '#3E5F3A';
 
 const styles = StyleSheet.create({
   container: {
@@ -558,6 +606,72 @@ const styles = StyleSheet.create({
   beautifyBtnText: {
     color: Colors.primary,
     fontSize: FontSize.body,
+    fontWeight: '700',
+  },
+
+  // 2026-08-16 CONCEPT_TRUTH — Trails T6 Tools card + Primary CTA.
+  utilityRow: {
+    position: 'absolute',
+    right: Spacing.md,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  utilityBadge: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderWidth: 1, borderColor: 'rgba(20,42,30,0.08)',
+    ...Shadow.elevated,
+  },
+  toolsCard: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(20,42,30,0.08)',
+    marginBottom: Spacing.sm,
+    ...Shadow.elevated,
+  },
+  toolTab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 6,
+  },
+  toolTabActive: {},
+  toolIconWrap: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(62,95,58,0.10)',
+  },
+  toolIconWrapActive: {
+    backgroundColor: CONCEPT_GREEN,
+  },
+  toolTabLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: CONCEPT_GREEN,
+  },
+  toolTabLabelActive: {
+    color: CONCEPT_GREEN,
+    fontWeight: '800',
+  },
+  primaryCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: CONCEPT_GREEN,
+  },
+  primaryCtaText: {
+    color: '#FFFFFF',
+    fontSize: 17,
     fontWeight: '700',
   },
   saveBtn: {

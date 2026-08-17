@@ -22,7 +22,7 @@
  *   - Emergency Contacts (T2 already deleted; SOS work descoped)
  *   - Explicit always-visible Debug toggle (5-tap gesture restores it — App Store review safety)
  */
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import * as Application from 'expo-application';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -56,6 +56,10 @@ import { BackButton } from '../components/BackButton';
 import { PressBtn } from '../components/PressBtn';
 import { pickDebugScreenshots, uploadDebugScreenshots } from '../services/debugUpload';
 import { log } from '../services/appLog';
+import { useWeatherStore, NZ_TEST_CITIES } from '../store/useWeatherStore';
+import type { NZCity } from '../store/useWeatherStore';
+import { getHomeBackground } from '../utils/homeBackground';
+import { useAppearance } from '../hooks/useAppearance';
 import { OTA_VERSION } from '../components/OtaBadge';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -67,19 +71,25 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 // ── Row helpers ────────────────────────────────────────────────────────────
 function ToggleRow({
   iconName, iconColor, iconBg, label, hint, value, onToggle,
+  textColor, mutedColor,
 }: {
   iconName: IconName; iconColor: string; iconBg: string;
   label: string; hint?: string;
   value: boolean; onToggle: () => void;
+  // R21 (2026-08-17): optional weather/appearance-adaptive text colors.
+  // When bg is dark (night variant), the default deep-green label + grey
+  // hint disappear; caller passes cardTextColor + cardTextColorMuted so
+  // the row stays readable on every variant.
+  textColor?: string; mutedColor?: string;
 }) {
   return (
     <View style={rowStyles.row}>
       <View style={[rowStyles.iconWrap, { backgroundColor: iconBg }]}>
-        <Icon name={iconName} size={16} color={iconColor} strokeWidth={1.8} />
+        <Icon name={iconName} size={18} color={iconColor} strokeWidth={1.8} />
       </View>
       <View style={rowStyles.content}>
-        <Text style={rowStyles.label}>{label}</Text>
-        {hint ? <Text style={rowStyles.hint} numberOfLines={2}>{hint}</Text> : null}
+        <Text style={[rowStyles.label, textColor ? { color: textColor } : null]}>{label}</Text>
+        {hint ? <Text style={[rowStyles.hint, mutedColor ? { color: mutedColor } : null]} numberOfLines={2}>{hint}</Text> : null}
       </View>
       <Switch
         value={value}
@@ -93,28 +103,31 @@ function ToggleRow({
 
 function ActionRow({
   iconName, iconColor, iconBg, label, hint, value, labelColor, onPress, external, hideChevron, disabled,
+  textColor, mutedColor,
 }: {
   iconName?: IconName; iconColor?: string; iconBg?: string;
   label: string; hint?: string; value?: string; labelColor?: string;
   onPress: () => void; external?: boolean; hideChevron?: boolean; disabled?: boolean;
+  // R21 (2026-08-17): appearance-adaptive text tokens (see ToggleRow).
+  textColor?: string; mutedColor?: string;
 }) {
   return (
     <PressBtn style={rowStyles.actionRow} onPress={onPress} scaleTo={0.97} disabled={disabled}>
       {iconName && iconBg && iconColor ? (
         <View style={[rowStyles.iconWrap, { backgroundColor: iconBg }]}>
-          <Icon name={iconName} size={16} color={iconColor} strokeWidth={1.8} />
+          <Icon name={iconName} size={18} color={iconColor} strokeWidth={1.8} />
         </View>
       ) : null}
       <View style={{ flex: 1 }}>
-        <Text style={[rowStyles.actionLabel, labelColor ? { color: labelColor } : null]}>{label}</Text>
-        {hint ? <Text style={rowStyles.hint} numberOfLines={2}>{hint}</Text> : null}
+        <Text style={[rowStyles.actionLabel, textColor ? { color: textColor } : null, labelColor ? { color: labelColor } : null]}>{label}</Text>
+        {hint ? <Text style={[rowStyles.hint, mutedColor ? { color: mutedColor } : null]} numberOfLines={2}>{hint}</Text> : null}
       </View>
-      {value ? <Text style={rowStyles.value}>{value}</Text> : null}
+      {value ? <Text style={[rowStyles.value, mutedColor ? { color: mutedColor } : null]}>{value}</Text> : null}
       {!hideChevron && (
         <Icon
           name={external ? 'ExternalLink' : 'ChevronRight'}
           size={IconSize.sm}
-          color={Colors.textMuted}
+          color={mutedColor ?? Colors.textMuted}
           strokeWidth={2}
         />
       )}
@@ -122,8 +135,22 @@ function ActionRow({
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
-  return <Text style={styles.sectionHeader}>{title}</Text>;
+function SectionHeader({ title, color, shadowColor }: { title: string; color?: string; shadowColor?: string }) {
+  // R21 (2026-08-17): weather-adaptive color. When bg is night variant, the
+  // muted grey `Colors.textSecondary` disappears against the dark landscape.
+  // Caller passes settingsBgTokens.textColorMuted so section headers stay
+  // readable on every bg variant. Falls back to styles.sectionHeader default.
+  return (
+    <Text
+      style={[
+        styles.sectionHeader,
+        color ? { color } : null,
+        shadowColor ? { textShadowColor: shadowColor, textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 } : null,
+      ]}
+    >
+      {title}
+    </Text>
+  );
 }
 
 // ── Type-to-confirm modal ─────────────────────────────────────────────────
@@ -235,14 +262,31 @@ export function SettingsScreen() {
   const simWalkerActive = useSimWalkerStore((s) => s.active);
   const setSimWalkerActive = useSimWalkerStore((s) => s.setActive);
 
+  // Weather location override (dev testing)
+  const weatherOverride = useWeatherStore((s) => s.locationOverride);
+  const setLocationOverride = useWeatherStore((s) => s.setLocationOverride);
+  const weatherCondition = useWeatherStore((s) => s.condition);
+  const weatherTemp = useWeatherStore((s) => s.temperature);
+
   // Settings store — only what remains after O12 cleanup
   // O12: nightMode field remains in useSettingsStore for a future Dark Theme
   // Sprint, but the SettingsScreen toggle is hidden (no consumer yet).
   const hapticFeedback = useSettingsStore((s) => s.hapticFeedback);
+  // R21 (2026-08-17): voiceGuidance UI toggle removed per concept clip-92.
+  // Field kept in store for future turn-by-turn nav Sprint; not read here.
   const units = useSettingsStore((s) => s.units);
   const dateFormat = useSettingsStore((s) => s.dateFormat);
   const debugMode = useSettingsStore((s) => s.debugMode);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
+
+  // R21 (2026-08-17 user "在settings里添加一个 可以隐藏首页的探索百分比的设置
+  // 防止压力太大 默认开 用户可以选" + "第一次肯定是waiting 用户不理解是干嘛的
+  // 可以给用户一个演示 当他关的时候 提醒他"): toggle to hide the Home
+  // "% of country" swap icon. Default true. On turn-OFF we show a demo
+  // modal explaining what the feature is (users haven't seen it working
+  // yet — first-time exploration is basically 0% so they'd never notice).
+  const showExplorationPercent = useSettingsStore((s) => s.showExplorationPercent);
+  const [showExplorationDemo, setShowExplorationDemo] = useState(false);
 
   // Memory stats (readonly display)
   const memoryPointCount = useMemoryStore((s) => s.points.length);
@@ -608,48 +652,115 @@ export function SettingsScreen() {
   const appVersion = Application.nativeApplicationVersion ?? '0.2.5';
   const aboutRowValue = `v${appVersion} · ${OTA_VERSION}`;
 
+  // R21 (2026-08-17 user "settings 和 homepage 一样 根据当前位置 改背景"):
+  // Weather-adaptive bg. Consumes same store as Home so nav Home↔Settings
+  // is visually continuous. Text/card colors derived from tokens.
+  const settingsCondition = useWeatherStore(s => s.condition);
+  const settingsConditionOverride = useWeatherStore(s => s.conditionOverride);
+  const settingsDayNightOverride = useWeatherStore(s => s.dayNightOverride);
+  const effectiveSettingsCondition = settingsConditionOverride ?? settingsCondition;
+  const settingsAppearance = useAppearance();
+  const settingsBgTokens = useMemo(() => {
+    let forced: 'day' | 'night' | undefined = undefined;
+    if (settingsDayNightOverride === 'day' || settingsDayNightOverride === 'night') {
+      forced = settingsDayNightOverride;
+    } else if (settingsAppearance.mode === 'light') {
+      forced = 'day';
+    } else if (settingsAppearance.mode === 'dark') {
+      forced = 'night';
+    }
+    return getHomeBackground(effectiveSettingsCondition, Date.now(), forced);
+  }, [effectiveSettingsCondition, settingsDayNightOverride, settingsAppearance.mode]);
+
+  // R21 (2026-08-17): weather-adaptive style overrides. Card + divider + footer
+  // pick colors from tokens so Settings visually matches Home across all 8
+  // variants (day → paper cards, night → deep ink cards).
+  const cardOverride = {
+    backgroundColor: settingsBgTokens.cardBackgroundColor,
+    borderWidth: 1,
+    borderColor: settingsBgTokens.cardBorderColor,
+  };
+  const dividerOverride = { backgroundColor: settingsBgTokens.cardBorderColor };
+  // R21 (2026-08-17 user "Thanks for using Cairn. 和 signout 颜色不对"):
+  // footer + Sign out row need readable colors on every variant. Muted grey
+  // (textColorMuted) disappears on both bright cream and deep slate variants;
+  // use the main textColor with slight opacity instead so it reads clearly
+  // without competing with the section headers.
+  const footerOverride = { color: settingsBgTokens.textColor, opacity: 0.75 };
+
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: settingsBgTokens.useDarkText ? '#F4EFE6' : '#0A1220' }}>
+      {/* R21 (2026-08-17): weather-adaptive bg + weather-adaptive veil. */}
+      <Image
+        source={settingsBgTokens.bgAsset}
+        style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, bottom: 0,
+          width: '100%',
+          height: '100%',
+        }}
+        resizeMode="cover"
+      />
+      <View style={[styles.bgVeil, {
+        backgroundColor: settingsBgTokens.useDarkText
+          ? 'rgba(244,239,230,0.42)'   // day: warm paper veil, translucent
+          : 'rgba(10,18,32,0.55)',     // night: deep-ink veil
+      }]} />
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Top bar (no Save button — settings auto-persist via updateSetting) */}
         <View style={styles.topBar}>
-          <BackButton variant="pill" onPress={() => nav.goBack()} />
-          <Text style={styles.topTitle}>Settings</Text>
+          {/* R21 v3 (2026-08-17): unified to Auth Sign In/Up back style.
+              Settings has its own top bar (no map overlay) so the frosted
+              pill was inconsistent with Auth. */}
+          <BackButton variant="inline" onPress={() => nav.goBack()} />
+          <Text style={[styles.topTitle, { color: settingsBgTokens.textColor, textShadowColor: settingsBgTokens.textShadowColor }]}>Settings</Text>
           <View style={styles.topBarSpacer} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scroll}
+        >
 
-          {/* ── Profile card (top, no section header) ── */}
-          {isLoggedIn && user ? (
-            <View style={styles.card}>
-              <View style={profileStyles.header}>
-                <View style={profileStyles.avatar}>
-                  <Text style={profileStyles.avatarText}>
-                    {(user.name.trim().charAt(0) || '?').toUpperCase()}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={profileStyles.name}>{user.name}</Text>
-                  <Text style={profileStyles.email}>{user.email}</Text>
+          {/* clip-92 concept alignment (2026-08-16): one-line subtitle sits
+              under the title, mirrors the "One long scrollable page. Same
+              background as on Homepage." caption in the concept.
+              2026-08-16 fix: subtitle REMOVED — Round 4 subagent QA flagged
+              as designer caption leak, not user-facing copy. */}
+
+          {/* ── Profile card (top, no section header) ──
+              R21 (2026-08-17): Settings requires signed-in state (gated by
+              RootNavigator). Profile always renders — user is always
+              populated because RootNavigator only shows Settings when
+              isLoggedIn is true. */}
+          <View style={[styles.card, cardOverride]}>
+            <View style={profileStyles.header}>
+              <View style={profileStyles.avatar}>
+                <Text style={profileStyles.avatarText}>
+                  {(user!.name.trim().charAt(0) || '?').toUpperCase()}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                  <Text style={[profileStyles.name, { color: settingsBgTokens.cardTextColor }]}>{user!.name}</Text>
+                  <Text style={[profileStyles.email, { color: settingsBgTokens.cardTextColorMuted }]}>{user!.email}</Text>
                   {/* O18 HOME-05: "Member for X days" — no rewards, no
                       streaks (per user note: not habit-tracking app). Just
                       a quiet acknowledgement of time spent together. */}
-                  {user.createdAt && (() => {
-                    const days = Math.max(1, Math.floor((Date.now() - new Date(user.createdAt).getTime()) / 86400000));
+                  {user!.createdAt && (() => {
+                    const days = Math.max(1, Math.floor((Date.now() - new Date(user!.createdAt).getTime()) / 86400000));
                     return (
-                      <Text style={profileStyles.memberFor}>
+                      <Text style={[profileStyles.memberFor, { color: settingsBgTokens.cardTextColorMuted }]}>
                         Member for {days} {days === 1 ? 'day' : 'days'}
                       </Text>
                     );
                   })()}
                 </View>
               </View>
-              <View style={styles.dividerFlush} />
+              <View style={[styles.dividerFlush, dividerOverride]} />
               <ActionRow
                 label="Edit name"
                 onPress={openEditName}
-              />
+                textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted} />
               {/* R114/O24 (2026-08-12): inline edit-name panel, mirrors the
                   Change password accordion below. Uses pwStyles so both
                   panels share the same visual language. */}
@@ -699,8 +810,8 @@ export function SettingsScreen() {
                   setCurrentPw('');
                   setNewPw('');
                   setConfirmPw('');
-                }}
-              />
+                }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
               {showChangePw && (
                 <View style={pwStyles.form}>
                   {!!pwError && <Text style={pwStyles.error}>{pwError}</Text>}
@@ -784,20 +895,6 @@ export function SettingsScreen() {
                 </View>
               )}
             </View>
-          ) : (
-            <View style={styles.card}>
-              <PressBtn style={rowStyles.actionRow} onPress={() => nav.replace('Auth')} scaleTo={0.97}>
-                <View style={[rowStyles.iconWrap, { backgroundColor: Colors.primaryLight }]}>
-                  <Icon name="User" size={16} color={Colors.primary} strokeWidth={1.8} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: FontSize.body, fontWeight: '500', color: Colors.textPrimary }}>Sign in to save your data</Text>
-                  <Text style={{ fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 1 }}>Your sessions will sync across devices</Text>
-                </View>
-                <Icon name="ChevronRight" size={IconSize.sm} color={Colors.textMuted} strokeWidth={2} />
-              </PressBtn>
-            </View>
-          )}
 
           {/* ── Your progress (O15 bug 1: moved here from below Preferences,
            *  right after Profile card so the badge feels like part of the
@@ -816,21 +913,21 @@ export function SettingsScreen() {
             </TouchableOpacity>
           </View>
           <View style={badgeStyles.row}>
-            <View style={badgeStyles.card}>
+            <View style={[badgeStyles.card, cardOverride]}>
               <View style={[badgeStyles.iconBadge, { backgroundColor: '#eef3e6' }]}>
                 <Icon name="Footprints" size={22} color={Colors.primary} strokeWidth={1.8} />
               </View>
-              <Text style={badgeStyles.value}>{memoryPointCount}</Text>
-              <Text style={badgeStyles.label}>
+              <Text style={[badgeStyles.value, { color: settingsBgTokens.cardTextColor }]}>{memoryPointCount}</Text>
+              <Text style={[badgeStyles.label, { color: settingsBgTokens.cardTextColorMuted }]}>
                 {memoryPointCount === 1 ? 'place explored' : 'places explored'}
               </Text>
             </View>
-            <View style={badgeStyles.card}>
+            <View style={[badgeStyles.card, cardOverride]}>
               <View style={[badgeStyles.iconBadge, { backgroundColor: 'rgba(181,130,61,0.12)' }]}>
                 <Icon name="Mountain" size={22} color="#b5823d" strokeWidth={1.8} />
               </View>
-              <Text style={badgeStyles.value}>{myCairnCount}</Text>
-              <Text style={badgeStyles.label}>
+              <Text style={[badgeStyles.value, { color: settingsBgTokens.cardTextColor }]}>{myCairnCount}</Text>
+              <Text style={[badgeStyles.label, { color: settingsBgTokens.cardTextColorMuted }]}>
                 {myCairnCount === 1 ? 'cairn planted' : 'cairns planted'}
               </Text>
             </View>
@@ -840,8 +937,8 @@ export function SettingsScreen() {
            *  Moved from Home to keep Home visually calm. Shows all-time
            *  totals (no period toggle — Settings is the full-picture view)
            *  and a one-tap jump to the Activities list (Routes route). */}
-          <SectionHeader title="Your journey" />
-          <View style={styles.card}>
+          <SectionHeader title="Your journey" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
+          <View style={[styles.card, cardOverride]}>
             <View style={journeyStyles.statsRow}>
               <View style={journeyStyles.statChip}>
                 <Icon name="Route" size={14} color={Colors.primary} strokeWidth={2} />
@@ -856,20 +953,20 @@ export function SettingsScreen() {
                 </Text>
               </View>
             </View>
-            <View style={styles.divider} />
+            <View style={[styles.dividerFlush, dividerOverride]} />
             <ActionRow
               iconName="Milestone"
               iconColor={Colors.primary}
               iconBg={Colors.primaryLight}
               label="View all activities"
               hint="Full list of your hikes and runs"
-              onPress={() => nav.navigate('Routes')}
-            />
+              onPress={() => nav.navigate('Routes')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
           </View>
 
           {/* ── Preferences ── */}
-          <SectionHeader title="Preferences" />
-          <View style={styles.card}>
+          <SectionHeader title="Preferences" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
+          <View style={[styles.card, cardOverride]}>
             {/* R114/O22 STORY-73024 (S3): Memory always-on GPS. When on,
                 the app records memory points whenever it's open (foreground
                 or lock-screen resume), not just during Hike/Run sessions.
@@ -881,9 +978,9 @@ export function SettingsScreen() {
               label="Memory always-on GPS"
               hint="Fill in your map whenever the app is open, not just during hikes."
               value={memoryAlwaysOn}
-              onToggle={() => setMemorySetting('foregroundAutoUnlockEnabled', !memoryAlwaysOn)}
-            />
-            <View style={styles.divider} />
+              onToggle={() => setMemorySetting('foregroundAutoUnlockEnabled', !memoryAlwaysOn)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+            <View style={[styles.divider, dividerOverride]} />
             <ActionRow
               iconName="Ruler"
               iconColor={Colors.primary}
@@ -891,13 +988,13 @@ export function SettingsScreen() {
               label="Units"
               hint="Distance and elevation"
               value={units === 'imperial' ? 'Miles / feet' : 'Kilometres / metres'}
-              onPress={() => setShowUnitsInline(v => !v)}
-            />
+              onPress={() => setShowUnitsInline(v => !v)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
             {/* O13 bug 2: inline expansion instead of popup modal. Matches
              *  the Change-password disclosure pattern in the Profile card. */}
             {showUnitsInline && (
               <View style={inlineStyles.expand}>
-                <View style={styles.divider} />
+                <View style={[styles.divider, dividerOverride]} />
                 <TouchableOpacity
                   style={inlineStyles.pickerRow}
                   onPress={() => { updateSetting('units', 'metric'); setShowUnitsInline(false); }}
@@ -915,7 +1012,7 @@ export function SettingsScreen() {
                   </View>
                   {units === 'metric' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
                 </TouchableOpacity>
-                <View style={styles.divider} />
+                <View style={[styles.divider, dividerOverride]} />
                 <TouchableOpacity
                   style={inlineStyles.pickerRow}
                   onPress={() => { updateSetting('units', 'imperial'); setShowUnitsInline(false); }}
@@ -935,7 +1032,7 @@ export function SettingsScreen() {
                 </TouchableOpacity>
               </View>
             )}
-            <View style={styles.divider} />
+            <View style={[styles.divider, dividerOverride]} />
             {/* O18 HIST-09: date format picker (dmy / mdy / ymd) */}
             <ActionRow
               iconName="Calendar"
@@ -944,11 +1041,11 @@ export function SettingsScreen() {
               label="Date format"
               hint="How dates appear across the app"
               value={dateFormat === 'mdy' ? 'MM/DD/YYYY' : dateFormat === 'ymd' ? 'YYYY-MM-DD' : 'DD/MM/YYYY'}
-              onPress={() => setShowDateInline(v => !v)}
-            />
+              onPress={() => setShowDateInline(v => !v)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
             {showDateInline && (
               <View style={inlineStyles.expand}>
-                <View style={styles.divider} />
+                <View style={[styles.divider, dividerOverride]} />
                 <TouchableOpacity
                   style={inlineStyles.pickerRow}
                   onPress={() => { updateSetting('dateFormat', 'dmy'); setShowDateInline(false); }}
@@ -959,7 +1056,7 @@ export function SettingsScreen() {
                   </View>
                   {dateFormat === 'dmy' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
                 </TouchableOpacity>
-                <View style={styles.divider} />
+                <View style={[styles.divider, dividerOverride]} />
                 <TouchableOpacity
                   style={inlineStyles.pickerRow}
                   onPress={() => { updateSetting('dateFormat', 'mdy'); setShowDateInline(false); }}
@@ -970,7 +1067,7 @@ export function SettingsScreen() {
                   </View>
                   {dateFormat === 'mdy' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
                 </TouchableOpacity>
-                <View style={styles.divider} />
+                <View style={[styles.divider, dividerOverride]} />
                 <TouchableOpacity
                   style={inlineStyles.pickerRow}
                   onPress={() => { updateSetting('dateFormat', 'ymd'); setShowDateInline(false); }}
@@ -983,7 +1080,7 @@ export function SettingsScreen() {
                 </TouchableOpacity>
               </View>
             )}
-            <View style={styles.divider} />
+            <View style={[styles.divider, dividerOverride]} />
             <ToggleRow
               iconName="Vibrate"
               iconColor="#8a6e3b"
@@ -998,8 +1095,99 @@ export function SettingsScreen() {
                 // immediately feels what they enabled. Toggle-off obviously
                 // does nothing (no vibration to preview).
                 if (next) haptic.notification('success');
-              }}
-            />
+              }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+            <View style={[styles.divider, dividerOverride]} />
+            {/* R21 (2026-08-17): Show exploration %. Default on. When user
+                turns OFF, show a demo modal first so they understand what
+                they're hiding — most first-time users have basically 0%
+                so they've never seen the feature and don't know what to
+                turn off. */}
+            <ToggleRow
+              iconName="TrendingUp"
+              iconColor="#4a6b38"
+              iconBg="#e0e8d5"
+              label="Show exploration %"
+              hint="Little swap icon on Home that shows % of your country you've explored"
+              value={showExplorationPercent}
+              onToggle={() => {
+                if (showExplorationPercent) {
+                  // Turning OFF — show demo first so user knows what disappears.
+                  setShowExplorationDemo(true);
+                } else {
+                  // Turning ON — no demo needed, just enable.
+                  updateSetting('showExplorationPercent', true);
+                  haptic.notification('success');
+                }
+              }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+            <View style={[styles.divider, dividerOverride]} />
+            {/* R21 (2026-08-17): Appearance — 3-segment picker inside the
+                Preferences card. Light / Dark / Auto. Auto follows local
+                time (6..19 = light, else dark). Explicit choice overrides
+                weather-adaptive Home bg day/night bucket. Default Auto. */}
+            <View style={{ paddingHorizontal: Spacing.base, paddingVertical: Spacing.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <View style={[rowStyles.iconWrap, { backgroundColor: '#dde3ee' }]}>
+                  <Icon name="Moon" size={18} color="#4a5c78" strokeWidth={1.8} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[rowStyles.label, { color: settingsBgTokens.cardTextColor }]}>Appearance</Text>
+                  <Text style={[rowStyles.hint, { color: settingsBgTokens.cardTextColorMuted }]}>
+                    {settingsAppearance.mode === 'auto'
+                      ? 'Follows time of day'
+                      : settingsAppearance.mode === 'light' ? 'Always light' : 'Always dark'}
+                  </Text>
+                </View>
+              </View>
+              <View style={{
+                flexDirection: 'row',
+                backgroundColor: settingsBgTokens.useDarkText ? 'rgba(33,54,44,0.06)' : 'rgba(255,255,255,0.10)',
+                borderRadius: 12,
+                padding: 3,
+              }}>
+                {(['light', 'auto', 'dark'] as const).map((m) => {
+                  const active = settingsAppearance.mode === m;
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      onPress={() => {
+                        updateSetting('appearance', m);
+                        haptic.selection();
+                      }}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 9,
+                        borderRadius: 9,
+                        alignItems: 'center',
+                        backgroundColor: active
+                          ? (settingsBgTokens.useDarkText ? '#ffffff' : 'rgba(255,255,255,0.22)')
+                          : 'transparent',
+                        shadowColor: active ? '#000' : 'transparent',
+                        shadowOpacity: active ? 0.08 : 0,
+                        shadowRadius: 4,
+                        shadowOffset: { width: 0, height: 1 },
+                      }}
+                    >
+                      <Text style={{
+                        fontSize: 13,
+                        fontWeight: active ? '700' : '500',
+                        color: active
+                          ? (settingsBgTokens.useDarkText ? '#21362C' : '#F0EEE6')
+                          : settingsBgTokens.cardTextColorMuted,
+                        textTransform: 'capitalize',
+                      }}>
+                        {m}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+            {/* R21 (2026-08-17): Voice guidance removed per concept clip-92 —
+                the concept Preferences card lists only 4 rows (Memory GPS /
+                Units / Date format / Haptic). Voice guidance retained in
+                store but no UI toggle until turn-by-turn nav Sprint ships. */}
           </View>
 
           {/* O15 bug 1: Progress moved to right below Profile card
@@ -1007,10 +1195,10 @@ export function SettingsScreen() {
            *  their achievement immediately after their identity. */}
 
           {/* ── O18 SET-05: Notifications ────────────────────────── */}
-          {isLoggedIn && pushPrefs && (
+          {pushPrefs && (
             <>
-              <SectionHeader title="Notifications" />
-              <View style={styles.card}>
+              <SectionHeader title="Notifications" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
+              <View style={[styles.card, cardOverride]}>
                 <ToggleRow
                   iconName="Users"
                   iconColor="#5d7c46"
@@ -1018,8 +1206,8 @@ export function SettingsScreen() {
                   label="Friend requests"
                   hint="When someone wants to add you"
                   value={pushPrefs.friendRequests}
-                  onToggle={() => togglePushPref('friendRequests')}
-                />
+                  onToggle={() => togglePushPref('friendRequests')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
                 <ToggleRow
                   iconName="Flag"
                   iconColor="#c47a00"
@@ -1027,8 +1215,8 @@ export function SettingsScreen() {
                   label="Cairn activity"
                   hint="Replies and reactions on your cairns"
                   value={pushPrefs.markerReplies}
-                  onToggle={() => togglePushPref('markerReplies')}
-                />
+                  onToggle={() => togglePushPref('markerReplies')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
                 <ToggleRow
                   iconName="Mountain"
                   iconColor="#4a6b38"
@@ -1036,8 +1224,8 @@ export function SettingsScreen() {
                   label="Memory highlights"
                   hint="When a friend hikes near a place you've been"
                   value={pushPrefs.memoryHits}
-                  onToggle={() => togglePushPref('memoryHits')}
-                />
+                  onToggle={() => togglePushPref('memoryHits')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
                 <ToggleRow
                   iconName="Info"
                   iconColor="#4a7a8a"
@@ -1045,15 +1233,15 @@ export function SettingsScreen() {
                   label="Announcements"
                   hint="Occasional product updates"
                   value={pushPrefs.announcements}
-                  onToggle={() => togglePushPref('announcements')}
-                />
+                  onToggle={() => togglePushPref('announcements')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
               </View>
             </>
           )}
 
           {/* ── About & Legal ── */}
-          <SectionHeader title="About & Legal" />
-          <View style={styles.card}>
+          <SectionHeader title="About & Legal" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
+          <View style={[styles.card, cardOverride]}>
             <ActionRow
               iconName="Cloud"
               iconColor="#4a7a8a"
@@ -1061,9 +1249,9 @@ export function SettingsScreen() {
               label="Check the weather"
               hint="Opens MetService NZ"
               external
-              onPress={() => Linking.openURL('https://www.metservice.com/rural').catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))}
-            />
-            <View style={styles.divider} />
+              onPress={() => Linking.openURL('https://www.metservice.com/rural').catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+            <View style={[styles.divider, dividerOverride]} />
             {/* O13 bug 5: unified in-app feedback / safety / bug row.
              *  Replaces the 3 separate mailto rows (Report / Feedback /
              *  Debug screenshot). Expands inline; sends via appLog + optional
@@ -1078,8 +1266,8 @@ export function SettingsScreen() {
                 setShowFeedbackInline(v => !v);
                 setFeedbackError('');
                 setFeedbackSent(false);
-              }}
-            />
+              }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
             {showFeedbackInline && (
               <View style={inlineStyles.expand}>
                 {/* Kind chips */}
@@ -1217,7 +1405,7 @@ export function SettingsScreen() {
                 </View>
               </View>
             )}
-            <View style={styles.divider} />
+            <View style={[styles.divider, dividerOverride]} />
             <ActionRow
               iconName="Shield"
               iconColor="#4a6d8a"
@@ -1225,9 +1413,9 @@ export function SettingsScreen() {
               label="Privacy Policy"
               hint="How we handle your data"
               external
-              onPress={() => Linking.openURL(PRIVACY_URL).catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))}
-            />
-            <View style={styles.divider} />
+              onPress={() => Linking.openURL(PRIVACY_URL).catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+            <View style={[styles.divider, dividerOverride]} />
             <ActionRow
               iconName="FileText"
               iconColor="#7a6a4a"
@@ -1235,9 +1423,9 @@ export function SettingsScreen() {
               label="Terms of Service"
               hint="Apple's standard app terms — a Cairn-specific version is coming"
               external
-              onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/').catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))}
-            />
-            <View style={styles.divider} />
+              onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/').catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+            <View style={[styles.divider, dividerOverride]} />
             <ActionRow
               iconName="Info"
               iconColor={Colors.textSecondary}
@@ -1246,130 +1434,132 @@ export function SettingsScreen() {
               value={aboutRowValue}
               onPress={handleAboutTap}
               hideChevron
-            />
+              textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted} />
+            {/* R21 (2026-08-17): Export my data moved into About & Legal
+                per concept clip-92 (all legal/data-management sits together
+                in one card, not a lonely single-row card). */}
+            <View style={[styles.divider, dividerOverride]} />
+            <ActionRow
+              iconName="Download"
+              iconColor={Colors.primary}
+              iconBg={Colors.primaryLight}
+              label="Export my data"
+              hint="We'll email you a JSON bundle with everything on your account"
+              onPress={async () => {
+                Alert.alert(
+                  'Export your data',
+                  'This will build a JSON bundle of your hikes, cairns, memory points, routes, friends, and notifications. We\'ll email you a download link within a few minutes.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Request export',
+                      onPress: async () => {
+                        try {
+                          // eslint-disable-next-line @typescript-eslint/no-require-imports
+                          const { requestDataExport } = require('../services/authService');
+                          const r = await requestDataExport();
+                          if (r.error) {
+                            Alert.alert('Export failed', r.error, [{ text: 'OK' }]);
+                            return;
+                          }
+                          Alert.alert(
+                            'Export requested',
+                            'You\'ll receive an email within a few minutes with a download link. The link is valid for 24 hours.',
+                            [{ text: 'OK' }],
+                          );
+                        } catch {
+                          Alert.alert('Export failed', 'Please try again.', [{ text: 'OK' }]);
+                        }
+                      },
+                    },
+                  ],
+                );
+              }}
+              hideChevron textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
           </View>
 
-          {/* ── O18 batch 6.7 (AUTH-GDPR): Export my data ─── */}
-          {isLoggedIn && (
-            <View style={styles.card}>
-              <ActionRow
-                iconName="Download"
-                iconColor={Colors.primary}
-                iconBg={Colors.primaryLight}
-                label="Export my data"
-                hint="We'll email you a JSON bundle with everything on your account"
-                onPress={async () => {
-                  Alert.alert(
-                    'Export your data',
-                    'This will build a JSON bundle of your hikes, cairns, memory points, routes, friends, and notifications. We\'ll email you a download link within a few minutes.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Request export',
-                        onPress: async () => {
-                          try {
-                            // eslint-disable-next-line @typescript-eslint/no-require-imports
-                            const { requestDataExport } = require('../services/authService');
-                            const r = await requestDataExport();
-                            if (r.error) {
-                              Alert.alert('Export failed', r.error, [{ text: 'OK' }]);
-                              return;
-                            }
-                            Alert.alert(
-                              'Export requested',
-                              'You\'ll receive an email within a few minutes with a download link. The link is valid for 24 hours.',
-                              [{ text: 'OK' }],
-                            );
-                          } catch {
-                            Alert.alert('Export failed', 'Please try again.', [{ text: 'OK' }]);
-                          }
-                        },
-                      },
-                    ],
-                  );
-                }}
-                hideChevron
-              />
-            </View>
-          )}
+          {/* R21: standalone Export card removed — merged into About & Legal above. */}
 
           {/* ── Danger zone (destructive actions grouped) ── */}
-          <SectionHeader title="Danger zone" />
-          <View style={styles.card}>
+          <SectionHeader title="Danger zone" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
+          <View style={[styles.card, cardOverride]}>
             <ActionRow
               label="Reset my map memory"
               hint="Clears every place you have walked. Your hikes and cairns are kept."
               labelColor={Colors.danger}
-              onPress={() => setShowResetMemoryModal(true)}
-            />
-            {isLoggedIn && (
-              <>
-                <View style={styles.dividerFlush} />
-                <ActionRow
-                  label="Delete account"
-                  hint="Permanent — opens confirmation before we email our team"
-                  labelColor={Colors.danger}
-                  onPress={() => setShowDeleteAccountModal(true)}
-                />
-              </>
-            )}
+              onPress={() => setShowResetMemoryModal(true)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+            <View style={[styles.dividerFlush, dividerOverride]} />
+            <ActionRow
+              label="Delete account"
+              hint="Permanent — opens confirmation before we email our team"
+              labelColor={Colors.danger}
+              onPress={() => setShowDeleteAccountModal(true)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
           </View>
 
           {/* ── Account (Sign out — grey, below danger, above footer) ── */}
-          {isLoggedIn && user && (
-            <View style={[styles.card, { marginTop: Spacing.xl }]}>
-              <ActionRow
-                label="Sign out"
-                hint="Your hikes stay saved"
-                labelColor={Colors.textPrimary}
-                onPress={async () => {
-                  // O18 AUTH-09: if a hike is active, warn that data will be
-                  // lost. Users tap Settings mid-hike more often than we'd
-                  // like — a silent sign-out clears the in-flight session.
-                  // eslint-disable-next-line @typescript-eslint/no-require-imports
-                  const { useTrackingStore } = require('../store/useTrackingStore');
-                  const trackingStatus = useTrackingStore.getState().status;
-                  if (trackingStatus === 'tracking' || trackingStatus === 'paused') {
-                    const proceed = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function'
-                      ? window.confirm("You're in the middle of a hike. Signing out will discard the current recording. Continue?")
-                      : await new Promise<boolean>((resolve) =>
-                          Alert.alert(
-                            'Sign out mid-hike?',
-                            "You're recording a hike right now. Signing out will discard this session. Save or stop first if you want to keep it.",
-                            [
-                              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-                              { text: 'Sign out anyway', style: 'destructive', onPress: () => resolve(true) },
-                            ],
-                          )
-                        );
-                    if (!proceed) return;
-                  }
-                  const confirmed = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function'
-                    ? window.confirm('Your hikes stay saved. You can sign back in anytime.')
+          {/* 2026-08-17 R21: unwrapped {user && ...} — RootNavigator gate
+              (isLoggedIn && user) already ensures user is non-null here.
+              Kept as bare View for reader clarity, matching Profile card. */}
+          <View style={[styles.card, cardOverride, { marginTop: Spacing.xl }]}>
+            <ActionRow
+              label="Sign out"
+              hint="Your hikes stay saved"
+              onPress={async () => {
+                // O18 AUTH-09: if a hike is active, warn that data will be
+                // lost. Users tap Settings mid-hike more often than we'd
+                // like — a silent sign-out clears the in-flight session.
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const { useTrackingStore } = require('../store/useTrackingStore');
+                const trackingStatus = useTrackingStore.getState().status;
+                if (trackingStatus === 'tracking' || trackingStatus === 'paused') {
+                  const proceed = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function'
+                    ? window.confirm("You're in the middle of a hike. Signing out will discard the current recording. Continue?")
                     : await new Promise<boolean>((resolve) =>
-                        Alert.alert('Sign out', 'Your hikes stay saved. You can sign back in anytime.', [
-                          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-                          { text: 'Sign out', style: 'destructive', onPress: () => resolve(true) },
-                        ])
+                        Alert.alert(
+                          'Sign out mid-hike?',
+                          "You're recording a hike right now. Signing out will discard this session. Save or stop first if you want to keep it.",
+                          [
+                            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                            { text: 'Sign out anyway', style: 'destructive', onPress: () => resolve(true) },
+                          ],
+                        )
                       );
-                  if (!confirmed) return;
-                  crashLogger.breadcrumb('signout:confirmed');
-                  try { await logout(); crashLogger.breadcrumb('signout:token_cleared'); }
-                  catch { crashLogger.breadcrumb('signout:token_clear_failed'); }
-                  crashLogger.breadcrumb('signout:before_appLogout');
-                  try { await storage.removeItem('cairn_remember_me'); } catch { /* swallow */ }
-                  appLogout();
-                  crashLogger.breadcrumb('signout:after_appLogout');
-                }}
-              />
-            </View>
-          )}
+                  if (!proceed) return;
+                }
+                const confirmed = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function'
+                  ? window.confirm('Your hikes stay saved. You can sign back in anytime.')
+                  : await new Promise<boolean>((resolve) =>
+                      Alert.alert('Sign out', 'Your hikes stay saved. You can sign back in anytime.', [
+                        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                        { text: 'Sign out', style: 'destructive', onPress: () => resolve(true) },
+                      ])
+                    );
+                if (!confirmed) return;
+                crashLogger.breadcrumb('signout:confirmed');
+                try { await logout(); crashLogger.breadcrumb('signout:token_cleared'); }
+                catch { crashLogger.breadcrumb('signout:token_clear_failed'); }
+                crashLogger.breadcrumb('signout:before_appLogout');
+                // R21 (2026-08-17): remember-me credentials are NOT cleared
+                // on sign out — that's user preference, they want their
+                // email/password auto-filled next time. Previously the
+                // legacy AsyncStorage removeItem was a no-op (real data
+                // in SecureStore) but even if it worked, clearing would
+                // defeat the purpose of remember-me. User must uncheck
+                // "Remember me on this device" during sign-in to clear.
+                appLogout();
+                crashLogger.breadcrumb('signout:after_appLogout');
+              }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+          </View>
 
           {/* ── Developer (hidden — unlocked via 5-tap on About Cairn) ── */}
           {debugMode && (
             <>
-              <SectionHeader title="Developer" />
-              <View style={styles.card}>
+              <SectionHeader title="Developer" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
+              <View style={[styles.card, cardOverride]}>
                 <ToggleRow
                   iconName="Wrench"
                   iconColor={Colors.primary}
@@ -1377,17 +1567,17 @@ export function SettingsScreen() {
                   label="Debug mode"
                   hint="Enables sim-walker + verbose telemetry"
                   value={debugMode}
-                  onToggle={() => updateSetting('debugMode', !debugMode)}
-                />
-                <View style={styles.divider} />
+                  onToggle={() => updateSetting('debugMode', !debugMode)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+                <View style={[styles.divider, dividerOverride]} />
                 <ActionRow
                   iconName="Settings2"
                   iconColor={Colors.textSecondary}
                   iconBg="#f0ede4"
                   label="Open Debug screen"
-                  onPress={() => nav.navigate('Debug' as never)}
-                />
-                <View style={styles.divider} />
+                  onPress={() => nav.navigate('Debug' as never)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+                <View style={[styles.divider, dividerOverride]} />
                 <ToggleRow
                   iconName="Navigation2"
                   iconColor={Colors.primary}
@@ -1395,8 +1585,72 @@ export function SettingsScreen() {
                   label="Sim walker (fake GPS)"
                   hint="Off on next app launch"
                   value={simWalkerActive}
-                  onToggle={() => setSimWalkerActive(!simWalkerActive)}
-                />
+                  onToggle={() => setSimWalkerActive(!simWalkerActive)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+                <View style={[styles.divider, dividerOverride]} />
+                {/* ── Location override for weather testing ── */}
+                <View style={{ paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm, gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={[rowStyles.iconWrap, { backgroundColor: '#e8f0fb' }]}>
+                      <Icon name="MapPin" size={16} color="#3b7dd8" strokeWidth={1.8} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: FontSize.body, color: Colors.textPrimary, fontWeight: '600' }}>
+                        Location override
+                      </Text>
+                      <Text style={{ fontSize: FontSize.caption, color: Colors.textSecondary, marginTop: 1 }}>
+                        {weatherOverride
+                          ? `${weatherOverride.label} · ${weatherCondition}${weatherTemp != null ? ` · ${weatherTemp}°C` : ''}`
+                          : `Real GPS · ${weatherCondition}${weatherTemp != null ? ` · ${weatherTemp}°C` : ''}`}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
+                    {NZ_TEST_CITIES.map((city) => {
+                      const active = weatherOverride?.label === city.label;
+                      return (
+                        <TouchableOpacity
+                          key={city.label}
+                          onPress={() => {
+                            haptic('light');
+                            setLocationOverride(active ? null : city);
+                          }}
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 20,
+                            backgroundColor: active ? Colors.primary : '#e8e4dc',
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={active ? `Clear ${city.label} override` : `Set location to ${city.label}`}
+                        >
+                          <Text style={{
+                            fontSize: 12,
+                            fontWeight: '600',
+                            color: active ? '#fff' : Colors.textSecondary,
+                          }}>
+                            {city.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {weatherOverride && (
+                      <TouchableOpacity
+                        onPress={() => { haptic('light'); setLocationOverride(null); }}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 20,
+                          backgroundColor: '#fde8e8',
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Clear location override"
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#c0392b' }}>Clear</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
               </View>
               <Text style={styles.devNote}>
                 Only for development and QA.
@@ -1405,7 +1659,7 @@ export function SettingsScreen() {
           )}
 
           {/* ── Footer ── */}
-          <Text style={styles.footer}>Thanks for using Cairn.</Text>
+          <Text style={[styles.footer, footerOverride]}>Thanks for using Cairn.</Text>
 
         </ScrollView>
       </SafeAreaView>
@@ -1551,46 +1805,146 @@ export function SettingsScreen() {
           }
         }}
       />
+
+      {/* R21 (2026-08-17): Exploration % demo modal — shown when user
+          turns OFF the "Show exploration %" toggle. Explains the feature
+          they're about to hide, since first-time users have basically 0%
+          explored and would never have seen it in action. */}
+      <Modal
+        visible={showExplorationDemo}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExplorationDemo(false)}
+      >
+        <Pressable
+          style={demoStyles.backdrop}
+          onPress={() => setShowExplorationDemo(false)}
+        >
+          <Pressable style={demoStyles.card} onPress={(e) => e.stopPropagation()}>
+            <Text style={demoStyles.title}>Before you hide it</Text>
+            <Text style={demoStyles.body}>
+              On Home, a small swap icon lets you flip between km² and % of your country explored.
+            </Text>
+
+            {/* Preview mini illustration — two rows, showing what it looks like on Home */}
+            <View style={demoStyles.previewCard}>
+              <View style={demoStyles.previewRow}>
+                <Text style={demoStyles.previewValue}>2.4</Text>
+                <Text style={demoStyles.previewUnit}>km²</Text>
+                <View style={demoStyles.previewSwap}>
+                  <Icon name="ArrowLeftRight" size={12} color="#6b7280" strokeWidth={2} />
+                </View>
+              </View>
+              <Text style={demoStyles.previewCaption}>of your world</Text>
+
+              <View style={demoStyles.previewDivider} />
+
+              <View style={demoStyles.previewRow}>
+                <Text style={demoStyles.previewValue}>0.01</Text>
+                <Text style={demoStyles.previewUnit}>%</Text>
+                <View style={demoStyles.previewSwap}>
+                  <Icon name="ArrowLeftRight" size={12} color="#6b7280" strokeWidth={2} />
+                </View>
+              </View>
+              <Text style={demoStyles.previewCaption}>of New Zealand</Text>
+            </View>
+
+            <Text style={demoStyles.hint}>
+              Some people find % motivating. Others find it stressful — the number stays tiny for a long time. Your call.
+            </Text>
+
+            <View style={demoStyles.buttonRow}>
+              <TouchableOpacity
+                style={demoStyles.keepBtn}
+                onPress={() => {
+                  setShowExplorationDemo(false);
+                  haptic.notification('success');
+                }}
+              >
+                <Text style={demoStyles.keepBtnText}>Keep it on</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={demoStyles.hideBtn}
+                onPress={() => {
+                  updateSetting('showExplorationPercent', false);
+                  setShowExplorationDemo(false);
+                  haptic.notification('success');
+                }}
+              >
+                <Text style={demoStyles.hideBtnText}>Hide it anyway</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  // clip-92 concept alignment (2026-08-16): container is transparent so the
+  // landscape ImageBackground behind it can show through. The cream veil
+  // (bgVeil) softens the photograph so cards stay readable.
+  container: { flex: 1, backgroundColor: 'transparent' },
+
+  // Warm paper veil over the landscape — R21 (2026-08-17): reduced 0.72 → 0.55
+  // so the scrolling landscape reads more clearly. Cards stay readable
+  // because they are pure white on top, not translucent.
+  bgVeil: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(244,239,230,0.55)',
+  },
 
   topBar: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: Spacing.sm,
-    backgroundColor: Colors.bg,
+    backgroundColor: 'transparent',
   },
   topBarSpacer: { width: 40 }, // balance BackButton for centred title
   topTitle: {
     flex: 1, textAlign: 'center',
-    fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary,
+    fontSize: FontSize.h2, fontWeight: '700', color: Colors.textPrimary,
   },
 
-  scroll: { paddingBottom: Spacing.xxl },
+  // clip-92 concept alignment: quiet subtitle under the title.
+  subtitle: {
+    fontSize: FontSize.small,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginHorizontal: Spacing.base,
+    marginTop: -Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+
+  // R21 (2026-08-17): paddingBottom bumped 32 → 160 so Danger zone /
+  // Sign out / Footer clear the tab bar + home indicator on iPhone. User
+  // reported "只能看到 Reset memory 后面就没了" — root cause was insufficient
+  // scroll padding letting the bottom rows sit under the tab bar.
+  scroll: { paddingBottom: Spacing.xxl * 5 },
 
   sectionHeader: {
     // R114/O24 (2026-08-12): removed uppercase per user rule — every page's
     // titles should be sentence case, not shouted caps. Bumped weight and
     // color slightly so the header still reads as a header without caps.
-    fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary,
+    fontSize: FontSize.caption, fontWeight: '600', color: Colors.textSecondary,
     letterSpacing: 0.2,
-    marginHorizontal: Spacing.base, marginTop: Spacing.xl, marginBottom: 4,
+    marginHorizontal: Spacing.base, marginTop: Spacing.xl, marginBottom: Spacing.sm,
   },
 
+  // Concept alignment (2026-08-16): match Settings-2 fullpage — pure white
+  // cards, 20px radius, no visible border, softer shadow. Cards float on the
+  // cream paper bg so any translucent tint muddied the contrast.
   card: {
-    backgroundColor: 'rgba(255,255,255,0.92)', marginHorizontal: Spacing.base,
-    borderRadius: Radius.card, overflow: 'hidden',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
+    backgroundColor: '#ffffff', marginHorizontal: Spacing.base,
+    borderRadius: 20, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
   },
   // Default divider: skip the icon column so it visually starts under the
   // label. Rows without an icon should use `dividerFlush` to avoid an
   // unnaturally-inset line hanging in whitespace.
-  divider: { height: 1, backgroundColor: Colors.border, marginLeft: 52 },
+  divider: { height: 1, backgroundColor: Colors.border, marginLeft: 64 },
   dividerFlush: { height: 1, backgroundColor: Colors.border, marginHorizontal: Spacing.base },
 
   footer: {
@@ -1613,7 +1967,7 @@ const rowStyles = StyleSheet.create({
     minHeight: 64,
   },
   iconWrap: {
-    width: 32, height: 32, borderRadius: 8,
+    width: 36, height: 36, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
     marginRight: Spacing.md,
   },
@@ -1634,17 +1988,19 @@ const profileStyles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: Spacing.base, paddingVertical: Spacing.md,
   },
+  // Concept alignment (2026-08-16): avatar chip = muted sage disk, dark
+  // ink letter. Matches Settings-1/2 hero shot exactly.
   avatar: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: Colors.primaryLight,
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: '#d9dfc9',
     alignItems: 'center', justifyContent: 'center',
     marginRight: Spacing.md,
   },
   avatarText: {
-    fontSize: FontSize.h3, fontWeight: '700', color: Colors.primary,
+    fontSize: FontSize.h3, fontWeight: '700', color: '#4a5d3a',
   },
   name: {
-    fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary,
+    fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary,
   },
   email: {
     fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2,
@@ -1711,9 +2067,9 @@ const inlineStyles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     // Match ActionRow.paddingHorizontal = Spacing.base and add a
     // 52px leading indent so the row starts at the same x-position
-    // as the parent ActionRow's label (skipping the 32px icon +
-    // 16px marginRight + Spacing.base padding).
-    paddingLeft: Spacing.base + 32 + Spacing.md,
+    // as the parent ActionRow's label (skipping the 36px icon +
+    // 12px marginRight + Spacing.base padding).
+    paddingLeft: Spacing.base + 36 + Spacing.md,
     paddingRight: Spacing.base,
     paddingVertical: 12,
     minHeight: 48,
@@ -1860,40 +2216,42 @@ const helpStyles = StyleSheet.create({
   },
 });
 
-// O13 bug 4: badge cards for "Your progress" (Memory achievement style).
+// Concept alignment (2026-08-16): "Your progress" — bigger flat cards on
+// white, larger number, softer icon badges. Removed border to match concept.
 const badgeStyles = StyleSheet.create({
   row: {
-    flexDirection: 'row', gap: Spacing.sm,
+    flexDirection: 'row', gap: Spacing.md,
     paddingHorizontal: Spacing.base,
   },
   card: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.card,
-    paddingVertical: Spacing.md,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    paddingVertical: Spacing.lg,
     paddingHorizontal: Spacing.md,
     alignItems: 'center',
-    borderWidth: 1, borderColor: Colors.border,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
   },
   iconBadge: {
-    width: 44, height: 44, borderRadius: 22,
+    width: 48, height: 48, borderRadius: 24,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   value: {
-    fontSize: 24, fontWeight: '700', color: Colors.textPrimary,
+    fontSize: 32, fontWeight: '800', color: Colors.textPrimary,
     fontVariant: ['tabular-nums'],
+    letterSpacing: -0.5,
   },
   label: {
-    fontSize: FontSize.small, color: Colors.textSecondary,
-    marginTop: 2,
+    fontSize: FontSize.caption, color: Colors.textSecondary,
+    marginTop: 4,
     textAlign: 'center',
   },
 });
 
 // O24 SETTINGS-JOURNEY: stats chips inside the Your journey card.
-// Visual echo of the old Home stats row but sits inside a card so it
-// reads as a Settings block, not a floating strip.
+// Concept alignment (2026-08-16): chips sit on white card, softer cream fill
+// with subtle warm border — matches Settings-2 exact.
 const journeyStyles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
@@ -1903,13 +2261,13 @@ const journeyStyles = StyleSheet.create({
   },
   statChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: '#faf7f0',
     borderRadius: Radius.pill,
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderWidth: 1, borderColor: '#ece6de',
   },
   statText: {
-    fontSize: FontSize.small,
+    fontSize: FontSize.caption,
     fontWeight: '600',
     color: Colors.textSecondary,
   },
@@ -2002,6 +2360,125 @@ const toastStyles = StyleSheet.create({
   text: {
     color: '#fff',
     fontSize: FontSize.small,
+    fontWeight: '600',
+  },
+});
+
+// R21 (2026-08-17): Exploration % demo modal styles.
+const demoStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 18,
+    width: '100%',
+    maxWidth: 340,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#21362C',
+    marginBottom: 8,
+    letterSpacing: -0.2,
+  },
+  body: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#4a5560',
+    marginBottom: 14,
+  },
+  previewCard: {
+    backgroundColor: '#f5f2ea',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  previewValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#21362C',
+    letterSpacing: -0.5,
+  },
+  previewUnit: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4a5560',
+  },
+  previewSwap: {
+    marginLeft: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(107,114,128,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+  },
+  previewCaption: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  previewDivider: {
+    height: 1,
+    backgroundColor: 'rgba(107,114,128,0.15)',
+    marginVertical: 10,
+  },
+  hint: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#6b7280',
+    marginBottom: 16,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  keepBtn: {
+    flex: 1,
+    backgroundColor: '#21362C',
+    borderRadius: 14,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keepBtnText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  hideBtn: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderRadius: 14,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(33,54,44,0.2)',
+  },
+  hideBtnText: {
+    color: '#21362C',
+    fontSize: 15,
     fontWeight: '600',
   },
 });
