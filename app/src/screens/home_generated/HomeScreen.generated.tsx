@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { styles } from './styles';
 import { Icon } from '../../components/Icon';
 import type { HomeBackgroundTokens } from '../../utils/homeBackground';
+import { useAppearance } from '../../hooks/useAppearance';
 
 // Auto-generated from Home.spec.json  viewport 375x812
 // States: H0, H1
@@ -59,6 +60,12 @@ export function HomeScreen(props: {
   const tabBorder = tokens?.tabBarBorderColor;
   const tabText = tokens?.tabBarTextColor;
 
+  // R21 (2026-08-17): day/night action icon variants. Night = gold, Day = dark green.
+  const { isDark } = useAppearance();
+  const hikingIcon  = isDark ? require('../../../assets/home/action-hiking-night.png')     : require('../../../assets/home/action-hiking-day.png');
+  const runningIcon = isDark ? require('../../../assets/home/action-running-night.png')    : require('../../../assets/home/action-running-day.png');
+  const cairnIcon   = isDark ? require('../../../assets/home/action-leave-cairn-night.png'): require('../../../assets/home/action-leave-cairn-day.png');
+
   // Override helpers — flatten spread so we only override the changing color
   // props, keeping every position/size value from styles.ts intact.
   const heroBigTextOverride = { color: textColor, textShadowColor };
@@ -93,15 +100,15 @@ export function HomeScreen(props: {
           <Text style={[styles.shared__greeting_name, heroBigTextOverride]}>{greetingName}</Text>
           <View style={styles.shared__action_row}>
             <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={() => nav.navigate('Hiking' as never)} activeOpacity={0.85}>
-              <Image source={require('../../../assets/home/action-hiking.png')} style={styles.shared__action_row__action_hiking__icon} resizeMode="contain" />
+              <Image source={hikingIcon} style={styles.shared__action_row__action_hiking__icon} resizeMode="contain" />
               <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{'Hiking'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={() => nav.navigate('Running' as never)} activeOpacity={0.85}>
-              <Image source={require('../../../assets/home/action-running.png')} style={styles.shared__action_row__action_running__icon} resizeMode="contain" />
+              <Image source={runningIcon} style={styles.shared__action_row__action_running__icon} resizeMode="contain" />
               <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{'Running'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={() => nav.navigate('Plant' as never)} activeOpacity={0.85}>
-              <Image source={require('../../../assets/home/action-leave-cairn.png')} style={styles.shared__action_row__action_leave_cairn__icon} resizeMode="contain" />
+              <Image source={cairnIcon} style={styles.shared__action_row__action_leave_cairn__icon} resizeMode="contain" />
               <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{'Leave a Cairn'}</Text>
             </TouchableOpacity>
           </View>
@@ -141,15 +148,15 @@ export function HomeScreen(props: {
           <Text style={[styles.shared__greeting_name, heroBigTextOverride]}>{greetingName}</Text>
           <View style={styles.shared__action_row}>
             <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={() => nav.navigate('Hiking' as never)} activeOpacity={0.85}>
-              <Image source={require('../../../assets/home/action-hiking.png')} style={styles.shared__action_row__action_hiking__icon} resizeMode="contain" />
+              <Image source={hikingIcon} style={styles.shared__action_row__action_hiking__icon} resizeMode="contain" />
               <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{'Hiking'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={() => nav.navigate('Running' as never)} activeOpacity={0.85}>
-              <Image source={require('../../../assets/home/action-running.png')} style={styles.shared__action_row__action_running__icon} resizeMode="contain" />
+              <Image source={runningIcon} style={styles.shared__action_row__action_running__icon} resizeMode="contain" />
               <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{'Running'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={() => nav.navigate('Plant' as never)} activeOpacity={0.85}>
-              <Image source={require('../../../assets/home/action-leave-cairn.png')} style={styles.shared__action_row__action_leave_cairn__icon} resizeMode="contain" />
+              <Image source={cairnIcon} style={styles.shared__action_row__action_leave_cairn__icon} resizeMode="contain" />
               <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{'Leave a Cairn'}</Text>
             </TouchableOpacity>
           </View>
