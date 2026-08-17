@@ -30,6 +30,10 @@ export function HomeScreen(props: {
   onToggleUnit?: () => void;
   bgAsset?: any;
   bgTokens?: HomeBackgroundTokens;
+  /** R21 (2026-08-17): explicit day/night from wrapper — takes precedence
+   *  over useAppearance so the DEV Day/Night toggle (which only sets
+   *  dayNightOverride, NOT appearance) also flips the action icons. */
+  forcedIsDark?: boolean;
 } = {}) {
   const nav = useNavigation<any>();
   const state = props.state ?? 'H0';
@@ -60,8 +64,10 @@ export function HomeScreen(props: {
   const tabBorder = tokens?.tabBarBorderColor;
   const tabText = tokens?.tabBarTextColor;
 
-  // R21 (2026-08-17): day/night action icon variants. Night = gold, Day = dark green.
-  const { isDark } = useAppearance();
+  // R21 (2026-08-17): day/night action icon variants. Dark green = day, Gold = night.
+  // Wrapper passes forcedIsDark so DEV Day/Night toggle stays in sync with icons.
+  const { isDark: appearanceIsDark } = useAppearance();
+  const isDark = props.forcedIsDark ?? appearanceIsDark;
   const hikingIcon  = isDark ? require('../../../assets/home/action-hiking-night.png')     : require('../../../assets/home/action-hiking-day.png');
   const runningIcon = isDark ? require('../../../assets/home/action-running-night.png')    : require('../../../assets/home/action-running-day.png');
   const cairnIcon   = isDark ? require('../../../assets/home/action-leave-cairn-night.png'): require('../../../assets/home/action-leave-cairn-day.png');
