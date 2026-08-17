@@ -324,7 +324,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Hiking H2 tray auto-expand + collapse on entry, Trails list visual rework
 // (Activities/Routes/Cairns), Route Detail time stat, Show-exploration-%
 // preference with demo, Routes/Plant/Memory dark bg support.
-export const OTA_VERSION = 'O30';
+export const OTA_VERSION = 'O31';
 
 
 type OtaState =

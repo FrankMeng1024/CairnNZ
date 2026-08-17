@@ -17,6 +17,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { getCurrentRegion } from '../config/regions';
 import { getMapStyleForLayer, getPrimaryMapStyle } from '../config/mapbox';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { useAppearance } from '../hooks/useAppearance';
 import { haversineM } from '../utils/geo';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { MARKER_META } from '../data/mockData';
@@ -101,6 +102,7 @@ export function HikingMap({
   const region = getCurrentRegion();
   // O18 MAP-01: react to user's saved map layer preference (outdoors / satellite).
   const mapLayer = useSettingsStore((s) => s.mapLayer);
+  const { isDark: appearanceIsDark } = useAppearance();
 
   // R114/O22 (2026-08-08) Bug 4: watch network state. When offline, Mapbox
   // tiles fail to fetch → map renders black/white. Overlay a friendly
@@ -345,7 +347,7 @@ export function HikingMap({
       <MapView
         ref={mapViewRef}
         style={StyleSheet.absoluteFillObject}
-        styleURL={getMapStyleForLayer(mapLayer)}
+        styleURL={getMapStyleForLayer(mapLayer, appearanceIsDark)}
         logoEnabled={false}
         attributionEnabled={false}
         // Mapbox's built-in compass is hidden — we draw our own as a

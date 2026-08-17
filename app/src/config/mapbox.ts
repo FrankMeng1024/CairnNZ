@@ -116,7 +116,11 @@ export function getPrimaryMapStyle(): string {
  */
 export type MapLayer = 'outdoors' | 'satellite';
 
-export function getMapStyleForLayer(layer: MapLayer): string {
+export function getMapStyleForLayer(layer: MapLayer, isDark?: boolean): string {
   if (layer === 'satellite') return MAP_STYLES.satellite;
+  // R21 (2026-08-17): dark mode support. When user Appearance = Dark (or
+  // Auto at night), switch outdoors/streets style to Mapbox's official
+  // dark-v11 so map surfaces match the rest of the app's dark theme.
+  if (isDark) return MAP_STYLES.dark;
   return getPrimaryMapStyle();
 }

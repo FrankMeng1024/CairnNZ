@@ -112,14 +112,33 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ [key]: value } as Partial<Settings>);
     const next = { ...get(), [key]: value };
     storage.setItem(STORAGE_KEY, JSON.stringify(pick(next)));
-    if (key === 'debugMode') debugLogger.setEnabled(Boolean(value));
+    if (key === 'debugMode') {
+      debugLogger.setEnabled(Boolean(value));
+      // R21 (2026-08-17 user "开了debug模式 自动开启虚拟摇杆和homepage的relocation"):
+      // debugMode is the single source of truth for dev tooling — flipping
+      // it on/off auto-toggles Sim walker so the user doesn't hunt for a
+      // separate switch. Sim walker store is lazy-required so this module
+      // stays free of a hard dev dependency in production builds.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useSimWalkerStore } = require('../dev/simWalker/useSimWalkerStore');
+        useSimWalkerStore.getState().setActive(Boolean(value));
+      } catch { /* silent — sim walker module missing in some builds */ }
+    }
   },
 
   saveAll: (patch) => {
     set(patch);
     const next = { ...get(), ...patch };
     storage.setItem(STORAGE_KEY, JSON.stringify(pick(next)));
-    if (patch.debugMode !== undefined) debugLogger.setEnabled(Boolean(patch.debugMode));
+    if (patch.debugMode !== undefined) {
+      debugLogger.setEnabled(Boolean(patch.debugMode));
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useSimWalkerStore } = require('../dev/simWalker/useSimWalkerStore');
+        useSimWalkerStore.getState().setActive(Boolean(patch.debugMode));
+      } catch { /* silent */ }
+    }
   },
 
   hydrate: async () => {

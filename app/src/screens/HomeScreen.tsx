@@ -84,6 +84,10 @@ export function HomeScreen() {
   // R21 (2026-08-17 user "在settings里添加一个 可以隐藏首页的探索百分比的设置"):
   // when Settings toggle is off, hide the % swap icon and force km² display.
   const showExplorationPercent = useSettingsStore(s => s.showExplorationPercent);
+  // R21 (2026-08-17 user "debug模式开启的时候展示出来"): gate the top-right
+  // DEV cycler on debugMode instead of __DEV__ so it appears on production
+  // builds after 5-tap Settings unlock.
+  const debugMode = useSettingsStore(s => s.debugMode);
 
   const validSessions = useMemo(
     () => sessions.filter((s: any) => (s.distanceM > 0 || s.durationS > 0) && s.startedAt),
@@ -274,7 +278,11 @@ export function HomeScreen() {
           />
           {/* DEV-only weather cycler — top-right circular button.
               TODO: LAUNCH_GATE — remove this block before App Store. */}
-          {__DEV__ && (
+          {/* R21 (2026-08-17 user "homepage右上角有一个dev...debug模式开启的时候展示出来"):
+              gate DEV menu on Settings debugMode (unlocked via 5-tap on
+              About Cairn) instead of __DEV__. Ships on production builds
+              but hidden until user opts in via Settings. */}
+          {debugMode && (
             <View style={{ position: 'absolute', right: 20, top: 56 }}>
               <TouchableOpacity
                 onPress={() => setDevMenuOpen(v => !v)}

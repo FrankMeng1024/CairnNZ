@@ -46,6 +46,7 @@ import { PulseDot } from '../components/PulseDot';
 import { PressBtn } from '../components/PressBtn';
 import { HikingMap } from './HikingMap';
 import { TooShortSheet } from '../components/TooShortSheet';
+import { useAppearance } from '../hooks/useAppearance';
 import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
 import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
 // v429 hotfix: SimWalkerOverlay static import removed to prevent gpsInjector
@@ -75,6 +76,13 @@ export function HikingScreen() {
   const isFocused = useIsFocused();
   // O12: uiMode/isExpert removed — was dead double-switch (only 'brg' placeholder used it)
   const insets = useSafeAreaInsets();
+  // R21 (2026-08-17 user "确保hike界面根据系统主题色 切换 白天和黑夜"):
+  // read Appearance. When isDark, gpsChip/actions/stats surface swap to
+  // deep slate. Mapbox styleURL also switches via HikingMap → dark-v11.
+  const { isDark: hikeIsDark } = useAppearance();
+  const hikeChipBg = hikeIsDark ? 'rgba(15,22,38,0.72)' : 'rgba(255,255,255,0.65)';
+  const hikeChipBorder = hikeIsDark ? 'rgba(220,230,240,0.15)' : 'rgba(255,255,255,0.4)';
+  const hikeChipText = hikeIsDark ? '#E5EAF0' : Colors.textPrimary;
 
   // Real tracking store
   const status = useTrackingStore(s => s.status);
@@ -1131,18 +1139,18 @@ export function HikingScreen() {
         <View style={[styles.topOverlay, { paddingTop: insets.top + Spacing.lg }]} pointerEvents="box-none">
           <View style={styles.topRow}>
             <BackButton variant="inline" onPress={() => nav.goBack()} />
-            <View style={[styles.gpsChip, styles.gpsChipAmber]}>
+            <View style={[styles.gpsChip, styles.gpsChipAmber, hikeIsDark ? { backgroundColor: hikeChipBg, borderColor: hikeChipBorder } : null]}>
               <View style={[styles.gpsDot, { backgroundColor: Colors.severityWarning }]} />
-              <Text style={[styles.gpsText, styles.gpsTextAmber]}>Enable GPS</Text>
+              <Text style={[styles.gpsText, styles.gpsTextAmber, hikeIsDark ? { color: hikeChipText } : null]}>Enable GPS</Text>
             </View>
           </View>
           <View style={styles.statsStrip} pointerEvents="none">
-            <Text style={styles.statsStripKm}>{distDisplay} {dist.unit}</Text>
-            <Text style={styles.statsStripTime}>{durationDisplay}</Text>
-            <Text style={styles.statsStripElev}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
+            <Text style={[styles.statsStripKm, hikeIsDark ? { color: hikeChipText } : null]}>{distDisplay} {dist.unit}</Text>
+            <Text style={[styles.statsStripTime, hikeIsDark ? { color: hikeChipText } : null]}>{durationDisplay}</Text>
+            <Text style={[styles.statsStripElev, hikeIsDark ? { color: hikeChipText } : null]}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
             <View style={styles.statsStripGpsWrap}>
               <View style={[styles.statsStripGpsDot, { backgroundColor: hasLocationPermission === false ? Colors.severityWarning : Colors.primary }]} />
-              <Text style={styles.statsStripGpsText}>GPS</Text>
+              <Text style={[styles.statsStripGpsText, hikeIsDark ? { color: hikeChipText } : null]}>GPS</Text>
             </View>
           </View>
         </View>
@@ -1329,6 +1337,7 @@ export function HikingScreen() {
           <BackButton variant="inline" onPress={() => nav.goBack()} />
           <View style={[
             styles.gpsChip,
+            hikeIsDark ? { backgroundColor: hikeChipBg, borderColor: hikeChipBorder } : null,
             status === 'idle' ? styles.gpsChipAmber : (!locationAvailable && styles.gpsChipOffline),
           ]}>
             <PulseDot
@@ -1351,12 +1360,12 @@ export function HikingScreen() {
 
         {/* Concept stats strip — always visible while on Hiking. */}
         <View style={styles.statsStrip} pointerEvents="none">
-          <Text style={styles.statsStripKm}>{distDisplay} {dist.unit}</Text>
-          <Text style={styles.statsStripTime}>{durationDisplay}</Text>
-          <Text style={styles.statsStripElev}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
+          <Text style={[styles.statsStripKm, hikeIsDark ? { color: hikeChipText } : null]}>{distDisplay} {dist.unit}</Text>
+          <Text style={[styles.statsStripTime, hikeIsDark ? { color: hikeChipText } : null]}>{durationDisplay}</Text>
+          <Text style={[styles.statsStripElev, hikeIsDark ? { color: hikeChipText } : null]}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
           <View style={styles.statsStripGpsWrap}>
             <View style={[styles.statsStripGpsDot, { backgroundColor: locationAvailable ? Colors.primary : Colors.severityWarning }]} />
-            <Text style={styles.statsStripGpsText}>GPS</Text>
+            <Text style={[styles.statsStripGpsText, hikeIsDark ? { color: hikeChipText } : null]}>GPS</Text>
           </View>
         </View>
 
