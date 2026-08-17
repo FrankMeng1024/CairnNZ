@@ -137,21 +137,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md, paddingVertical: 7,
   },
   pillText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.primary },
-  // R21 v4 (2026-08-17 user "任何页面同一个功能都应该一模一样"): the
-  // inline back is now the single app-wide back affordance — matches Auth
-  // exactly (no background, deep-green ChevronLeft + "Back" text, 8pt
-  // vertical padding, alignSelf flex-start). On map overlays a light text
-  // shadow keeps it readable; on paper backgrounds the shadow is invisible.
+  // R21 v5 (2026-08-18 user "上方back是虚化的"): removed the white text
+  // shadow — user reported the "Back" label looked blurred/frosted on
+  // map overlays. Clean bold deep-green on a subtle capsule reads as
+  // sharper. On paper bg the capsule is nearly invisible; on maps it
+  // gives just enough separation to read.
   inline: {
     flexDirection: 'row', alignItems: 'center', gap: 2,
     alignSelf: 'flex-start',
-    paddingVertical: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.55)',
   },
   inlineText: {
     fontSize: FontSize.caption, fontWeight: '600', color: Colors.primary,
-    textShadowColor: 'rgba(255,255,255,0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
   // R114 (2026-08-07): ghostRound variant styles.
   ghostRoundShadow: {

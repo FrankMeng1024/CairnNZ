@@ -335,6 +335,21 @@ function AppRoot() {
       hydrateSettings().catch((err: unknown) => {
         // eslint-disable-next-line no-console
         console.warn('[hydrateSettings failed]', err);
+      }).then(() => {
+        // R21 (2026-08-18 user "关app再进就没虚拟摇杆了"): if debugMode is
+        // on after hydrate, auto-enable Sim walker so the DEV workflow
+        // survives cold restarts. Fixes prior behaviour where sim walker
+        // only turned on when the toggle was flipped in Settings.
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { useSettingsStore: sset } = require('./src/store/useSettingsStore');
+          const isDebug = sset.getState().debugMode;
+          if (isDebug) {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { useSimWalkerStore } = require('./src/dev/simWalker/useSimWalkerStore');
+            useSimWalkerStore.getState().setActive(true);
+          }
+        } catch { /* silent */ }
       });
       markBootPhase('ue_main_after_hydrate_settings');
     } catch (err) {

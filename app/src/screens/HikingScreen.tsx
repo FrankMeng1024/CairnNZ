@@ -1139,12 +1139,8 @@ export function HikingScreen() {
         <View style={[styles.topOverlay, { paddingTop: insets.top + Spacing.lg }]} pointerEvents="box-none">
           <View style={styles.topRow}>
             <BackButton variant="inline" onPress={() => nav.goBack()} />
-            <View style={[styles.gpsChip, styles.gpsChipAmber, hikeIsDark ? { backgroundColor: hikeChipBg, borderColor: hikeChipBorder } : null]}>
-              <View style={[styles.gpsDot, { backgroundColor: Colors.severityWarning }]} />
-              <Text style={[styles.gpsText, styles.gpsTextAmber, hikeIsDark ? { color: hikeChipText } : null]}>Enable GPS</Text>
-            </View>
           </View>
-          <View style={styles.statsStrip} pointerEvents="none">
+          <View style={[styles.statsStrip, hikeIsDark ? { backgroundColor: "rgba(15,22,38,0.60)", borderColor: "rgba(220,230,240,0.14)" } : null]} pointerEvents="none">
             <Text style={[styles.statsStripKm, hikeIsDark ? { color: hikeChipText } : null]}>{distDisplay} {dist.unit}</Text>
             <Text style={[styles.statsStripTime, hikeIsDark ? { color: hikeChipText } : null]}>{durationDisplay}</Text>
             <Text style={[styles.statsStripElev, hikeIsDark ? { color: hikeChipText } : null]}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
@@ -1186,14 +1182,6 @@ export function HikingScreen() {
               <Icon name="ChevronUp" size={18} color={Colors.textSecondary} strokeWidth={2.5} />
             </TouchableOpacity>
 
-            {/* Route row */}
-            <TouchableOpacity style={styles.routeRow} onPress={openRoutePicker} activeOpacity={0.9}>
-              <Text style={styles.routeRowLabel} numberOfLines={1}>
-                Route: {selectedRoute ? selectedRouteName : 'None'}
-              </Text>
-              <Icon name="ChevronRight" size={20} color={Colors.textMuted} strokeWidth={2} />
-            </TouchableOpacity>
-
             {/* Start Hiking — solid pill button (concept color #455D3C) */}
             <Animated.View style={[{ height: 52 }, { transform: [{ scale: trackBtnScale }] }]}>
               <TouchableOpacity
@@ -1213,9 +1201,9 @@ export function HikingScreen() {
         {showRoutePicker && (
           <Animated.View style={[styles.routePickerBackdrop, { opacity: routePickerOpacity }]}>
             <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closeRoutePicker} activeOpacity={1} />
-            <Animated.View style={[styles.routePickerSheet, { transform: [{ translateY: routePickerSlide }] }]}>
-              <View style={styles.routePickerHandle} />
-              <Text style={styles.routePickerTitle}>Choose a route</Text>
+            <Animated.View style={[styles.routePickerSheet, hikeIsDark ? { backgroundColor: "rgba(15,22,38,0.96)", borderTopColor: "rgba(220,230,240,0.14)" } : null, { transform: [{ translateY: routePickerSlide }] }]}>
+              <View style={[styles.routePickerHandle, hikeIsDark ? { backgroundColor: "rgba(220,230,240,0.30)" } : null]} />
+              <Text style={[styles.routePickerTitle, hikeIsDark ? { color: "#F0EEE6" } : null]}>Choose a route</Text>
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }} contentContainerStyle={{ gap: Spacing.sm }}>
                 {/* Free Hiking */}
                 <TouchableOpacity
@@ -1227,8 +1215,8 @@ export function HikingScreen() {
                     <Icon name="Target" size={16} color={Colors.primary} strokeWidth={2} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.routePickerName}>Free Hike</Text>
-                    <Text style={styles.routePickerMeta}>No route · explore freely</Text>
+                    <Text style={[styles.routePickerName, hikeIsDark ? { color: "#F0EEE6" } : null]}>Free Hike</Text>
+                    <Text style={[styles.routePickerMeta, hikeIsDark ? { color: "rgba(240,238,230,0.68)" } : null]}>No route · explore freely</Text>
                   </View>
                   {selectedRoute === null && <Icon name="Check" size={16} color={Colors.primary} strokeWidth={2.5} />}
                 </TouchableOpacity>
@@ -1266,8 +1254,8 @@ export function HikingScreen() {
                         <Icon name="Route" size={16} color={Colors.primary} strokeWidth={2} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.routePickerName}>{r.name}</Text>
-                        <Text style={styles.routePickerMeta}>
+                        <Text style={[styles.routePickerName, hikeIsDark ? { color: "#F0EEE6" } : null]}>{r.name}</Text>
+                        <Text style={[styles.routePickerMeta, hikeIsDark ? { color: "rgba(240,238,230,0.68)" } : null]}>
                           {dist.format(r.distanceM, 1)} {dist.unit}
                           {r.elevationGainM > 0 ? ` · ↑${dist.formatElevation(r.elevationGainM)}${dist.elevUnit}` : ''}
                           {r.runCount > 0 ? ` · ${r.runCount}× done` : ''}
@@ -1335,31 +1323,13 @@ export function HikingScreen() {
       <View style={[styles.topOverlay, { paddingTop: insets.top + Spacing.lg }]} pointerEvents="box-none">
         <View style={styles.topRow}>
           <BackButton variant="inline" onPress={() => nav.goBack()} />
-          <View style={[
-            styles.gpsChip,
-            hikeIsDark ? { backgroundColor: hikeChipBg, borderColor: hikeChipBorder } : null,
-            status === 'idle' ? styles.gpsChipAmber : (!locationAvailable && styles.gpsChipOffline),
-          ]}>
-            <PulseDot
-              size={8}
-              color={locationAvailable
-                ? Colors.success
-                : status === 'idle' ? Colors.severityCaution : Colors.danger}
-              pulsing={locationAvailable}
-            />
-            <Text style={[
-              styles.gpsText,
-              status === 'idle' ? styles.gpsTextAmber : (!locationAvailable && styles.gpsTextOffline),
-            ]}>
-              {locationAvailable
-                ? 'GPS'
-                : status === 'idle' ? 'Enable GPS' : 'GPS Offline'}
-            </Text>
-          </View>
+          {/* R21 v6 (2026-08-18 user "GPS因为下面已经有了 新的一行 不需要上面的"):
+              top GPS chip removed — the stats card's GPS dot is the
+              canonical status affordance. Keeping only Back at the top. */}
         </View>
 
         {/* Concept stats strip — always visible while on Hiking. */}
-        <View style={styles.statsStrip} pointerEvents="none">
+        <View style={[styles.statsStrip, hikeIsDark ? { backgroundColor: "rgba(15,22,38,0.60)", borderColor: "rgba(220,230,240,0.14)" } : null]} pointerEvents="none">
           <Text style={[styles.statsStripKm, hikeIsDark ? { color: hikeChipText } : null]}>{distDisplay} {dist.unit}</Text>
           <Text style={[styles.statsStripTime, hikeIsDark ? { color: hikeChipText } : null]}>{durationDisplay}</Text>
           <Text style={[styles.statsStripElev, hikeIsDark ? { color: hikeChipText } : null]}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
@@ -1470,39 +1440,22 @@ export function HikingScreen() {
                 )}
               </TouchableOpacity>
             </View>
-            {/* Recenter button — only shown after the user has manually
-                panned/zoomed (followUser=false). Concept: pale FAB with a
-                target glyph, sits between compass (left) and flag (right). */}
-            {!followUser && (
-              <View style={styles.controlSlot}>
-                <TouchableOpacity
-                  style={styles.fabPale}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Recenter map on current location"
-                  onPress={() => {
-                    haptic.selection();
-                    recenterImperativeRef.current?.();
-                    setTimeout(() => setFollowUser(true), 700);
-                  }}
-                >
-                  <Icon name="Target" size={20} color={Colors.primary} strokeWidth={2} />
-                </TouchableOpacity>
-              </View>
-            )}
+            {/* R21 (2026-08-18 user "让重新定位按钮常量在右侧"): Recenter
+                fixed at right — no longer gated on !followUser. Layer
+                toggle removed (was TODO with no real handler). */}
             <View style={styles.controlSlot}>
               <TouchableOpacity
                 style={styles.fabPale}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel="Toggle map layers"
+                accessibilityLabel="Recenter map on current location"
                 onPress={() => {
                   haptic.selection();
-                  // TODO: basemap layer toggle — concept placeholder, no target UX yet
-                  console.log('[HikingScreen] layer toggle - todo');
+                  recenterImperativeRef.current?.();
+                  setTimeout(() => setFollowUser(true), 700);
                 }}
               >
-                <Icon name="Layers" size={20} color={Colors.primary} strokeWidth={2} />
+                <Icon name="Target" size={20} color={Colors.primary} strokeWidth={2} />
               </TouchableOpacity>
             </View>
           </View>
@@ -1518,7 +1471,7 @@ export function HikingScreen() {
           state was removed as part of the same overhaul). */}
       {isTrackingOrPaused && (
         <View
-          style={[styles.h2Layer, { paddingBottom: insets.bottom + 88 }]}
+          style={[styles.h2Layer, { paddingBottom: insets.bottom + 32 }]}
           pointerEvents="box-none"
         >
           {actionsExpanded ? (
@@ -1579,7 +1532,9 @@ export function HikingScreen() {
                     }}
                   >
                     <Image
-                      source={require('../../assets/hiking/cairn-stack.png')}
+                      source={hikeIsDark
+                        ? require('../../assets/home/action-leave-cairn-night.png')
+                        : require('../../assets/home/action-leave-cairn-day.png')}
                       style={{ width: 28, height: 28 }}
                       resizeMode="contain"
                     />
@@ -1826,16 +1781,22 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
 
   // ── Concept stats strip (H0-H4 shared) ────────────────────────────────
-  // One row anchored just below Back/GPS chips. Values sit on the map's
-  // topmost translucent Paper band. Text is bold ink; numbers use
-  // tabular-nums so widths don't jitter as digits change.
+  // R21 (2026-08-18 user "上方4个数字没有格子 所以显得悬浮在那很突兀"):
+  // wrap stats in a paper card matching Home action-button surface —
+  // rgba(255,253,247,0.45) day / deep slate 0.6 night — so numbers sit
+  // in a defined container instead of floating awkwardly on the map.
   statsStrip: {
+    marginHorizontal: Spacing.base,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,253,247,0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(20,42,30,0.08)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xs,
   },
   statsStripKm: {
     fontSize: 14, fontWeight: '700', color: CONCEPT.ink,
@@ -1989,34 +1950,42 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'flex-end',
   },
+  // R21 (2026-08-18 user "改成和外部一样的风格"): route picker sheet uses
+  // Home paper palette (rgba(255,253,247,0.98) for the sheet itself with
+  // dark-green ink text) so it feels continuous with Home / Settings.
   routePickerSheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    backgroundColor: 'rgba(255,253,247,0.98)',
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: Spacing.base, paddingTop: Spacing.sm, paddingBottom: Spacing.xxl,
     gap: Spacing.sm,
+    borderTopWidth: 1, borderTopColor: 'rgba(20,42,30,0.08)',
     shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 12,
   },
   routePickerHandle: {
-    width: 36, height: 4, borderRadius: 2,
-    backgroundColor: Colors.border, alignSelf: 'center', marginBottom: Spacing.xs,
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: 'rgba(20,42,30,0.20)', alignSelf: 'center', marginBottom: Spacing.sm,
   },
-  routePickerTitle: { fontSize: FontSize.caption, fontWeight: '700', color: Colors.textMuted,  letterSpacing: 0.8, marginBottom: 4 },
+  routePickerTitle: {
+    fontSize: 15, fontWeight: '600', color: '#1B3A28',
+    letterSpacing: 0, marginBottom: Spacing.xs, paddingHorizontal: 4,
+  },
   routePickerRow: {
-    backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: Radius.card,
+    backgroundColor: 'rgba(255,253,247,0.45)', borderRadius: 16,
     flexDirection: 'row', alignItems: 'center',
     padding: Spacing.base, gap: Spacing.md,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    borderLeftWidth: 3, borderLeftColor: 'transparent',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
+    borderWidth: 1, borderColor: 'rgba(20,42,30,0.10)',
   },
-  routePickerRowSelected: { borderLeftColor: Colors.primary, backgroundColor: Colors.primaryBg, borderColor: Colors.primaryMuted },
+  routePickerRowSelected: {
+    backgroundColor: 'rgba(20,42,30,0.10)',
+    borderColor: 'rgba(20,42,30,0.30)',
+  },
   routePickerBadge: {
     width: 44, height: 44, borderRadius: 12,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: 'rgba(20,42,30,0.08)',
     alignItems: 'center', justifyContent: 'center',
   },
-  routePickerName: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
-  routePickerMeta: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
+  routePickerName: { fontSize: FontSize.body, fontWeight: '600', color: '#1B3A28' },
+  routePickerMeta: { fontSize: FontSize.small, color: 'rgba(27,58,40,0.62)', marginTop: 2 },
 
   // Top overlay
   topOverlay: { position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'box-none' },

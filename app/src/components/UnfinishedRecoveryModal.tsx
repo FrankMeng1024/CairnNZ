@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './Icon';
 import { Colors, Spacing, Radius, FontSize, Shadow } from './tokens';
 import { useDistance } from '../utils/distanceFormat';
+import { useAppearance } from '../hooks/useAppearance';
 
 interface UnfinishedData {
   sessionId: string;
@@ -58,6 +59,16 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
   const opacity = useRef(new Animated.Value(0)).current;
   // O12 Round-3 R3-C1: settings-aware distance format.
   const dist = useDistance();
+  // R21 (2026-08-18 user "resume没有用夜间模式 风格也有点偏差"): swap the
+  // sheet + text tokens with Home / route-picker style so the recovery
+  // modal reads as part of the same visual system and honours dark mode.
+  const { isDark } = useAppearance();
+  const sheetBg = isDark ? 'rgba(15,22,38,0.96)' : 'rgba(255,253,247,0.98)';
+  const primaryText = isDark ? '#F0EEE6' : '#1B3A28';
+  const mutedText = isDark ? 'rgba(240,238,230,0.68)' : 'rgba(27,58,40,0.62)';
+  const handleColor = isDark ? 'rgba(220,230,240,0.30)' : 'rgba(20,42,30,0.20)';
+  const iconBg = isDark ? 'rgba(240,238,230,0.10)' : 'rgba(20,42,30,0.08)';
+  const iconColor = isDark ? '#F0EEE6' : '#1B3A28';
 
   useEffect(() => {
     if (visible) {
@@ -114,30 +125,30 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
         onPress={() => { /* noop — 强制用户点两个按钮之一 */ }}
       />
       <Animated.View
-        style={[styles.sheet, { transform: [{ translateY: slideY }], paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}
+        style={[styles.sheet, { backgroundColor: sheetBg, transform: [{ translateY: slideY }], paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}
       >
-        <View style={styles.handle} />
-        <View style={styles.iconWrap}>
-          <Icon name="MapPin" size={28} color={Colors.primary} strokeWidth={2} />
+        <View style={[styles.handle, { backgroundColor: handleColor }]} />
+        <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
+          <Icon name="MapPin" size={28} color={iconColor} strokeWidth={2} />
         </View>
-        <Text style={styles.title}>Resume this {label.toLowerCase()}?</Text>
+        <Text style={[styles.title, { color: primaryText }]}>Resume this {label.toLowerCase()}?</Text>
         {/* O18 SAF-06: subtitle makes it explicit the hike was preserved
             through a force-quit / crash so users know their data is safe. */}
-        <Text style={styles.subtitle}>
+        <Text style={[styles.subtitle, { color: mutedText }]}>
           We saved everything up to your last GPS fix. Continue where you left off, or discard and start fresh.
         </Text>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{distText}</Text>
-            <Text style={styles.statLabel}>{dist.unit}</Text>
+            <Text style={[styles.statValue, { color: primaryText }]}>{distText}</Text>
+            <Text style={[styles.statLabel, { color: mutedText }]}>{dist.unit}</Text>
           </View>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{formatDuration(data.durationS)}</Text>
-            <Text style={styles.statLabel}>duration</Text>
+            <Text style={[styles.statValue, { color: primaryText }]}>{formatDuration(data.durationS)}</Text>
+            <Text style={[styles.statLabel, { color: mutedText }]}>duration</Text>
           </View>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{formatRelative(data.lastPointAt)}</Text>
-            <Text style={styles.statLabel}>last point</Text>
+            <Text style={[styles.statValue, { color: primaryText }]}>{formatRelative(data.lastPointAt)}</Text>
+            <Text style={[styles.statLabel, { color: mutedText }]}>last point</Text>
           </View>
         </View>
         <TouchableOpacity
@@ -154,7 +165,7 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
           onPress={() => dismiss(onDiscard)}
           testID="unfinished-discard"
         >
-          <Text style={styles.btnSecondaryText}>Discard</Text>
+          <Text style={[styles.btnSecondaryText, { color: mutedText }]}>Discard</Text>
         </TouchableOpacity>
       </Animated.View>
     </Animated.View>

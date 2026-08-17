@@ -60,7 +60,14 @@ export function initMapbox() {
 const MAP_STYLES = {
   outdoors: 'mapbox://styles/mapbox/outdoors-v12',
   streets: 'mapbox://styles/mapbox/streets-v12',
-  dark: 'mapbox://styles/mapbox/dark-v11',
+  // R21 (2026-08-18 user "黑色的地球很丑, mapbox没更好看点的夜间模式了么"):
+  // navigation-night-v1 replaces dark-v11 as the primary night style — it's
+  // Mapbox's dedicated navigation-oriented night palette. Roads stay
+  // clearly visible against a deep midnight-blue base (not pitch black),
+  // labels remain readable, terrain shading is warmer than dark-v11's
+  // flat grey slab. Reads as a proper "night hiking map" instead of
+  // a cold city dashboard.
+  dark: 'mapbox://styles/mapbox/navigation-night-v1',
   satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
 } as const;
 
