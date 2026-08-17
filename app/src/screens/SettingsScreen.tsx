@@ -1121,69 +1121,6 @@ export function SettingsScreen() {
                 }
               }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
     />
-            <View style={[styles.divider, dividerOverride]} />
-            {/* R21 (2026-08-17): Appearance — 3-segment picker inside the
-                Preferences card. Light / Dark / Auto. Auto follows local
-                time (6..19 = light, else dark). Explicit choice overrides
-                weather-adaptive Home bg day/night bucket. Default Auto. */}
-            <View style={{ paddingHorizontal: Spacing.base, paddingVertical: Spacing.md }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                <View style={[rowStyles.iconWrap, { backgroundColor: '#dde3ee' }]}>
-                  <Icon name="Moon" size={18} color="#4a5c78" strokeWidth={1.8} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[rowStyles.label, { color: settingsBgTokens.cardTextColor }]}>Appearance</Text>
-                  <Text style={[rowStyles.hint, { color: settingsBgTokens.cardTextColorMuted }]}>
-                    {settingsAppearance.mode === 'auto'
-                      ? 'Follows time of day'
-                      : settingsAppearance.mode === 'light' ? 'Always light' : 'Always dark'}
-                  </Text>
-                </View>
-              </View>
-              <View style={{
-                flexDirection: 'row',
-                backgroundColor: settingsBgTokens.useDarkText ? 'rgba(33,54,44,0.06)' : 'rgba(255,255,255,0.10)',
-                borderRadius: 12,
-                padding: 3,
-              }}>
-                {(['light', 'auto', 'dark'] as const).map((m) => {
-                  const active = settingsAppearance.mode === m;
-                  return (
-                    <TouchableOpacity
-                      key={m}
-                      onPress={() => {
-                        updateSetting('appearance', m);
-                        haptic.selection();
-                      }}
-                      style={{
-                        flex: 1,
-                        paddingVertical: 9,
-                        borderRadius: 9,
-                        alignItems: 'center',
-                        backgroundColor: active
-                          ? (settingsBgTokens.useDarkText ? '#ffffff' : 'rgba(255,255,255,0.22)')
-                          : 'transparent',
-                        shadowColor: active ? '#000' : 'transparent',
-                        shadowOpacity: active ? 0.08 : 0,
-                        shadowRadius: 4,
-                        shadowOffset: { width: 0, height: 1 },
-                      }}
-                    >
-                      <Text style={{
-                        fontSize: 13,
-                        fontWeight: active ? '700' : '500',
-                        color: active
-                          ? (settingsBgTokens.useDarkText ? '#21362C' : '#F0EEE6')
-                          : settingsBgTokens.cardTextColorMuted,
-                        textTransform: 'capitalize',
-                      }}>
-                        {m}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
             {/* R21 (2026-08-17): Voice guidance removed per concept clip-92 —
                 the concept Preferences card lists only 4 rows (Memory GPS /
                 Units / Date format / Haptic). Voice guidance retained in

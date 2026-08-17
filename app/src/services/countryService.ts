@@ -115,6 +115,26 @@ export async function resolveCurrentCountry(): Promise<CountryCache | null> {
         });
         displayName = place?.city ?? place?.subregion ?? place?.region ?? place?.country ?? '';
         countryCode = (place?.isoCountryCode ?? countryCode).toUpperCase();
+        // R21 fix (2026-08-17 user "出现了中文 系统必须纯英语"): expo-location
+        // reverseGeocodeAsync returns locale-specific names on device (Chinese
+        // device → Chinese city names). Detect non-ASCII and fall back to
+        // BigDataCloud with localityLanguage=en for a guaranteed English name.
+        const isNonAscii = /[^\u0000-\u007F]/.test(displayName);
+        if (isNonAscii || !displayName) {
+          try {
+            const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${pos.coords.latitude.toFixed(4)}&longitude=${pos.coords.longitude.toFixed(4)}&localityLanguage=en`;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 4000);
+            const res = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (res.ok) {
+              const j = await res.json();
+              const eng = j.city ?? j.locality ?? j.principalSubdivision ?? j.countryName ?? '';
+              if (eng) displayName = eng;
+              if (j.countryCode) countryCode = (j.countryCode as string).toUpperCase();
+            }
+          } catch { /* silent — keep expo-location result */ }
+        }
       } else {
         // R21 (2026-08-17 fix): web fallback uses BigDataCloud free reverse
         // geocoding. Tested from user's location (Guiyang, China) and works

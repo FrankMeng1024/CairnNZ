@@ -239,6 +239,8 @@ export function HomeScreen() {
   const setLocationOverride = useWeatherStore(s => s.setLocationOverride);
   const setDayNightOverride = useWeatherStore(s => s.setDayNightOverride);
   const setConditionOverride = useWeatherStore(s => s.setConditionOverride);
+  const updateSetting = useSettingsStore(s => s.updateSetting);
+  const appearanceMode = useSettingsStore(s => s.appearance);
   const [devMenuOpen, setDevMenuOpen] = useState(false);
   // R21 (2026-08-17 user "二次点击就是取消"): each toggle is idempotent —
   // click city A once = override, click A again = clear. Same for weather
@@ -385,6 +387,23 @@ export function HomeScreen() {
                     >
                       <Text style={{ fontSize: 11, fontWeight: '600', color: '#21362C' }}>Night</Text>
                     </TouchableOpacity>
+                  </View>
+                  <Text style={{ paddingHorizontal: 4, paddingTop: 2, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>
+                    APPEARANCE
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
+                    {(['light', 'auto', 'dark'] as const).map((m) => (
+                      <TouchableOpacity
+                        key={m}
+                        onPress={() => { updateSetting('appearance', m); setDevMenuOpen(false); }}
+                        style={{
+                          flex: 1, paddingVertical: 4, alignItems: 'center', borderRadius: 8,
+                          backgroundColor: appearanceMode === m ? 'rgba(33,54,44,0.15)' : 'rgba(33,54,44,0.05)',
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#21362C', textTransform: 'capitalize' }}>{m}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
                 </View>
               )}

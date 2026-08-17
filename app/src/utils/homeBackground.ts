@@ -89,20 +89,22 @@ const VARIANT_PALETTE: Record<HomeBgVariant, {
   tabBarTextColor: string;
   invertIcons: boolean;
 }> = {
-  // R21 v7 (2026-08-17 user "绿色太深 没有户外感"): shifted from deep
-  // #2A4B34 to a warmer moss-green #3D6B4A that has real outdoor
-  // vibrancy — matches NZ bush color, feels alive not institutional.
+  // R21 v8 (2026-08-17 user "绿色不适合 换个适合白天的颜色"): hero text on
+  // sunny/cloudy/rain/snow day bg = white + warm shadow. Reads naturally on
+  // every landscape photo, no colour-clash with the bg vegetation/sky.
+  // actionButtonBackgroundColor kept at paper (white semi-opaque) so the
+  // Hiking/Running/Cairn tiles have contrast vs the white hero text.
   'sunny-day': {
-    textColor: '#3D6B4A',
-    textColorMuted: 'rgba(61,107,74,0.9)',
-    textShadowColor: 'rgba(255,249,230,0.75)',
+    textColor: '#FFFFFF',
+    textColorMuted: 'rgba(255,255,255,0.88)',
+    textShadowColor: 'rgba(20,40,20,0.55)',
     cardBackgroundColor: 'rgba(255,253,247,0.68)',
     cardBorderColor: 'rgba(27,58,40,0.10)',
     cardTextColor: '#1B3A28',
     cardTextColorMuted: 'rgba(27,58,40,0.62)',
-    actionButtonBackgroundColor: 'rgba(255,253,247,0.94)',
+    actionButtonBackgroundColor: 'rgba(255,253,247,0.68)',
     actionButtonTextColor: '#1B3A28',
-    tabBarBackgroundColor: 'rgba(250,247,238,0.94)',
+    tabBarBackgroundColor: 'rgba(250,247,238,0.88)',
     tabBarBorderColor: 'rgba(27,58,40,0.08)',
     tabBarTextColor: '#1B3A28',
     invertIcons: false,
@@ -123,20 +125,17 @@ const VARIANT_PALETTE: Record<HomeBgVariant, {
     tabBarTextColor: '#F0EEE6',
     invertIcons: true,
   },
-  // Cloudy day: R21 v5 iter 3 — hero pushed to #131C24 near-black, shadow
-  // warmed cream 0.85. muted 0.86 → 0.94 so "Every step" no longer
-  // dissolves on the mid-band mountain haze.
   'cloudy-day': {
-    textColor: '#3A5C6E',
-    textColorMuted: 'rgba(58,92,110,0.9)',
-    textShadowColor: 'rgba(255,253,245,0.7)',
+    textColor: '#FFFFFF',
+    textColorMuted: 'rgba(255,255,255,0.88)',
+    textShadowColor: 'rgba(10,20,30,0.55)',
     cardBackgroundColor: 'rgba(252,251,247,0.68)',
     cardBorderColor: 'rgba(42,52,56,0.08)',
     cardTextColor: '#2A3438',
     cardTextColorMuted: 'rgba(42,52,56,0.62)',
-    actionButtonBackgroundColor: 'rgba(252,251,247,0.94)',
+    actionButtonBackgroundColor: 'rgba(252,251,247,0.68)',
     actionButtonTextColor: '#2A3438',
-    tabBarBackgroundColor: 'rgba(248,247,242,0.94)',
+    tabBarBackgroundColor: 'rgba(248,247,242,0.88)',
     tabBarBorderColor: 'rgba(42,52,56,0.08)',
     tabBarTextColor: '#2A3438',
     invertIcons: false,
@@ -156,19 +155,17 @@ const VARIANT_PALETTE: Record<HomeBgVariant, {
     tabBarTextColor: '#E5EAF0',
     invertIcons: true,
   },
-  // Rain day: iter 3 — kept iter 2 values, they already read 9.3. Only
-  // shadow warmed further and muted +0.03.
   'rain-day': {
-    textColor: '#3B5A72',
-    textColorMuted: 'rgba(59,90,114,0.92)',
-    textShadowColor: 'rgba(255,251,238,0.75)',
+    textColor: '#FFFFFF',
+    textColorMuted: 'rgba(255,255,255,0.88)',
+    textShadowColor: 'rgba(10,18,28,0.6)',
     cardBackgroundColor: 'rgba(252,250,245,0.68)',
     cardBorderColor: 'rgba(46,58,68,0.10)',
     cardTextColor: '#2E3A44',
     cardTextColorMuted: 'rgba(46,58,68,0.62)',
-    actionButtonBackgroundColor: 'rgba(252,250,245,0.92)',
+    actionButtonBackgroundColor: 'rgba(252,250,245,0.68)',
     actionButtonTextColor: '#2E3A44',
-    tabBarBackgroundColor: 'rgba(247,245,240,0.92)',
+    tabBarBackgroundColor: 'rgba(247,245,240,0.88)',
     tabBarBorderColor: 'rgba(46,58,68,0.10)',
     tabBarTextColor: '#2E3A44',
     invertIcons: false,
@@ -189,16 +186,16 @@ const VARIANT_PALETTE: Record<HomeBgVariant, {
     invertIcons: true,
   },
   'snow-day': {
-    textColor: '#3E5E76',
-    textColorMuted: 'rgba(62,94,118,0.9)',
-    textShadowColor: 'rgba(255,253,247,0.65)',
+    textColor: '#FFFFFF',
+    textColorMuted: 'rgba(255,255,255,0.88)',
+    textShadowColor: 'rgba(10,18,32,0.55)',
     cardBackgroundColor: 'rgba(255,253,247,0.68)',
     cardBorderColor: 'rgba(31,42,58,0.08)',
     cardTextColor: '#1F2A3A',
     cardTextColorMuted: 'rgba(31,42,58,0.62)',
-    actionButtonBackgroundColor: 'rgba(255,253,247,0.94)',
+    actionButtonBackgroundColor: 'rgba(255,253,247,0.68)',
     actionButtonTextColor: '#1F2A3A',
-    tabBarBackgroundColor: 'rgba(250,247,238,0.94)',
+    tabBarBackgroundColor: 'rgba(250,247,238,0.88)',
     tabBarBorderColor: 'rgba(31,42,58,0.08)',
     tabBarTextColor: '#1F2A3A',
     invertIcons: false,
