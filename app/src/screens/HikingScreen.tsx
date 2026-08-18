@@ -199,6 +199,12 @@ export function HikingScreen() {
   // Start-Hiking button visible while tracking was still finalising
   // (up to 30s) — very confusing.
   const [savingHike, setSavingHike] = useState(false);
+  // R21 (2026-08-18 user "finish如果too short现在没任何提示 应该有提示 让
+  // 用户选择resume 或者discard"): local flag that forces TooShortSheet
+  // when the Finish button detects an obviously-too-short hike. This
+  // avoids racing with useTrackingStore.stopTracking's own lastStopReason
+  // pathway and always shows the confirmation sheet before any teardown.
+  const [showTooShortConfirm, setShowTooShortConfirm] = useState(false);
   // Initialize phase from current tracking status — if user has an active hike
   // and re-enters this screen (Home → Hiking again), jump straight to the
   // tracking UI instead of forcing the route picker.
@@ -1480,7 +1486,7 @@ export function HikingScreen() {
               }}
             >
               <Icon
-                name={actionsExpanded ? 'ChevronLeft' : 'Navigation'}
+                name={actionsExpanded ? 'ChevronLeft' : 'ChevronRight'}
                 size={22}
                 color={hikeIsDark ? '#F0EEE6' : Colors.primary}
                 strokeWidth={2.2}
@@ -1548,15 +1554,12 @@ export function HikingScreen() {
                         stopTracking();
                         return;
                       }
-                      // R21 (2026-08-18 user "没任何移动直接点finish 应该 too short"):
-                      // pre-check distance before opening StopSummarySheet.
-                      // If < 20m or fewer than 2 points, route straight to
-                      // stopTracking so TooShortSheet observes the reason
-                      // via lastStopReason — same path save-hike-atomic
-                      // uses (matches wasTooShort at line 843).
+                      // R21 (2026-08-18): too-short guard — surface the
+                      // TooShortSheet directly so the user always sees a
+                      // confirmation before the hike is torn down.
                       const isTooShort = ts.trackPoints.length < 2 || ts.distanceM < 20;
                       if (isTooShort) {
-                        stopTracking();
+                        setShowTooShortConfirm(true);
                         return;
                       }
                       pauseTracking();
@@ -1702,10 +1705,17 @@ export function HikingScreen() {
           session has < 2 GPS points. Got it = continue tracking (state
           was preserved). End anyway = full discard via store action. */}
       <TooShortSheet
-        visible={lastStopReason === 'too-short'}
+        visible={lastStopReason === 'too-short' || showTooShortConfirm}
         activityMode={activityMode}
-        onContinue={() => clearLastStopReason()}
-        onDiscard={() => { clearLastStopReason(); discardCurrentSession(); }}
+        onContinue={() => {
+          setShowTooShortConfirm(false);
+          clearLastStopReason();
+        }}
+        onDiscard={() => {
+          setShowTooShortConfirm(false);
+          clearLastStopReason();
+          discardCurrentSession();
+        }}
       />
       {/* O18 ONB-04: permission-denied modal — shown when GPS was rejected
           during the initial hiking prime. Replaces prior silent return. */}
@@ -1869,16 +1879,21 @@ const styles = StyleSheet.create({
   },
   trayAnchorRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Spacing.md,
     paddingLeft: Spacing.base,
   },
   trayRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Spacing.md,
   },
+  // R21 (2026-08-18 user "需要是一行 现在不平 且大小不一"): anchor + fabs
+  // share identical dimensions (48x48) and sit on the same baseline. Label
+  // uses absolute-position under each fab so the fab row stays perfectly
+  // aligned regardless of whether a label is present or wraps.
   trayItem: {
+    width: 48,
     alignItems: 'center',
   },
   trayAnchor: {
@@ -1890,7 +1905,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15, shadowRadius: 10, elevation: 6,
   },
   trayFab: {
-    width: 52, height: 52, borderRadius: 26,
+    width: 48, height: 48, borderRadius: 24,
     backgroundColor: CONCEPT.paper94,
     borderWidth: 1, borderColor: CONCEPT.hairline,
     alignItems: 'center', justifyContent: 'center',
@@ -1898,7 +1913,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12, shadowRadius: 10, elevation: 4,
   },
   trayFabLabel: {
-    marginTop: 2,
+    marginTop: 4,
     fontSize: 11,
     color: Colors.textSecondary,
     fontWeight: '600',

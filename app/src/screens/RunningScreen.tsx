@@ -203,6 +203,10 @@ export function RunningScreen() {
   // collapsed by default. Tap the Navigation anchor (bottom-left) to
   // expand → Pause / Cairn / Finish slides out to the right.
   const [runActionsExpanded, setRunActionsExpanded] = useState(false);
+  // R21 (2026-08-18 user "finish如果too short现在没任何提示"): local guard
+  // — Finish button surfaces TooShortSheet directly instead of racing
+  // with stopTracking's lastStopReason pathway.
+  const [showTooShortConfirmRun, setShowTooShortConfirmRun] = useState(false);
   // R21 (2026-08-18): follow-camera state so Recenter FAB is only shown
   // when the user has dragged the map off-position.
   const [runFollowUser, setRunFollowUser] = useState(true);
@@ -1053,19 +1057,27 @@ export function RunningScreen() {
               </MapView>
             </View>
           )}
-          {/* O18 RUN-02: Signal-lost chip (parity with Hiking).
-              Visible only during active tracking after 2 min of no fix.
-              R21 (2026-08-18): pinned to top-right + dark-aware. */}
-          {status === 'tracking' && signalLost && (
-            <SafeAreaView edges={['top']} style={{ alignItems: 'flex-end', paddingHorizontal: Spacing.base }}>
-              <View style={runStyles.signalLostPill}>
-                <View style={runStyles.signalLostDot} />
-                <Text style={runStyles.signalLostText}>
-                  {signalLostMin >= 1 ? `Signal lost · ${signalLostMin} min` : 'Signal lost'}
-                </Text>
-              </View>
-            </SafeAreaView>
-          )}
+          {/* R21 (2026-08-18 user "上方 下方 按钮 等等都和hike是一样的"):
+              R2 top row now mirrors Hike — Back left, signal-lost pill
+              on the right (only visible when tracking + lost). Kept the
+              stats bar below. */}
+          <SafeAreaView edges={['top']} pointerEvents="box-none">
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.base, paddingTop: Spacing.md, gap: Spacing.sm }}>
+              <BackButton variant="inline" onPress={() => {
+                if (nav.canGoBack()) nav.goBack();
+                else nav.navigate('Home' as never);
+              }} />
+              <View style={{ flex: 1 }} />
+              {status === 'tracking' && signalLost && (
+                <View style={runStyles.signalLostPill}>
+                  <View style={runStyles.signalLostDot} />
+                  <Text style={runStyles.signalLostText}>
+                    {signalLostMin >= 1 ? `Signal lost · ${signalLostMin} min` : 'Signal lost'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </SafeAreaView>
           {/* Stats bar — 2026-08-17 concept R0/R1: distance / duration
               / pace / GPS pill. Label strings match the concept ("km",
               blank for duration since HH:MM:SS reads on its own,
@@ -1110,7 +1122,7 @@ export function RunningScreen() {
                   }}
                 >
                   <Icon
-                    name={runActionsExpanded ? 'ChevronLeft' : 'Navigation'}
+                    name={runActionsExpanded ? 'ChevronLeft' : 'ChevronRight'}
                     size={22}
                     color={runIsDark ? '#F0EEE6' : RunConcept.textPrimary}
                     strokeWidth={2.2}
@@ -1168,7 +1180,14 @@ export function RunningScreen() {
                         activeOpacity={0.85}
                         onPress={() => {
                           haptic.impact('medium');
+                          const ts = useTrackingStore.getState();
                           setRunActionsExpanded(false);
+                          // R21 (2026-08-18): too-short guard mirrors Hike.
+                          const isTooShort = ts.trackPoints.length < 2 || ts.distanceM < 20;
+                          if (isTooShort) {
+                            setShowTooShortConfirmRun(true);
+                            return;
+                          }
                           openSaveSheet();
                         }}
                         accessibilityRole="button"
@@ -1258,10 +1277,14 @@ export function RunningScreen() {
           covers the lock + controls. Got it = continue tracking (state
           preserved by stopTracking pre-check). End anyway = full discard. */}
       <TooShortSheet
-        visible={lastStopReason === 'too-short'}
+        visible={lastStopReason === 'too-short' || showTooShortConfirmRun}
         activityMode="running"
-        onContinue={() => clearLastStopReason()}
+        onContinue={() => {
+          setShowTooShortConfirmRun(false);
+          clearLastStopReason();
+        }}
         onDiscard={() => {
+          setShowTooShortConfirmRun(false);
           clearLastStopReason();
           discardCurrentSession();
           // Fix 4 (STATE-LEAK-STOPPED-SESSION-ID): after a too-short
@@ -1490,17 +1513,20 @@ const runStyles = StyleSheet.create({
   trayAnchorLayer: { position: 'absolute', bottom: 0, left: 0, right: 0 },
   trayAnchorRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Spacing.md,
     paddingLeft: Spacing.base,
     paddingBottom: Spacing.sm,
   },
   trayRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Spacing.md,
   },
-  trayItem: { alignItems: 'center' },
+  // R21 (2026-08-18): match Hiking — anchor + fabs identical 48x48 so
+  // the row is perfectly flat, labels sit under each fab in a fixed
+  // 48px column.
+  trayItem: { width: 48, alignItems: 'center' },
   trayAnchor: {
     width: 48, height: 48, borderRadius: 24,
     backgroundColor: 'rgba(255,253,247,0.94)',
@@ -1510,7 +1536,7 @@ const runStyles = StyleSheet.create({
     shadowOpacity: 0.15, shadowRadius: 10, elevation: 6,
   },
   trayFab: {
-    width: 52, height: 52, borderRadius: 26,
+    width: 48, height: 48, borderRadius: 24,
     backgroundColor: 'rgba(255,253,247,0.94)',
     borderWidth: 1, borderColor: 'rgba(20,42,30,0.10)',
     alignItems: 'center', justifyContent: 'center',
