@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Radius, FontSize, Shadow } from './tokens';
+import { useAppearance } from '../hooks/useAppearance';
 
 // Concept H3/R3 (sleep-run-2026-08-15): two botanical icons at the top of the
 // modal — footprints + fern-leaf — replace the previous MapPin circle. Same
@@ -42,6 +43,14 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
   const insets = useSafeAreaInsets();
   const slideY = useRef(new Animated.Value(500)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  // R21 (2026-08-18 user "hike complete和confirm page也要follow 白天夜间"):
+  // dark tokens for the too-short sheet so it stays coherent with the
+  // rest of the Hike/Run night surfaces.
+  const { isDark } = useAppearance();
+  const sheetBg = isDark ? 'rgba(15,22,38,0.98)' : Colors.surface;
+  const titleColor = isDark ? '#F0EEE6' : Colors.textPrimary;
+  const bodyColor = isDark ? 'rgba(240,238,230,0.68)' : Colors.textSecondary;
+  const handleColor = isDark ? 'rgba(220,230,240,0.30)' : Colors.border;
 
   useEffect(() => {
     if (visible) {
@@ -76,14 +85,14 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
     <Animated.View style={[styles.scrim, { opacity }]} pointerEvents="auto">
       {/* Tapping the scrim acts like "Got it" — preserves session. */}
       <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => dismiss(onContinue)} />
-      <Animated.View style={[styles.sheet, { transform: [{ translateY: slideY }], paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
-        <View style={styles.handle} />
+      <Animated.View style={[styles.sheet, { backgroundColor: sheetBg, transform: [{ translateY: slideY }], paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
+        <View style={[styles.handle, { backgroundColor: handleColor }]} />
         <View style={styles.botanicalRow}>
           <Image source={FOOTPRINTS_ICON} style={styles.botanicalFootprints} resizeMode="contain" />
           <Image source={FERN_ICON} style={styles.botanicalFern} resizeMode="contain" />
         </View>
-        <Text style={styles.title}>Keep going{'\n'}a little longer</Text>
-        <Text style={styles.body}>{bodyCopy}</Text>
+        <Text style={[styles.title, { color: titleColor }]}>Keep going{'\n'}a little longer</Text>
+        <Text style={[styles.body, { color: bodyColor }]}>{bodyCopy}</Text>
         <TouchableOpacity
           style={styles.btnPrimary}
           activeOpacity={0.85}

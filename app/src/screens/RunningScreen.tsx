@@ -759,7 +759,7 @@ export function RunningScreen() {
   // ── Pre-start ─────────────────────────────────────────────────────────────
   if (runState === 'pre') {
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.primaryBg }}>
+      <View style={{ flex: 1, backgroundColor: runIsDark ? '#0F1620' : Colors.primaryBg }}>
         {/* Real Mapbox basemap (or fallback if Mapbox unavailable) */}
         {MapView ? (
           <MapView
@@ -977,8 +977,8 @@ export function RunningScreen() {
   //   • No compass ring, no lock overlay, no double-tap gesture. Done opens
   //     the save-name sheet which drives the transition to R4.
   return (
-    <View style={runStyles.container}>
-      <View style={runStyles.bg}>
+    <View style={[runStyles.container, runIsDark ? { backgroundColor: '#0F1620' } : null]}>
+      <View style={[runStyles.bg, runIsDark ? { backgroundColor: '#0F1620' } : null]}>
           {/* R1 basemap + tracking polyline. Concept R1-tracking.png shows
               a full terrain map behind the top stats bar with the run's
               green trail drawn on top. Store subscriptions unchanged —
@@ -1058,9 +1058,9 @@ export function RunningScreen() {
               R21 (2026-08-18): pinned to top-right + dark-aware. */}
           {status === 'tracking' && signalLost && (
             <SafeAreaView edges={['top']} style={{ alignItems: 'flex-end', paddingHorizontal: Spacing.base }}>
-              <View style={[runStyles.signalLostPill, runIsDark ? { backgroundColor: 'rgba(120,25,25,0.60)', borderColor: 'rgba(240,180,180,0.40)' } : null]}>
+              <View style={runStyles.signalLostPill}>
                 <View style={runStyles.signalLostDot} />
-                <Text style={[runStyles.signalLostText, runIsDark ? { color: '#FBE4E4' } : null]}>
+                <Text style={runStyles.signalLostText}>
                   {signalLostMin >= 1 ? `Signal lost · ${signalLostMin} min` : 'Signal lost'}
                 </Text>
               </View>
@@ -1563,12 +1563,11 @@ const runStyles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginHorizontal: Spacing.base, marginTop: Spacing.sm,
     paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
-    backgroundColor: RunConcept.cardSurface, borderRadius: Radius.chip,
-    borderWidth: 1, borderColor: Colors.severityWarning,
+    backgroundColor: 'transparent', borderRadius: Radius.chip,
     gap: 6,
   },
-  signalLostDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.severityWarning },
-  signalLostText: { fontSize: 11, fontWeight: '700', color: Colors.severityWarning, letterSpacing: 0.2 },
+  signalLostDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' },
+  signalLostText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
   // Toast confirmation after plant.
   plantToast: {
     alignSelf: 'center',

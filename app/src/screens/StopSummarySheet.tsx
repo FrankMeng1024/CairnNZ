@@ -29,6 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { useDistance } from '../utils/distanceFormat';
 import { formatDate } from '../utils/dateFormat';
+import { useAppearance } from '../hooks/useAppearance';
 
 type StopSummary = {
   distanceM: number;
@@ -198,6 +199,15 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onConfirmAndHom
   const elevVal = dist.formatElevation(summary.elevationGainM, 0);
   const elevLbl = `${dist.elevUnit} elev`;
 
+  // R21 (2026-08-18 user "hike complete和confirm page也要follow 白天夜间"):
+  // read Appearance so the sheet + text tokens swap into slate/cream when
+  // the user's picked Dark (or Auto at night). Kept as inline overrides so
+  // day rendering matches the concept 1:1.
+  const { isDark: completeIsDark } = useAppearance();
+  const sheetBg = completeIsDark ? 'rgba(15,22,38,0.98)' : PAPER_BG;
+  const titleInk = completeIsDark ? '#F0EEE6' : TITLE_INK;
+  const mutedInk = completeIsDark ? 'rgba(240,238,230,0.68)' : MUTED_INK;
+
   // Sleep-run 2026-08-16 (H4 concept): "Share this activity" action lives in
   // the header. Uses React Native's built-in Share API — iOS system share
   // sheet, no new dependency. Silent-fail on cancel (user dismissed sheet).
@@ -219,31 +229,17 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onConfirmAndHom
         <Animated.View
           style={[
             stopSheetStyles.sheet,
-            { transform: [{ translateY: slideY }], paddingBottom: Math.max(insets.bottom, 20) + 8 },
+            { backgroundColor: sheetBg, transform: [{ translateY: slideY }], paddingBottom: Math.max(insets.bottom, 20) + 8 },
           ]}
         >
           <View style={stopSheetStyles.handle} />
 
-          {/* Header row: title on the left, share + X close on the right.
-              Share opens the iOS system share sheet with a summary string
-              (built via React Native's built-in Share API — no dep added).
-              The X calls onCancel (resume tracking) — it does NOT delete
-              the session. Prior "Discard" text-link was removed as part
-              of the 2026-08-16 H4 redesign (safety: no one-tap data loss). */}
+          {/* Header row: title on the left, X close on the right.
+              R21 (2026-08-18 user "hike complete 不需要右上角分享"):
+              share button removed. X still cancels (resume tracking). */}
           <View style={stopSheetStyles.headerRow}>
-            <Text style={stopSheetStyles.title} numberOfLines={1}>{heading}</Text>
+            <Text style={[stopSheetStyles.title, { color: titleInk }]} numberOfLines={1}>{heading}</Text>
             <View style={stopSheetStyles.headerActions}>
-              <TouchableOpacity
-                onPress={shareSummary}
-                style={stopSheetStyles.iconBtn}
-                activeOpacity={0.6}
-                disabled={saving}
-                accessibilityRole="button"
-                accessibilityLabel={isRun ? 'Share this run' : 'Share this hike'}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Icon name="Share2" size={20} color={saving ? MUTED_INK : TITLE_INK} strokeWidth={2} />
-              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
                   if (saving) return;
@@ -257,7 +253,7 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onConfirmAndHom
                 accessibilityLabel="Close and keep tracking"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={[stopSheetStyles.closeX, saving && { opacity: 0.4 }]}>✕</Text>
+                <Text style={[stopSheetStyles.closeX, { color: titleInk }, saving && { opacity: 0.4 }]}>✕</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -284,62 +280,63 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onConfirmAndHom
               whole units (m or ft). */}
           <View style={stopSheetStyles.statsRow}>
             <View style={stopSheetStyles.statCol}>
-              <Text style={stopSheetStyles.statVal} numberOfLines={1}>{distanceVal}</Text>
-              <Text style={stopSheetStyles.statLbl}>{distanceLbl}</Text>
+              <Text style={[stopSheetStyles.statVal, { color: titleInk }]} numberOfLines={1}>{distanceVal}</Text>
+              <Text style={[stopSheetStyles.statLbl, { color: mutedInk }]}>{distanceLbl}</Text>
             </View>
             <View style={stopSheetStyles.statCol}>
-              <Text style={stopSheetStyles.statVal} numberOfLines={1}>{timeVal}</Text>
-              <Text style={stopSheetStyles.statLbl}>time</Text>
+              <Text style={[stopSheetStyles.statVal, { color: titleInk }]} numberOfLines={1}>{timeVal}</Text>
+              <Text style={[stopSheetStyles.statLbl, { color: mutedInk }]}>time</Text>
             </View>
             <View style={stopSheetStyles.statCol}>
-              <Text style={stopSheetStyles.statVal} numberOfLines={1}>{elevVal}</Text>
-              <Text style={stopSheetStyles.statLbl}>{elevLbl}</Text>
+              <Text style={[stopSheetStyles.statVal, { color: titleInk }]} numberOfLines={1}>{elevVal}</Text>
+              <Text style={[stopSheetStyles.statLbl, { color: mutedInk }]}>{elevLbl}</Text>
             </View>
           </View>
 
-          {/* Mini-map preview card (concept H4/R4). Renders trackPoints as an
-              SVG polyline against a rounded paper card. Mapbox is intentionally
-              NOT used here — a static preview keeps the summary sheet snappy
-              on cold start and avoids GL context contention when the user is
-              still on the tracking map. Falls back gracefully to an empty
-              card when trackPoints has < 2 points (freshly stopped run). */}
-          <View
-            style={stopSheetStyles.miniMapCard}
-            onLayout={(e) => setMiniMapWidth(e.nativeEvent.layout.width)}
-          >
-            {miniMapWidth > 0 && (
-              <MiniMapPolyline
-                points={summary.trackPoints}
-                stroke={CTA_GREEN}
-                width={miniMapWidth}
-                height={120}
-              />
-            )}
-          </View>
+          {/* Mini-map preview card. R21 (2026-08-18 user "数字下有一行空的div
+              不知道是啥"): only render when there are enough trackPoints to
+              draw a polyline — an empty card just below the stats looked
+              like a mystery blank div when the hike had 0 points. */}
+          {summary.trackPoints.length >= 2 && (
+            <View
+              style={[stopSheetStyles.miniMapCard, completeIsDark ? { backgroundColor: 'rgba(240,238,230,0.06)', borderColor: 'rgba(220,230,240,0.14)' } : null]}
+              onLayout={(e) => setMiniMapWidth(e.nativeEvent.layout.width)}
+            >
+              {miniMapWidth > 0 && (
+                <MiniMapPolyline
+                  points={summary.trackPoints}
+                  stroke={CTA_GREEN}
+                  width={miniMapWidth}
+                  height={120}
+                />
+              )}
+            </View>
+          )}
 
-          {/* "Great hike!" / "Great run!" positive-feedback card (concept H4/R4).
-              Small fern-leaf icon on the left, bold header + muted subtitle to
-              the right. Reinforces the exploration story before the primary CTA. */}
-          <View style={stopSheetStyles.feedbackCard}>
+          {/* "Great hike!" / "Great run!" positive-feedback card (concept H4/R4). */}
+          <View style={[stopSheetStyles.feedbackCard, completeIsDark ? { backgroundColor: 'rgba(240,238,230,0.06)', borderColor: 'rgba(220,230,240,0.14)' } : null]}>
             <View style={stopSheetStyles.feedbackIcon}>
               <Icon name="Leaf" size={22} color={CTA_GREEN} strokeWidth={2} />
             </View>
             <View style={stopSheetStyles.feedbackText}>
-              <Text style={stopSheetStyles.feedbackTitle}>
+              <Text style={[stopSheetStyles.feedbackTitle, { color: titleInk }]}>
                 {isRun ? 'Great run!' : 'Great hike!'}
               </Text>
-              <Text style={stopSheetStyles.feedbackSubtitle}>
+              <Text style={[stopSheetStyles.feedbackSubtitle, { color: mutedInk }]}>
                 Another piece of your world explored.
               </Text>
             </View>
           </View>
 
-          {/* Name input — placeholder shows the default so tapping Save
-              without typing still produces a sensible activity title. */}
+          {/* Name input — R21 (2026-08-18 user "下方text位置 用户不知道是
+              写hike的名字的 要让用户知道"): explicit label above the field
+              plus a friendlier placeholder so users know this names the
+              activity in their history. */}
+          <Text style={[stopSheetStyles.nameLabel, { color: mutedInk }]}>{isRun ? 'Name this run (optional)' : 'Name this hike (optional)'}</Text>
           <TextInput
-            style={stopSheetStyles.nameInput}
+            style={[stopSheetStyles.nameInput, { color: titleInk, borderColor: completeIsDark ? 'rgba(220,230,240,0.14)' : 'rgba(20,42,30,0.10)', backgroundColor: completeIsDark ? 'rgba(240,238,230,0.06)' : 'rgba(255,253,247,0.5)' }]}
             placeholder={defaultName}
-            placeholderTextColor={MUTED_INK}
+            placeholderTextColor={mutedInk}
             value={name}
             onChangeText={(t) => setName(t.slice(0, 60))}
             autoFocus={false}
@@ -347,8 +344,9 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onConfirmAndHom
           />
 
           {/* Primary CTA — "View Activity" saves the hike and jumps to
-              the MapHistory detail. Uses onConfirm which HikingScreen
-              wires to save + nav.reset(→ MapHistory). */}
+              the MapHistory detail. R21 (2026-08-18 user "去掉done"):
+              secondary Done button removed — a single explicit CTA is
+              clearer. Cancel/close is still via the X in the header. */}
           <TouchableOpacity
             style={[stopSheetStyles.saveBtn, saving && { opacity: 0.7 }]}
             onPress={() => {
@@ -377,26 +375,6 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onConfirmAndHom
             ) : (
               <Text style={stopSheetStyles.saveText}>View Activity</Text>
             )}
-          </TouchableOpacity>
-
-          {/* Secondary CTA — "Done" saves the hike and returns Home.
-              Falls back to onConfirm when caller has not wired the
-              home variant (both paths save; only nav destination
-              differs in HikingScreen). */}
-          <TouchableOpacity
-            onPress={() => {
-              if (saving) return;
-              Keyboard.dismiss();
-              const homeCb = onConfirmAndHome ?? onConfirm;
-              homeCb(name);
-            }}
-            activeOpacity={0.6}
-            disabled={saving}
-            style={stopSheetStyles.doneHit}
-            accessibilityRole="button"
-            accessibilityLabel="Save hike and return home"
-          >
-            <Text style={[stopSheetStyles.doneText, saving && { opacity: 0.4 }]}>Done</Text>
           </TouchableOpacity>
         </Animated.View>
       </KeyboardAvoidingView>
@@ -539,6 +517,13 @@ const stopSheetStyles = StyleSheet.create({
     fontWeight: '600',
     color: MUTED_INK,
     textAlign: 'center',
+  },
+  nameLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: MUTED_INK,
+    marginBottom: -8,
+    marginTop: 4,
   },
   nameInput: {
     height: 44,

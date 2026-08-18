@@ -1129,7 +1129,7 @@ export function HikingScreen() {
   if (phase === 'select') {
     return (
       <>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: hikeIsDark ? "#0F1620" : "#F4EFE6" }]}>
         <HikingMap markers={[]} trackPoints={[]} onMarkerPress={() => {}} />
 
         {/* Top overlay: concept-locked stats strip (4 items in one row).
@@ -1165,33 +1165,35 @@ export function HikingScreen() {
                 the "Explore freely" story before the user commits to
                 a saved route, and mirrors the fern used on the
                 complete screen. */}
-            <TouchableOpacity style={styles.freeHikePill} onPress={openRoutePicker} activeOpacity={0.9}>
+            <TouchableOpacity style={[styles.freeHikePill, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.14)' } : null]} onPress={openRoutePicker} activeOpacity={0.9}>
               <Image
                 source={require('../../assets/hiking/fern-leaf.png')}
                 style={styles.freeHikeGlyph}
                 resizeMode="contain"
               />
               <View style={{ flex: 1 }}>
-                <Text style={styles.freeHikeEyebrow}>
+                <Text style={[styles.freeHikeEyebrow, hikeIsDark ? { color: '#F0EEE6' } : null]}>
                   {selectedRoute ? 'ROUTE' : 'FREE HIKE'}
                 </Text>
-                <Text style={styles.freeHikeSub} numberOfLines={1}>
+                <Text style={[styles.freeHikeSub, hikeIsDark ? { color: 'rgba(240,238,230,0.68)' } : null]} numberOfLines={1}>
                   {selectedRoute ? selectedRouteName : 'Explore freely'}
                 </Text>
               </View>
-              <Icon name="ChevronUp" size={18} color={Colors.textSecondary} strokeWidth={2.5} />
+              <Icon name="ChevronUp" size={18} color={hikeIsDark ? 'rgba(240,238,230,0.68)' : Colors.textSecondary} strokeWidth={2.5} />
             </TouchableOpacity>
 
-            {/* Start Hiking — solid pill button (concept color #455D3C) */}
+            {/* Start Hiking — solid pill button. R21 (2026-08-18) dark: use
+                deep-slate fill + cream text so it stops looking like a
+                bright button pasted on a dark map. */}
             <Animated.View style={[{ height: 52 }, { transform: [{ scale: trackBtnScale }] }]}>
               <TouchableOpacity
-                style={styles.startHikeBtn}
+                style={[styles.startHikeBtn, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.85)', borderColor: 'rgba(220,230,240,0.24)', borderWidth: 1 } : null]}
                 onPress={() => { haptic.impact('medium'); startTracking(); setPhase('tracking'); }}
                 activeOpacity={1}
                 onPressIn={() => springIn(trackBtnScale)}
                 onPressOut={() => springOut(trackBtnScale)}
               >
-                <Text style={styles.startHikeBtnText}>Start Hiking</Text>
+                <Text style={[styles.startHikeBtnText, hikeIsDark ? { color: '#F0EEE6' } : null]}>Start Hiking</Text>
               </TouchableOpacity>
             </Animated.View>
           </View>
@@ -1207,7 +1209,7 @@ export function HikingScreen() {
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }} contentContainerStyle={{ gap: Spacing.sm }}>
                 {/* Free Hiking */}
                 <TouchableOpacity
-                  style={[styles.routePickerRow, selectedRoute === null && styles.routePickerRowSelected]}
+                  style={[styles.routePickerRow, hikeIsDark ? { backgroundColor: "rgba(240,238,230,0.08)", borderColor: "rgba(220,230,240,0.14)" } : null, selectedRoute === null && (hikeIsDark ? { backgroundColor: "rgba(240,238,230,0.20)", borderColor: "rgba(220,230,240,0.35)" } : styles.routePickerRowSelected)]}
                   onPress={() => pickRoute(null)}
                   activeOpacity={0.8}
                 >
@@ -1243,7 +1245,8 @@ export function HikingScreen() {
                       key={r.id}
                       style={[
                         styles.routePickerRow,
-                        selectedRoute === r.id && styles.routePickerRowSelected,
+                        hikeIsDark ? { backgroundColor: 'rgba(240,238,230,0.08)', borderColor: 'rgba(220,230,240,0.14)' } : null,
+                        selectedRoute === r.id && (hikeIsDark ? { backgroundColor: 'rgba(240,238,230,0.20)', borderColor: 'rgba(220,230,240,0.35)' } : styles.routePickerRowSelected),
                         tooFar && { opacity: 0.45 },
                       ]}
                       onPress={tooFar ? undefined : () => pickRoute(r.id)}
@@ -1286,7 +1289,7 @@ export function HikingScreen() {
 
   return (
     <>
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: hikeIsDark ? "#0F1620" : "#F4EFE6" }]}>
       <HikingMap
         markers={markers}
         trackPoints={(trackPointsSmoothed.length >= 2 ? trackPointsSmoothed : trackPoints).map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentBreak: (tp as any).segmentBreak }))}
@@ -1331,9 +1334,9 @@ export function HikingScreen() {
               with the stats card. Kept invisible during normal operation. */}
           <View style={{ flex: 1 }} />
           {isTracking && signalLost && (
-            <View style={[styles.signalLostPill, hikeIsDark ? { backgroundColor: 'rgba(120,25,25,0.60)', borderColor: 'rgba(240,180,180,0.40)' } : null]}>
+            <View style={styles.signalLostPill}>
               <View style={styles.signalLostDot} />
-              <Text style={[styles.signalLostText, hikeIsDark ? { color: '#FBE4E4' } : null]}>
+              <Text style={styles.signalLostText}>
                 {signalLostMin >= 1 ? `Signal lost · ${signalLostMin} min` : 'Signal lost'}
               </Text>
             </View>
@@ -1542,6 +1545,17 @@ export function HikingScreen() {
                       const ts = useTrackingStore.getState();
                       setActionsExpanded(false);
                       if (!ts.startedAt) {
+                        stopTracking();
+                        return;
+                      }
+                      // R21 (2026-08-18 user "没任何移动直接点finish 应该 too short"):
+                      // pre-check distance before opening StopSummarySheet.
+                      // If < 20m or fewer than 2 points, route straight to
+                      // stopTracking so TooShortSheet observes the reason
+                      // via lastStopReason — same path save-hike-atomic
+                      // uses (matches wasTooShort at line 843).
+                      const isTooShort = ts.trackPoints.length < 2 || ts.distanceM < 20;
+                      if (isTooShort) {
                         stopTracking();
                         return;
                       }
@@ -2051,13 +2065,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginHorizontal: Spacing.base, marginTop: Spacing.sm,
     paddingHorizontal: Spacing.md, paddingVertical: 6,
-    backgroundColor: Colors.severityWarningBg,
+    backgroundColor: 'transparent',
     borderRadius: 999,
-    borderWidth: 1, borderColor: Colors.severityWarning,
     gap: 6,
   },
-  signalLostDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.severityWarning },
-  signalLostText: { fontSize: 11, fontWeight: '700', color: Colors.severityWarning, letterSpacing: 0.2 },
+  signalLostDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' },
+  signalLostText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
   // O18 HIKE-02: GPS accuracy chip — same shape as signalLostPill but
   // neutral color (Colors.textSecondary). Only rendered when accuracy > 15m
   // during active tracking (so 3m and 30m fixes read very differently).

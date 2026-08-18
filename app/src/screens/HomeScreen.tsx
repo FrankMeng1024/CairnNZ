@@ -13,7 +13,7 @@
  */
 import React, { useMemo, useState, useEffect } from 'react';
 import { View, StyleSheet, LayoutChangeEvent, TouchableOpacity, Text, Platform } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { HomeScreen as GeneratedHome } from './home_generated/HomeScreen.generated';
@@ -95,26 +95,29 @@ export function HomeScreen() {
   // reveals them ahead of completed sessions so a returning user is
   // reminded to resume or discard first. Refreshes on focus.
   const [unfinishedHikes, setUnfinishedHikes] = useState<Array<{ session_id: string; started_at: number; activity_mode: 'hiking' | 'running' }>>([]);
+  const refreshUnfinished = React.useCallback(async () => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { listActiveHikes } = require('../services/hikeTrackWriter');
+      const list = await listActiveHikes();
+      setUnfinishedHikes(
+        list.map((m: any) => ({
+          session_id: m.session_id,
+          started_at: m.started_at,
+          activity_mode: m.activity_mode,
+        })).sort((a: any, b: any) => b.started_at - a.started_at),
+      );
+    } catch { /* silent — no disk = empty */ }
+  }, []);
+  // R21 (2026-08-18 user "点击 discard 回到 homepage, 依旧展示 unfinish"):
+  // re-list on every focus so Discard from Hiking clears the card
+  // immediately. sessions.length dep kept so save-hike also refreshes.
+  useFocusEffect(React.useCallback(() => {
+    refreshUnfinished();
+  }, [refreshUnfinished]));
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { listActiveHikes } = require('../services/hikeTrackWriter');
-        const list = await listActiveHikes();
-        if (!cancelled) {
-          setUnfinishedHikes(
-            list.map((m: any) => ({
-              session_id: m.session_id,
-              started_at: m.started_at,
-              activity_mode: m.activity_mode,
-            })).sort((a: any, b: any) => b.started_at - a.started_at),
-          );
-        }
-      } catch { /* silent — no disk = empty */ }
-    })();
-    return () => { cancelled = true; };
-  }, [sessions.length]);
+    refreshUnfinished();
+  }, [sessions.length, refreshUnfinished]);
 
   const validSessions = useMemo(
     () => sessions.filter((s: any) => (s.distanceM > 0 || s.durationS > 0) && s.startedAt),
