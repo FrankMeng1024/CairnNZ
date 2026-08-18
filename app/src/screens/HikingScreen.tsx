@@ -1326,6 +1326,18 @@ export function HikingScreen() {
           {/* R21 v6 (2026-08-18 user "GPS因为下面已经有了 新的一行 不需要上面的"):
               top GPS chip removed — the stats card's GPS dot is the
               canonical status affordance. Keeping only Back at the top. */}
+          {/* R21 (2026-08-18 user "signal lost 放右上角 也就是和back一行的右边"):
+              signal-lost pill moved into the top-row so it never overlaps
+              with the stats card. Kept invisible during normal operation. */}
+          <View style={{ flex: 1 }} />
+          {isTracking && signalLost && (
+            <View style={[styles.signalLostPill, hikeIsDark ? { backgroundColor: 'rgba(120,25,25,0.60)', borderColor: 'rgba(240,180,180,0.40)' } : null]}>
+              <View style={styles.signalLostDot} />
+              <Text style={[styles.signalLostText, hikeIsDark ? { color: '#FBE4E4' } : null]}>
+                {signalLostMin >= 1 ? `Signal lost · ${signalLostMin} min` : 'Signal lost'}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Concept stats strip — always visible while on Hiking. */}
@@ -1355,17 +1367,8 @@ export function HikingScreen() {
           </View>
         )}
 
-        {/* v78 #1: Signal-lost pill — appears above the stats bar when
-            the latest accepted GPS fix is older than 30s. Hidden during
-            normal operation. */}
-        {isTracking && signalLost && (
-          <View style={styles.signalLostPill}>
-            <View style={styles.signalLostDot} />
-            <Text style={styles.signalLostText}>
-              {signalLostMin >= 1 ? `Signal lost · ${signalLostMin} min` : 'Signal lost'}
-            </Text>
-          </View>
-        )}
+        {/* v78 #1: Signal-lost pill was moved to top-row (2026-08-18 R21).
+            It now lives in the same row as the Back button, right-aligned. */}
         {/* O18 HIKE-07: transient lap toast — appears for 2s each time
             the user crosses a 1 km / 1 mi boundary during tracking. */}
         {isTracking && lapToast && (
@@ -1417,48 +1420,31 @@ export function HikingScreen() {
             </Animated.View>
           </View>
         ) : (
-          // Tracking: concept H1 layout — 44x44 pale compass FAB (left) +
-          // 44x44 pale layers FAB (right). Both edges align with the
-          // top-row Back / GPS chips so the page reads as a single grid.
-          // Cairn quick-drop lives in the H2 tray (chevron pull-up).
-          <View style={styles.controlRow}>
-            <View style={styles.controlSlot}>
-              <TouchableOpacity
-                style={styles.fabPale}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Toggle compass"
-                onPress={() => {
-                  haptic.selection();
-                  setCompassEnabled(v => !v);
-                }}
-              >
-                {compassEnabled ? (
-                  <CompassNeedle heading={heading} size={22} />
-                ) : (
-                  <Icon name="Compass" size={20} color={Colors.primary} strokeWidth={2} />
-                )}
-              </TouchableOpacity>
+          // R21 (2026-08-18 user "把指南针去掉"): compass FAB removed.
+          // Only Recenter remains, and only when the user has drifted off
+          // the follow position — otherwise the bottom row is empty so
+          // the map breathes. Actions (Pause/Cairn/Finish) moved to a
+          // vertical tray anchored to the right edge (see below).
+          !followUser ? (
+            <View style={styles.controlRow}>
+              <View style={{ flex: 1 }} />
+              <View style={styles.controlSlot}>
+                <TouchableOpacity
+                  style={[styles.fabPale, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.85)', borderColor: 'rgba(220,230,240,0.24)' } : null]}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Recenter map on current location"
+                  onPress={() => {
+                    haptic.selection();
+                    recenterImperativeRef.current?.();
+                    setTimeout(() => setFollowUser(true), 700);
+                  }}
+                >
+                  <Icon name="Target" size={20} color={hikeIsDark ? '#F0EEE6' : Colors.primary} strokeWidth={2} />
+                </TouchableOpacity>
+              </View>
             </View>
-            {/* R21 (2026-08-18 user "让重新定位按钮常量在右侧"): Recenter
-                fixed at right — no longer gated on !followUser. Layer
-                toggle removed (was TODO with no real handler). */}
-            <View style={styles.controlSlot}>
-              <TouchableOpacity
-                style={styles.fabPale}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Recenter map on current location"
-                onPress={() => {
-                  haptic.selection();
-                  recenterImperativeRef.current?.();
-                  setTimeout(() => setFollowUser(true), 700);
-                }}
-              >
-                <Icon name="Target" size={20} color={Colors.primary} strokeWidth={2} />
-              </TouchableOpacity>
-            </View>
-          </View>
+          ) : null
         )}
       </View>
 
@@ -1469,59 +1455,63 @@ export function HikingScreen() {
           overhaul removed the legacy inline trackingBar controls).
           Renders while tracking or paused (not gated by lock — Lock
           state was removed as part of the same overhaul). */}
+      {/* R21 (2026-08-18 user "在左下角 原指南针位置 向右侧横向弹出
+          即 箭头> Pause Cairn Finish"): anchor sits at bottom-left where
+          the old compass FAB was, tap → row expands to the right:
+          [Nav ▶] [Pause] [Cairn] [Finish]. Recenter (bottom-right) is
+          handled separately and only appears when the user has drifted. */}
       {isTrackingOrPaused && (
         <View
-          style={[styles.h2Layer, { paddingBottom: insets.bottom + 32 }]}
+          style={[styles.trayAnchorLayer, { paddingBottom: insets.bottom + 8 }]}
           pointerEvents="box-none"
         >
-          {actionsExpanded ? (
-            <View style={styles.h2Tray} pointerEvents="auto">
-              <TouchableOpacity
-                style={styles.h2ChevronHandle}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Hide quick actions"
-                onPress={() => {
-                  haptic.selection();
-                  setActionsExpanded(false);
-                }}
-              >
-                <Icon name="ChevronDown" size={18} color={Colors.textSecondary} strokeWidth={2.2} />
-              </TouchableOpacity>
-              <View style={styles.h2Row}>
-                <View style={styles.h2Slot}>
+          <View style={styles.trayAnchorRow} pointerEvents="auto">
+            <TouchableOpacity
+              style={[styles.trayAnchor, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.85)', borderColor: 'rgba(220,230,240,0.24)' } : null]}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={actionsExpanded ? 'Hide quick actions' : 'Show quick actions'}
+              onPress={() => {
+                haptic.selection();
+                setActionsExpanded(v => !v);
+              }}
+            >
+              <Icon
+                name={actionsExpanded ? 'ChevronLeft' : 'Navigation'}
+                size={22}
+                color={hikeIsDark ? '#F0EEE6' : Colors.primary}
+                strokeWidth={2.2}
+              />
+            </TouchableOpacity>
+            {actionsExpanded && (
+              <View style={styles.trayRow}>
+                <View style={styles.trayItem}>
                   <TouchableOpacity
-                    style={styles.h2Fab}
+                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
                     activeOpacity={0.85}
                     accessibilityRole="button"
                     accessibilityLabel={status === 'paused' ? 'Resume hike' : 'Pause hike'}
                     onPress={() => {
                       haptic.impact('light');
-                      // Paused → Resume; tracking → Pause. Single button
-                      // toggle keeps the tray tidy while covering both
-                      // states (concept H2 pause button role).
-                      if (status === 'paused') {
-                        resumeTracking();
-                      } else {
-                        pauseTracking();
-                      }
+                      if (status === 'paused') resumeTracking();
+                      else pauseTracking();
                       setActionsExpanded(false);
                     }}
                   >
                     <Icon
                       name={status === 'paused' ? 'Play' : 'Pause'}
                       size={22}
-                      color={Colors.primary}
+                      color={hikeIsDark ? '#F0EEE6' : Colors.primary}
                       strokeWidth={2.2}
                     />
                   </TouchableOpacity>
-                  <Text style={styles.h2FabLabel}>
+                  <Text style={[styles.trayFabLabel, hikeIsDark ? { color: '#F0EEE6' } : null]}>
                     {status === 'paused' ? 'Resume' : 'Pause'}
                   </Text>
                 </View>
-                <View style={styles.h2Slot}>
+                <View style={styles.trayItem}>
                   <TouchableOpacity
-                    style={styles.h2Fab}
+                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
                     activeOpacity={0.85}
                     accessibilityRole="button"
                     accessibilityLabel="Leave a Cairn"
@@ -1539,28 +1529,15 @@ export function HikingScreen() {
                       resizeMode="contain"
                     />
                   </TouchableOpacity>
-                  <Text style={styles.h2FabLabel}>Cairn</Text>
+                  <Text style={[styles.trayFabLabel, hikeIsDark ? { color: '#F0EEE6' } : null]}>Cairn</Text>
                 </View>
-                <View style={styles.h2Slot}>
+                <View style={styles.trayItem}>
                   <TouchableOpacity
-                    style={styles.h2Fab}
+                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
                     activeOpacity={0.85}
                     accessibilityRole="button"
-                    accessibilityLabel="Lock — prevent accidental taps"
-                    accessibilityHint="Long-press to finish the hike"
+                    accessibilityLabel="Finish hike"
                     onPress={() => {
-                      // 2026-08-17 concept H2: third slot returns to
-                      // Lock (concept-locked). Tap collapses the tray
-                      // so accidental Pause/Cairn taps stop working
-                      // until the user pulls the chevron up again —
-                      // that's the intended pocket-tap guard.
-                      haptic.selection();
-                      setActionsExpanded(false);
-                    }}
-                    onLongPress={() => {
-                      // Finish-hike affordance preserved as long-press
-                      // on Lock. Same StopSummarySheet path the previous
-                      // Done button opened — behaviorally identical.
                       haptic.impact('medium');
                       const ts = useTrackingStore.getState();
                       setActionsExpanded(false);
@@ -1578,28 +1555,14 @@ export function HikingScreen() {
                         startedAt: ts.startedAt,
                       });
                     }}
-                    delayLongPress={600}
                   >
-                    <Icon name="Lock" size={22} color={Colors.primary} strokeWidth={2.2} />
+                    <Icon name="Flag" size={22} color={hikeIsDark ? '#F0EEE6' : Colors.primary} strokeWidth={2.2} />
                   </TouchableOpacity>
-                  <Text style={styles.h2FabLabel}>Lock</Text>
+                  <Text style={[styles.trayFabLabel, hikeIsDark ? { color: '#F0EEE6' } : null]}>Finish</Text>
                 </View>
               </View>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.h2ChevronHandle}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Show quick actions"
-              onPress={() => {
-                haptic.selection();
-                setActionsExpanded(true);
-              }}
-            >
-              <Icon name="ChevronUp" size={18} color={Colors.textSecondary} strokeWidth={2.2} />
-            </TouchableOpacity>
-          )}
+            )}
+          </View>
         </View>
       )}
 
@@ -1882,9 +1845,52 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.10, shadowRadius: 12, elevation: 4,
   },
 
-  // H2 concept: expandable action tray during tracking.
-  // Sits above the H1 bottom FAB row. Chevron pull-up handle
-  // reveals 3 large 56x56 circular buttons (Pause / Cairn / Lock).
+  // R21 (2026-08-18): tray anchor sits at BOTTOM-LEFT (old compass FAB
+  // position). Navigation button collapses/expands horizontal row that
+  // slides out to its right (Pause → Cairn → Finish).
+  trayAnchorLayer: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: 0,
+    pointerEvents: 'box-none',
+  },
+  trayAnchorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingLeft: Spacing.base,
+  },
+  trayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  trayItem: {
+    alignItems: 'center',
+  },
+  trayAnchor: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: CONCEPT.paper94,
+    borderWidth: 1, borderColor: CONCEPT.hairline,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15, shadowRadius: 10, elevation: 6,
+  },
+  trayFab: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: CONCEPT.paper94,
+    borderWidth: 1, borderColor: CONCEPT.hairline,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12, shadowRadius: 10, elevation: 4,
+  },
+  trayFabLabel: {
+    marginTop: 2,
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+
+  // Legacy h2* styles kept for now (unused after tray rework).
   h2Layer: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,

@@ -18,6 +18,7 @@ import { TouchableOpacity, Text, StyleSheet, Animated, View, Platform } from 're
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from './tokens';
 import { Icon } from './Icon';
+import { useAppearance } from '../hooks/useAppearance';
 
 // Lazy require expo-blur — graceful fallback on web / unsupported targets.
 let BlurView: any = null;
@@ -38,6 +39,10 @@ interface BackButtonProps {
 export function BackButton({ variant = 'inline', label = 'Back', onPress }: BackButtonProps) {
   const nav = useNavigation();
   const scale = useRef(new Animated.Value(1)).current;
+  // R21 (2026-08-18): dark-aware colour. Ink becomes cream on night bg
+  // so the inline back stays readable on Hike / MapScreen dark overlays.
+  const { isDark } = useAppearance();
+  const inkColor = isDark ? '#F0EEE6' : Colors.primary;
 
   const handlePressIn = () =>
     Animated.spring(scale, { toValue: 0.95, useNativeDriver: true, tension: 300, friction: 10 }).start();
@@ -60,8 +65,8 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress }: Back
           onPressOut={handlePressOut}
           activeOpacity={1}
         >
-          <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
-          <Text style={styles.inlineText}>{label}</Text>
+          <Icon name="ChevronLeft" size={IconSize.sm} color={inkColor} strokeWidth={2.5} />
+          <Text style={[styles.inlineText, { color: inkColor }]}>{label}</Text>
         </TouchableOpacity>
       </Animated.View>
     );
@@ -137,18 +142,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md, paddingVertical: 7,
   },
   pillText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.primary },
-  // R21 v5 (2026-08-18 user "上方back是虚化的"): removed the white text
-  // shadow — user reported the "Back" label looked blurred/frosted on
-  // map overlays. Clean bold deep-green on a subtle capsule reads as
-  // sharper. On paper bg the capsule is nearly invisible; on maps it
-  // gives just enough separation to read.
+  // R21 v6 (2026-08-18 user "back的风格参考auth 不应该有白色框"): match Auth
+  // exactly — no background, no shadow, just ChevronLeft + "Back" text
+  // deep-green on 8pt vertical padding.
   inline: {
     flexDirection: 'row', alignItems: 'center', gap: 2,
     alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: Radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    paddingVertical: 8,
   },
   inlineText: {
     fontSize: FontSize.caption, fontWeight: '600', color: Colors.primary,

@@ -89,6 +89,33 @@ export function HomeScreen() {
   // builds after 5-tap Settings unlock.
   const debugMode = useSettingsStore(s => s.debugMode);
 
+  // R21 (2026-08-18 user "如果正有一个正在进行 未完成的hike ... 展示的内容是
+  // 最后一个未完成的action, N-1个未完成的action, last 完成了的 action,
+  // empty action"): read unfinished hike/run backups from disk. Home
+  // reveals them ahead of completed sessions so a returning user is
+  // reminded to resume or discard first. Refreshes on focus.
+  const [unfinishedHikes, setUnfinishedHikes] = useState<Array<{ session_id: string; started_at: number; activity_mode: 'hiking' | 'running' }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { listActiveHikes } = require('../services/hikeTrackWriter');
+        const list = await listActiveHikes();
+        if (!cancelled) {
+          setUnfinishedHikes(
+            list.map((m: any) => ({
+              session_id: m.session_id,
+              started_at: m.started_at,
+              activity_mode: m.activity_mode,
+            })).sort((a: any, b: any) => b.started_at - a.started_at),
+          );
+        }
+      } catch { /* silent — no disk = empty */ }
+    })();
+    return () => { cancelled = true; };
+  }, [sessions.length]);
+
   const validSessions = useMemo(
     () => sessions.filter((s: any) => (s.distanceM > 0 || s.durationS > 0) && s.startedAt),
     [sessions],
@@ -192,10 +219,21 @@ export function HomeScreen() {
     return sorted[0];
   }, [hasHike, validSessions]);
 
-  const lastHikeTitle = lastHike?.name || 'Recent hike';
-  const lastHikeMeta = lastHike
+  // R21 (2026-08-18): priority display — most recent unfinished action wins
+  // over the last completed hike. Users see "resume or discard" instead of
+  // "here's an old completed hike" when there's an in-progress session.
+  const topUnfinished = unfinishedHikes[0] ?? null;
+  const otherUnfinishedCount = Math.max(0, unfinishedHikes.length - 1);
+  const showUnfinished = !!topUnfinished;
+
+  const lastHikeTitle = showUnfinished
+    ? (topUnfinished.activity_mode === 'running' ? 'Run in progress' : 'Hike in progress')
+    : (lastHike?.name || 'Recent hike');
+  const lastHikeMeta = showUnfinished
+    ? `Tap to resume or discard${otherUnfinishedCount > 0 ? ` · +${otherUnfinishedCount} more unfinished` : ''} · Started ${formatRelativeDay(topUnfinished.started_at)}`
+    : (lastHike
     ? `${formatDistanceKm(lastHike.distanceM || 0)} · ${formatDuration(lastHike.durationS || 0)} · ${formatRelativeDay(lastHike.startedAt)}`
-    : '';
+    : '');
 
   const initial = ((user?.name ?? user?.email ?? '?').charAt(0) || '?').toUpperCase();
   const greetingName = user?.name || 'Explorer';
@@ -262,7 +300,7 @@ export function HomeScreen() {
           ]}
         >
           <GeneratedHome
-            state={displayState}
+            state={showUnfinished ? 'H1' : displayState}
             initial={initial}
             greetingName={greetingName}
             exploredKm2={exploredKm2}
@@ -272,6 +310,10 @@ export function HomeScreen() {
             onToggleUnit={showExplorationPercent ? () => setShowPercent(v => !v) : undefined}
             lastHikeTitle={lastHikeTitle}
             lastHikeMeta={lastHikeMeta}
+            lastHikeEyebrow={showUnfinished ? 'Unfinished' : 'Last hike'}
+            onLastHikePress={showUnfinished
+              ? () => nav.navigate(topUnfinished!.activity_mode === 'running' ? 'Running' : 'Hiking')
+              : undefined}
             bgAsset={bgTokens.bgAsset}
             bgTokens={bgTokens}
             forcedIsDark={bgTokens.variant.endsWith('-night')}

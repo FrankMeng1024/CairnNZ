@@ -34,6 +34,11 @@ export function HomeScreen(props: {
    *  over useAppearance so the DEV Day/Night toggle (which only sets
    *  dayNightOverride, NOT appearance) also flips the action icons. */
   forcedIsDark?: boolean;
+  /** R21 (2026-08-18): when set, the last-hike card is tappable and its
+   *  eyebrow shows the passed label (e.g. "Unfinished") instead of the
+   *  default "Last hike". */
+  lastHikeEyebrow?: string;
+  onLastHikePress?: () => void;
 } = {}) {
   const nav = useNavigation<any>();
   const state = props.state ?? 'H0';
@@ -224,11 +229,16 @@ export function HomeScreen(props: {
           </Text>
           {/* R21 (2026-08-17): duplicate top-right toggle removed. The new
               inline toggle sits next to the km² label. */}
-          <View style={[styles.H1__last_hike_card, cardContainerOverride]}>
-            <Text style={[styles.H1__last_hike_card__last_hike_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{'Last hike'}</Text>
+          <TouchableOpacity
+            activeOpacity={props.onLastHikePress ? 0.85 : 1}
+            disabled={!props.onLastHikePress}
+            onPress={props.onLastHikePress}
+            style={[styles.H1__last_hike_card, cardContainerOverride]}
+          >
+            <Text style={[styles.H1__last_hike_card__last_hike_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{props.lastHikeEyebrow ?? 'Last hike'}</Text>
             <Text style={[styles.H1__last_hike_card__last_hike_title, cardText ? { color: cardText } : null]}>{lastHikeTitle}</Text>
             <Text style={[styles.H1__last_hike_card__last_hike_meta, cardTextMuted ? { color: cardTextMuted } : null]}>{lastHikeMeta}</Text>
-          </View>
+          </TouchableOpacity>
         </>
       )}
     </View>

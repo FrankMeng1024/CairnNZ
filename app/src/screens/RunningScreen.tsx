@@ -28,12 +28,13 @@ import { useTrackingStore } from '../store/useTrackingStore';
 import { useRouteStore } from '../store/useRouteStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { getCurrentRegion } from '../config/regions';
-import { getPrimaryMapStyle } from '../config/mapbox';
+import { getPrimaryMapStyle, getMapStyleForLayer } from '../config/mapbox';
 import { formatDuration } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
+import { useAppearance } from '../hooks/useAppearance';
 import { PulseDot } from '../components/PulseDot';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
@@ -195,6 +196,16 @@ export function RunningScreen() {
   const routes = useRouteStore(s => s.routes);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
   const [runState, setRunState] = useState<RunState>('pre');
+  // R21 (2026-08-18): dark theme parity with Hiking. Run tray + top pills
+  // + Recenter FAB honour Settings Appearance so day/night reads the same.
+  const { isDark: runIsDark } = useAppearance();
+  // R21 (2026-08-18 user "点击 向右侧展开"): tracking action tray is
+  // collapsed by default. Tap the Navigation anchor (bottom-left) to
+  // expand → Pause / Cairn / Finish slides out to the right.
+  const [runActionsExpanded, setRunActionsExpanded] = useState(false);
+  // R21 (2026-08-18): follow-camera state so Recenter FAB is only shown
+  // when the user has dragged the map off-position.
+  const [runFollowUser, setRunFollowUser] = useState(true);
   // O18 RUN-07: capture sessionId at Stop so 'View activity detail' can
   // navigate to MapHistory even after stopTracking clears the store's id.
   const [stoppedSessionId, setStoppedSessionId] = useState<string | number | null>(null);
@@ -754,7 +765,7 @@ export function RunningScreen() {
           <MapView
             key={`map-${mapEpoch}`}
             style={StyleSheet.absoluteFillObject}
-            styleURL={getPrimaryMapStyle()}
+            styleURL={runIsDark ? getMapStyleForLayer('outdoors', true) : getPrimaryMapStyle()}
             logoEnabled={false}
             attributionEnabled={false}
             scaleBarEnabled={false}
@@ -977,7 +988,7 @@ export function RunningScreen() {
             <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
               <MapView
                 style={StyleSheet.absoluteFillObject}
-                styleURL={getPrimaryMapStyle()}
+                styleURL={runIsDark ? getMapStyleForLayer('outdoors', true) : getPrimaryMapStyle()}
                 logoEnabled={false}
                 attributionEnabled={false}
                 scaleBarEnabled={false}
@@ -1043,12 +1054,13 @@ export function RunningScreen() {
             </View>
           )}
           {/* O18 RUN-02: Signal-lost chip (parity with Hiking).
-              Visible only during active tracking after 2 min of no fix. */}
+              Visible only during active tracking after 2 min of no fix.
+              R21 (2026-08-18): pinned to top-right + dark-aware. */}
           {status === 'tracking' && signalLost && (
-            <SafeAreaView edges={['top']}>
-              <View style={runStyles.signalLostPill}>
+            <SafeAreaView edges={['top']} style={{ alignItems: 'flex-end', paddingHorizontal: Spacing.base }}>
+              <View style={[runStyles.signalLostPill, runIsDark ? { backgroundColor: 'rgba(120,25,25,0.60)', borderColor: 'rgba(240,180,180,0.40)' } : null]}>
                 <View style={runStyles.signalLostDot} />
-                <Text style={runStyles.signalLostText}>
+                <Text style={[runStyles.signalLostText, runIsDark ? { color: '#FBE4E4' } : null]}>
                   {signalLostMin >= 1 ? `Signal lost · ${signalLostMin} min` : 'Signal lost'}
                 </Text>
               </View>
@@ -1059,7 +1071,7 @@ export function RunningScreen() {
               blank for duration since HH:MM:SS reads on its own,
               "/km" suffix baked into paceDisplay). */}
           <SafeAreaView edges={['top']}>
-            <View style={runStyles.statsBar}>
+            <View style={[runStyles.statsBar, runIsDark ? { backgroundColor: "rgba(15,22,38,0.55)", borderBottomColor: "rgba(220,230,240,0.14)" } : null]}>
               <StatItem value={distDisplay} label={dist.unit} />
               <StatItem value={durationDisplay} label="" />
               <StatItem value={paceDisplay} label={paceDisplay === '--' ? '' : paceUnit} />
@@ -1078,77 +1090,96 @@ export function RunningScreen() {
               removed. R1 is now a clean map-first view — the polyline and
               stats bar carry the whole R1 experience. */}
 
-          {/* R2 action tray — always visible during 'running' state.
-              Three circular buttons: Pause / Cairn / Done. Done opens the
-              save-name sheet, which then calls handleStop(name). */}
-          <View style={runStyles.unlockedWrap} pointerEvents="box-none">
-            <SafeAreaView edges={['bottom']}>
-              <View style={runStyles.actionsRow}>
-                {/* Pause */}
-                <View style={runStyles.actionCol}>
-                  <TouchableOpacity
-                    style={runStyles.actionCircleForest}
-                    onPress={() => {
-                      haptic.impact('light');
-                      if (status === 'paused') resumeTracking();
-                      else pauseTracking();
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={status === 'paused' ? 'Resume run' : 'Pause run'}
-                  >
-                    <Icon
-                      name={status === 'paused' ? 'Play' : 'Pause'}
-                      size={24} color={RunConcept.textPrimary} strokeWidth={2}
-                    />
-                  </TouchableOpacity>
-                  <Text style={runStyles.actionLabel}>{status === 'paused' ? 'Resume' : 'Pause'}</Text>
-                </View>
-
-                {/* Leave a Cairn — dark forest circle with the cairn-stack
-                    PNG asset (replaces the previous lucide Flag icon). */}
-                <View style={runStyles.actionCol}>
-                  <TouchableOpacity
-                    style={runStyles.actionCircleCairn}
-                    onPress={handlePlantCairn}
-                    disabled={!locationAvailable}
-                    accessibilityRole="button"
-                    accessibilityLabel="Leave a Cairn"
-                  >
-                    <Image
-                      source={require('../../assets/running/cairn-stack.png')}
-                      style={runStyles.cairnGlyph}
-                      resizeMode="contain"
-                    />
-                  </TouchableOpacity>
-                  <Text style={runStyles.actionLabel}>Cairn</Text>
-                </View>
-
-                {/* Lock — concept R2 third slot (2026-08-17).
-                    Tap collapses tray semantics (via reactivity of the
-                    outer overlay); long-press retains the previous Done
-                    behavior so the user can still finish a run. */}
-                <View style={runStyles.actionCol}>
-                  <TouchableOpacity
-                    style={runStyles.actionCircleForest}
-                    onPress={() => {
-                      haptic.selection();
-                      // Concept lock is a pocket-tap guard. Real lock
-                      // behavior is deferred; the visual affordance
-                      // matches the concept sheet 1:1.
-                    }}
-                    onLongPress={() => {
-                      haptic.impact('medium');
-                      openSaveSheet();
-                    }}
-                    delayLongPress={600}
-                    accessibilityRole="button"
-                    accessibilityLabel="Lock — prevent accidental taps"
-                    accessibilityHint="Long-press to finish the run"
-                  >
-                    <Icon name="Lock" size={24} color={RunConcept.textPrimary} strokeWidth={2} />
-                  </TouchableOpacity>
-                  <Text style={runStyles.actionLabel}>Lock</Text>
-                </View>
+          {/* R21 (2026-08-18 user "run同步 也是一样"): R2 action tray now
+              mirrors Hiking — collapsible anchor at bottom-left (old
+              compass FAB position). Tap Navigation → Pause / Cairn /
+              Finish slides out to the right. Same behaviour paused or
+              running. Recenter FAB lives bottom-right and only appears
+              when the user has dragged the map off follow. */}
+          <View style={runStyles.trayAnchorLayer} pointerEvents="box-none">
+            <SafeAreaView edges={['bottom']} pointerEvents="box-none">
+              <View style={runStyles.trayAnchorRow} pointerEvents="auto">
+                <TouchableOpacity
+                  style={[runStyles.trayAnchor, runIsDark ? { backgroundColor: 'rgba(15,22,38,0.85)', borderColor: 'rgba(220,230,240,0.24)' } : null]}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={runActionsExpanded ? 'Hide quick actions' : 'Show quick actions'}
+                  onPress={() => {
+                    haptic.selection();
+                    setRunActionsExpanded(v => !v);
+                  }}
+                >
+                  <Icon
+                    name={runActionsExpanded ? 'ChevronLeft' : 'Navigation'}
+                    size={22}
+                    color={runIsDark ? '#F0EEE6' : RunConcept.textPrimary}
+                    strokeWidth={2.2}
+                  />
+                </TouchableOpacity>
+                {runActionsExpanded && (
+                  <View style={runStyles.trayRow}>
+                    <View style={runStyles.trayItem}>
+                      <TouchableOpacity
+                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
+                        activeOpacity={0.85}
+                        onPress={() => {
+                          haptic.impact('light');
+                          if (status === 'paused') resumeTracking();
+                          else pauseTracking();
+                          setRunActionsExpanded(false);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={status === 'paused' ? 'Resume run' : 'Pause run'}
+                      >
+                        <Icon
+                          name={status === 'paused' ? 'Play' : 'Pause'}
+                          size={22} color={runIsDark ? '#F0EEE6' : RunConcept.textPrimary} strokeWidth={2.2}
+                        />
+                      </TouchableOpacity>
+                      <Text style={[runStyles.trayFabLabel, runIsDark ? { color: '#F0EEE6' } : null]}>
+                        {status === 'paused' ? 'Resume' : 'Pause'}
+                      </Text>
+                    </View>
+                    <View style={runStyles.trayItem}>
+                      <TouchableOpacity
+                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
+                        activeOpacity={0.85}
+                        onPress={() => {
+                          setRunActionsExpanded(false);
+                          handlePlantCairn();
+                        }}
+                        disabled={!locationAvailable}
+                        accessibilityRole="button"
+                        accessibilityLabel="Leave a Cairn"
+                      >
+                        <Image
+                          source={runIsDark
+                            ? require('../../assets/home/action-leave-cairn-night.png')
+                            : require('../../assets/home/action-leave-cairn-day.png')}
+                          style={{ width: 28, height: 28 }}
+                          resizeMode="contain"
+                        />
+                      </TouchableOpacity>
+                      <Text style={[runStyles.trayFabLabel, runIsDark ? { color: '#F0EEE6' } : null]}>Cairn</Text>
+                    </View>
+                    <View style={runStyles.trayItem}>
+                      <TouchableOpacity
+                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
+                        activeOpacity={0.85}
+                        onPress={() => {
+                          haptic.impact('medium');
+                          setRunActionsExpanded(false);
+                          openSaveSheet();
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Finish run"
+                      >
+                        <Icon name="Flag" size={22} color={runIsDark ? '#F0EEE6' : RunConcept.textPrimary} strokeWidth={2.2} />
+                      </TouchableOpacity>
+                      <Text style={[runStyles.trayFabLabel, runIsDark ? { color: '#F0EEE6' } : null]}>Finish</Text>
+                    </View>
+                  </View>
+                )}
               </View>
               {plantToast && (
                 <View style={runStyles.plantToast}>
@@ -1453,6 +1484,45 @@ const runStyles = StyleSheet.create({
   // that still stack label under value don't break.
   statUnit: { fontSize: 11, fontWeight: '500', color: RunConcept.textMuted, letterSpacing: 0.2 },
   statLabel: { fontSize: FontSize.tiny, color: RunConcept.textMuted, marginTop: 2, letterSpacing: 0.5 },
+
+  // R21 (2026-08-18): tray anchor mirrors Hiking — bottom-left, tap
+  // Navigation → row expands to the right (Pause / Cairn / Finish).
+  trayAnchorLayer: { position: 'absolute', bottom: 0, left: 0, right: 0 },
+  trayAnchorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingLeft: Spacing.base,
+    paddingBottom: Spacing.sm,
+  },
+  trayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  trayItem: { alignItems: 'center' },
+  trayAnchor: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: 'rgba(255,253,247,0.94)',
+    borderWidth: 1, borderColor: 'rgba(20,42,30,0.10)',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15, shadowRadius: 10, elevation: 6,
+  },
+  trayFab: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: 'rgba(255,253,247,0.94)',
+    borderWidth: 1, borderColor: 'rgba(20,42,30,0.10)',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12, shadowRadius: 10, elevation: 4,
+  },
+  trayFabLabel: {
+    marginTop: 2,
+    fontSize: 11,
+    color: RunConcept.textMuted,
+    fontWeight: '600',
+  },
 
   unlockedWrap: { position: 'absolute', bottom: 0, left: 0, right: 0 },
   // R2 concept (fix 2): 3 EQUAL pale-paper circular buttons in a row with
