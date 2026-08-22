@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './Icon';
 import { Colors, Spacing, Radius, FontSize, Shadow } from './tokens';
 import { useDistance } from '../utils/distanceFormat';
-import { useAppearance } from '../hooks/useAppearance';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 interface UnfinishedData {
   sessionId: string;
@@ -62,13 +62,13 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
   // R21 (2026-08-18 user "resume没有用夜间模式 风格也有点偏差"): swap the
   // sheet + text tokens with Home / route-picker style so the recovery
   // modal reads as part of the same visual system and honours dark mode.
-  const { isDark } = useAppearance();
-  const sheetBg = isDark ? 'rgba(15,22,38,0.96)' : 'rgba(255,253,247,0.98)';
-  const primaryText = isDark ? '#F0EEE6' : '#1B3A28';
-  const mutedText = isDark ? 'rgba(240,238,230,0.68)' : 'rgba(27,58,40,0.62)';
-  const handleColor = isDark ? 'rgba(220,230,240,0.30)' : 'rgba(20,42,30,0.20)';
-  const iconBg = isDark ? 'rgba(240,238,230,0.10)' : 'rgba(20,42,30,0.08)';
-  const iconColor = isDark ? '#F0EEE6' : '#1B3A28';
+  const theme = useVisualTheme();
+  const sheetBg = theme.surfaceElevated;
+  const primaryText = theme.foreground;
+  const mutedText = theme.foregroundSecondary;
+  const handleColor = theme.border;
+  const iconBg = theme.surface;
+  const iconColor = theme.icon;
 
   useEffect(() => {
     if (visible) {

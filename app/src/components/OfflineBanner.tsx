@@ -23,8 +23,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, FontSize } from './tokens';
 import { Icon } from './Icon';
 import { useOnlineOnly } from '../hooks/useOnlineOnly';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 export function OfflineBanner() {
+  const theme = useVisualTheme();
   const { online } = useOnlineOnly();
   const insets = useSafeAreaInsets();
   const opacity = useRef(new Animated.Value(0)).current;
@@ -58,9 +60,9 @@ export function OfflineBanner() {
         },
       ]}
     >
-      <View style={styles.bar}>
-        <Icon name="CloudOff" size={14} color={Colors.textSecondary} strokeWidth={2} />
-        <Text style={styles.text}>You&apos;re offline. Some actions will sync when you&apos;re back.</Text>
+      <View style={[styles.bar, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
+        <Icon name="CloudOff" size={14} color={theme.icon} strokeWidth={2} />
+        <Text style={[styles.text, { color: theme.foregroundSecondary }]}>You&apos;re offline. Some actions will sync when you&apos;re back.</Text>
       </View>
     </Animated.View>
   );

@@ -296,8 +296,8 @@ const cairnStyles = StyleSheet.create({
 });
 
 // ── Press-animated wrapper ─────────────────────────────────────────────────
-function PressBtn({ onPress, style, children, scale = 0.97, disabled }: {
-  onPress: () => void; style?: object | object[]; children: React.ReactNode; scale?: number; disabled?: boolean;
+function PressBtn({ onPress, style, children, scale = 0.97, disabled, testID }: {
+  onPress: () => void; style?: object | object[]; children: React.ReactNode; scale?: number; disabled?: boolean; testID?: string;
 }) {
   const anim = useRef(new Animated.Value(1)).current;
   const onIn = () => !disabled && Animated.spring(anim, { toValue: scale, useNativeDriver: true, tension: 300, friction: 10 }).start();
@@ -305,6 +305,7 @@ function PressBtn({ onPress, style, children, scale = 0.97, disabled }: {
   return (
     <Animated.View style={{ transform: [{ scale: anim }] }}>
       <TouchableOpacity
+        testID={testID}
         onPress={disabled ? undefined : onPress}
         onPressIn={onIn}
         onPressOut={onOut}
@@ -1617,7 +1618,6 @@ export function AuthScreen() {
             style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
             resizeMode="cover"
             fadeDuration={0}
-          >
           >
             {/* R21 (2026-08-17): softer top-to-bottom fade to paper. Landing
                 hero is landscape (702×358); on portrait phones it fills as

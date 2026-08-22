@@ -2,7 +2,13 @@
 unity_setup/
 .playwright-mcp/
 debug-snapshots/
-docs/qa/
+docs/qa/**
+!docs/qa/visual-migration/
+!docs/qa/visual-migration/final/
+!docs/qa/visual-migration/final/weather-board.jpg
+!docs/qa/visual-migration/final/day-night-board.jpg
+!docs/qa/visual-migration/final/product-unity-board.jpg
+!docs/qa/visual-migration/asset-contact-sheet-baseline.jpg
 docs/ux/
 docs/virtual-user/
 node_modules/

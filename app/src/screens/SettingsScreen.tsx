@@ -689,7 +689,7 @@ export function SettingsScreen() {
   const footerOverride = { color: settingsBgTokens.textColor, opacity: 0.75 };
 
   return (
-    <View style={{ flex: 1, backgroundColor: settingsBgTokens.useDarkText ? '#F4EFE6' : '#0A1220' }}>
+    <View style={{ flex: 1, backgroundColor: settingsBgTokens.useDarkText ? '#F4EFE6' : '#183128' }}>
       {/* R21 (2026-08-17): weather-adaptive bg + weather-adaptive veil. */}
       <Image
         source={settingsBgTokens.bgAsset}
@@ -703,8 +703,8 @@ export function SettingsScreen() {
       />
       <View style={[styles.bgVeil, {
         backgroundColor: settingsBgTokens.useDarkText
-          ? 'rgba(244,239,230,0.42)'   // day: warm paper veil, translucent
-          : 'rgba(10,18,32,0.55)',     // night: deep-ink veil
+          ? 'rgba(243,244,234,0.78)'   // day: scenery supports the long form
+          : 'rgba(19,38,31,0.76)',     // night: open spruce, never near-black
       }]} />
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Top bar (no Save button — settings auto-persist via updateSetting) */}

@@ -11,7 +11,7 @@
  */
 import React from 'react';
 import { Platform } from 'react-native';
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // R113 restore: navigationRef for Playwright web QA (Round loop). Removed
@@ -50,6 +50,7 @@ import { useAppStore } from '../store/useAppStore';
 // R21 (2026-08-17): isPlaywrightBypass import removed — no more bypass in
 // nav gate. Real login flow only.
 import { markBootPhase } from '../services/bootDiagnostics';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 // v302: mark immediately after all transitive imports above resolved.
 // If app dies between `render_about_to_mount_root` (App.tsx) and
@@ -93,6 +94,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
   const { isLoggedIn, user } = useAppStore();
+  const visualTheme = useVisualTheme();
   markBootPhase('navigator_body_running', { isLoggedIn: !!isLoggedIn });
 
   // v312 anchor: just before NavigationContainer JSX. If we see this
@@ -127,6 +129,19 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer
+      theme={{
+        ...DefaultTheme,
+        dark: visualTheme.mode === 'night',
+        colors: {
+          ...DefaultTheme.colors,
+          primary: visualTheme.primary,
+          background: visualTheme.background,
+          card: visualTheme.surfaceElevated,
+          text: visualTheme.foreground,
+          border: visualTheme.border,
+          notification: visualTheme.accent,
+        },
+      }}
       ref={navigationRef ?? undefined}
       onReady={() => {
         markBootPhase('navigation_container_ready', { isLoggedIn: !!isLoggedIn });
@@ -146,6 +161,11 @@ export function RootNavigator() {
             try {
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.useSettingsStore = require('../store/useSettingsStore').useSettingsStore;
+              // Visual-migration QA: force weather and day/night without
+              // changing production weather-fetch semantics. Web-only and
+              // available through the existing Playwright store bridge.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.useWeatherStore = require('../store/useWeatherStore').useWeatherStore;
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.useSimWalkerStore = require('../dev/simWalker/useSimWalkerStore').useSimWalkerStore;
               // eslint-disable-next-line @typescript-eslint/no-require-imports

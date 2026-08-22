@@ -5,7 +5,7 @@
  * Sprint 42 — STORY-00140: Visual Quality Foundation
  */
 import React from 'react';
-import { View, StyleSheet, Platform, ViewStyle } from 'react-native';
+import { View, StyleSheet, Platform, ViewStyle, StyleProp } from 'react-native';
 
 // expo-blur may not be available in web/Expo Go — graceful fallback
 let BlurView: any = null;
@@ -19,7 +19,7 @@ interface GlassPanelProps {
   intensity?: number;       // blur intensity (1-100, default 20)
   tint?: 'light' | 'dark'; // glass tint
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   borderRadius?: number;
 }
 

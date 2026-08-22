@@ -32,7 +32,7 @@ import { MARKER_META, type MarkerType } from '../data/mockData';
 // R114 (2026-08-07): canonical MarkCard import (post-Metro-restart).
 import { MarkCard } from '../features/marks/components/MarkCard';
 import { EmptyRoutes, EmptyMarkers, IllustrationHalo } from '../components/Illustrations';
-import { useAppearance } from '../hooks/useAppearance';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 // ── Mapbox conditional import (for RouteSheet preview) ────────────────────
 // Native-only — on web fallback to a static placeholder.
@@ -72,6 +72,7 @@ const FLAG_TYPES: { id: MarkerType; icon: IconName; label: string; color: string
 
 // ── Segment Control ──────────────────────────────────────────────────────────
 function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+  const theme = useVisualTheme();
   // v119: tab order: Activities first (the source of truth — every walked
   // session lives here), then Routes (curated, derived from Activities),
   // then Flags (place markers). This matches user mental model: "I want
@@ -82,10 +83,10 @@ function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) 
     { id: 'flags', label: 'Cairns' },
   ];
   return (
-    <View style={segStyles.container}>
+    <View style={[segStyles.container, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
       {tabs.map(t => (
-        <TouchableOpacity key={t.id} style={[segStyles.tab, active === t.id && segStyles.tabActive]} onPress={() => onChange(t.id)} activeOpacity={0.8}>
-          <Text style={[segStyles.tabText, active === t.id && segStyles.tabTextActive]}>{t.label}</Text>
+        <TouchableOpacity key={t.id} style={[segStyles.tab, active === t.id && segStyles.tabActive, active === t.id ? { backgroundColor: theme.primary } : null]} onPress={() => onChange(t.id)} activeOpacity={0.8}>
+          <Text style={[segStyles.tabText, active === t.id && segStyles.tabTextActive, { color: active === t.id ? theme.onPrimary : theme.foregroundSecondary }]}>{t.label}</Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -102,6 +103,7 @@ function ScopeTabBar({
   scope: 'mine' | 'friends';
   onChange: (s: 'mine' | 'friends') => void;
 }) {
+  const theme = useVisualTheme();
   const SCOPES: { id: 'mine' | 'friends'; label: string }[] = [
     { id: 'mine', label: 'Mine' },
     { id: 'friends', label: 'Friends' },
@@ -111,12 +113,12 @@ function ScopeTabBar({
       {SCOPES.map(s => (
         <TouchableOpacity
           key={s.id}
-          style={[scopeStyles.btn, scope === s.id && scopeStyles.btnActive]}
+          style={[scopeStyles.btn, scope === s.id && scopeStyles.btnActive, scope === s.id ? { borderBottomColor: theme.primary } : null]}
           onPress={() => onChange(s.id)}
           activeOpacity={0.7}
           testID={`scope-${s.id}`}
         >
-          <Text style={[scopeStyles.text, scope === s.id && scopeStyles.textActive]}>{s.label}</Text>
+          <Text style={[scopeStyles.text, scope === s.id && scopeStyles.textActive, { color: scope === s.id ? theme.primary : theme.foregroundSecondary }]}>{s.label}</Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -178,9 +180,10 @@ function EmptyState({
   illustration?: React.ReactNode;
   heroImage?: any;
 }) {
+  const theme = useVisualTheme();
   return (
     <View style={styles.empty}>
-      {heroImage ? (
+      {heroImage && theme.mode === 'day' ? (
         <Image
           source={heroImage}
           style={styles.emptyHeroImage}
@@ -191,11 +194,11 @@ function EmptyState({
         <View style={{ marginBottom: Spacing.md }}>{illustration}</View>
       ) : (
         <View style={styles.emptyIconWrap}>
-          <Icon name={icon} size={36} color={Colors.textMuted} strokeWidth={1.5} />
+          <Icon name={icon} size={36} color={theme.iconInactive} strokeWidth={1.5} />
         </View>
       )}
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyHint}>{hint}</Text>
+      <Text style={[styles.emptyTitle, { color: theme.foreground }]}>{title}</Text>
+      <Text style={[styles.emptyHint, { color: theme.foregroundSecondary }]}>{hint}</Text>
     </View>
   );
 }
@@ -226,6 +229,7 @@ function FilterSortBar<F extends string, S extends string>({
   sortValue: S;
   onSortChange: (id: S) => void;
 }) {
+  const theme = useVisualTheme();
   return (
     <View style={filterBarStyles.row}>
       <ScrollView
@@ -245,18 +249,18 @@ function FilterSortBar<F extends string, S extends string>({
           ];
           const textColor = isActive
             ? isAllChip
-              ? '#fff'
-              : Colors.primary
-            : Colors.textSecondary;
+              ? theme.onPrimary
+              : theme.primary
+            : theme.foregroundSecondary;
           const iconColor = isActive
             ? isAllChip
-              ? '#fff'
-              : Colors.primary
-            : Colors.textSecondary;
+              ? theme.onPrimary
+              : theme.primary
+            : theme.foregroundSecondary;
           return (
             <TouchableOpacity
               key={f.id}
-              style={chipStyle}
+              style={[chipStyle, { backgroundColor: isActive ? (isAllChip ? theme.primary : theme.surfaceElevated) : theme.surface, borderColor: theme.border }]}
               onPress={() => onFilterChange(f.id)}
               activeOpacity={0.7}
             >
@@ -277,7 +281,7 @@ function FilterSortBar<F extends string, S extends string>({
         })}
       </ScrollView>
       <TouchableOpacity
-        style={filterBarStyles.sortChip}
+        style={[filterBarStyles.sortChip, { backgroundColor: theme.surface, borderColor: theme.border }]}
         onPress={() => {
           // cycle to next sort option
           const idx = sorts.findIndex(s => s.id === sortValue);
@@ -286,8 +290,8 @@ function FilterSortBar<F extends string, S extends string>({
         }}
         activeOpacity={0.7}
       >
-        <Text style={filterBarStyles.sortText}>{sorts.find(s => s.id === sortValue)?.label}</Text>
-        <Icon name="ChevronDown" size={12} color={Colors.textSecondary} strokeWidth={2} />
+        <Text style={[filterBarStyles.sortText, { color: theme.foregroundSecondary }]}>{sorts.find(s => s.id === sortValue)?.label}</Text>
+        <Icon name="ChevronDown" size={12} color={theme.iconInactive} strokeWidth={2} />
       </TouchableOpacity>
     </View>
   );
@@ -797,6 +801,7 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
 
 // ── Activities Tab ───────────────────────────────────────────────────────────
 function ActivitiesTab() {
+  const theme = useVisualTheme();
   const sessions = useSessionStore(s => s.sessions);
   const [selectedSession, setSelectedSession] = useState<import('../store/useSessionStore').TrackingSession | null>(null);
   const [filter, setFilter] = useState<'all' | 'hiking' | 'running'>('all');
@@ -865,18 +870,18 @@ function ActivitiesTab() {
         contentContainerStyle={styles.activityListContent}
         ListEmptyComponent={
           <View style={{ alignItems: 'center', paddingTop: 40 }}>
-            <Text style={styles.emptyHint}>No activities match this filter.</Text>
+            <Text style={[styles.emptyHint, { color: theme.foregroundSecondary }]}>No activities match this filter.</Text>
           </View>
         }
         renderItem={({ item }) => {
           const isRun = item.activityMode === 'running';
-          const accent = isRun ? Colors.running : Colors.primary;
+          const accent = isRun ? theme.accent : theme.iconActive;
           const bg = isRun ? Colors.runningLight : Colors.primaryLight;
           const date = new Date(item.startedAt);
           const dateStr = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
           return (
             <PressBtn
-              style={styles.activityRow}
+              style={[styles.activityRow, { borderBottomColor: theme.border }]}
               onPress={() => nav.navigate('MapHistory', { sessionId: item.id })}
               onLongPress={() => setSelectedSession(item)}
               scaleTo={0.97}
@@ -890,8 +895,8 @@ function ActivitiesTab() {
                 }
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.activityTitle} numberOfLines={1}>{item.name || (isRun ? 'Run' : 'Hike')}</Text>
-                <Text style={styles.activityMeta} numberOfLines={1}>
+                <Text style={[styles.activityTitle, { color: theme.foreground }]} numberOfLines={1}>{item.name || (isRun ? 'Run' : 'Hike')}</Text>
+                <Text style={[styles.activityMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>
                   {dateStr} · {dist.format(item.distanceM, 1)} {dist.unit} · {formatDuration(item.durationS)}
                 </Text>
               </View>
@@ -1316,10 +1321,7 @@ export function RoutesScreen() {
   // text for slate bg + cream text when isDark. Uses inline overrides on the
   // main container + title; list items already use tokens that read okay on
   // both variants (deep glyphs on light-neutral row backgrounds).
-  const { isDark } = useAppearance();
-  const darkBg = '#0F1620';
-  const darkText = '#E8ECF2';
-  const darkMuted = 'rgba(232,236,242,0.68)';
+  const theme = useVisualTheme();
   // O18 HOME-03: manual refresh state — spins the icon during network work,
   // avoids duplicate concurrent calls, and gives users a way to re-check
   // when they know they should have new data (friend just shared).
@@ -1345,11 +1347,11 @@ export function RoutesScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: isDark ? darkBg : undefined }}>
-    <SafeAreaView style={[styles.container, isDark ? { backgroundColor: darkBg } : null]} edges={['top']}>
-      <View style={styles.header}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+      <View style={[styles.header, { backgroundColor: theme.background }]}>
         <BackButton variant="inline" onPress={() => nav.goBack()} />
-        <Text style={[styles.title, isDark ? { color: darkText } : null]}>Routes</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>Trails</Text>
         {/* O18 HOME-03: manual refresh — visible on Routes / Cairns tabs
             (Activities uses local sessions, no server refresh). */}
         {tab !== 'activities' ? (
@@ -1364,7 +1366,7 @@ export function RoutesScreen() {
             <Icon
               name="RotateCcw"
               size={IconSize.sm}
-              color={refreshing ? Colors.textMuted : Colors.primary}
+              color={refreshing ? theme.iconInactive : theme.iconActive}
               strokeWidth={2}
             />
           </TouchableOpacity>

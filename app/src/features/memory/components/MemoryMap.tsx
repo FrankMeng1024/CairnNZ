@@ -28,6 +28,7 @@ import { flushNow as flushLogsNow } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
 
 interface Props {
   centerLat: number;
@@ -98,6 +99,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   { centerLat, centerLng, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onFogReady, strangerMarks, flyToTarget },
   ref,
 ) {
+  const theme = useVisualTheme();
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
   const mapViewRef = useRef<any>(null);
@@ -320,7 +322,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   // lifetime.
 
   if (!Mapbox.available) {
-    return <View style={styles.webStub} />;
+    return <View style={[styles.webStub, { backgroundColor: theme.background }]} />;
   }
   const { MapView, Camera, UserLocation, CircleLayer } = Mapbox as any;
 
@@ -526,10 +528,10 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
       {/* Tile-loading overlay: same as HikingMap. Hides blank canvas on
           slow CDN / fresh install until Mapbox first-render fires. */}
       {!mapFirstRender && (
-        <View style={styles.mapLoadingOverlay} pointerEvents="none">
-          <View style={styles.mapLoadingCard}>
-            <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={styles.mapLoadingText}>Loading map…</Text>
+        <View style={[styles.mapLoadingOverlay, { backgroundColor: theme.readabilityScrim }]} pointerEvents="none">
+          <View style={[styles.mapLoadingCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}>
+            <ActivityIndicator size="small" color={theme.primary} />
+            <Text style={[styles.mapLoadingText, { color: theme.foreground }]}>Loading map…</Text>
           </View>
         </View>
       )}

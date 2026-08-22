@@ -43,6 +43,7 @@ import { FLAG_TYPES } from '../data/flagTypes';
 import { getCurrentRegion } from '../config/regions';
 import { getMapStyleForLayer, getPrimaryMapStyle } from '../config/mapbox';
 import { likeMarker, reportMarker, MarkerInteractionError } from '../services/markerInteractionService';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 // Mapbox — conditional import (native only; web uses fallback)
 let MapboxGL: any = null;
@@ -557,6 +558,7 @@ function EditMarkerSheet({
 
 // ── Main Map Screen ───────────────────────────────────────────────────────────
 export function MapScreen() {
+  const visualTheme = useVisualTheme();
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<any>();
   const focusMarkerId: string | undefined = route.params?.focusMarkerId;
@@ -718,7 +720,7 @@ export function MapScreen() {
   // deleted.
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: visualTheme.background }}>
       {/* Map — full bleed topo placeholder */}
       <RealMap markers={mapMarkers} onMarkerPress={(m) => setDetailMarker(m)} viewerId={viewerId} friendIds={friendIds} />
 

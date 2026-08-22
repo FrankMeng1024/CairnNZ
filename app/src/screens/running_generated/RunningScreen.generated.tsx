@@ -122,7 +122,7 @@ export function RunningScreen(props: { state?: RunningState; initial?: string } 
             <Text style={styles.R2__action_pause__pause_glyph}>{'II'}</Text>
           </View>
           <View style={styles.R2__action_cairn}>
-            <Image source={require('../../../assets/running/cairn-stack.png')} style={styles.R2__action_cairn__cairn_icon} resizeMode="contain" />
+            <Image source={require('../../../assets/running/action-leave-cairn.png')} style={styles.R2__action_cairn__cairn_icon} resizeMode="contain" />
           </View>
           <View style={styles.R2__action_lock}>
             <Text style={styles.R2__action_lock__lock_glyph}>{'⌘'}</Text>

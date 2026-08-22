@@ -45,6 +45,7 @@ import { getFlagsSync } from '../config/featureFlags';
 import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
 import { debugLogger } from '../services/debugLogger';
 import { telemetryUploader } from '../services/telemetryUploader';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 // Conditional Mapbox import — same pattern as RoutesScreen.
 let MapView: any = null;
@@ -73,6 +74,7 @@ if (Platform.OS !== 'web') {
 const SAVE_FRACTION_FLAG = 'editModeEnabled';
 
 export function RouteEditorScreen() {
+  const visualTheme = useVisualTheme();
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
   const route = useRoute<any>();
@@ -725,7 +727,7 @@ export function RouteEditorScreen() {
   }], [renderPoints.length, editBrushStrokes.length, editHasCommittedEdit, editIsModified]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: visualTheme.background }]}>
       <View style={styles.mapArea}>
         {MapView ? (
           <MapView
@@ -881,7 +883,7 @@ export function RouteEditorScreen() {
                 onPress={() => { /* TODO route settings */ }}
                 activeOpacity={0.85}
               >
-                <Icon name="Settings" size={20} color="#3E5F3A" strokeWidth={2} />
+                <Icon name="Cog" size={20} color={visualTheme.icon} strokeWidth={1.9} />
               </TouchableOpacity>
             </>
           ) : (

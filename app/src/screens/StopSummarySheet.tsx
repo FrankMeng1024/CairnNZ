@@ -29,7 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { useDistance } from '../utils/distanceFormat';
 import { formatDate } from '../utils/dateFormat';
-import { useAppearance } from '../hooks/useAppearance';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 type StopSummary = {
   distanceM: number;
@@ -203,10 +203,11 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onConfirmAndHom
   // read Appearance so the sheet + text tokens swap into slate/cream when
   // the user's picked Dark (or Auto at night). Kept as inline overrides so
   // day rendering matches the concept 1:1.
-  const { isDark: completeIsDark } = useAppearance();
-  const sheetBg = completeIsDark ? 'rgba(15,22,38,0.98)' : PAPER_BG;
-  const titleInk = completeIsDark ? '#F0EEE6' : TITLE_INK;
-  const mutedInk = completeIsDark ? 'rgba(240,238,230,0.68)' : MUTED_INK;
+  const completeTheme = useVisualTheme();
+  const completeIsDark = completeTheme.mode === 'night';
+  const sheetBg = completeIsDark ? completeTheme.surfaceElevated : PAPER_BG;
+  const titleInk = completeIsDark ? completeTheme.foreground : TITLE_INK;
+  const mutedInk = completeIsDark ? completeTheme.foregroundSecondary : MUTED_INK;
 
   // Sleep-run 2026-08-16 (H4 concept): "Share this activity" action lives in
   // the header. Uses React Native's built-in Share API — iOS system share

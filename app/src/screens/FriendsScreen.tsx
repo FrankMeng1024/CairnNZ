@@ -19,7 +19,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import {
   useFriendStore, sendFriendRequest, fetchFriendRequests,
   acceptFriendRequestAPI, rejectFriendRequestAPI, blockUser, fetchFriendProfile,
@@ -28,6 +28,8 @@ import {
 } from '../store/useFriendStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { useAppearance } from '../hooks/useAppearance';
+import { useVisualTheme } from '../hooks/useVisualTheme';
+import { Icon, type IconName } from '../components/Icon';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -110,62 +112,6 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-// ── Inline SVG icons — default size = DS.ic_md (24). Line weight tuned per
-// icon so at their intended size they read balanced. Pass explicit `size`
-// to override.
-const Ico = {
-  Back: ({ size = 24, color = T.forest }: { size?: number; color?: string }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-      <Path d="m15 18-6-6 6-6" />
-    </Svg>
-  ),
-  Add: ({ size = 24, color = T.forest }: { size?: number; color?: string }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <Path d="M12 5v14M5 12h14" />
-    </Svg>
-  ),
-  Check: ({ size = 20, color = T.forest }: { size?: number; color?: string }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-      <Path d="m5 12 4 4L19 6" />
-    </Svg>
-  ),
-  X: ({ size = 20, color = T.danger }: { size?: number; color?: string }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-      <Path d="M6 6l12 12M18 6 6 18" />
-    </Svg>
-  ),
-  Clock: ({ size = 20, color = T.forest }: { size?: number; color?: string }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-      <Circle cx="12" cy="12" r="9" />
-      <Path d="M12 7v5l3 2" />
-    </Svg>
-  ),
-  Mail: ({ size = 24, color = T.forest }: { size?: number; color?: string }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-      <Rect x="3" y="5" width="18" height="14" rx="2" />
-      <Path d="m3 7 9 6 9-6" />
-    </Svg>
-  ),
-  People: ({ size = 24, color = T.forest }: { size?: number; color?: string }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
-      <Circle cx="9" cy="8" r="3" />
-      <Path d="M3 20v-2a6 6 0 0 1 12 0v2" />
-      <Path d="M16 6a3 3 0 0 1 0 6M18 20v-2a5 5 0 0 0-3-4.58" />
-    </Svg>
-  ),
-  ChevronR: ({ size = 20, color = T.textSecondary }: { size?: number; color?: string }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-      <Path d="m9 6 6 6-6 6" />
-    </Svg>
-  ),
-  Send: ({ size = 20, color = '#fff' }: { size?: number; color?: string }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <Path d="M22 2 11 13" />
-      <Path d="m22 2-7 20-4-9-9-4 20-7Z" />
-    </Svg>
-  ),
-};
-
 // ── Background: cream + optional footprints illustration ────────────────────
 // The illustration asset is 1170x2532 (iPhone @3x). We render it as an <Image>
 // with `resizeMode='cover'` filling the full screen so it does not squash or
@@ -174,20 +120,20 @@ const Ico = {
 // useAppearance. Auto mode follows local time; user-set Light/Dark overrides.
 function Backdrop() {
   const { isDark } = useAppearance();
-  const daySrc = require('../../assets/friends/backgrounds/friends-bg-day.png');
-  const nightSrc = require('../../assets/friends/backgrounds/friends-bg-night.png');
+  const daySrc = require('../../assets/friends/backgrounds/friends-bg-day-semantic-v2.jpg');
+  const nightSrc = require('../../assets/friends/backgrounds/friends-bg-night-semantic-v2.jpg');
   const srcModule = isDark ? nightSrc : daySrc;
   const webUri =
     Platform.OS === 'web'
       ? (isDark
-          ? '/assets/?unstable_path=./assets/friends/backgrounds/friends-bg-night.png'
-          : '/assets/?unstable_path=./assets/friends/backgrounds/friends-bg-day.png')
+          ? '/assets/?unstable_path=./assets/friends/backgrounds/friends-bg-night-semantic-v2.jpg'
+          : '/assets/?unstable_path=./assets/friends/backgrounds/friends-bg-day-semantic-v2.jpg')
       : null;
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#0A1220' : T.paper }]}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#183128' : T.paper }]}>
       <Image
         source={webUri ? { uri: webUri } : srcModule}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', opacity: isDark ? 0.95 : 0.85 }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', opacity: isDark ? 0.94 : 0.92 }}
         resizeMode="cover"
       />
     </View>
@@ -197,25 +143,26 @@ function Backdrop() {
 // ── Tabs: two independent pill buttons (concept F0/F1/F2 — the pills are
 // separate, not joined inside a single container).
 function TabsPill({ active, onChange }: { active: 'friends' | 'pending'; onChange: (t: 'friends' | 'pending') => void }) {
+  const theme = useVisualTheme();
   return (
     <View style={s.tabsRow}>
       <TouchableOpacity
-        style={[s.tabPill, active === 'friends' ? s.tabPillActive : s.tabPillIdle]}
+        style={[s.tabPill, active === 'friends' ? { backgroundColor: theme.primary } : { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
         activeOpacity={0.85}
         onPress={() => onChange('friends')}
         accessibilityRole="button"
         accessibilityLabel="Friends tab"
       >
-        <Text style={[s.tabLabel, active === 'friends' && s.tabLabelActive]}>Friends</Text>
+        <Text style={[s.tabLabel, { color: active === 'friends' ? theme.onPrimary : theme.foreground }]}>Friends</Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[s.tabPill, active === 'pending' ? s.tabPillActive : s.tabPillIdle]}
+        style={[s.tabPill, active === 'pending' ? { backgroundColor: theme.primary } : { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
         activeOpacity={0.85}
         onPress={() => onChange('pending')}
         accessibilityRole="button"
         accessibilityLabel="Pending tab"
       >
-        <Text style={[s.tabLabel, active === 'pending' && s.tabLabelActive]}>Pending</Text>
+        <Text style={[s.tabLabel, { color: active === 'pending' ? theme.onPrimary : theme.foreground }]}>Pending</Text>
       </TouchableOpacity>
     </View>
   );
@@ -228,12 +175,13 @@ function FriendRow({
   id: string; name: string; sharedFlags: number;
   onPress?: () => void; onLongPress?: () => void;
 }) {
+  const theme = useVisualTheme();
   const meta = sharedFlags > 0
     ? `${sharedFlags} shared ${sharedFlags === 1 ? 'flag' : 'flags'}`
     : 'No shared flags yet';
   return (
     <TouchableOpacity
-      style={s.card}
+      style={[s.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={500}
@@ -244,10 +192,10 @@ function FriendRow({
         <Text style={s.avatarText}>{initialsOf(name)}</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={s.cardName} numberOfLines={1}>{name}</Text>
-        <Text style={s.cardMeta} numberOfLines={1}>{meta}</Text>
+        <Text style={[s.cardName, { color: theme.foreground }]} numberOfLines={1}>{name}</Text>
+        <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{meta}</Text>
       </View>
-      <Ico.ChevronR />
+      <Icon name="ChevronRight" size={20} color={theme.iconInactive} strokeWidth={1.9} />
     </TouchableOpacity>
   );
 }
@@ -259,14 +207,15 @@ function IncomingRow({
   id: string; fromName: string; fromEmail: string;
   busy: boolean; onAccept: () => void; onReject: () => void;
 }) {
+  const theme = useVisualTheme();
   return (
-    <View style={s.card} testID={`incoming-card-${id}`}>
+    <View style={[s.card, { backgroundColor: theme.surface, borderColor: theme.border }]} testID={`incoming-card-${id}`}>
       <View style={[s.avatar, { backgroundColor: avatarColorFor(id) }]}>
         <Text style={s.avatarText}>{initialsOf(fromName)}</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={s.cardName} numberOfLines={1}>{fromName}</Text>
-        <Text style={s.cardMeta} numberOfLines={1}>{fromEmail}</Text>
+        <Text style={[s.cardName, { color: theme.foreground }]} numberOfLines={1}>{fromName}</Text>
+        <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{fromEmail}</Text>
       </View>
       <View style={s.actionRow}>
         <TouchableOpacity
@@ -276,7 +225,7 @@ function IncomingRow({
           hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
           accessibilityLabel="Accept friend request"
         >
-          {busy ? <ActivityIndicator size="small" color={T.forestActive} /> : <Ico.Check size={DS.ic_sm} color={T.forestActive} />}
+          {busy ? <ActivityIndicator size="small" color={theme.iconActive} /> : <Icon name="Check" size={DS.ic_sm} color={theme.iconActive} strokeWidth={2} />}
         </TouchableOpacity>
         <TouchableOpacity
           style={s.actionBtn}
@@ -285,7 +234,7 @@ function IncomingRow({
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 6 }}
           accessibilityLabel="Decline friend request"
         >
-          <Ico.X size={DS.ic_sm} color={T.danger} />
+          <Icon name="X" size={DS.ic_sm} color={theme.destructive} strokeWidth={2} />
         </TouchableOpacity>
       </View>
     </View>
@@ -298,14 +247,15 @@ function SentRow({
 }: {
   id: string; toName: string; onCancel: () => void;
 }) {
+  const theme = useVisualTheme();
   return (
-    <View style={s.card} testID={`sent-card-${id}`}>
+    <View style={[s.card, { backgroundColor: theme.surface, borderColor: theme.border }]} testID={`sent-card-${id}`}>
       <View style={[s.avatar, { backgroundColor: avatarColorFor(id) }]}>
         <Text style={s.avatarText}>{initialsOf(toName)}</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={s.cardName} numberOfLines={1}>{toName}</Text>
-        <Text style={s.cardMeta} numberOfLines={1}>Waiting for response</Text>
+        <Text style={[s.cardName, { color: theme.foreground }]} numberOfLines={1}>{toName}</Text>
+        <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>Waiting for response</Text>
       </View>
       <TouchableOpacity
         style={s.actionBtn}
@@ -314,7 +264,7 @@ function SentRow({
         accessibilityLabel="Cancel outbound request"
         testID={`btn-cancel-outbound-${id}`}
       >
-        <Ico.Clock size={DS.ic_sm} color={T.forest} />
+        <Icon name="Timer" size={DS.ic_sm} color={theme.icon} strokeWidth={1.9} />
       </TouchableOpacity>
     </View>
   );
@@ -329,6 +279,7 @@ function SentRow({
 type AddState = 'idle' | 'loading' | 'success' | 'error';
 
 function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
+  const theme = useVisualTheme();
   const [email, setEmail] = useState('');
   const [err, setErr] = useState('');
   const [state, setState] = useState<AddState>('idle');
@@ -384,13 +335,13 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
   // R21 (2026-08-17): day/night variants driven by useAppearance.
   const { isDark: birdIsDark } = useAppearance();
   const birdModule = birdIsDark
-    ? require('../../assets/friends/hero/add-friend-hero-night.png')
-    : require('../../assets/friends/hero/add-friend-hero-day.png');
+    ? require('../../assets/friends/hero/add-friend-hero-night-semantic-v2.jpg')
+    : require('../../assets/friends/hero/add-friend-hero-day-semantic-v2.jpg');
   const birdWebUri =
     Platform.OS === 'web'
       ? (birdIsDark
-          ? '/assets/?unstable_path=./assets/friends/hero/add-friend-hero-night.png'
-          : '/assets/?unstable_path=./assets/friends/hero/add-friend-hero-day.png')
+          ? '/assets/?unstable_path=./assets/friends/hero/add-friend-hero-night-semantic-v2.jpg'
+          : '/assets/?unstable_path=./assets/friends/hero/add-friend-hero-day-semantic-v2.jpg')
       : null;
 
   return (
@@ -406,7 +357,7 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
       </Animated.View>
 
       {/* Rising sheet */}
-      <Animated.View style={[s.f6Sheet, { transform: [{ translateY: slide }] }]}>
+      <Animated.View style={[s.f6Sheet, { backgroundColor: theme.background, transform: [{ translateY: slide }] }]}>
         {/* HERO — landscape asset fills the top of the sheet */}
         <View style={s.f6HeroBox} pointerEvents="none">
           <Image
@@ -431,15 +382,15 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
                 flush with sheet edges. */}
             <Path
               d="M 0,90 C 100,-10 290,-10 390,90 L 390,90 L 0,90 Z"
-              fill={T.paper}
+              fill={theme.background}
             />
           </Svg>
 
-          <View style={s.f6ArchBody}>
+          <View style={[s.f6ArchBody, { backgroundColor: theme.background }]}>
             {/* Mail badge — sits at arch peak (SVG dome crest) */}
             <View style={s.f6MailBadge}>
               <View style={s.f6MailCircle}>
-                <Ico.Mail size={DS.ic_md} color={T.forestActive} />
+                <Icon name="Mail" size={DS.ic_md} color={theme.iconActive} strokeWidth={1.9} />
               </View>
             </View>
 
@@ -448,8 +399,8 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              <Text style={s.f6Title}>Add a Friend</Text>
-              <Text style={s.f6Body}>
+              <Text style={[s.f6Title, { color: theme.foreground }]}>Add a Friend</Text>
+              <Text style={[s.f6Body, { color: theme.foregroundSecondary }]}>
                 {state === 'success'
                   ? `Request sent to ${successEmail.current}`
                   : 'Enter their email address to\nsend a friend request.'}
@@ -457,12 +408,12 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
 
               {state !== 'success' && (
                 <>
-                  <Text style={s.f6InputLabel}>Email Address</Text>
-                  <View style={[s.f6InputWrap, err ? { borderColor: T.danger } : null]}>
+                  <Text style={[s.f6InputLabel, { color: theme.foregroundSecondary }]}>Email Address</Text>
+                  <View style={[s.f6InputWrap, { backgroundColor: theme.surface, borderColor: err ? theme.destructive : theme.border }]}>
                     <TextInput
-                      style={s.f6Input}
+                      style={[s.f6Input, { color: theme.foreground }]}
                       placeholder="name@email.com"
-                      placeholderTextColor={T.textSecondary}
+                      placeholderTextColor={theme.muted}
                       value={email}
                       onChangeText={(t) => { setEmail(t); if (err) setErr(''); }}
                       keyboardType="email-address"
@@ -473,23 +424,23 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
                   {!!err && <Text style={s.f6Err}>{err}</Text>}
 
                   <TouchableOpacity
-                    style={[s.f6Send, (!email.trim() || state === 'loading') && { opacity: 0.75 }]}
+                    style={[s.f6Send, { backgroundColor: theme.primary }, (!email.trim() || state === 'loading') && { opacity: 0.55 }]}
                     onPress={submit}
                     disabled={!email.trim() || state === 'loading'}
                     activeOpacity={0.9}
                   >
                     {state === 'loading'
-                      ? <ActivityIndicator size="small" color="#fff" />
+                      ? <ActivityIndicator size="small" color={theme.onPrimary} />
                       : (
                         <>
-                          <Ico.Send size={DS.ic_sm} color="#fff" />
-                          <Text style={s.f6SendText}>Send Request</Text>
+                          <Icon name="Send" size={DS.ic_sm} color={theme.onPrimary} strokeWidth={1.9} />
+                          <Text style={[s.f6SendText, { color: theme.onPrimary }]}>Send Request</Text>
                         </>
                       )}
                   </TouchableOpacity>
 
                   <TouchableOpacity style={s.f6Cancel} onPress={close} activeOpacity={0.7}>
-                    <Text style={s.f6CancelText}>Cancel</Text>
+                    <Text style={[s.f6CancelText, { color: theme.foregroundSecondary }]}>Cancel</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -505,24 +456,24 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
           accessibilityLabel="Close"
           accessibilityRole="button"
         >
-          <Ico.X size={DS.ic_md} color={T.forest} />
+          <Icon name="X" size={DS.ic_md} color={theme.icon} strokeWidth={1.9} />
         </TouchableOpacity>
       </Animated.View>
     </View>
   );
 }
 
-// ── Bottom navigation (reused from Home — same PNG icons, same colors, same
-// layout tokens so Home ↔ Friends visual continuity is preserved).
+// ── Bottom navigation: same vector geometry and semantic colors as Home.
 function BottomNav({ active, onNavigate }: { active: 'trails' | 'friends' | 'memory' | 'settings'; onNavigate: (dest: string) => void }) {
+  const theme = useVisualTheme();
   const items = [
-    { key: 'trails' as const,   route: 'Routes',   label: 'Trails',   img: require('../../assets/home/tab-trails.png') },
-    { key: 'friends' as const,  route: 'Friends',  label: 'Friends',  img: require('../../assets/home/tab-friends.png') },
-    { key: 'memory' as const,   route: 'Memory',   label: 'Memory',   img: require('../../assets/home/tab-memory.png') },
-    { key: 'settings' as const, route: 'Settings', label: 'Settings', img: require('../../assets/home/tab-settings.png') },
+    { key: 'trails' as const, route: 'Routes', label: 'Trails', icon: 'Route' as IconName },
+    { key: 'friends' as const, route: 'Friends', label: 'Friends', icon: 'Users' as IconName },
+    { key: 'memory' as const, route: 'Memory', label: 'Memory', icon: 'Layers' as IconName },
+    { key: 'settings' as const, route: 'Settings', label: 'Settings', icon: 'Cog' as IconName },
   ];
   return (
-    <View style={s.bottomNav}>
+    <View style={[s.bottomNav, { backgroundColor: theme.surface, borderColor: theme.border }]}>
       {items.map((it) => (
         <TouchableOpacity
           key={it.key}
@@ -530,8 +481,8 @@ function BottomNav({ active, onNavigate }: { active: 'trails' | 'friends' | 'mem
           activeOpacity={0.8}
           onPress={() => onNavigate(it.route)}
         >
-          <Image source={it.img} style={s.bottomNavIcon} resizeMode="contain" />
-          <Text style={[s.bottomNavLabel, it.key === active && s.bottomNavLabelActive]}>{it.label}</Text>
+          <Icon name={it.icon} size={22} color={it.key === active ? theme.iconActive : theme.iconInactive} strokeWidth={1.9} />
+          <Text style={[s.bottomNavLabel, { color: it.key === active ? theme.iconActive : theme.iconInactive }]}>{it.label}</Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -540,6 +491,7 @@ function BottomNav({ active, onNavigate }: { active: 'trails' | 'friends' | 'mem
 
 // ── Main ────────────────────────────────────────────────────────────────────
 export function FriendsScreen() {
+  const theme = useVisualTheme();
   const nav = useNavigation<Nav>();
   const [tab, setTab] = useState<'friends' | 'pending'>('friends');
   const [showAdd, setShowAdd] = useState(false);
@@ -682,7 +634,7 @@ export function FriendsScreen() {
   //   Pending tab + neither                 → F5 (clean bg)
   // Concept: both Friends and Pending tabs share the footprints backdrop.
   return (
-    <View style={s.root}>
+    <View style={[s.root, { backgroundColor: theme.background }]}>
       <Backdrop />
 
       {/* Header */}
@@ -694,9 +646,9 @@ export function FriendsScreen() {
           accessibilityLabel="Back"
           accessibilityRole="button"
         >
-          <Ico.Back size={DS.ic_md} color={T.forest} />
+          <Icon name="ChevronLeft" size={DS.ic_md} color={theme.icon} strokeWidth={1.9} />
         </TouchableOpacity>
-        <Text style={s.hTitle}>Friends</Text>
+        <Text style={[s.hTitle, { color: theme.foreground }]}>Friends</Text>
         <TouchableOpacity
           style={s.hIcon}
           onPress={() => setShowAdd(true)}
@@ -704,7 +656,7 @@ export function FriendsScreen() {
           accessibilityLabel="Add friend"
           accessibilityRole="button"
         >
-          <Ico.Add size={DS.ic_md} color={T.forest} />
+          <Icon name="Plus" size={DS.ic_md} color={theme.icon} strokeWidth={1.9} />
         </TouchableOpacity>
       </View>
 
@@ -720,12 +672,12 @@ export function FriendsScreen() {
         {/* Friends tab */}
         {tab === 'friends' && !hasFriends && (
           <View style={s.emptyBlock}>
-            <View style={s.emptyIconRing}>
-              <Ico.People size={DS.ic_lg} color={T.forest} />
+            <View style={[s.emptyIconRing, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Icon name="Users" size={DS.ic_lg} color={theme.iconActive} strokeWidth={1.8} />
             </View>
-            <View style={s.emptyTextCard}>
-              <Text style={s.emptyTitle}>No friends yet</Text>
-              <Text style={s.emptyBody}>Add a friend by email to see where your paths cross.</Text>
+            <View style={[s.emptyTextCard, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+              <Text style={[s.emptyTitle, { color: theme.foreground }]}>No friends yet</Text>
+              <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>Add a friend by email to see where your paths cross.</Text>
             </View>
           </View>
         )}
@@ -747,12 +699,12 @@ export function FriendsScreen() {
         {/* Pending tab */}
         {tab === 'pending' && pendingEmpty && (
           <View style={s.emptyBlock}>
-            <View style={s.emptyIconRing}>
-              <Ico.Mail size={DS.ic_lg} color={T.forest} />
+            <View style={[s.emptyIconRing, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Icon name="Mail" size={DS.ic_lg} color={theme.iconActive} strokeWidth={1.8} />
             </View>
-            <View style={s.emptyTextCard}>
-              <Text style={s.emptyTitle}>No pending requests</Text>
-              <Text style={s.emptyBody}>New requests and sent invites will appear here.</Text>
+            <View style={[s.emptyTextCard, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+              <Text style={[s.emptyTitle, { color: theme.foreground }]}>No pending requests</Text>
+              <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>New requests and sent invites will appear here.</Text>
             </View>
           </View>
         )}
@@ -800,39 +752,30 @@ export function FriendsScreen() {
       {/* Floating Add Friend button (concept: shown when list has content) */}
       {((tab === 'friends' && hasFriends) || (tab === 'pending' && (hasIncoming || hasOutbound))) && (
         <TouchableOpacity
-          style={s.floatingAdd}
+          style={[s.floatingAdd, { backgroundColor: theme.primary }]}
           onPress={() => setShowAdd(true)}
           activeOpacity={0.9}
           accessibilityLabel="Add a Friend"
           accessibilityRole="button"
         >
-          <Ico.Add size={DS.ic_sm} color="#fff" />
-          <Text style={s.floatingAddText}>Add a Friend</Text>
+          <Icon name="Plus" size={DS.ic_sm} color={theme.onPrimary} strokeWidth={2} />
+          <Text style={[s.floatingAddText, { color: theme.onPrimary }]}>Add a Friend</Text>
         </TouchableOpacity>
       )}
 
       {/* Empty-state large CTA */}
       {((tab === 'friends' && !hasFriends) || (tab === 'pending' && pendingEmpty)) && (
         <TouchableOpacity
-          style={s.floatingAdd}
+          style={[s.floatingAdd, { backgroundColor: theme.primary }]}
           onPress={() => setShowAdd(true)}
           activeOpacity={0.9}
           accessibilityLabel="Add a Friend"
           accessibilityRole="button"
         >
-          <Ico.Add size={DS.ic_sm} color="#fff" />
-          <Text style={s.floatingAddText}>Add a Friend</Text>
+          <Icon name="Plus" size={DS.ic_sm} color={theme.onPrimary} strokeWidth={2} />
+          <Text style={[s.floatingAddText, { color: theme.onPrimary }]}>Add a Friend</Text>
         </TouchableOpacity>
       )}
-
-      {/* Bottom navigation (reused from Home) */}
-      <BottomNav
-        active="friends"
-        onNavigate={(dest) => {
-          if (dest === 'Friends') return; // already here
-          nav.navigate(dest as never);
-        }}
-      />
 
       {/* Add-friend full-screen page */}
       {showAdd && <AddFriendPage onDismiss={() => setShowAdd(false)} />}

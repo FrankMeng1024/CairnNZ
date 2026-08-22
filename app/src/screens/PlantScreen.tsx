@@ -45,7 +45,7 @@ import { VisibilityConfig } from '../features/plant/config/plantConfig';
 import { encodeTitleBody } from '../features/plant/services/noteEncoding';
 import { log } from '../services/appLog';
 import { haptic } from '../services/hapticService';
-import { useAppearance } from '../hooks/useAppearance';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 type Step = 'gps' | 'pin' | 'content';
 
@@ -109,7 +109,7 @@ export function PlantScreen() {
   // R21 (2026-08-17): dark mode support. When isDark, the cream root swaps
   // to a deep slate so Plant matches Home/Settings/Friends at night. Child
   // step components read their text color from the passed-through tokens.
-  const { isDark } = useAppearance();
+  const visualTheme = useVisualTheme();
   // O1: recordCircleUnlock selector removed (v351 stopped calling it, dead ref
   // triggered re-render every time useMemoryStore changed)
   const userId = useAppStore((s) => s.user?.id ?? '');
@@ -286,7 +286,7 @@ export function PlantScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.root, isDark ? { backgroundColor: '#0F1620' } : null]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.root, { backgroundColor: visualTheme.background }]} edges={['top', 'bottom']}>
       <View style={styles.container}>
         {step === 'gps' && (
           <GpsLockStep

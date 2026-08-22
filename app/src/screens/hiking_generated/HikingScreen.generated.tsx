@@ -122,7 +122,7 @@ export function HikingScreen(props: { state?: HikingState; initial?: string } = 
             <Text style={styles.H2__action_pause__pause_glyph}>{'II'}</Text>
           </View>
           <View style={styles.H2__action_cairn}>
-            <Image source={require('../../../assets/hiking/cairn-stack.png')} style={styles.H2__action_cairn__cairn_icon} resizeMode="contain" />
+            <Image source={require('../../../assets/hiking/action-leave-cairn.png')} style={styles.H2__action_cairn__cairn_icon} resizeMode="contain" />
           </View>
           <View style={styles.H2__action_lock}>
             <Text style={styles.H2__action_lock__lock_glyph}>{'⌘'}</Text>

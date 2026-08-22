@@ -34,6 +34,7 @@ import { PressBtn } from '../components/PressBtn';
 import { MARKER_META } from '../data/mockData';
 import type { TrackingSession } from '../store/useSessionStore';
 import type { Marker } from '../store/useMarkerStore';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 // ── Conditional Mapbox import ─────────────────────────────────────────────
 // Native: render the track on top of a real Mapbox map. Web / Expo Go:
@@ -761,6 +762,7 @@ function FlagDetailSheet({ marker, onClose, onDelete }: {
 
 // ── Main ────────────────────────────────────────────────────────────────────
 export function MapHistoryScreen() {
+  const visualTheme = useVisualTheme();
   const nav = useNavigation<Nav>();
   const route = useRoute<any>();
   const targetSessionId = route.params?.sessionId as string | undefined;
@@ -1077,9 +1079,9 @@ export function MapHistoryScreen() {
     : markers.slice(0, 8);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: visualTheme.background }]}>
       {/* Map area */}
-      <View style={styles.mapArea}>
+      <View style={[styles.mapArea, { backgroundColor: visualTheme.background }]}>
         {/* Track polyline when session selected. Native (iOS/Android with
             @rnmapbox/maps available) renders the track on a real Mapbox
             map; web/Expo Go falls back to the SVG-on-panel rendering. */}

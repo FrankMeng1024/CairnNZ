@@ -18,7 +18,7 @@ import { TouchableOpacity, Text, StyleSheet, Animated, View, Platform } from 're
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from './tokens';
 import { Icon } from './Icon';
-import { useAppearance } from '../hooks/useAppearance';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 // Lazy require expo-blur — graceful fallback on web / unsupported targets.
 let BlurView: any = null;
@@ -41,8 +41,8 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress }: Back
   const scale = useRef(new Animated.Value(1)).current;
   // R21 (2026-08-18): dark-aware colour. Ink becomes cream on night bg
   // so the inline back stays readable on Hike / MapScreen dark overlays.
-  const { isDark } = useAppearance();
-  const inkColor = isDark ? '#F0EEE6' : Colors.primary;
+  const theme = useVisualTheme();
+  const inkColor = theme.iconActive;
 
   const handlePressIn = () =>
     Animated.spring(scale, { toValue: 0.95, useNativeDriver: true, tension: 300, friction: 10 }).start();
@@ -80,7 +80,7 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress }: Back
     return (
       <Animated.View style={[{ transform: [{ scale }] }, styles.ghostRoundShadow]}>
         <TouchableOpacity
-          style={styles.ghostRound}
+          style={[styles.ghostRound, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
           onPress={handlePress}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
@@ -89,7 +89,7 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress }: Back
           accessibilityLabel={label}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Icon name="ChevronLeft" size={22} color={Colors.textPrimary} strokeWidth={2.4} />
+          <Icon name="ChevronLeft" size={22} color={theme.icon} strokeWidth={2.4} />
         </TouchableOpacity>
       </Animated.View>
     );
@@ -105,17 +105,17 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress }: Back
         activeOpacity={1}
       >
         {BlurView ? (
-          <BlurView intensity={30} tint="light" style={styles.pillBlur}>
+          <BlurView intensity={30} tint={theme.mode === 'night' ? 'dark' : 'light'} style={[styles.pillBlur, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={styles.pillContent}>
-              <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
-              <Text style={styles.pillText}>{label}</Text>
+              <Icon name="ChevronLeft" size={IconSize.sm} color={theme.iconActive} strokeWidth={2.5} />
+              <Text style={[styles.pillText, { color: theme.foreground }]}>{label}</Text>
             </View>
           </BlurView>
         ) : (
-          <View style={[styles.pillBlur, styles.pillFallback]}>
+          <View style={[styles.pillBlur, styles.pillFallback, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={styles.pillContent}>
-              <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
-              <Text style={styles.pillText}>{label}</Text>
+              <Icon name="ChevronLeft" size={IconSize.sm} color={theme.iconActive} strokeWidth={2.5} />
+              <Text style={[styles.pillText, { color: theme.foreground }]}>{label}</Text>
             </View>
           </View>
         )}

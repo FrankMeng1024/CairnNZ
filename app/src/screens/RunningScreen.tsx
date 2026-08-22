@@ -35,6 +35,7 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens'
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { useAppearance } from '../hooks/useAppearance';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 import { PulseDot } from '../components/PulseDot';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
@@ -113,12 +114,14 @@ function useRunKeepAwake() {
 // so the row matches the concept sheet exactly. Label is rendered inline,
 // slightly smaller and muted, with a hair of horizontal padding so it
 // doesn't crowd the digits.
-function StatItem({ value, label }: { value: string; label: string }) {
+function StatItem({ value, label, title }: { value: string; label: string; title: string }) {
+  const theme = useVisualTheme();
   return (
     <View style={runStyles.statItem}>
-      <Text style={runStyles.statValue} numberOfLines={1}>
+      <Text style={[runStyles.statLabel, { color: theme.muted }]}>{title}</Text>
+      <Text style={[runStyles.statValue, { color: theme.foreground }]} numberOfLines={1}>
         {value}
-        {label ? <Text style={runStyles.statUnit}> {label}</Text> : null}
+        {label ? <Text style={[runStyles.statUnit, { color: theme.foregroundSecondary }]}> {label}</Text> : null}
       </Text>
     </View>
   );
@@ -199,6 +202,7 @@ export function RunningScreen() {
   // R21 (2026-08-18): dark theme parity with Hiking. Run tray + top pills
   // + Recenter FAB honour Settings Appearance so day/night reads the same.
   const { isDark: runIsDark } = useAppearance();
+  const runTheme = useVisualTheme();
   // R21 (2026-08-18 user "点击 向右侧展开"): tracking action tray is
   // collapsed by default. Tap the Navigation anchor (bottom-left) to
   // expand → Pause / Cairn / Finish slides out to the right.
@@ -763,7 +767,7 @@ export function RunningScreen() {
   // ── Pre-start ─────────────────────────────────────────────────────────────
   if (runState === 'pre') {
     return (
-      <View style={{ flex: 1, backgroundColor: runIsDark ? '#0F1620' : Colors.primaryBg }}>
+      <View style={{ flex: 1, backgroundColor: runTheme.background }}>
         {/* Real Mapbox basemap (or fallback if Mapbox unavailable) */}
         {MapView ? (
           <MapView
@@ -816,14 +820,16 @@ export function RunningScreen() {
             )}
           </MapView>
         ) : (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md }}>
-            <Icon name="Map" size={48} color={Colors.primaryMuted} />
-            <Text style={{ fontSize: FontSize.h3, fontWeight: '600', color: Colors.textPrimary }}>
-              Map unavailable
-            </Text>
-            <Text style={{ fontSize: FontSize.body, color: Colors.textSecondary, textAlign: 'center' }}>
-              Live map appears when GPS is enabled
-            </Text>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: runTheme.background }}>
+            <View style={{ alignItems: 'center', gap: Spacing.sm, width: '78%', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg, borderRadius: Radius.cardLg, borderWidth: 1, borderColor: runTheme.border, backgroundColor: runTheme.surface }}>
+              <Icon name="Map" size={38} color={runTheme.iconInactive} />
+              <Text style={{ fontSize: FontSize.h3, fontWeight: '700', color: runTheme.foreground }}>
+                Map unavailable
+              </Text>
+              <Text style={{ fontSize: FontSize.caption, lineHeight: 18, color: runTheme.foregroundSecondary, textAlign: 'center' }}>
+                Live map appears when GPS is enabled
+              </Text>
+            </View>
           </View>
         )}
 
@@ -861,39 +867,39 @@ export function RunningScreen() {
               4-item row (km / time / pace / GPS dot) shown pre-start too so
               layout is symmetric with Hiking H0 statsStrip. Zeros gracefully
               before user hits Start. */}
-          <View style={preStyles.statsStrip} pointerEvents="none">
-            <Text style={preStyles.statsStripKm}>0.00 {dist.unit}</Text>
-            <Text style={preStyles.statsStripTime}>00:00</Text>
-            <Text style={preStyles.statsStripPace}>{`--'--"/${dist.unit}`}</Text>
+          <View style={[preStyles.statsStrip, { backgroundColor: runTheme.mapOverlay, borderColor: runTheme.border }]} pointerEvents="none">
+            <Text style={[preStyles.statsStripKm, runIsDark ? { color: runTheme.foreground } : null]}>0.00 {dist.unit}</Text>
+            <Text style={[preStyles.statsStripTime, runIsDark ? { color: runTheme.foreground } : null]}>00:00</Text>
+            <Text style={[preStyles.statsStripPace, runIsDark ? { color: runTheme.foreground } : null]}>{`--'--"/${dist.unit}`}</Text>
             <View style={preStyles.statsStripGpsWrap}>
               <View style={[preStyles.statsStripGpsDot, { backgroundColor: permissionBlocked ? Colors.severityWarning : RunConcept.forest }]} />
-              <Text style={preStyles.statsStripGpsText}>GPS</Text>
+              <Text style={[preStyles.statsStripGpsText, runIsDark ? { color: runTheme.foreground } : null]}>GPS</Text>
             </View>
           </View>
         </SafeAreaView>
 
         {/* Bottom: FREE RUN card + Route row + green Start Running (R0 concept) */}
         <SafeAreaView style={preStyles.bottomOverlay} edges={['bottom']} pointerEvents="box-none">
-          <View style={preStyles.bottomPanel}>
+          <View style={[preStyles.bottomPanel, { backgroundColor: runTheme.mapOverlay, borderColor: runTheme.border, shadowColor: runTheme.shadow }]}>
             {/* FREE RUN card — 2026-08-17 concept R0: compass/target
                 glyph on the left, eyebrow + sub in the middle, chevron
                 on the right. Compass matches the "Run anywhere" story
                 and echoes the R0 map orientation cue. */}
-            <TouchableOpacity style={preStyles.freeRunCard} onPress={openRoutePicker} activeOpacity={0.9}>
+            <TouchableOpacity style={[preStyles.freeRunCard, runIsDark ? { backgroundColor: runTheme.surfaceElevated, borderColor: runTheme.border } : null]} onPress={openRoutePicker} activeOpacity={0.9}>
               <View style={preStyles.freeRunGlyph}>
-                <Icon name="Target" size={22} color={RunConcept.textPrimary} strokeWidth={2} />
+                <Icon name="Target" size={22} color={runIsDark ? runTheme.iconActive : RunConcept.textPrimary} strokeWidth={2} />
               </View>
               <View style={preStyles.freeRunTextGroup}>
-                <Text style={preStyles.freeRunEyebrow}>FREE RUN</Text>
-                <Text style={preStyles.freeRunSub}>Run anywhere</Text>
+                <Text style={[preStyles.freeRunEyebrow, runIsDark ? { color: runTheme.foreground } : null]}>FREE RUN</Text>
+                <Text style={[preStyles.freeRunSub, runIsDark ? { color: runTheme.foregroundSecondary } : null]}>Run anywhere</Text>
               </View>
-              <Icon name="ChevronUp" size={20} color={RunConcept.textMuted} strokeWidth={2} />
+              <Icon name="ChevronUp" size={20} color={runIsDark ? runTheme.iconInactive : RunConcept.textMuted} strokeWidth={2} />
             </TouchableOpacity>
 
             {/* Route row — separate line per concept */}
-            <TouchableOpacity style={preStyles.routeRow} onPress={openRoutePicker} activeOpacity={0.9}>
-              <Text style={preStyles.routeRowText}>Route: {selectedRoute ? selectedRouteName : 'None'}</Text>
-              <Icon name="ChevronRight" size={18} color={RunConcept.textMuted} strokeWidth={2} />
+            <TouchableOpacity style={[preStyles.routeRow, runIsDark ? { backgroundColor: runTheme.surface, borderColor: runTheme.border } : null]} onPress={openRoutePicker} activeOpacity={0.9}>
+              <Text style={[preStyles.routeRowText, runIsDark ? { color: runTheme.foreground } : null]}>Route: {selectedRoute ? selectedRouteName : 'None'}</Text>
+              <Icon name="ChevronRight" size={18} color={runIsDark ? runTheme.iconInactive : RunConcept.textMuted} strokeWidth={2} />
             </TouchableOpacity>
 
             {/* Start Running — full-width forest-green pill */}
@@ -903,9 +909,9 @@ export function RunningScreen() {
                 onPress={handleStart}
                 onPressIn={onStartPressIn}
                 onPressOut={onStartPressOut}
-                style={preStyles.startBtn}
+                style={[preStyles.startBtn, runIsDark ? { backgroundColor: runTheme.primary } : null]}
               >
-                <Text style={preStyles.startBtnText}>Start Running</Text>
+                <Text style={[preStyles.startBtnText, runIsDark ? { color: runTheme.onPrimary } : null]}>Start Running</Text>
               </TouchableOpacity>
             </Animated.View>
             {/* 2026-08-17 concept R0: tiny lock hint below Start Running.
@@ -913,8 +919,8 @@ export function RunningScreen() {
                 can stash the device in a pocket without worrying about
                 accidental input during the run. */}
             <View style={preStyles.lockHintRow}>
-              <Icon name="Lock" size={11} color={Colors.textMuted} strokeWidth={2} />
-              <Text style={preStyles.lockHint}>Screen locks automatically</Text>
+              <Icon name="Lock" size={11} color={runIsDark ? runTheme.muted : Colors.textMuted} strokeWidth={2} />
+              <Text style={[preStyles.lockHint, runIsDark ? { color: runTheme.muted } : null]}>Screen locks automatically</Text>
             </View>
           </View>
         </SafeAreaView>
@@ -981,8 +987,8 @@ export function RunningScreen() {
   //   • No compass ring, no lock overlay, no double-tap gesture. Done opens
   //     the save-name sheet which drives the transition to R4.
   return (
-    <View style={[runStyles.container, runIsDark ? { backgroundColor: '#0F1620' } : null]}>
-      <View style={[runStyles.bg, runIsDark ? { backgroundColor: '#0F1620' } : null]}>
+    <View style={[runStyles.container, { backgroundColor: runTheme.background }]}>
+      <View style={[runStyles.bg, { backgroundColor: runTheme.background }]}>
           {/* R1 basemap + tracking polyline. Concept R1-tracking.png shows
               a full terrain map behind the top stats bar with the run's
               green trail drawn on top. Store subscriptions unchanged —
@@ -1057,6 +1063,17 @@ export function RunningScreen() {
               </MapView>
             </View>
           )}
+          {!MapView && (
+            <View style={runStyles.mapFallback} pointerEvents="none">
+              <View style={[runStyles.mapFallbackCard, { backgroundColor: runTheme.surface, borderColor: runTheme.border }]}>
+                <View style={[runStyles.mapFallbackIcon, { backgroundColor: runTheme.surfaceElevated }]}>
+                  <Icon name="Map" size={26} color={runTheme.iconActive} strokeWidth={1.8} />
+                </View>
+                <Text style={[runStyles.mapFallbackTitle, { color: runTheme.foreground }]}>Tracking your run</Text>
+                <Text style={[runStyles.mapFallbackText, { color: runTheme.foregroundSecondary }]}>Your live route appears here when location is available.</Text>
+              </View>
+            </View>
+          )}
           {/* R21 (2026-08-18 user "上方 下方 按钮 等等都和hike是一样的"):
               R2 top row now mirrors Hike — Back left, signal-lost pill
               on the right (only visible when tracking + lost). Kept the
@@ -1082,21 +1099,22 @@ export function RunningScreen() {
               / pace / GPS pill. Label strings match the concept ("km",
               blank for duration since HH:MM:SS reads on its own,
               "/km" suffix baked into paceDisplay). */}
-          <SafeAreaView edges={['top']}>
-            <View style={[runStyles.statsBar, runIsDark ? { backgroundColor: "rgba(15,22,38,0.55)", borderBottomColor: "rgba(220,230,240,0.14)" } : null]}>
-              <StatItem value={distDisplay} label={dist.unit} />
-              <StatItem value={durationDisplay} label="" />
-              <StatItem value={paceDisplay} label={paceDisplay === '--' ? '' : paceUnit} />
-              <View style={[runStyles.statItem, { justifyContent: 'center', gap: 4 }]}>
+          <View style={[runStyles.statsBar, { backgroundColor: runTheme.mapOverlay, borderColor: runTheme.border, shadowColor: runTheme.shadow }]}>
+              <StatItem title="DISTANCE" value={distDisplay} label={dist.unit} />
+              <StatItem title="TIME" value={durationDisplay} label="" />
+              <StatItem title="PACE" value={paceDisplay} label={paceDisplay === '--' ? '' : paceUnit} />
+              <View style={runStyles.statItem}>
+                <Text style={[runStyles.statLabel, { color: runTheme.muted }]}>SIGNAL</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                 <PulseDot
                   size={8}
-                  color={locationAvailable ? RunConcept.forest : RunConcept.textMuted}
+                  color={locationAvailable ? runTheme.iconActive : runTheme.iconInactive}
                   pulsing={locationAvailable}
                 />
-                <Text style={runStyles.statUnit}>{locationAvailable ? 'GPS' : 'Offline'}</Text>
+                <Text style={[runStyles.statValue, { color: runTheme.foreground, fontSize: 14 }]}>{locationAvailable ? 'GPS' : 'Offline'}</Text>
+                </View>
               </View>
             </View>
-          </SafeAreaView>
 
           {/* Sleep-run 2026-08-16 rev-2: compass ring + dark lock overlay
               removed. R1 is now a clean map-first view — the polyline and
@@ -1112,7 +1130,7 @@ export function RunningScreen() {
             <SafeAreaView edges={['bottom']} pointerEvents="box-none">
               <View style={runStyles.trayAnchorRow} pointerEvents="auto">
                 <TouchableOpacity
-                  style={[runStyles.trayAnchor, runIsDark ? { backgroundColor: 'rgba(15,22,38,0.85)', borderColor: 'rgba(220,230,240,0.24)' } : null]}
+                  style={[runStyles.trayAnchor, runIsDark ? { backgroundColor: runTheme.surfaceElevated, borderColor: runTheme.border } : null]}
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel={runActionsExpanded ? 'Hide quick actions' : 'Show quick actions'}
@@ -1132,7 +1150,7 @@ export function RunningScreen() {
                   <View style={runStyles.trayRow}>
                     <View style={runStyles.trayItem}>
                       <TouchableOpacity
-                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
+                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: runTheme.surface, borderColor: runTheme.border } : null]}
                         activeOpacity={0.85}
                         onPress={() => {
                           haptic.impact('light');
@@ -1154,7 +1172,7 @@ export function RunningScreen() {
                     </View>
                     <View style={runStyles.trayItem}>
                       <TouchableOpacity
-                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
+                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: runTheme.surface, borderColor: runTheme.border } : null]}
                         activeOpacity={0.85}
                         onPress={() => {
                           setRunActionsExpanded(false);
@@ -1164,19 +1182,13 @@ export function RunningScreen() {
                         accessibilityRole="button"
                         accessibilityLabel="Leave a Cairn"
                       >
-                        <Image
-                          source={runIsDark
-                            ? require('../../assets/home/action-leave-cairn-night.png')
-                            : require('../../assets/home/action-leave-cairn-day.png')}
-                          style={{ width: 28, height: 28 }}
-                          resizeMode="contain"
-                        />
+                        <Icon name="Flag" size={24} color={runTheme.iconActive} strokeWidth={1.9} />
                       </TouchableOpacity>
                       <Text style={[runStyles.trayFabLabel, runIsDark ? { color: '#F0EEE6' } : null]}>Cairn</Text>
                     </View>
                     <View style={runStyles.trayItem}>
                       <TouchableOpacity
-                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
+                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: runTheme.surface, borderColor: runTheme.border } : null]}
                         activeOpacity={0.85}
                         onPress={() => {
                           haptic.impact('medium');
@@ -1331,7 +1343,20 @@ const preStyles = StyleSheet.create({
   subtitle: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 4 },
 
   // New compact layout — R0 concept
-  bottomPanel: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.md, gap: Spacing.sm },
+  bottomPanel: {
+    marginHorizontal: Spacing.sm,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.base,
+    paddingBottom: Spacing.md,
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 10,
+  },
   freeRunCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: RunConcept.cardSurface, borderRadius: 18,
@@ -1455,9 +1480,17 @@ const preStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 8,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderRadius: 16,
+    shadowColor: '#102A20',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 6,
   },
   statsStripKm: { fontSize: 14, fontWeight: '700', color: RunConcept.textPrimary, fontVariant: ['tabular-nums'] },
   statsStripTime: { fontSize: 14, fontWeight: '700', color: RunConcept.textPrimary, fontVariant: ['tabular-nums'] },
@@ -1495,18 +1528,52 @@ const runStyles = StyleSheet.create({
   bg: { flex: 1, backgroundColor: RunConcept.paper },
 
   statsBar: {
-    flexDirection: 'row', paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md, paddingBottom: Spacing.sm,
-    borderBottomWidth: 1, borderBottomColor: RunConcept.hairline,
-    gap: Spacing.base,
+    flexDirection: 'row',
+    marginHorizontal: Spacing.base,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderWidth: 1,
+    borderRadius: 18,
+    gap: Spacing.xs,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    elevation: 7,
   },
-  statItem: { flex: 1, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
-  statValue: { fontSize: 14, fontWeight: '700', color: RunConcept.textPrimary, letterSpacing: -0.2, fontVariant: ['tabular-nums'] },
+  statItem: { flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  statValue: { fontSize: 17, fontWeight: '800', color: RunConcept.textPrimary, letterSpacing: -0.35, fontVariant: ['tabular-nums'] },
   // 2026-08-17 concept R0: label sits inline with the value (small,
   // muted). Keeping statLabel around so the historical detail views
   // that still stack label under value don't break.
   statUnit: { fontSize: 11, fontWeight: '500', color: RunConcept.textMuted, letterSpacing: 0.2 },
-  statLabel: { fontSize: FontSize.tiny, color: RunConcept.textMuted, marginTop: 2, letterSpacing: 0.5 },
+  statLabel: { fontSize: 9, fontWeight: '800', color: RunConcept.textMuted, letterSpacing: 0.9 },
+
+  mapFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 42,
+  },
+  mapFallbackCard: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.xl,
+    borderRadius: 22,
+    borderWidth: 1,
+    gap: Spacing.sm,
+  },
+  mapFallbackIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
+  mapFallbackTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
+  mapFallbackText: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
 
   // R21 (2026-08-18): tray anchor mirrors Hiking — bottom-left, tap
   // Navigation → row expands to the right (Pause / Cairn / Finish).

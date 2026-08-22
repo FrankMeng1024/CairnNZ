@@ -57,6 +57,7 @@ import { HikingIcon } from '../../components/ActivityIcons/HikingIcon';
 import { storage } from '../../store/storage';
 import { haptic } from '../../services/hapticService';
 import { useAppStore } from '../../store/useAppStore';
+import { useVisualTheme } from '../../hooks/useVisualTheme';
 
 const LEGACY_STORAGE_KEY = 'cairn_onboarding_v1_done';
 
@@ -89,6 +90,7 @@ interface IntroScreen {
 }
 
 export function OnboardingModal({ visible, onFinish }: Props) {
+  const theme = useVisualTheme();
   const [step, setStep] = useState<Step>(1);
   const [locationGranted, setLocationGranted] = useState<boolean | null>(null);
   const fade = useRef(new Animated.Value(0)).current;
@@ -199,19 +201,19 @@ export function OnboardingModal({ visible, onFinish }: Props) {
     },
     {
       key: 'hiking',
-      icon: <HikingIcon size={64} color={Colors.primary} />,
+      icon: <HikingIcon size={64} color={theme.iconActive} />,
       title: 'Track every hike',
       body: 'Cairn quietly records your route, distance, and elevation.\nNo chatter, no leaderboards.',
     },
     {
       key: 'cairns',
-      icon: <FlagMarkerIcon size={64} stoneColor={Colors.flag} flagColor={Colors.primary} />,
+      icon: <FlagMarkerIcon size={64} stoneColor={Colors.flag} flagColor={theme.iconActive} />,
       title: 'Leave a cairn',
       body: 'Drop a small marker with a note.\nKeep it for yourself, or share with friends walking the same trail.',
     },
     {
       key: 'memory',
-      icon: <Icon name="Footprints" size={56} color={Colors.primary} strokeWidth={1.5} />,
+      icon: <Icon name="Footprints" size={56} color={theme.iconActive} strokeWidth={1.5} />,
       title: 'Uncover your map',
       body: 'Every step reveals fog on your map.\nOver months, you build a personal atlas of where you have walked.',
     },
@@ -222,7 +224,7 @@ export function OnboardingModal({ visible, onFinish }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent transparent={false}>
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
         <Animated.View style={[styles.inner, { opacity: fade }]}>
           {step !== 'denied' && (
             <View style={styles.pagerWrap}>
@@ -244,8 +246,8 @@ export function OnboardingModal({ visible, onFinish }: Props) {
                 renderItem={({ item }) => (
                   <View style={[styles.page, { width: screenWidth }]}>
                     <View style={styles.iconWrap}>{item.icon}</View>
-                    <Text style={styles.title}>{item.title}</Text>
-                    <Text style={styles.body}>{item.body}</Text>
+                    <Text style={[styles.title, { color: theme.foreground }]}>{item.title}</Text>
+                    <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{item.body}</Text>
                   </View>
                 )}
               />
@@ -260,20 +262,20 @@ export function OnboardingModal({ visible, onFinish }: Props) {
                     hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                   >
                     <View
-                      style={[styles.dot, i === stepIndex && styles.dotActive]}
+                      style={[styles.dot, { backgroundColor: i === stepIndex ? theme.primary : theme.border }]}
                     />
                   </TouchableOpacity>
                 ))}
               </View>
               <View style={styles.ctaWrap}>
                 <TouchableOpacity
-                  style={styles.ctaBtn}
+                  style={[styles.ctaBtn, { backgroundColor: theme.primary }]}
                   onPress={isLastIntro ? requestLocation : advance}
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel={isLastIntro ? (locationGranted === true ? 'Done' : 'Enable Location') : 'Continue'}
                 >
-                  <Text style={styles.ctaText}>
+                  <Text style={[styles.ctaText, { color: theme.onPrimary }]}>
                     {isLastIntro ? (locationGranted === true ? 'Done' : 'Enable Location') : 'Continue'}
                   </Text>
                 </TouchableOpacity>
@@ -287,7 +289,7 @@ export function OnboardingModal({ visible, onFinish }: Props) {
                     granted; the slot is always reserved. */}
                 <View style={styles.ctaHintSlot}>
                   {isLastIntro && locationGranted !== true ? (
-                    <Text style={styles.ctaHint}>iOS will ask for permission next.</Text>
+                    <Text style={[styles.ctaHint, { color: theme.muted }]}>iOS will ask for permission next.</Text>
                   ) : null}
                 </View>
               </View>
@@ -296,21 +298,21 @@ export function OnboardingModal({ visible, onFinish }: Props) {
           {step === 'denied' && (
             <View style={styles.screen}>
               <View style={styles.iconWrap}>
-                <Icon name="MapPin" size={56} color={Colors.textMuted} strokeWidth={1.5} />
+                <Icon name="MapPin" size={56} color={theme.iconInactive} strokeWidth={1.5} />
               </View>
-              <Text style={styles.title}>You can still use Cairn</Text>
-              <Text style={styles.body}>
+              <Text style={[styles.title, { color: theme.foreground }]}>You can still use Cairn</Text>
+              <Text style={[styles.body, { color: theme.foregroundSecondary }]}>
                 {"Without location, we can't record your hikes or reveal your map.\nYou can turn on location later in Settings."}
               </Text>
               <View style={styles.ctaWrap}>
                 <TouchableOpacity
-                  style={styles.ctaBtn}
+                  style={[styles.ctaBtn, { backgroundColor: theme.primary }]}
                   onPress={finish}
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel="Continue"
                 >
-                  <Text style={styles.ctaText}>Continue</Text>
+                  <Text style={[styles.ctaText, { color: theme.onPrimary }]}>Continue</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.secondaryBtn}
@@ -319,7 +321,7 @@ export function OnboardingModal({ visible, onFinish }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel="Open Settings"
                 >
-                  <Text style={styles.secondaryText}>Open Settings</Text>
+                  <Text style={[styles.secondaryText, { color: theme.foregroundSecondary }]}>Open Settings</Text>
                 </TouchableOpacity>
               </View>
             </View>

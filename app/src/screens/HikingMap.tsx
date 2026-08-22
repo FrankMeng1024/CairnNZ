@@ -12,7 +12,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Platform, ActivityIndicator, Image,
 } from 'react-native';
-import { Colors, Spacing, FontSize, Shadow } from '../components/tokens';
+import { Colors, Spacing, FontSize, Radius, Shadow } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
 import { getCurrentRegion } from '../config/regions';
 import { getMapStyleForLayer, getPrimaryMapStyle } from '../config/mapbox';
@@ -24,6 +24,7 @@ import { MARKER_META } from '../data/mockData';
 import { FLAG_TYPES } from '../data/flagTypes';
 import { MarkerPin } from './MarkerPin';
 import type { Marker } from '../store/useMarkerStore';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 // ── Mapbox conditional import ────────────────────────────────────────────
 // @rnmapbox/maps components are native-only — on web they may be undefined.
@@ -103,6 +104,7 @@ export function HikingMap({
   // O18 MAP-01: react to user's saved map layer preference (outdoors / satellite).
   const mapLayer = useSettingsStore((s) => s.mapLayer);
   const { isDark: appearanceIsDark } = useAppearance();
+  const theme = useVisualTheme();
 
   // R114/O22 (2026-08-08) Bug 4: watch network state. When offline, Mapbox
   // tiles fail to fetch → map renders black/white. Overlay a friendly
@@ -319,15 +321,17 @@ export function HikingMap({
   // Fallback when Mapbox not available
   if (!MapView) {
     return (
-      <View style={mapStyles.mapBg}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md }}>
-          <Icon name="Map" size={48} color={Colors.primaryMuted} />
-          <Text style={{ fontSize: FontSize.h3, fontWeight: '600', color: Colors.textPrimary }}>
-            Map unavailable
-          </Text>
-          <Text style={{ fontSize: FontSize.body, color: Colors.textSecondary, textAlign: 'center' }}>
-            Live map appears when GPS is enabled
-          </Text>
+      <View style={[mapStyles.mapBg, { backgroundColor: theme.background }]}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ alignItems: 'center', gap: Spacing.sm, width: '78%', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg, borderRadius: Radius.cardLg, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface }}>
+            <Icon name="Map" size={38} color={theme.iconInactive} />
+            <Text style={{ fontSize: FontSize.h3, fontWeight: '700', color: theme.foreground }}>
+              Map unavailable
+            </Text>
+            <Text style={{ fontSize: FontSize.caption, lineHeight: 18, color: theme.foregroundSecondary, textAlign: 'center' }}>
+              Live map appears when GPS is enabled
+            </Text>
+          </View>
         </View>
         {markers.map((m, i) => (
           <MarkerPin

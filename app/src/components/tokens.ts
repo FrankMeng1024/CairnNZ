@@ -66,6 +66,86 @@ export const Colors = {
   switchTrack: '#E0E0E0',          // toggle switch inactive track
 } as const;
 
+/**
+ * CairnNZ semantic visual tokens.
+ *
+ * Weather never changes these values: it selects scenery only. The active
+ * DAY/NIGHT appearance selects one of these two functional palettes for
+ * every screen, including Mapbox overlays and scenic screens.
+ */
+export interface VisualThemeTokens {
+  mode: 'day' | 'night';
+  foreground: string;
+  foregroundSecondary: string;
+  muted: string;
+  primary: string;
+  accent: string;
+  background: string;
+  surface: string;
+  surfaceElevated: string;
+  border: string;
+  icon: string;
+  iconActive: string;
+  iconInactive: string;
+  mapOverlay: string;
+  readabilityScrim: string;
+  destructive: string;
+  onPrimary: string;
+  onScenic: string;
+  onScenicMuted: string;
+  shadow: string;
+}
+
+export const DAY_VISUAL_THEME: VisualThemeTokens = {
+  mode: 'day',
+  foreground: '#17372D',
+  foregroundSecondary: '#4F625A',
+  muted: '#7A8982',
+  primary: '#2F684F',
+  accent: '#72A34B',
+  background: '#F3F4EA',
+  surface: 'rgba(252,252,246,0.94)',
+  surfaceElevated: '#FFFDF7',
+  border: 'rgba(32,72,57,0.16)',
+  icon: '#355B4B',
+  iconActive: '#235E45',
+  iconInactive: '#829087',
+  mapOverlay: 'rgba(252,252,246,0.94)',
+  readabilityScrim: 'rgba(10,35,27,0.20)',
+  destructive: '#B93B32',
+  onPrimary: '#FFFFFF',
+  onScenic: '#FFFFFF',
+  onScenicMuted: 'rgba(255,255,255,0.88)',
+  shadow: 'rgba(12,36,28,0.16)',
+};
+
+export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
+  mode: 'night',
+  foreground: '#F2F5EF',
+  foregroundSecondary: '#C6D4CC',
+  muted: '#91A79D',
+  primary: '#8FBE88',
+  accent: '#A7C983',
+  background: '#102A24',
+  surface: 'rgba(25,56,48,0.96)',
+  surfaceElevated: '#244B40',
+  border: 'rgba(220,238,226,0.22)',
+  icon: '#DCE8DF',
+  iconActive: '#B1D79B',
+  iconInactive: '#8BA097',
+  mapOverlay: 'rgba(18,48,41,0.96)',
+  readabilityScrim: 'rgba(4,18,15,0.36)',
+  destructive: '#F08078',
+  onPrimary: '#102219',
+  onScenic: '#F5F7F2',
+  onScenicMuted: 'rgba(240,245,239,0.88)',
+  shadow: 'rgba(2,12,9,0.46)',
+};
+
+export function getVisualTheme(isDark: boolean): VisualThemeTokens {
+  return isDark ? NIGHT_VISUAL_THEME : DAY_VISUAL_THEME;
+}
+
 export const Spacing = {
   xs: 4,
   sm: 8,

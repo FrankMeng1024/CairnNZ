@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Radius, FontSize, Shadow } from './tokens';
-import { useAppearance } from '../hooks/useAppearance';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 // Concept H3/R3 (sleep-run-2026-08-15): two botanical icons at the top of the
 // modal — footprints + fern-leaf — replace the previous MapPin circle. Same
@@ -46,11 +46,11 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
   // R21 (2026-08-18 user "hike complete和confirm page也要follow 白天夜间"):
   // dark tokens for the too-short sheet so it stays coherent with the
   // rest of the Hike/Run night surfaces.
-  const { isDark } = useAppearance();
-  const sheetBg = isDark ? 'rgba(15,22,38,0.98)' : Colors.surface;
-  const titleColor = isDark ? '#F0EEE6' : Colors.textPrimary;
-  const bodyColor = isDark ? 'rgba(240,238,230,0.68)' : Colors.textSecondary;
-  const handleColor = isDark ? 'rgba(220,230,240,0.30)' : Colors.border;
+  const theme = useVisualTheme();
+  const sheetBg = theme.surfaceElevated;
+  const titleColor = theme.foreground;
+  const bodyColor = theme.foregroundSecondary;
+  const handleColor = theme.border;
 
   useEffect(() => {
     if (visible) {
@@ -94,18 +94,18 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
         <Text style={[styles.title, { color: titleColor }]}>Keep going{'\n'}a little longer</Text>
         <Text style={[styles.body, { color: bodyColor }]}>{bodyCopy}</Text>
         <TouchableOpacity
-          style={styles.btnPrimary}
+          style={[styles.btnPrimary, { backgroundColor: theme.primary }]}
           activeOpacity={0.85}
           onPress={() => dismiss(onContinue)}
         >
-          <Text style={styles.btnPrimaryText}>Got it — keep going</Text>
+          <Text style={[styles.btnPrimaryText, { color: theme.onPrimary }]}>Got it — keep going</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.btnSecondary}
           activeOpacity={0.7}
           onPress={() => dismiss(onDiscard)}
         >
-          <Text style={styles.btnSecondaryText}>End {label.toLowerCase()} anyway</Text>
+          <Text style={[styles.btnSecondaryText, { color: theme.foregroundSecondary }]}>End {label.toLowerCase()} anyway</Text>
         </TouchableOpacity>
       </Animated.View>
     </Animated.View>

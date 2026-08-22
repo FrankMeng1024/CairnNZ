@@ -4,19 +4,9 @@
  * Input:  WeatherCondition from useWeatherStore + a timestamp (Date.now).
  * Output: HomeBackgroundTokens — 一整套 tokens 供 HomeScreen 用。
  *
- * R21 v4 (2026-08-17): per-variant palette. Each of the 8 variants has its
- * own carefully-picked text/shadow/card colors, pixel-sampled from the
- * actual bg image so it feels handcrafted, not generic "dark or light".
- *
- *  Variant       Top L  Bot L  Text color        Shadow           Card
- *  sunny-day     131    89     #1B3A28 forest    white glow       paper 90
- *  sunny-night   33     37     #F0EEE6 cream     deep blue glow   ink 78
- *  cloudy-day    194    73     #2A3438 slate    white glow       paper 92
- *  cloudy-night  22     13     #E5EAF0 silver    deep blue glow   ink 82
- *  rain-day      110    46     #2E3A44 storm    white glow       paper 88
- *  rain-night    21     15     #D8E0EC ice       deep blue glow   ink 82
- *  snow-day      159    148    #1F2A3A ink      white glow       paper 92
- *  snow-night    19     72     #DCE6F0 ice white deep blue glow   ink 78
+ * Production visual system: weather selects exactly one scenic asset;
+ * Day/Night selects exactly one functional UI palette. No component color
+ * changes by weather, which keeps Rainy Night and Sunny Night in one system.
  *
  * fog → cloudy fallback (no dedicated asset).
  * Day/night: local hour 6..19 = day, else night.
@@ -24,14 +14,14 @@
 import type { WeatherCondition } from '../store/useWeatherStore';
 
 const BG_ASSETS = {
-  'sunny-day':  require('../../assets/home/home-bg-sunny-day.jpg'),
-  'sunny-night': require('../../assets/home/home-bg-sunny-night.jpg'),
-  'cloudy-day':  require('../../assets/home/home-bg-cloudy-day.jpg'),
-  'cloudy-night': require('../../assets/home/home-bg-cloudy-night.jpg'),
-  'rain-day':    require('../../assets/home/home-bg-rain-day.jpg'),
-  'rain-night':  require('../../assets/home/home-bg-rain-night.jpg'),
-  'snow-day':    require('../../assets/home/home-bg-snow-day.jpg'),
-  'snow-night':  require('../../assets/home/home-bg-snow-night.jpg'),
+  'sunny-day':  require('../../assets/home/home-bg-sunny-day-semantic-v2-3x.jpg'),
+  'sunny-night': require('../../assets/home/home-bg-sunny-night-semantic-v2-3x.jpg'),
+  'cloudy-day':  require('../../assets/home/home-bg-cloudy-day-semantic-v2-3x.jpg'),
+  'cloudy-night': require('../../assets/home/home-bg-cloudy-night-semantic-v2-3x.jpg'),
+  'rain-day':    require('../../assets/home/home-bg-rainy-day-semantic-v2-3x.jpg'),
+  'rain-night':  require('../../assets/home/home-bg-rainy-night-semantic-v2-3x.jpg'),
+  'snow-day':    require('../../assets/home/home-bg-snowy-day-semantic-v2-3x.jpg'),
+  'snow-night':  require('../../assets/home/home-bg-snowy-night-semantic-v2-3x.jpg'),
 } as const;
 
 const FALLBACK_BG = require('../../assets/home/home-background.jpg');
@@ -72,9 +62,9 @@ export function resolveVariant(
   return `${bucket}-${dayNight}` as HomeBgVariant;
 }
 
-// Per-variant palette. Text color chosen against dominant top-30% luminance
-// of each bg; shadow/glow accent chosen against complementary tone.
-const VARIANT_PALETTE: Record<HomeBgVariant, {
+// Functional UI has exactly two palettes. Weather selects only the scenic
+// image above; it never creates another component theme.
+type ScenicUiPalette = {
   textColor: string;
   textColorMuted: string;
   textShadowColor: string;
@@ -88,133 +78,38 @@ const VARIANT_PALETTE: Record<HomeBgVariant, {
   tabBarBorderColor: string;
   tabBarTextColor: string;
   invertIcons: boolean;
-}> = {
-  // R21 v8 (2026-08-17 user "绿色不适合 换个适合白天的颜色"): hero text on
-  // sunny/cloudy/rain/snow day bg = white + warm shadow. Reads naturally on
-  // every landscape photo, no colour-clash with the bg vegetation/sky.
-  // actionButtonBackgroundColor kept at paper (white semi-opaque) so the
-  // Hiking/Running/Cairn tiles have contrast vs the white hero text.
-  'sunny-day': {
-    textColor: '#FFFFFF',
-    textColorMuted: 'rgba(255,255,255,0.88)',
-    textShadowColor: 'rgba(20,40,20,0.55)',
-    cardBackgroundColor: 'rgba(255,253,247,0.45)',
-    cardBorderColor: 'rgba(27,58,40,0.10)',
-    cardTextColor: '#1B3A28',
-    cardTextColorMuted: 'rgba(27,58,40,0.62)',
-    actionButtonBackgroundColor: 'rgba(255,253,247,0.45)',
-    actionButtonTextColor: '#1B3A28',
-    tabBarBackgroundColor: 'rgba(255,253,247,0.45)',
-    tabBarBorderColor: 'rgba(27,58,40,0.08)',
-    tabBarTextColor: '#1B3A28',
-    invertIcons: false,
-  },
-  // Sunny night: iter 3 — muted +0.04 opacity, shadow stays.
-  'sunny-night': {
-    textColor: '#F2F0E8',
-    textColorMuted: 'rgba(242,240,232,0.86)',
-    textShadowColor: 'rgba(8,16,30,0.8)',
-    cardBackgroundColor: 'rgba(15,22,38,0.60)',
-    cardBorderColor: 'rgba(240,238,230,0.14)',
-    cardTextColor: '#F0EEE6',
-    cardTextColorMuted: 'rgba(240,238,230,0.68)',
-    actionButtonBackgroundColor: 'rgba(15,22,38,0.72)',
-    actionButtonTextColor: '#F0EEE6',
-    tabBarBackgroundColor: 'rgba(15,22,38,0.82)',
-    tabBarBorderColor: 'rgba(240,238,230,0.12)',
-    tabBarTextColor: '#F0EEE6',
-    invertIcons: true,
-  },
-  'cloudy-day': {
-    textColor: '#FFFFFF',
-    textColorMuted: 'rgba(255,255,255,0.88)',
-    textShadowColor: 'rgba(10,20,30,0.55)',
-    cardBackgroundColor: 'rgba(255,253,247,0.45)',
-    cardBorderColor: 'rgba(42,52,56,0.08)',
-    cardTextColor: '#2A3438',
-    cardTextColorMuted: 'rgba(42,52,56,0.62)',
-    actionButtonBackgroundColor: 'rgba(255,253,247,0.45)',
-    actionButtonTextColor: '#2A3438',
-    tabBarBackgroundColor: 'rgba(255,253,247,0.45)',
-    tabBarBorderColor: 'rgba(42,52,56,0.08)',
-    tabBarTextColor: '#2A3438',
-    invertIcons: false,
-  },
-  'cloudy-night': {
-    textColor: '#E8ECEE',
-    textColorMuted: 'rgba(232,236,238,0.82)',
-    textShadowColor: 'rgba(4,10,20,0.85)',
-    cardBackgroundColor: 'rgba(10,18,32,0.60)',
-    cardBorderColor: 'rgba(229,234,240,0.14)',
-    cardTextColor: '#E5EAF0',
-    cardTextColorMuted: 'rgba(229,234,240,0.66)',
-    actionButtonBackgroundColor: 'rgba(10,18,32,0.75)',
-    actionButtonTextColor: '#E5EAF0',
-    tabBarBackgroundColor: 'rgba(10,18,32,0.85)',
-    tabBarBorderColor: 'rgba(229,234,240,0.12)',
-    tabBarTextColor: '#E5EAF0',
-    invertIcons: true,
-  },
-  'rain-day': {
-    textColor: '#FFFFFF',
-    textColorMuted: 'rgba(255,255,255,0.88)',
-    textShadowColor: 'rgba(10,18,28,0.6)',
-    cardBackgroundColor: 'rgba(255,253,247,0.45)',
-    cardBorderColor: 'rgba(46,58,68,0.10)',
-    cardTextColor: '#2E3A44',
-    cardTextColorMuted: 'rgba(46,58,68,0.62)',
-    actionButtonBackgroundColor: 'rgba(255,253,247,0.45)',
-    actionButtonTextColor: '#2E3A44',
-    tabBarBackgroundColor: 'rgba(255,253,247,0.45)',
-    tabBarBorderColor: 'rgba(46,58,68,0.10)',
-    tabBarTextColor: '#2E3A44',
-    invertIcons: false,
-  },
-  'rain-night': {
-    textColor: '#DAE2EE',
-    textColorMuted: 'rgba(218,226,238,0.82)',
-    textShadowColor: 'rgba(4,10,20,0.82)',
-    cardBackgroundColor: 'rgba(10,18,32,0.60)',
-    cardBorderColor: 'rgba(216,224,236,0.14)',
-    cardTextColor: '#D8E0EC',
-    cardTextColorMuted: 'rgba(216,224,236,0.66)',
-    actionButtonBackgroundColor: 'rgba(10,18,32,0.75)',
-    actionButtonTextColor: '#D8E0EC',
-    tabBarBackgroundColor: 'rgba(10,18,32,0.85)',
-    tabBarBorderColor: 'rgba(216,224,236,0.12)',
-    tabBarTextColor: '#D8E0EC',
-    invertIcons: true,
-  },
-  'snow-day': {
-    textColor: '#FFFFFF',
-    textColorMuted: 'rgba(255,255,255,0.88)',
-    textShadowColor: 'rgba(10,18,32,0.55)',
-    cardBackgroundColor: 'rgba(255,253,247,0.45)',
-    cardBorderColor: 'rgba(31,42,58,0.08)',
-    cardTextColor: '#1F2A3A',
-    cardTextColorMuted: 'rgba(31,42,58,0.62)',
-    actionButtonBackgroundColor: 'rgba(255,253,247,0.45)',
-    actionButtonTextColor: '#1F2A3A',
-    tabBarBackgroundColor: 'rgba(255,253,247,0.45)',
-    tabBarBorderColor: 'rgba(31,42,58,0.08)',
-    tabBarTextColor: '#1F2A3A',
-    invertIcons: false,
-  },
-  'snow-night': {
-    textColor: '#E0E8F2',
-    textColorMuted: 'rgba(224,232,242,0.87)',
-    textShadowColor: 'rgba(4,10,20,0.82)',
-    cardBackgroundColor: 'rgba(15,22,38,0.60)',
-    cardBorderColor: 'rgba(220,230,240,0.14)',
-    cardTextColor: '#DCE6F0',
-    cardTextColorMuted: 'rgba(220,230,240,0.66)',
-    actionButtonBackgroundColor: 'rgba(15,22,38,0.72)',
-    actionButtonTextColor: '#DCE6F0',
-    tabBarBackgroundColor: 'rgba(15,22,38,0.82)',
-    tabBarBorderColor: 'rgba(220,230,240,0.12)',
-    tabBarTextColor: '#DCE6F0',
-    invertIcons: true,
-  },
+};
+
+const DAY_UI_PALETTE: ScenicUiPalette = {
+  textColor: '#FFFFFF',
+  textColorMuted: 'rgba(255,255,255,0.88)',
+  textShadowColor: 'rgba(10,35,27,0.62)',
+  cardBackgroundColor: 'rgba(252,252,246,0.90)',
+  cardBorderColor: 'rgba(32,72,57,0.16)',
+  cardTextColor: '#17372D',
+  cardTextColorMuted: '#52665D',
+  actionButtonBackgroundColor: 'rgba(252,252,246,0.90)',
+  actionButtonTextColor: '#17372D',
+  tabBarBackgroundColor: 'rgba(252,252,246,0.94)',
+  tabBarBorderColor: 'rgba(32,72,57,0.16)',
+  tabBarTextColor: '#355B4B',
+  invertIcons: false,
+};
+
+const NIGHT_UI_PALETTE: ScenicUiPalette = {
+  textColor: '#F5F7F2',
+  textColorMuted: 'rgba(240,245,239,0.88)',
+  textShadowColor: 'rgba(2,12,9,0.88)',
+  cardBackgroundColor: 'rgba(25,56,48,0.94)',
+  cardBorderColor: 'rgba(220,238,226,0.22)',
+  cardTextColor: '#F2F5EF',
+  cardTextColorMuted: '#C6D4CC',
+  actionButtonBackgroundColor: 'rgba(25,56,48,0.94)',
+  actionButtonTextColor: '#F2F5EF',
+  tabBarBackgroundColor: 'rgba(18,48,41,0.96)',
+  tabBarBorderColor: 'rgba(220,238,226,0.22)',
+  tabBarTextColor: '#DCE8DF',
+  invertIcons: true,
 };
 
 const DARK_TEXT_VARIANTS: ReadonlySet<HomeBgVariant> = new Set([
@@ -240,7 +135,7 @@ export function getHomeBackground(
     : resolveVariant(safeCondition, nowMs);
   const bgAsset = BG_ASSETS[variant] ?? FALLBACK_BG;
   const useDarkText = DARK_TEXT_VARIANTS.has(variant);
-  const p = VARIANT_PALETTE[variant];
+  const p = variant.endsWith('-night') ? NIGHT_UI_PALETTE : DAY_UI_PALETTE;
 
   return {
     bgAsset,

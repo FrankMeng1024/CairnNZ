@@ -36,6 +36,7 @@ import { PaywallSheet } from '../components/PaywallSheet';
 import { BackButton } from '../../../components/BackButton';
 import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { log, flushNow as flushLogsNow } from '../../../services/appLog';
 // v322: ForegroundUnlockManager moved here from App root. Mounts only
 // when MemoryScreen mounts, unmounts when user leaves. This means H3 +
@@ -80,6 +81,7 @@ let _lastKnownCoord: { lat: number; lng: number; ts: number } | null = null;
 let _memoryScreenRenderCount = 0;
 
 export function MemoryScreen() {
+  const theme = useVisualTheme();
   // v317: mark memory-screen render entry. v316 server data showed user
   // navigated from login → Memory tab → crash. No beacon coverage in
   // MemoryScreen mount path.
@@ -664,7 +666,7 @@ export function MemoryScreen() {
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
       {/* v322: fgum mounts here. Unmounts when MemoryScreen unmounts
           (user navigates back to Home), releasing GPS watcher + h3
           + memory-store subscriptions. */}
@@ -718,48 +720,48 @@ export function MemoryScreen() {
         />
       ) : failReason === 'permission' ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>Location permission needed</Text>
-          <Text style={styles.emptySub}>
+          <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Location permission needed</Text>
+          <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>
             Memory needs your location to draw the map.
           </Text>
           <TouchableOpacity
-            style={styles.emptyPrimaryBtn}
+            style={[styles.emptyPrimaryBtn, { backgroundColor: theme.primary }]}
             onPress={() => Linking.openSettings()}
             activeOpacity={0.85}
           >
-            <Text style={styles.emptyPrimaryBtnText}>Open Settings</Text>
+            <Text style={[styles.emptyPrimaryBtnText, { color: theme.onPrimary }]}>Open Settings</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.emptySecondaryBtn}
             onPress={() => setRefetchToken((n) => n + 1)}
             activeOpacity={0.7}
           >
-            <Text style={styles.emptySecondaryBtnText}>Try again</Text>
+            <Text style={[styles.emptySecondaryBtnText, { color: theme.foregroundSecondary }]}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : failReason === 'timeout' || failReason === 'error' ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>
+          <Text style={[styles.emptyTitle, { color: theme.foreground }]}>
             {failReason === 'timeout' ? 'Could not get a GPS fix' : 'Location unavailable'}
           </Text>
-          <Text style={styles.emptySub}>
+          <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>
             {failReason === 'timeout'
               ? 'GPS signal is weak. Move outside or near a window and try again.'
               : 'We could not read your location. Check that location services are on.'}
           </Text>
           <TouchableOpacity
-            style={styles.emptyPrimaryBtn}
+            style={[styles.emptyPrimaryBtn, { backgroundColor: theme.primary }]}
             onPress={() => setRefetchToken((n) => n + 1)}
             activeOpacity={0.85}
           >
-            <Text style={styles.emptyPrimaryBtnText}>Try again</Text>
+            <Text style={[styles.emptyPrimaryBtnText, { color: theme.onPrimary }]}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.emptyState}>
-          <ActivityIndicator color={Colors.primary} size="large" />
-          <Text style={[styles.emptyTitle, { marginTop: 16 }]}>Looking for your position…</Text>
-          <Text style={styles.emptySub}>
+          <ActivityIndicator color={theme.primary} size="large" />
+          <Text style={[styles.emptyTitle, { marginTop: 16, color: theme.foreground }]}>Looking for your position…</Text>
+          <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>
             We need a GPS fix to draw your memory map.
           </Text>
         </View>
@@ -767,7 +769,7 @@ export function MemoryScreen() {
 
       {persistentCoord && mapMoved && (
         <TouchableOpacity
-          style={styles.recenterBtn}
+          style={[styles.recenterBtn, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
           onPress={() => {
             onRecenter();
             setMapMoved(false);
@@ -776,7 +778,7 @@ export function MemoryScreen() {
         >
           {/* v334: Target icon to match HikingScreen.tsx recenter pill
               (decision E: "and an icon like Hiking, ..."). */}
-          <Icon name="Target" size={22} color={Colors.primary} strokeWidth={2} />
+          <Icon name="Target" size={22} color={theme.iconActive} strokeWidth={2} />
         </TouchableOpacity>
       )}
 
@@ -860,14 +862,14 @@ export function MemoryScreen() {
       {persistentCoord && (
         <Animated.View
           pointerEvents="none"
-          style={[styles.loadingOverlay, { opacity: overlayOpacity }]}
+          style={[styles.loadingOverlay, { opacity: overlayOpacity, backgroundColor: theme.background }]}
         >
           <View style={styles.loadingInner}>
-            <View style={styles.loadingLogoCircle}>
-              <Icon name="Mountain" size={44} color={Colors.primary} strokeWidth={1.5} />
+            <View style={[styles.loadingLogoCircle, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
+              <Icon name="Mountain" size={44} color={theme.iconActive} strokeWidth={1.5} />
             </View>
-            <Text style={styles.loadingTitle}>Cairn</Text>
-            <Text style={styles.loadingSub}>
+            <Text style={[styles.loadingTitle, { color: theme.foreground }]}>Cairn</Text>
+            <Text style={[styles.loadingSub, { color: theme.foregroundSecondary }]}>
               {loadingStage === 0
                 ? 'Loading map…'
                 : loadingStage === 1
@@ -875,7 +877,7 @@ export function MemoryScreen() {
                   : 'Network is slow, please wait…'}
             </Text>
             <ActivityIndicator
-              color={Colors.primary}
+              color={theme.primary}
               size="small"
               style={styles.loadingSpinner}
             />
@@ -926,16 +928,16 @@ export function MemoryScreen() {
 
       <Modal visible={showHint && isMemoryFocused} transparent animationType="fade" onRequestClose={dismissHint}>
         <View style={styles.hintBackdrop}>
-          <View style={styles.hintCard}>
-            <Text style={styles.hintTitle}>Walk to unlock your memory</Text>
-            <Text style={styles.hintBody}>
+          <View style={[styles.hintCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
+            <Text style={[styles.hintTitle, { color: theme.foreground }]}>Walk to unlock your memory</Text>
+            <Text style={[styles.hintBody, { color: theme.foregroundSecondary }]}>
               The map starts covered in fog. As you walk around, the fog clears
               and the places you have been become part of your memory.
               {'\n\n'}
               Cairns left by you and others appear as you discover them.
             </Text>
-            <TouchableOpacity style={styles.hintBtn} onPress={dismissHint} activeOpacity={0.85}>
-              <Text style={styles.hintBtnText}>Got it</Text>
+            <TouchableOpacity style={[styles.hintBtn, { backgroundColor: theme.primary }]} onPress={dismissHint} activeOpacity={0.85}>
+              <Text style={[styles.hintBtnText, { color: theme.onPrimary }]}>Got it</Text>
             </TouchableOpacity>
           </View>
         </View>

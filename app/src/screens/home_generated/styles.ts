@@ -68,6 +68,8 @@ export const styles = StyleSheet.create({
     top: 18,
     width: 40,
     height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shared__action_row__action_hiking__label: {
     position: 'absolute',
@@ -96,6 +98,8 @@ export const styles = StyleSheet.create({
     top: 18,
     width: 40,
     height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shared__action_row__action_running__label: {
     position: 'absolute',
@@ -124,6 +128,8 @@ export const styles = StyleSheet.create({
     top: 18,
     width: 40,
     height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shared__action_row__action_leave_cairn__label: {
     position: 'absolute',

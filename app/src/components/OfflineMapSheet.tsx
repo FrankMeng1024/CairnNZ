@@ -17,6 +17,7 @@ import {
   getDownloadedPacks, downloadPack, deletePack, pausePack, resumePack,
   type DownloadedPackInfo,
 } from '../services/offlineMapService';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 interface Props {
   visible: boolean;
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function OfflineMapSheet({ visible, onClose }: Props) {
+  const theme = useVisualTheme();
   const [downloadedPacks, setDownloadedPacks] = useState<DownloadedPackInfo[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [progress, setProgress] = useState<Record<string, number>>({});
@@ -86,12 +88,12 @@ export function OfflineMapSheet({ visible, onClose }: Props) {
     const currentProgress = progress[item.id] ?? status?.progress ?? 0;
 
     return (
-      <View style={[styles.packCard, Elevation[2]]}>
+      <View style={[styles.packCard, Elevation[2], { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
         <View style={styles.packHeader}>
           <View style={styles.packInfo}>
-            <Text style={styles.packName}>{item.name}</Text>
-            <Text style={styles.packDesc}>{item.description}</Text>
-            <Text style={styles.packSize}>
+            <Text style={[styles.packName, { color: theme.foreground }]}>{item.name}</Text>
+            <Text style={[styles.packDesc, { color: theme.foregroundSecondary }]}>{item.description}</Text>
+            <Text style={[styles.packSize, { color: theme.muted }]}>
               {isDownloaded ? '✓ Downloaded' : `~${item.estimatedSizeMB} MB`}
               {' · '}Zoom {item.minZoom}–{item.maxZoom}
             </Text>
@@ -132,14 +134,14 @@ export function OfflineMapSheet({ visible, onClose }: Props) {
   return (
     <View style={styles.overlay}>
       <SafeAreaView style={styles.container}>
-        <GlassPanel intensity={20} tint="light" style={styles.sheet} borderRadius={24}>
+        <GlassPanel intensity={20} tint={theme.mode === 'night' ? 'dark' : 'light'} style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]} borderRadius={24}>
           <View style={styles.header}>
-            <Text style={styles.title}>Offline Maps</Text>
+            <Text style={[styles.title, { color: theme.foreground }]}>Offline Maps</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Icon name="X" size={20} color={Colors.textSecondary} />
+              <Icon name="X" size={20} color={theme.icon} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>
             Download regions for offline use. Maps work without internet.
           </Text>
           <FlatList

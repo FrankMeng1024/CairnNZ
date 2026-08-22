@@ -57,6 +57,7 @@ import { ContentConfig, VisibilityConfig } from '../features/plant/config/plantC
 import { SyncBadge } from '../components/SyncBadge';
 // v422 D 类: marker edit/delete 是"回家做"的动作, 无网禁用按钮 + 提示
 import { useOnlineOnly } from '../hooks/useOnlineOnly';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 let MapView: any = null;
 let CameraComponent: any = null;
@@ -98,6 +99,7 @@ const VISIBILITY_LABEL: Record<MarkerPermission, { label: string; iconName: Icon
 };
 
 export function MarkerDetailScreen() {
+  const visualTheme = useVisualTheme();
   const nav = useNavigation<Nav>();
   const route = useRoute<DetailRoute>();
   const markerId = route.params?.markerId;
@@ -182,7 +184,7 @@ export function MarkerDetailScreen() {
 
   if (!marker) {
     return (
-      <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.root, { backgroundColor: visualTheme.background }]} edges={['top', 'bottom']}>
         <View style={styles.backRowTop}>
           <BackButton variant="inline" />
         </View>
@@ -218,7 +220,7 @@ export function MarkerDetailScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.root, { backgroundColor: visualTheme.background }]} edges={['top', 'bottom']}>
       {/* ── Map hero ──────────────────────────────────────────── */}
       <View style={[styles.mapWrap, { height: MAP_H }]}>
         {MapView ? (

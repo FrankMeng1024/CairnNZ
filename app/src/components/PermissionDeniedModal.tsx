@@ -21,6 +21,7 @@ import React from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { Colors, Spacing, Radius, FontSize, Shadow } from './tokens';
 import { Icon } from './Icon';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 interface Props {
   visible: boolean;
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export function PermissionDeniedModal({ visible, featureName, onDismiss }: Props) {
+  const theme = useVisualTheme();
   const openSettings = () => {
     Linking.openSettings().catch(() => { /* best-effort */ });
     onDismiss();
@@ -37,21 +39,21 @@ export function PermissionDeniedModal({ visible, featureName, onDismiss }: Props
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
       <View style={styles.backdrop}>
-        <View style={styles.sheet}>
-          <View style={styles.iconWrap}>
-            <Icon name="MapPin" size={32} color={Colors.primary} strokeWidth={1.8} />
+        <View style={[styles.sheet, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}>
+          <View style={[styles.iconWrap, { backgroundColor: theme.surface }]}>
+            <Icon name="MapPin" size={32} color={theme.iconActive} strokeWidth={1.8} />
           </View>
-          <Text style={styles.title}>{featureName} needs your location</Text>
-          <Text style={styles.body}>
+          <Text style={[styles.title, { color: theme.foreground }]}>{featureName} needs your location</Text>
+          <Text style={[styles.body, { color: theme.foregroundSecondary }]}>
             Turn on location for Cairn in Settings to use this feature.
           </Text>
           <TouchableOpacity
-            style={styles.primaryBtn}
+            style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
             onPress={openSettings}
             accessibilityRole="button"
             accessibilityLabel="Open Settings"
           >
-            <Text style={styles.primaryText}>Open Settings</Text>
+            <Text style={[styles.primaryText, { color: theme.onPrimary }]}>Open Settings</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.secondaryBtn}
@@ -59,7 +61,7 @@ export function PermissionDeniedModal({ visible, featureName, onDismiss }: Props
             accessibilityRole="button"
             accessibilityLabel="Not now"
           >
-            <Text style={styles.secondaryText}>Not now</Text>
+            <Text style={[styles.secondaryText, { color: theme.foregroundSecondary }]}>Not now</Text>
           </TouchableOpacity>
         </View>
       </View>

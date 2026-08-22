@@ -15,6 +15,7 @@
 import React, { useRef } from 'react';
 import { TouchableOpacity, Text, StyleSheet, Animated, ActivityIndicator, View, StyleProp, ViewStyle } from 'react-native';
 import { Colors, Spacing, FontSize } from './tokens';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 interface PrimaryButtonProps {
   label: string;
@@ -35,13 +36,14 @@ export function PrimaryButton({
   label, onPress, disabled, loading,
   variant = 'solid', leftIcon, tint, textColor, style,
 }: PrimaryButtonProps) {
+  const theme = useVisualTheme();
   const scale = useRef(new Animated.Value(1)).current;
   const pressIn = () => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, tension: 300, friction: 10 }).start();
   const pressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 8 }).start();
 
   const isSurface = variant === 'surface';
-  const bg = tint ?? (isSurface ? Colors.surface : Colors.primary);
-  const fg = textColor ?? (isSurface ? Colors.textPrimary : '#ffffff');
+  const bg = tint ?? (isSurface ? theme.surfaceElevated : theme.primary);
+  const fg = textColor ?? (isSurface ? theme.foreground : theme.onPrimary);
 
   return (
     <Animated.View style={[{ transform: [{ scale }] }, style]}>
@@ -54,7 +56,7 @@ export function PrimaryButton({
         style={[
           styles.btn,
           { backgroundColor: bg },
-          isSurface && { borderWidth: 1, borderColor: Colors.border },
+          isSurface && { borderWidth: 1, borderColor: theme.border },
           (disabled || loading) && styles.disabled,
         ]}
       >

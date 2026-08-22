@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { styles } from './styles';
 import { Icon } from '../../components/Icon';
 import type { HomeBackgroundTokens } from '../../utils/homeBackground';
-import { useAppearance } from '../../hooks/useAppearance';
+import { getVisualTheme } from '../../components/tokens';
 
 // Auto-generated from Home.spec.json  viewport 375x812
 // States: H0, H1
@@ -69,13 +70,12 @@ export function HomeScreen(props: {
   const tabBorder = tokens?.tabBarBorderColor;
   const tabText = tokens?.tabBarTextColor;
 
-  // R21 (2026-08-17): day/night action icon variants. Dark green = day, Gold = night.
-  // Wrapper passes forcedIsDark so DEV Day/Night toggle stays in sync with icons.
-  const { isDark: appearanceIsDark } = useAppearance();
-  const isDark = props.forcedIsDark ?? appearanceIsDark;
-  const hikingIcon  = isDark ? require('../../../assets/home/action-hiking-night.png')     : require('../../../assets/home/action-hiking-day.png');
-  const runningIcon = isDark ? require('../../../assets/home/action-running-night.png')    : require('../../../assets/home/action-running-day.png');
-  const cairnIcon   = isDark ? require('../../../assets/home/action-leave-cairn-night.png'): require('../../../assets/home/action-leave-cairn-day.png');
+  // One functional vector family; Day/Night changes semantic color only.
+  const isDark = props.forcedIsDark ?? false;
+  const visualTheme = getVisualTheme(isDark);
+  const scenicScrim = isDark
+    ? ['rgba(7,20,17,0.14)', 'rgba(7,20,17,0.02)', 'rgba(7,20,17,0.08)', 'rgba(7,20,17,0.20)'] as const
+    : ['rgba(10,35,27,0.25)', 'rgba(10,35,27,0.04)', 'rgba(10,35,27,0.10)', 'rgba(10,35,27,0.24)'] as const;
 
   // Override helpers — flatten spread so we only override the changing color
   // props, keeping every position/size value from styles.ts intact.
@@ -85,7 +85,7 @@ export function HomeScreen(props: {
     ? { backgroundColor: cardBg, borderColor: cardBorder }
     : null;
   const actionButtonOverride = actionBg
-    ? { backgroundColor: actionBg }
+    ? { backgroundColor: actionBg, borderWidth: 1, borderColor: cardBorder }
     : null;
   const tabBarOverride = tabBg
     ? { backgroundColor: tabBg, borderColor: tabBorder }
@@ -107,37 +107,38 @@ export function HomeScreen(props: {
       {state === 'H0' && (
         <>
           <Image source={bgAsset} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} resizeMode="cover" />
+          <LinearGradient colors={scenicScrim} locations={[0, 0.34, 0.62, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
           <Text style={[styles.shared__greeting_eyebrow, heroSubTextOverride]}>{'Kia ora,'}</Text>
           <Text style={[styles.shared__greeting_name, heroBigTextOverride]}>{greetingName}</Text>
           <View style={styles.shared__action_row}>
             <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={() => nav.navigate('Hiking' as never)} activeOpacity={0.85}>
-              <Image source={hikingIcon} style={styles.shared__action_row__action_hiking__icon} resizeMode="contain" />
+              <View style={styles.shared__action_row__action_hiking__icon}><Icon name="Footprints" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{'Hiking'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={() => nav.navigate('Running' as never)} activeOpacity={0.85}>
-              <Image source={runningIcon} style={styles.shared__action_row__action_running__icon} resizeMode="contain" />
+              <View style={styles.shared__action_row__action_running__icon}><Icon name="PersonStanding" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{'Running'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={() => nav.navigate('Plant' as never)} activeOpacity={0.85}>
-              <Image source={cairnIcon} style={styles.shared__action_row__action_leave_cairn__icon} resizeMode="contain" />
+              <View style={styles.shared__action_row__action_leave_cairn__icon}><Icon name="Flag" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{'Leave a Cairn'}</Text>
             </TouchableOpacity>
           </View>
           <View style={[styles.shared__tab_bar, tabBarOverride]}>
             <TouchableOpacity style={styles.shared__tab_bar__tab_trails} onPress={() => nav.navigate('Routes' as never)}>
-              <Image source={require('../../../assets/home/tab-trails.png')} style={styles.shared__tab_bar__tab_trails_icon} resizeMode="contain" />
+              <View style={styles.shared__tab_bar__tab_trails_icon_wrap}><Icon name="Route" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__tab_bar__tab_trails_label, tabText ? { color: tabText } : null]}>Trails</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_friends} onPress={() => nav.navigate('Friends' as never)}>
-              <Image source={require('../../../assets/home/tab-friends.png')} style={styles.shared__tab_bar__tab_friends_icon} resizeMode="contain" />
+              <View style={styles.shared__tab_bar__tab_friends_icon_wrap}><Icon name="Users" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__tab_bar__tab_friends_label, tabText ? { color: tabText } : null]}>Friends</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)}>
-              <Image source={require('../../../assets/home/tab-memory.png')} style={styles.shared__tab_bar__tab_memory_icon} resizeMode="contain" />
+              <View style={styles.shared__tab_bar__tab_memory_icon_wrap}><Icon name="Layers" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__tab_bar__tab_memory_label, tabText ? { color: tabText } : null]}>Memory</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_settings} onPress={() => nav.navigate('Settings' as never)}>
-              <Image source={require('../../../assets/home/tab-settings.png')} style={styles.shared__tab_bar__tab_settings_icon} resizeMode="contain" />
+              <View style={styles.shared__tab_bar__tab_settings_icon_wrap}><Icon name="Cog" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__tab_bar__tab_settings_label, tabText ? { color: tabText } : null]}>Settings</Text>
             </TouchableOpacity>
           </View>
@@ -155,37 +156,38 @@ export function HomeScreen(props: {
       {state === 'H1' && (
         <>
           <Image source={bgAsset} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} resizeMode="cover" />
+          <LinearGradient colors={scenicScrim} locations={[0, 0.34, 0.62, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
           <Text style={[styles.shared__greeting_eyebrow, heroSubTextOverride]}>{'Kia ora,'}</Text>
           <Text style={[styles.shared__greeting_name, heroBigTextOverride]}>{greetingName}</Text>
           <View style={styles.shared__action_row}>
             <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={() => nav.navigate('Hiking' as never)} activeOpacity={0.85}>
-              <Image source={hikingIcon} style={styles.shared__action_row__action_hiking__icon} resizeMode="contain" />
+              <View style={styles.shared__action_row__action_hiking__icon}><Icon name="Footprints" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{'Hiking'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={() => nav.navigate('Running' as never)} activeOpacity={0.85}>
-              <Image source={runningIcon} style={styles.shared__action_row__action_running__icon} resizeMode="contain" />
+              <View style={styles.shared__action_row__action_running__icon}><Icon name="PersonStanding" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{'Running'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={() => nav.navigate('Plant' as never)} activeOpacity={0.85}>
-              <Image source={cairnIcon} style={styles.shared__action_row__action_leave_cairn__icon} resizeMode="contain" />
+              <View style={styles.shared__action_row__action_leave_cairn__icon}><Icon name="Flag" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{'Leave a Cairn'}</Text>
             </TouchableOpacity>
           </View>
           <View style={[styles.shared__tab_bar, tabBarOverride]}>
             <TouchableOpacity style={styles.shared__tab_bar__tab_trails} onPress={() => nav.navigate('Routes' as never)}>
-              <Image source={require('../../../assets/home/tab-trails.png')} style={styles.shared__tab_bar__tab_trails_icon} resizeMode="contain" />
+              <View style={styles.shared__tab_bar__tab_trails_icon_wrap}><Icon name="Route" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__tab_bar__tab_trails_label, tabText ? { color: tabText } : null]}>Trails</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_friends} onPress={() => nav.navigate('Friends' as never)}>
-              <Image source={require('../../../assets/home/tab-friends.png')} style={styles.shared__tab_bar__tab_friends_icon} resizeMode="contain" />
+              <View style={styles.shared__tab_bar__tab_friends_icon_wrap}><Icon name="Users" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__tab_bar__tab_friends_label, tabText ? { color: tabText } : null]}>Friends</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)}>
-              <Image source={require('../../../assets/home/tab-memory.png')} style={styles.shared__tab_bar__tab_memory_icon} resizeMode="contain" />
+              <View style={styles.shared__tab_bar__tab_memory_icon_wrap}><Icon name="Layers" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__tab_bar__tab_memory_label, tabText ? { color: tabText } : null]}>Memory</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_settings} onPress={() => nav.navigate('Settings' as never)}>
-              <Image source={require('../../../assets/home/tab-settings.png')} style={styles.shared__tab_bar__tab_settings_icon} resizeMode="contain" />
+              <View style={styles.shared__tab_bar__tab_settings_icon_wrap}><Icon name="Cog" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
               <Text style={[styles.shared__tab_bar__tab_settings_label, tabText ? { color: tabText } : null]}>Settings</Text>
             </TouchableOpacity>
           </View>

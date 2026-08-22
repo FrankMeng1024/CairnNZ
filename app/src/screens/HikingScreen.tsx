@@ -47,6 +47,7 @@ import { PressBtn } from '../components/PressBtn';
 import { HikingMap } from './HikingMap';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { useAppearance } from '../hooks/useAppearance';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
 import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
 // v429 hotfix: SimWalkerOverlay static import removed to prevent gpsInjector
@@ -80,9 +81,10 @@ export function HikingScreen() {
   // read Appearance. When isDark, gpsChip/actions/stats surface swap to
   // deep slate. Mapbox styleURL also switches via HikingMap → dark-v11.
   const { isDark: hikeIsDark } = useAppearance();
-  const hikeChipBg = hikeIsDark ? 'rgba(15,22,38,0.72)' : 'rgba(255,255,255,0.65)';
-  const hikeChipBorder = hikeIsDark ? 'rgba(220,230,240,0.15)' : 'rgba(255,255,255,0.4)';
-  const hikeChipText = hikeIsDark ? '#E5EAF0' : Colors.textPrimary;
+  const hikeTheme = useVisualTheme();
+  const hikeChipBg = hikeTheme.mapOverlay;
+  const hikeChipBorder = hikeTheme.border;
+  const hikeChipText = hikeTheme.foreground;
 
   // Real tracking store
   const status = useTrackingStore(s => s.status);
@@ -1135,7 +1137,7 @@ export function HikingScreen() {
   if (phase === 'select') {
     return (
       <>
-      <View style={[styles.container, { backgroundColor: hikeIsDark ? "#0F1620" : "#F4EFE6" }]}>
+      <View style={[styles.container, { backgroundColor: hikeTheme.background }]}>
         <HikingMap markers={[]} trackPoints={[]} onMarkerPress={() => {}} />
 
         {/* Top overlay: concept-locked stats strip (4 items in one row).
@@ -1146,7 +1148,7 @@ export function HikingScreen() {
           <View style={styles.topRow}>
             <BackButton variant="inline" onPress={() => nav.goBack()} />
           </View>
-          <View style={[styles.statsStrip, hikeIsDark ? { backgroundColor: "rgba(15,22,38,0.60)", borderColor: "rgba(220,230,240,0.14)" } : null]} pointerEvents="none">
+          <View style={[styles.statsStrip, hikeIsDark ? { backgroundColor: hikeTheme.mapOverlay, borderColor: hikeTheme.border } : null]} pointerEvents="none">
             <Text style={[styles.statsStripKm, hikeIsDark ? { color: hikeChipText } : null]}>{distDisplay} {dist.unit}</Text>
             <Text style={[styles.statsStripTime, hikeIsDark ? { color: hikeChipText } : null]}>{durationDisplay}</Text>
             <Text style={[styles.statsStripElev, hikeIsDark ? { color: hikeChipText } : null]}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
@@ -1171,21 +1173,21 @@ export function HikingScreen() {
                 the "Explore freely" story before the user commits to
                 a saved route, and mirrors the fern used on the
                 complete screen. */}
-            <TouchableOpacity style={[styles.freeHikePill, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.14)' } : null]} onPress={openRoutePicker} activeOpacity={0.9}>
+            <TouchableOpacity style={[styles.freeHikePill, hikeIsDark ? { backgroundColor: hikeTheme.surfaceElevated, borderColor: hikeTheme.border } : null]} onPress={openRoutePicker} activeOpacity={0.9}>
               <Image
                 source={require('../../assets/hiking/fern-leaf.png')}
                 style={styles.freeHikeGlyph}
                 resizeMode="contain"
               />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.freeHikeEyebrow, hikeIsDark ? { color: '#F0EEE6' } : null]}>
+                <Text style={[styles.freeHikeEyebrow, hikeIsDark ? { color: hikeTheme.foreground } : null]}>
                   {selectedRoute ? 'ROUTE' : 'FREE HIKE'}
                 </Text>
-                <Text style={[styles.freeHikeSub, hikeIsDark ? { color: 'rgba(240,238,230,0.68)' } : null]} numberOfLines={1}>
+                <Text style={[styles.freeHikeSub, hikeIsDark ? { color: hikeTheme.foregroundSecondary } : null]} numberOfLines={1}>
                   {selectedRoute ? selectedRouteName : 'Explore freely'}
                 </Text>
               </View>
-              <Icon name="ChevronUp" size={18} color={hikeIsDark ? 'rgba(240,238,230,0.68)' : Colors.textSecondary} strokeWidth={2.5} />
+              <Icon name="ChevronUp" size={18} color={hikeIsDark ? hikeTheme.iconInactive : Colors.textSecondary} strokeWidth={2.5} />
             </TouchableOpacity>
 
             {/* Start Hiking — solid pill button. R21 (2026-08-18) dark: use
@@ -1193,13 +1195,13 @@ export function HikingScreen() {
                 bright button pasted on a dark map. */}
             <Animated.View style={[{ height: 52 }, { transform: [{ scale: trackBtnScale }] }]}>
               <TouchableOpacity
-                style={[styles.startHikeBtn, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.85)', borderColor: 'rgba(220,230,240,0.24)', borderWidth: 1 } : null]}
+                style={[styles.startHikeBtn, hikeIsDark ? { backgroundColor: hikeTheme.primary, borderColor: hikeTheme.border, borderWidth: 1 } : null]}
                 onPress={() => { haptic.impact('medium'); startTracking(); setPhase('tracking'); }}
                 activeOpacity={1}
                 onPressIn={() => springIn(trackBtnScale)}
                 onPressOut={() => springOut(trackBtnScale)}
               >
-                <Text style={[styles.startHikeBtnText, hikeIsDark ? { color: '#F0EEE6' } : null]}>Start Hiking</Text>
+                <Text style={[styles.startHikeBtnText, hikeIsDark ? { color: hikeTheme.onPrimary } : null]}>Start Hiking</Text>
               </TouchableOpacity>
             </Animated.View>
           </View>
@@ -1209,7 +1211,7 @@ export function HikingScreen() {
         {showRoutePicker && (
           <Animated.View style={[styles.routePickerBackdrop, { opacity: routePickerOpacity }]}>
             <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closeRoutePicker} activeOpacity={1} />
-            <Animated.View style={[styles.routePickerSheet, hikeIsDark ? { backgroundColor: "rgba(15,22,38,0.96)", borderTopColor: "rgba(220,230,240,0.14)" } : null, { transform: [{ translateY: routePickerSlide }] }]}>
+            <Animated.View style={[styles.routePickerSheet, hikeIsDark ? { backgroundColor: hikeTheme.surfaceElevated, borderTopColor: hikeTheme.border } : null, { transform: [{ translateY: routePickerSlide }] }]}>
               <View style={[styles.routePickerHandle, hikeIsDark ? { backgroundColor: "rgba(220,230,240,0.30)" } : null]} />
               <Text style={[styles.routePickerTitle, hikeIsDark ? { color: "#F0EEE6" } : null]}>Choose a route</Text>
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }} contentContainerStyle={{ gap: Spacing.sm }}>
@@ -1295,7 +1297,7 @@ export function HikingScreen() {
 
   return (
     <>
-    <View style={[styles.container, { backgroundColor: hikeIsDark ? "#0F1620" : "#F4EFE6" }]}>
+    <View style={[styles.container, { backgroundColor: hikeTheme.background }]}>
       <HikingMap
         markers={markers}
         trackPoints={(trackPointsSmoothed.length >= 2 ? trackPointsSmoothed : trackPoints).map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentBreak: (tp as any).segmentBreak }))}
@@ -1350,7 +1352,7 @@ export function HikingScreen() {
         </View>
 
         {/* Concept stats strip — always visible while on Hiking. */}
-        <View style={[styles.statsStrip, hikeIsDark ? { backgroundColor: "rgba(15,22,38,0.60)", borderColor: "rgba(220,230,240,0.14)" } : null]} pointerEvents="none">
+        <View style={[styles.statsStrip, hikeIsDark ? { backgroundColor: hikeTheme.mapOverlay, borderColor: hikeTheme.border } : null]} pointerEvents="none">
           <Text style={[styles.statsStripKm, hikeIsDark ? { color: hikeChipText } : null]}>{distDisplay} {dist.unit}</Text>
           <Text style={[styles.statsStripTime, hikeIsDark ? { color: hikeChipText } : null]}>{durationDisplay}</Text>
           <Text style={[styles.statsStripElev, hikeIsDark ? { color: hikeChipText } : null]}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
@@ -1369,7 +1371,7 @@ export function HikingScreen() {
             fix arrives. */}
         {isTracking && overSpeedActive && (
           <View style={styles.overSpeedBanner}>
-            <Icon name="AlertTriangle" size={12} color={Colors.severityWarning} strokeWidth={2.5} />
+            <Icon name="TriangleAlert" size={12} color={Colors.severityWarning} strokeWidth={2.5} />
             <Text style={styles.overSpeedBannerText} numberOfLines={1}>
               Moving too fast for a hike — pausing recording
             </Text>
@@ -1439,7 +1441,7 @@ export function HikingScreen() {
               <View style={{ flex: 1 }} />
               <View style={styles.controlSlot}>
                 <TouchableOpacity
-                  style={[styles.fabPale, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.85)', borderColor: 'rgba(220,230,240,0.24)' } : null]}
+                  style={[styles.fabPale, hikeIsDark ? { backgroundColor: hikeTheme.surfaceElevated, borderColor: hikeTheme.border } : null]}
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel="Recenter map on current location"
@@ -1476,7 +1478,7 @@ export function HikingScreen() {
         >
           <View style={styles.trayAnchorRow} pointerEvents="auto">
             <TouchableOpacity
-              style={[styles.trayAnchor, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.85)', borderColor: 'rgba(220,230,240,0.24)' } : null]}
+              style={[styles.trayAnchor, hikeIsDark ? { backgroundColor: hikeTheme.surfaceElevated, borderColor: hikeTheme.border } : null]}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={actionsExpanded ? 'Hide quick actions' : 'Show quick actions'}
@@ -1496,7 +1498,7 @@ export function HikingScreen() {
               <View style={styles.trayRow}>
                 <View style={styles.trayItem}>
                   <TouchableOpacity
-                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
+                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: hikeTheme.surface, borderColor: hikeTheme.border } : null]}
                     activeOpacity={0.85}
                     accessibilityRole="button"
                     accessibilityLabel={status === 'paused' ? 'Resume hike' : 'Pause hike'}
@@ -1520,7 +1522,7 @@ export function HikingScreen() {
                 </View>
                 <View style={styles.trayItem}>
                   <TouchableOpacity
-                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
+                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: hikeTheme.surface, borderColor: hikeTheme.border } : null]}
                     activeOpacity={0.85}
                     accessibilityRole="button"
                     accessibilityLabel="Leave a Cairn"
@@ -1530,19 +1532,13 @@ export function HikingScreen() {
                       nav.navigate('Plant');
                     }}
                   >
-                    <Image
-                      source={hikeIsDark
-                        ? require('../../assets/home/action-leave-cairn-night.png')
-                        : require('../../assets/home/action-leave-cairn-day.png')}
-                      style={{ width: 28, height: 28 }}
-                      resizeMode="contain"
-                    />
+                    <Icon name="Flag" size={24} color={hikeTheme.iconActive} strokeWidth={1.9} />
                   </TouchableOpacity>
                   <Text style={[styles.trayFabLabel, hikeIsDark ? { color: '#F0EEE6' } : null]}>Cairn</Text>
                 </View>
                 <View style={styles.trayItem}>
                   <TouchableOpacity
-                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: 'rgba(15,22,38,0.72)', borderColor: 'rgba(220,230,240,0.20)' } : null]}
+                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: hikeTheme.surface, borderColor: hikeTheme.border } : null]}
                     activeOpacity={0.85}
                     accessibilityRole="button"
                     accessibilityLabel="Finish hike"

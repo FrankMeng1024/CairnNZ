@@ -23,6 +23,7 @@ try {
 }
 
 import { MarkerType } from '../config/markerTypes';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 export interface PanelMarkerItem {
   id: string;
@@ -47,6 +48,7 @@ const MARKER_ICONS: Record<string, { icon: IconName; color: string; bg: string }
 };
 
 export function MapBottomPanel({ markers, onMarkerPress, onOfflinePress }: Props) {
+  const theme = useVisualTheme();
   const bottomSheetRef = useRef<any>(null);
 
   // Snap points: peek (80px), half (45%), full (85%)
@@ -56,7 +58,7 @@ export function MapBottomPanel({ markers, onMarkerPress, onOfflinePress }: Props
     const meta = MARKER_ICONS[item.type] || MARKER_ICONS.free;
     return (
       <TouchableOpacity
-        style={styles.markerRow}
+        style={[styles.markerRow, { backgroundColor: theme.surface }]}
         onPress={() => onMarkerPress?.(item.id)}
         activeOpacity={0.7}
       >
@@ -64,23 +66,23 @@ export function MapBottomPanel({ markers, onMarkerPress, onOfflinePress }: Props
           <Icon name={meta.icon} size={16} color={meta.color} strokeWidth={2} />
         </View>
         <View style={styles.markerInfo}>
-          <Text style={styles.markerTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.markerMeta}>
+          <Text style={[styles.markerTitle, { color: theme.foreground }]} numberOfLines={1}>{item.title}</Text>
+          <Text style={[styles.markerMeta, { color: theme.muted }]}>
             {item.distance ? `${item.distance} · ` : ''}{item.timeAgo}
           </Text>
         </View>
-        <Icon name="ChevronRight" size={16} color={Colors.textMuted} />
+        <Icon name="ChevronRight" size={16} color={theme.iconInactive} />
       </TouchableOpacity>
     );
-  }, [onMarkerPress]);
+  }, [onMarkerPress, theme]);
 
   // Fallback when @gorhom/bottom-sheet not available
   if (!BottomSheet) {
     return (
       <View style={styles.fallbackPanel}>
-        <GlassPanel intensity={16} tint="light" style={styles.fallbackInner} borderRadius={20}>
-          <View style={styles.dragHandle} />
-          <Text style={styles.peekText}>
+        <GlassPanel intensity={16} tint={theme.mode === 'night' ? 'dark' : 'light'} style={styles.fallbackInner} borderRadius={20}>
+          <View style={[styles.dragHandle, { backgroundColor: theme.border }]} />
+          <Text style={[styles.peekText, { color: theme.foregroundSecondary }]}>
             {markers.length} markers nearby
           </Text>
         </GlassPanel>
@@ -93,19 +95,19 @@ export function MapBottomPanel({ markers, onMarkerPress, onOfflinePress }: Props
       ref={bottomSheetRef}
       index={0}
       snapPoints={snapPoints}
-      backgroundStyle={styles.sheetBackground}
-      handleIndicatorStyle={styles.handleIndicator}
+      backgroundStyle={[styles.sheetBackground, { backgroundColor: theme.surfaceElevated }]}
+      handleIndicatorStyle={[styles.handleIndicator, { backgroundColor: theme.border }]}
       enablePanDownToClose={false}
     >
       {/* Peek content */}
       <View style={styles.peekRow}>
-        <Text style={styles.peekText}>
+        <Text style={[styles.peekText, { color: theme.foregroundSecondary }]}>
           {markers.length} marker{markers.length !== 1 ? 's' : ''} nearby
         </Text>
         {onOfflinePress && (
-          <TouchableOpacity style={styles.offlineBtn} onPress={onOfflinePress}>
-            <Icon name="Download" size={14} color={Colors.primary} />
-            <Text style={styles.offlineBtnText}>Offline</Text>
+          <TouchableOpacity style={[styles.offlineBtn, { backgroundColor: theme.surface }]} onPress={onOfflinePress}>
+            <Icon name="Download" size={14} color={theme.iconActive} />
+            <Text style={[styles.offlineBtnText, { color: theme.primary }]}>Offline</Text>
           </TouchableOpacity>
         )}
       </View>

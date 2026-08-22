@@ -25,6 +25,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'reac
 import { useMemoryScopeStore, type MemoryScope } from '../store/useMemoryScopeStore';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
 
 interface Props {
   /** When provided, a Pick icon is shown as a third segment that
@@ -35,6 +36,7 @@ interface Props {
 }
 
 export function MemoryScopeToggle({ onPickPress }: Props) {
+  const theme = useVisualTheme();
   const scope = useMemoryScopeStore((s) => s.scope);
   const setScope = useMemoryScopeStore((s) => s.setScope);
 
@@ -61,18 +63,18 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
   ];
 
   return (
-    <View style={styles.container} testID="memory-scope-toggle">
+    <View style={[styles.container, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]} testID="memory-scope-toggle">
       {opts.map((o) => {
         const active = scope === o.id;
         return (
           <TouchableOpacity
             key={o.id}
-            style={[styles.segment, active && styles.segmentActive]}
+            style={[styles.segment, active && styles.segmentActive, active ? { backgroundColor: theme.surface } : null]}
             onPress={() => setScope(o.id)}
             activeOpacity={0.7}
             testID={`memory-scope-${o.id}`}
           >
-            <Text style={[styles.label, active && styles.labelActive]}>{o.label}</Text>
+            <Text style={[styles.label, active && styles.labelActive, { color: active ? theme.primary : theme.foregroundSecondary }]}>{o.label}</Text>
           </TouchableOpacity>
         );
       })}
@@ -90,7 +92,7 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
             importantForAccessibility={scope === 'friends' ? 'yes' : 'no-hide-descendants'}
             testID="memory-scope-pick"
           >
-            <Icon name="Users" size={16} color={Colors.primary} strokeWidth={2.2} />
+            <Icon name="Users" size={16} color={theme.iconActive} strokeWidth={2.2} />
           </TouchableOpacity>
         </Animated.View>
       ) : null}
