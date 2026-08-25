@@ -32,7 +32,7 @@ const BG_ASSETS = {
 // change there.
 const HOME_BG_ASSETS = {
   ...BG_ASSETS,
-  'sunny-day': require('../../assets/home/prototypes/final-nz-world-sunny/gate-a1.5/candidate-b1-3x.jpg'),
+  'sunny-day': require('../../assets/home/prototypes/final-nz-world-sunny/gate-a1.6/candidate-b1a-3x.jpg'),
 } as const;
 
 const FALLBACK_BG = require('../../assets/home/home-background.jpg');
