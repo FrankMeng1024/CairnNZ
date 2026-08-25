@@ -16,6 +16,7 @@ import {
   TextInput, Animated, Easing, ActivityIndicator,
   KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -30,6 +31,7 @@ import { useMarkerStore } from '../store/useMarkerStore';
 import { useAppearance } from '../hooks/useAppearance';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { Icon, type IconName } from '../components/Icon';
+import { CairnIcon } from '../components/CairnIcon';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -97,8 +99,8 @@ const T = {
 
 // Avatar palette (concept F1/F2 shows colored circles with initials)
 const AVATAR_PALETTE = [
-  '#0F5D45', '#7B4EA8', '#3B7DB6', '#C57438',
-  '#4A8C4A', '#B84B7C', '#6B7280', '#8B5CF6',
+  '#476D5C', '#64756C', '#617A83', '#8A765F',
+  '#6F8268', '#826F73', '#687078', '#78806B',
 ];
 function avatarColorFor(id: string): string {
   let h = 0;
@@ -120,21 +122,22 @@ function isValidEmail(email: string): boolean {
 // useAppearance. Auto mode follows local time; user-set Light/Dark overrides.
 function Backdrop() {
   const { isDark } = useAppearance();
-  const daySrc = require('../../assets/friends/backgrounds/friends-bg-day-semantic-v2.jpg');
-  const nightSrc = require('../../assets/friends/backgrounds/friends-bg-night-semantic-v2.jpg');
+  const daySrc = require('../../assets/home/gate1/home-world-b-day-3x.jpg');
+  const nightSrc = require('../../assets/home/gate1/home-world-b-night-3x.jpg');
   const srcModule = isDark ? nightSrc : daySrc;
-  const webUri =
-    Platform.OS === 'web'
-      ? (isDark
-          ? '/assets/?unstable_path=./assets/friends/backgrounds/friends-bg-night-semantic-v2.jpg'
-          : '/assets/?unstable_path=./assets/friends/backgrounds/friends-bg-day-semantic-v2.jpg')
-      : null;
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#183128' : T.paper }]}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#141C1F' : '#F1F2EA' }]}>
       <Image
-        source={webUri ? { uri: webUri } : srcModule}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', opacity: isDark ? 0.94 : 0.92 }}
+        source={srcModule}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', opacity: isDark ? 0.78 : 0.78 }}
         resizeMode="cover"
+      />
+      <LinearGradient
+        colors={isDark
+          ? ['rgba(20,28,31,0.08)', 'rgba(20,28,31,0.24)', '#141C1F', '#141C1F']
+          : ['rgba(24,46,42,0.06)', 'rgba(241,242,234,0.12)', '#F1F2EA', '#F1F2EA']}
+        locations={[0, 0.19, 0.43, 1]}
+        style={StyleSheet.absoluteFill}
       />
     </View>
   );
@@ -144,10 +147,11 @@ function Backdrop() {
 // separate, not joined inside a single container).
 function TabsPill({ active, onChange }: { active: 'friends' | 'pending'; onChange: (t: 'friends' | 'pending') => void }) {
   const theme = useVisualTheme();
+  const idleMaterial = theme.mode === 'night' ? 'rgba(27,36,40,0.58)' : 'rgba(246,248,243,0.58)';
   return (
     <View style={s.tabsRow}>
       <TouchableOpacity
-        style={[s.tabPill, active === 'friends' ? { backgroundColor: theme.primary } : { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
+        style={[s.tabPill, active === 'friends' ? { backgroundColor: theme.primary } : { backgroundColor: idleMaterial, borderWidth: 1, borderColor: theme.border }]}
         activeOpacity={0.85}
         onPress={() => onChange('friends')}
         accessibilityRole="button"
@@ -156,7 +160,7 @@ function TabsPill({ active, onChange }: { active: 'friends' | 'pending'; onChang
         <Text style={[s.tabLabel, { color: active === 'friends' ? theme.onPrimary : theme.foreground }]}>Friends</Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[s.tabPill, active === 'pending' ? { backgroundColor: theme.primary } : { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
+        style={[s.tabPill, active === 'pending' ? { backgroundColor: theme.primary } : { backgroundColor: idleMaterial, borderWidth: 1, borderColor: theme.border }]}
         activeOpacity={0.85}
         onPress={() => onChange('pending')}
         accessibilityRole="button"
@@ -179,9 +183,10 @@ function FriendRow({
   const meta = sharedFlags > 0
     ? `${sharedFlags} shared ${sharedFlags === 1 ? 'flag' : 'flags'}`
     : 'No shared flags yet';
+  const rowSurface = theme.mode === 'night' ? 'rgba(29,38,42,0.76)' : 'rgba(250,251,247,0.80)';
   return (
     <TouchableOpacity
-      style={[s.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
+      style={[s.card, { backgroundColor: rowSurface, borderColor: theme.border }]}
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={500}
@@ -195,7 +200,7 @@ function FriendRow({
         <Text style={[s.cardName, { color: theme.foreground }]} numberOfLines={1}>{name}</Text>
         <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{meta}</Text>
       </View>
-      <Icon name="ChevronRight" size={20} color={theme.iconInactive} strokeWidth={1.9} />
+      <CairnIcon name="otherTrace" size={20} color={theme.iconInactive} accent={theme.iconActive} />
     </TouchableOpacity>
   );
 }
@@ -335,13 +340,13 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
   // R21 (2026-08-17): day/night variants driven by useAppearance.
   const { isDark: birdIsDark } = useAppearance();
   const birdModule = birdIsDark
-    ? require('../../assets/friends/hero/add-friend-hero-night-semantic-v2.jpg')
-    : require('../../assets/friends/hero/add-friend-hero-day-semantic-v2.jpg');
+    ? require('../../assets/friends/hero/gate2/add-friend-world-a-night.jpg')
+    : require('../../assets/friends/hero/gate2/add-friend-world-a-day.jpg');
   const birdWebUri =
     Platform.OS === 'web'
       ? (birdIsDark
-          ? '/assets/?unstable_path=./assets/friends/hero/add-friend-hero-night-semantic-v2.jpg'
-          : '/assets/?unstable_path=./assets/friends/hero/add-friend-hero-day-semantic-v2.jpg')
+          ? '/assets/?unstable_path=./assets/friends/hero/gate2/add-friend-world-a-night.jpg'
+          : '/assets/?unstable_path=./assets/friends/hero/gate2/add-friend-world-a-day.jpg')
       : null;
 
   return (
@@ -357,7 +362,7 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
       </Animated.View>
 
       {/* Rising sheet */}
-      <Animated.View style={[s.f6Sheet, { backgroundColor: theme.background, transform: [{ translateY: slide }] }]}>
+      <Animated.View style={[s.f6Sheet, { backgroundColor: birdIsDark ? '#182126' : theme.background, transform: [{ translateY: slide }] }]}>
         {/* HERO — landscape asset fills the top of the sheet */}
         <View style={s.f6HeroBox} pointerEvents="none">
           <Image
@@ -382,14 +387,14 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
                 flush with sheet edges. */}
             <Path
               d="M 0,90 C 100,-10 290,-10 390,90 L 390,90 L 0,90 Z"
-              fill={theme.background}
+              fill={birdIsDark ? '#182126' : theme.background}
             />
           </Svg>
 
-          <View style={[s.f6ArchBody, { backgroundColor: theme.background }]}>
+          <View style={[s.f6ArchBody, { backgroundColor: birdIsDark ? '#182126' : theme.background }]}>
             {/* Mail badge — sits at arch peak (SVG dome crest) */}
             <View style={s.f6MailBadge}>
-              <View style={s.f6MailCircle}>
+              <View style={[s.f6MailCircle, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
                 <Icon name="Mail" size={DS.ic_md} color={theme.iconActive} strokeWidth={1.9} />
               </View>
             </View>
@@ -450,7 +455,7 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
 
         {/* Close X — top-left over hero */}
         <TouchableOpacity
-          style={s.f6Close}
+          style={[s.f6Close, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
           onPress={close}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityLabel="Close"
@@ -536,7 +541,7 @@ export function FriendsScreen() {
   const friends = useMemo(
     () => storeFriends.map((f) => ({
       id: f.id, name: f.name, email: f.email,
-      sharedFlags: 0, // Backend hasn't returned real value yet — keep 0 (row copy adapts).
+      sharedFlags: (f as typeof f & { sharedFlags?: number }).sharedFlags ?? 0,
     })),
     [storeFriends],
   );
@@ -646,9 +651,12 @@ export function FriendsScreen() {
           accessibilityLabel="Back"
           accessibilityRole="button"
         >
-          <Icon name="ChevronLeft" size={DS.ic_md} color={theme.icon} strokeWidth={1.9} />
+          <Icon name="ChevronLeft" size={DS.ic_md} color={theme.onScenic} strokeWidth={1.9} />
         </TouchableOpacity>
-        <Text style={[s.hTitle, { color: theme.foreground }]}>Friends</Text>
+        <View style={s.titleBlock}>
+          <Text style={[s.hTitle, { color: theme.onScenic }]}>Friends</Text>
+          <Text style={[s.hSubtitle, { color: theme.onScenicMuted }]}>Paths that cross yours</Text>
+        </View>
         <TouchableOpacity
           style={s.hIcon}
           onPress={() => setShowAdd(true)}
@@ -656,7 +664,7 @@ export function FriendsScreen() {
           accessibilityLabel="Add friend"
           accessibilityRole="button"
         >
-          <Icon name="Plus" size={DS.ic_md} color={theme.icon} strokeWidth={1.9} />
+          <Icon name="Plus" size={DS.ic_md} color={theme.onScenic} strokeWidth={1.9} />
         </TouchableOpacity>
       </View>
 
@@ -672,10 +680,16 @@ export function FriendsScreen() {
         {/* Friends tab */}
         {tab === 'friends' && !hasFriends && (
           <View style={s.emptyBlock}>
-            <View style={[s.emptyIconRing, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Icon name="Users" size={DS.ic_lg} color={theme.iconActive} strokeWidth={1.8} />
+            <View style={s.emptyTrace} pointerEvents="none">
+              <View style={[s.emptyTraceLine, { backgroundColor: theme.border }]} />
+              <View style={[s.emptyTraceNode, s.emptyTraceNodeLeft, { borderColor: theme.iconInactive }]} />
+              <View style={[s.emptyTraceNode, s.emptyTraceNodeRight, { backgroundColor: theme.iconActive, borderColor: theme.iconActive }]} />
             </View>
-            <View style={[s.emptyTextCard, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+            <View style={[s.emptyIconMark, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
+              <CairnIcon name="friends" size={32} color={theme.iconActive} accent={theme.accent} active />
+            </View>
+            <View style={s.emptyTextGroup}>
+              <Text style={[s.emptyEyebrow, { color: theme.foregroundSecondary }]}>QUIETLY CONNECTED</Text>
               <Text style={[s.emptyTitle, { color: theme.foreground }]}>No friends yet</Text>
               <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>Add a friend by email to see where your paths cross.</Text>
             </View>
@@ -683,7 +697,7 @@ export function FriendsScreen() {
         )}
         {tab === 'friends' && hasFriends && (
           <>
-            <Text style={s.sectionTitle}>Friends ({friends.length})</Text>
+            <Text style={[s.sectionTitle, { color: theme.foregroundSecondary }]}>YOUR CIRCLE · {friends.length}</Text>
             {friends.map((f) => (
               <FriendRow
                 key={f.id}
@@ -835,7 +849,7 @@ const s = StyleSheet.create({
 
   // ── Header ────────────────────────────────────────────────────────────────
   header: {
-    height: 48,
+    height: 54,
     marginTop: 44,
     paddingHorizontal: DS.contentPad,
     flexDirection: 'row',
@@ -851,9 +865,11 @@ const s = StyleSheet.create({
   hTitle: {
     fontSize: DS.fs_headerTitle,
     fontWeight: DS.fw_bold,
-    color: T.forest,
-    letterSpacing: 0.2,
+    color: '#fff',
+    letterSpacing: -0.25,
   },
+  titleBlock: { alignItems: 'center', gap: 2 },
+  hSubtitle: { fontSize: 11, fontWeight: '500', letterSpacing: 0.45 },
 
   // ── Tabs (centered, equal width, φ-related dimensions) ───────────────────
   tabsRow: {
@@ -892,17 +908,17 @@ const s = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: DS.contentPad,
     paddingTop: DS.sp5,
-    paddingBottom: 220,   // floating Add Friend + bottom nav clearance
+    paddingBottom: 112,
     gap: DS.sp3,
   },
 
   sectionTitle: {
-    fontSize: DS.fs_sectionTitle,
-    fontWeight: DS.fw_bold,
+    fontSize: 10,
+    fontWeight: DS.fw_semibold,
     color: T.forest,
     paddingHorizontal: DS.sp1,
     paddingBottom: DS.sp2,
-    letterSpacing: 0.3,
+    letterSpacing: 1.25,
   },
   mutedNote: {
     fontSize: DS.fs_meta,
@@ -914,11 +930,11 @@ const s = StyleSheet.create({
 
   // ── Cards (friend / incoming / sent) ─────────────────────────────────────
   card: {
-    minHeight: 68,        // 42px avatar + padding
+    minHeight: 64,
     backgroundColor: T.card,
     borderWidth: 1,
     borderColor: T.cardBorder,
-    borderRadius: DS.rad_lg,
+    borderRadius: 16,
     paddingHorizontal: DS.sp4,
     paddingVertical: DS.sp3,
     flexDirection: 'row',
@@ -969,24 +985,69 @@ const s = StyleSheet.create({
   // of usable height for pleasing vertical composition.
   emptyBlock: {
     alignItems: 'center',
-    paddingTop: 96,
-    gap: DS.sp5,
+    paddingTop: 82,
+    gap: DS.sp3,
   },
+  // Retained for the Pending empty state; the Friends empty state uses the
+  // quieter shared-trace composition below.
   emptyIconRing: {
-    width: 112,           // 68 * φ ≈ 110, rounded to 112
-    height: 112,
-    borderRadius: 56,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     borderWidth: 1,
-    borderColor: T.cardBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: DS.sp4,
+    marginBottom: DS.sp3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 2,
+  },
+  emptyTrace: {
+    width: 176,
+    height: 28,
+    justifyContent: 'center',
+    marginBottom: -18,
+  },
+  emptyTraceLine: {
+    height: 1,
+    marginHorizontal: 18,
+    transform: [{ rotate: '-5deg' }],
+  },
+  emptyTraceNode: {
+    position: 'absolute',
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  emptyTraceNodeLeft: { left: 14, top: 14 },
+  emptyTraceNodeRight: { right: 14, top: 6 },
+  emptyIconMark: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 2,
+  },
+  emptyTextGroup: {
+    alignItems: 'center',
+    maxWidth: 272,
+    paddingTop: DS.sp3,
+  },
+  emptyEyebrow: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: DS.fw_semibold,
+    letterSpacing: 1.55,
+    marginBottom: DS.sp2,
   },
   emptyTextCard: {
     backgroundColor: 'rgba(249,247,239,0.9)',
@@ -1019,8 +1080,8 @@ const s = StyleSheet.create({
     position: 'absolute',
     left: 68,
     right: 68,
-    bottom: 112,
-    height: 52,           // matches input/CTA scale on F6
+    bottom: 34,
+    height: 48,
     backgroundColor: T.forestActive,
     borderRadius: DS.rad_pill,
     flexDirection: 'row',
@@ -1112,6 +1173,7 @@ const s = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 4,

@@ -4,8 +4,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { styles } from './styles';
 import { Icon } from '../../components/Icon';
+import { CairnIcon } from '../../components/CairnIcon';
+import { SunnyMotionLayer } from '../../components/home/SunnyMotionLayer';
 import type { HomeBackgroundTokens } from '../../utils/homeBackground';
-import { getVisualTheme } from '../../components/tokens';
 
 // Auto-generated from Home.spec.json  viewport 375x812
 // States: H0, H1
@@ -35,6 +36,8 @@ export function HomeScreen(props: {
    *  over useAppearance so the DEV Day/Night toggle (which only sets
    *  dayNightOverride, NOT appearance) also flips the action icons. */
   forcedIsDark?: boolean;
+  /** Gate A1: render local ambient overlays only for the canonical Sunny Day. */
+  sunnyMotionEnabled?: boolean;
   /** R21 (2026-08-18): when set, the last-hike card is tappable and its
    *  eyebrow shows the passed label (e.g. "Unfinished") instead of the
    *  default "Last hike". */
@@ -72,10 +75,14 @@ export function HomeScreen(props: {
 
   // One functional vector family; Day/Night changes semantic color only.
   const isDark = props.forcedIsDark ?? false;
-  const visualTheme = getVisualTheme(isDark);
   const scenicScrim = isDark
-    ? ['rgba(7,20,17,0.14)', 'rgba(7,20,17,0.02)', 'rgba(7,20,17,0.08)', 'rgba(7,20,17,0.20)'] as const
-    : ['rgba(10,35,27,0.25)', 'rgba(10,35,27,0.04)', 'rgba(10,35,27,0.10)', 'rgba(10,35,27,0.24)'] as const;
+    ? ['rgba(4,12,18,0.28)', 'rgba(4,12,18,0.02)', 'rgba(4,12,18,0.10)', 'rgba(3,10,14,0.34)'] as const
+    : ['rgba(7,24,27,0.20)', 'rgba(7,24,27,0.01)', 'rgba(7,24,27,0.06)', 'rgba(6,19,19,0.24)'] as const;
+
+  const actionIconColor = isDark ? '#DCE7E7' : '#244F43';
+  const actionAccent = isDark ? '#9FC9A7' : '#3C755D';
+  const navIconColor = isDark ? '#C8D5D7' : '#31594A';
+  const navAccent = isDark ? '#A7CFA9' : '#2F684F';
 
   // Override helpers — flatten spread so we only override the changing color
   // props, keeping every position/size value from styles.ts intact.
@@ -103,42 +110,43 @@ export function HomeScreen(props: {
     ? `% of ${countryName || 'the map'}`
     : `km² of ${countryName || 'your world'}`;
   return (
-    <View style={{ flex: 1, width: 375, height: 812 }}>
+    <View style={{ flex: 1, width: 375, height: 812, backgroundColor: props.sunnyMotionEnabled ? '#79A8BE' : undefined }}>
       {state === 'H0' && (
         <>
           <Image source={bgAsset} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} resizeMode="cover" />
+          {props.sunnyMotionEnabled ? <SunnyMotionLayer /> : null}
           <LinearGradient colors={scenicScrim} locations={[0, 0.34, 0.62, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
           <Text style={[styles.shared__greeting_eyebrow, heroSubTextOverride]}>{'Kia ora,'}</Text>
           <Text style={[styles.shared__greeting_name, heroBigTextOverride]}>{greetingName}</Text>
           <View style={styles.shared__action_row}>
             <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={() => nav.navigate('Hiking' as never)} activeOpacity={0.85}>
-              <View style={styles.shared__action_row__action_hiking__icon}><Icon name="Footprints" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
+              <View style={styles.shared__action_row__action_hiking__icon}><CairnIcon name="hiking" size={29} color={actionIconColor} accent={actionAccent} active /></View>
               <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{'Hiking'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={() => nav.navigate('Running' as never)} activeOpacity={0.85}>
-              <View style={styles.shared__action_row__action_running__icon}><Icon name="PersonStanding" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
+              <View style={styles.shared__action_row__action_running__icon}><CairnIcon name="running" size={29} color={actionIconColor} accent={actionAccent} /></View>
               <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{'Running'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={() => nav.navigate('Plant' as never)} activeOpacity={0.85}>
-              <View style={styles.shared__action_row__action_leave_cairn__icon}><Icon name="Flag" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
+              <View style={styles.shared__action_row__action_leave_cairn__icon}><CairnIcon name="leaveCairn" size={29} color={actionIconColor} accent={actionAccent} /></View>
               <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{'Leave a Cairn'}</Text>
             </TouchableOpacity>
           </View>
           <View style={[styles.shared__tab_bar, tabBarOverride]}>
             <TouchableOpacity style={styles.shared__tab_bar__tab_trails} onPress={() => nav.navigate('Routes' as never)}>
-              <View style={styles.shared__tab_bar__tab_trails_icon_wrap}><Icon name="Route" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
+              <View style={styles.shared__tab_bar__tab_trails_icon_wrap}><CairnIcon name="trails" size={20} color={navIconColor} accent={navAccent} /></View>
               <Text style={[styles.shared__tab_bar__tab_trails_label, tabText ? { color: tabText } : null]}>Trails</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_friends} onPress={() => nav.navigate('Friends' as never)}>
-              <View style={styles.shared__tab_bar__tab_friends_icon_wrap}><Icon name="Users" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
+              <View style={styles.shared__tab_bar__tab_friends_icon_wrap}><CairnIcon name="friends" size={20} color={navIconColor} accent={navAccent} /></View>
               <Text style={[styles.shared__tab_bar__tab_friends_label, tabText ? { color: tabText } : null]}>Friends</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)}>
-              <View style={styles.shared__tab_bar__tab_memory_icon_wrap}><Icon name="Layers" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
+              <View style={styles.shared__tab_bar__tab_memory_icon_wrap}><CairnIcon name="memory" size={20} color={navIconColor} accent={navAccent} /></View>
               <Text style={[styles.shared__tab_bar__tab_memory_label, tabText ? { color: tabText } : null]}>Memory</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_settings} onPress={() => nav.navigate('Settings' as never)}>
-              <View style={styles.shared__tab_bar__tab_settings_icon_wrap}><Icon name="Cog" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
+              <View style={styles.shared__tab_bar__tab_settings_icon_wrap}><CairnIcon name="settings" size={20} color={navIconColor} accent={navAccent} /></View>
               <Text style={[styles.shared__tab_bar__tab_settings_label, tabText ? { color: tabText } : null]}>Settings</Text>
             </TouchableOpacity>
           </View>
@@ -156,38 +164,39 @@ export function HomeScreen(props: {
       {state === 'H1' && (
         <>
           <Image source={bgAsset} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} resizeMode="cover" />
+          {props.sunnyMotionEnabled ? <SunnyMotionLayer /> : null}
           <LinearGradient colors={scenicScrim} locations={[0, 0.34, 0.62, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
           <Text style={[styles.shared__greeting_eyebrow, heroSubTextOverride]}>{'Kia ora,'}</Text>
           <Text style={[styles.shared__greeting_name, heroBigTextOverride]}>{greetingName}</Text>
           <View style={styles.shared__action_row}>
             <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={() => nav.navigate('Hiking' as never)} activeOpacity={0.85}>
-              <View style={styles.shared__action_row__action_hiking__icon}><Icon name="Footprints" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
+              <View style={styles.shared__action_row__action_hiking__icon}><CairnIcon name="hiking" size={29} color={actionIconColor} accent={actionAccent} active /></View>
               <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{'Hiking'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={() => nav.navigate('Running' as never)} activeOpacity={0.85}>
-              <View style={styles.shared__action_row__action_running__icon}><Icon name="PersonStanding" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
+              <View style={styles.shared__action_row__action_running__icon}><CairnIcon name="running" size={29} color={actionIconColor} accent={actionAccent} /></View>
               <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{'Running'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={() => nav.navigate('Plant' as never)} activeOpacity={0.85}>
-              <View style={styles.shared__action_row__action_leave_cairn__icon}><Icon name="Flag" size={34} color={visualTheme.iconActive} strokeWidth={1.9} /></View>
+              <View style={styles.shared__action_row__action_leave_cairn__icon}><CairnIcon name="leaveCairn" size={29} color={actionIconColor} accent={actionAccent} /></View>
               <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{'Leave a Cairn'}</Text>
             </TouchableOpacity>
           </View>
           <View style={[styles.shared__tab_bar, tabBarOverride]}>
             <TouchableOpacity style={styles.shared__tab_bar__tab_trails} onPress={() => nav.navigate('Routes' as never)}>
-              <View style={styles.shared__tab_bar__tab_trails_icon_wrap}><Icon name="Route" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
+              <View style={styles.shared__tab_bar__tab_trails_icon_wrap}><CairnIcon name="trails" size={20} color={navIconColor} accent={navAccent} /></View>
               <Text style={[styles.shared__tab_bar__tab_trails_label, tabText ? { color: tabText } : null]}>Trails</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_friends} onPress={() => nav.navigate('Friends' as never)}>
-              <View style={styles.shared__tab_bar__tab_friends_icon_wrap}><Icon name="Users" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
+              <View style={styles.shared__tab_bar__tab_friends_icon_wrap}><CairnIcon name="friends" size={20} color={navIconColor} accent={navAccent} /></View>
               <Text style={[styles.shared__tab_bar__tab_friends_label, tabText ? { color: tabText } : null]}>Friends</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)}>
-              <View style={styles.shared__tab_bar__tab_memory_icon_wrap}><Icon name="Layers" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
+              <View style={styles.shared__tab_bar__tab_memory_icon_wrap}><CairnIcon name="memory" size={20} color={navIconColor} accent={navAccent} /></View>
               <Text style={[styles.shared__tab_bar__tab_memory_label, tabText ? { color: tabText } : null]}>Memory</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_settings} onPress={() => nav.navigate('Settings' as never)}>
-              <View style={styles.shared__tab_bar__tab_settings_icon_wrap}><Icon name="Cog" size={24} color={visualTheme.icon} strokeWidth={1.9} /></View>
+              <View style={styles.shared__tab_bar__tab_settings_icon_wrap}><CairnIcon name="settings" size={20} color={navIconColor} accent={navAccent} /></View>
               <Text style={[styles.shared__tab_bar__tab_settings_label, tabText ? { color: tabText } : null]}>Settings</Text>
             </TouchableOpacity>
           </View>

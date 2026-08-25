@@ -45,6 +45,7 @@ import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { getMapbox } from '../services/mapboxAdapter';
 import { log } from '../../../services/appLog';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import bufferTurf from '@turf/buffer';
 import differenceTurf from '@turf/difference';
 import unionTurf from '@turf/union';
@@ -256,6 +257,7 @@ function buildFogShape(
 }
 
 export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
+  const theme = useVisualTheme();
   const Mapbox = getMapbox();
   const useH3Fog = useMemorySettingsStore((s) => s.useH3Fog);
   // v346: drive geometry from useMemoryStore.points (real GPS path),
@@ -477,14 +479,11 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
       <FillLayer
         id="memory-fog"
         style={{
-          // v349: fog color back to warm dark-brown. User feedback on v347
-          // cool slate rgba(28,32,48,0.78): "很冷血" — fog of war is a
-          // hiking exploration metaphor, warm earth tones read as
-          // "unexplored wilderness" (Diablo, AoE, Civ all use dark-brown
-          // ~#2A1F12-#3D2C1A range). #3A2A18 is the original Skia design
-          // value (fogMaskRenderer.ts:282 pre-v346), at alpha 0.78 it
-          // sits between v346's too-muddy 0.80 and a too-light 0.70.
-          fillColor: 'rgba(58, 42, 24, 0.78)',
+          // Gate 1: unexplored terrain is a natural mineral veil, not a
+          // game-like brown fog. Map texture remains faintly legible.
+          fillColor: theme.mode === 'night'
+            ? 'rgba(16, 23, 29, 0.74)'
+            : 'rgba(31, 38, 42, 0.68)',
           fillOpacity: 1,
           // Disable AA to avoid 1px seams along hole edges (mapbox-gl-js#7023
           // workaround per Simon Sat 2019).
@@ -498,19 +497,16 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
           rendered on our polygon source. v350 inlines them as direct ShapeSource
           children so cloneReactChildrenWithProps injects sourceID correctly.
 
-          Two-pass corridor halo (mirrors the original Skia fog renderer's
-          two-pass cream halo design — see fogMaskRenderer.ts:351-364 pre-v346):
-          wide soft outer glow hides the jagged fillAntialias:false stairsteps
-          + a tight inner gold rim crisps the cutout edge. Reads as "lantern
-          light on a trail through fog" rather than "hole punched in fog". */}
+          Two quiet edge passes distinguish revealed geography without a
+          fantasy glow or collectible-map treatment. */}
       {LineLayer ? (
         <LineLayer
           id="memory-fog-edge-outer"
           style={{
-            lineColor: 'rgba(247, 232, 200, 0.35)',
-            lineWidth: 7,
-            lineBlur: 8,
-            lineOpacity: 0.85,
+            lineColor: theme.mode === 'night' ? 'rgba(183, 207, 204, 0.28)' : 'rgba(223, 233, 226, 0.38)',
+            lineWidth: 5,
+            lineBlur: 7,
+            lineOpacity: 0.72,
           }}
         />
       ) : null}
@@ -518,10 +514,10 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
         <LineLayer
           id="memory-fog-edge-inner"
           style={{
-            lineColor: 'rgba(255, 220, 165, 0.85)',
-            lineWidth: 1.6,
-            lineBlur: 1.2,
-            lineOpacity: 0.9,
+            lineColor: theme.mode === 'night' ? 'rgba(183, 213, 204, 0.64)' : 'rgba(227, 238, 229, 0.76)',
+            lineWidth: 1.1,
+            lineBlur: 0.8,
+            lineOpacity: 0.82,
           }}
         />
       ) : null}

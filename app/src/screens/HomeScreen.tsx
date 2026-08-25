@@ -25,6 +25,7 @@ import { useSettingsStore } from '../store/useSettingsStore';
 import { useAppearance } from '../hooks/useAppearance';
 import { resolveCurrentCountry } from '../services/countryService';
 import { getHomeBackground } from '../utils/homeBackground';
+import { SUNNY_AMBIENT_MOTION_ENABLED } from '../config/homeVisual';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -270,7 +271,7 @@ export function HomeScreen() {
       } else if (appearance.mode === 'dark') {
         forced = 'night';
       }
-      return getHomeBackground(effectiveCondition, Date.now(), forced);
+      return getHomeBackground(effectiveCondition, Date.now(), forced, 'home');
     },
     [effectiveCondition, dayNightOverride, appearance.mode],
   );
@@ -290,7 +291,10 @@ export function HomeScreen() {
   // and day/night. No "reset" button needed.
 
   return (
-    <View style={styles.root} onLayout={onLayout}>
+    <View
+      style={[styles.root, bgTokens.variant === 'sunny-day' ? styles.sunnyFallback : null]}
+      onLayout={onLayout}
+    >
       {dims && (
         <View
           style={[
@@ -320,6 +324,7 @@ export function HomeScreen() {
             bgAsset={bgTokens.bgAsset}
             bgTokens={bgTokens}
             forcedIsDark={bgTokens.variant.endsWith('-night')}
+            sunnyMotionEnabled={SUNNY_AMBIENT_MOTION_ENABLED && bgTokens.variant === 'sunny-day'}
           />
           {/* DEV-only weather cycler — top-right circular button.
               TODO: LAUNCH_GATE — remove this block before App Store. */}
@@ -453,4 +458,5 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
   canvas: { overflow: 'hidden' },
+  sunnyFallback: { backgroundColor: '#79A8BE' },
 });

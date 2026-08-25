@@ -35,6 +35,7 @@ import { MemoryFriendPickModal } from '../components/MemoryFriendPickModal';
 import { PaywallSheet } from '../components/PaywallSheet';
 import { BackButton } from '../../../components/BackButton';
 import { Icon } from '../../../components/Icon';
+import { CairnIcon } from '../../../components/CairnIcon';
 import { Colors } from '../../../components/tokens';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { log, flushNow as flushLogsNow } from '../../../services/appLog';
@@ -100,6 +101,8 @@ export function MemoryScreen() {
   const insets = useSafeAreaInsets();
   const watcherFix = useMemoryStore((s) => s.lastWatcherFix);
   const initialDone = useMemoryStore((s) => s.initialRevealDone);
+  const memoryPoints = useMemoryStore((s) => s.points);
+  const personalCairns = useMarkerStore((s) => s.markers);
   const firstVisitDone = useMemorySettingsStore((s) => s.firstVisitDone);
   const settingsHydrated = useMemorySettingsStore((s) => s.hydrated);
   const setSetting = useMemorySettingsStore((s) => s.set);
@@ -674,7 +677,7 @@ export function MemoryScreen() {
       {/* V9: Back button matches Hiking — pill variant + safe-area top inset
           so it doesn't intrude into the Dynamic Island area. */}
       <View style={[styles.topBar, { paddingTop: insets.top + 24 }]} pointerEvents="box-none">
-        <BackButton variant="inline" onPress={() => nav.goBack()} />
+        <BackButton variant="pill" onPress={() => nav.goBack()} />
         {/* v376: Pick icon 移到 MemoryScopeToggle 内部作为第三个 segment,
             scope=friends 时 width+opacity 展开,scope=mine 时 collapse 到 0
             (用户 v375 反馈: 之前的 fixed-position 占位空白难看)。 */}
@@ -851,6 +854,39 @@ export function MemoryScreen() {
         >
           <Icon name="Layers" size={22} color={hierarchyOpen ? '#fff' : Colors.primary} strokeWidth={2} />
         </TouchableOpacity>
+      )}
+
+      {persistentCoord && loadingState !== 'loading' && (
+        <View
+          style={[
+            styles.memoryPanel,
+            {
+              backgroundColor: theme.mode === 'night' ? 'rgba(20,28,32,0.78)' : 'rgba(247,249,244,0.82)',
+              borderColor: theme.border,
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <View style={[styles.memoryIcon, { backgroundColor: theme.mode === 'night' ? 'rgba(133,177,156,0.14)' : 'rgba(47,104,79,0.10)' }]}>
+            <CairnIcon name="memory" size={24} color={theme.iconActive} accent={theme.accent} active />
+          </View>
+          <View style={styles.memoryCopy}>
+            <Text style={[styles.memoryEyebrow, { color: theme.foregroundSecondary }]}>YOUR MEMORY</Text>
+            <Text style={[styles.memoryTitle, { color: theme.foreground }]}>The world remembers where you went.</Text>
+            <View style={styles.memoryLegend}>
+              <View style={styles.memoryLegendItem}>
+                <CairnIcon name="personalTrace" size={16} color={theme.iconActive} accent={theme.accent} active />
+                <Text style={[styles.memoryLegendText, { color: theme.foregroundSecondary }]}>
+                  {memoryPoints.length > 0 ? 'Your path revealed' : 'Your first path awaits'}
+                </Text>
+              </View>
+              <View style={styles.memoryLegendItem}>
+                <CairnIcon name="leaveCairn" size={16} color={theme.iconInactive} />
+                <Text style={[styles.memoryLegendText, { color: theme.foregroundSecondary }]}>{personalCairns.length} cairns</Text>
+              </View>
+            </View>
+          </View>
+        </View>
       )}
 
       {/* v359: loading overlay covering MemoryMap until both gates fire
@@ -1116,7 +1152,7 @@ const styles = StyleSheet.create({
   },
   recenterBtn: {
     position: 'absolute',
-    right: 16, bottom: 110,
+    right: 16, bottom: 168,
     width: 48, height: 48, borderRadius: 24,
     backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
@@ -1128,7 +1164,7 @@ const styles = StyleSheet.create({
   // once GPS coords known. Layers icon → tap opens the region popover.
   hierarchyBtn: {
     position: 'absolute',
-    left: 16, bottom: 110,
+    left: 16, bottom: 168,
     width: 48, height: 48, borderRadius: 24,
     backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
@@ -1143,6 +1179,39 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.32,
     shadowRadius: 12,
   },
+  memoryPanel: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 24,
+    minHeight: 118,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    zIndex: 12,
+    shadowColor: '#071114',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  memoryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memoryCopy: { flex: 1 },
+  memoryEyebrow: { fontSize: 9, fontWeight: '700', letterSpacing: 1.35, marginBottom: 4 },
+  memoryTitle: { fontSize: 16, lineHeight: 20, fontWeight: '600', letterSpacing: -0.25 },
+  memoryLegend: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 9 },
+  memoryLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  memoryLegendText: { fontSize: 10, fontWeight: '500' },
   // BUG-D fix (v371 post-OTA): Pick friends top-right cluster — sits
   // inline with the scope toggle in the top bar. Replaces the bottom-
   // right FAB pattern which was occluding map content.

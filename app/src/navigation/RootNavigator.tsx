@@ -43,6 +43,7 @@ import { RoutesPreviewScreen } from '../screens/RoutesPreviewScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { MemoryScreen } from '../features/memory/screens/MemoryScreen';
 import { MarkDetailDevPreviewScreen } from '../features/marks/dev/MarkDetailDevPreviewScreen';
+import { Gate1IconSheetScreen } from '../screens/Gate1IconSheetScreen';
 import { MarkerDetailScreen } from '../screens/MarkerDetailScreen';
 import { OnboardingModal, hasCompletedOnboarding } from '../features/onboarding/OnboardingModal';
 import { OfflineBanner } from '../components/OfflineBanner';
@@ -88,6 +89,7 @@ export type RootStackParamList = {
   Debug: undefined;
   /** Sprint 68 STORY-00532: dev-only preview for MarkDetailSheet 4 forms. */
   MarkDetailDevPreview: undefined;
+  Gate1IconSheet: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -181,6 +183,13 @@ export function RootNavigator() {
               stores.useAppStore = useAppStore;
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.useRouteStore = require('../store/useRouteStore').useRouteStore;
+              // Gate-1 proof fixtures use direct, in-memory Zustand setState
+              // so screenshots exercise active production screens without
+              // writing synthetic data to the backend.
+              stores.useFriendStore = require('../store/useFriendStore').useFriendStore;
+              stores.useMemoryStore = require('../features/memory/store/useMemoryStore').useMemoryStore;
+              stores.useMemorySettingsStore = require('../features/memory/store/useMemorySettingsStore').useMemorySettingsStore;
+              stores.useMarkerStore = require('../store/useMarkerStore').useMarkerStore;
             } catch { /* ignore */ }
             (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = stores;
           }
@@ -224,6 +233,7 @@ export function RootNavigator() {
             <Stack.Screen name="Memory"      component={MemoryScreen} />
             <Stack.Screen name="Debug"       component={DebugScreen} />
             {__DEV__ && <Stack.Screen name="MarkDetailDevPreview" component={MarkDetailDevPreviewScreen} />}
+            {__DEV__ && <Stack.Screen name="Gate1IconSheet" component={Gate1IconSheetScreen} />}
           </>
         ) : (
           <Stack.Screen

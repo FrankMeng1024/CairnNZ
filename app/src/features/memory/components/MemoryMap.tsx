@@ -12,7 +12,7 @@
  * doesn't follow centerCoordinate prop updates after first mount.
  */
 
-import React, { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { StyleSheet, View, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
@@ -102,7 +102,32 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const theme = useVisualTheme();
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
+  const memoryPoints = useMemoryStore((s) => s.points);
   const mapViewRef = useRef<any>(null);
+
+  const personalTraceShape = useMemo(() => {
+    const ordered = memoryPoints.slice(-2000).sort((a, b) => a.ts - b.ts);
+    const features: Array<{ type: 'Feature'; properties: Record<string, never>; geometry: { type: 'LineString'; coordinates: number[][] } }> = [];
+    let segment: number[][] = [];
+    let previous: typeof ordered[number] | null = null;
+    const flush = () => {
+      if (segment.length >= 2) {
+        features.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: segment } });
+      }
+      segment = [];
+    };
+    for (const point of ordered) {
+      if (previous) {
+        const gapMs = point.ts - previous.ts;
+        const gapM = haversineM({ lat: previous.lat, lng: previous.lng }, { lat: point.lat, lng: point.lng });
+        if (gapMs > 15 * 60_000 || gapM > 700) flush();
+      }
+      segment.push([point.lng, point.lat]);
+      previous = point;
+    }
+    flush();
+    return { type: 'FeatureCollection' as const, features };
+  }, [memoryPoints]);
 
   // v447: expose getCurrentCenter so parent can pull the true current
   // map center at panel-open time. This is the reliable source, unlike
@@ -324,7 +349,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   if (!Mapbox.available) {
     return <View style={[styles.webStub, { backgroundColor: theme.background }]} />;
   }
-  const { MapView, Camera, UserLocation, CircleLayer } = Mapbox as any;
+  const { MapView, Camera, UserLocation, CircleLayer, ShapeSource, LineLayer } = Mapbox as any;
 
   return (
     <View style={styles.container}>
@@ -505,6 +530,26 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           setFogReady(true);
           onFogReady?.();
         }} />
+        {personalTraceShape.features.length > 0 && ShapeSource && LineLayer ? (
+          <ShapeSource id="memory-personal-trace" shape={personalTraceShape}>
+            <LineLayer
+              id="memory-personal-trace-casing"
+              style={{
+                lineColor: theme.mode === 'night' ? 'rgba(8,16,20,0.70)' : 'rgba(17,31,30,0.50)',
+                lineWidth: 4.4,
+                lineOpacity: 0.82,
+              }}
+            />
+            <LineLayer
+              id="memory-personal-trace-line"
+              style={{
+                lineColor: theme.mode === 'night' ? '#A8C7B6' : '#9BBEAA',
+                lineWidth: 1.8,
+                lineOpacity: 0.96,
+              }}
+            />
+          </ShapeSource>
+        ) : null}
         {/* v380: render pins only AFTER fog is ready, so they appear
             on top of the fog mask layer.
             v387: additionally gate on initialRevealDone so server-hydrated

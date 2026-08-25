@@ -63,6 +63,9 @@ interface MapViewProps {
   style?: any;
   styleURL?: string;
   onMapIdle?: (feature: any) => void;
+  onWillStartLoadingMap?: () => void;
+  onDidFinishLoadingMap?: () => void;
+  onDidFinishRenderingMapFully?: () => void;
   // v297 — high-frequency camera change events used by PinAdjustStep
   // to keep a "latest pan position" ref in sync with map state, so
   // the confirm-tap handler can read the true map center without the
@@ -89,8 +92,24 @@ interface MapViewProps {
   children?: React.ReactNode;
 }
 
-export function MapView({ style, styleURL, onMapIdle, onCameraChanged, children }: MapViewProps) {
+export function MapView({
+  style,
+  styleURL,
+  onMapIdle,
+  onCameraChanged,
+  onWillStartLoadingMap,
+  onDidFinishLoadingMap,
+  onDidFinishRenderingMapFully,
+  children,
+}: MapViewProps) {
   const mapRef = useRef<MapRef | null>(null);
+  const loadingStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (loadingStartedRef.current) return;
+    loadingStartedRef.current = true;
+    onWillStartLoadingMap?.();
+  }, [onWillStartLoadingMap]);
 
   // Translate mapbox:// style url to a public URL the JS SDK accepts.
   // mapbox-gl@2 actually accepts mapbox:// style URLs natively if a token
@@ -174,19 +193,22 @@ export function MapView({ style, styleURL, onMapIdle, onCameraChanged, children 
           }}
           mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
           mapStyle={styleUrl}
+          onLoad={() => {
+            onDidFinishLoadingMap?.();
+          }}
           initialViewState={
             initialCenter && Array.isArray(initialCenter)
               ? { longitude: initialCenter[0], latitude: initialCenter[1], zoom: initialZoom }
               : { longitude: 0, latitude: 0, zoom: initialZoom }
           }
           onIdle={(e) => {
-            if (!onMapIdle) return;
             const c = e.target.getCenter();
             const z = e.target.getZoom();
             // Synthesize a feature payload matching the @rnmapbox/maps
             // onCameraChanged / onMapIdle shape so component code reads
             // properties.center + properties.zoom identically.
-            onMapIdle({ properties: { center: [c.lng, c.lat], zoom: z } });
+            onMapIdle?.({ properties: { center: [c.lng, c.lat], zoom: z } });
+            onDidFinishRenderingMapFully?.();
           }}
           onMove={(e) => {
             if (!onCameraChanged) return;
