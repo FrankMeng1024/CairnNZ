@@ -58,8 +58,8 @@ import { pickDebugScreenshots, uploadDebugScreenshots } from '../services/debugU
 import { log } from '../services/appLog';
 import { useWeatherStore, NZ_TEST_CITIES } from '../store/useWeatherStore';
 import type { NZCity } from '../store/useWeatherStore';
-import { getHomeBackground } from '../utils/homeBackground';
-import { useAppearance } from '../hooks/useAppearance';
+import { getHomeBackground, getRegisteredBackgroundLayout, getWeatherReviewBackground } from '../utils/homeBackground';
+import { useScenicTimeState } from '../hooks/useScenicTimeState';
 import { OTA_VERSION } from '../components/OtaBadge';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -277,6 +277,7 @@ export function SettingsScreen() {
   const units = useSettingsStore((s) => s.units);
   const dateFormat = useSettingsStore((s) => s.dateFormat);
   const debugMode = useSettingsStore((s) => s.debugMode);
+  const appearance = useSettingsStore((s) => s.appearance);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
 
   // R21 (2026-08-17 user "在settings里添加一个 可以隐藏首页的探索百分比的设置
@@ -287,6 +288,7 @@ export function SettingsScreen() {
   // yet — first-time exploration is basically 0% so they'd never notice).
   const showExplorationPercent = useSettingsStore((s) => s.showExplorationPercent);
   const [showExplorationDemo, setShowExplorationDemo] = useState(false);
+  const [showAppearanceHelp, setShowAppearanceHelp] = useState(false);
 
   // Memory stats (readonly display)
   const memoryPointCount = useMemoryStore((s) => s.points.length);
@@ -657,30 +659,41 @@ export function SettingsScreen() {
   // is visually continuous. Text/card colors derived from tokens.
   const settingsCondition = useWeatherStore(s => s.condition);
   const settingsConditionOverride = useWeatherStore(s => s.conditionOverride);
-  const settingsDayNightOverride = useWeatherStore(s => s.dayNightOverride);
   const effectiveSettingsCondition = settingsConditionOverride ?? settingsCondition;
-  const settingsAppearance = useAppearance();
-  const settingsBgTokens = useMemo(() => {
-    let forced: 'day' | 'night' | undefined = undefined;
-    if (settingsDayNightOverride === 'day' || settingsDayNightOverride === 'night') {
-      forced = settingsDayNightOverride;
-    } else if (settingsAppearance.mode === 'light') {
-      forced = 'day';
-    } else if (settingsAppearance.mode === 'dark') {
-      forced = 'night';
-    }
-    return getHomeBackground(effectiveSettingsCondition, Date.now(), forced);
-  }, [effectiveSettingsCondition, settingsDayNightOverride, settingsAppearance.mode]);
+  const scenicTime = useScenicTimeState();
+  const settingsBgTokens = useMemo(() => (
+    settingsConditionOverride === 'cloudy'
+    || settingsConditionOverride === 'rain'
+    || settingsConditionOverride === 'snow'
+  )
+    ? getWeatherReviewBackground(settingsConditionOverride, scenicTime.timeOfDay)
+    : getHomeBackground(
+      effectiveSettingsCondition,
+      Date.now(),
+      scenicTime.timeOfDay,
+      'settings',
+      { sunriseMs: scenicTime.sunriseMs, sunsetMs: scenicTime.sunsetMs },
+    ), [
+      effectiveSettingsCondition,
+      settingsConditionOverride,
+      scenicTime.timeOfDay,
+      scenicTime.sunriseMs,
+      scenicTime.sunsetMs,
+    ]);
+  const registeredSettingsBackground = useMemo(
+    () => getRegisteredBackgroundLayout(settingsBgTokens),
+    [settingsBgTokens],
+  );
 
   // R21 (2026-08-17): weather-adaptive style overrides. Card + divider + footer
   // pick colors from tokens so Settings visually matches Home across all 8
   // variants (day → paper cards, night → deep ink cards).
   const cardOverride = {
-    backgroundColor: settingsBgTokens.cardBackgroundColor,
+    backgroundColor: settingsBgTokens.settingsCardBackgroundColor,
     borderWidth: 1,
-    borderColor: settingsBgTokens.cardBorderColor,
+    borderColor: settingsBgTokens.settingsCardBorderColor,
   };
-  const dividerOverride = { backgroundColor: settingsBgTokens.cardBorderColor };
+  const dividerOverride = { backgroundColor: settingsBgTokens.settingsCardBorderColor };
   // R21 (2026-08-17 user "Thanks for using Cairn. 和 signout 颜色不对"):
   // footer + Sign out row need readable colors on every variant. Muted grey
   // (textColorMuted) disappears on both bright cream and deep slate variants;
@@ -689,23 +702,14 @@ export function SettingsScreen() {
   const footerOverride = { color: settingsBgTokens.textColor, opacity: 0.75 };
 
   return (
-    <View style={{ flex: 1, backgroundColor: settingsBgTokens.useDarkText ? '#F4EFE6' : '#183128' }}>
+    <View style={{ flex: 1, backgroundColor: settingsBgTokens.settingsBackgroundColor }}>
       {/* R21 (2026-08-17): weather-adaptive bg + weather-adaptive veil. */}
       <Image
         source={settingsBgTokens.bgAsset}
-        style={{
-          position: 'absolute',
-          top: 0, left: 0, right: 0, bottom: 0,
-          width: '100%',
-          height: '100%',
-        }}
+        style={[{ position: 'absolute' }, registeredSettingsBackground]}
         resizeMode="cover"
       />
-      <View style={[styles.bgVeil, {
-        backgroundColor: settingsBgTokens.useDarkText
-          ? 'rgba(243,244,234,0.78)'   // day: scenery supports the long form
-          : 'rgba(19,38,31,0.76)',     // night: open spruce, never near-black
-      }]} />
+      <View style={[styles.bgVeil, { backgroundColor: settingsBgTokens.settingsVeilColor }]} />
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Top bar (no Save button — settings auto-persist via updateSetting) */}
         <View style={styles.topBar}>
@@ -1122,21 +1126,30 @@ export function SettingsScreen() {
               }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
     />
             <View style={[styles.divider, dividerOverride]} />
-            {/* R21 (2026-08-17): Appearance — 3-segment picker inside the
-                Preferences card. Light / Auto / Dark. Auto follows local
-                time (6..19 = light, else dark). Explicit choice overrides
-                weather-adaptive Home bg day/night bucket. Default Auto. */}
+            {/* One product concept: Appearance controls the Sunny time family.
+                Binary light/dark behavior is derived internally. */}
             <View style={{ paddingHorizontal: Spacing.base, paddingVertical: Spacing.md }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                <View style={[rowStyles.iconWrap, { backgroundColor: '#dde3ee' }]}>
-                  <Icon name="Moon" size={18} color="#4a5c78" strokeWidth={1.8} />
+                <View style={[rowStyles.iconWrap, { backgroundColor: '#E3E4DF' }]}>
+                  <Icon name="Sun" size={18} color="#53635D" strokeWidth={1.8} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[rowStyles.label, { color: settingsBgTokens.cardTextColor }]}>Appearance</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={[rowStyles.label, { color: settingsBgTokens.cardTextColor }]}>Appearance</Text>
+                    <TouchableOpacity
+                      onPress={() => setShowAppearanceHelp(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel="How automatic appearance works"
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{ marginLeft: 7, width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Icon name="Info" size={15} color={settingsBgTokens.cardTextColorMuted} strokeWidth={1.9} />
+                    </TouchableOpacity>
+                  </View>
                   <Text style={[rowStyles.hint, { color: settingsBgTokens.cardTextColorMuted }]}>
-                    {settingsAppearance.mode === 'auto'
-                      ? 'Follows time of day'
-                      : settingsAppearance.mode === 'light' ? 'Always light' : 'Always dark'}
+                    {appearance === 'auto'
+                      ? `Auto · ${scenicTime.autoTimeOfDay[0].toUpperCase()}${scenicTime.autoTimeOfDay.slice(1)}`
+                      : `Always ${appearance[0].toUpperCase()}${appearance.slice(1)}`}
                   </Text>
                 </View>
               </View>
@@ -1146,8 +1159,8 @@ export function SettingsScreen() {
                 borderRadius: 12,
                 padding: 3,
               }}>
-                {(['light', 'auto', 'dark'] as const).map((m) => {
-                  const active = settingsAppearance.mode === m;
+                {(['auto', 'day', 'sunset', 'night'] as const).map((m) => {
+                  const active = appearance === m;
                   return (
                     <TouchableOpacity
                       key={m}
@@ -1155,11 +1168,15 @@ export function SettingsScreen() {
                         updateSetting('appearance', m);
                         haptic.selection();
                       }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={`Appearance ${m}`}
                       style={{
                         flex: 1,
-                        paddingVertical: 9,
+                        minHeight: 42,
                         borderRadius: 9,
                         alignItems: 'center',
+                        justifyContent: 'center',
                         backgroundColor: active
                           ? (settingsBgTokens.useDarkText ? '#ffffff' : 'rgba(255,255,255,0.22)')
                           : 'transparent',
@@ -1170,7 +1187,7 @@ export function SettingsScreen() {
                       }}
                     >
                       <Text style={{
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: active ? '700' : '500',
                         color: active
                           ? (settingsBgTokens.useDarkText ? '#21362C' : '#F0EEE6')
@@ -1731,6 +1748,41 @@ export function SettingsScreen() {
           }
         }}
       />
+
+      <Modal
+        visible={showAppearanceHelp}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAppearanceHelp(false)}
+      >
+        <Pressable
+          style={demoStyles.backdrop}
+          onPress={() => setShowAppearanceHelp(false)}
+          accessibilityLabel="Dismiss appearance help"
+        >
+          <Pressable
+            style={[demoStyles.card, {
+              backgroundColor: settingsBgTokens.settingsCardBackgroundColor,
+              borderColor: settingsBgTokens.settingsCardBorderColor,
+              borderWidth: 1,
+            }]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <Text style={[demoStyles.title, { color: settingsBgTokens.cardTextColor }]}>Automatic appearance</Text>
+            <Text style={[demoStyles.body, { color: settingsBgTokens.cardTextColorMuted }]}>
+              {"Automatic appearance changes CairnNZ between Day, Sunset and Night using local sunrise and sunset times for your current location. If solar timing isn't available, local time is used instead."}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowAppearanceHelp(false)}
+              style={[demoStyles.keepBtn, { alignSelf: 'stretch' }]}
+              accessibilityRole="button"
+              accessibilityLabel="Close appearance help"
+            >
+              <Text style={demoStyles.keepBtnText}>Got it</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* R21 (2026-08-17): Exploration % demo modal — shown when user
           turns OFF the "Show exploration %" toggle. Explains the feature

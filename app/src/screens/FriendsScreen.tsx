@@ -122,8 +122,8 @@ function isValidEmail(email: string): boolean {
 // useAppearance. Auto mode follows local time; user-set Light/Dark overrides.
 function Backdrop() {
   const { isDark } = useAppearance();
-  const daySrc = require('../../assets/home/gate1/home-world-b-day-3x.jpg');
-  const nightSrc = require('../../assets/home/gate1/home-world-b-night-3x.jpg');
+  const daySrc = require('../../assets/friends/backgrounds/friends-bg-day-semantic-v2.jpg');
+  const nightSrc = require('../../assets/friends/backgrounds/friends-bg-night-semantic-v2.jpg');
   const srcModule = isDark ? nightSrc : daySrc;
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#141C1F' : '#F1F2EA' }]}>
@@ -134,9 +134,9 @@ function Backdrop() {
       />
       <LinearGradient
         colors={isDark
-          ? ['rgba(20,28,31,0.08)', 'rgba(20,28,31,0.24)', '#141C1F', '#141C1F']
-          : ['rgba(24,46,42,0.06)', 'rgba(241,242,234,0.12)', '#F1F2EA', '#F1F2EA']}
-        locations={[0, 0.19, 0.43, 1]}
+          ? ['rgba(10,20,23,0.12)', 'rgba(16,28,31,0.18)', 'rgba(16,28,31,0.34)', 'rgba(16,28,31,0.48)']
+          : ['rgba(243,244,234,0.18)', 'rgba(243,244,234,0.12)', 'rgba(243,244,234,0.27)', 'rgba(243,244,234,0.44)']}
+        locations={[0, 0.24, 0.58, 1]}
         style={StyleSheet.absoluteFill}
       />
     </View>
@@ -224,7 +224,7 @@ function IncomingRow({
       </View>
       <View style={s.actionRow}>
         <TouchableOpacity
-          style={s.actionBtn}
+          style={[s.actionBtn, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
           onPress={onAccept}
           disabled={busy}
           hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
@@ -233,7 +233,7 @@ function IncomingRow({
           {busy ? <ActivityIndicator size="small" color={theme.iconActive} /> : <Icon name="Check" size={DS.ic_sm} color={theme.iconActive} strokeWidth={2} />}
         </TouchableOpacity>
         <TouchableOpacity
-          style={s.actionBtn}
+          style={[s.actionBtn, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
           onPress={onReject}
           disabled={busy}
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 6 }}
@@ -263,7 +263,7 @@ function SentRow({
         <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>Waiting for response</Text>
       </View>
       <TouchableOpacity
-        style={s.actionBtn}
+        style={[s.actionBtn, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
         onPress={onCancel}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         accessibilityLabel="Cancel outbound request"
@@ -340,13 +340,13 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
   // R21 (2026-08-17): day/night variants driven by useAppearance.
   const { isDark: birdIsDark } = useAppearance();
   const birdModule = birdIsDark
-    ? require('../../assets/friends/hero/gate2/add-friend-world-a-night.jpg')
-    : require('../../assets/friends/hero/gate2/add-friend-world-a-day.jpg');
+    ? require('../../assets/friends/hero/add-friend-hero-night-semantic-v2.jpg')
+    : require('../../assets/friends/hero/add-friend-hero-day-semantic-v2.jpg');
   const birdWebUri =
     Platform.OS === 'web'
       ? (birdIsDark
-          ? '/assets/?unstable_path=./assets/friends/hero/gate2/add-friend-world-a-night.jpg'
-          : '/assets/?unstable_path=./assets/friends/hero/gate2/add-friend-world-a-day.jpg')
+          ? '/assets/?unstable_path=./assets/friends/hero/add-friend-hero-night-semantic-v2.jpg'
+          : '/assets/?unstable_path=./assets/friends/hero/add-friend-hero-day-semantic-v2.jpg')
       : null;
 
   return (
@@ -497,6 +497,8 @@ function BottomNav({ active, onNavigate }: { active: 'trails' | 'friends' | 'mem
 // ── Main ────────────────────────────────────────────────────────────────────
 export function FriendsScreen() {
   const theme = useVisualTheme();
+  const headerColor = theme.mode === 'night' ? theme.onScenic : theme.foreground;
+  const headerSecondary = theme.mode === 'night' ? theme.onScenicMuted : theme.foregroundSecondary;
   const nav = useNavigation<Nav>();
   const [tab, setTab] = useState<'friends' | 'pending'>('friends');
   const [showAdd, setShowAdd] = useState(false);
@@ -651,11 +653,11 @@ export function FriendsScreen() {
           accessibilityLabel="Back"
           accessibilityRole="button"
         >
-          <Icon name="ChevronLeft" size={DS.ic_md} color={theme.onScenic} strokeWidth={1.9} />
+          <Icon name="ChevronLeft" size={DS.ic_md} color={headerColor} strokeWidth={1.9} />
         </TouchableOpacity>
         <View style={s.titleBlock}>
-          <Text style={[s.hTitle, { color: theme.onScenic }]}>Friends</Text>
-          <Text style={[s.hSubtitle, { color: theme.onScenicMuted }]}>Paths that cross yours</Text>
+          <Text style={[s.hTitle, { color: headerColor }]}>Friends</Text>
+          <Text style={[s.hSubtitle, { color: headerSecondary }]}>Paths that cross yours</Text>
         </View>
         <TouchableOpacity
           style={s.hIcon}
@@ -664,7 +666,7 @@ export function FriendsScreen() {
           accessibilityLabel="Add friend"
           accessibilityRole="button"
         >
-          <Icon name="Plus" size={DS.ic_md} color={theme.onScenic} strokeWidth={1.9} />
+          <Icon name="Plus" size={DS.ic_md} color={headerColor} strokeWidth={1.9} />
         </TouchableOpacity>
       </View>
 
@@ -726,7 +728,7 @@ export function FriendsScreen() {
           <>
             {hasIncoming && (
               <>
-                <Text style={s.sectionTitle}>Incoming Requests ({incoming.length})</Text>
+                <Text style={[s.sectionTitle, { color: theme.foregroundSecondary }]}>INCOMING · {incoming.length}</Text>
                 {incoming.map((r) => (
                   <IncomingRow
                     key={r.id}
@@ -741,11 +743,11 @@ export function FriendsScreen() {
               </>
             )}
             {!hasIncoming && (
-              <Text style={s.mutedNote}>No incoming requests</Text>
+              <Text style={[s.mutedNote, { color: theme.foregroundSecondary }]}>No incoming requests</Text>
             )}
             {hasOutbound && (
               <>
-                <Text style={[s.sectionTitle, { marginTop: 20 }]}>Sent Requests ({outbound.length})</Text>
+                <Text style={[s.sectionTitle, { marginTop: 20, color: theme.foregroundSecondary }]}>SENT · {outbound.length}</Text>
                 {outbound.map((r) => (
                   <SentRow
                     key={r.id}
@@ -757,7 +759,7 @@ export function FriendsScreen() {
               </>
             )}
             {!hasOutbound && hasIncoming && (
-              <Text style={[s.mutedNote, { marginTop: 20 }]}>No sent requests yet</Text>
+              <Text style={[s.mutedNote, { marginTop: 20, color: theme.foregroundSecondary }]}>No sent requests yet</Text>
             )}
           </>
         )}
@@ -796,44 +798,44 @@ export function FriendsScreen() {
 
       {/* Profile modal (unchanged UX from previous version, minimal card) */}
       {profileFriend && (
-        <View style={s.profileOverlay}>
-          <View style={s.profileCard}>
+        <View style={[s.profileOverlay, { backgroundColor: theme.mode === 'night' ? 'rgba(2,12,9,0.62)' : 'rgba(17,31,25,0.38)' }]}>
+          <View style={[s.profileCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
             <View style={{ alignItems: 'center', marginBottom: 12 }}>
               <View style={[s.avatar, { width: 64, height: 64, borderRadius: 32, backgroundColor: avatarColorFor(profileFriend.id) }]}>
                 <Text style={[s.avatarText, { fontSize: 24 }]}>{initialsOf(profileFriend.name)}</Text>
               </View>
-              <Text style={[s.cardName, { fontSize: 18, marginTop: 10 }]}>{profileFriend.name}</Text>
-              <Text style={s.cardMeta}>{profileFriend.email}</Text>
+              <Text style={[s.cardName, { fontSize: 18, marginTop: 10, color: theme.foreground }]}>{profileFriend.name}</Text>
+              <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]}>{profileFriend.email}</Text>
             </View>
             {profileLoading ? (
-              <ActivityIndicator color={T.forestActive} style={{ marginVertical: 20 }} />
+              <ActivityIndicator color={theme.primary} style={{ marginVertical: 20 }} />
             ) : profileData ? (
-              <View style={{ paddingVertical: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: T.cardBorder }}>
+              <View style={{ paddingVertical: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.border }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={s.profileStat}>{profileData.hikeCount}</Text>
-                    <Text style={s.profileStatLabel}>hikes</Text>
+                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.hikeCount}</Text>
+                    <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>hikes</Text>
                   </View>
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={s.profileStat}>{profileData.friendCount}</Text>
-                    <Text style={s.profileStatLabel}>friends</Text>
+                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.friendCount}</Text>
+                    <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>friends</Text>
                   </View>
                 </View>
                 {profileData.memberSince && (
-                  <Text style={[s.cardMeta, { textAlign: 'center', marginTop: 8 }]}>
+                  <Text style={[s.cardMeta, { textAlign: 'center', marginTop: 8, color: theme.foregroundSecondary }]}>
                     Member since {new Date(profileData.memberSince).toLocaleDateString()}
                   </Text>
                 )}
               </View>
             ) : (
-              <Text style={[s.cardMeta, { textAlign: 'center', marginVertical: 20 }]}>Profile unavailable.</Text>
+              <Text style={[s.cardMeta, { textAlign: 'center', marginVertical: 20, color: theme.foregroundSecondary }]}>Profile unavailable.</Text>
             )}
             <TouchableOpacity
               testID="btn-close-profile"
-              style={s.profileClose}
+              style={[s.profileClose, { backgroundColor: theme.primary }]}
               onPress={() => { setProfileFriend(null); setProfileData(null); }}
             >
-              <Text style={s.profileCloseText}>Close</Text>
+              <Text style={[s.profileCloseText, { color: theme.onPrimary }]}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1329,6 +1331,7 @@ const s = StyleSheet.create({
   profileCard: {
     backgroundColor: T.paper,
     borderRadius: DS.rad_lg,
+    borderWidth: 1,
     padding: DS.sp5,
     width: '100%',
     maxWidth: 340,

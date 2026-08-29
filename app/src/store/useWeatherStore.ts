@@ -13,6 +13,7 @@
  */
 import { create } from 'zustand';
 import { storage } from './storage';
+import type { ScenicTimeOfDay } from '../utils/scenicTime';
 
 // WMO Weather Interpretation Codes → simplified condition bucket
 // https://open-meteo.com/en/docs#weathervariables
@@ -64,12 +65,18 @@ interface WeatherState {
   condition: WeatherCondition;
   temperature: number | null;   // °C, null until first fetch
   isDaytime: boolean;
+  /** Today's local solar times returned by Open-Meteo (epoch milliseconds). */
+  sunriseMs: number | null;
+  sunsetMs: number | null;
+  solarTimezone: string | null;
   fetchedAt: number;            // Date.now() — used for 30-min cache
   loading: boolean;
   locationOverride: LocationOverride | null;
   /** R21 (2026-08-17 DEV-only): force day/night for testing all bg
    * variants. null = follow real clock, 'day' or 'night' = override. */
   dayNightOverride: 'day' | 'night' | null;
+  /** Sunny 3-state DEV override. null follows the persisted user preference. */
+  timeOfDayOverride: ScenicTimeOfDay | null;
   /** R21 (2026-08-17 DEV-only): force a specific weather condition.
    * null = use real weather from API. Any bucket = show that bg. */
   conditionOverride: WeatherCondition | null;
@@ -77,6 +84,7 @@ interface WeatherState {
   fetchWeather: (lat: number, lon: number) => Promise<void>;
   setLocationOverride: (city: LocationOverride | null) => void;
   setDayNightOverride: (v: 'day' | 'night' | null) => void;
+  setTimeOfDayOverride: (v: ScenicTimeOfDay | null) => void;
   setConditionOverride: (v: WeatherCondition | null) => void;
   /** Recompute isDaytime from current clock — call on foreground resume. */
   refreshDaytime: () => void;
@@ -101,6 +109,9 @@ export async function hydrateWeatherCache(): Promise<void> {
         useWeatherStore.setState({
           condition: p.condition,
           temperature: p.temperature ?? null,
+          sunriseMs: typeof p.sunriseMs === 'number' ? p.sunriseMs : null,
+          sunsetMs: typeof p.sunsetMs === 'number' ? p.sunsetMs : null,
+          solarTimezone: typeof p.solarTimezone === 'string' ? p.solarTimezone : null,
           fetchedAt: p.fetchedAt,
         });
       }
@@ -108,8 +119,22 @@ export async function hydrateWeatherCache(): Promise<void> {
   } catch { /* silent */ }
 }
 
-function saveCachedWeather(condition: WeatherCondition, temperature: number | null, fetchedAt: number) {
-  storage.setItem(WEATHER_STORAGE_KEY, JSON.stringify({ condition, temperature, fetchedAt })).catch(() => {});
+function saveCachedWeather(
+  condition: WeatherCondition,
+  temperature: number | null,
+  sunriseMs: number | null,
+  sunsetMs: number | null,
+  solarTimezone: string | null,
+  fetchedAt: number,
+) {
+  storage.setItem(WEATHER_STORAGE_KEY, JSON.stringify({
+    condition,
+    temperature,
+    sunriseMs,
+    sunsetMs,
+    solarTimezone,
+    fetchedAt,
+  })).catch(() => {});
 }
 
 export const useWeatherStore = create<WeatherState>((set, get) => ({
@@ -118,10 +143,14 @@ export const useWeatherStore = create<WeatherState>((set, get) => ({
   condition: 'sunny',
   temperature: null,
   isDaytime: computeIsDaytime(),
+  sunriseMs: null,
+  sunsetMs: null,
+  solarTimezone: null,
   fetchedAt: 0,
   loading: false,
   locationOverride: null,
   dayNightOverride: null,
+  timeOfDayOverride: null,
   conditionOverride: null,
 
   fetchWeather: async (lat: number, lon: number) => {
@@ -138,6 +167,7 @@ export const useWeatherStore = create<WeatherState>((set, get) => ({
         `https://api.open-meteo.com/v1/forecast` +
         `?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
         `&current=temperature_2m,weathercode` +
+        `&daily=sunrise,sunset&forecast_days=1&timeformat=unixtime` +
         `&timezone=auto`;
 
       const controller = new AbortController();
@@ -154,16 +184,24 @@ export const useWeatherStore = create<WeatherState>((set, get) => ({
 
       const newCondition = wmoToCondition(code);
       const newTemp = temp != null ? Math.round(temp) : null;
+      const sunriseSeconds = json?.daily?.sunrise?.[0];
+      const sunsetSeconds = json?.daily?.sunset?.[0];
+      const sunriseMs = typeof sunriseSeconds === 'number' ? sunriseSeconds * 1000 : null;
+      const sunsetMs = typeof sunsetSeconds === 'number' ? sunsetSeconds * 1000 : null;
+      const solarTimezone = typeof json?.timezone === 'string' ? json.timezone : null;
       const newFetchedAt = Date.now();
       set({
         condition: newCondition,
         temperature: newTemp,
         isDaytime: computeIsDaytime(),
+        sunriseMs,
+        sunsetMs,
+        solarTimezone,
         fetchedAt: newFetchedAt,
         loading: false,
       });
       // Persist so next cold boot reads real condition immediately.
-      saveCachedWeather(newCondition, newTemp, newFetchedAt);
+      saveCachedWeather(newCondition, newTemp, sunriseMs, sunsetMs, solarTimezone, newFetchedAt);
     } catch {
       // Network error or timeout — keep existing condition, unblock loading.
       set({ loading: false, isDaytime: computeIsDaytime() });
@@ -179,7 +217,15 @@ export const useWeatherStore = create<WeatherState>((set, get) => ({
   },
 
   setDayNightOverride: (v) => {
-    set({ dayNightOverride: v });
+    set({ dayNightOverride: v, timeOfDayOverride: v });
+  },
+
+  setTimeOfDayOverride: (v) => {
+    set({
+      timeOfDayOverride: v,
+      // Preserve the legacy field for older QA consumers where possible.
+      dayNightOverride: v === 'day' || v === 'night' ? v : null,
+    });
   },
 
   setConditionOverride: (v) => {

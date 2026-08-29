@@ -662,7 +662,7 @@ export function RunningScreen() {
     };
 
     return (
-      <SafeAreaView style={completeStyles.container} edges={['top', 'bottom']}>
+      <SafeAreaView style={[completeStyles.container, { backgroundColor: runTheme.background }]} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={completeStyles.scroll} showsVerticalScrollIndicator={false}>
           {/* Header row (fix 3): Back chevron (left) + Share icon (right).
               Back is semantically equivalent to Done — the run is already
@@ -684,7 +684,7 @@ export function RunningScreen() {
               activeOpacity={0.6}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Icon name="Share2" size={22} color={RunConcept.textPrimary} strokeWidth={2} />
+              <Icon name="Share2" size={22} color={runTheme.iconActive} strokeWidth={2} />
             </TouchableOpacity>
           </View>
           <Image
@@ -692,19 +692,19 @@ export function RunningScreen() {
             style={completeStyles.hero}
             resizeMode="cover"
           />
-          <Text style={completeStyles.title}>Run Complete</Text>
+          <Text style={[completeStyles.title, { color: runTheme.foreground }]}>Run Complete</Text>
           <View style={completeStyles.statsRow}>
             <View style={completeStyles.statCell}>
-              <Text style={completeStyles.statVal}>{summaryDist}</Text>
-              <Text style={completeStyles.statLbl}>{dist.unit}</Text>
+              <Text style={[completeStyles.statVal, { color: runTheme.foreground }]}>{summaryDist}</Text>
+              <Text style={[completeStyles.statLbl, { color: runTheme.muted }]}>{dist.unit}</Text>
             </View>
             <View style={completeStyles.statCell}>
-              <Text style={completeStyles.statVal}>{durationDisplay}</Text>
-              <Text style={completeStyles.statLbl}>time</Text>
+              <Text style={[completeStyles.statVal, { color: runTheme.foreground }]}>{durationDisplay}</Text>
+              <Text style={[completeStyles.statLbl, { color: runTheme.muted }]}>time</Text>
             </View>
             <View style={completeStyles.statCell}>
-              <Text style={completeStyles.statVal}>{paceDisplay}</Text>
-              <Text style={completeStyles.statLbl}>/{dist.unit}</Text>
+              <Text style={[completeStyles.statVal, { color: runTheme.foreground }]}>{paceDisplay}</Text>
+              <Text style={[completeStyles.statLbl, { color: runTheme.muted }]}>/{dist.unit}</Text>
             </View>
           </View>
 
@@ -712,13 +712,13 @@ export function RunningScreen() {
               card — same fallback strategy as StopSummarySheet. Static so
               the R4 screen doesn't need to spin up another Mapbox context. */}
           <View
-            style={completeStyles.miniMapCard}
+            style={[completeStyles.miniMapCard, { backgroundColor: runTheme.surface, borderColor: runTheme.border }]}
             onLayout={(e) => setR4MiniMapWidth(e.nativeEvent.layout.width)}
           >
             {r4MiniMapWidth > 0 && (
               <RunMiniMapPolyline
                 points={trackPoints.map(p => ({ lat: p.lat, lng: p.lng }))}
-                stroke={RunConcept.forest}
+                stroke={runTheme.iconActive}
                 width={r4MiniMapWidth}
                 height={130}
               />
@@ -728,13 +728,13 @@ export function RunningScreen() {
           {/* "Great run!" feedback card (concept R4). Small fern icon + bold
               header + muted subtitle. Reinforces the exploration story before
               the primary CTA. */}
-          <View style={completeStyles.feedbackCard}>
-            <View style={completeStyles.feedbackIcon}>
-              <Icon name="Leaf" size={22} color={RunConcept.forest} strokeWidth={2} />
+          <View style={[completeStyles.feedbackCard, { backgroundColor: runTheme.surface, borderColor: runTheme.border }]}>
+            <View style={[completeStyles.feedbackIcon, { backgroundColor: runTheme.surfaceElevated }]}>
+              <Icon name="Leaf" size={22} color={runTheme.iconActive} strokeWidth={2} />
             </View>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={completeStyles.feedbackTitle}>Great run!</Text>
-              <Text style={completeStyles.feedbackSubtitle}>
+              <Text style={[completeStyles.feedbackTitle, { color: runTheme.foreground }]}>Great run!</Text>
+              <Text style={[completeStyles.feedbackSubtitle, { color: runTheme.foregroundSecondary }]}>
                 Another piece of your world explored.
               </Text>
             </View>
@@ -742,13 +742,13 @@ export function RunningScreen() {
 
           <View style={completeStyles.ctaGroup}>
             <TouchableOpacity
-              style={completeStyles.primaryBtn}
+              style={[completeStyles.primaryBtn, { backgroundColor: runTheme.primary }]}
               onPress={goActivityDetail}
               accessibilityRole="button"
               accessibilityLabel="View this run in Activity Detail"
               activeOpacity={0.9}
             >
-              <Text style={completeStyles.primaryBtnText}>View Activity</Text>
+              <Text style={[completeStyles.primaryBtnText, { color: runTheme.onPrimary }]}>View Activity</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={goHome}
@@ -756,7 +756,7 @@ export function RunningScreen() {
               accessibilityRole="button"
               accessibilityLabel="Done — return home"
             >
-              <Text style={completeStyles.doneBtnText}>Done</Text>
+              <Text style={[completeStyles.doneBtnText, { color: runTheme.primary }]}>Done</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -929,46 +929,54 @@ export function RunningScreen() {
         {showRoutePicker && (
           <Animated.View style={[preStyles.routePickerBackdrop, { opacity: routePickerOpacity }]}>
             <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closeRoutePicker} activeOpacity={1} />
-            <Animated.View style={[preStyles.routePickerSheet, { transform: [{ translateY: routePickerSlide }] }]}>
-              <View style={preStyles.routePickerHandle} />
-              <Text style={preStyles.routePickerTitle}>Choose a route</Text>
+            <Animated.View style={[preStyles.routePickerSheet, { backgroundColor: runTheme.surfaceElevated, borderTopColor: runTheme.border, transform: [{ translateY: routePickerSlide }] }]}>
+              <View style={[preStyles.routePickerHandle, { backgroundColor: runTheme.border }]} />
+              <Text style={[preStyles.routePickerTitle, { color: runTheme.muted }]}>Choose a route</Text>
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }} contentContainerStyle={{ gap: Spacing.sm }}>
                 {/* Free Run */}
                 <TouchableOpacity
-                  style={[preStyles.routePickerRow, selectedRoute === null && preStyles.routePickerRowSelected]}
+                  style={[
+                    preStyles.routePickerRow,
+                    { backgroundColor: runTheme.surface, borderColor: runTheme.border },
+                    selectedRoute === null && { backgroundColor: runTheme.surfaceElevated, borderColor: runTheme.primary },
+                  ]}
                   onPress={() => pickRoute(null)}
                   activeOpacity={0.8}
                 >
-                  <View style={[preStyles.routePickerBadge, { backgroundColor: RunConcept.forest + '1F' }]}>
-                    <Icon name="Target" size={16} color={RunConcept.forest} strokeWidth={2} />
+                  <View style={[preStyles.routePickerBadge, { backgroundColor: runTheme.surfaceElevated }]}>
+                    <Icon name="Target" size={16} color={runTheme.iconActive} strokeWidth={2} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={preStyles.routePickerName}>Free Run</Text>
-                    <Text style={preStyles.routePickerMeta}>No route · explore freely</Text>
+                    <Text style={[preStyles.routePickerName, { color: runTheme.foreground }]}>Free Run</Text>
+                    <Text style={[preStyles.routePickerMeta, { color: runTheme.foregroundSecondary }]}>No route · explore freely</Text>
                   </View>
-                  {selectedRoute === null && <Icon name="Check" size={16} color={RunConcept.forest} strokeWidth={2.5} />}
+                  {selectedRoute === null && <Icon name="Check" size={16} color={runTheme.iconActive} strokeWidth={2.5} />}
                 </TouchableOpacity>
 
                 {/* Saved routes */}
                 {routes.map(r => (
                   <TouchableOpacity
                     key={r.id}
-                    style={[preStyles.routePickerRow, selectedRoute === r.id && preStyles.routePickerRowSelected]}
+                    style={[
+                      preStyles.routePickerRow,
+                      { backgroundColor: runTheme.surface, borderColor: runTheme.border },
+                      selectedRoute === r.id && { backgroundColor: runTheme.surfaceElevated, borderColor: runTheme.primary },
+                    ]}
                     onPress={() => pickRoute(r.id)}
                     activeOpacity={0.8}
                   >
-                    <View style={[preStyles.routePickerBadge, { backgroundColor: RunConcept.forest + '1F' }]}>
-                      <Icon name="Route" size={16} color={RunConcept.forest} strokeWidth={2} />
+                    <View style={[preStyles.routePickerBadge, { backgroundColor: runTheme.surfaceElevated }]}>
+                      <Icon name="Route" size={16} color={runTheme.iconActive} strokeWidth={2} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={preStyles.routePickerName}>{r.name}</Text>
-                      <Text style={preStyles.routePickerMeta}>
+                      <Text style={[preStyles.routePickerName, { color: runTheme.foreground }]}>{r.name}</Text>
+                      <Text style={[preStyles.routePickerMeta, { color: runTheme.foregroundSecondary }]}>
                         {dist.format(r.distanceM, 1)} {dist.unit}
                         {r.elevationGainM > 0 ? ` · ↑${dist.formatElevation(r.elevationGainM)}${dist.elevUnit}` : ''}
                         {r.runCount > 0 ? ` · ${r.runCount}× done` : ''}
                       </Text>
                     </View>
-                    {selectedRoute === r.id && <Icon name="Check" size={16} color={RunConcept.forest} strokeWidth={2.5} />}
+                    {selectedRoute === r.id && <Icon name="Check" size={16} color={runTheme.iconActive} strokeWidth={2.5} />}
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -1239,14 +1247,14 @@ export function RunningScreen() {
             style={{ width: '100%' }}
           >
             <Animated.View
-              style={[runStyles.saveSheet, { transform: [{ translateY: saveSheetSlide }] }]}
+              style={[runStyles.saveSheet, { backgroundColor: runTheme.surfaceElevated, borderTopColor: runTheme.border, transform: [{ translateY: saveSheetSlide }] }]}
             >
-              <View style={runStyles.saveSheetHandle} />
-              <Text style={runStyles.saveSheetTitle}>Name this run</Text>
+              <View style={[runStyles.saveSheetHandle, { backgroundColor: runTheme.border }]} />
+              <Text style={[runStyles.saveSheetTitle, { color: runTheme.foreground }]}>Name this run</Text>
               <TextInput
-                style={runStyles.saveSheetInput}
+                style={[runStyles.saveSheetInput, { backgroundColor: runTheme.surface, borderColor: runTheme.border, color: runTheme.foreground }]}
                 placeholder="Morning Run"
-                placeholderTextColor={RunConcept.textMuted}
+                placeholderTextColor={runTheme.muted}
                 value={pendingName}
                 onChangeText={(t) => setPendingName(t.slice(0, 60))}
                 autoFocus
@@ -1261,7 +1269,7 @@ export function RunningScreen() {
                 }}
               />
               <TouchableOpacity
-                style={runStyles.saveSheetBtn}
+                style={[runStyles.saveSheetBtn, { backgroundColor: runTheme.primary }]}
                 onPress={() => {
                   const name = pendingName;
                   closeSaveSheet(() => { void handleStop(name); });
@@ -1270,7 +1278,7 @@ export function RunningScreen() {
                 accessibilityLabel="Save this run"
                 activeOpacity={0.9}
               >
-                <Text style={runStyles.saveSheetBtnText}>Save</Text>
+                <Text style={[runStyles.saveSheetBtnText, { color: runTheme.onPrimary }]}>Save</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={runStyles.saveSheetCancel}
@@ -1278,7 +1286,7 @@ export function RunningScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Cancel and keep running"
               >
-                <Text style={runStyles.saveSheetCancelText}>Cancel</Text>
+                <Text style={[runStyles.saveSheetCancelText, { color: runTheme.foregroundSecondary }]}>Cancel</Text>
               </TouchableOpacity>
             </Animated.View>
           </KeyboardAvoidingView>
@@ -1563,6 +1571,7 @@ const runStyles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     gap: Spacing.sm,
+    borderTopWidth: 1,
   },
   mapFallbackIcon: {
     width: 48,
@@ -1685,6 +1694,7 @@ const runStyles = StyleSheet.create({
     paddingHorizontal: Spacing.base, paddingTop: Spacing.sm,
     paddingBottom: Spacing.xxl,
     gap: Spacing.md,
+    borderTopWidth: 1,
     shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.14, shadowRadius: 22, elevation: 14,
   },
@@ -1766,6 +1776,7 @@ const completeStyles = StyleSheet.create({
     height: 130,
     borderRadius: 16,
     backgroundColor: '#EFEAE0',
+    borderWidth: 1,
     overflow: 'hidden',
   },
   feedbackCard: {
@@ -1778,6 +1789,7 @@ const completeStyles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 14,
     backgroundColor: '#EFEAE0',
+    borderWidth: 1,
   },
   feedbackIcon: {
     width: 34, height: 34, borderRadius: 17,

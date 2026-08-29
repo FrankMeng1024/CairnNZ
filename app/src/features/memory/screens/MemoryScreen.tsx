@@ -81,6 +81,26 @@ let _lastKnownCoord: { lat: number; lng: number; ts: number } | null = null;
 // apart "1st cold render" vs "Nth re-render after tab switch".
 let _memoryScreenRenderCount = 0;
 
+function MemoryStateMark({ label }: { label: string }) {
+  const theme = useVisualTheme();
+  return (
+    <>
+      <View
+        style={[
+          styles.stateMark,
+          {
+            backgroundColor: theme.mode === 'night' ? 'rgba(143,190,136,0.12)' : 'rgba(47,104,79,0.09)',
+            borderColor: theme.border,
+          },
+        ]}
+      >
+        <CairnIcon name="memory" size={28} color={theme.iconActive} accent={theme.accent} active />
+      </View>
+      <Text style={[styles.stateEyebrow, { color: theme.foregroundSecondary }]}>{label}</Text>
+    </>
+  );
+}
+
 export function MemoryScreen() {
   const theme = useVisualTheme();
   // v317: mark memory-screen render entry. v316 server data showed user
@@ -723,6 +743,7 @@ export function MemoryScreen() {
         />
       ) : failReason === 'permission' ? (
         <View style={styles.emptyState}>
+          <MemoryStateMark label="LOCATION + MEMORY" />
           <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Location permission needed</Text>
           <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>
             Memory needs your location to draw the map.
@@ -744,6 +765,7 @@ export function MemoryScreen() {
         </View>
       ) : failReason === 'timeout' || failReason === 'error' ? (
         <View style={styles.emptyState}>
+          <MemoryStateMark label="MEMORY MAP" />
           <Text style={[styles.emptyTitle, { color: theme.foreground }]}>
             {failReason === 'timeout' ? 'Could not get a GPS fix' : 'Location unavailable'}
           </Text>
@@ -762,8 +784,9 @@ export function MemoryScreen() {
         </View>
       ) : (
         <View style={styles.emptyState}>
+          <MemoryStateMark label="PREPARING YOUR MAP" />
           <ActivityIndicator color={theme.primary} size="large" />
-          <Text style={[styles.emptyTitle, { marginTop: 16, color: theme.foreground }]}>Looking for your position…</Text>
+          <Text style={[styles.emptyTitle, { marginTop: 14, color: theme.foreground }]}>Looking for your position…</Text>
           <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>
             We need a GPS fix to draw your memory map.
           </Text>
@@ -790,7 +813,11 @@ export function MemoryScreen() {
           Layers icon differentiates from Target crosshair on right. */}
       {persistentCoord && (
         <TouchableOpacity
-          style={[styles.hierarchyBtn, hierarchyOpen && styles.hierarchyBtnActive]}
+          style={[
+            styles.hierarchyBtn,
+            { backgroundColor: theme.mapOverlay, borderColor: theme.border },
+            hierarchyOpen && { backgroundColor: theme.primary, borderColor: theme.primary },
+          ]}
           onPress={async () => {
             if (hierarchyOpen) {
               setHierarchyOpen(false);
@@ -852,7 +879,7 @@ export function MemoryScreen() {
           }}
           activeOpacity={0.85}
         >
-          <Icon name="Layers" size={22} color={hierarchyOpen ? '#fff' : Colors.primary} strokeWidth={2} />
+          <Icon name="Layers" size={22} color={hierarchyOpen ? theme.onPrimary : theme.iconActive} strokeWidth={2} />
         </TouchableOpacity>
       )}
 
@@ -902,9 +929,10 @@ export function MemoryScreen() {
         >
           <View style={styles.loadingInner}>
             <View style={[styles.loadingLogoCircle, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
-              <Icon name="Mountain" size={44} color={theme.iconActive} strokeWidth={1.5} />
+              <CairnIcon name="memory" size={38} color={theme.iconActive} accent={theme.accent} active />
             </View>
-            <Text style={[styles.loadingTitle, { color: theme.foreground }]}>Cairn</Text>
+            <Text style={[styles.loadingEyebrow, { color: theme.foregroundSecondary }]}>YOUR MEMORY</Text>
+            <Text style={[styles.loadingTitle, { color: theme.foreground }]}>Opening your map</Text>
             <Text style={[styles.loadingSub, { color: theme.foregroundSecondary }]}>
               {loadingStage === 0
                 ? 'Loading map…'
@@ -1107,6 +1135,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 40,
   },
+  stateMark: {
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 13,
+  },
+  stateEyebrow: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '700',
+    letterSpacing: 1.45,
+    marginBottom: 8,
+  },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '500',
@@ -1266,7 +1310,14 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '600',
     color: Colors.textPrimary,
-    letterSpacing: 1.2,
+    letterSpacing: -0.25,
+    marginBottom: 6,
+  },
+  loadingEyebrow: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '700',
+    letterSpacing: 1.45,
     marginBottom: 6,
   },
   loadingSub: {

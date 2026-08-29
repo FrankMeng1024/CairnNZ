@@ -604,6 +604,7 @@ function ActivitySheet({
 // ── Routes Tab ───────────────────────────────────────────────────────────────
 function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
   const nav = useNavigation<Nav>();
+  const theme = useVisualTheme();
   const routes = useRouteStore(s => s.routes);
   const deleteRoute = useRouteStore(s => s.deleteRoute);
   // O12 Round-3 R3-C1: settings-aware distance format for route list.
@@ -664,29 +665,29 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
       {scope === 'mine' && routes.length === 0 ? (
         <View style={styles.emptyHero}>
           {/* Concept-aligned circle icon: soft neutral fill, thin route glyph */}
-          <View style={styles.emptyHeroIcon}>
-            <Icon name="Route" size={32} color={Colors.primary} strokeWidth={1.8} />
+          <View style={[styles.emptyHeroIcon, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
+            <Icon name="Route" size={32} color={theme.iconActive} strokeWidth={1.8} />
           </View>
-          <Text style={styles.emptyHeroTitle}>No saved routes yet</Text>
-          <Text style={styles.emptyHeroBody}>
+          <Text style={[styles.emptyHeroTitle, { color: theme.foreground }]}>No saved routes yet</Text>
+          <Text style={[styles.emptyHeroBody, { color: theme.foregroundSecondary }]}>
             Routes are paths you've already walked.{'\n'}
             Open an Activity, tap{' '}
-            <Text style={styles.emptyHeroBodyStrong}>Save as Route</Text>
+            <Text style={[styles.emptyHeroBodyStrong, { color: theme.primary }]}>Save as Route</Text>
             , and it'll show up here.
           </Text>
           <TouchableOpacity
-            style={styles.emptyHeroCta}
+            style={[styles.emptyHeroCta, { backgroundColor: theme.primary }]}
             activeOpacity={0.85}
             onPress={() => onGoToActivities?.()}
           >
-            <Icon name="Map" size={16} color="#fff" strokeWidth={2} />
-            <Text style={styles.emptyHeroCtaText}>View Activities</Text>
+            <Icon name="Map" size={16} color={theme.onPrimary} strokeWidth={2} />
+            <Text style={[styles.emptyHeroCtaText, { color: theme.onPrimary }]}>View Activities</Text>
           </TouchableOpacity>
         </View>
       ) : null}
       {scope === 'friends' && !hasFetchedFriends && circleRoutes.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={styles.emptyHint}>Loading friends' routes…</Text>
+          <Text style={[styles.emptyHint, { color: theme.foregroundSecondary }]}>Loading friends' routes…</Text>
         </View>
       ) : null}
       {scope === 'friends' && hasFetchedFriends && circleRoutes.length === 0 ? (
@@ -697,8 +698,8 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
             style={styles.emptyHeroImage}
             resizeMode="contain"
           />
-          <Text style={styles.emptyHeroTitle}>No routes from friends yet</Text>
-          <Text style={styles.emptyHeroBody}>
+          <Text style={[styles.emptyHeroTitle, { color: theme.foreground }]}>No routes from friends yet</Text>
+          <Text style={[styles.emptyHeroBody, { color: theme.foregroundSecondary }]}>
             When your friends share routes,{'\n'}
             they'll appear here.
           </Text>
@@ -707,14 +708,14 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
       {((scope === 'mine' && routes.length > 0) || (scope === 'friends' && circleRoutes.length > 0)) && (
         <>
       {/* O18 ROUTE-07: text search over route name. */}
-      <View style={styles.searchWrap}>
-        <Icon name="Search" size={16} color={Colors.textMuted} strokeWidth={2} />
+      <View style={[styles.searchWrap, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <Icon name="Search" size={16} color={theme.iconInactive} strokeWidth={2} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: theme.foreground }]}
           value={routeSearch}
           onChangeText={setRouteSearch}
           placeholder="Search routes by name…"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={theme.muted}
           autoCorrect={false}
           autoCapitalize="none"
           clearButtonMode="while-editing"
@@ -757,14 +758,14 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
           /* v376: routes.length===0 已在外层提前 return,这里只剩
              "filter 把所有数据筛掉"的场景。 */
           <View style={{ alignItems: 'center', paddingTop: 40 }}>
-            <Text style={styles.emptyHint}>
+            <Text style={[styles.emptyHint, { color: theme.foregroundSecondary }]}>
               {'No routes match this filter.'}
             </Text>
           </View>
         }
         renderItem={({ item }) => (
           <PressBtn
-            style={styles.routeRow}
+            style={[styles.routeRow, { borderBottomColor: theme.border }]}
             onPress={() => nav.navigate('MapHistory', { routeId: item.id })}
             onLongPress={() => setSelectedRoute(item)}
             scaleTo={0.97}
@@ -772,17 +773,17 @@ function RoutesTab({ onGoToActivities }: { onGoToActivities?: () => void }) {
             {/* Concept crops/03-routes-mine.png: soft-fill circle with deep-green
                 route glyph — replaced the cairn-stack raster which mismatched
                 the reference. */}
-            <View style={styles.routeIconWrap}>
-              <Icon name="Route" size={18} color={Colors.primary} strokeWidth={2} />
+            <View style={[styles.routeIconWrap, { backgroundColor: theme.surfaceElevated }]}>
+              <Icon name="Route" size={18} color={theme.iconActive} strokeWidth={2} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.routeTitle} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.routeMeta} numberOfLines={1}>
+              <Text style={[styles.routeTitle, { color: theme.foreground }]} numberOfLines={1}>{item.name}</Text>
+              <Text style={[styles.routeMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>
                 {dist.format(item.distanceM, 1)} {dist.unit}
                 {item.elevationGainM ? ` · +${dist.formatElevation(item.elevationGainM)}${dist.elevUnit}` : ''}
               </Text>
             </View>
-            <Icon name="ChevronRight" size={16} color={Colors.textMuted} strokeWidth={2} />
+            <Icon name="ChevronRight" size={16} color={theme.iconInactive} strokeWidth={2} />
           </PressBtn>
         )}
       />
@@ -1108,6 +1109,7 @@ const PERM_FILTERS: { id: MarkerPermission | 'all'; icon: IconName }[] = [
 // Metro restart. Design ref: docs/design/r114-mark-redesign.md §9.
 
 function FlagsTab() {
+  const theme = useVisualTheme();
   const markers = useMarkerStore(s => s.markers);
   // Sprint 69 STORY-00537: circle markers slice + loader.
   const circleMarkers = useMarkerStore(s => s.circleMarkers);
@@ -1182,19 +1184,19 @@ function FlagsTab() {
               <EmptyMarkers size={192} />
             </IllustrationHalo>
           </View>
-          <Text style={styles.emptyHeroTitle}>No cairns planted yet</Text>
-          <Text style={styles.emptyHeroBody}>
+          <Text style={[styles.emptyHeroTitle, { color: theme.foreground }]}>No cairns planted yet</Text>
+          <Text style={[styles.emptyHeroBody, { color: theme.foregroundSecondary }]}>
             Leave a mark when you find something worth noting —{'\n'}
             a viewpoint, a junction, a hut.
           </Text>
           <TouchableOpacity
-            style={styles.emptyHeroCta}
+            style={[styles.emptyHeroCta, { backgroundColor: theme.primary }]}
             activeOpacity={0.85}
             onPress={() => nav.navigate('Plant')}
             testID="flags-mine-empty-plant-cta"
           >
-            <Icon name="Plus" size={16} color="#fff" strokeWidth={2} />
-            <Text style={styles.emptyHeroCtaText}>Plant a new mark</Text>
+            <Icon name="Plus" size={16} color={theme.onPrimary} strokeWidth={2} />
+            <Text style={[styles.emptyHeroCtaText, { color: theme.onPrimary }]}>Plant a new mark</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1209,7 +1211,7 @@ function FlagsTab() {
 
       {scope === 'friends' && !hasFetchedFriends && circleMarkers.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={styles.emptyHint}>Loading friends' marks…</Text>
+          <Text style={[styles.emptyHint, { color: theme.foregroundSecondary }]}>Loading friends' marks…</Text>
         </View>
       ) : null}
       {scope === 'friends' && hasFetchedFriends && circleMarkers.length === 0 ? (
@@ -1219,8 +1221,8 @@ function FlagsTab() {
               <EmptyMarkers size={192} />
             </IllustrationHalo>
           </View>
-          <Text style={styles.emptyHeroTitle}>No marks from your friends yet</Text>
-          <Text style={styles.emptyHeroBody}>
+          <Text style={[styles.emptyHeroTitle, { color: theme.foreground }]}>No marks from your friends yet</Text>
+          <Text style={[styles.emptyHeroBody, { color: theme.foregroundSecondary }]}>
             Marks your friends share at Friend tier{'\n'}
             will show up here.
           </Text>
@@ -1240,22 +1242,30 @@ function FlagsTab() {
           contentContainerStyle={styles.filterChipsScroll}
         >
           {FLAG_FILTERS.map(f => (
-            <TouchableOpacity key={f.id} style={[styles.filterChip, typeFilter === f.id && styles.filterChipActive]} onPress={() => setTypeFilter(f.id)}>
-              <Text style={[styles.filterChipText, typeFilter === f.id && styles.filterChipTextActive]}>{f.label}</Text>
+            <TouchableOpacity
+              key={f.id}
+              style={[
+                styles.filterChip,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+                typeFilter === f.id && { backgroundColor: theme.surfaceElevated, borderColor: theme.primary },
+              ]}
+              onPress={() => setTypeFilter(f.id)}
+            >
+              <Text style={[styles.filterChipText, { color: typeFilter === f.id ? theme.primary : theme.foregroundSecondary }, typeFilter === f.id && styles.filterChipTextActive]}>{f.label}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
         <View style={styles.permRow}>
-          <View style={styles.permToggleGroup}>
+          <View style={[styles.permToggleGroup, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             {PERM_FILTERS.map(p => {
               const active = permFilter === p.id;
               return (
                 <TouchableOpacity
                   key={p.id}
-                  style={[styles.permToggle, active && styles.permToggleActive]}
+                  style={[styles.permToggle, active && { backgroundColor: theme.surfaceElevated }]}
                   onPress={() => setPermFilter(active ? 'all' : p.id)}
                 >
-                  <Icon name={p.icon} size={13} color={active ? Colors.primary : Colors.textMuted} strokeWidth={active ? 2.5 : 1.8} />
+                  <Icon name={p.icon} size={13} color={active ? theme.primary : theme.iconInactive} strokeWidth={active ? 2.5 : 1.8} />
                 </TouchableOpacity>
               );
             })}
@@ -1263,12 +1273,12 @@ function FlagsTab() {
           {/* Sort chip moved into the same row as perm toggles to keep
               vertical compactness — was on its own third row before. */}
           <TouchableOpacity
-            style={filterBarStyles.sortChip}
+            style={[filterBarStyles.sortChip, { backgroundColor: theme.surface, borderColor: theme.border }]}
             onPress={() => setSort(sort === 'recent' ? 'nearest' : 'recent')}
             activeOpacity={0.7}
           >
-            <Icon name="ArrowUpDown" size={12} color={Colors.primary} strokeWidth={2} />
-            <Text style={filterBarStyles.sortText}>{sort === 'recent' ? 'Recent' : 'Nearest'}</Text>
+            <Icon name="ArrowUpDown" size={12} color={theme.primary} strokeWidth={2} />
+            <Text style={[filterBarStyles.sortText, { color: theme.foregroundSecondary }]}>{sort === 'recent' ? 'Recent' : 'Nearest'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1294,7 +1304,7 @@ function FlagsTab() {
             />
           );
         }}
-        ListEmptyComponent={<View style={{ padding: Spacing.xl, alignItems: 'center' }}><Text style={styles.emptyHint}>No matching cairns. Try a different filter.</Text></View>}
+        ListEmptyComponent={<View style={{ padding: Spacing.xl, alignItems: 'center' }}><Text style={[styles.emptyHint, { color: theme.foregroundSecondary }]}>No matching cairns. Try a different filter.</Text></View>}
       />
       {/* v299 N8: FlagEditSheet removed — Flags now navigate to
           read-only MarkerDetailScreen. */}
@@ -1395,6 +1405,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
     marginBottom: Spacing.sm,
     backgroundColor: 'rgba(0,0,0,0.04)',
+    borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 6,
@@ -1530,6 +1541,7 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: 38,
     backgroundColor: 'rgba(93,124,70,0.10)',
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.md,

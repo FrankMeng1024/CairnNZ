@@ -18,6 +18,7 @@
 import { create } from 'zustand';
 import { storage } from './storage';
 import { debugLogger } from '../services/debugLogger';
+import { migrateLegacyAppearancePreference, type ScenicAppearancePref } from '../utils/scenicTime';
 
 export type UnitsPref = 'metric' | 'imperial';
 // O18 HIST-09: user-selectable date format. Default 'dmy' (DD/MM/YYYY, NZ/UK style).
@@ -26,10 +27,9 @@ export type DateFormatPref = 'dmy' | 'mdy' | 'ymd';
 // O18 MAP-01: user-selectable map layer (outdoors vs satellite).
 // Default 'outdoors' — matches existing getPrimaryMapStyle() behaviour.
 export type MapLayerPref = 'outdoors' | 'satellite';
-// R21 (2026-08-17): app-wide Light/Dark/Auto appearance mode. Auto follows
-// local time (day/night). Explicit Light or Dark overrides both time and
-// weather-adaptive Home tokens. Default 'auto'.
-export type AppearancePref = 'light' | 'dark' | 'auto';
+// Appearance is the one user-facing time-theme decision. Functional light /
+// dark mechanics are derived internally from the effective scenic state.
+export type AppearancePref = ScenicAppearancePref;
 
 interface Settings {
   // Preferences
@@ -38,7 +38,7 @@ interface Settings {
   mapLayer: MapLayerPref;
   nightMode: boolean;
   hapticFeedback: boolean;
-  // R21 (2026-08-17): app-wide appearance. See AppearancePref type comment.
+  // Sunny time family: Auto / Day / Sunset / Night.
   appearance: AppearancePref;
 
   // Route following (added when Cairn gained turn-by-turn navigation).
@@ -189,8 +189,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         if (migrated.mapLayer !== 'outdoors' && migrated.mapLayer !== 'satellite') {
           delete migrated.mapLayer;
         }
-        if (migrated.appearance !== 'light' && migrated.appearance !== 'dark' && migrated.appearance !== 'auto') {
-          delete migrated.appearance;
+        // Sunny three-time migration: the former UI exposed both functional
+        // Light/Auto/Dark and Scenery Time. Preserve the explicit scenery
+        // choice when present, otherwise map the old functional choice into
+        // the single Appearance model. The duplicate key is then removed.
+        const legacyAppearance = (migrated as Record<string, unknown>).appearance;
+        const legacyScenery = (migrated as Record<string, unknown>).sceneryTime;
+        const migratedAppearance = migrateLegacyAppearancePreference({
+          appearance: legacyAppearance,
+          sceneryTime: legacyScenery,
+        });
+        if (legacyAppearance !== migratedAppearance) mutated = true;
+        migrated.appearance = migratedAppearance;
+        if ('sceneryTime' in migrated) {
+          delete migrated.sceneryTime;
+          mutated = true;
         }
         const boolFields = [
           'nightMode', 'hapticFeedback', 'voiceGuidance', 'debugMode',

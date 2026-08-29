@@ -1,0 +1,98 @@
+[
+  {
+    "key": "sunny-day",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/sunny/sunny-day-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/sunny/sunny-day-material-polish-3x.jpg",
+    "width": 853,
+    "height": 1844,
+    "amount": 0.46
+  },
+  {
+    "key": "sunny-sunset",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/sunny/sunny-sunset-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/sunny/sunny-sunset-material-polish-3x.jpg",
+    "width": 852,
+    "height": 1846,
+    "amount": 0.48
+  },
+  {
+    "key": "sunny-night",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/sunny/sunny-night-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/sunny/sunny-night-material-polish-3x.jpg",
+    "width": 853,
+    "height": 1844,
+    "amount": 0.54
+  },
+  {
+    "key": "cloudy-day",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-day-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-day-material-polish-3x.jpg",
+    "width": 853,
+    "height": 1844,
+    "amount": 0.42
+  },
+  {
+    "key": "cloudy-sunset",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-sunset-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-sunset-material-polish-3x.jpg",
+    "width": 852,
+    "height": 1846,
+    "amount": 0.46
+  },
+  {
+    "key": "cloudy-night",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-night-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-night-material-polish-3x.jpg",
+    "width": 853,
+    "height": 1844,
+    "amount": 0.5
+  },
+  {
+    "key": "rainy-day",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/rainy/rainy-day-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/rainy/rainy-day-material-polish-3x.jpg",
+    "width": 853,
+    "height": 1844,
+    "amount": 0.38
+  },
+  {
+    "key": "rainy-sunset",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/rainy/rainy-sunset-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/rainy/rainy-sunset-material-polish-3x.jpg",
+    "width": 852,
+    "height": 1846,
+    "amount": 0.42
+  },
+  {
+    "key": "rainy-night",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/rainy/rainy-night-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/rainy/rainy-night-material-polish-3x.jpg",
+    "width": 853,
+    "height": 1844,
+    "amount": 0.46
+  },
+  {
+    "key": "snowy-day",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/snowy/snowy-day-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/snowy/snowy-day-material-polish-3x.jpg",
+    "width": 853,
+    "height": 1844,
+    "amount": 0.52
+  },
+  {
+    "key": "snowy-sunset",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/snowy/snowy-sunset-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/snowy/snowy-sunset-material-polish-3x.jpg",
+    "width": 853,
+    "height": 1844,
+    "amount": 0.55
+  },
+  {
+    "key": "snowy-night",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/snowy/snowy-night-material-polish-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-polish-v1/snowy/snowy-night-material-polish-3x.jpg",
+    "width": 853,
+    "height": 1844,
+    "amount": 0.58
+  }
+]

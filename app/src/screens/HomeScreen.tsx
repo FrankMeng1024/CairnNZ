@@ -22,9 +22,9 @@ import { useAppStore } from '../store/useAppStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import { useWeatherStore, NZ_TEST_CITIES } from '../store/useWeatherStore';
 import { useSettingsStore } from '../store/useSettingsStore';
-import { useAppearance } from '../hooks/useAppearance';
+import { useScenicTimeState } from '../hooks/useScenicTimeState';
 import { resolveCurrentCountry } from '../services/countryService';
-import { getHomeBackground } from '../utils/homeBackground';
+import { getHomeBackground, getWeatherReviewBackground } from '../utils/homeBackground';
 import { SUNNY_AMBIENT_MOTION_ENABLED } from '../config/homeVisual';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -75,7 +75,6 @@ export function HomeScreen() {
   const weatherCondition = useWeatherStore(s => s.condition);
   const conditionOverride = useWeatherStore(s => s.conditionOverride);
   const locationOverride = useWeatherStore(s => s.locationOverride);
-  const dayNightOverride = useWeatherStore(s => s.dayNightOverride);
   const fetchWeather = useWeatherStore(s => s.fetchWeather);
   // Effective condition = override if set, else real. Drives bg + tokens.
   const effectiveCondition = conditionOverride ?? weatherCondition;
@@ -256,24 +255,23 @@ export function HomeScreen() {
 
   const scale = dims ? Math.min(dims.w / DESIGN_W, dims.h / DESIGN_H) : 1;
 
-  // R21 (2026-08-17): weather-adaptive tokens now respect user Appearance
-  // preference. When user explicitly picks Light/Dark, we override the
-  // clock-based day/night; DEV toggle still wins over both.
-  const appearance = useAppearance();
+  const scenicTime = useScenicTimeState();
   const bgTokens = useMemo(
-    () => {
-      // Priority: DEV dayNightOverride > user Appearance (light/dark) > real clock (auto)
-      let forced: 'day' | 'night' | undefined = undefined;
-      if (dayNightOverride === 'day' || dayNightOverride === 'night') {
-        forced = dayNightOverride;
-      } else if (appearance.mode === 'light') {
-        forced = 'day';
-      } else if (appearance.mode === 'dark') {
-        forced = 'night';
-      }
-      return getHomeBackground(effectiveCondition, Date.now(), forced, 'home');
-    },
-    [effectiveCondition, dayNightOverride, appearance.mode],
+    // conditionOverride is a transient Dev/QA-only store field. It is not
+    // persisted and normal weather resolution never reaches this review map.
+    () => conditionOverride === 'cloudy' || conditionOverride === 'rain' || conditionOverride === 'snow'
+      ? getWeatherReviewBackground(conditionOverride, scenicTime.timeOfDay)
+      : getHomeBackground(effectiveCondition, Date.now(), scenicTime.timeOfDay, 'home', {
+        sunriseMs: scenicTime.sunriseMs,
+        sunsetMs: scenicTime.sunsetMs,
+      }),
+    [
+      conditionOverride,
+      effectiveCondition,
+      scenicTime.sunriseMs,
+      scenicTime.sunsetMs,
+      scenicTime.timeOfDay,
+    ],
   );
 
   // R21 (2026-08-17 user "DEV 改的是我的当前 GPS location + 切白天黑夜 + reset"):
@@ -283,7 +281,8 @@ export function HomeScreen() {
   //  - Reset: clear both, back to real GPS + real time
   // TODO: LAUNCH_GATE — remove before App Store submission.
   const setLocationOverride = useWeatherStore(s => s.setLocationOverride);
-  const setDayNightOverride = useWeatherStore(s => s.setDayNightOverride);
+  const timeOfDayOverride = useWeatherStore(s => s.timeOfDayOverride);
+  const setTimeOfDayOverride = useWeatherStore(s => s.setTimeOfDayOverride);
   const setConditionOverride = useWeatherStore(s => s.setConditionOverride);
   const [devMenuOpen, setDevMenuOpen] = useState(false);
   // R21 (2026-08-17 user "二次点击就是取消"): each toggle is idempotent —
@@ -323,7 +322,7 @@ export function HomeScreen() {
               : undefined}
             bgAsset={bgTokens.bgAsset}
             bgTokens={bgTokens}
-            forcedIsDark={bgTokens.variant.endsWith('-night')}
+            forcedIsDark={!bgTokens.useDarkText}
             sunnyMotionEnabled={SUNNY_AMBIENT_MOTION_ENABLED && bgTokens.variant === 'sunny-day'}
           />
           {/* DEV-only weather cycler — top-right circular button.
@@ -420,31 +419,30 @@ export function HomeScreen() {
                     TIME
                   </Text>
                   <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setDayNightOverride(dayNightOverride === 'day' ? null : 'day');
-                        setDevMenuOpen(false);
-                      }}
-                      style={{
-                        flex: 1, paddingVertical: 4, alignItems: 'center', borderRadius: 8,
-                        backgroundColor: dayNightOverride === 'day' ? 'rgba(33,54,44,0.15)' : 'rgba(33,54,44,0.05)',
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#21362C' }}>Day</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setDayNightOverride(dayNightOverride === 'night' ? null : 'night');
-                        setDevMenuOpen(false);
-                      }}
-                      style={{
-                        flex: 1, paddingVertical: 4, alignItems: 'center', borderRadius: 8,
-                        backgroundColor: dayNightOverride === 'night' ? 'rgba(33,54,44,0.15)' : 'rgba(33,54,44,0.05)',
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#21362C' }}>Night</Text>
-                    </TouchableOpacity>
+                    {([null, 'day', 'sunset', 'night'] as const).map((time) => {
+                      const active = timeOfDayOverride === time;
+                      return (
+                        <TouchableOpacity
+                          key={time ?? 'auto'}
+                          onPress={() => {
+                            setTimeOfDayOverride(time);
+                            setDevMenuOpen(false);
+                          }}
+                          style={{
+                            flex: 1, paddingVertical: 4, alignItems: 'center', borderRadius: 8,
+                            backgroundColor: active ? 'rgba(33,54,44,0.15)' : 'rgba(33,54,44,0.05)',
+                          }}
+                        >
+                          <Text style={{ fontSize: 10, fontWeight: '600', color: '#21362C', textTransform: 'capitalize' }}>
+                            {time ?? 'auto'}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
+                  <Text style={{ paddingHorizontal: 4, paddingBottom: 2, fontSize: 9, color: '#6D746F' }}>
+                    Resolved {scenicTime.timeOfDay} · {bgTokens.assetId}
+                  </Text>
                 </View>
               )}
             </View>

@@ -22,7 +22,7 @@ import {
   // Sprint 11
   Info, Send,
   // Sprint 12
-  Moon, Volume2, LogOut, User, ArrowUp, Save,
+  Moon, Sun, Volume2, LogOut, User, ArrowUp, Save,
   // Sprint 13
   Globe,
   // Sprint 19
@@ -76,7 +76,7 @@ const ICON_MAP = {
   Scissors,
   LogIn, Eye, EyeOff, Mail, KeyRound, UserPlus,
   Info, Send,
-  Moon, Volume2, LogOut, User, ArrowUp, Save,
+  Moon, Sun, Volume2, LogOut, User, ArrowUp, Save,
   Globe,
   Compass,
   Apple,
