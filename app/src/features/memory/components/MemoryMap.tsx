@@ -29,6 +29,8 @@ import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
+import { useMapTheme } from '../../../hooks/useMapTheme';
+import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../../../config/mapbox';
 
 interface Props {
   centerLat: number;
@@ -82,7 +84,6 @@ interface Props {
   flyToTarget?: { center: [number, number]; zoom: number; token: number } | null;
 }
 
-const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12';
 const INITIAL_ZOOM = 16.5;
 
 export type MemoryMapHandle = {
@@ -100,6 +101,9 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   ref,
 ) {
   const theme = useVisualTheme();
+  const memoryMapTheme = useMapTheme();
+  const memoryResolvedMapStyle = getMapStyleForTheme('outdoors', memoryMapTheme);
+  const memoryLightPreset = themeToStandardPreset(memoryMapTheme);
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
   const memoryPoints = useMemoryStore((s) => s.points);
@@ -349,14 +353,16 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   if (!Mapbox.available) {
     return <View style={[styles.webStub, { backgroundColor: theme.background }]} />;
   }
-  const { MapView, Camera, UserLocation, CircleLayer, ShapeSource, LineLayer } = Mapbox as any;
+  const { MapView, Camera, UserLocation, CircleLayer, ShapeSource, LineLayer, StyleImport } = Mapbox as any;
 
   return (
     <View style={styles.container}>
       <MapView
         ref={mapViewRef}
         style={styles.map}
-        styleURL={SEPIA_STYLE_URL}
+        {...(memoryResolvedMapStyle.kind === 'url'
+          ? { styleURL: memoryResolvedMapStyle.url }
+          : { styleJSON: memoryResolvedMapStyle.json })}
         compassEnabled={false}
         scaleBarEnabled={false}
         logoEnabled={false}
@@ -462,6 +468,15 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           }
         }}
       >
+        {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
+        {StyleImport ? (
+          <StyleImport
+            key={memoryLightPreset}
+            id="basemap"
+            existing
+            config={buildStandardConfig(memoryMapTheme) as any}
+          />
+        ) : null}
         <Camera
           ref={cameraRef}
           // v302 N6: defaultSettings (instead of centerCoordinate prop)
@@ -471,6 +486,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           defaultSettings={{
             centerCoordinate: [centerLng, centerLat],
             zoomLevel: INITIAL_ZOOM,
+            pitch: 0,
           }}
           animationMode={'flyTo'}
           animationDuration={600}
@@ -535,7 +551,12 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             <LineLayer
               id="memory-personal-trace-casing"
               style={{
-                lineColor: theme.mode === 'night' ? 'rgba(8,16,20,0.70)' : 'rgba(17,31,30,0.50)',
+                // R21-v3 v2 (2026-08-30): 三态 trace casing — sunset 用深棕紫托底
+                lineColor: memoryMapTheme === 'night'
+                  ? 'rgba(8,16,20,0.70)'
+                  : memoryMapTheme === 'sunset'
+                    ? 'rgba(42,24,48,0.62)'
+                    : 'rgba(17,31,30,0.50)',
                 lineWidth: 4.4,
                 lineOpacity: 0.82,
               }}
@@ -543,7 +564,13 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             <LineLayer
               id="memory-personal-trace-line"
               style={{
-                lineColor: theme.mode === 'night' ? '#A8C7B6' : '#9BBEAA',
+                // R21-v3 v2: sunset 用暖珊瑚色 (和黄昏底图橙紫呼应),
+                // day/night 保留原绿色调 (探索感)
+                lineColor: memoryMapTheme === 'night'
+                  ? '#A8C7B6'
+                  : memoryMapTheme === 'sunset'
+                    ? '#E8A870'
+                    : '#9BBEAA',
                 lineWidth: 1.8,
                 lineOpacity: 0.96,
               }}

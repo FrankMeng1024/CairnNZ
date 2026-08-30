@@ -39,7 +39,8 @@ import { PinNudgeConfig } from '../config/plantConfig';
 // migrated to Colors tokens per design §12.
 import { Colors, Spacing, FontSize } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
-import { getPrimaryMapStyle } from '../../../config/mapbox';
+import { getPrimaryMapStyle, getStandardStyleURL, themeToStandardPreset, buildStandardConfig, buildStandardSatelliteConfig } from '../../../config/mapbox';
+import { useMapTheme } from '../../../hooks/useMapTheme';
 import { log } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
 import { BackButton } from '../../../components/BackButton';
@@ -61,7 +62,12 @@ interface Props {
   onBack: () => void;
 }
 
-const SATELLITE_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12';
+// R21-v3 v4 (2026-08-30): switched satellite branch from the classic
+// satellite-streets-v12 to the newer Mapbox Standard Satellite. Same
+// imagery source but with a Standard-style import basemap that respects
+// `lightPreset` (day/dusk/night) — so the satellite view now warms up at
+// dusk and dims at night in sync with the rest of Cairn's map surfaces.
+const SATELLITE_STYLE = 'mapbox://styles/mapbox/standard-satellite';
 
 // Zoom range — same physical bounds as v296. Below 14 the 50m ring
 // collapses to a few px; above 20 mapbox runs out of tile data.
@@ -124,6 +130,11 @@ export function PinAdjustStep({
   const originRef = useRef({ lat: gpsLat, lng: gpsLng });
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapStyle, setMapStyle] = useState<'outdoors' | 'satellite'>('outdoors');
+  // R21-v3 (2026-08-30): Plant uses Standard 3D basemap; the three-state
+  // theme controls the Standard style's lightPreset (day/dusk/night).
+  // Satellite view bypasses Standard entirely to keep raster imagery clean.
+  const plantMapTheme = useMapTheme();
+  const plantLightPreset = themeToStandardPreset(plantMapTheme);
   // Camera ref — used by the +/- zoom buttons to set both
   // centerCoordinate (locked to current pin) and zoomLevel in one
   // atomic call. Because we disable all native zoom gestures below,
@@ -415,7 +426,7 @@ export function PinAdjustStep({
                               onConfirm={() => onConfirm(pinLat, pinLng)}
                               onBack={onBack} />;
   }
-  const { MapView, Camera, ShapeSource, FillLayer, LineLayer } = Mapbox;
+  const { MapView, Camera, ShapeSource, FillLayer, LineLayer, StyleImport } = Mapbox;
 
   return (
     <View style={styles.container}>
@@ -436,7 +447,7 @@ export function PinAdjustStep({
       <View style={styles.mapWrap}>
         <MapView
           style={styles.map}
-          styleURL={mapStyle === 'satellite' ? SATELLITE_STYLE : getPrimaryMapStyle()}
+          styleURL={mapStyle === 'satellite' ? SATELLITE_STYLE : getStandardStyleURL()}
           compassEnabled={false}
           scaleBarEnabled={false}
           attributionEnabled={false}
@@ -458,11 +469,40 @@ export function PinAdjustStep({
           onMapIdle={onMapSettle}
           onCameraChanged={onCameraTick}
         >
+          {/* R21-v3 (2026-08-30): Standard style lightPreset — day/dusk/night
+              driven by useMapTheme. Satellite branch bypasses Standard so this
+              import has no target and would be a no-op; render only when the
+              basemap is actually Standard.
+              key={plantLightPreset} forces StyleImport remount whenever the
+              preset changes so the config is re-applied via a fresh native
+              attach (rnmapbox's StyleImport prop-diff reactivity is
+              unspecified — remount is the safe path and PinAdjust is a
+              short-lived screen so remount cost is negligible). */}
+          {/* R21-v3 v2 (2026-08-30): Standard style lightPreset — day/dusk/night
+              driven by useMapTheme. R21-v3 v4 (2026-08-30): satellite branch
+              now also uses Standard-Satellite which honours the basemap import.
+              R21-v3 v4b (2026-08-30): standard-satellite supports a strict
+              subset of config keys (no theme/font/show3d*); pass a satellite-
+              specific config to avoid "unknown property" warnings on native.
+              key={plantLightPreset} forces StyleImport remount whenever the
+              preset changes so the config is re-applied via a fresh native
+              attach. */}
+          {StyleImport ? (
+            <StyleImport
+              key={plantLightPreset}
+              id="basemap"
+              existing
+              config={(mapStyle === 'satellite'
+                ? buildStandardSatelliteConfig(plantMapTheme)
+                : buildStandardConfig(plantMapTheme)) as any}
+            />
+          ) : null}
           <Camera
             ref={cameraRef}
             defaultSettings={{
               centerCoordinate: [originRef.current.lng, originRef.current.lat],
               zoomLevel: INITIAL_ZOOM,
+              pitch: 0,
             }}
             minZoomLevel={MIN_ZOOM}
             maxZoomLevel={MAX_ZOOM}

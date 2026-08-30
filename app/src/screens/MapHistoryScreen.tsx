@@ -21,7 +21,7 @@ import { useRouteStore } from '../store/useRouteStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { crashLogger } from '../services/crashLogger';
 import { getCurrentRegion } from '../config/regions';
-import { getMapStyleForLayer, getPrimaryMapStyle } from '../config/mapbox';
+import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { formatDuration, formatDate, getRelativeTime, haversineM, kalmanInit, kalmanUpdate, simplifyPolyline } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
@@ -35,6 +35,7 @@ import { MARKER_META } from '../data/mockData';
 import type { TrackingSession } from '../store/useSessionStore';
 import type { Marker } from '../store/useMarkerStore';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { useMapTheme } from '../hooks/useMapTheme';
 
 // ── Conditional Mapbox import ─────────────────────────────────────────────
 // Native: render the track on top of a real Mapbox map. Web / Expo Go:
@@ -44,6 +45,7 @@ let CameraComponent: any = null;
 let LineLayer: any = null;
 let ShapeSource: any = null;
 let PointAnnotation: any = null;
+let StyleImport: any = null;
 if (Platform.OS !== 'web') {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -53,6 +55,7 @@ if (Platform.OS !== 'web') {
     LineLayer = Mapbox.LineLayer;
     ShapeSource = Mapbox.ShapeSource;
     PointAnnotation = Mapbox.PointAnnotation;
+    StyleImport = Mapbox.StyleImport;
   } catch {
     // @rnmapbox/maps not in this build — fallback panel will render.
   }
@@ -96,6 +99,10 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
   const color = session.activityMode === 'running' ? Colors.running : Colors.primary;
   // O18 MAP-01: react to user's saved map layer preference.
   const mapLayer = useSettingsStore((s) => s.mapLayer);
+  // R21-v3: three-state theme applied to every mapbox surface.
+  const mapTheme = useMapTheme();
+  const resolvedMapStyle = getMapStyleForTheme(mapLayer, mapTheme);
+  const historyLightPreset = themeToStandardPreset(mapTheme);
   // v198 Bug 5: track whether the user has panned the camera away from
   // the initial fit. When true, render a small recenter button that
   // re-fits to the route bbox. Pattern matches HikingScreen's recenter.
@@ -149,7 +156,9 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
     <View style={StyleSheet.absoluteFillObject}>
     <MapView
       style={StyleSheet.absoluteFillObject}
-      styleURL={getMapStyleForLayer(mapLayer)}
+      {...(resolvedMapStyle.kind === 'url'
+        ? { styleURL: resolvedMapStyle.url }
+        : { styleJSON: resolvedMapStyle.json })}
       logoEnabled={false}
       attributionEnabled={false}
       scaleBarEnabled={false}
@@ -164,6 +173,15 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
         }
       }}
     >
+      {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
+      {mapLayer !== 'satellite' && StyleImport ? (
+        <StyleImport
+          key={historyLightPreset}
+          id="basemap"
+          existing
+          config={buildStandardConfig(mapTheme) as any}
+        />
+      ) : null}
       {CameraComponent && (
         <CameraComponent
           ref={cameraRef}
@@ -175,6 +193,7 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
             paddingLeft: 40,
             paddingRight: 40,
           }}
+          pitch={0}
           animationDuration={0}
         />
       )}

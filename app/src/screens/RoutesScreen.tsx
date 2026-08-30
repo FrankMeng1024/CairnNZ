@@ -19,20 +19,19 @@ import { useMarkerStore, type Marker, type MarkerPermission } from '../store/use
 // longer decodes marker.note directly; MarkCard owns that.
 import { useTrackingStore } from '../store/useTrackingStore';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
-import { getPrimaryMapStyle } from '../config/mapbox';
+import { getPrimaryMapStyle, getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { Icon, type IconName } from '../components/Icon';
 import { HikingIcon, RunningIcon } from '../components/ActivityIcons';
 import { BackButton } from '../components/BackButton';
 import { PressBtn } from '../components/PressBtn';
 import { formatDuration, haversineM } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
-// R114 (2026-08-07): MARKER_META still needed for FLAG_TYPES filter panel.
-// MarkerType kept for MarkerPermission-adjacent typing.
-import { MARKER_META, type MarkerType } from '../data/mockData';
+import { type MarkerType } from '../data/mockData';
 // R114 (2026-08-07): canonical MarkCard import (post-Metro-restart).
 import { MarkCard } from '../features/marks/components/MarkCard';
 import { EmptyRoutes, EmptyMarkers, IllustrationHalo } from '../components/Illustrations';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { useMapTheme } from '../hooks/useMapTheme';
 
 // ── Mapbox conditional import (for RouteSheet preview) ────────────────────
 // Native-only — on web fallback to a static placeholder.
@@ -40,6 +39,7 @@ let MapView: any = null;
 let CameraComponent: any = null;
 let LineLayer: any = null;
 let ShapeSource: any = null;
+let StyleImport: any = null;
 if (Platform.OS !== 'web') {
   try {
     const Mapbox = require('@rnmapbox/maps');
@@ -47,6 +47,7 @@ if (Platform.OS !== 'web') {
     CameraComponent = Mapbox.Camera;
     LineLayer = Mapbox.LineLayer;
     ShapeSource = Mapbox.ShapeSource;
+    StyleImport = Mapbox.StyleImport;
   } catch {
     // @rnmapbox/maps not installed in this build (Expo Go) — fallback used.
   }
@@ -61,13 +62,6 @@ const FLAG_FILTERS: { id: MarkerType | 'all'; label: string }[] = [
   { id: 'cairn', label: 'Cairn' },
   { id: 'water', label: 'Water' },
   { id: 'junction', label: 'Junction' },
-];
-
-const FLAG_TYPES: { id: MarkerType; icon: IconName; label: string; color: string; bg: string }[] = [
-  { id: 'danger',   icon: 'TriangleAlert', label: 'Danger',   color: Colors.danger,    bg: Colors.dangerBg  },
-  { id: 'cairn',    icon: 'Mountain',      label: 'Cairn',    color: Colors.trail,     bg: 'rgba(181,130,61,0.10)' },
-  { id: 'water',    icon: 'Droplets',      label: 'Water',    color: Colors.success,   bg: Colors.successBg },
-  { id: 'junction', icon: 'Navigation2',   label: 'Junction', color: Colors.docOrange, bg: Colors.severityWarningBg },
 ];
 
 // ── Segment Control ──────────────────────────────────────────────────────────
@@ -300,6 +294,9 @@ function FilterSortBar<F extends string, S extends string>({
 // ── RouteSheet ────────────────────────────────────────────────────────────────
 // ── Route map preview (renders polyline of route.points) ───────────────────
 function RouteMapPreview({ points }: { points: { lat: number; lng: number }[] }) {
+  const routeMapTheme = useMapTheme();
+  const routeResolvedMapStyle = getMapStyleForTheme('outdoors', routeMapTheme);
+  const routeLightPreset = themeToStandardPreset(routeMapTheme);
   // Compute bounds for camera fit
   const bounds = useMemo(() => {
     if (!points || points.length < 2) return null;
@@ -336,7 +333,9 @@ function RouteMapPreview({ points }: { points: { lat: number; lng: number }[] })
     <View style={routePreviewStyles.mapWrap}>
       <MapView
         style={StyleSheet.absoluteFillObject}
-        styleURL={getPrimaryMapStyle()}
+        {...(routeResolvedMapStyle.kind === 'url'
+          ? { styleURL: routeResolvedMapStyle.url }
+          : { styleJSON: routeResolvedMapStyle.json })}
         logoEnabled={false}
         attributionEnabled={false}
         compassEnabled={false}
@@ -346,9 +345,20 @@ function RouteMapPreview({ points }: { points: { lat: number; lng: number }[] })
         rotateEnabled={false}
         pitchEnabled={false}
       >
+        {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
+        {StyleImport ? (
+          <StyleImport
+            key={routeLightPreset}
+            id="basemap"
+            existing
+            config={buildStandardConfig(routeMapTheme) as any}
+          />
+        ) : null}
         {CameraComponent && (
           <CameraComponent
             bounds={{ ne: bounds.ne, sw: bounds.sw, paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24 }}
+            pitch={0}
+            maxZoomLevel={16}
             animationDuration={0}
           />
         )}
@@ -913,189 +923,6 @@ function ActivitiesTab() {
   );
 }
 
-// ── FlagEditSheet — mirrors MapScreen's EditMarkerSheet exactly ───────────────
-function FlagEditSheet({
-  marker, onClose, onSave, onDelete,
-}: {
-  marker: Marker | null;
-  onClose: () => void;
-  onSave: (id: string, type: MarkerType, note: string, permission: MarkerPermission) => void;
-  onDelete: (id: string) => void;
-}) {
-  const nav = useNavigation<Nav>();
-  const insets = useSafeAreaInsets();
-  const [selectedType, setSelectedType] = useState<MarkerType | null>(null);
-  const [text, setText] = useState('');
-  const [permission, setPermission] = useState<MarkerPermission>('personal');
-  const [textFocused, setTextFocused] = useState(false);
-  const slideAnim = useRef(new Animated.Value(400)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const snapshot = useRef(marker);
-  if (marker !== null) snapshot.current = marker;
-  const data = snapshot.current;
-  const isVisible = useRef(false);
-
-  const dismiss = (then?: () => void) => {
-    Animated.parallel([
-      Animated.timing(slideAnim, { toValue: 400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      Animated.timing(opacityAnim, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-    ]).start(() => { isVisible.current = false; onClose(); then?.(); });
-  };
-
-  useEffect(() => {
-    if (marker) {
-      setSelectedType(marker.type as MarkerType);
-      setText(marker.note ?? '');
-      setPermission((marker.permission as MarkerPermission) ?? 'personal');
-    }
-  }, [marker?.id]);
-
-  useEffect(() => {
-    if (marker !== null) {
-      isVisible.current = true;
-      slideAnim.setValue(400);
-      opacityAnim.setValue(0);
-      Animated.parallel([
-        Animated.timing(slideAnim, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-        Animated.timing(opacityAnim, { toValue: 1, duration: 220, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-      ]).start();
-    }
-  }, [marker?.id]);
-
-  if (marker === null && !isVisible.current) return null;
-  if (!data) return null;
-
-  const permIconNames: Record<MarkerPermission, IconName> = { personal: 'Lock', group: 'Users', public: 'Globe' };
-  const permLabels: Record<MarkerPermission, string> = { personal: 'Just me', group: 'Friends', public: 'Public' };
-
-  const confirmDelete = () => {
-    Alert.alert(
-      'Delete cairn',
-      `Delete "${data.note || 'this cairn'}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => dismiss(() => onDelete(data.id)) },
-      ]
-    );
-  };
-
-  return (
-    // No dark overlay — sheet slides up over transparent background
-    <Animated.View style={[sheetStyles.container, { opacity: opacityAnim }]}>
-      <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => dismiss()} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <Animated.View style={[sheetStyles.sheet, { transform: [{ translateY: slideAnim }], paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
-          <View style={sheetStyles.handle} />
-
-          {/* Header: title + map pin + close */}
-          <View style={sheetStyles.headerRow}>
-            <Text style={sheetStyles.title}>Edit Flag</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-              {/* View on map — icon button in header, away from Delete */}
-              <PressBtn
-                style={sheetStyles.mapBtn}
-                onPress={() => dismiss(() => nav.navigate('Map' as any, { focusLat: data.lat, focusLng: data.lng, focusMarkerId: data.id }))}
-                scaleTo={0.92}
-              >
-                <Icon name="MapPin" size={14} color={Colors.primary} strokeWidth={2} />
-              </PressBtn>
-              <PressBtn style={sheetStyles.closeBtn} onPress={() => dismiss()} scaleTo={0.9}>
-                <Icon name="X" size={IconSize.sm} color={Colors.textSecondary} strokeWidth={2.5} />
-              </PressBtn>
-            </View>
-          </View>
-
-          {/* Type grid — identical to MapScreen: gradient badge + check mark */}
-          <View style={sheetStyles.typeGrid}>
-            {FLAG_TYPES.map((flag) => {
-              const isSelected = selectedType === flag.id;
-              return (
-                <TouchableOpacity
-                  key={flag.id}
-                  style={[sheetStyles.typeCard, isSelected && sheetStyles.typeCardSelected]}
-                  onPress={() => { setSelectedType(flag.id); haptic.impact('light'); }}
-                  activeOpacity={0.8}
-                >
-                  <LinearGradient
-                    colors={[flag.bg, flag.bg]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                    style={[sheetStyles.typeIconBadge, { borderColor: flag.color + '40' }]}
-                  >
-                    <Icon name={flag.icon} size={IconSize.md} color={flag.color} strokeWidth={2} />
-                  </LinearGradient>
-                  <Text style={[sheetStyles.typeCardLabel, { color: isSelected ? Colors.primary : Colors.textSecondary }]}>
-                    {flag.label}
-                  </Text>
-                  {isSelected && (
-                    <View style={sheetStyles.typeCardCheck}>
-                      <Icon name="CircleCheck" size={14} color={Colors.primary} strokeWidth={2.5} />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Note input — identical to MapScreen */}
-          <View style={sheetStyles.noteWrap}>
-            <TextInput
-              style={[sheetStyles.noteInput, textFocused && sheetStyles.noteInputFocused, text.length >= 50 && sheetStyles.noteInputError]}
-              placeholder="Describe this spot… (optional)"
-              placeholderTextColor={Colors.textMuted}
-              value={text}
-              onChangeText={(t) => setText(t.slice(0, 50))}
-              multiline
-              numberOfLines={2}
-              onFocus={() => setTextFocused(true)}
-              onBlur={() => setTextFocused(false)}
-            />
-            <View style={sheetStyles.noteFooterRow}>
-              <Text style={sheetStyles.noteMaxLabel}>Max 50 characters</Text>
-              {(textFocused || text.length > 0) && (
-                <Text style={[sheetStyles.charCount, text.length >= 50 ? { color: Colors.danger } : text.length >= 40 ? { color: Colors.severityCaution } : null]}>
-                  {text.length}/50
-                </Text>
-              )}
-            </View>
-          </View>
-
-          {/* Permission pills — identical to MapScreen */}
-          <View style={sheetStyles.permRow}>
-            {(['personal', 'group', 'public'] as const).map((p) => {
-              const active = permission === p;
-              return (
-                <TouchableOpacity key={p} style={[sheetStyles.permPill, active && sheetStyles.permPillActive]} onPress={() => setPermission(p)}>
-                  <Icon name={permIconNames[p]} size={14} color={active ? Colors.primary : Colors.textSecondary} strokeWidth={1.8} />
-                  <Text style={[sheetStyles.permPillLabel, active && sheetStyles.permPillLabelActive]}>{permLabels[p]}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Actions: Delete (ghost left) + Save Changes (solid right) */}
-          <View style={sheetStyles.actions}>
-            <PressBtn style={sheetStyles.deleteBtn} onPress={confirmDelete} scaleTo={0.96}>
-              <Icon name="Trash2" size={14} color={Colors.danger} strokeWidth={2} />
-              <Text style={sheetStyles.deleteBtnText}>Delete</Text>
-            </PressBtn>
-            <PressBtn
-              style={sheetStyles.saveBtn}
-              onPress={() => {
-                if (!selectedType) return;
-                onSave(data.id, selectedType, text, permission);
-                dismiss();
-              }}
-              scaleTo={0.96}
-            >
-              <Icon name="Check" size={IconSize.sm} color="#fff" strokeWidth={2} />
-              <Text style={sheetStyles.saveBtnText}>Save Changes</Text>
-            </PressBtn>
-          </View>
-        </Animated.View>
-      </KeyboardAvoidingView>
-    </Animated.View>
-  );
-}
 
 // ── Flags Tab ────────────────────────────────────────────────────────────────
 const PERM_FILTERS: { id: MarkerPermission | 'all'; icon: IconName }[] = [
@@ -1129,10 +956,6 @@ function FlagsTab() {
   // v375 STORY-00537: track whether the first Friends fetch has settled
   // — same flicker-prevention pattern as RoutesTab.
   const [hasFetchedFriends, setHasFetchedFriends] = useState(false);
-  // v299 N8: flags now open the read-only MarkerDetailScreen instead
-  // of the in-place FlagEditSheet. Editing/deleting is no longer
-  // exposed from this tab — per user spec, planted cairns are
-  // immutable.
   const nav = useNavigation<Nav>();
 
   // Lazy-load friend markers when the user first switches to Friends.
@@ -1306,8 +1129,6 @@ function FlagsTab() {
         }}
         ListEmptyComponent={<View style={{ padding: Spacing.xl, alignItems: 'center' }}><Text style={[styles.emptyHint, { color: theme.foregroundSecondary }]}>No matching cairns. Try a different filter.</Text></View>}
       />
-      {/* v299 N8: FlagEditSheet removed — Flags now navigate to
-          read-only MarkerDetailScreen. */}
         </>
       )}
     </View>

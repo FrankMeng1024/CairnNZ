@@ -30,6 +30,12 @@ interface MapboxAdapter {
   // react-native-svg CAShapeLayer (commits on next CATransaction, ~16ms after
   // PointAnnotation's 10μs delay). MarkerView attaches actual UIView to map.
   MarkerView: any;
+  /**
+   * R21-v3 (2026-08-30) — Standard style config injector. Used by Plant
+   * PinAdjust to set lightPreset (day/dusk/night). Only defined on native
+   * (Mapbox v11+); web shim leaves it null.
+   */
+  StyleImport: any;
   available: boolean;
 }
 
@@ -70,6 +76,7 @@ export function getMapbox(): MapboxAdapter {
       Images: m.Images,
       Image: m.Image,
       MarkerView: m.MarkerView,
+      StyleImport: m.StyleImport,
       available: true,
     };
   } catch {
@@ -92,6 +99,7 @@ function makeUnavailable(): MapboxAdapter {
     Images: null,
     Image: null,
     MarkerView: null,
+    StyleImport: null,
     available: false,
   };
 }

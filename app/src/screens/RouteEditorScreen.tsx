@@ -46,6 +46,8 @@ import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
 import { debugLogger } from '../services/debugLogger';
 import { telemetryUploader } from '../services/telemetryUploader';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { useMapTheme } from '../hooks/useMapTheme';
+import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 
 // Conditional Mapbox import — same pattern as RoutesScreen.
 let MapView: any = null;
@@ -56,6 +58,7 @@ let ShapeSource: any = null;
 // builds may not export them — guarded `?? null` keeps the screen working.
 let RasterDemSource: any = null;
 let TerrainComponent: any = null;
+let StyleImport: any = null;
 if (Platform.OS !== 'web') {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -66,6 +69,7 @@ if (Platform.OS !== 'web') {
     ShapeSource = Mapbox.ShapeSource;
     RasterDemSource = Mapbox.RasterDemSource ?? null;
     TerrainComponent = Mapbox.Terrain ?? null;
+    StyleImport = Mapbox.StyleImport ?? null;
   } catch {
     // Not available — fallback panel renders.
   }
@@ -75,6 +79,9 @@ const SAVE_FRACTION_FLAG = 'editModeEnabled';
 
 export function RouteEditorScreen() {
   const visualTheme = useVisualTheme();
+  const editorMapTheme = useMapTheme();
+  const editorResolvedMapStyle = getMapStyleForTheme('outdoors', editorMapTheme);
+  const editorLightPreset = themeToStandardPreset(editorMapTheme);
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
   const route = useRoute<any>();
@@ -733,7 +740,9 @@ export function RouteEditorScreen() {
           <MapView
             ref={mapViewRef}
             style={StyleSheet.absoluteFillObject}
-            styleURL="mapbox://styles/mapbox/outdoors-v12"
+            {...(editorResolvedMapStyle.kind === 'url'
+              ? { styleURL: editorResolvedMapStyle.url }
+              : { styleJSON: editorResolvedMapStyle.json })}
             logoEnabled={false}
             attributionEnabled={false}
             scaleBarEnabled={false}
@@ -762,18 +771,33 @@ export function RouteEditorScreen() {
               } catch { /* swallow */ }
             }}
           >
+            {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
+            {StyleImport ? (
+              <StyleImport
+                key={editorLightPreset}
+                id="basemap"
+                existing
+                config={buildStandardConfig(editorMapTheme) as any}
+              />
+            ) : null}
             {/* v6.3 plan §2.3: enable Terrain DEM so queryTerrainElevation()
                 returns real altitudes for Mapbox-snap polylines. Optional —
                 falls through if the SDK build doesn't export RasterDemSource. */}
             {RasterDemSource && TerrainComponent && (
               <>
+                {/* R21-v3 v2 (2026-08-30): Standard basemap already ships
+                    with its own internal `mapbox-dem` source and terrain.
+                    Adding a second source with the SAME id collides on
+                    native and can silently override Standard's terrain.
+                    Use a distinct id so queryTerrainElevation still has
+                    a source to query without stomping Standard's setup. */}
                 <RasterDemSource
-                  id="mapbox-dem"
+                  id="cairn-editor-dem"
                   url="mapbox://mapbox.mapbox-terrain-dem-v1"
                   tileSize={514}
                   maxZoomLevel={14}
                 />
-                <TerrainComponent sourceID="mapbox-dem" exaggeration={1} />
+                <TerrainComponent sourceID="cairn-editor-dem" exaggeration={0} />
               </>
             )}
             {CameraComponent && (() => {
@@ -793,6 +817,7 @@ export function RouteEditorScreen() {
                       paddingLeft: 40,
                       paddingRight: 40,
                     }}
+                    pitch={0}
                     animationDuration={isEditing ? 300 : 0}
                   />
                 );
@@ -807,6 +832,7 @@ export function RouteEditorScreen() {
                   ref={cameraRef}
                   centerCoordinate={fallbackCenter}
                   zoomLevel={fallbackZoom}
+                  pitch={0}
                   animationDuration={0}
                 />
               );

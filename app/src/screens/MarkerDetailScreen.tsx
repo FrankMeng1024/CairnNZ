@@ -49,7 +49,7 @@ import { MarkForm } from '../features/marks/components/MarkForm';
 // looked nothing like the v10 design users see on the Memory map — visual
 // inconsistency between "where I saw it" and "where I tap to read it".
 import { CairnPin, resolveTier } from '../features/memory/components/CairnPinsLayer';
-import { getPrimaryMapStyle } from '../config/mapbox';
+import { getPrimaryMapStyle, getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { formatDate } from '../utils/geo';
 import { log } from '../services/appLog';
 import { ContentConfig, VisibilityConfig } from '../features/plant/config/plantConfig';
@@ -58,11 +58,13 @@ import { SyncBadge } from '../components/SyncBadge';
 // v422 D 类: marker edit/delete 是"回家做"的动作, 无网禁用按钮 + 提示
 import { useOnlineOnly } from '../hooks/useOnlineOnly';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { useMapTheme } from '../hooks/useMapTheme';
 
 let MapView: any = null;
 let CameraComponent: any = null;
 let PointAnnotation: any = null;
 let MarkerView: any = null;
+let StyleImport: any = null;
 if (Platform.OS !== 'web') {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -71,6 +73,7 @@ if (Platform.OS !== 'web') {
     CameraComponent = Mapbox.Camera;
     PointAnnotation = Mapbox.PointAnnotation;
     MarkerView = Mapbox.MarkerView;
+    StyleImport = Mapbox.StyleImport;
   } catch {}
 } else {
   try {
@@ -82,6 +85,7 @@ if (Platform.OS !== 'web') {
       CameraComponent = m.Camera;
       PointAnnotation = m.PointAnnotation;
       MarkerView = m.MarkerView;
+      StyleImport = m.StyleImport;
     }
   } catch {}
 }
@@ -100,6 +104,9 @@ const VISIBILITY_LABEL: Record<MarkerPermission, { label: string; iconName: Icon
 
 export function MarkerDetailScreen() {
   const visualTheme = useVisualTheme();
+  const markerMapTheme = useMapTheme();
+  const markerResolvedMapStyle = getMapStyleForTheme('outdoors', markerMapTheme);
+  const markerLightPreset = themeToStandardPreset(markerMapTheme);
   const nav = useNavigation<Nav>();
   const route = useRoute<DetailRoute>();
   const markerId = route.params?.markerId;
@@ -226,12 +233,23 @@ export function MarkerDetailScreen() {
         {MapView ? (
           <MapView
             style={styles.map}
-            styleURL={getPrimaryMapStyle()}
+            {...(markerResolvedMapStyle.kind === 'url'
+              ? { styleURL: markerResolvedMapStyle.url }
+              : { styleJSON: markerResolvedMapStyle.json })}
             compassEnabled={false}
             scaleBarEnabled={false}
             attributionEnabled={false}
             logoEnabled={false}
           >
+            {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
+            {StyleImport ? (
+              <StyleImport
+                key={markerLightPreset}
+                id="basemap"
+                existing
+                config={buildStandardConfig(markerMapTheme) as any}
+              />
+            ) : null}
             <CameraComponent
               defaultSettings={{
                 centerCoordinate: [marker.lng, marker.lat],
@@ -240,6 +258,7 @@ export function MarkerDetailScreen() {
                 // Previous zoom was too tight — cairn floated in a blank
                 // green area with no landmarks.
                 zoomLevel: 15,
+                pitch: 0,
               }}
             />
             {MarkerView ? (

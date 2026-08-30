@@ -40,7 +40,7 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress }: Back
   const nav = useNavigation();
   const scale = useRef(new Animated.Value(1)).current;
   // R21 (2026-08-18): dark-aware colour. Ink becomes cream on night bg
-  // so the inline back stays readable on Hike / MapScreen dark overlays.
+  // so the inline back stays readable on Hike / dark map overlays.
   const theme = useVisualTheme();
   const inkColor = theme.iconActive;
 

@@ -97,12 +97,12 @@ test.describe('Post-Cleanup Regression — v416', () => {
     expect(critical, `Console errors:\n${errors.join('\n')}`).toEqual([]);
   });
 
-  test('02. Home has Hike/Run/Map/Routes/Friends/Memory tabs visible', async ({ page }) => {
+  test('02. Home has Hike/Run/Routes/Friends/Memory tabs visible', async ({ page }) => {
     await seedAuth(page);
     await goHomeWithConsole(page);
     // Look for tab labels regardless of exact icons/casing
     const bodyText = await page.textContent('body');
-    const foundTabs = ['Hik', 'Run', 'Map', 'Route', 'Friend', 'Memory'].filter(
+    const foundTabs = ['Hik', 'Run', 'Route', 'Friend', 'Memory'].filter(
       t => bodyText?.toLowerCase().includes(t.toLowerCase())
     );
     await page.screenshot({ path: `${EVIDENCE}/02-tabs.png` });

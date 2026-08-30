@@ -29,7 +29,6 @@ NEW_ERRORS=$(echo "$TSC_OUT" | grep -v "Sprint 35" \
   | grep -v "RoutesScreen.tsx" \
   | grep -v "RunningScreen.tsx(273" \
   | grep -v "RootNavigator.tsx(54" \
-  | grep -v "MapScreen.tsx(598" \
   | grep -v "mapbox-gl" \
   | grep ": error" || true)
 if [ -n "$NEW_ERRORS" ]; then
