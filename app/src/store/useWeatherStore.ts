@@ -14,6 +14,7 @@
 import { create } from 'zustand';
 import { storage } from './storage';
 import type { ScenicTimeOfDay } from '../utils/scenicTime';
+import type { HikingIconCandidate, RunningIconCandidate } from '../components/home/HomeActionCandidateIcon';
 
 // WMO Weather Interpretation Codes → simplified condition bucket
 // https://open-meteo.com/en/docs#weathervariables
@@ -80,12 +81,17 @@ interface WeatherState {
   /** R21 (2026-08-17 DEV-only): force a specific weather condition.
    * null = use real weather from API. Any bucket = show that bg. */
   conditionOverride: WeatherCondition | null;
+  /** Dev-only Home action review overrides. Null preserves production icons. */
+  hikingIconCandidate: HikingIconCandidate | null;
+  runningIconCandidate: RunningIconCandidate | null;
 
   fetchWeather: (lat: number, lon: number) => Promise<void>;
   setLocationOverride: (city: LocationOverride | null) => void;
   setDayNightOverride: (v: 'day' | 'night' | null) => void;
   setTimeOfDayOverride: (v: ScenicTimeOfDay | null) => void;
   setConditionOverride: (v: WeatherCondition | null) => void;
+  setHikingIconCandidate: (v: HikingIconCandidate | null) => void;
+  setRunningIconCandidate: (v: RunningIconCandidate | null) => void;
   /** Recompute isDaytime from current clock — call on foreground resume. */
   refreshDaytime: () => void;
 }
@@ -152,6 +158,8 @@ export const useWeatherStore = create<WeatherState>((set, get) => ({
   dayNightOverride: null,
   timeOfDayOverride: null,
   conditionOverride: null,
+  hikingIconCandidate: null,
+  runningIconCandidate: null,
 
   fetchWeather: async (lat: number, lon: number) => {
     const now = Date.now();
@@ -231,6 +239,9 @@ export const useWeatherStore = create<WeatherState>((set, get) => ({
   setConditionOverride: (v) => {
     set({ conditionOverride: v });
   },
+
+  setHikingIconCandidate: (v) => set({ hikingIconCandidate: v }),
+  setRunningIconCandidate: (v) => set({ runningIconCandidate: v }),
 
   refreshDaytime: () => {
     set({ isDaytime: computeIsDaytime() });

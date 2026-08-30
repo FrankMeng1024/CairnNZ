@@ -33,6 +33,7 @@ import { MARKER_META, type MarkerType } from '../data/mockData';
 import { MarkCard } from '../features/marks/components/MarkCard';
 import { EmptyRoutes, EmptyMarkers, IllustrationHalo } from '../components/Illustrations';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { SegmentedControl as PillTabs } from '../components/SegmentedControl';
 
 // ── Mapbox conditional import (for RouteSheet preview) ────────────────────
 // Native-only — on web fallback to a static placeholder.
@@ -72,7 +73,6 @@ const FLAG_TYPES: { id: MarkerType; icon: IconName; label: string; color: string
 
 // ── Segment Control ──────────────────────────────────────────────────────────
 function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const theme = useVisualTheme();
   // v119: tab order: Activities first (the source of truth — every walked
   // session lives here), then Routes (curated, derived from Activities),
   // then Flags (place markers). This matches user mental model: "I want
@@ -82,15 +82,7 @@ function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) 
     { id: 'routes', label: 'Routes' },
     { id: 'flags', label: 'Cairns' },
   ];
-  return (
-    <View style={[segStyles.container, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
-      {tabs.map(t => (
-        <TouchableOpacity key={t.id} style={[segStyles.tab, active === t.id && segStyles.tabActive, active === t.id ? { backgroundColor: theme.primary } : null]} onPress={() => onChange(t.id)} activeOpacity={0.8}>
-          <Text style={[segStyles.tabText, active === t.id && segStyles.tabTextActive, { color: active === t.id ? theme.onPrimary : theme.foregroundSecondary }]}>{t.label}</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
+  return <PillTabs value={active} segments={tabs.map(t => ({ key: t.id, label: t.label }))} onChange={onChange} containerStyle={segStyles.container} testID="trails-tabs" />;
 }
 
 // Sprint 69 STORY-00537 + STORY-00538: scope sub-tab used inside Flags
@@ -103,26 +95,11 @@ function ScopeTabBar({
   scope: 'mine' | 'friends';
   onChange: (s: 'mine' | 'friends') => void;
 }) {
-  const theme = useVisualTheme();
   const SCOPES: { id: 'mine' | 'friends'; label: string }[] = [
     { id: 'mine', label: 'Mine' },
     { id: 'friends', label: 'Friends' },
   ];
-  return (
-    <View style={scopeStyles.row} testID="scope-tab-bar">
-      {SCOPES.map(s => (
-        <TouchableOpacity
-          key={s.id}
-          style={[scopeStyles.btn, scope === s.id && scopeStyles.btnActive, scope === s.id ? { borderBottomColor: theme.primary } : null]}
-          onPress={() => onChange(s.id)}
-          activeOpacity={0.7}
-          testID={`scope-${s.id}`}
-        >
-          <Text style={[scopeStyles.text, scope === s.id && scopeStyles.textActive, { color: scope === s.id ? theme.primary : theme.foregroundSecondary }]}>{s.label}</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
+  return <PillTabs value={scope} segments={SCOPES.map(s => ({ key: s.id, label: s.label }))} onChange={onChange} containerStyle={scopeStyles.row} testID="scope-tab-bar" />;
 }
 
 const scopeStyles = StyleSheet.create({
@@ -300,6 +277,7 @@ function FilterSortBar<F extends string, S extends string>({
 // ── RouteSheet ────────────────────────────────────────────────────────────────
 // ── Route map preview (renders polyline of route.points) ───────────────────
 function RouteMapPreview({ points }: { points: { lat: number; lng: number }[] }) {
+  const theme = useVisualTheme();
   // Compute bounds for camera fit
   const bounds = useMemo(() => {
     if (!points || points.length < 2) return null;
@@ -325,9 +303,9 @@ function RouteMapPreview({ points }: { points: { lat: number; lng: number }[] })
   if (!MapView || !points || points.length < 2 || !bounds) {
     // Fallback when Mapbox unavailable or route has too few points
     return (
-      <View style={routePreviewStyles.fallback}>
-        <Icon name="Map" size={28} color={Colors.primaryMuted} />
-        <Text style={routePreviewStyles.fallbackText}>Route preview</Text>
+      <View style={[routePreviewStyles.fallback, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <Icon name="Map" size={IconSize.lg} color={theme.iconInactive} />
+        <Text style={[routePreviewStyles.fallbackText, { color: theme.foregroundSecondary }]}>Route preview</Text>
       </View>
     );
   }
@@ -382,6 +360,7 @@ function RouteSheet({
    *  preview; only the owner actions are suppressed. */
   readOnly?: boolean;
 }) {
+  const theme = useVisualTheme();
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(400)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -427,16 +406,16 @@ function RouteSheet({
   const lastRun = data.lastRunAt ? new Date(data.lastRunAt).toLocaleDateString() : null;
 
   return (
-    <Animated.View style={[sheetStyles.container, { opacity: opacityAnim }]}>
+    <Animated.View style={[sheetStyles.container, { opacity: opacityAnim, backgroundColor: theme.readabilityScrim }]}>
       <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => dismiss()} />
-      <Animated.View style={[sheetStyles.sheet, { transform: [{ translateY: slideAnim }], paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
-        <View style={sheetStyles.handle} />
+      <Animated.View style={[sheetStyles.sheet, { transform: [{ translateY: slideAnim }], paddingBottom: Math.max(insets.bottom, Spacing.xl), backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow }]}>
+        <View style={[sheetStyles.handle, { backgroundColor: theme.border }]} />
 
         {/* Header */}
         <View style={sheetStyles.headerRow}>
-          <Text style={sheetStyles.title} numberOfLines={1}>{data.name}</Text>
-          <PressBtn style={sheetStyles.closeBtn} onPress={() => dismiss()} scaleTo={0.9}>
-            <Icon name="X" size={IconSize.sm} color={Colors.textSecondary} strokeWidth={2.5} />
+          <Text style={[sheetStyles.title, { color: theme.foreground }]} numberOfLines={1}>{data.name}</Text>
+          <PressBtn style={[sheetStyles.closeBtn, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => dismiss()} scaleTo={0.9}>
+            <Icon name="X" size={IconSize.sm} color={theme.icon} strokeWidth={2.25} />
           </PressBtn>
         </View>
 
@@ -446,30 +425,30 @@ function RouteSheet({
             originating activity) where editing actually happens. */}
 
         {/* Stats row */}
-        <View style={routeSheetStyles.statsRow}>
+        <View style={[routeSheetStyles.statsRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={routeSheetStyles.statItem}>
-            <Icon name="Milestone" size={14} color={Colors.primary} strokeWidth={2} />
-            <Text style={routeSheetStyles.statValue}>{dist.format(data.distanceM, 1)} {dist.unit}</Text>
+            <Icon name="Milestone" size={14} color={theme.iconActive} strokeWidth={2} />
+            <Text style={[routeSheetStyles.statValue, { color: theme.foreground }]}>{dist.format(data.distanceM, 1)} {dist.unit}</Text>
           </View>
-          <View style={routeSheetStyles.statDivider} />
+          <View style={[routeSheetStyles.statDivider, { backgroundColor: theme.border }]} />
           <View style={routeSheetStyles.statItem}>
-            <Icon name="TrendingUp" size={14} color={Colors.primary} strokeWidth={2} />
-            <Text style={routeSheetStyles.statValue}>{dist.formatElevation(data.elevationGainM)} {dist.elevUnit}</Text>
+            <Icon name="TrendingUp" size={14} color={theme.iconActive} strokeWidth={2} />
+            <Text style={[routeSheetStyles.statValue, { color: theme.foreground }]}>{dist.formatElevation(data.elevationGainM)} {dist.elevUnit}</Text>
           </View>
-          <View style={routeSheetStyles.statDivider} />
+          <View style={[routeSheetStyles.statDivider, { backgroundColor: theme.border }]} />
           <View style={routeSheetStyles.statItem}>
-            <Icon name="Flag" size={14} color={Colors.primary} strokeWidth={2} />
-            <Text style={routeSheetStyles.statValue}>{data.waypoints.length} waypoints</Text>
+            <Icon name="Flag" size={14} color={theme.iconActive} strokeWidth={2} />
+            <Text style={[routeSheetStyles.statValue, { color: theme.foreground }]}>{data.waypoints.length} waypoints</Text>
           </View>
-          <View style={routeSheetStyles.statDivider} />
+          <View style={[routeSheetStyles.statDivider, { backgroundColor: theme.border }]} />
           <View style={routeSheetStyles.statItem}>
-            <Icon name="RotateCcw" size={14} color={Colors.primary} strokeWidth={2} />
-            <Text style={routeSheetStyles.statValue}>{data.runCount}× used</Text>
+            <Icon name="RotateCcw" size={14} color={theme.iconActive} strokeWidth={2} />
+            <Text style={[routeSheetStyles.statValue, { color: theme.foreground }]}>{data.runCount}× used</Text>
           </View>
         </View>
 
         {lastRun && (
-          <Text style={routeSheetStyles.lastRun}>Last used {lastRun}</Text>
+          <Text style={[routeSheetStyles.lastRun, { color: theme.muted }]}>Last used {lastRun}</Text>
         )}
 
         {/* Actions — v122 fix #8: a single View button (full-width
@@ -482,13 +461,13 @@ function RouteSheet({
             a "Save as my route" affordance (out of scope here). */}
         <View style={sheetStyles.actions}>
           <PressBtn
-            style={[sheetStyles.saveBtn, { flex: 1, opacity: readOnly ? 0.5 : 1 }]}
+            style={[sheetStyles.saveBtn, { flex: 1, opacity: readOnly ? 0.5 : 1, backgroundColor: theme.primary }]}
             onPress={() => { if (!readOnly) dismiss(() => onEdit(data.id)); }}
             scaleTo={readOnly ? 1 : 0.96}
             disabled={readOnly}
           >
-            <Icon name="Map" size={14} color="#fff" strokeWidth={2} />
-            <Text style={sheetStyles.saveBtnText}>{readOnly ? 'Friend route (view only)' : 'View'}</Text>
+            <Icon name="Map" size={14} color={theme.onPrimary} strokeWidth={2} />
+            <Text style={[sheetStyles.saveBtnText, { color: theme.onPrimary }]}>{readOnly ? 'Friend route (view only)' : 'View'}</Text>
           </PressBtn>
         </View>
       </Animated.View>
@@ -503,6 +482,7 @@ function ActivitySheet({
   session: import('../store/useSessionStore').TrackingSession | null;
   onClose: () => void;
 }) {
+  const theme = useVisualTheme();
   const nav = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const deleteSession = useSessionStore(s => s.deleteSession);
@@ -542,7 +522,7 @@ function ActivitySheet({
   if (!data) return null;
 
   const isRun = data.activityMode === 'running';
-  const accent = isRun ? Colors.running : Colors.primary;
+  const accent = isRun ? Colors.running : theme.iconActive;
   const date = new Date(data.startedAt);
   const dateStr = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
 
@@ -552,31 +532,31 @@ function ActivitySheet({
   };
 
   return (
-    <Animated.View style={[sheetStyles.container, { opacity: opacityAnim }]}>
+    <Animated.View style={[sheetStyles.container, { opacity: opacityAnim, backgroundColor: theme.readabilityScrim }]}>
       <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => dismiss()} />
-      <Animated.View style={[sheetStyles.sheet, { transform: [{ translateY: slideAnim }], paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
-        <View style={sheetStyles.handle} />
+      <Animated.View style={[sheetStyles.sheet, { transform: [{ translateY: slideAnim }], paddingBottom: Math.max(insets.bottom, Spacing.xl), backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow }]}>
+        <View style={[sheetStyles.handle, { backgroundColor: theme.border }]} />
 
         {/* Header */}
         <View style={sheetStyles.headerRow}>
-          <Text style={sheetStyles.title}>{data.name || (isRun ? 'Run' : 'Hike')}</Text>
-          <PressBtn style={sheetStyles.closeBtn} onPress={() => dismiss()} scaleTo={0.9}>
-            <Icon name="X" size={IconSize.sm} color={Colors.textSecondary} strokeWidth={2.5} />
+          <Text style={[sheetStyles.title, { color: theme.foreground }]}>{data.name || (isRun ? 'Run' : 'Hike')}</Text>
+          <PressBtn style={[sheetStyles.closeBtn, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => dismiss()} scaleTo={0.9}>
+            <Icon name="X" size={IconSize.sm} color={theme.icon} strokeWidth={2.25} />
           </PressBtn>
         </View>
 
         {/* Stats row */}
-        <View style={routeSheetStyles.statsRow}>
+        <View style={[routeSheetStyles.statsRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={routeSheetStyles.statItem}>
             <Icon name="Calendar" size={14} color={accent} strokeWidth={2} />
             <Text style={[routeSheetStyles.statValue, { color: accent }]}>{dateStr}</Text>
           </View>
-          <View style={routeSheetStyles.statDivider} />
+          <View style={[routeSheetStyles.statDivider, { backgroundColor: theme.border }]} />
           <View style={routeSheetStyles.statItem}>
             <Icon name="Milestone" size={14} color={accent} strokeWidth={2} />
             <Text style={[routeSheetStyles.statValue, { color: accent }]}>{dist.format(data.distanceM, 1)} {dist.unit}</Text>
           </View>
-          <View style={routeSheetStyles.statDivider} />
+          <View style={[routeSheetStyles.statDivider, { backgroundColor: theme.border }]} />
           <View style={routeSheetStyles.statItem}>
             <Icon name="Timer" size={14} color={accent} strokeWidth={2} />
             <Text style={[routeSheetStyles.statValue, { color: accent }]}>{formatDuration(data.durationS)}</Text>
@@ -588,12 +568,12 @@ function ActivitySheet({
             entry points was redundant and made the row feel cramped. */}
         <View style={sheetStyles.actions}>
           <PressBtn
-            style={[sheetStyles.saveBtn, { flex: 1 }]}
+            style={[sheetStyles.saveBtn, { flex: 1, backgroundColor: theme.primary }]}
             onPress={() => dismiss(() => nav.navigate('MapHistory', { sessionId: data.id }))}
             scaleTo={0.96}
           >
-            <Icon name="Map" size={14} color="#fff" strokeWidth={2} />
-            <Text style={sheetStyles.saveBtnText}>View</Text>
+            <Icon name="Map" size={14} color={theme.onPrimary} strokeWidth={2} />
+            <Text style={[sheetStyles.saveBtnText, { color: theme.onPrimary }]}>View</Text>
           </PressBtn>
         </View>
       </Animated.View>
@@ -1361,7 +1341,10 @@ export function RoutesScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       <View style={[styles.header, { backgroundColor: theme.background }]}>
         <BackButton variant="inline" onPress={() => nav.goBack()} />
-        <Text style={[styles.title, { color: theme.foreground }]}>Trails</Text>
+        <View style={styles.titleBlock}>
+          <Text style={[styles.title, { color: theme.textPrimary }]}>Trails</Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Routes, activity and cairns</Text>
+        </View>
         {/* O18 HOME-03: manual refresh — visible on Routes / Cairns tabs
             (Activities uses local sessions, no server refresh). */}
         {tab !== 'activities' ? (
@@ -1418,10 +1401,12 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: Spacing.sm,
+    minHeight: 56, paddingHorizontal: Spacing.base, paddingTop: Spacing.sm, paddingBottom: Spacing.sm,
     backgroundColor: Colors.bg,
   },
-  title: { flex: 1, textAlign: 'center', fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary },
+  titleBlock: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  title: { textAlign: 'center', fontSize: FontSize.h2, fontWeight: '700' },
+  subtitle: { marginTop: 1, fontSize: FontSize.small, fontWeight: '500' },
   listContent: { padding: Spacing.base, gap: Spacing.sm },
   card: {
     backgroundColor: 'rgba(255,255,255,0.90)', borderRadius: Radius.card,
@@ -1495,15 +1480,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     gap: Spacing.sm,
   },
-  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.pill, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.chip, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   filterChipActive: { backgroundColor: Colors.primaryBg, borderColor: Colors.primary },
   filterChipText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary },
   filterChipTextActive: { color: Colors.primary },
-  permToggleGroup: { flexDirection: 'row', gap: 2, backgroundColor: Colors.surface, borderRadius: Radius.pill, borderWidth: 1, borderColor: Colors.border, padding: 2 },
+  permToggleGroup: { flexDirection: 'row', gap: 2, backgroundColor: Colors.surface, borderRadius: Radius.card, borderWidth: 1, borderColor: Colors.border, padding: 2 },
   permToggle: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   permToggleActive: { backgroundColor: Colors.primaryBg },
   empty: { flex: 1, alignItems: 'center', paddingTop: 96, paddingHorizontal: Spacing.xl },
-  emptyIconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md, ...Shadow.card },
+  emptyIconWrap: { width: 52, height: 52, borderRadius: Radius.card, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md },
   // Concept hero illustration (mountain scene). Width matches the empty state
   // frame; height is intrinsic-locked via aspect ratio so the artwork keeps
   // its balance across viewports.
@@ -1537,9 +1522,9 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   emptyHeroIcon: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 52,
+    height: 52,
+    borderRadius: Radius.card,
     backgroundColor: 'rgba(93,124,70,0.10)',
     borderWidth: 1,
     alignItems: 'center',
@@ -1570,7 +1555,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingVertical: 12,
     paddingHorizontal: Spacing.xl,
-    borderRadius: Radius.pill,
+    borderRadius: Radius.button,
     marginTop: Spacing.lg,
   },
   emptyHeroCtaText: {
@@ -1635,7 +1620,7 @@ const sheetStyles = StyleSheet.create({
   permRow: { flexDirection: 'row', gap: Spacing.sm },
   permPill: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.pill,
+    borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.chip,
     paddingVertical: Spacing.xs, paddingHorizontal: Spacing.sm, backgroundColor: Colors.surface,
   },
   permPillActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryBg },
@@ -1683,7 +1668,7 @@ const filterBarStyles = StyleSheet.create({
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 7,
-    borderRadius: Radius.pill,
+    borderRadius: Radius.chip,
     backgroundColor: Colors.surface,
     borderWidth: 1, borderColor: Colors.border,
   },
@@ -1708,7 +1693,7 @@ const filterBarStyles = StyleSheet.create({
   sortChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: Radius.pill,
+    borderRadius: Radius.chip,
     backgroundColor: Colors.surface,
     borderWidth: 1, borderColor: Colors.border,
   },
@@ -1719,36 +1704,23 @@ const filterBarStyles = StyleSheet.create({
   },
 });
 
-// Concept-aligned pill-shaped segmented control (sleep-run-2026-08-15 Routes).
-// Container is a rounded 20-radius pill with a subtle border; the active tab
-// gets a soft primary-tinted fill and forest-green bold label.
+// Shared semantic segmented geometry: restrained card track and button-radius
+// active segments. Color is supplied by the active Day/Sunset/Night theme.
 const segStyles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
     marginHorizontal: Spacing.base,
     marginTop: Spacing.xs,
-    // 2026-08-16 concept: deeper paper #E6E2D6 container (was translucent white)
-    backgroundColor: '#E6E2D6',
-    borderRadius: 20,
-    padding: 4,
-    borderWidth: 0,
-    height: 40,
+    height: 42,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: Radius.button,
   },
   tabActive: {
-    // 2026-08-16 concept: solid deep green (#3E5F3A) fill + white label
-    backgroundColor: '#3E5F3A',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.10,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 0,
   },
   tabText: {
     fontSize: 13,
@@ -1757,7 +1729,6 @@ const segStyles = StyleSheet.create({
     letterSpacing: 0.1,
   },
   tabTextActive: {
-    color: '#FFFFFF',
     fontWeight: '700',
   },
 });

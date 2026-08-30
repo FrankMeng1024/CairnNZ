@@ -18,10 +18,12 @@
  * denying location means the feature won't work.
  */
 import React from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
-import { Colors, Spacing, Radius, FontSize, Shadow } from './tokens';
+import { View, Text, StyleSheet, Linking } from 'react-native';
+import { Spacing, Radius, FontSize } from './tokens';
 import { Icon } from './Icon';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { ModalCard } from './ModalCard';
+import { AppButton } from './AppButton';
 
 interface Props {
   visible: boolean;
@@ -37,60 +39,28 @@ export function PermissionDeniedModal({ visible, featureName, onDismiss }: Props
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
-      <View style={styles.backdrop}>
-        <View style={[styles.sheet, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}>
+    <ModalCard visible={visible} onDismiss={onDismiss} testID="permission-denied-modal">
+        <View style={styles.content}>
           <View style={[styles.iconWrap, { backgroundColor: theme.surface }]}>
-            <Icon name="MapPin" size={32} color={theme.iconActive} strokeWidth={1.8} />
+            <Icon name="MapPin" size={28} color={theme.iconActive} strokeWidth={1.8} />
           </View>
           <Text style={[styles.title, { color: theme.foreground }]}>{featureName} needs your location</Text>
           <Text style={[styles.body, { color: theme.foregroundSecondary }]}>
             Turn on location for Cairn in Settings to use this feature.
           </Text>
-          <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
-            onPress={openSettings}
-            accessibilityRole="button"
-            accessibilityLabel="Open Settings"
-          >
-            <Text style={[styles.primaryText, { color: theme.onPrimary }]}>Open Settings</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            onPress={onDismiss}
-            accessibilityRole="button"
-            accessibilityLabel="Not now"
-          >
-            <Text style={[styles.secondaryText, { color: theme.foregroundSecondary }]}>Not now</Text>
-          </TouchableOpacity>
+          <AppButton label="Open Settings" onPress={openSettings} style={styles.action} />
+          <AppButton label="Not now" onPress={onDismiss} variant="tertiary" style={styles.action} />
         </View>
-      </View>
-    </Modal>
+    </ModalCard>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.xl,
-  },
-  sheet: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.card,
-    padding: Spacing.xl,
-    alignItems: 'center',
-    maxWidth: 340,
-    width: '100%',
-    ...Shadow.card,
-  },
+  content: { alignItems: 'center' },
   iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.primaryBg,
+    width: 48,
+    height: 48,
+    borderRadius: Radius.card,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.md,
@@ -98,38 +68,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSize.h3,
     fontWeight: '700',
-    color: Colors.textPrimary,
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
   body: {
     fontSize: FontSize.body,
-    color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: Spacing.lg,
   },
-  primaryBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.button,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    alignItems: 'center',
-    minWidth: 220,
-  },
-  primaryText: {
-    color: '#fff',
-    fontSize: FontSize.body,
-    fontWeight: '700',
-  },
-  secondaryBtn: {
-    marginTop: Spacing.sm,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-  },
-  secondaryText: {
-    color: Colors.textSecondary,
-    fontSize: FontSize.body,
-    fontWeight: '600',
-  },
+  action: { alignSelf: 'stretch', marginTop: Spacing.sm },
 });

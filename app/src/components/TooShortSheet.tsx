@@ -18,19 +18,12 @@
  */
 import React, { useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Image,
+  View, Text, StyleSheet, TouchableOpacity, Animated, Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Radius, FontSize, Shadow } from './tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
-
-// Concept H3/R3 (sleep-run-2026-08-15): two botanical icons at the top of the
-// modal — footprints + fern-leaf — replace the previous MapPin circle. Same
-// PNGs are shipped under both assets/hiking and assets/running; we always
-// pull from the hiking set so Hike + Run render identically (concept-lock:
-// same green, same botanical vocabulary, no per-mode divergence).
-const FOOTPRINTS_ICON = require('../../assets/hiking/footprints.png');
-const FERN_ICON = require('../../assets/hiking/fern-leaf.png');
+import { Icon } from './Icon';
 
 interface Props {
   visible: boolean;
@@ -87,9 +80,8 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
       <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => dismiss(onContinue)} />
       <Animated.View style={[styles.sheet, { backgroundColor: sheetBg, transform: [{ translateY: slideY }], paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
         <View style={[styles.handle, { backgroundColor: handleColor }]} />
-        <View style={styles.botanicalRow}>
-          <Image source={FOOTPRINTS_ICON} style={styles.botanicalFootprints} resizeMode="contain" />
-          <Image source={FERN_ICON} style={styles.botanicalFern} resizeMode="contain" />
+        <View style={[styles.stateIcon, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Icon name="Map" size={28} color={theme.iconActive} strokeWidth={1.8} />
         </View>
         <Text style={[styles.title, { color: titleColor }]}>Keep going{'\n'}a little longer</Text>
         <Text style={[styles.body, { color: bodyColor }]}>{bodyCopy}</Text>
@@ -115,7 +107,7 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(8,12,13,0.40)',
     justifyContent: 'flex-end',
     zIndex: 250,
   },
@@ -132,29 +124,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border, alignSelf: 'center',
     marginBottom: Spacing.xs,
   },
-  // Concept H3/R3: two small botanical images centered, side-by-side with a
-  // gentle overlap that echoes the frame illustration. Footprints leads
-  // (activity metaphor), fern-leaf trails (rest / nature). Sized ~44px so
-  // the pair reads as a single motif rather than two competing icons.
-  botanicalRow: {
-    flexDirection: 'row',
+  stateIcon: {
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.xs,
-    height: 56,
-  },
-  botanicalFootprints: {
-    width: 44,
-    height: 44,
-    marginRight: -6,
-  },
-  botanicalFern: {
     width: 48,
     height: 48,
+    borderRadius: Radius.card,
+    borderWidth: 1,
   },
   title: {
-    fontSize: FontSize.h2, fontWeight: '800',
+    fontSize: FontSize.h2, fontWeight: '700',
     color: Colors.textPrimary, textAlign: 'center',
   },
   body: {
@@ -164,15 +145,8 @@ const styles = StyleSheet.create({
   },
   btnPrimary: {
     marginTop: Spacing.md,
-    // 2026-08-17 R21 concept H3/R3: primary CTA uses the same dark forest
-    // green (#455D3C) as the HikingScreen "Start Hiking" button so all
-    // Hike-flow primary CTAs read as one family. Colors.primary (#5d7c46)
-    // is a lighter sage used elsewhere (chips, links) but reads too light
-    // on this sheet where the fern illustration already carries green.
-    // Concept uses pill radius to match the H0 "Start Hiking" button.
-    backgroundColor: '#455D3C',
-    height: 52,
-    borderRadius: 26,
+    height: 48,
+    borderRadius: Radius.button,
     alignItems: 'center', justifyContent: 'center',
   },
   btnPrimaryText: {
@@ -183,11 +157,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12, alignItems: 'center', justifyContent: 'center',
   },
   btnSecondaryText: {
-    // 2026-08-17 R21 concept H3/R3: "End hike anyway" is rendered in the
-    // same dark forest green as the primary CTA (concept color #455D3C),
-    // not muted gray. This gives the link visual weight while its
-    // hierarchy stays secondary via lack of button background.
-    color: '#455D3C',
     fontSize: FontSize.body, fontWeight: '600',
   },
 });

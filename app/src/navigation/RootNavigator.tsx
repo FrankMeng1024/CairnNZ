@@ -183,6 +183,7 @@ export function RootNavigator() {
               stores.useAppStore = useAppStore;
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.useRouteStore = require('../store/useRouteStore').useRouteStore;
+              stores.useSessionStore = require('../store/useSessionStore').useSessionStore;
               // Gate-1 proof fixtures use direct, in-memory Zustand setState
               // so screenshots exercise active production screens without
               // writing synthetic data to the backend.

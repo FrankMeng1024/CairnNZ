@@ -189,8 +189,8 @@ export function MarkerDetailScreen() {
           <BackButton variant="inline" />
         </View>
         <View style={styles.notFoundBox}>
-          <Text style={styles.notFoundTitle}>Cairn not found</Text>
-          <Text style={styles.notFoundSub}>
+          <Text style={[styles.notFoundTitle, { color: visualTheme.foreground }]}>Cairn not found</Text>
+          <Text style={[styles.notFoundSub, { color: visualTheme.foregroundSecondary }]}>
             This cairn may have been removed or hasn't synced yet.
           </Text>
         </View>
@@ -274,8 +274,8 @@ export function MarkerDetailScreen() {
             )}
           </MapView>
         ) : (
-          <View style={styles.mapFallback}>
-            <Text style={styles.mapFallbackText}>
+          <View style={[styles.mapFallback, { backgroundColor: visualTheme.background }]}>
+            <Text style={[styles.mapFallbackText, { color: visualTheme.foregroundSecondary }]}>
               {marker.lat.toFixed(5)}, {marker.lng.toFixed(5)}
             </Text>
           </View>
@@ -301,20 +301,20 @@ export function MarkerDetailScreen() {
           Edit is now a Modal (see below) rather than inline replacement —
           user reported the inline edit form got hidden by the keyboard. */}
       <ScrollView
-        style={styles.panel}
+        style={[styles.panel, { backgroundColor: visualTheme.surfaceElevated }]}
         contentContainerStyle={styles.panelContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         {/* 1. Title */}
         {privateTitle ? (
-          <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">{privateTitle}</Text>
+          <Text style={[styles.title, { color: visualTheme.foreground }]} numberOfLines={2} ellipsizeMode="tail">{privateTitle}</Text>
         ) : (
-          <Text style={styles.titleEmpty}>Untitled cairn</Text>
+          <Text style={[styles.titleEmpty, { color: visualTheme.muted }]}>Untitled cairn</Text>
         )}
 
         {/* 2. Body */}
-        {privateBody ? <Text style={styles.body}>{privateBody}</Text> : null}
+        {privateBody ? <Text style={[styles.body, { color: visualTheme.foregroundSecondary }]}>{privateBody}</Text> : null}
 
         {/* 3. Meta pills row: type, visibility, sync state */}
         <View style={styles.headerRow}>
@@ -322,9 +322,9 @@ export function MarkerDetailScreen() {
             <Icon name={meta.icon as IconName} size={14} color={meta.color} strokeWidth={2} />
             <Text style={[styles.typeBadgeText, { color: meta.color }]}>{meta.label}</Text>
           </View>
-          <View style={[styles.visBadge, { borderColor: Colors.border }]}>
-            <Icon name={vis.iconName} size={12} color={Colors.textSecondary} strokeWidth={2} />
-            <Text style={styles.visBadgeText}>{vis.label}</Text>
+          <View style={[styles.visBadge, { borderColor: visualTheme.border, backgroundColor: visualTheme.surface }]}>
+            <Icon name={vis.iconName} size={12} color={visualTheme.iconInactive} strokeWidth={2} />
+            <Text style={[styles.visBadgeText, { color: visualTheme.foregroundSecondary }]}>{vis.label}</Text>
           </View>
           {marker.syncState && marker.syncState !== 'synced' ? (
             <SyncBadge state={marker.syncState} />
@@ -332,7 +332,7 @@ export function MarkerDetailScreen() {
         </View>
 
         {/* 4. Divider */}
-        <View style={styles.metaDivider} />
+        <View style={[styles.metaDivider, { backgroundColor: visualTheme.border }]} />
 
         {/* 5. Date / location — with clear labels */}
         <View style={styles.metaList}>
@@ -346,19 +346,19 @@ export function MarkerDetailScreen() {
 
         {/* 6. Public snapshot divergence banner (owner only) */}
         {snap && snapDiffers && isOwner && (
-          <View style={styles.snapshotBanner}>
+          <View style={[styles.snapshotBanner, { backgroundColor: visualTheme.surface, borderColor: visualTheme.border }]}>
             <View style={styles.snapshotHeaderRow}>
-              <Icon name="Globe" size={12} color={Colors.textSecondary} strokeWidth={2} />
-              <Text style={styles.snapshotHeader}>Public viewers see</Text>
+              <Icon name="Globe" size={12} color={visualTheme.iconInactive} strokeWidth={2} />
+              <Text style={[styles.snapshotHeader, { color: visualTheme.foregroundSecondary }]}>Public viewers see</Text>
             </View>
-            <Text style={styles.snapshotBody}>
+            <Text style={[styles.snapshotBody, { color: visualTheme.foreground }]}>
               {(() => {
                 const sm = MARKER_TYPES[snap.type];
                 const sn = splitTitleBody(snap.note);
                 return `"${sn.title || sn.body || 'Untitled'}", pinned as ${sm?.label ?? snap.type}.`;
               })()}
             </Text>
-            <Text style={styles.snapshotFootnote}>
+            <Text style={[styles.snapshotFootnote, { color: visualTheme.muted }]}>
               Public content is frozen at the moment you first shared.
             </Text>
           </View>
@@ -372,18 +372,18 @@ export function MarkerDetailScreen() {
           risk. Fix: Delete becomes icon-only ghost, small (fixed 48pt
           square), Edit becomes the wide primary. */}
       {isOwner && (
-        <View style={styles.stickyActionRow}>
+        <View style={[styles.stickyActionRow, { backgroundColor: visualTheme.surfaceElevated, borderTopColor: visualTheme.border }]}>
           <TouchableOpacity
-            style={[styles.deleteIconBtn, !online && { opacity: 0.4 }]}
+            style={[styles.deleteIconBtn, { backgroundColor: visualTheme.surface, borderColor: visualTheme.border }, !online && { opacity: 0.4 }]}
             onPress={handleDelete}
             disabled={!online}
             accessibilityRole="button"
             accessibilityLabel={online ? 'Delete cairn' : 'Delete cairn (needs internet)'}
           >
-            <Icon name="Trash2" size={18} color={Colors.danger} strokeWidth={2} />
+            <Icon name="Trash2" size={18} color={visualTheme.destructive} strokeWidth={2} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnPrimary, styles.editPrimaryBtn, !online && { opacity: 0.4 }]}
+            style={[styles.actionBtn, styles.actionBtnPrimary, { backgroundColor: visualTheme.primary }, styles.editPrimaryBtn, !online && { opacity: 0.4 }]}
             onPress={enterEdit}
             disabled={!online}
           >
@@ -411,20 +411,20 @@ export function MarkerDetailScreen() {
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View style={styles.editBackdrop}>
-            <View style={styles.editSheet}>
+          <View style={[styles.editBackdrop, { backgroundColor: visualTheme.readabilityScrim }]}>
+            <View style={[styles.editSheet, { backgroundColor: visualTheme.surfaceElevated }]}>
               {/* Sheet header — grabber + title + close */}
-              <View style={styles.editHeader}>
-                <View style={styles.editGrabber} />
+              <View style={[styles.editHeader, { borderBottomColor: visualTheme.border }]}>
+                <View style={[styles.editGrabber, { backgroundColor: visualTheme.border }]} />
                 <View style={styles.editHeaderRow}>
-                  <Text style={styles.editHeaderTitle}>Edit cairn</Text>
+                  <Text style={[styles.editHeaderTitle, { color: visualTheme.foreground }]}>Edit cairn</Text>
                   <TouchableOpacity
                     onPress={cancelEdit}
                     disabled={saving}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                     accessibilityLabel="Close edit"
                   >
-                    <Icon name="X" size={22} color={Colors.textSecondary} strokeWidth={2} />
+                    <Icon name="X" size={22} color={visualTheme.iconInactive} strokeWidth={2} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -453,9 +453,9 @@ export function MarkerDetailScreen() {
               </ScrollView>
 
               {/* Save button — sits above the keyboard, always visible */}
-              <View style={styles.editFooter}>
+              <View style={[styles.editFooter, { backgroundColor: visualTheme.surfaceElevated, borderTopColor: visualTheme.border }]}>
                 <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionBtnPrimary, saving && { opacity: 0.6 }]}
+                  style={[styles.actionBtn, styles.actionBtnPrimary, { backgroundColor: visualTheme.primary }, saving && { opacity: 0.6 }]}
                   onPress={saveEdit}
                   disabled={saving}
                 >
@@ -471,11 +471,12 @@ export function MarkerDetailScreen() {
 }
 
 function MetaRow({ iconName, label, text }: { iconName: IconName; label: string; text: string }) {
+  const theme = useVisualTheme();
   return (
     <View style={styles.metaItem}>
-      <Icon name={iconName} size={13} color={Colors.textSecondary} strokeWidth={2} />
-      <Text style={styles.metaLabel}>{label}</Text>
-      <Text style={styles.metaText}>{text}</Text>
+      <Icon name={iconName} size={13} color={theme.iconInactive} strokeWidth={2} />
+      <Text style={[styles.metaLabel, { color: theme.foregroundSecondary }]}>{label}</Text>
+      <Text style={[styles.metaText, { color: theme.foreground }]}>{text}</Text>
     </View>
   );
 }

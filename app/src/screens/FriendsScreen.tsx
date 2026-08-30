@@ -19,6 +19,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import Svg, { Path } from 'react-native-svg';
 import {
@@ -28,10 +29,11 @@ import {
   type OutboundRequest, type FriendProfile,
 } from '../store/useFriendStore';
 import { useMarkerStore } from '../store/useMarkerStore';
-import { useAppearance } from '../hooks/useAppearance';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { Icon, type IconName } from '../components/Icon';
 import { CairnIcon } from '../components/CairnIcon';
+import { SegmentedControl } from '../components/SegmentedControl';
+import { Colors, FontSize, IconSize, Radius, Shadow, Spacing } from '../components/tokens';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -41,60 +43,45 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 // Icon sizes (unified 16 / 20 / 24 / 44)
 // Radius scale (8 / 13 / 21 — Fibonacci)
 const DS = {
-  // Type
-  fs_caption: 12,
-  fs_meta: 12,
-  fs_body: 15,
-  fs_label: 14,
-  fs_cardName: 16,
-  fs_sectionTitle: 14,
-  fs_headerTitle: 20,
-  fs_emptyTitle: 22,
-  fs_pageTitle: 26,
-  // Weight
-  fw_regular: '400' as const,
+  // Shared system aliases kept local to limit the Friends-only diff.
+  fs_caption: FontSize.small,
+  fs_meta: FontSize.caption,
+  fs_body: FontSize.body,
+  fs_label: FontSize.caption,
+  fs_cardName: FontSize.body,
+  fs_headerTitle: FontSize.h2,
+  fs_emptyTitle: FontSize.h2,
+  fs_pageTitle: 24,
   fw_medium: '500' as const,
   fw_semibold: '600' as const,
   fw_bold: '700' as const,
-  // Spacing
-  sp1: 4,
-  sp2: 8,
-  sp3: 12,
-  sp4: 16,
-  sp5: 20,
-  sp6: 24,
-  sp7: 32,
+  sp1: Spacing.xs,
+  sp2: Spacing.sm,
+  sp3: Spacing.md,
+  sp4: Spacing.base,
+  sp5: Spacing.lg,
+  sp6: Spacing.xl,
+  sp7: Spacing.xxl,
   sp8: 40,
-  // Icon
-  ic_xs: 16,
-  ic_sm: 20,
-  ic_md: 24,
-  ic_lg: 44,
-  // Radius
-  rad_sm: 8,
-  rad_md: 13,
-  rad_lg: 21,
-  rad_pill: 999,
-  // Content margins (golden-inspired)
-  contentPad: 20,     // 375 * 0.053, breathes without being tight
+  ic_sm: IconSize.sm,
+  ic_md: IconSize.md,
+  ic_lg: IconSize.lg,
+  contentPad: Spacing.base,
 };
 
 // ── Spec tokens (colors) ────────────────────────────────────────────────────
 const T = {
-  paper: '#F9F7EF',
-  forest: '#1F4A3F',       // slightly lighter than #143D35 to match concept
-  forestActive: '#175A44', // active pill / CTA — softer than #0F5D45
-  textPrimary: '#2A3630',
-  textSecondary: '#7C8580',
-  card: 'rgba(255,255,255,0.75)',
-  cardBorder: 'rgba(210,205,195,0.75)',
-  tabBg: 'rgba(255,255,255,0.72)',   // idle pill background
-  tabBgActive: '#175A44',            // active pill background
-  navSurface: '#F4EFE6',             // home tab bar color
-  scrim: 'rgba(20,30,25,0.45)',
-  inputBg: 'rgba(255,255,255,0.9)',
-  inputBorder: 'rgba(210,205,195,0.9)',
-  danger: '#c53d2e',
+  paper: Colors.bg,
+  forest: Colors.primaryDark,
+  forestActive: Colors.primary,
+  textPrimary: Colors.textPrimary,
+  textSecondary: Colors.textSecondary,
+  card: Colors.surface,
+  cardBorder: Colors.border,
+  scrim: 'rgba(20,30,25,0.40)',
+  inputBg: Colors.surface,
+  inputBorder: Colors.border,
+  danger: Colors.danger,
 };
 
 // Avatar palette (concept F1/F2 shows colored circles with initials)
@@ -118,56 +105,26 @@ function isValidEmail(email: string): boolean {
 // The illustration asset is 1170x2532 (iPhone @3x). We render it as an <Image>
 // with `resizeMode='cover'` filling the full screen so it does not squash or
 // display at its natural pixel size.
-// R21 (2026-08-17): Friends bg now has day + night variants driven by
-// useAppearance. Auto mode follows local time; user-set Light/Dark overrides.
+// Sunset deliberately reuses the locked Day world with a warm mineral dusk
+// treatment. This creates a true third state without inventing new scenery.
 function Backdrop() {
-  const { isDark } = useAppearance();
+  const theme = useVisualTheme();
   const daySrc = require('../../assets/friends/backgrounds/friends-bg-day-semantic-v2.jpg');
   const nightSrc = require('../../assets/friends/backgrounds/friends-bg-night-semantic-v2.jpg');
-  const srcModule = isDark ? nightSrc : daySrc;
+  const isNight = theme.mode === 'night';
+  const srcModule = isNight ? nightSrc : daySrc;
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? '#141C1F' : '#F1F2EA' }]}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]}>
       <Image
         source={srcModule}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', opacity: isDark ? 0.78 : 0.78 }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', opacity: theme.scenicImageOpacity }}
         resizeMode="cover"
       />
       <LinearGradient
-        colors={isDark
-          ? ['rgba(10,20,23,0.12)', 'rgba(16,28,31,0.18)', 'rgba(16,28,31,0.34)', 'rgba(16,28,31,0.48)']
-          : ['rgba(243,244,234,0.18)', 'rgba(243,244,234,0.12)', 'rgba(243,244,234,0.27)', 'rgba(243,244,234,0.44)']}
+        colors={theme.scenicBackdropOverlay}
         locations={[0, 0.24, 0.58, 1]}
         style={StyleSheet.absoluteFill}
       />
-    </View>
-  );
-}
-
-// ── Tabs: two independent pill buttons (concept F0/F1/F2 — the pills are
-// separate, not joined inside a single container).
-function TabsPill({ active, onChange }: { active: 'friends' | 'pending'; onChange: (t: 'friends' | 'pending') => void }) {
-  const theme = useVisualTheme();
-  const idleMaterial = theme.mode === 'night' ? 'rgba(27,36,40,0.58)' : 'rgba(246,248,243,0.58)';
-  return (
-    <View style={s.tabsRow}>
-      <TouchableOpacity
-        style={[s.tabPill, active === 'friends' ? { backgroundColor: theme.primary } : { backgroundColor: idleMaterial, borderWidth: 1, borderColor: theme.border }]}
-        activeOpacity={0.85}
-        onPress={() => onChange('friends')}
-        accessibilityRole="button"
-        accessibilityLabel="Friends tab"
-      >
-        <Text style={[s.tabLabel, { color: active === 'friends' ? theme.onPrimary : theme.foreground }]}>Friends</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[s.tabPill, active === 'pending' ? { backgroundColor: theme.primary } : { backgroundColor: idleMaterial, borderWidth: 1, borderColor: theme.border }]}
-        activeOpacity={0.85}
-        onPress={() => onChange('pending')}
-        accessibilityRole="button"
-        accessibilityLabel="Pending tab"
-      >
-        <Text style={[s.tabLabel, { color: active === 'pending' ? theme.onPrimary : theme.foreground }]}>Pending</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -183,10 +140,9 @@ function FriendRow({
   const meta = sharedFlags > 0
     ? `${sharedFlags} shared ${sharedFlags === 1 ? 'flag' : 'flags'}`
     : 'No shared flags yet';
-  const rowSurface = theme.mode === 'night' ? 'rgba(29,38,42,0.76)' : 'rgba(250,251,247,0.80)';
   return (
     <TouchableOpacity
-      style={[s.card, { backgroundColor: rowSurface, borderColor: theme.border }]}
+      style={[s.card, { backgroundColor: theme.scenicSurface, borderColor: theme.borderSubtle }]}
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={500}
@@ -214,7 +170,7 @@ function IncomingRow({
 }) {
   const theme = useVisualTheme();
   return (
-    <View style={[s.card, { backgroundColor: theme.surface, borderColor: theme.border }]} testID={`incoming-card-${id}`}>
+    <View style={[s.card, { backgroundColor: theme.surfacePrimary, borderColor: theme.borderSubtle }]} testID={`incoming-card-${id}`}>
       <View style={[s.avatar, { backgroundColor: avatarColorFor(id) }]}>
         <Text style={s.avatarText}>{initialsOf(fromName)}</Text>
       </View>
@@ -224,7 +180,7 @@ function IncomingRow({
       </View>
       <View style={s.actionRow}>
         <TouchableOpacity
-          style={[s.actionBtn, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
+          style={[s.actionBtn, { backgroundColor: theme.surfaceSecondary, borderColor: theme.borderSubtle }]}
           onPress={onAccept}
           disabled={busy}
           hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
@@ -233,7 +189,7 @@ function IncomingRow({
           {busy ? <ActivityIndicator size="small" color={theme.iconActive} /> : <Icon name="Check" size={DS.ic_sm} color={theme.iconActive} strokeWidth={2} />}
         </TouchableOpacity>
         <TouchableOpacity
-          style={[s.actionBtn, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
+          style={[s.actionBtn, { backgroundColor: theme.surfaceSecondary, borderColor: theme.borderSubtle }]}
           onPress={onReject}
           disabled={busy}
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 6 }}
@@ -254,7 +210,7 @@ function SentRow({
 }) {
   const theme = useVisualTheme();
   return (
-    <View style={[s.card, { backgroundColor: theme.surface, borderColor: theme.border }]} testID={`sent-card-${id}`}>
+    <View style={[s.card, { backgroundColor: theme.surfacePrimary, borderColor: theme.borderSubtle }]} testID={`sent-card-${id}`}>
       <View style={[s.avatar, { backgroundColor: avatarColorFor(id) }]}>
         <Text style={s.avatarText}>{initialsOf(toName)}</Text>
       </View>
@@ -263,7 +219,7 @@ function SentRow({
         <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>Waiting for response</Text>
       </View>
       <TouchableOpacity
-        style={[s.actionBtn, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
+        style={[s.actionBtn, { backgroundColor: theme.surfaceSecondary, borderColor: theme.borderSubtle }]}
         onPress={onCancel}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         accessibilityLabel="Cancel outbound request"
@@ -285,13 +241,14 @@ type AddState = 'idle' | 'loading' | 'success' | 'error';
 
 function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
   const theme = useVisualTheme();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [err, setErr] = useState('');
   const [state, setState] = useState<AddState>('idle');
   const successEmail = useRef('');
 
   // Slide + scrim animation. Sheet starts fully off-screen and glides up.
-  const SHEET_TRAVEL = 700;
+  const SHEET_TRAVEL = 760;
   const slide = useRef(new Animated.Value(SHEET_TRAVEL)).current;
   const scrim = useRef(new Animated.Value(0)).current;
 
@@ -336,15 +293,15 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
     }
   };
 
-  // Bird corner asset (small image top-right of sheet).
-  // R21 (2026-08-17): day/night variants driven by useAppearance.
-  const { isDark: birdIsDark } = useAppearance();
-  const birdModule = birdIsDark
+  // Preserve the accepted bird/arch identity. Sunset uses the same Day
+  // artwork with a restrained warm overlay so scenery never jumps worlds.
+  const birdIsNight = theme.mode === 'night';
+  const birdModule = birdIsNight
     ? require('../../assets/friends/hero/add-friend-hero-night-semantic-v2.jpg')
     : require('../../assets/friends/hero/add-friend-hero-day-semantic-v2.jpg');
   const birdWebUri =
     Platform.OS === 'web'
-      ? (birdIsDark
+      ? (birdIsNight
           ? '/assets/?unstable_path=./assets/friends/hero/add-friend-hero-night-semantic-v2.jpg'
           : '/assets/?unstable_path=./assets/friends/hero/add-friend-hero-day-semantic-v2.jpg')
       : null;
@@ -352,7 +309,10 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
   return (
     <View style={s.f6Root} pointerEvents="box-none">
       {/* Scrim behind sheet — the small strip above the sheet is tappable */}
-      <Animated.View style={[s.f6Scrim, { opacity: scrim }]}>
+      <Animated.View style={[s.f6Scrim, {
+        opacity: scrim,
+        backgroundColor: theme.scrim,
+      }]}>
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
@@ -362,13 +322,27 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
       </Animated.View>
 
       {/* Rising sheet */}
-      <Animated.View style={[s.f6Sheet, { backgroundColor: birdIsDark ? '#182126' : theme.background, transform: [{ translateY: slide }] }]}>
+      <Animated.View style={[s.f6Sheet, {
+        backgroundColor: theme.sheetSurface,
+        borderColor: theme.borderSubtle,
+        paddingBottom: Math.max(insets.bottom, Spacing.lg),
+        transform: [{ translateY: slide }],
+      }]}>
+        <KeyboardAvoidingView
+          style={s.f6Keyboard}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
+        >
         {/* HERO — landscape asset fills the top of the sheet */}
         <View style={s.f6HeroBox} pointerEvents="none">
           <Image
             source={birdWebUri ? { uri: birdWebUri } : birdModule}
             style={s.f6HeroImg}
             resizeMode="cover"
+          />
+          <LinearGradient
+            colors={theme.scenicHeroOverlay}
+            style={StyleSheet.absoluteFill}
           />
         </View>
 
@@ -387,14 +361,14 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
                 flush with sheet edges. */}
             <Path
               d="M 0,90 C 100,-10 290,-10 390,90 L 390,90 L 0,90 Z"
-              fill={birdIsDark ? '#182126' : theme.background}
+              fill={theme.sheetSurface}
             />
           </Svg>
 
-          <View style={[s.f6ArchBody, { backgroundColor: birdIsDark ? '#182126' : theme.background }]}>
+          <View style={[s.f6ArchBody, { backgroundColor: theme.sheetSurface }]}>
             {/* Mail badge — sits at arch peak (SVG dome crest) */}
             <View style={s.f6MailBadge}>
-              <View style={[s.f6MailCircle, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
+              <View style={[s.f6MailCircle, { backgroundColor: theme.modalSurface, borderColor: theme.borderSubtle }]}>
                 <Icon name="Mail" size={DS.ic_md} color={theme.iconActive} strokeWidth={1.9} />
               </View>
             </View>
@@ -414,19 +388,22 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
               {state !== 'success' && (
                 <>
                   <Text style={[s.f6InputLabel, { color: theme.foregroundSecondary }]}>Email Address</Text>
-                  <View style={[s.f6InputWrap, { backgroundColor: theme.surface, borderColor: err ? theme.destructive : theme.border }]}>
-                    <TextInput
-                      style={[s.f6Input, { color: theme.foreground }]}
+                  <View style={[s.f6InputWrap, { backgroundColor: theme.inputSurface, borderColor: err ? theme.destructive : theme.borderSubtle }]}>
+                  <TextInput
+                    style={[s.f6Input, { color: theme.foreground }]}
                       placeholder="name@email.com"
                       placeholderTextColor={theme.muted}
                       value={email}
                       onChangeText={(t) => { setEmail(t); if (err) setErr(''); }}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      editable={state !== 'loading'}
-                    />
-                  </View>
-                  {!!err && <Text style={s.f6Err}>{err}</Text>}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="send"
+                    onSubmitEditing={submit}
+                    editable={state !== 'loading'}
+                  />
+                </View>
+                  {!!err && <Text style={[s.f6Err, { color: theme.destructive }]}>{err}</Text>}
 
                   <TouchableOpacity
                     style={[s.f6Send, { backgroundColor: theme.primary }, (!email.trim() || state === 'loading') && { opacity: 0.55 }]}
@@ -455,7 +432,7 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
 
         {/* Close X — top-left over hero */}
         <TouchableOpacity
-          style={[s.f6Close, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
+          style={[s.f6Close, { backgroundColor: theme.modalSurface, borderColor: theme.borderSubtle }]}
           onPress={close}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityLabel="Close"
@@ -463,6 +440,7 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
         >
           <Icon name="X" size={DS.ic_md} color={theme.icon} strokeWidth={1.9} />
         </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Animated.View>
     </View>
   );
@@ -497,11 +475,12 @@ function BottomNav({ active, onNavigate }: { active: 'trails' | 'friends' | 'mem
 // ── Main ────────────────────────────────────────────────────────────────────
 export function FriendsScreen() {
   const theme = useVisualTheme();
-  const headerColor = theme.mode === 'night' ? theme.onScenic : theme.foreground;
-  const headerSecondary = theme.mode === 'night' ? theme.onScenicMuted : theme.foregroundSecondary;
+  const insets = useSafeAreaInsets();
+  const headerColor = theme.scenicText;
   const nav = useNavigation<Nav>();
   const [tab, setTab] = useState<'friends' | 'pending'>('friends');
   const [showAdd, setShowAdd] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const storeFriends = useFriendStore((st) => st.friends);
   const loadFriendsFromBackend = useFriendStore((st) => st.loadFriendsFromBackend);
@@ -536,8 +515,11 @@ export function FriendsScreen() {
   };
 
   useEffect(() => {
-    loadFriendsFromBackend();
-    loadRequests();
+    let active = true;
+    Promise.all([loadFriendsFromBackend(), loadRequests()]).finally(() => {
+      if (active) setInitialLoading(false);
+    });
+    return () => { active = false; };
   }, []);
 
   const friends = useMemo(
@@ -645,7 +627,7 @@ export function FriendsScreen() {
       <Backdrop />
 
       {/* Header */}
-      <View style={s.header}>
+      <View style={[s.header, { paddingTop: Math.max(insets.top, Spacing.md) }]}>
         <TouchableOpacity
           style={s.hIcon}
           onPress={() => nav.goBack()}
@@ -657,7 +639,7 @@ export function FriendsScreen() {
         </TouchableOpacity>
         <View style={s.titleBlock}>
           <Text style={[s.hTitle, { color: headerColor }]}>Friends</Text>
-          <Text style={[s.hSubtitle, { color: headerSecondary }]}>Paths that cross yours</Text>
+          <Text style={[s.hSubtitle, { color: theme.scenicTextMuted }]}>Paths that cross yours</Text>
         </View>
         <TouchableOpacity
           style={s.hIcon}
@@ -671,7 +653,13 @@ export function FriendsScreen() {
       </View>
 
       {/* Tabs */}
-      <TabsPill active={tab} onChange={setTab} />
+      <SegmentedControl
+        value={tab}
+        onChange={setTab}
+        segments={[{ key: 'friends', label: 'Friends' }, { key: 'pending', label: 'Pending' }]}
+        containerStyle={s.tabsRow}
+        testID="friends-tabs"
+      />
 
       {/* Content */}
       <ScrollView
@@ -679,16 +667,17 @@ export function FriendsScreen() {
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {initialLoading && !hasFriends && !hasIncoming && !hasOutbound && (
+          <View style={s.loadingBlock} accessibilityLabel="Loading friends">
+            <ActivityIndicator size="small" color={theme.iconActive} />
+            <Text style={[s.loadingText, { color: theme.foregroundSecondary }]}>Checking your circle…</Text>
+          </View>
+        )}
         {/* Friends tab */}
-        {tab === 'friends' && !hasFriends && (
+        {!initialLoading && tab === 'friends' && !hasFriends && (
           <View style={s.emptyBlock}>
-            <View style={s.emptyTrace} pointerEvents="none">
-              <View style={[s.emptyTraceLine, { backgroundColor: theme.border }]} />
-              <View style={[s.emptyTraceNode, s.emptyTraceNodeLeft, { borderColor: theme.iconInactive }]} />
-              <View style={[s.emptyTraceNode, s.emptyTraceNodeRight, { backgroundColor: theme.iconActive, borderColor: theme.iconActive }]} />
-            </View>
             <View style={[s.emptyIconMark, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
-              <CairnIcon name="friends" size={32} color={theme.iconActive} accent={theme.accent} active />
+              <CairnIcon name="friends" size={IconSize.lg} color={theme.iconActive} accent={theme.accent} active />
             </View>
             <View style={s.emptyTextGroup}>
               <Text style={[s.emptyEyebrow, { color: theme.foregroundSecondary }]}>QUIETLY CONNECTED</Text>
@@ -713,12 +702,12 @@ export function FriendsScreen() {
         )}
 
         {/* Pending tab */}
-        {tab === 'pending' && pendingEmpty && (
+        {!initialLoading && tab === 'pending' && pendingEmpty && (
           <View style={s.emptyBlock}>
-            <View style={[s.emptyIconRing, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={[s.emptyIconMark, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
               <Icon name="Mail" size={DS.ic_lg} color={theme.iconActive} strokeWidth={1.8} />
             </View>
-            <View style={[s.emptyTextCard, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+            <View style={s.emptyTextGroup}>
               <Text style={[s.emptyTitle, { color: theme.foreground }]}>No pending requests</Text>
               <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>New requests and sent invites will appear here.</Text>
             </View>
@@ -765,24 +754,10 @@ export function FriendsScreen() {
         )}
       </ScrollView>
 
-      {/* Floating Add Friend button (concept: shown when list has content) */}
-      {((tab === 'friends' && hasFriends) || (tab === 'pending' && (hasIncoming || hasOutbound))) && (
+      {/* One stable primary action position across list, empty and loading states. */}
+      {!initialLoading && (
         <TouchableOpacity
-          style={[s.floatingAdd, { backgroundColor: theme.primary }]}
-          onPress={() => setShowAdd(true)}
-          activeOpacity={0.9}
-          accessibilityLabel="Add a Friend"
-          accessibilityRole="button"
-        >
-          <Icon name="Plus" size={DS.ic_sm} color={theme.onPrimary} strokeWidth={2} />
-          <Text style={[s.floatingAddText, { color: theme.onPrimary }]}>Add a Friend</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Empty-state large CTA */}
-      {((tab === 'friends' && !hasFriends) || (tab === 'pending' && pendingEmpty)) && (
-        <TouchableOpacity
-          style={[s.floatingAdd, { backgroundColor: theme.primary }]}
+          style={[s.floatingAdd, { backgroundColor: theme.primary, bottom: Math.max(insets.bottom, Spacing.xl) }]}
           onPress={() => setShowAdd(true)}
           activeOpacity={0.9}
           accessibilityLabel="Add a Friend"
@@ -798,14 +773,24 @@ export function FriendsScreen() {
 
       {/* Profile modal (unchanged UX from previous version, minimal card) */}
       {profileFriend && (
-        <View style={[s.profileOverlay, { backgroundColor: theme.mode === 'night' ? 'rgba(2,12,9,0.62)' : 'rgba(17,31,25,0.38)' }]}>
-          <View style={[s.profileCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
-            <View style={{ alignItems: 'center', marginBottom: 12 }}>
-              <View style={[s.avatar, { width: 64, height: 64, borderRadius: 32, backgroundColor: avatarColorFor(profileFriend.id) }]}>
-                <Text style={[s.avatarText, { fontSize: 24 }]}>{initialsOf(profileFriend.name)}</Text>
+        <View style={[s.profileOverlay, { backgroundColor: theme.scrim }]}>
+          <View style={[s.profileCard, { backgroundColor: theme.modalSurface, borderColor: theme.borderSubtle }]}>
+            <View style={s.profileHeaderRow}>
+              <View style={[s.avatar, { backgroundColor: avatarColorFor(profileFriend.id) }]}>
+                <Text style={s.avatarText}>{initialsOf(profileFriend.name)}</Text>
               </View>
-              <Text style={[s.cardName, { fontSize: 18, marginTop: 10, color: theme.foreground }]}>{profileFriend.name}</Text>
-              <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]}>{profileFriend.email}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.profileName, { color: theme.foreground }]}>{profileFriend.name}</Text>
+                <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]}>{profileFriend.email}</Text>
+              </View>
+              <TouchableOpacity
+                style={[s.profileDismiss, { borderColor: theme.border }]}
+                onPress={() => { setProfileFriend(null); setProfileData(null); }}
+                accessibilityRole="button"
+                accessibilityLabel="Close profile"
+              >
+                <Icon name="X" size={IconSize.sm} color={theme.icon} strokeWidth={2} />
+              </TouchableOpacity>
             </View>
             {profileLoading ? (
               <ActivityIndicator color={theme.primary} style={{ marginVertical: 20 }} />
@@ -832,10 +817,10 @@ export function FriendsScreen() {
             )}
             <TouchableOpacity
               testID="btn-close-profile"
-              style={[s.profileClose, { backgroundColor: theme.primary }]}
+              style={[s.profileClose, { backgroundColor: theme.surface, borderColor: theme.border }]}
               onPress={() => { setProfileFriend(null); setProfileData(null); }}
             >
-              <Text style={[s.profileCloseText, { color: theme.onPrimary }]}>Close</Text>
+              <Text style={[s.profileCloseText, { color: theme.foreground }]}>Done</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -851,68 +836,52 @@ const s = StyleSheet.create({
 
   // ── Header ────────────────────────────────────────────────────────────────
   header: {
-    height: 54,
-    marginTop: 44,
+    minHeight: 72,
     paddingHorizontal: DS.contentPad,
+    paddingBottom: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   hIcon: {
-    width: DS.ic_md + 8,
-    height: DS.ic_md + 8,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   hTitle: {
     fontSize: DS.fs_headerTitle,
     fontWeight: DS.fw_bold,
-    color: '#fff',
+    textAlign: 'center',
     letterSpacing: -0.25,
   },
-  titleBlock: { alignItems: 'center', gap: 2 },
-  hSubtitle: { fontSize: 11, fontWeight: '500', letterSpacing: 0.45 },
+  titleBlock: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  hSubtitle: { marginTop: 2, fontSize: FontSize.small, fontWeight: DS.fw_medium, letterSpacing: 0.15 },
 
   // ── Tabs (centered, equal width, φ-related dimensions) ───────────────────
   tabsRow: {
-    marginTop: DS.sp4,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: DS.sp3,
-  },
-  tabPill: {
-    width: 132,     // ≈ 375 * 0.35 (close to φ⁻² * width/1.5)
-    height: 40,     // 132 / φ² ≈ 40 for pleasing tab proportion
-    borderRadius: DS.rad_pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabPillIdle: {
-    backgroundColor: T.tabBg,
-    borderWidth: 1,
-    borderColor: T.cardBorder,
-  },
-  tabPillActive: {
-    backgroundColor: T.tabBgActive,
-  },
-  tabLabel: {
-    fontSize: DS.fs_label,
-    fontWeight: DS.fw_bold,
-    color: T.forest,
-    letterSpacing: 0.2,
-  },
-  tabLabelActive: {
-    color: '#fff',
+    height: 44,
+    width: 276,
+    alignSelf: 'center',
+    marginTop: Spacing.xs,
   },
 
   // ── Scroll body ──────────────────────────────────────────────────────────
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: DS.contentPad,
-    paddingTop: DS.sp5,
-    paddingBottom: 112,
+    paddingTop: Spacing.base,
+    paddingBottom: 104,
     gap: DS.sp3,
   },
+
+  loadingBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.md,
+    paddingTop: 96,
+  },
+  loadingText: { fontSize: FontSize.caption, fontWeight: '500' },
 
   sectionTitle: {
     fontSize: 10,
@@ -936,7 +905,7 @@ const s = StyleSheet.create({
     backgroundColor: T.card,
     borderWidth: 1,
     borderColor: T.cardBorder,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingHorizontal: DS.sp4,
     paddingVertical: DS.sp3,
     flexDirection: 'row',
@@ -987,57 +956,17 @@ const s = StyleSheet.create({
   // of usable height for pleasing vertical composition.
   emptyBlock: {
     alignItems: 'center',
-    paddingTop: 82,
+    paddingTop: 72,
     gap: DS.sp3,
   },
-  // Retained for the Pending empty state; the Friends empty state uses the
-  // quieter shared-trace composition below.
-  emptyIconRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: DS.sp3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  emptyTrace: {
-    width: 176,
-    height: 28,
-    justifyContent: 'center',
-    marginBottom: -18,
-  },
-  emptyTraceLine: {
-    height: 1,
-    marginHorizontal: 18,
-    transform: [{ rotate: '-5deg' }],
-  },
-  emptyTraceNode: {
-    position: 'absolute',
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    borderWidth: 1,
-  },
-  emptyTraceNodeLeft: { left: 14, top: 14 },
-  emptyTraceNodeRight: { right: 14, top: 6 },
   emptyIconMark: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 56,
+    height: 56,
+    borderRadius: Radius.card,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 2,
+    ...Shadow.card,
   },
   emptyTextGroup: {
     alignItems: 'center',
@@ -1050,15 +979,6 @@ const s = StyleSheet.create({
     fontWeight: DS.fw_semibold,
     letterSpacing: 1.55,
     marginBottom: DS.sp2,
-  },
-  emptyTextCard: {
-    backgroundColor: 'rgba(249,247,239,0.9)',
-    borderRadius: DS.rad_lg,
-    paddingHorizontal: DS.sp6,
-    paddingVertical: DS.sp5,
-    alignSelf: 'stretch',
-    marginHorizontal: DS.sp5,
-    alignItems: 'center',
   },
   emptyTitle: {
     fontSize: DS.fs_emptyTitle,
@@ -1080,21 +1000,16 @@ const s = StyleSheet.create({
   // Positioned at 0.618 point above bottom nav for eye-natural landing.
   floatingAdd: {
     position: 'absolute',
-    left: 68,
-    right: 68,
-    bottom: 34,
+    left: Spacing.lg,
+    right: Spacing.lg,
     height: 48,
     backgroundColor: T.forestActive,
-    borderRadius: DS.rad_pill,
+    borderRadius: Radius.button,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: DS.sp2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+    ...Shadow.elevated,
   },
   floatingAddText: {
     color: '#fff',
@@ -1103,7 +1018,7 @@ const s = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── F6 Add-friend rising sheet ────────────────────────────────────────────
+  // ── Add-friend rising sheet ───────────────────────────────────────────────
   f6Root: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
@@ -1116,27 +1031,28 @@ const s = StyleSheet.create({
   f6Sheet: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
-    height: '94%',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    // Human review asked for a softer invitation surface, not a near-full
+    // page takeover. The shorter detent keeps Friends visibly present.
+    height: '74%',
+    borderTopLeftRadius: Radius.sheet,
+    borderTopRightRadius: Radius.sheet,
+    borderWidth: 1,
+    borderBottomWidth: 0,
     overflow: 'hidden',
     backgroundColor: T.paper,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    elevation: 20,
+    ...Shadow.sheet,
   },
+  f6Keyboard: { flex: 1 },
   f6HeroBox: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 220,          // full sheet height * 0.29 — golden vertical
+    height: 148,
     overflow: 'hidden',
     backgroundColor: '#E8E4D6',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: Radius.sheet,
+    borderTopRightRadius: Radius.sheet,
   },
   f6HeroImg: {
     position: 'absolute',
@@ -1149,7 +1065,7 @@ const s = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: 160,
+    top: 94,
     bottom: 0,
   },
   f6ArchSvg: {
@@ -1162,15 +1078,15 @@ const s = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: 60,
+    top: 62,
     bottom: 0,
     backgroundColor: T.paper,
-    paddingTop: DS.sp6,
+    paddingTop: Spacing.lg,
   },
   f6Close: {
     position: 'absolute',
-    top: DS.sp5,
-    left: DS.sp5,
+    top: Spacing.base,
+    left: Spacing.base,
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -1187,16 +1103,16 @@ const s = StyleSheet.create({
   },
   f6MailBadge: {
     position: 'absolute',
-    top: -22,
+    top: -14,
     left: 0,
     right: 0,
     alignItems: 'center',
     zIndex: 3,
   },
   f6MailCircle: {
-    width: 68,            // 42 * φ = 68 for balanced hierarchy
-    height: 68,
-    borderRadius: 34,
+    width: 48,
+    height: 48,
+    borderRadius: Radius.card,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: T.cardBorder,
@@ -1209,18 +1125,17 @@ const s = StyleSheet.create({
     elevation: 3,
   },
   f6ScrollBody: {
-    paddingTop: 48,
-    paddingHorizontal: DS.sp7,
+    paddingTop: 42,
+    paddingHorizontal: DS.sp6,
     paddingBottom: DS.sp8,
     alignItems: 'stretch',
   },
   f6Title: {
     fontSize: DS.fs_pageTitle,
-    fontWeight: DS.fw_bold,
+    fontWeight: DS.fw_semibold,
     color: T.forest,
     textAlign: 'center',
-    fontStyle: 'italic',
-    letterSpacing: 0.3,
+    letterSpacing: -0.25,
   },
   f6Body: {
     fontSize: DS.fs_body,
@@ -1232,15 +1147,15 @@ const s = StyleSheet.create({
   },
   f6InputLabel: {
     fontSize: DS.fs_label,
-    fontWeight: DS.fw_bold,
+    fontWeight: DS.fw_semibold,
     color: T.forest,
-    marginTop: DS.sp7,
+    marginTop: DS.sp6,
     marginBottom: DS.sp2,
     letterSpacing: 0.3,
   },
   f6InputWrap: {
     height: 52,
-    borderRadius: DS.rad_pill,
+    borderRadius: Radius.button,
     backgroundColor: T.inputBg,
     borderWidth: 1,
     borderColor: T.inputBorder,
@@ -1259,8 +1174,8 @@ const s = StyleSheet.create({
     marginLeft: DS.sp3,
   },
   f6Send: {
-    height: 56,
-    borderRadius: DS.rad_pill,
+    height: 52,
+    borderRadius: Radius.button,
     backgroundColor: T.forestActive,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1330,11 +1245,30 @@ const s = StyleSheet.create({
   },
   profileCard: {
     backgroundColor: T.paper,
-    borderRadius: DS.rad_lg,
+    borderRadius: Radius.card,
     borderWidth: 1,
     padding: DS.sp5,
     width: '100%',
     maxWidth: 340,
+    ...Shadow.modal,
+  },
+  profileHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginBottom: Spacing.base,
+  },
+  profileName: {
+    fontSize: FontSize.h3,
+    fontWeight: '600',
+  },
+  profileDismiss: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   profileStat: {
     fontSize: DS.fs_headerTitle,
@@ -1347,9 +1281,12 @@ const s = StyleSheet.create({
   },
   profileClose: {
     backgroundColor: T.forestActive,
-    paddingVertical: DS.sp3,
-    borderRadius: DS.rad_pill,
+    height: 48,
+    borderWidth: 1,
+    borderRadius: Radius.button,
     marginTop: DS.sp3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   profileCloseText: {
     color: '#fff',

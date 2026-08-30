@@ -51,11 +51,11 @@ describe('Sunny three-time background mapping', () => {
       const production = getHomeBackground('cloudy', Date.now(), timeOfDay, 'home');
       const sunny = getHomeBackground('sunny', Date.now(), timeOfDay, 'home');
       expect(review.variant).toBe(`cloudy-review-${timeOfDay}`);
-      expect(review.assetId).toBe(`cloudy-${timeOfDay}-full-frame-3x.jpg`);
+      expect(review.assetId).toBe(`cloudy-${timeOfDay}-material-polish-3x.jpg`);
       expect(review.backgroundScale).toBe(sunny.backgroundScale);
       if (timeOfDay === 'day') {
-        expect(review.backgroundOffsetXPct).toBeCloseTo(sunny.backgroundOffsetXPct + 1.54);
-        expect(review.backgroundOffsetYPct).toBeCloseTo(sunny.backgroundOffsetYPct - 0.95);
+        expect(review.backgroundOffsetXPct).toBe(1.54);
+        expect(review.backgroundOffsetYPct).toBe(-0.95);
       } else {
         expect(review.backgroundOffsetXPct).toBe(sunny.backgroundOffsetXPct);
         expect(review.backgroundOffsetYPct).toBe(sunny.backgroundOffsetYPct);
@@ -74,7 +74,7 @@ describe('Sunny three-time background mapping', () => {
       const production = getHomeBackground(weather, Date.now(), timeOfDay, 'home');
       const sunny = getHomeBackground('sunny', Date.now(), timeOfDay, 'home');
       expect(review.variant).toBe(`${weather}-review-${timeOfDay}`);
-      expect(review.assetId).toBe(`${filePrefix}-${timeOfDay}-full-frame-3x.jpg`);
+      expect(review.assetId).toBe(`${filePrefix}-${timeOfDay}-material-polish-3x.jpg`);
       expect(review.backgroundScale).toBe(sunny.backgroundScale);
       expect(production.variant).not.toContain('review');
     }
@@ -85,11 +85,34 @@ describe('Sunny three-time background mapping', () => {
     expect(getWeatherReviewBackground('rain', 'sunset').useDarkText).toBe(false);
   });
 
-  it('registers the corrected Rainy Day material pass back to the locked world', () => {
+  it('restores the measured V1 Rainy Day registration for rollback review', () => {
     const rainy = getWeatherReviewBackground('rain', 'day');
-    expect(rainy.backgroundOffsetXPct).toBeCloseTo(0.26);
-    expect(rainy.backgroundOffsetYPct).toBeCloseTo(-1.66);
+    expect(rainy.backgroundOffsetXPct).toBe(0.26);
+    expect(rainy.backgroundOffsetYPct).toBe(-1.66);
   });
+
+  it('restores the measured V1 Snowy Day registration for rollback review', () => {
+    const snowy = getWeatherReviewBackground('snow', 'day');
+    expect(snowy.backgroundOffsetXPct).toBe(0);
+    expect(snowy.backgroundOffsetYPct).toBe(-0.12);
+  });
+
+  it.each(['day', 'sunset', 'night'] as const)(
+    'exposes Sunny %s from the same rollback family only through Dev review',
+    timeOfDay => {
+      const review = getWeatherReviewBackground('sunny', timeOfDay);
+      const production = getHomeBackground('sunny', Date.now(), timeOfDay, 'home');
+      const expected = {
+        day: 'sunny-day-final-micro-3x.jpg',
+        sunset: 'sunny-evening-final-micro-3x.jpg',
+        night: 'deep-night-starlight-3x.jpg',
+      } as const;
+      expect(review.variant).toBe(`sunny-review-${timeOfDay}`);
+      expect(review.assetId).toBe(expected[timeOfDay]);
+      expect(production.variant).toBe(`sunny-${timeOfDay}`);
+      expect(production.variant).not.toContain('review');
+    },
+  );
 
   it.each(['day', 'sunset', 'night'] as const)(
     'keeps Home and Settings on the same effective %s state',

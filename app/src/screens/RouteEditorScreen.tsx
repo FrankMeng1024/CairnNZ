@@ -857,8 +857,8 @@ export function RouteEditorScreen() {
             )}
           </MapView>
         ) : (
-          <View style={styles.fallback}>
-            <Text style={styles.fallbackText}>Map unavailable</Text>
+          <View style={[styles.fallback, { backgroundColor: visualTheme.background }]}>
+            <Text style={[styles.fallbackText, { color: visualTheme.foregroundSecondary }]}>Map unavailable</Text>
           </View>
         )}
 
@@ -877,9 +877,9 @@ export function RouteEditorScreen() {
           <BackButton variant="inline" />
           {isEditing ? (
             <>
-              <Text style={styles.topTitle}>Edit Route</Text>
+              <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>Edit Route</Text>
               <TouchableOpacity
-                style={styles.gearBtn}
+                style={[styles.gearBtn, { backgroundColor: visualTheme.mapOverlay, borderColor: visualTheme.border }]}
                 onPress={() => { /* TODO route settings */ }}
                 activeOpacity={0.85}
               >
@@ -909,7 +909,7 @@ export function RouteEditorScreen() {
             keyboardVerticalOffset={0}
             pointerEvents="box-none"
           >
-            <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + Spacing.md }]} pointerEvents="auto">
+            <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]} pointerEvents="auto">
               {enterEditError && (
                 <TouchableOpacity
                   style={styles.errorBanner}
@@ -922,19 +922,19 @@ export function RouteEditorScreen() {
               )}
 
               {/* Read-only summary card with name + stats — sage primaryBg tint */}
-              <View style={styles.viewSummary}>
+              <View style={[styles.viewSummary, { backgroundColor: visualTheme.surface, borderColor: visualTheme.border, borderWidth: 1 }]}>
                 <TextInput
-                  style={styles.viewSummaryName}
+                  style={[styles.viewSummaryName, { color: visualTheme.foreground }]}
                   value={name}
                   onChangeText={setName}
                   placeholder="Route name (required)"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={visualTheme.muted}
                 />
                 {renderPoints.length >= 2 && (
                   <View style={styles.viewStatsInline}>
-                    <Text style={styles.viewStatText}>{renderPoints.length} points</Text>
-                    <Text style={styles.viewStatDot}>·</Text>
-                    <Text style={styles.viewStatText}>{dist.format(polylineLengthM(renderPoints), 1)} {dist.unit}</Text>
+                    <Text style={[styles.viewStatText, { color: visualTheme.foregroundSecondary }]}>{renderPoints.length} points</Text>
+                    <Text style={[styles.viewStatDot, { color: visualTheme.muted }]}>·</Text>
+                    <Text style={[styles.viewStatText, { color: visualTheme.foregroundSecondary }]}>{dist.format(polylineLengthM(renderPoints), 1)} {dist.unit}</Text>
                   </View>
                 )}
                 {/* Sprint 69 STORY-00535: visibility toggle. Personal | Friend,
@@ -942,20 +942,20 @@ export function RouteEditorScreen() {
                     parity with Mark create chip pattern (Sprint 68 STORY-00530). */}
                 <View style={styles.permissionRow} testID="route-permission-row">
                   <TouchableOpacity
-                    style={[styles.permissionChip, permission === 'personal' && styles.permissionChipActive]}
+                    style={[styles.permissionChip, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border }, permission === 'personal' && { borderColor: visualTheme.primary, backgroundColor: visualTheme.surface }]}
                     onPress={() => setPermission('personal')}
                     testID="route-permission-personal"
                   >
-                    <Icon name="Lock" size={12} color={permission === 'personal' ? Colors.primary : Colors.textSecondary} strokeWidth={2.2} />
-                    <Text style={[styles.permissionText, permission === 'personal' && styles.permissionTextActive]}>Just me</Text>
+                    <Icon name="Lock" size={12} color={permission === 'personal' ? visualTheme.iconActive : visualTheme.iconInactive} strokeWidth={2.2} />
+                    <Text style={[styles.permissionText, { color: permission === 'personal' ? visualTheme.primary : visualTheme.foregroundSecondary }, permission === 'personal' && styles.permissionTextActive]}>Just me</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.permissionChip, permission === 'friend' && styles.permissionChipActive]}
+                    style={[styles.permissionChip, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border }, permission === 'friend' && { borderColor: visualTheme.primary, backgroundColor: visualTheme.surface }]}
                     onPress={() => setPermission('friend')}
                     testID="route-permission-friend"
                   >
-                    <Icon name="Users" size={12} color={permission === 'friend' ? Colors.primary : Colors.textSecondary} strokeWidth={2.2} />
-                    <Text style={[styles.permissionText, permission === 'friend' && styles.permissionTextActive]}>Friends</Text>
+                    <Icon name="Users" size={12} color={permission === 'friend' ? visualTheme.iconActive : visualTheme.iconInactive} strokeWidth={2.2} />
+                    <Text style={[styles.permissionText, { color: permission === 'friend' ? visualTheme.primary : visualTheme.foregroundSecondary }, permission === 'friend' && styles.permissionTextActive]}>Friends</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -967,40 +967,40 @@ export function RouteEditorScreen() {
                 {routeId && (
                   <TouchableOpacity
                     onPress={handleDelete}
-                    style={[styles.viewBtn, styles.viewDeleteBtn]}
+                    style={[styles.viewBtn, styles.viewDeleteBtn, { backgroundColor: visualTheme.surface, borderColor: visualTheme.destructive }]}
                     activeOpacity={0.85}
                   >
-                    <Icon name="Trash2" size={16} color={Colors.danger} strokeWidth={2.5} />
-                    <Text style={styles.viewDeleteBtnText}>Delete</Text>
+                    <Icon name="Trash2" size={16} color={visualTheme.destructive} strokeWidth={2.5} />
+                    <Text style={[styles.viewDeleteBtnText, { color: visualTheme.destructive }]}>Delete</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
                   onPress={enterEdit}
                   disabled={enterEditLoading}
-                  style={[styles.viewBtn, styles.viewEditBtn]}
+                  style={[styles.viewBtn, styles.viewEditBtn, { backgroundColor: visualTheme.surface, borderColor: visualTheme.primary }]}
                   activeOpacity={0.85}
                 >
                   {enterEditLoading ? (
-                    <ActivityIndicator size="small" color={Colors.primary} />
+                    <ActivityIndicator size="small" color={visualTheme.primary} />
                   ) : (
                     <>
-                      <Icon name="Edit3" size={16} color={Colors.primary} strokeWidth={2.5} />
-                      <Text style={styles.viewEditBtnText}>Edit</Text>
+                      <Icon name="Edit3" size={16} color={visualTheme.iconActive} strokeWidth={2.5} />
+                      <Text style={[styles.viewEditBtnText, { color: visualTheme.primary }]}>Edit</Text>
                     </>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleViewSave}
                   disabled={!canSaveView}
-                  style={[styles.viewBtn, styles.viewSaveBtn, !canSaveView && styles.viewSaveBtnDisabled]}
+                  style={[styles.viewBtn, styles.viewSaveBtn, { backgroundColor: visualTheme.primary }, !canSaveView && styles.viewSaveBtnDisabled]}
                   activeOpacity={0.85}
                 >
                   {saving ? (
-                    <ActivityIndicator size="small" color={Colors.surface} />
+                    <ActivityIndicator size="small" color={visualTheme.onPrimary} />
                   ) : (
                     <>
-                      <Icon name="Check" size={16} color={Colors.surface} strokeWidth={2.5} />
-                      <Text style={styles.viewSaveBtnText}>Save</Text>
+                      <Icon name="Check" size={16} color={visualTheme.onPrimary} strokeWidth={2.5} />
+                      <Text style={[styles.viewSaveBtnText, { color: visualTheme.onPrimary }]}>Save</Text>
                     </>
                   )}
                 </TouchableOpacity>

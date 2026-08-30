@@ -481,9 +481,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
         style={{
           // Gate 1: unexplored terrain is a natural mineral veil, not a
           // game-like brown fog. Map texture remains faintly legible.
-          fillColor: theme.mode === 'night'
-            ? 'rgba(16, 23, 29, 0.74)'
-            : 'rgba(31, 38, 42, 0.68)',
+          fillColor: theme.mapFogFill,
           fillOpacity: 1,
           // Disable AA to avoid 1px seams along hole edges (mapbox-gl-js#7023
           // workaround per Simon Sat 2019).
@@ -503,7 +501,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
         <LineLayer
           id="memory-fog-edge-outer"
           style={{
-            lineColor: theme.mode === 'night' ? 'rgba(183, 207, 204, 0.28)' : 'rgba(223, 233, 226, 0.38)',
+            lineColor: theme.mapFogEdgeOuter,
             lineWidth: 5,
             lineBlur: 7,
             lineOpacity: 0.72,
@@ -514,7 +512,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
         <LineLayer
           id="memory-fog-edge-inner"
           style={{
-            lineColor: theme.mode === 'night' ? 'rgba(183, 213, 204, 0.64)' : 'rgba(227, 238, 229, 0.76)',
+            lineColor: theme.mapFogEdgeInner,
             lineWidth: 1.1,
             lineBlur: 0.8,
             lineOpacity: 0.82,

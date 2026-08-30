@@ -24,6 +24,7 @@ import { useFriendStore } from '../../../store/useFriendStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
 
 interface Props {
   visible: boolean;
@@ -34,6 +35,7 @@ interface Props {
 }
 
 export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
+  const theme = useVisualTheme();
   const friends = useFriendStore((s) => s.friends);
   const subs = useMemorySubscriptionsStore((s) => s.subscriptions);
   const limit = useMemorySubscriptionsStore((s) => s.limit);
@@ -116,27 +118,27 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
       onRequestClose={dismiss}
       testID="memory-friend-pick-modal"
     >
-      <Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
+      <Animated.View style={[styles.backdrop, { opacity: backdropAnim, backgroundColor: theme.readabilityScrim }]}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={dismiss} activeOpacity={1} />
-        <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
+        <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }], backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow }]}>
           {/* Handle */}
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: theme.border }]} />
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>Show friends on your map</Text>
-              <Text style={styles.subtitle}>
+              <Text style={[styles.title, { color: theme.foreground }]}>Show friends on your map</Text>
+              <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>
                 {subs.length} of {limit} picked
               </Text>
             </View>
             <TouchableOpacity onPress={dismiss} testID="memory-friend-pick-close" style={styles.close}>
-              <Icon name="X" size={18} color={Colors.textSecondary} strokeWidth={2.2} />
+              <Icon name="X" size={18} color={theme.iconInactive} strokeWidth={2.2} />
             </TouchableOpacity>
           </View>
 
           {loading ? (
-            <View style={styles.loadingBox}><ActivityIndicator color={Colors.primary} /></View>
+            <View style={styles.loadingBox}><ActivityIndicator color={theme.primary} /></View>
           ) : friends.length === 0 ? (
-            <Text style={styles.emptyHint}>No friends yet. Add a friend in the Friends tab first.</Text>
+            <Text style={[styles.emptyHint, { color: theme.muted }]}>No friends yet. Add a friend in the Friends tab first.</Text>
           ) : (
             <FlatList
               data={friends}
@@ -146,13 +148,13 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
                 const locked = !subscribed && atCap;
                 return (
                   <TouchableOpacity
-                    style={[styles.row, subscribed && styles.rowActive]}
+                    style={[styles.row, subscribed && { backgroundColor: theme.surface }]}
                     onPress={() => onTap(Number(item.id))}
                     testID={`memory-friend-row-${item.id}`}
                   >
                     <View style={styles.rowMain}>
-                      <Text style={styles.rowName}>{item.name || item.email}</Text>
-                      {item.email && item.email !== item.name ? <Text style={styles.rowEmail}>{item.email}</Text> : null}
+                      <Text style={[styles.rowName, { color: theme.foreground }]}>{item.name || item.email}</Text>
+                      {item.email && item.email !== item.name ? <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>{item.email}</Text> : null}
                     </View>
                     {subscribed ? (
                       <Icon name="Check" size={18} color={Colors.success} strokeWidth={2.5} />
@@ -160,13 +162,13 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
                       <Icon name="Lock" size={16} color={Colors.warning} strokeWidth={2.2} />
                     ) : (
                       <View style={styles.addCircle}>
-                        <Icon name="Plus" size={14} color={Colors.primary} strokeWidth={2.4} />
+                        <Icon name="Plus" size={14} color={theme.iconActive} strokeWidth={2.4} />
                       </View>
                     )}
                   </TouchableOpacity>
                 );
               }}
-              ItemSeparatorComponent={() => <View style={styles.sep} />}
+              ItemSeparatorComponent={() => <View style={[styles.sep, { backgroundColor: theme.border }]} />}
             />
           )}
         </Animated.View>
