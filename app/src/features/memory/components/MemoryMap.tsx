@@ -551,7 +551,12 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             <LineLayer
               id="memory-personal-trace-casing"
               style={{
-                lineColor: theme.mode === 'night' ? 'rgba(8,16,20,0.70)' : 'rgba(17,31,30,0.50)',
+                // R21-v3 v2 (2026-08-30): 三态 trace casing — sunset 用深棕紫托底
+                lineColor: memoryMapTheme === 'night'
+                  ? 'rgba(8,16,20,0.70)'
+                  : memoryMapTheme === 'sunset'
+                    ? 'rgba(42,24,48,0.62)'
+                    : 'rgba(17,31,30,0.50)',
                 lineWidth: 4.4,
                 lineOpacity: 0.82,
               }}
@@ -559,7 +564,13 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             <LineLayer
               id="memory-personal-trace-line"
               style={{
-                lineColor: theme.mode === 'night' ? '#A8C7B6' : '#9BBEAA',
+                // R21-v3 v2: sunset 用暖珊瑚色 (和黄昏底图橙紫呼应),
+                // day/night 保留原绿色调 (探索感)
+                lineColor: memoryMapTheme === 'night'
+                  ? '#A8C7B6'
+                  : memoryMapTheme === 'sunset'
+                    ? '#E8A870'
+                    : '#9BBEAA',
                 lineWidth: 1.8,
                 lineOpacity: 0.96,
               }}
