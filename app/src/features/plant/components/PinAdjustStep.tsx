@@ -39,7 +39,7 @@ import { PinNudgeConfig } from '../config/plantConfig';
 // migrated to Colors tokens per design §12.
 import { Colors, Spacing, FontSize } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
-import { getPrimaryMapStyle, getStandardStyleURL, themeToStandardPreset } from '../../../config/mapbox';
+import { getPrimaryMapStyle, getStandardStyleURL, themeToStandardPreset, buildStandardConfig } from '../../../config/mapbox';
 import { useMapTheme } from '../../../hooks/useMapTheme';
 import { log } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
@@ -478,7 +478,7 @@ export function PinAdjustStep({
               key={plantLightPreset}
               id="basemap"
               existing
-              config={{ lightPreset: plantLightPreset }}
+              config={buildStandardConfig(plantMapTheme)}
             />
           ) : null}
           <Camera
@@ -486,6 +486,7 @@ export function PinAdjustStep({
             defaultSettings={{
               centerCoordinate: [originRef.current.lng, originRef.current.lat],
               zoomLevel: INITIAL_ZOOM,
+              pitch: 0,
             }}
             minZoomLevel={MIN_ZOOM}
             maxZoomLevel={MAX_ZOOM}

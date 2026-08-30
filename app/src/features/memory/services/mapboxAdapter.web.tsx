@@ -127,7 +127,15 @@ export function MapView({
     if (!styleJSON) return null;
     try { return JSON.parse(styleJSON); } catch { return null; }
   }, [styleJSON]);
-  const styleUrl = styleURL ?? 'mapbox://styles/mapbox/outdoors-v12';
+  // R21-v3 v2 (2026-08-30): mapbox-gl-js v2.15.0 does NOT support Mapbox
+  // Standard style (v3+ feature). Substitute outdoors-v12 on web so the
+  // Playwright smoke test surface still renders. Real theme (day/dusk/night)
+  // will not show on web — this is a documented compromise until we upgrade
+  // mapbox-gl to v3.x.
+  const rewrittenStyleURL = (styleURL === 'mapbox://styles/mapbox/standard')
+    ? 'mapbox://styles/mapbox/outdoors-v12'
+    : styleURL;
+  const styleUrl = rewrittenStyleURL ?? 'mapbox://styles/mapbox/outdoors-v12';
 
   // react-map-gl needs an initialViewState. We pull it from the first
   // <Camera> child if present. Otherwise default to a sensible center.

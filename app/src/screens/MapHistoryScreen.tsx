@@ -21,7 +21,7 @@ import { useRouteStore } from '../store/useRouteStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { crashLogger } from '../services/crashLogger';
 import { getCurrentRegion } from '../config/regions';
-import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle } from '../config/mapbox';
+import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { formatDuration, formatDate, getRelativeTime, haversineM, kalmanInit, kalmanUpdate, simplifyPolyline } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
@@ -45,6 +45,7 @@ let CameraComponent: any = null;
 let LineLayer: any = null;
 let ShapeSource: any = null;
 let PointAnnotation: any = null;
+let StyleImport: any = null;
 if (Platform.OS !== 'web') {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -54,6 +55,7 @@ if (Platform.OS !== 'web') {
     LineLayer = Mapbox.LineLayer;
     ShapeSource = Mapbox.ShapeSource;
     PointAnnotation = Mapbox.PointAnnotation;
+    StyleImport = Mapbox.StyleImport;
   } catch {
     // @rnmapbox/maps not in this build — fallback panel will render.
   }
@@ -100,6 +102,7 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
   // R21-v3: three-state theme applied to every mapbox surface.
   const mapTheme = useMapTheme();
   const resolvedMapStyle = getMapStyleForTheme(mapLayer, mapTheme);
+  const historyLightPreset = themeToStandardPreset(mapTheme);
   // v198 Bug 5: track whether the user has panned the camera away from
   // the initial fit. When true, render a small recenter button that
   // re-fits to the route bbox. Pattern matches HikingScreen's recenter.
@@ -170,6 +173,15 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
         }
       }}
     >
+      {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
+      {mapLayer !== 'satellite' && StyleImport ? (
+        <StyleImport
+          key={historyLightPreset}
+          id="basemap"
+          existing
+          config={buildStandardConfig(mapTheme)}
+        />
+      ) : null}
       {CameraComponent && (
         <CameraComponent
           ref={cameraRef}
@@ -181,6 +193,7 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
             paddingLeft: 40,
             paddingRight: 40,
           }}
+          pitch={0}
           animationDuration={0}
         />
       )}

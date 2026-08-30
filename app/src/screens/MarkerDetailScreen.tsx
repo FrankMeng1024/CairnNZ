@@ -49,7 +49,7 @@ import { MarkForm } from '../features/marks/components/MarkForm';
 // looked nothing like the v10 design users see on the Memory map — visual
 // inconsistency between "where I saw it" and "where I tap to read it".
 import { CairnPin, resolveTier } from '../features/memory/components/CairnPinsLayer';
-import { getPrimaryMapStyle, getMapStyleForTheme } from '../config/mapbox';
+import { getPrimaryMapStyle, getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { formatDate } from '../utils/geo';
 import { log } from '../services/appLog';
 import { ContentConfig, VisibilityConfig } from '../features/plant/config/plantConfig';
@@ -64,6 +64,7 @@ let MapView: any = null;
 let CameraComponent: any = null;
 let PointAnnotation: any = null;
 let MarkerView: any = null;
+let StyleImport: any = null;
 if (Platform.OS !== 'web') {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -72,6 +73,7 @@ if (Platform.OS !== 'web') {
     CameraComponent = Mapbox.Camera;
     PointAnnotation = Mapbox.PointAnnotation;
     MarkerView = Mapbox.MarkerView;
+    StyleImport = Mapbox.StyleImport;
   } catch {}
 } else {
   try {
@@ -83,6 +85,7 @@ if (Platform.OS !== 'web') {
       CameraComponent = m.Camera;
       PointAnnotation = m.PointAnnotation;
       MarkerView = m.MarkerView;
+      StyleImport = m.StyleImport;
     }
   } catch {}
 }
@@ -103,6 +106,7 @@ export function MarkerDetailScreen() {
   const visualTheme = useVisualTheme();
   const markerMapTheme = useMapTheme();
   const markerResolvedMapStyle = getMapStyleForTheme('outdoors', markerMapTheme);
+  const markerLightPreset = themeToStandardPreset(markerMapTheme);
   const nav = useNavigation<Nav>();
   const route = useRoute<DetailRoute>();
   const markerId = route.params?.markerId;
@@ -237,6 +241,15 @@ export function MarkerDetailScreen() {
             attributionEnabled={false}
             logoEnabled={false}
           >
+            {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
+            {StyleImport ? (
+              <StyleImport
+                key={markerLightPreset}
+                id="basemap"
+                existing
+                config={buildStandardConfig(markerMapTheme)}
+              />
+            ) : null}
             <CameraComponent
               defaultSettings={{
                 centerCoordinate: [marker.lng, marker.lat],
@@ -245,6 +258,7 @@ export function MarkerDetailScreen() {
                 // Previous zoom was too tight — cairn floated in a blank
                 // green area with no landmarks.
                 zoomLevel: 15,
+                pitch: 0,
               }}
             />
             {MarkerView ? (

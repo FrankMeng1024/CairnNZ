@@ -28,7 +28,7 @@ import { useTrackingStore } from '../store/useTrackingStore';
 import { useRouteStore } from '../store/useRouteStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { getCurrentRegion } from '../config/regions';
-import { getPrimaryMapStyle, getMapStyleForLayer, getMapStyleForTheme } from '../config/mapbox';
+import { getPrimaryMapStyle, getMapStyleForLayer, getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { formatDuration } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
@@ -84,6 +84,7 @@ let UserLocationComponent: any = null;
 // here so we can render the extracted concept asset without pulling in
 // the whole HikingMap component.
 let PointAnnotationComponent: any = null;
+let StyleImport: any = null;
 if (Platform.OS !== 'web') {
   try {
     const Mapbox = require('@rnmapbox/maps');
@@ -93,6 +94,7 @@ if (Platform.OS !== 'web') {
     LineLayer = Mapbox.LineLayer;
     UserLocationComponent = Mapbox.UserLocation;
     PointAnnotationComponent = Mapbox.PointAnnotation;
+    StyleImport = Mapbox.StyleImport;
   } catch {
     // @rnmapbox/maps not installed in this build (Expo Go) — fallback used.
   }
@@ -205,6 +207,7 @@ export function RunningScreen() {
   const { isDark: runIsDark } = useAppearance();
   const runMapTheme = useMapTheme();
   const runResolvedMapStyle = getMapStyleForTheme('outdoors', runMapTheme);
+  const runLightPreset = themeToStandardPreset(runMapTheme);
   const runTheme = useVisualTheme();
   // R21 (2026-08-18 user "点击 向右侧展开"): tracking action tray is
   // collapsed by default. Tap the Navigation anchor (bottom-left) to
@@ -792,6 +795,15 @@ export function RunningScreen() {
             rotateEnabled={gesturesEnabled}
             pitchEnabled={gesturesEnabled}
           >
+            {/* R21-v3 v2 (2026-08-30): Standard style lightPreset — day/dusk/night. */}
+            {StyleImport ? (
+              <StyleImport
+                key={runLightPreset}
+                id="basemap"
+                existing
+                config={buildStandardConfig(runMapTheme)}
+              />
+            ) : null}
             {/* v122 fix #2: full mirror of HikingScreen — Camera always
                 mounts. instantCamera mode (lastCoordinate known) uses
                 defaultSettings + animationMode='none' AND the imperative
@@ -1023,6 +1035,15 @@ export function RunningScreen() {
                 rotateEnabled={false}
                 pitchEnabled={false}
               >
+                {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
+                {StyleImport ? (
+                  <StyleImport
+                    key={runLightPreset}
+                    id="basemap"
+                    existing
+                    config={buildStandardConfig(runMapTheme)}
+                  />
+                ) : null}
                 {CameraComponent && (
                   <CameraComponent
                     followUserLocation={foregroundGranted}

@@ -41,7 +41,7 @@ import { OfflineMapSheet } from '../components/OfflineMapSheet';
 import { MARKER_META, MarkerType } from '../data/mockData';
 import { FLAG_TYPES } from '../data/flagTypes';
 import { getCurrentRegion } from '../config/regions';
-import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle } from '../config/mapbox';
+import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { likeMarker, reportMarker, MarkerInteractionError } from '../services/markerInteractionService';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
@@ -52,6 +52,7 @@ let MapView: any = null;
 let Camera: any = null;
 let PointAnnotation: any = null;
 let UserLocation: any = null;
+let StyleImport: any = null;
 if (Platform.OS !== 'web') {
   try {
     const Mapbox = require('@rnmapbox/maps');
@@ -60,6 +61,7 @@ if (Platform.OS !== 'web') {
     Camera = Mapbox.Camera;
     PointAnnotation = Mapbox.PointAnnotation;
     UserLocation = Mapbox.UserLocation;
+    StyleImport = Mapbox.StyleImport;
   } catch {
     // Mapbox native not available
   }
@@ -110,6 +112,7 @@ function RealMap({
   const updateSetting = useSettingsStore((s) => s.updateSetting);
   // R21-v3: three-state theme (day/sunset/night).
   const mapTheme = useMapTheme();
+  const mapLightPreset = themeToStandardPreset(mapTheme);
   const resolvedMapStyle = React.useMemo(() => getMapStyleForTheme(mapLayer, mapTheme), [mapLayer, mapTheme]);
 
   // If Mapbox not available (Expo Go), show upgrade prompt
@@ -162,15 +165,25 @@ function RealMap({
         compassEnabled={true}
         scaleBarEnabled={false}
       >
+        {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
+        {mapLayer !== 'satellite' && StyleImport ? (
+          <StyleImport
+            key={mapLightPreset}
+            id="basemap"
+            existing
+            config={buildStandardConfig(mapTheme)}
+          />
+        ) : null}
         <Camera
           defaultSettings={{
             centerCoordinate: [region.centerLng, region.centerLat],
             zoomLevel: region.defaultZoom,
+            pitch: 0,
           }}
           minZoomLevel={4}
           maxZoomLevel={18}
         />
-        <UserLocation visible={true} renderMode="native" />
+        <UserLocation visible={true} renderMode="normal" />
         {markers.map((m) => {
           const meta = MARKER_META[m.type as keyof typeof MARKER_META] ?? MARKER_META.free;
           const flagType = FLAG_TYPES.find(f => f.id === m.type);

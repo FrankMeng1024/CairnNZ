@@ -19,7 +19,7 @@ import { useMarkerStore, type Marker, type MarkerPermission } from '../store/use
 // longer decodes marker.note directly; MarkCard owns that.
 import { useTrackingStore } from '../store/useTrackingStore';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
-import { getPrimaryMapStyle, getMapStyleForTheme } from '../config/mapbox';
+import { getPrimaryMapStyle, getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { Icon, type IconName } from '../components/Icon';
 import { HikingIcon, RunningIcon } from '../components/ActivityIcons';
 import { BackButton } from '../components/BackButton';
@@ -41,6 +41,7 @@ let MapView: any = null;
 let CameraComponent: any = null;
 let LineLayer: any = null;
 let ShapeSource: any = null;
+let StyleImport: any = null;
 if (Platform.OS !== 'web') {
   try {
     const Mapbox = require('@rnmapbox/maps');
@@ -48,6 +49,7 @@ if (Platform.OS !== 'web') {
     CameraComponent = Mapbox.Camera;
     LineLayer = Mapbox.LineLayer;
     ShapeSource = Mapbox.ShapeSource;
+    StyleImport = Mapbox.StyleImport;
   } catch {
     // @rnmapbox/maps not installed in this build (Expo Go) — fallback used.
   }
@@ -303,6 +305,7 @@ function FilterSortBar<F extends string, S extends string>({
 function RouteMapPreview({ points }: { points: { lat: number; lng: number }[] }) {
   const routeMapTheme = useMapTheme();
   const routeResolvedMapStyle = getMapStyleForTheme('outdoors', routeMapTheme);
+  const routeLightPreset = themeToStandardPreset(routeMapTheme);
   // Compute bounds for camera fit
   const bounds = useMemo(() => {
     if (!points || points.length < 2) return null;
@@ -351,9 +354,20 @@ function RouteMapPreview({ points }: { points: { lat: number; lng: number }[] })
         rotateEnabled={false}
         pitchEnabled={false}
       >
+        {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
+        {StyleImport ? (
+          <StyleImport
+            key={routeLightPreset}
+            id="basemap"
+            existing
+            config={buildStandardConfig(routeMapTheme)}
+          />
+        ) : null}
         {CameraComponent && (
           <CameraComponent
             bounds={{ ne: bounds.ne, sw: bounds.sw, paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24 }}
+            pitch={0}
+            maxZoomLevel={16}
             animationDuration={0}
           />
         )}

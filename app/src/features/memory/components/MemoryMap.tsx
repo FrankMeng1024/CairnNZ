@@ -30,7 +30,7 @@ import { Colors } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { useMapTheme } from '../../../hooks/useMapTheme';
-import { getMapStyleForTheme } from '../../../config/mapbox';
+import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../../../config/mapbox';
 
 interface Props {
   centerLat: number;
@@ -103,6 +103,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const theme = useVisualTheme();
   const memoryMapTheme = useMapTheme();
   const memoryResolvedMapStyle = getMapStyleForTheme('outdoors', memoryMapTheme);
+  const memoryLightPreset = themeToStandardPreset(memoryMapTheme);
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
   const memoryPoints = useMemoryStore((s) => s.points);
@@ -352,7 +353,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   if (!Mapbox.available) {
     return <View style={[styles.webStub, { backgroundColor: theme.background }]} />;
   }
-  const { MapView, Camera, UserLocation, CircleLayer, ShapeSource, LineLayer } = Mapbox as any;
+  const { MapView, Camera, UserLocation, CircleLayer, ShapeSource, LineLayer, StyleImport } = Mapbox as any;
 
   return (
     <View style={styles.container}>
@@ -467,6 +468,15 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           }
         }}
       >
+        {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
+        {StyleImport ? (
+          <StyleImport
+            key={memoryLightPreset}
+            id="basemap"
+            existing
+            config={buildStandardConfig(memoryMapTheme)}
+          />
+        ) : null}
         <Camera
           ref={cameraRef}
           // v302 N6: defaultSettings (instead of centerCoordinate prop)
@@ -476,6 +486,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           defaultSettings={{
             centerCoordinate: [centerLng, centerLat],
             zoomLevel: INITIAL_ZOOM,
+            pitch: 0,
           }}
           animationMode={'flyTo'}
           animationDuration={600}

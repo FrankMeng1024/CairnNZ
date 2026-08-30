@@ -31,7 +31,7 @@ export function initMapbox() {
       const offline = (Mapbox as any).offlineManager;
       if (offline && typeof offline.createPack === 'function') {
         const styleURL = process.env.EXPO_PUBLIC_CAIRN_TOPO_STYLE_URL
-          ?? 'mapbox://styles/mapbox/streets-v12';
+          ?? 'mapbox://styles/mapbox/standard';
         offline.getPack('cairn-nz-warmup').then((pack: unknown) => {
           if (pack) return; // already cached from a previous launch
           void offline.createPack(
@@ -152,11 +152,36 @@ export function themeToStandardPreset(theme: MapTheme): StandardLightPreset {
 }
 
 /**
+ * R21-v3 v2 (2026-08-30) — StyleImport config for Standard style in
+ * "flat top-down" mode. User explicitly requested no 3D pitch and no
+ * 3D buildings/landmarks, so we disable every `show3d*` flag Standard
+ * exposes (all default `true` per Mapbox spec). Terrain is intrinsic
+ * to Standard and cannot be disabled via config — pitch=0 hides it
+ * effectively (only shading remains, no elevation parallax).
+ *
+ * Values are typed as `string` because rnmapbox's StyleImport config
+ * dictionary is `{ [key: string]: string }` — booleans are coerced by
+ * the native side.
+ */
+export function buildStandardConfig(theme: MapTheme): { [key: string]: string } {
+  return {
+    lightPreset: themeToStandardPreset(theme),
+    show3dObjects: 'false',
+    show3dBuildings: 'false',
+    show3dFacades: 'false',
+    show3dLandmarks: 'false',
+    show3dTrees: 'false',
+  };
+}
+
+/**
  * Local packaged 2D sunset style. Bundled via metro require() so no network
  * fetch is needed. See app/assets/map-styles/sunset-2d.json for the palette.
- * rnmapbox `styleJSON` expects a JSON string, mapbox-gl `style` prop
- * accepts the object directly. Return both flavours so callers can pass
- * the right one for their target.
+ *
+ * R21-v3 v2 (2026-08-30): No longer used at runtime — every surface now
+ * runs Standard 3D with a `lightPreset` (day/dusk/night) via <StyleImport>.
+ * Kept in the codebase as a documented fallback in case Standard proves
+ * too heavy on older devices or the 3D look tests badly with users.
  */
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const SUNSET_STYLE_JSON_OBJ = require('../../assets/map-styles/sunset-2d.json');
@@ -182,38 +207,38 @@ export function getSunsetStyleJSONString(): string {
  *   night + outdoors → dark-v11 (URL)
  *   night + satellite → satellite (URL)
  */
+/**
+ * R21-v3 (2026-08-30 v2) — resolve the effective style for a given theme +
+ * layer combination. All non-satellite surfaces now return Mapbox Standard
+ * (3D) — the caller pairs the returned styleURL with a `<StyleImport
+ * id="basemap" existing config={{lightPreset}} />` child that applies the
+ * day/dusk/night light preset. Satellite branch keeps its own imagery,
+ * unaffected by theme.
+ *
+ *   any theme + satellite → satellite-streets-v12 (URL)
+ *   any theme + outdoors  → Standard (URL) — preset via StyleImport child
+ *
+ * Legacy sunset JSON + dark-v11 paths are retired now that every surface
+ * runs Standard with a preset.
+ */
 export type ResolvedMapStyle =
   | { kind: 'url'; url: string }
   | { kind: 'json'; json: string; object: object };
 
-// R21-v3 (2026-08-30): pre-allocated tagged values so `getMapStyleForTheme`
-// returns the SAME reference for the same (layer, theme) pair every call.
-// Prevents rnmapbox / react-map-gl from perceiving a "new style" prop each
-// render and triggering avoidable style reloads — especially bad in list
-// screens (RoutesScreen) that mount many map previews.
+// R21-v3 (2026-08-30 v2): pre-allocated tagged values so `getMapStyleForTheme`
+// returns the SAME reference every call. Prevents rnmapbox / react-map-gl
+// from perceiving a "new style" prop each render and triggering avoidable
+// style reloads — especially bad in list screens (RoutesScreen) that mount
+// many map previews.
 const RESOLVED_SATELLITE: ResolvedMapStyle = { kind: 'url', url: MAP_STYLES.satellite };
-const RESOLVED_NIGHT_OUTDOORS: ResolvedMapStyle = { kind: 'url', url: MAP_STYLES.darkV11 };
-const RESOLVED_SUNSET_OUTDOORS: ResolvedMapStyle = {
-  kind: 'json',
-  json: SUNSET_STYLE_JSON_STR,
-  object: SUNSET_STYLE_JSON_OBJ,
-};
-// R21-v3: day path stays through getPrimaryMapStyle() so
-// EXPO_PUBLIC_CAIRN_TOPO_STYLE_URL env override still works. Cached lazily
-// on first call and reused thereafter.
-let RESOLVED_DAY_OUTDOORS: ResolvedMapStyle | null = null;
+const RESOLVED_STANDARD: ResolvedMapStyle = { kind: 'url', url: MAP_STYLES.standard };
 
 export function getMapStyleForTheme(
   layer: MapLayer,
-  theme: MapTheme,
+  _theme: MapTheme,
 ): ResolvedMapStyle {
   if (layer === 'satellite') return RESOLVED_SATELLITE;
-  if (theme === 'night') return RESOLVED_NIGHT_OUTDOORS;
-  if (theme === 'sunset') return RESOLVED_SUNSET_OUTDOORS;
-  if (!RESOLVED_DAY_OUTDOORS) {
-    RESOLVED_DAY_OUTDOORS = { kind: 'url', url: getPrimaryMapStyle() };
-  }
-  return RESOLVED_DAY_OUTDOORS;
+  return RESOLVED_STANDARD;
 }
 
 /**

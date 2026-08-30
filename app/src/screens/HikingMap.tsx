@@ -15,7 +15,7 @@ import {
 import { Colors, Spacing, FontSize, Radius, Shadow } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
 import { getCurrentRegion } from '../config/regions';
-import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle } from '../config/mapbox';
+import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
@@ -36,6 +36,7 @@ let UserLocationComponent: any = null;
 let LineLayer: any = null;
 let ShapeSource: any = null;
 let CircleLayer: any = null;
+let StyleImport: any = null;
 if (Platform.OS !== 'web') {
   try {
     const Mapbox = require('@rnmapbox/maps');
@@ -46,6 +47,7 @@ if (Platform.OS !== 'web') {
     LineLayer = Mapbox.LineLayer;
     ShapeSource = Mapbox.ShapeSource;
     CircleLayer = Mapbox.CircleLayer;
+    StyleImport = Mapbox.StyleImport;
   } catch {
     // Mapbox native not available
   }
@@ -105,6 +107,7 @@ export function HikingMap({
   const mapLayer = useSettingsStore((s) => s.mapLayer);
   const theme = useVisualTheme();
   const mapTheme = useMapTheme();
+  const hikeLightPreset = themeToStandardPreset(mapTheme);
 
   // R114/O22 (2026-08-08) Bug 4: watch network state. When offline, Mapbox
   // tiles fail to fetch → map renders black/white. Overlay a friendly
@@ -392,6 +395,18 @@ export function HikingMap({
           if (!mapFirstRender) setMapFirstRender(true);
         }}
       >
+        {/* R21-v3 v2 (2026-08-30): Standard style lightPreset — day/dusk/night
+            follows useMapTheme. Satellite layer skips the import (Standard
+            is not the loaded style). key={preset} forces remount so the
+            preset re-applies cleanly when sunset/night hits mid-session. */}
+        {mapLayer !== 'satellite' && StyleImport ? (
+          <StyleImport
+            key={hikeLightPreset}
+            id="basemap"
+            existing
+            config={buildStandardConfig(mapTheme)}
+          />
+        ) : null}
         <CameraComponent
           ref={cameraRef}
           // v118: followUser respects the new toggle state. While true,
