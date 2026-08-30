@@ -404,7 +404,7 @@ export function HikingMap({
             key={hikeLightPreset}
             id="basemap"
             existing
-            config={buildStandardConfig(mapTheme)}
+            config={buildStandardConfig(mapTheme) as any}
           />
         ) : null}
         <CameraComponent

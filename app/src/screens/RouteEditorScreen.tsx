@@ -777,7 +777,7 @@ export function RouteEditorScreen() {
                 key={editorLightPreset}
                 id="basemap"
                 existing
-                config={buildStandardConfig(editorMapTheme)}
+                config={buildStandardConfig(editorMapTheme) as any}
               />
             ) : null}
             {/* v6.3 plan §2.3: enable Terrain DEM so queryTerrainElevation()

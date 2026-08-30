@@ -474,7 +474,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             key={memoryLightPreset}
             id="basemap"
             existing
-            config={buildStandardConfig(memoryMapTheme)}
+            config={buildStandardConfig(memoryMapTheme) as any}
           />
         ) : null}
         <Camera

@@ -247,7 +247,7 @@ export function MarkerDetailScreen() {
                 key={markerLightPreset}
                 id="basemap"
                 existing
-                config={buildStandardConfig(markerMapTheme)}
+                config={buildStandardConfig(markerMapTheme) as any}
               />
             ) : null}
             <CameraComponent

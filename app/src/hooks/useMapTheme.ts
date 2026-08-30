@@ -12,7 +12,7 @@
  * bool — that lost the sunset state.
  *
  * Consumers:
- *   - HikingMap / MapHistoryScreen / MapScreen / RoutesScreen /
+ *   - HikingMap / MapHistoryScreen / RoutesScreen /
  *     RunningScreen / RouteEditor / MarkerDetail / Memory — pipe theme into
  *     `getMapStyleForTheme(layer, theme)`
  *   - PinAdjustStep — pipes theme into `themeToStandardPreset(theme)` for

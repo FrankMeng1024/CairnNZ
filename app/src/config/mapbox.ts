@@ -92,7 +92,7 @@ type MapStyle = keyof typeof MAP_STYLES;
  *   roads       muted (don't compete with terrain)
  *
  * The style is served from Mapbox Studio.  We fall back to
- * `outdoors-v12` if the custom style fails to load (see MapScreen /
+ * `outdoors-v12` if the custom style fails to load (see MapHistoryScreen /
  * HikingScreen / RouteEditorScreen).
  *
  * To publish: create a new style in Mapbox Studio, apply the colour
@@ -125,7 +125,7 @@ export function getPrimaryMapStyle(): string {
 
 /**
  * O18 MAP-01: user-selectable layer switch (outdoors vs satellite).
- * Called by MapScreen / MapHistoryScreen / HikingMap so the same choice
+ * Called by MapHistoryScreen / HikingMap so the same choice
  * applies across every map surface. Plant flow keeps its own inline
  * toggle (per v299 UX) — do NOT wire this to PinAdjustStep.
  */
@@ -159,18 +159,58 @@ export function themeToStandardPreset(theme: MapTheme): StandardLightPreset {
  * to Standard and cannot be disabled via config — pitch=0 hides it
  * effectively (only shading remains, no elevation parallax).
  *
- * Values are typed as `string` because rnmapbox's StyleImport config
- * dictionary is `{ [key: string]: string }` — booleans are coerced by
- * the native side.
+ * R21-v3 v4 (2026-08-30) — additional refinements for hiking/outdoor
+ * feel (免费, 全部 Mapbox Standard 内建):
+ *   - theme=faded → basemap tuned down so cairn pins + route + fog
+ *     stand out; matches Cairn's "map is a canvas, your data is the
+ *     content" ethos
+ *   - font=Spectral → warmer, more editorial serif; feels like a
+ *     printed hiking map rather than a car dashboard
+ *   - showTransitLabels=false → public-transit stops/lines are noise
+ *     for a hiking/running app
+ *   - showPedestrianRoads=true → tracks, footpaths, trails become the
+ *     visual priority instead of highways
+ *
+ * R21-v3 v4b (2026-08-30) — 4-eyes review fix: bool config values must
+ * be JS booleans, NOT string 'true'/'false'. The rnmapbox 10.3.1 iOS
+ * native side (RNMBXStyleImport.swift) forwards config as-is via
+ * `mapboxMap.setStyleImportConfigProperties(configs: [String: Any])`.
+ * String 'false' becomes a truthy NSString and Mapbox's expression
+ * evaluator silently ignores it → show3d flags never turned off in v4a.
+ * The TS type at v10.3.1 declares `{[key: string]: string}` which is a
+ * stale typing bug in the package — we return the correct runtime shape
+ * and cast to any at the call site to satisfy the outdated .d.ts.
  */
-export function buildStandardConfig(theme: MapTheme): { [key: string]: string } {
+type StandardConfig = { [key: string]: string | boolean };
+
+export function buildStandardConfig(theme: MapTheme): StandardConfig {
   return {
     lightPreset: themeToStandardPreset(theme),
-    show3dObjects: 'false',
-    show3dBuildings: 'false',
-    show3dFacades: 'false',
-    show3dLandmarks: 'false',
-    show3dTrees: 'false',
+    theme: 'faded',
+    font: 'Spectral',
+    show3dObjects: false,
+    show3dBuildings: false,
+    show3dFacades: false,
+    show3dLandmarks: false,
+    show3dTrees: false,
+    showTransitLabels: false,
+    showPedestrianRoads: true,
+  };
+}
+
+/**
+ * R21-v3 v4b (2026-08-30) — subset config for Mapbox Standard-Satellite
+ * style. Standard-Satellite supports ONLY: lightPreset, showPlaceLabels,
+ * showRoadLabels, showPointOfInterestLabels, showTransitLabels,
+ * showRoadsAndTransit, showPedestrianRoads. Passing the full Standard
+ * set (theme/font/show3d*) triggers "unknown property" warnings on
+ * native and pollutes telemetry.
+ */
+export function buildStandardSatelliteConfig(theme: MapTheme): StandardConfig {
+  return {
+    lightPreset: themeToStandardPreset(theme),
+    showTransitLabels: false,
+    showPedestrianRoads: true,
   };
 }
 

@@ -179,7 +179,7 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
           key={historyLightPreset}
           id="basemap"
           existing
-          config={buildStandardConfig(mapTheme)}
+          config={buildStandardConfig(mapTheme) as any}
         />
       ) : null}
       {CameraComponent && (

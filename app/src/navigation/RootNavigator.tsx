@@ -29,7 +29,6 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { HikingScreen } from '../screens/HikingScreen';
 import { RunningScreen } from '../screens/RunningScreen';
 import { MapHistoryScreen } from '../screens/MapHistoryScreen';
-import { MapScreen } from '../screens/MapScreen';
 import { RoutesScreen } from '../screens/RoutesScreen';
 import { RouteEditorScreen } from '../screens/RouteEditorScreen';
 import { DebugScreen } from '../screens/DebugScreen';
@@ -64,7 +63,6 @@ export type RootStackParamList = {
   Hiking: undefined;
   Running: undefined;
   MapHistory: { sessionId?: string; routeId?: string } | undefined;
-  Map: { focusLat?: number; focusLng?: number; focusMarkerId?: string } | undefined;
   Routes: { initialTab?: 'routes' | 'activities' | 'flags' } | undefined;
   RouteEditor: { routeId?: string; fromSessionId?: string } | undefined;
   Plant: undefined;
@@ -219,7 +217,6 @@ export function RootNavigator() {
             <Stack.Screen name="Running"     component={RunningScreen} />
             <Stack.Screen name="Routes"      component={RoutesScreen} />
             <Stack.Screen name="MapHistory"  component={MapHistoryScreen} />
-            <Stack.Screen name="Map"         component={MapScreen} />
             <Stack.Screen name="RouteEditor" component={RouteEditorScreen} />
             <Stack.Screen name="Plant"       component={PlantScreen} />
             <Stack.Screen name="MarkerDetail" component={MarkerDetailScreen} />

@@ -801,7 +801,7 @@ export function RunningScreen() {
                 key={runLightPreset}
                 id="basemap"
                 existing
-                config={buildStandardConfig(runMapTheme)}
+                config={buildStandardConfig(runMapTheme) as any}
               />
             ) : null}
             {/* v122 fix #2: full mirror of HikingScreen — Camera always
@@ -1041,7 +1041,7 @@ export function RunningScreen() {
                     key={runLightPreset}
                     id="basemap"
                     existing
-                    config={buildStandardConfig(runMapTheme)}
+                    config={buildStandardConfig(runMapTheme) as any}
                   />
                 ) : null}
                 {CameraComponent && (
