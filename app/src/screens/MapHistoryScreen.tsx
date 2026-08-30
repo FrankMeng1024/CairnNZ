@@ -456,6 +456,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
   onPress: () => void;
   onViewOnMap: () => void;
 }) {
+  const theme = useVisualTheme();
   const isRun = session.activityMode === 'running';
   const dateStr = formatDate(session.startedAt);
   // O12: settings-aware distance format.
@@ -464,7 +465,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
   // when no name was set. Earlier versions hardcoded 'Run' / 'Hike'
   // here, dropping whatever the user typed in the stop-summary sheet.
   const actLabel = session.name || (isRun ? 'Run' : 'Hike');
-  const actColor = isRun ? Colors.running : Colors.primary;
+  const actColor = isRun ? Colors.running : theme.iconActive;
   const actLightBg = isRun ? Colors.runningLight : Colors.primaryLight;
   const actDeepBg = isRun
     ? Colors.runningLight.replace('0.12', '0.24')
@@ -586,26 +587,26 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
           delayLongPress={800}
           accessibilityLabel="Tap to retry sync, long-press to discard"
         >
-          <View style={[cardStyles.routeCard, { opacity: 0.55 }]}>
+          <View style={[cardStyles.routeCard, { opacity: 0.62, backgroundColor: theme.surface, borderColor: theme.border }]}>
             <LinearGradient
               colors={[actLightBg, actDeepBg]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={cardStyles.routeCardGradient}
             >
               <View style={cardStyles.routeCardHeader}>
-                <View style={[cardStyles.iconCircle, { backgroundColor: 'rgba(255,255,255,0.7)' }]}>
+                <View style={[cardStyles.iconCircle, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
                   <Icon name={isRun ? 'Footprints' : 'Mountain'} size={20} color={actColor} strokeWidth={2} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={cardStyles.routeCardTitle} numberOfLines={1}>{actLabel}</Text>
-                  <Text style={cardStyles.routeCardSubtitle}>
+                  <Text style={[cardStyles.routeCardTitle, { color: theme.foreground }]} numberOfLines={1}>{actLabel}</Text>
+                  <Text style={[cardStyles.routeCardSubtitle, { color: theme.muted }]}>
                     {distStr} · {durationStr}
                   </Text>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                <Icon name="CloudOff" size={12} color={Colors.textSecondary} strokeWidth={2} />
-                <Text style={{ color: Colors.textSecondary, fontSize: FontSize.caption }}>
+                <Icon name="CloudOff" size={12} color={theme.iconInactive} strokeWidth={2} />
+                <Text style={{ color: theme.foregroundSecondary, fontSize: FontSize.caption }}>
                   {session.syncState === 'syncing' ? 'Syncing…' : 'Saved offline — tap to retry sync'}
                 </Text>
               </View>
@@ -614,7 +615,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
         </TouchableOpacity>
       ) : (
       <PressRow onPress={onPress}>
-        <View style={[cardStyles.routeCard, (isSelected || isExpanded) && cardStyles.routeCardSelected]}>
+        <View style={[cardStyles.routeCard, { backgroundColor: theme.surface, borderColor: theme.border }, (isSelected || isExpanded) && { backgroundColor: theme.surfaceElevated, borderColor: theme.primary }]}>
           <LinearGradient
             colors={[actLightBg, actDeepBg]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -627,19 +628,19 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
           </LinearGradient>
           <View style={cardStyles.routeInfo}>
             {/* Activity type pill badge */}
-            <View style={[cardStyles.actTypePill, { backgroundColor: actLightBg }]}>
+            <View style={[cardStyles.actTypePill, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
               <Text style={[cardStyles.actTypePillText, { color: actColor }]}>{actLabel}</Text>
             </View>
             {/* Primary stat: duration */}
-            <Text style={cardStyles.routePrimary}>{durationStr}</Text>
+            <Text style={[cardStyles.routePrimary, { color: theme.foreground }]}>{durationStr}</Text>
             {/* Secondary line: date · distance */}
-            <Text style={cardStyles.routeMeta}>{dateStr} · {distStr}</Text>
+            <Text style={[cardStyles.routeMeta, { color: theme.muted }]}>{dateStr} · {distStr}</Text>
           </View>
           <View style={cardStyles.routeChevron}>
             <Icon
               name={isExpanded ? 'ChevronDown' : 'ChevronRight'}
               size={IconSize.sm}
-              color={isExpanded ? actColor : Colors.textMuted}
+              color={isExpanded ? actColor : theme.iconInactive}
               strokeWidth={2.5}
             />
           </View>
@@ -648,55 +649,55 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
       )}
       {/* Inline expanded stats + route preview card — 只在非 pending 时渲染 */}
       {!isPendingSync && (
-      <Animated.View style={[cardStyles.expandedArea, { height: expandedHeight, opacity: expandAnim }]}>
+      <Animated.View style={[cardStyles.expandedArea, { height: expandedHeight, opacity: expandAnim, backgroundColor: theme.surface, borderColor: theme.border }]}>
         <Animated.View style={{ opacity: statsOpacity, transform: [{ translateY: statsTransY }] }}>
         <View style={cardStyles.expandedStats}>
-          <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.primary }]}>
-            <Text style={cardStyles.expandedStatVal}>{distStr}</Text>
-            {distStr !== 'No GPS' && <Text style={cardStyles.expandedStatLbl}>{dist.unit}</Text>}
+          <View style={[cardStyles.expandedCapsule, { borderLeftColor: theme.iconActive, backgroundColor: theme.surfaceElevated }]}>
+            <Text style={[cardStyles.expandedStatVal, { color: theme.foreground }]}>{distStr}</Text>
+            {distStr !== 'No GPS' && <Text style={[cardStyles.expandedStatLbl, { color: theme.muted }]}>{dist.unit}</Text>}
           </View>
-          <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.running }]}>
-            <Text style={cardStyles.expandedStatVal}>{durationStr}</Text>
-            <Text style={cardStyles.expandedStatLbl}>time</Text>
+          <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.running, backgroundColor: theme.surfaceElevated }]}>
+            <Text style={[cardStyles.expandedStatVal, { color: theme.foreground }]}>{durationStr}</Text>
+            <Text style={[cardStyles.expandedStatLbl, { color: theme.muted }]}>time</Text>
           </View>
-          <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.severityCaution }]}>
-            <Text style={cardStyles.expandedStatVal}>+{dist.formatElevation(session.elevationGainM ?? 0)}{dist.elevUnit}</Text>
-            <Text style={cardStyles.expandedStatLbl}>elev</Text>
+          <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.severityCaution, backgroundColor: theme.surfaceElevated }]}>
+            <Text style={[cardStyles.expandedStatVal, { color: theme.foreground }]}>+{dist.formatElevation(session.elevationGainM ?? 0)}{dist.elevUnit}</Text>
+            <Text style={[cardStyles.expandedStatLbl, { color: theme.muted }]}>elev</Text>
           </View>
-          <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.flag }]}>
-            <Text style={cardStyles.expandedStatVal}>{session.markerIds?.length ?? 0}</Text>
-            <Text style={cardStyles.expandedStatLbl}>flags</Text>
+          <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.flag, backgroundColor: theme.surfaceElevated }]}>
+            <Text style={[cardStyles.expandedStatVal, { color: theme.foreground }]}>{session.markerIds?.length ?? 0}</Text>
+            <Text style={[cardStyles.expandedStatLbl, { color: theme.muted }]}>flags</Text>
           </View>
         </View>
         </Animated.View>
 
         {/* Route preview card (STORY-00103 + STORY-00108) */}
         <Animated.View style={{ opacity: previewOpacity, transform: [{ translateY: previewTransY }] }}>
-        <View style={cardStyles.routePreviewCard}>
+        <View style={[cardStyles.routePreviewCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
           {/* Topo background — contour rings */}
           <View style={cardStyles.topoRingOuter} />
           <View style={cardStyles.topoRingMid} />
           <View style={cardStyles.topoRingInner} />
           {/* Stat chips overlaid */}
           <View style={cardStyles.previewChipsRow}>
-            <View style={cardStyles.previewChip}>
+            <View style={[cardStyles.previewChip, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Icon name="MapPin" size={10} color={actColor} strokeWidth={2.5} />
               <Text style={[cardStyles.previewChipText, { color: actColor }]}>{distStr}</Text>
             </View>
-            <View style={cardStyles.previewChip}>
+            <View style={[cardStyles.previewChip, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Icon name="Timer" size={10} color={actColor} strokeWidth={2.5} />
               <Text style={[cardStyles.previewChipText, { color: actColor }]}>{durationStr}</Text>
             </View>
           </View>
           {/* Route label — STORY-00108: renamed from "Route Preview" */}
-          <Text style={cardStyles.previewLabel}>Preview</Text>
+          <Text style={[cardStyles.previewLabel, { color: theme.foregroundSecondary }]}>Preview</Text>
         </View>
         </Animated.View>
 
         <Animated.View style={{ opacity: ctaOpacity, transform: [{ translateY: ctaTransY }] }}>
-        <TouchableOpacity style={cardStyles.viewOnMapBtn} onPress={onViewOnMap}>
-          <Icon name="Map" size={14} color="#fff" strokeWidth={2} />
-          <Text style={cardStyles.viewOnMapText}>View on Map</Text>
+        <TouchableOpacity style={[cardStyles.viewOnMapBtn, { backgroundColor: theme.primary }]} onPress={onViewOnMap}>
+          <Icon name="Map" size={14} color={theme.onPrimary} strokeWidth={2} />
+          <Text style={[cardStyles.viewOnMapText, { color: theme.onPrimary }]}>View on Map</Text>
         </TouchableOpacity>
         </Animated.View>
       </Animated.View>
@@ -711,6 +712,7 @@ function FlagDetailSheet({ marker, onClose, onDelete }: {
   onClose: () => void;
   onDelete: () => void;
 }) {
+  const theme = useVisualTheme();
   const slideY = useRef(new Animated.Value(H)).current;
   const scrimOpacity = useRef(new Animated.Value(0)).current;
 
@@ -750,29 +752,29 @@ function FlagDetailSheet({ marker, onClose, onDelete }: {
   return (
     <>
       {/* Scrim — fades in/out in sync with sheet */}
-      <Animated.View style={[sheetStyles.scrim, { opacity: scrimOpacity }]}>
+      <Animated.View style={[sheetStyles.scrim, { opacity: scrimOpacity, backgroundColor: theme.readabilityScrim }]}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={close} />
       </Animated.View>
-      <Animated.View style={[sheetStyles.sheet, { transform: [{ translateY: slideY }] }]}>
+      <Animated.View style={[sheetStyles.sheet, { transform: [{ translateY: slideY }], backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow }]}>
         {/* Drag handle */}
-        <View style={sheetStyles.handle} />
+        <View style={[sheetStyles.handle, { backgroundColor: theme.border }]} />
         {/* Type badge */}
         <View style={[sheetStyles.typeBadge, { backgroundColor: meta.bg, borderColor: meta.color }]}>
           <Icon name={meta.iconName as IconName} size={20} color={meta.color} strokeWidth={2} />
           <Text style={[sheetStyles.typeBadgeText, { color: meta.color }]}>{meta.label}</Text>
         </View>
         {/* Note */}
-        <Text style={sheetStyles.noteLabel}>Note</Text>
-        <Text style={sheetStyles.noteText} numberOfLines={4}>{marker.note || 'No note yet'}</Text>
+        <Text style={[sheetStyles.noteLabel, { color: theme.foregroundSecondary }]}>Note</Text>
+        <Text style={[sheetStyles.noteText, { color: theme.foreground }]} numberOfLines={4}>{marker.note || 'No note yet'}</Text>
         {/* Date */}
-        <Text style={sheetStyles.dateLine}>Planted: {dateStr}</Text>
+        <Text style={[sheetStyles.dateLine, { color: theme.muted }]}>Planted: {dateStr}</Text>
         {/* Delete */}
         <TouchableOpacity
-          style={[sheetStyles.deleteBtn, deleteConfirm && { backgroundColor: Colors.danger }]}
+          style={[sheetStyles.deleteBtn, { backgroundColor: theme.surface, borderColor: theme.destructive }, deleteConfirm && { backgroundColor: theme.destructive }]}
           onPress={handleDelete}
         >
-          <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
-          <Text style={[sheetStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Cairn'}</Text>
+          <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? theme.onPrimary : theme.destructive} strokeWidth={2} />
+          <Text style={[sheetStyles.deleteBtnText, { color: deleteConfirm ? theme.onPrimary : theme.destructive }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Cairn'}</Text>
         </TouchableOpacity>
       </Animated.View>
     </>
@@ -1196,7 +1198,7 @@ export function MapHistoryScreen() {
               has NO top title — the tab bar (Activities/Routes/Cairns) below
               already anchors the context. Only detail views show a title.
               Type-specific label based on which detail is open. */}
-          <Text style={styles.topTitle}>{targetRouteId ? 'Route Detail' : targetSessionId ? 'Activity Detail' : (tab === 'flags' ? 'Cairns' : 'Routes')}</Text>
+          <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>{targetRouteId ? 'Route Detail' : targetSessionId ? 'Activity Detail' : (tab === 'flags' ? 'Cairns' : 'Routes')}</Text>
           {/* User decision 2026-08-16: Plan button removed from Trails top row.
               Also drop the right-side spacer — nothing to balance now. */}
           {!targetSessionId && !targetRouteId ? (
@@ -1230,13 +1232,13 @@ export function MapHistoryScreen() {
           (red outline pill, full width). Pill radius 14, minHeight 54 — Auth
           submit style. */}
       {targetRouteId && selectedRoute ? (
-        <View style={styles.singleSessionPanel}>
-          <View style={styles.panelHandle} />
+        <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
+          <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
           <View style={{ marginBottom: Spacing.md }}>
             {renameEditing ? (
               <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
                 <TextInput
-                  style={styles.renameInput}
+                  style={[styles.renameInput, { color: visualTheme.foreground, borderBottomColor: visualTheme.primary }]}
                   value={renameText}
                   onChangeText={setRenameText}
                   autoFocus
@@ -1248,7 +1250,7 @@ export function MapHistoryScreen() {
                   }}
                   returnKeyType="done"
                   placeholder="Route name"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={visualTheme.muted}
                 />
                 <TouchableOpacity
                   onPress={() => {
@@ -1259,14 +1261,14 @@ export function MapHistoryScreen() {
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Save new route name"
                 >
-                  <Icon name="Check" size={20} color={Colors.primary} strokeWidth={2.5} />
+                  <Icon name="Check" size={20} color={visualTheme.iconActive} strokeWidth={2.5} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setRenameEditing(false)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Cancel rename"
                 >
-                  <Icon name="X" size={20} color={Colors.textMuted} strokeWidth={2.5} />
+                  <Icon name="X" size={20} color={visualTheme.iconInactive} strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
             ) : (
@@ -1280,22 +1282,22 @@ export function MapHistoryScreen() {
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.detailTitle} numberOfLines={1}>{selectedRoute.name || 'Route'}</Text>
-                  <Icon name="Pencil" size={14} color={Colors.textMuted} strokeWidth={2} />
+                  <Text style={[styles.detailTitle, { color: visualTheme.foreground }]} numberOfLines={1}>{selectedRoute.name || 'Route'}</Text>
+                  <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} />
                 </View>
               </TouchableOpacity>
             )}
           </View>
           <View style={styles.singleSessionStats}>
             <View style={styles.singleStat}>
-              <Text style={styles.singleStatValue}>{dist.format(selectedRoute.distanceM ?? 0, 2)}</Text>
-              <Text style={styles.singleStatLabel}>{dist.unit}</Text>
+              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{dist.format(selectedRoute.distanceM ?? 0, 2)}</Text>
+              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>{dist.unit}</Text>
             </View>
             <View style={styles.singleStat}>
               {/* Concept crops/05 middle stat = estimated time. Routes carry no
                   recorded duration, so estimate from distance + typical pace
                   per activity mode (hiking 4 km/h, running 10 km/h). */}
-              <Text style={styles.singleStatValue}>
+              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>
                 {formatDuration(
                   Math.round(
                     (selectedRoute.distanceM ?? 0) /
@@ -1303,16 +1305,16 @@ export function MapHistoryScreen() {
                   )
                 )}
               </Text>
-              <Text style={styles.singleStatLabel}>time</Text>
+              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>time</Text>
             </View>
             <View style={styles.singleStat}>
-              <Text style={styles.singleStatValue}>+{dist.formatElevation(selectedRoute.elevationGainM ?? 0)}{dist.elevUnit}</Text>
-              <Text style={styles.singleStatLabel}>elev</Text>
+              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>+{dist.formatElevation(selectedRoute.elevationGainM ?? 0)}{dist.elevUnit}</Text>
+              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>elev</Text>
             </View>
           </View>
           <View style={{ gap: Spacing.sm, marginTop: Spacing.lg }}>
             <TouchableOpacity
-              style={styles.actionPillPrimary}
+              style={[styles.actionPillPrimary, { backgroundColor: visualTheme.primary }]}
               onPress={() => {
                 (nav as any).navigate('RouteEditor', { routeId: selectedRoute.id });
               }}
@@ -1323,7 +1325,7 @@ export function MapHistoryScreen() {
               <Text style={styles.actionPillPrimaryText}>Edit Route</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.actionPillDanger, deleteConfirm && styles.actionPillDangerActive]}
+              style={[styles.actionPillDanger, { backgroundColor: visualTheme.surface, borderColor: visualTheme.destructive }, deleteConfirm && { backgroundColor: visualTheme.destructive, borderColor: visualTheme.destructive }]}
               onPress={() => {
                 if (!deleteConfirm) { setDeleteConfirm(true); return; }
                 // deleteRoute API — falls back to nav goBack on missing
@@ -1334,14 +1336,14 @@ export function MapHistoryScreen() {
               accessibilityRole="button"
               accessibilityLabel="Delete route"
             >
-              <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
-              <Text style={[styles.actionPillDangerText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete'}</Text>
+              <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? visualTheme.onPrimary : visualTheme.destructive} strokeWidth={2} />
+              <Text style={[styles.actionPillDangerText, { color: deleteConfirm ? visualTheme.onPrimary : visualTheme.destructive }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete'}</Text>
             </TouchableOpacity>
           </View>
         </View>
       ) : targetSessionId && selectedSession ? (
-        <View style={styles.singleSessionPanel}>
-          <View style={styles.panelHandle} />
+        <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
+          <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
           {/* 2026-08-17 Activity Detail (concept crops/02): panel handle +
               title with pencil (rename) + 3-col stats (km / time / elev) +
               meta row (activity icon · date · time-of-day) + Delete (red
@@ -1351,7 +1353,7 @@ export function MapHistoryScreen() {
             {renameEditing ? (
               <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
                 <TextInput
-                  style={styles.renameInput}
+                  style={[styles.renameInput, { color: visualTheme.foreground, borderBottomColor: visualTheme.primary }]}
                   value={renameText}
                   onChangeText={setRenameText}
                   autoFocus
@@ -1363,7 +1365,7 @@ export function MapHistoryScreen() {
                   }}
                   returnKeyType="done"
                   placeholder="Hike name"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={visualTheme.muted}
                 />
                 <TouchableOpacity
                   onPress={() => {
@@ -1374,14 +1376,14 @@ export function MapHistoryScreen() {
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Save new name"
                 >
-                  <Icon name="Check" size={20} color={Colors.primary} strokeWidth={2.5} />
+                  <Icon name="Check" size={20} color={visualTheme.iconActive} strokeWidth={2.5} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setRenameEditing(false)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Cancel rename"
                 >
-                  <Icon name="X" size={20} color={Colors.textMuted} strokeWidth={2.5} />
+                  <Icon name="X" size={20} color={visualTheme.iconInactive} strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
             ) : (
@@ -1396,36 +1398,36 @@ export function MapHistoryScreen() {
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.detailTitle} numberOfLines={1}>
+                  <Text style={[styles.detailTitle, { color: visualTheme.foreground }]} numberOfLines={1}>
                     {selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike')}
                   </Text>
-                  <Icon name="Pencil" size={14} color={Colors.textMuted} strokeWidth={2} />
+                  <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} />
                 </View>
               </TouchableOpacity>
             )}
           </View>
           <View style={styles.singleSessionStats}>
             <View style={styles.singleStat}>
-              <Text style={styles.singleStatValue}>{dist.format(selectedSession.distanceM, 1)}</Text>
-              <Text style={styles.singleStatLabel}>{dist.unit}</Text>
+              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{dist.format(selectedSession.distanceM, 1)}</Text>
+              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>{dist.unit}</Text>
             </View>
             <View style={styles.singleStat}>
-              <Text style={styles.singleStatValue}>{formatDuration(selectedSession.durationS)}</Text>
-              <Text style={styles.singleStatLabel}>time</Text>
+              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{formatDuration(selectedSession.durationS)}</Text>
+              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>time</Text>
             </View>
             <View style={styles.singleStat}>
-              <Text style={styles.singleStatValue}>+{dist.formatElevation(selectedSession.elevationGainM ?? 0)}{dist.elevUnit}</Text>
-              <Text style={styles.singleStatLabel}>elev</Text>
+              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>+{dist.formatElevation(selectedSession.elevationGainM ?? 0)}{dist.elevUnit}</Text>
+              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>elev</Text>
             </View>
           </View>
           {/* Meta row: activity type · date · time-of-day (concept crops/02). */}
           <View style={styles.detailMetaRow}>
             {selectedSession.activityMode === 'running' ? (
-              <RunningIcon size={14} color={Colors.textSecondary} />
+              <RunningIcon size={14} color={visualTheme.iconInactive} />
             ) : (
-              <HikingIcon size={14} color={Colors.textSecondary} />
+              <HikingIcon size={14} color={visualTheme.iconInactive} />
             )}
-            <Text style={styles.detailMetaText}>
+            <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>
               {selectedSession.activityMode === 'running' ? 'Running' : 'Hiking'}
               {'  ·  '}
               {formatDate(selectedSession.startedAt)}
@@ -1435,7 +1437,7 @@ export function MapHistoryScreen() {
           </View>
           <View style={styles.actionRow}>
             <TouchableOpacity
-              style={[styles.actionPillDanger, { flex: 1 }, deleteConfirm && styles.actionPillDangerActive]}
+              style={[styles.actionPillDanger, { flex: 1, backgroundColor: visualTheme.surface, borderColor: visualTheme.destructive }, deleteConfirm && { backgroundColor: visualTheme.destructive, borderColor: visualTheme.destructive }]}
               onPress={() => {
                 if (!deleteConfirm) { setDeleteConfirm(true); return; }
                 deleteSession(selectedSession.id);
@@ -1444,13 +1446,13 @@ export function MapHistoryScreen() {
               accessibilityRole="button"
               accessibilityLabel="Delete hike"
             >
-              <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
-              <Text style={[styles.actionPillDangerText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete'}</Text>
+              <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? visualTheme.onPrimary : visualTheme.destructive} strokeWidth={2} />
+              <Text style={[styles.actionPillDangerText, { color: deleteConfirm ? visualTheme.onPrimary : visualTheme.destructive }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.actionPillPrimary,
-                { flex: 1 },
+                { flex: 1, backgroundColor: visualTheme.primary },
                 loadedTrackPoints == null || loadedTrackPoints.length < 2 ? { opacity: 0.4 } : undefined,
               ]}
               disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}

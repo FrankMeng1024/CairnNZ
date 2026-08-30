@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Modal, Animated } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Animated } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -46,6 +46,8 @@ import { log, flushNow as flushLogsNow } from '../../../services/appLog';
 // Home (which has no fog UI) crashed the app.
 import { ForegroundUnlockManager } from '../components/ForegroundUnlockManager';
 // v425: fly to real explored point inside sibling region (bug 2 fix)
+import { ModalCard } from '../../../components/ModalCard';
+import { AppButton } from '../../../components/AppButton';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 // v427: async hierarchy from /api/hierarchy (world-wide data)
 import { fetchDeepest } from '../services/hierarchyService';
@@ -89,7 +91,7 @@ function MemoryStateMark({ label }: { label: string }) {
         style={[
           styles.stateMark,
           {
-            backgroundColor: theme.mode === 'night' ? 'rgba(143,190,136,0.12)' : 'rgba(47,104,79,0.09)',
+            backgroundColor: theme.surface,
             borderColor: theme.border,
           },
         ]}
@@ -122,7 +124,6 @@ export function MemoryScreen() {
   const watcherFix = useMemoryStore((s) => s.lastWatcherFix);
   const initialDone = useMemoryStore((s) => s.initialRevealDone);
   const memoryPoints = useMemoryStore((s) => s.points);
-  const personalCairns = useMarkerStore((s) => s.markers);
   const firstVisitDone = useMemorySettingsStore((s) => s.firstVisitDone);
   const settingsHydrated = useMemorySettingsStore((s) => s.hydrated);
   const setSetting = useMemorySettingsStore((s) => s.set);
@@ -883,39 +884,6 @@ export function MemoryScreen() {
         </TouchableOpacity>
       )}
 
-      {persistentCoord && loadingState !== 'loading' && (
-        <View
-          style={[
-            styles.memoryPanel,
-            {
-              backgroundColor: theme.mode === 'night' ? 'rgba(20,28,32,0.78)' : 'rgba(247,249,244,0.82)',
-              borderColor: theme.border,
-            },
-          ]}
-          pointerEvents="none"
-        >
-          <View style={[styles.memoryIcon, { backgroundColor: theme.mode === 'night' ? 'rgba(133,177,156,0.14)' : 'rgba(47,104,79,0.10)' }]}>
-            <CairnIcon name="memory" size={24} color={theme.iconActive} accent={theme.accent} active />
-          </View>
-          <View style={styles.memoryCopy}>
-            <Text style={[styles.memoryEyebrow, { color: theme.foregroundSecondary }]}>YOUR MEMORY</Text>
-            <Text style={[styles.memoryTitle, { color: theme.foreground }]}>The world remembers where you went.</Text>
-            <View style={styles.memoryLegend}>
-              <View style={styles.memoryLegendItem}>
-                <CairnIcon name="personalTrace" size={16} color={theme.iconActive} accent={theme.accent} active />
-                <Text style={[styles.memoryLegendText, { color: theme.foregroundSecondary }]}>
-                  {memoryPoints.length > 0 ? 'Your path revealed' : 'Your first path awaits'}
-                </Text>
-              </View>
-              <View style={styles.memoryLegendItem}>
-                <CairnIcon name="leaveCairn" size={16} color={theme.iconInactive} />
-                <Text style={[styles.memoryLegendText, { color: theme.foregroundSecondary }]}>{personalCairns.length} cairns</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      )}
-
       {/* v359: loading overlay covering MemoryMap until both gates fire
           (Mapbox onDidFinishRenderingMapFully + FogLayer first holes) or
           3s timeout. pointerEvents="none" so user gestures pass through
@@ -937,7 +905,7 @@ export function MemoryScreen() {
               {loadingStage === 0
                 ? 'Loading map…'
                 : loadingStage === 1
-                  ? 'Loading your trails…'
+                  ? 'Restoring explored places…'
                   : 'Network is slow, please wait…'}
             </Text>
             <ActivityIndicator
@@ -990,9 +958,8 @@ export function MemoryScreen() {
         </View>
       )}
 
-      <Modal visible={showHint && isMemoryFocused} transparent animationType="fade" onRequestClose={dismissHint}>
-        <View style={styles.hintBackdrop}>
-          <View style={[styles.hintCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
+      <ModalCard visible={showHint && isMemoryFocused} onDismiss={dismissHint} testID="memory-unlock-guidance">
+          <View>
             <Text style={[styles.hintTitle, { color: theme.foreground }]}>Walk to unlock your memory</Text>
             <Text style={[styles.hintBody, { color: theme.foregroundSecondary }]}>
               The map starts covered in fog. As you walk around, the fog clears
@@ -1000,12 +967,9 @@ export function MemoryScreen() {
               {'\n\n'}
               Cairns left by you and others appear as you discover them.
             </Text>
-            <TouchableOpacity style={[styles.hintBtn, { backgroundColor: theme.primary }]} onPress={dismissHint} activeOpacity={0.85}>
-              <Text style={[styles.hintBtnText, { color: theme.onPrimary }]}>Got it</Text>
-            </TouchableOpacity>
+            <AppButton label="Got it" onPress={dismissHint} />
           </View>
-        </View>
-      </Modal>
+      </ModalCard>
 
       {/* BUG-D fix (v371 post-OTA): old bottom-right "Pick friends" FAB
           was replaced by the top-right Users icon in the top bar above.
@@ -1196,7 +1160,7 @@ const styles = StyleSheet.create({
   },
   recenterBtn: {
     position: 'absolute',
-    right: 16, bottom: 168,
+    right: 16, bottom: 24,
     width: 48, height: 48, borderRadius: 24,
     backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
@@ -1208,7 +1172,7 @@ const styles = StyleSheet.create({
   // once GPS coords known. Layers icon → tap opens the region popover.
   hierarchyBtn: {
     position: 'absolute',
-    left: 16, bottom: 168,
+    left: 16, bottom: 24,
     width: 48, height: 48, borderRadius: 24,
     backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
@@ -1223,60 +1187,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.32,
     shadowRadius: 12,
   },
-  memoryPanel: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 24,
-    minHeight: 118,
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    zIndex: 12,
-    shadowColor: '#071114',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  memoryIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  memoryCopy: { flex: 1 },
-  memoryEyebrow: { fontSize: 9, fontWeight: '700', letterSpacing: 1.35, marginBottom: 4 },
-  memoryTitle: { fontSize: 16, lineHeight: 20, fontWeight: '600', letterSpacing: -0.25 },
-  memoryLegend: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 9 },
-  memoryLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  memoryLegendText: { fontSize: 10, fontWeight: '500' },
   // BUG-D fix (v371 post-OTA): Pick friends top-right cluster — sits
   // inline with the scope toggle in the top bar. Replaces the bottom-
   // right FAB pattern which was occluding map content.
   // v376: topPickBtn / topPickBtnHidden / topRightCluster styles removed
   // — Pick icon is now an internal segment of MemoryScopeToggle (third
   // expand-out segment), no external button cluster.
-  hintBackdrop: {
-    // 2026-08-16 Round 8: reduced from rgba(20,20,20,0.55) — Memory concept
-    // shows modal as first-run onboarding sitting on the cream Memory bg,
-    // not as a heavy grey dim. Softer backdrop lets the map/cream show through.
-    flex: 1, backgroundColor: 'rgba(20,20,20,0.35)',
-    alignItems: 'center', justifyContent: 'center', padding: 28,
-  },
-  hintCard: {
-    backgroundColor: '#fff', borderRadius: 18, padding: 22,
-    width: '100%', maxWidth: 360,
-  },
   hintTitle: { fontSize: 17, fontWeight: '600', color: Colors.textPrimary, marginBottom: 10 },
   hintBody:  { fontSize: 13, lineHeight: 19, color: Colors.textSecondary, marginBottom: 18 },
-  hintBtn:   { backgroundColor: Colors.primary, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
-  hintBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   // v359: loading overlay — covers the entire MemoryMap during the
   // map+fog hydrate window. Cream background matches the screen root
   // so the cream→overlay transition is invisible; only the overlay→map

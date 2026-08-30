@@ -46,7 +46,6 @@ import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { getMapbox } from '../services/mapboxAdapter';
 import { log } from '../../../services/appLog';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
-import { useMapTheme } from '../../../hooks/useMapTheme';
 import bufferTurf from '@turf/buffer';
 import differenceTurf from '@turf/difference';
 import unionTurf from '@turf/union';
@@ -259,7 +258,6 @@ function buildFogShape(
 
 export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
   const theme = useVisualTheme();
-  const fogMapTheme = useMapTheme();
   const Mapbox = getMapbox();
   const useH3Fog = useMemorySettingsStore((s) => s.useH3Fog);
   // v346: drive geometry from useMemoryStore.points (real GPS path),
@@ -483,17 +481,10 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
         style={{
           // Gate 1: unexplored terrain is a natural mineral veil, not a
           // game-like brown fog. Map texture remains faintly legible.
-          // R21-v3 v2 (2026-08-30): 三态 fog color 追主题:
-          //   day    → 灰蓝 (与 outdoors 白天冷色底图协调)
-          //   sunset → 深紫褐 (让 dusk 橙紫底图透出但保留 fog 明确感)
-          //   night  → 深青黑 (原 night 色, 与 night preset 深冷底图协调)
-          // 透明度也分档: day 0.68 保留原视觉; sunset 0.6 让黄昏色更明显;
-          // night 0.7 略降 (原 0.74) 避免和 dark preset 底图叠加过暗看不清路径.
-          fillColor: fogMapTheme === 'night'
-            ? 'rgba(16, 23, 29, 0.70)'
-            : fogMapTheme === 'sunset'
-              ? 'rgba(58, 32, 46, 0.60)'
-              : 'rgba(31, 38, 42, 0.68)',
+          // R21-v3 v4 (2026-08-31): fog color is now a visualTheme token
+          // (theme.mapFogFill) — three-state palette lives in tokens.ts so
+          // UI + map surfaces share one source of truth.
+          fillColor: theme.mapFogFill,
           fillOpacity: 1,
           // Disable AA to avoid 1px seams along hole edges (mapbox-gl-js#7023
           // workaround per Simon Sat 2019).
@@ -513,12 +504,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
         <LineLayer
           id="memory-fog-edge-outer"
           style={{
-            // R21-v3 v2: 三态 edge outer — sunset 用暖色高光和黄昏底图对话
-            lineColor: fogMapTheme === 'night'
-              ? 'rgba(183, 207, 204, 0.28)'
-              : fogMapTheme === 'sunset'
-                ? 'rgba(232, 168, 112, 0.32)'
-                : 'rgba(223, 233, 226, 0.38)',
+            lineColor: theme.mapFogEdgeOuter,
             lineWidth: 5,
             lineBlur: 7,
             lineOpacity: 0.72,
@@ -529,12 +515,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
         <LineLayer
           id="memory-fog-edge-inner"
           style={{
-            // R21-v3 v2: 三态 edge inner
-            lineColor: fogMapTheme === 'night'
-              ? 'rgba(183, 213, 204, 0.64)'
-              : fogMapTheme === 'sunset'
-                ? 'rgba(245, 213, 168, 0.68)'
-                : 'rgba(227, 238, 229, 0.76)',
+            lineColor: theme.mapFogEdgeInner,
             lineWidth: 1.1,
             lineBlur: 0.8,
             lineOpacity: 0.82,

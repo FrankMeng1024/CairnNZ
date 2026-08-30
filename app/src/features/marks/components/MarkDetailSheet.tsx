@@ -24,11 +24,13 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import type { Marker } from '../../../store/useMarkerStore';
-import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
+import { Colors, Spacing, Radius, FontSize } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
 import type { IconName } from '../../../components/Icon';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
+import { BottomSheetFrame } from '../../../components/BottomSheetFrame';
 import {
   getMarkVisibility,
   getMarkDetailForm,
@@ -92,6 +94,7 @@ function formatAge(createdAt: number): string {
 }
 
 export function MarkDetailSheet(props: Props) {
+  const theme = useVisualTheme();
   const {
     marker, viewerId, subscribedFriendIds, friendIds, inMyFog,
     onClose, onEdit, onDelete, onLike, onReport, isLiked,
@@ -153,40 +156,37 @@ export function MarkDetailSheet(props: Props) {
   const { title, body } = splitTitleBody(marker.note ?? '');
 
   return (
-    <Modal
-      transparent
-      animationType="fade"
+    <BottomSheetFrame
       visible={!!marker}
-      onRequestClose={onClose}
+      onDismiss={onClose}
       testID={`mark-detail-sheet-form-${form}`}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <View style={styles.sheetContent}>
           {/* Close */}
           <TouchableOpacity style={styles.close} onPress={onClose} testID="mark-detail-close">
-            <Icon name="X" size={20} color={Colors.textSecondary} strokeWidth={2.2} />
+            <Icon name="X" size={20} color={theme.iconInactive} strokeWidth={2.2} />
           </TouchableOpacity>
 
           {/* Title + body */}
-          <Text style={styles.title} testID="mark-detail-title">{title || '(untitled)'}</Text>
-          {body ? <Text style={styles.body}>{body}</Text> : null}
+          <Text style={[styles.title, { color: theme.foreground }]} testID="mark-detail-title">{title || '(untitled)'}</Text>
+          {body ? <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{body}</Text> : null}
 
           {/* Tier badge row */}
           <View style={styles.row} testID="mark-detail-tier-row">
             <View style={[styles.tierChip, permDisplay === 'personal' && styles.tierPersonal,
                                           permDisplay === 'friend'   && styles.tierFriend,
                                           permDisplay === 'public'   && styles.tierPublic]}>
-              <Icon name={tierBadge.icon} size={12} color={Colors.textPrimary} strokeWidth={2.2} />
-              <Text style={styles.tierText}>{tierBadge.label}</Text>
+              <Icon name={tierBadge.icon} size={12} color={theme.icon} strokeWidth={2.2} />
+              <Text style={[styles.tierText, { color: theme.foreground }]}>{tierBadge.label}</Text>
             </View>
-            <Text style={styles.metaText}>{formatAge(marker.createdAt)}</Text>
+            <Text style={[styles.metaText, { color: theme.muted }]}>{formatAge(marker.createdAt)}</Text>
           </View>
 
           {/* Author (form B/C, Friend tier only) */}
           {showAuthorName ? (
             <View style={styles.authorRow}>
-              <Icon name="User" size={12} color={Colors.textSecondary} strokeWidth={2} />
-              <Text style={styles.authorText}>{marker.authorName}</Text>
+              <Icon name="User" size={12} color={theme.iconInactive} strokeWidth={2} />
+              <Text style={[styles.authorText, { color: theme.foregroundSecondary }]}>{marker.authorName}</Text>
             </View>
           ) : null}
 
@@ -200,7 +200,7 @@ export function MarkDetailSheet(props: Props) {
 
           {/* Helper text (form C) */}
           {form === 'C' ? (
-            <Text style={styles.helperText} testID="mark-detail-helper-walk">
+            <Text style={[styles.helperText, { color: theme.muted }]} testID="mark-detail-helper-walk">
               {/* UX-Med-3 fix (post-review UX round 2): reframed positively.
                   Original "(Walk here to like or report)" read like a
                   restriction. v4 §3 iron law 2 frames in-fog liking as
@@ -214,22 +214,22 @@ export function MarkDetailSheet(props: Props) {
           <View style={styles.actionRow}>
             {canEdit ? (
               <TouchableOpacity
-                style={[styles.actionBtn, styles.actionBtnSecondary]}
+                style={[styles.actionBtn, styles.actionBtnSecondary, { backgroundColor: theme.surface, borderColor: theme.border }]}
                 onPress={() => onEdit?.(marker)}
                 testID="mark-detail-edit"
               >
-                <Icon name="Pencil" size={14} color={Colors.primary} strokeWidth={2.2} />
-                <Text style={styles.actionTextSecondary}>Edit</Text>
+                <Icon name="Pencil" size={14} color={theme.iconActive} strokeWidth={2.2} />
+                <Text style={[styles.actionTextSecondary, { color: theme.primary }]}>Edit</Text>
               </TouchableOpacity>
             ) : null}
 
             <TouchableOpacity
-              style={[styles.actionBtn, styles.actionBtnSecondary]}
+              style={[styles.actionBtn, styles.actionBtnSecondary, { backgroundColor: theme.surface, borderColor: theme.border }]}
               onPress={() => onDelete?.(marker, deleteSemantic)}
               testID={`mark-detail-delete-${deleteSemantic}`}
             >
-              <Icon name="Trash2" size={14} color={Colors.danger} strokeWidth={2.2} />
-              <Text style={[styles.actionTextSecondary, { color: Colors.danger }]}>
+              <Icon name="Trash2" size={14} color={theme.destructive} strokeWidth={2.2} />
+              <Text style={[styles.actionTextSecondary, { color: theme.destructive }]}>
                 {/* UX-Med-4 fix (post-review UX round 2): button vs modal
                     tone aligned at medium. Pre-fix: button "Hide from view"
                     (soft) → modal "Hide permanently?" (hard) felt like
@@ -250,7 +250,7 @@ export function MarkDetailSheet(props: Props) {
               reporting" toast. v4 §4.11 lets own Public mark Like itself
               (simplified rule), but Report-self is incoherent. */}
           {canLikeReport ? (
-            <View style={styles.likeRow}>
+            <View style={[styles.likeRow, { borderTopColor: theme.border }]}>
               <TouchableOpacity
                 style={styles.likeBtn}
                 onPress={() => onLike?.(marker)}
@@ -278,27 +278,13 @@ export function MarkDetailSheet(props: Props) {
               ) : null}
             </View>
           ) : null}
-        </Pressable>
-      </Pressable>
-    </Modal>
+        </View>
+    </BottomSheetFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: Colors.overlayDark,
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.sheet,
-    borderTopRightRadius: Radius.sheet,
-    paddingTop: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xl,
-    ...Shadow.card,
-  },
+  sheetContent: { paddingBottom: Spacing.sm },
   close: {
     alignSelf: 'flex-end',
     padding: Spacing.xs,

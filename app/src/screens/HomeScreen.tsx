@@ -88,6 +88,8 @@ export function HomeScreen() {
   // DEV cycler on debugMode instead of __DEV__ so it appears on production
   // builds after 5-tap Settings unlock.
   const debugMode = useSettingsStore(s => s.debugMode);
+  const hikingIconCandidate = useWeatherStore(s => s.hikingIconCandidate);
+  const runningIconCandidate = useWeatherStore(s => s.runningIconCandidate);
 
   // R21 (2026-08-18 user "如果正有一个正在进行 未完成的hike ... 展示的内容是
   // 最后一个未完成的action, N-1个未完成的action, last 完成了的 action,
@@ -237,6 +239,11 @@ export function HomeScreen() {
     : (lastHike
     ? `${formatDistanceKm(lastHike.distanceM || 0)} · ${formatDuration(lastHike.durationS || 0)} · ${formatRelativeDay(lastHike.startedAt)}`
     : '');
+  const lastHikeDetails = showUnfinished
+    ? ['Resume available', formatRelativeDay(topUnfinished.started_at), ...(otherUnfinishedCount > 0 ? [`+${otherUnfinishedCount} pending`] : [])]
+    : (lastHike
+      ? [formatDistanceKm(lastHike.distanceM || 0), formatDuration(lastHike.durationS || 0), formatRelativeDay(lastHike.startedAt)]
+      : []);
 
   const initial = ((user?.name ?? user?.email ?? '?').charAt(0) || '?').toUpperCase();
   const greetingName = user?.name || 'Explorer';
@@ -259,7 +266,7 @@ export function HomeScreen() {
   const bgTokens = useMemo(
     // conditionOverride is a transient Dev/QA-only store field. It is not
     // persisted and normal weather resolution never reaches this review map.
-    () => conditionOverride === 'cloudy' || conditionOverride === 'rain' || conditionOverride === 'snow'
+    () => conditionOverride === 'sunny' || conditionOverride === 'cloudy' || conditionOverride === 'rain' || conditionOverride === 'snow'
       ? getWeatherReviewBackground(conditionOverride, scenicTime.timeOfDay)
       : getHomeBackground(effectiveCondition, Date.now(), scenicTime.timeOfDay, 'home', {
         sunriseMs: scenicTime.sunriseMs,
@@ -284,6 +291,8 @@ export function HomeScreen() {
   const timeOfDayOverride = useWeatherStore(s => s.timeOfDayOverride);
   const setTimeOfDayOverride = useWeatherStore(s => s.setTimeOfDayOverride);
   const setConditionOverride = useWeatherStore(s => s.setConditionOverride);
+  const setHikingIconCandidate = useWeatherStore(s => s.setHikingIconCandidate);
+  const setRunningIconCandidate = useWeatherStore(s => s.setRunningIconCandidate);
   const [devMenuOpen, setDevMenuOpen] = useState(false);
   // R21 (2026-08-17 user "二次点击就是取消"): each toggle is idempotent —
   // click city A once = override, click A again = clear. Same for weather
@@ -316,6 +325,7 @@ export function HomeScreen() {
             onToggleUnit={showExplorationPercent ? () => setShowPercent(v => !v) : undefined}
             lastHikeTitle={lastHikeTitle}
             lastHikeMeta={lastHikeMeta}
+            lastHikeDetails={lastHikeDetails}
             lastHikeEyebrow={showUnfinished ? 'Unfinished' : 'Last hike'}
             onLastHikePress={showUnfinished
               ? () => nav.navigate(topUnfinished!.activity_mode === 'running' ? 'Running' : 'Hiking')
@@ -324,6 +334,8 @@ export function HomeScreen() {
             bgTokens={bgTokens}
             forcedIsDark={!bgTokens.useDarkText}
             sunnyMotionEnabled={SUNNY_AMBIENT_MOTION_ENABLED && bgTokens.variant === 'sunny-day'}
+            hikingIconCandidate={debugMode ? hikingIconCandidate : null}
+            runningIconCandidate={debugMode ? runningIconCandidate : null}
           />
           {/* DEV-only weather cycler — top-right circular button.
               TODO: LAUNCH_GATE — remove this block before App Store. */}
@@ -443,6 +455,31 @@ export function HomeScreen() {
                   <Text style={{ paddingHorizontal: 4, paddingBottom: 2, fontSize: 9, color: '#6D746F' }}>
                     Resolved {scenicTime.timeOfDay} · {bgTokens.assetId}
                   </Text>
+                  <Text style={{ paddingHorizontal: 4, paddingTop: 4, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>
+                    ACTION ICONS · REVIEW ONLY
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
+                    {(['H1', 'H2', 'H3', 'H4', 'H5'] as const).map(candidate => (
+                      <TouchableOpacity
+                        key={candidate}
+                        onPress={() => setHikingIconCandidate(hikingIconCandidate === candidate ? null : candidate)}
+                        style={{ flex: 1, paddingVertical: 4, alignItems: 'center', borderRadius: 8, backgroundColor: hikingIconCandidate === candidate ? 'rgba(33,54,44,0.15)' : 'rgba(33,54,44,0.05)' }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#21362C' }}>{candidate}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
+                    {(['R1', 'R2', 'R3', 'R4', 'R5'] as const).map(candidate => (
+                      <TouchableOpacity
+                        key={candidate}
+                        onPress={() => setRunningIconCandidate(runningIconCandidate === candidate ? null : candidate)}
+                        style={{ flex: 1, paddingVertical: 4, alignItems: 'center', borderRadius: 8, backgroundColor: runningIconCandidate === candidate ? 'rgba(33,54,44,0.15)' : 'rgba(33,54,44,0.05)' }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#21362C' }}>{candidate}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
               )}
             </View>

@@ -35,9 +35,11 @@ const BG_ASSETS = {
 // three-time family while all non-Sunny mappings remain unchanged.
 const HOME_BG_ASSETS = {
   ...BG_ASSETS,
-  'sunny-day': require('../../assets/home/prototypes/weather-material-polish-v1/sunny/sunny-day-material-polish-3x.jpg'),
-  'sunny-sunset': require('../../assets/home/prototypes/weather-material-polish-v1/sunny/sunny-sunset-material-polish-3x.jpg'),
-  'sunny-night': require('../../assets/home/prototypes/weather-material-polish-v1/sunny/sunny-night-material-polish-3x.jpg'),
+  // V2 is retained only as rejected QA evidence. The final recovery rebuilds
+  // from the approved pre-V2 geometry masters and never chains V1/V2 pixels.
+  'sunny-day': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-day-soft-natural-v3-3x.jpg'),
+  'sunny-sunset': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-sunset-soft-natural-v3-3x.jpg'),
+  'sunny-night': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-night-soft-natural-v3-3x.jpg'),
   'cloudy-day': require('../../assets/home/prototypes/final-nz-world-sunny/gate-a1.13/sunny-variant-a-3x.jpg'),
   'rain-day': require('../../assets/home/prototypes/final-nz-world-sunny/gate-a1.13/sunny-variant-b-3x.jpg'),
   'snow-day': require('../../assets/home/prototypes/final-nz-world-sunny/gate-a1.13/sunny-variant-c-3x.jpg'),
@@ -52,10 +54,13 @@ const SETTINGS_BG_ASSETS = {
   'sunny-night': HOME_BG_ASSETS['sunny-night'],
 } as const;
 
-// Experimental non-Sunny three-time families. These assets are intentionally
-// not part of HOME_BG_ASSETS: only the transient Dev Mode review path may
-// select them until physical-phone human approval.
+// Review rollback family. These assets are intentionally not part of
+// HOME_BG_ASSETS: only an explicit transient Dev Mode weather override may
+// select them for physical-phone comparison. Auto/production remains intact.
 const WEATHER_REVIEW_BG_ASSETS = {
+  'sunny-review-day': require('../../assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-day-final-micro-3x.jpg'),
+  'sunny-review-sunset': require('../../assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-evening-final-micro-3x.jpg'),
+  'sunny-review-night': require('../../assets/home/prototypes/deep-night-exploration/deep-night-starlight-3x.jpg'),
   'cloudy-review-day': require('../../assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-day-material-polish-3x.jpg'),
   'cloudy-review-sunset': require('../../assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-sunset-material-polish-3x.jpg'),
   'cloudy-review-night': require('../../assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-night-material-polish-3x.jpg'),
@@ -69,7 +74,7 @@ const WEATHER_REVIEW_BG_ASSETS = {
 
 const FALLBACK_BG = require('../../assets/home/home-background.jpg');
 
-export type ReviewWeatherCondition = 'cloudy' | 'rain' | 'snow';
+export type ReviewWeatherCondition = 'sunny' | 'cloudy' | 'rain' | 'snow';
 export type WeatherReviewVariant = keyof typeof WEATHER_REVIEW_BG_ASSETS;
 export type CloudyReviewVariant = Extract<WeatherReviewVariant, `cloudy-review-${string}`>;
 export type HomeBgVariant = keyof typeof BG_ASSETS | 'sunny-sunset' | WeatherReviewVariant;
@@ -395,36 +400,24 @@ const WEATHER_REVIEW_GEOMETRY: Record<WeatherReviewVariant, {
   backgroundOffsetXPct: number;
   backgroundOffsetYPct: number;
 }> = {
-  // The full-frame Cloudy pass preserves the previous candidate registration;
-  // the weather response changes light/materials across the canvas, not the
-  // locked world anchors.
-  'cloudy-review-day': {
-    ...SUNNY_GEOMETRY['sunny-day'],
-    backgroundOffsetXPct: SUNNY_GEOMETRY['sunny-day'].backgroundOffsetXPct + 1.54,
-    backgroundOffsetYPct: SUNNY_GEOMETRY['sunny-day'].backgroundOffsetYPct - 0.95,
-  },
+  'sunny-review-day': SUNNY_GEOMETRY['sunny-day'],
+  'sunny-review-sunset': SUNNY_GEOMETRY['sunny-sunset'],
+  'sunny-review-night': SUNNY_GEOMETRY['sunny-night'],
+  // V1 preserves the measured registration of its full-frame source family.
+  'cloudy-review-day': { ...SUNNY_GEOMETRY['sunny-day'], backgroundOffsetXPct: 1.54, backgroundOffsetYPct: -0.95 },
   'cloudy-review-sunset': SUNNY_GEOMETRY['sunny-sunset'],
   'cloudy-review-night': SUNNY_GEOMETRY['sunny-night'],
-  // Rainy Day's full-frame material pass retained the same geometry but
-  // introduced a measurable 15px vertical internal drift at 390x844. The
-  // Dev-only registration compensates it; this is not world regeneration.
-  'rain-review-day': {
-    ...SUNNY_GEOMETRY['sunny-day'],
-    backgroundOffsetXPct: SUNNY_GEOMETRY['sunny-day'].backgroundOffsetXPct + 0.26,
-    backgroundOffsetYPct: SUNNY_GEOMETRY['sunny-day'].backgroundOffsetYPct - 1.66,
-  },
+  'rain-review-day': { ...SUNNY_GEOMETRY['sunny-day'], backgroundOffsetXPct: 0.26, backgroundOffsetYPct: -1.66 },
   'rain-review-sunset': SUNNY_GEOMETRY['sunny-sunset'],
   'rain-review-night': SUNNY_GEOMETRY['sunny-night'],
-  'snow-review-day': {
-    ...SUNNY_GEOMETRY['sunny-day'],
-    backgroundOffsetYPct: SUNNY_GEOMETRY['sunny-day'].backgroundOffsetYPct - 0.12,
-  },
+  'snow-review-day': { ...SUNNY_GEOMETRY['sunny-day'], backgroundOffsetYPct: -0.12 },
   'snow-review-sunset': SUNNY_GEOMETRY['sunny-sunset'],
   'snow-review-night': SUNNY_GEOMETRY['sunny-night'],
 };
 
 const DARK_TEXT_VARIANTS: ReadonlySet<HomeBgVariant> = new Set([
   'sunny-day',
+  'sunny-review-day',
   'cloudy-day',
   'cloudy-review-day',
   'rain-review-day',
@@ -444,18 +437,24 @@ const ASSET_IDS: Record<HomeBgVariant, string> = {
   'rain-night': 'home-bg-rainy-night-semantic-v2-3x.jpg',
   'snow-day': 'sunny-variant-c-3x.jpg',
   'snow-night': 'home-bg-snowy-night-semantic-v2-3x.jpg',
-  'cloudy-review-day': 'cloudy-day-full-frame-3x.jpg',
-  'cloudy-review-sunset': 'cloudy-sunset-full-frame-3x.jpg',
-  'cloudy-review-night': 'cloudy-night-full-frame-3x.jpg',
-  'rain-review-day': 'rainy-day-full-frame-3x.jpg',
-  'rain-review-sunset': 'rainy-sunset-full-frame-3x.jpg',
-  'rain-review-night': 'rainy-night-full-frame-3x.jpg',
-  'snow-review-day': 'snowy-day-full-frame-3x.jpg',
-  'snow-review-sunset': 'snowy-sunset-full-frame-3x.jpg',
-  'snow-review-night': 'snowy-night-full-frame-3x.jpg',
+  'sunny-review-day': 'sunny-day-final-micro-3x.jpg',
+  'sunny-review-sunset': 'sunny-evening-final-micro-3x.jpg',
+  'sunny-review-night': 'deep-night-starlight-3x.jpg',
+  'cloudy-review-day': 'cloudy-day-material-polish-3x.jpg',
+  'cloudy-review-sunset': 'cloudy-sunset-material-polish-3x.jpg',
+  'cloudy-review-night': 'cloudy-night-material-polish-3x.jpg',
+  'rain-review-day': 'rainy-day-material-polish-3x.jpg',
+  'rain-review-sunset': 'rainy-sunset-material-polish-3x.jpg',
+  'rain-review-night': 'rainy-night-material-polish-3x.jpg',
+  'snow-review-day': 'snowy-day-material-polish-3x.jpg',
+  'snow-review-sunset': 'snowy-sunset-material-polish-3x.jpg',
+  'snow-review-night': 'snowy-night-material-polish-3x.jpg',
 };
 
 const REVIEW_PALETTES: Record<WeatherReviewVariant, ScenicUiPalette> = {
+  'sunny-review-day': SUNNY_HOME_UI_PALETTE,
+  'sunny-review-sunset': SUNNY_EVENING_UI_PALETTE,
+  'sunny-review-night': SUNNY_NIGHT_UI_PALETTE,
   'cloudy-review-day': CLOUDY_REVIEW_DAY_UI_PALETTE,
   'cloudy-review-sunset': CLOUDY_REVIEW_SUNSET_UI_PALETTE,
   'cloudy-review-night': CLOUDY_REVIEW_NIGHT_UI_PALETTE,
@@ -467,7 +466,7 @@ const REVIEW_PALETTES: Record<WeatherReviewVariant, ScenicUiPalette> = {
   'snow-review-night': SNOW_REVIEW_NIGHT_UI_PALETTE,
 };
 
-/** Dev Mode-only 3x3 non-Sunny review family. Normal weather never calls it. */
+/** Dev Mode-only 4x3 rollback family. Normal weather never calls it. */
 export function getWeatherReviewBackground(
   weather: ReviewWeatherCondition,
   timeOfDay: ScenicTimeOfDay,

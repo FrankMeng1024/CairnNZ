@@ -13,9 +13,12 @@
  * UX: full-screen sheet with hero image, value props, single CTA.
  */
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { Colors, Spacing, FontSize } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
+import { BottomSheetFrame } from '../../../components/BottomSheetFrame';
+import { AppButton } from '../../../components/AppButton';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { getOfferings, purchasePackage, restorePurchases, type OfferingPackage } from '../../../services/iapService';
 
 interface Props {
@@ -25,6 +28,7 @@ interface Props {
 }
 
 export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
+  const theme = useVisualTheme();
   const [offerings, setOfferings] = useState<OfferingPackage[]>([]);
   const [loading, setLoading] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
@@ -103,28 +107,21 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
   };
 
   return (
-    <Modal
-      transparent
-      animationType="slide"
-      visible={visible}
-      onRequestClose={onClose}
-      testID="paywall-sheet"
-    >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+    <BottomSheetFrame visible={visible} onDismiss={onClose} testID="paywall-sheet">
+        <View style={styles.content}>
           <TouchableOpacity style={styles.close} onPress={onClose} testID="paywall-close">
-            <Icon name="X" size={20} color={Colors.textSecondary} strokeWidth={2.2} />
+            <Icon name="X" size={20} color={theme.iconInactive} strokeWidth={2.2} />
           </TouchableOpacity>
 
           {/* Hero — sepia gradient circle with sparkle */}
           <View style={styles.hero}>
-            <View style={styles.heroCircle}>
-              <Icon name="Heart" size={32} color={Colors.primary} strokeWidth={2.2} />
+            <View style={[styles.heroCircle, { backgroundColor: theme.surface }]}>
+              <Icon name="Heart" size={32} color={theme.iconActive} strokeWidth={2.2} />
             </View>
           </View>
 
-          <Text style={styles.title}>See more of your friends' world</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: theme.foreground }]}>See more of your friends' world</Text>
+          <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>
             You've reached the free tier of 5 friend memories. Upgrade to see all your friends' fog,
             marks, and routes on your map.
           </Text>
@@ -136,37 +133,35 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
           </View>
 
           <View style={styles.priceRow}>
-            <Text style={styles.price}>{priceLabel.split(' ')[0] || 'NZ$5.99'}</Text>
-            <Text style={styles.priceUnit}>{primaryPkg?.packageType === 'ANNUAL' ? 'per year' : 'per month'}</Text>
+            <Text style={[styles.price, { color: theme.foreground }]}>{priceLabel.split(' ')[0] || 'NZ$5.99'}</Text>
+            <Text style={[styles.priceUnit, { color: theme.foregroundSecondary }]}>{primaryPkg?.packageType === 'ANNUAL' ? 'per year' : 'per month'}</Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.cta, purchasing && { opacity: 0.6 }]}
+          <AppButton
+            label={primaryPkg ? 'Subscribe' : 'Continue'}
             onPress={onSubscribe}
             disabled={purchasing || loading}
+            loading={purchasing}
             testID="paywall-subscribe"
-          >
-            {purchasing
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.ctaText}>{primaryPkg ? 'Subscribe' : 'Continue'}</Text>}
-          </TouchableOpacity>
+            style={styles.cta}
+          />
 
           <TouchableOpacity onPress={onRestore} disabled={purchasing} testID="paywall-restore">
-            <Text style={styles.foot}>Restore purchases · Privacy · Terms</Text>
+            <Text style={[styles.foot, { color: theme.muted }]}>Restore purchases · Privacy · Terms</Text>
           </TouchableOpacity>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        </View>
+    </BottomSheetFrame>
   );
 }
 
 function ValueRow({ icon, text }: { icon: string; text: string }) {
+  const theme = useVisualTheme();
   return (
     <View style={valueRowStyles.row}>
-      <View style={valueRowStyles.bullet}>
-        <Icon name={icon as any} size={14} color={Colors.primary} strokeWidth={2.2} />
+      <View style={[valueRowStyles.bullet, { backgroundColor: theme.surface }]}>
+        <Icon name={icon as any} size={14} color={theme.iconActive} strokeWidth={2.2} />
       </View>
-      <Text style={valueRowStyles.text}>{text}</Text>
+      <Text style={[valueRowStyles.text, { color: theme.foreground }]}>{text}</Text>
     </View>
   );
 }
@@ -182,25 +177,11 @@ const valueRowStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: Colors.overlayDark,
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.sheet,
-    borderTopRightRadius: Radius.sheet,
-    paddingTop: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
-    ...Shadow.card,
-  },
+  content: { paddingBottom: Spacing.sm },
   close: { alignSelf: 'flex-end', padding: Spacing.xs },
   hero: { alignItems: 'center', marginVertical: Spacing.md },
   heroCircle: {
     width: 72, height: 72, borderRadius: 36,
-    backgroundColor: Colors.primaryBg,
     alignItems: 'center', justifyContent: 'center',
   },
   title: { fontSize: FontSize.h1, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
@@ -215,13 +196,6 @@ const styles = StyleSheet.create({
   },
   price: { fontSize: 32, fontWeight: '700', color: Colors.textPrimary },
   priceUnit: { fontSize: FontSize.body, color: Colors.textSecondary },
-  cta: {
-    backgroundColor: Colors.primary,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.button,
-    alignItems: 'center',
-    marginTop: Spacing.lg,
-  },
-  ctaText: { color: '#fff', fontSize: FontSize.body, fontWeight: '700' },
+  cta: { marginTop: Spacing.lg },
   foot: { textAlign: 'center', fontSize: FontSize.caption, color: Colors.textMuted, marginTop: Spacing.md },
 });

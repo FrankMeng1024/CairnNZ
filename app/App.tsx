@@ -403,13 +403,26 @@ function AppRoot() {
         const friendStore = require('./src/store/useFriendStore').useFriendStore;
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const weatherStore = require('./src/store/useWeatherStore').useWeatherStore;
+        // Visual convergence QA fixtures use these stores to exercise real
+        // nested screens. They remain web-only and do not affect native.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const routeStore = require('./src/store/useRouteStore').useRouteStore;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const markerStore = require('./src/store/useMarkerStore').useMarkerStore;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const settingsStore = require('./src/store/useSettingsStore').useSettingsStore;
+        const existingStores = (globalThis as unknown as { __cairnStores?: Record<string, unknown> }).__cairnStores ?? {};
         (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = {
+          ...existingStores,
           useAppStore,
           useTrackingStore: trackingStore,
           useSessionStore: sessionStore,
           useMemoryStore: memoryStore,
           useFriendStore: friendStore,
           useWeatherStore: weatherStore,
+          useRouteStore: routeStore,
+          useMarkerStore: markerStore,
+          useSettingsStore: settingsStore,
         };
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports

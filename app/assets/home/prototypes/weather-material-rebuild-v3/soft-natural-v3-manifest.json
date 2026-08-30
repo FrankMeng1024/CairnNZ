@@ -1,0 +1,122 @@
+[
+  {
+    "key": "sunny-day",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-day-final-micro-native.png",
+    "weatherReference": null,
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-day-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-day-soft-natural-v3-3x.jpg",
+    "dimensions": "853x1844",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  },
+  {
+    "key": "sunny-sunset",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-evening-final-micro-native.png",
+    "weatherReference": null,
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-sunset-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-sunset-soft-natural-v3-3x.jpg",
+    "dimensions": "852x1846",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  },
+  {
+    "key": "sunny-night",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/deep-night-exploration/deep-night-starlight-native.png",
+    "weatherReference": null,
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-night-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-night-soft-natural-v3-3x.jpg",
+    "dimensions": "853x1844",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  },
+  {
+    "key": "cloudy-day",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-day-final-micro-native.png",
+    "weatherReference": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-full-frame-correction/cloudy/cloudy-day-full-frame-native.png",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/cloudy/cloudy-day-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/cloudy/cloudy-day-soft-natural-v3-3x.jpg",
+    "dimensions": "853x1844",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  },
+  {
+    "key": "cloudy-sunset",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-evening-final-micro-native.png",
+    "weatherReference": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-full-frame-correction/cloudy/cloudy-sunset-full-frame-native.png",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/cloudy/cloudy-sunset-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/cloudy/cloudy-sunset-soft-natural-v3-3x.jpg",
+    "dimensions": "852x1846",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  },
+  {
+    "key": "cloudy-night",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/deep-night-exploration/deep-night-starlight-native.png",
+    "weatherReference": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-full-frame-correction/cloudy/cloudy-night-full-frame-native.png",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/cloudy/cloudy-night-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/cloudy/cloudy-night-soft-natural-v3-3x.jpg",
+    "dimensions": "853x1844",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  },
+  {
+    "key": "rainy-day",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-day-final-micro-native.png",
+    "weatherReference": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-full-frame-correction/rainy/rainy-day-full-frame-native.png",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/rainy/rainy-day-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/rainy/rainy-day-soft-natural-v3-3x.jpg",
+    "dimensions": "853x1844",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  },
+  {
+    "key": "rainy-sunset",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-evening-final-micro-native.png",
+    "weatherReference": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-full-frame-correction/rainy/rainy-sunset-full-frame-native.png",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/rainy/rainy-sunset-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/rainy/rainy-sunset-soft-natural-v3-3x.jpg",
+    "dimensions": "852x1846",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  },
+  {
+    "key": "rainy-night",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/deep-night-exploration/deep-night-starlight-native.png",
+    "weatherReference": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-full-frame-correction/rainy/rainy-night-full-frame-native.png",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/rainy/rainy-night-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/rainy/rainy-night-soft-natural-v3-3x.jpg",
+    "dimensions": "853x1844",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  },
+  {
+    "key": "snowy-day",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-day-final-micro-native.png",
+    "weatherReference": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-full-frame-correction/snowy/snowy-day-full-frame-native.png",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/snowy/snowy-day-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/snowy/snowy-day-soft-natural-v3-3x.jpg",
+    "dimensions": "853x1844",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  },
+  {
+    "key": "snowy-sunset",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-evening-final-micro-native.png",
+    "weatherReference": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-full-frame-correction/snowy/snowy-sunset-full-frame-native.png",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/snowy/snowy-sunset-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/snowy/snowy-sunset-soft-natural-v3-3x.jpg",
+    "dimensions": "852x1846",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  },
+  {
+    "key": "snowy-night",
+    "geometryMaster": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/deep-night-exploration/deep-night-starlight-native.png",
+    "weatherReference": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-full-frame-correction/snowy/snowy-night-full-frame-native.png",
+    "nativePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/snowy/snowy-night-soft-natural-v3-native.png",
+    "runtimePath": "/Users/mzm/Desktop/cairn/CairnNZ/app/assets/home/prototypes/weather-material-rebuild-v3/snowy/snowy-night-soft-natural-v3-3x.jpg",
+    "dimensions": "853x1844",
+    "rejectedV2UsedAsInput": false,
+    "geometryWarp": false
+  }
+]

@@ -70,11 +70,11 @@ export const Colors = {
  * CairnNZ semantic visual tokens.
  *
  * Weather never changes these values: it selects scenery only. The active
- * DAY/NIGHT appearance selects one of these two functional palettes for
+ * DAY/SUNSET/NIGHT appearance selects one functional palette for
  * every screen, including Mapbox overlays and scenic screens.
  */
 export interface VisualThemeTokens {
-  mode: 'day' | 'night';
+  mode: 'day' | 'sunset' | 'night';
   foreground: string;
   foregroundSecondary: string;
   muted: string;
@@ -94,6 +94,32 @@ export interface VisualThemeTokens {
   onScenic: string;
   onScenicMuted: string;
   shadow: string;
+  backgroundElevated: string;
+  scenicSurface: string;
+  surfacePrimary: string;
+  surfaceSecondary: string;
+  surfaceTranslucent: string;
+  modalSurface: string;
+  sheetSurface: string;
+  inputSurface: string;
+  tabActive: string;
+  tabInactive: string;
+  textPrimary: string;
+  textSecondary: string;
+  textMuted: string;
+  scenicText: string;
+  scenicTextMuted: string;
+  borderSubtle: string;
+  borderStrong: string;
+  scrim: string;
+  primaryAction: string;
+  secondaryAction: string;
+  scenicImageOpacity: number;
+  scenicBackdropOverlay: readonly [string, string, string, string];
+  scenicHeroOverlay: readonly [string, string];
+  mapFogFill: string;
+  mapFogEdgeOuter: string;
+  mapFogEdgeInner: string;
 }
 
 export const DAY_VISUAL_THEME: VisualThemeTokens = {
@@ -117,6 +143,86 @@ export const DAY_VISUAL_THEME: VisualThemeTokens = {
   onScenic: '#FFFFFF',
   onScenicMuted: 'rgba(255,255,255,0.88)',
   shadow: 'rgba(12,36,28,0.16)',
+  backgroundElevated: '#FAFAF4',
+  scenicSurface: 'rgba(250,251,247,0.80)',
+  surfacePrimary: 'rgba(252,252,246,0.94)',
+  surfaceSecondary: 'rgba(246,248,243,0.82)',
+  surfaceTranslucent: 'rgba(246,248,243,0.72)',
+  modalSurface: '#FFFDF7',
+  sheetSurface: '#FFFDF7',
+  inputSurface: 'rgba(252,252,246,0.94)',
+  tabActive: '#2F684F',
+  tabInactive: 'rgba(246,248,243,0.64)',
+  textPrimary: '#17372D',
+  textSecondary: '#4F625A',
+  textMuted: '#7A8982',
+  scenicText: '#17372D',
+  scenicTextMuted: '#4F625A',
+  borderSubtle: 'rgba(32,72,57,0.16)',
+  borderStrong: 'rgba(32,72,57,0.28)',
+  scrim: 'rgba(17,31,25,0.36)',
+  primaryAction: '#2F684F',
+  secondaryAction: 'rgba(246,248,243,0.82)',
+  scenicImageOpacity: 0.76,
+  scenicBackdropOverlay: ['rgba(243,244,234,0.18)', 'rgba(243,244,234,0.12)', 'rgba(243,244,234,0.27)', 'rgba(243,244,234,0.44)'],
+  scenicHeroOverlay: ['rgba(8,18,15,0.02)', 'rgba(8,18,15,0.28)'],
+  mapFogFill: 'rgba(31,38,42,0.68)',
+  mapFogEdgeOuter: 'rgba(223,233,226,0.38)',
+  mapFogEdgeInner: 'rgba(227,238,229,0.76)',
+};
+
+/**
+ * Sunset is a true system state, not Day with a warm scenic image. Its
+ * mineral-brown neutrals keep screens calm and readable while preserving
+ * CairnNZ green as an action accent instead of tinting every surface.
+ */
+export const SUNSET_VISUAL_THEME: VisualThemeTokens = {
+  mode: 'sunset',
+  foreground: '#F4F0E8',
+  foregroundSecondary: '#D3CBC0',
+  muted: '#A49B91',
+  primary: '#A7C18E',
+  accent: '#C79767',
+  background: '#373735',
+  surface: 'rgba(73,70,66,0.94)',
+  surfaceElevated: '#514D48',
+  border: 'rgba(244,232,216,0.18)',
+  icon: '#E8E0D5',
+  iconActive: '#C5D6AA',
+  iconInactive: '#A39B92',
+  mapOverlay: 'rgba(52,49,47,0.95)',
+  readabilityScrim: 'rgba(24,18,18,0.32)',
+  destructive: '#EE8A7E',
+  onPrimary: '#1D241B',
+  onScenic: '#FFF8EF',
+  onScenicMuted: 'rgba(255,248,239,0.88)',
+  shadow: 'rgba(14,10,12,0.40)',
+  backgroundElevated: '#403E3B',
+  scenicSurface: 'rgba(69,66,62,0.84)',
+  surfacePrimary: 'rgba(73,70,66,0.94)',
+  surfaceSecondary: 'rgba(82,77,71,0.90)',
+  surfaceTranslucent: 'rgba(73,69,65,0.76)',
+  modalSurface: '#514D48',
+  sheetSurface: '#514D48',
+  inputSurface: 'rgba(63,61,58,0.96)',
+  tabActive: '#A7C18E',
+  tabInactive: 'rgba(74,71,67,0.76)',
+  textPrimary: '#F4F0E8',
+  textSecondary: '#D3CBC0',
+  textMuted: '#A49B91',
+  scenicText: '#FFF8EF',
+  scenicTextMuted: 'rgba(255,248,239,0.88)',
+  borderSubtle: 'rgba(244,232,216,0.18)',
+  borderStrong: 'rgba(244,232,216,0.30)',
+  scrim: 'rgba(26,20,20,0.46)',
+  primaryAction: '#A7C18E',
+  secondaryAction: 'rgba(82,77,71,0.90)',
+  scenicImageOpacity: 0.72,
+  scenicBackdropOverlay: ['rgba(82,63,55,0.14)', 'rgba(91,71,61,0.14)', 'rgba(52,49,46,0.28)', 'rgba(42,40,39,0.54)'],
+  scenicHeroOverlay: ['rgba(103,72,59,0.10)', 'rgba(67,55,50,0.32)'],
+  mapFogFill: 'rgba(38,35,37,0.70)',
+  mapFogEdgeOuter: 'rgba(218,202,191,0.32)',
+  mapFogEdgeInner: 'rgba(235,219,205,0.68)',
 };
 
 export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
@@ -142,10 +248,38 @@ export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
   onScenic: '#F5F7F2',
   onScenicMuted: 'rgba(240,245,239,0.88)',
   shadow: 'rgba(2,8,9,0.46)',
+  backgroundElevated: '#202A29',
+  scenicSurface: 'rgba(29,38,42,0.78)',
+  surfacePrimary: 'rgba(37,47,46,0.96)',
+  surfaceSecondary: 'rgba(45,56,54,0.92)',
+  surfaceTranslucent: 'rgba(29,38,42,0.72)',
+  modalSurface: '#303D3B',
+  sheetSurface: '#303D3B',
+  inputSurface: 'rgba(30,40,39,0.98)',
+  tabActive: '#91BC86',
+  tabInactive: 'rgba(27,36,40,0.66)',
+  textPrimary: '#F2F5EF',
+  textSecondary: '#C8D0CD',
+  textMuted: '#929F9A',
+  scenicText: '#F5F7F2',
+  scenicTextMuted: 'rgba(240,245,239,0.88)',
+  borderSubtle: 'rgba(225,234,230,0.18)',
+  borderStrong: 'rgba(225,234,230,0.30)',
+  scrim: 'rgba(2,8,9,0.60)',
+  primaryAction: '#91BC86',
+  secondaryAction: 'rgba(45,56,54,0.92)',
+  scenicImageOpacity: 0.74,
+  scenicBackdropOverlay: ['rgba(10,17,20,0.18)', 'rgba(18,27,29,0.26)', 'rgba(20,29,30,0.42)', 'rgba(18,26,27,0.58)'],
+  scenicHeroOverlay: ['rgba(8,18,15,0.02)', 'rgba(8,18,15,0.32)'],
+  mapFogFill: 'rgba(16,23,29,0.74)',
+  mapFogEdgeOuter: 'rgba(183,207,204,0.28)',
+  mapFogEdgeInner: 'rgba(183,213,204,0.64)',
 };
 
-export function getVisualTheme(isDark: boolean): VisualThemeTokens {
-  return isDark ? NIGHT_VISUAL_THEME : DAY_VISUAL_THEME;
+export function getVisualTheme(mode: boolean | VisualThemeTokens['mode']): VisualThemeTokens {
+  if (mode === true || mode === 'night') return NIGHT_VISUAL_THEME;
+  if (mode === 'sunset') return SUNSET_VISUAL_THEME;
+  return DAY_VISUAL_THEME;
 }
 
 export const Spacing = {

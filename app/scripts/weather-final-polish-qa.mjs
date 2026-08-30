@@ -4,7 +4,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8081';
-const outputDir = path.resolve('..', 'docs', 'qa', 'visual-north-star', 'final-home-weather-polish-gate');
+const outputDir = process.env.CAIRN_WEATHER_QA_DIR
+  ? path.resolve(process.env.CAIRN_WEATHER_QA_DIR)
+  : path.resolve('..', 'docs', 'qa', 'visual-north-star', 'final-home-weather-polish-gate');
+const reviewAssetRootName = process.env.CAIRN_WEATHER_ASSET_ROOT || 'weather-material-polish-v1';
+const reviewAssetSuffix = process.env.CAIRN_WEATHER_ASSET_SUFFIX || 'material-polish-3x';
 fs.mkdirSync(outputDir, { recursive: true });
 
 const browser = await chromium.launch({
@@ -202,7 +206,7 @@ async function zoneResponseBoard() {
 async function rainDepthBoard() {
   // Use the exact runtime delivery without UI for material close-ups; the
   // companion 390×844 Home capture proves the same asset in product context.
-  const source = await sharp(path.resolve('assets', 'home', 'prototypes', 'weather-full-frame-correction', 'rainy', 'rainy-day-full-frame-3x.jpg'))
+  const source = await sharp(path.resolve('assets', 'home', 'prototypes', reviewAssetRootName, 'rainy', `rainy-day-${reviewAssetSuffix}.jpg`))
     .resize(390, 844, { fit: 'fill' })
     .png()
     .toBuffer();
@@ -246,14 +250,14 @@ await board('night-sky-beauty-restraint-review.jpg', [
 ], { columns: 2 });
 
 async function materialNaturalismBoard() {
-  const runtimeRoot = path.resolve('assets', 'home', 'prototypes', 'weather-material-polish-v1');
+  const runtimeRoot = path.resolve('assets', 'home', 'prototypes', reviewAssetRootName);
   const assets = [
     ['sunny', 'day'], ['cloudy', 'day'], ['rainy', 'day'], ['snowy', 'day'],
     ['sunny', 'sunset'], ['cloudy', 'sunset'], ['rainy', 'sunset'], ['snowy', 'sunset'],
     ['sunny', 'night'], ['cloudy', 'night'], ['rainy', 'night'], ['snowy', 'night'],
   ].map(([weather, time]) => ({
     label: `${weather.toUpperCase()} ${time.toUpperCase()}`,
-    path: path.join(runtimeRoot, weather, `${weather}-${time}-material-polish-3x.jpg`),
+    path: path.join(runtimeRoot, weather, `${weather}-${time}-${reviewAssetSuffix}.jpg`),
   }));
   const crops = [
     { label: 'MOUNTAIN', top: 470, height: 500 },

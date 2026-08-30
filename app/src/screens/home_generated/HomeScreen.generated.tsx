@@ -6,6 +6,7 @@ import { styles } from './styles';
 import { Icon } from '../../components/Icon';
 import { CairnIcon } from '../../components/CairnIcon';
 import { HomeProductIcon } from '../../components/home/HomeProductIcon';
+import { HomeActionCandidateIcon, type HikingIconCandidate, type RunningIconCandidate } from '../../components/home/HomeActionCandidateIcon';
 import { SunnyMotionLayer } from '../../components/home/SunnyMotionLayer';
 import { getRegisteredBackgroundLayout, type HomeBackgroundTokens } from '../../utils/homeBackground';
 
@@ -27,6 +28,8 @@ export function HomeScreen(props: {
   greetingName?: string;
   lastHikeTitle?: string;
   lastHikeMeta?: string;
+  /** Existing activity values composed into the unchanged card footprint. */
+  lastHikeDetails?: string[];
   countryName?: string;
   percentOfCountry?: number;
   showPercent?: boolean;
@@ -38,6 +41,9 @@ export function HomeScreen(props: {
   forcedIsDark?: boolean;
   /** Gate A1: render local ambient overlays only for the canonical Sunny Day. */
   sunnyMotionEnabled?: boolean;
+  /** Dev-only real-Home icon review. Null/undefined keeps production glyphs. */
+  hikingIconCandidate?: HikingIconCandidate | null;
+  runningIconCandidate?: RunningIconCandidate | null;
   /** R21 (2026-08-18): when set, the last-hike card is tappable and its
    *  eyebrow shows the passed label (e.g. "Unfinished") instead of the
    *  default "Last hike". */
@@ -50,6 +56,7 @@ export function HomeScreen(props: {
   const greetingName = props.greetingName ?? 'Explorer';
   const lastHikeTitle = props.lastHikeTitle ?? 'Recent hike';
   const lastHikeMeta = props.lastHikeMeta ?? '';
+  const lastHikeDetails = props.lastHikeDetails ?? [];
   const countryName = props.countryName;
   const percentOfCountry = props.percentOfCountry;
   const showPercent = !!props.showPercent;
@@ -83,8 +90,8 @@ export function HomeScreen(props: {
 
   // One functional vector family; Day/Night changes semantic color only.
   const isDark = props.forcedIsDark ?? false;
-  const actionAccent = isDark ? '#9FC9A7' : '#3C755D';
-  const navAccent = isDark ? '#A7CFA9' : '#2F684F';
+  const actionAccent = actionIconColor;
+  const navAccent = navIconColor;
   const scenicScrim = tokens?.variant === 'sunny-day'
     ? ['rgba(7,24,27,0.00)', 'rgba(7,24,27,0.00)', 'rgba(7,24,27,0.00)', 'rgba(6,19,19,0.06)'] as const
     : tokens?.variant === 'sunny-sunset'
@@ -137,9 +144,21 @@ export function HomeScreen(props: {
   const tabBarOverride = tabBg
     ? { backgroundColor: tabBg, borderColor: tabBorder }
     : null;
-  const renderActionIcon = (name: 'hiking' | 'running' | 'leaveCairn') => useCorrectedSunnyIcons
-    ? <HomeProductIcon name={name} size={29} color={actionIconColor} />
-    : <CairnIcon name={name} size={29} color={actionIconColor} accent={actionAccent} active={name === 'hiking'} />;
+  const actionIconReviewActive = !!props.hikingIconCandidate || !!props.runningIconCandidate;
+  const renderActionIcon = (name: 'hiking' | 'running' | 'leaveCairn') => {
+    if (name === 'hiking' && props.hikingIconCandidate) {
+      return <HomeActionCandidateIcon kind="hiking" candidate={props.hikingIconCandidate} size={29} color={actionIconColor} />;
+    }
+    if (name === 'running' && props.runningIconCandidate) {
+      return <HomeActionCandidateIcon kind="running" candidate={props.runningIconCandidate} size={29} color={actionIconColor} />;
+    }
+    if (name === 'leaveCairn' && actionIconReviewActive) {
+      return <HomeActionCandidateIcon kind="cairn" size={29} color={actionIconColor} />;
+    }
+    return useCorrectedSunnyIcons
+      ? <HomeProductIcon name={name} size={29} color={actionIconColor} />
+      : <CairnIcon name={name} size={29} color={actionIconColor} accent={actionAccent} active={name === 'hiking'} />;
+  };
   const renderNavIcon = (name: 'trails' | 'friends' | 'memory' | 'settings') => useCorrectedSunnyIcons
     ? <HomeProductIcon name={name} size={20} color={navIconColor} />
     : <CairnIcon name={name} size={20} color={navIconColor} accent={navAccent} />;
@@ -294,7 +313,18 @@ export function HomeScreen(props: {
           >
             <Text style={[styles.H1__last_hike_card__last_hike_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{props.lastHikeEyebrow ?? 'Last hike'}</Text>
             <Text style={[styles.H1__last_hike_card__last_hike_title, cardText ? { color: cardText } : null]}>{lastHikeTitle}</Text>
-            <Text style={[styles.H1__last_hike_card__last_hike_meta, cardTextMuted ? { color: cardTextMuted } : null]}>{lastHikeMeta}</Text>
+            {lastHikeDetails.length > 0 ? (
+              <View style={styles.H1__last_hike_card__detail_row}>
+                {lastHikeDetails.slice(0, 3).map((detail, index) => (
+                  <React.Fragment key={`${detail}-${index}`}>
+                    {index > 0 ? <View style={[styles.H1__last_hike_card__detail_divider, cardTextMuted ? { backgroundColor: cardTextMuted } : null]} /> : null}
+                    <Text numberOfLines={1} style={[styles.H1__last_hike_card__detail_text, cardTextMuted ? { color: cardTextMuted } : null]}>{detail}</Text>
+                  </React.Fragment>
+                ))}
+              </View>
+            ) : (
+              <Text style={[styles.H1__last_hike_card__last_hike_meta, cardTextMuted ? { color: cardTextMuted } : null]}>{lastHikeMeta}</Text>
+            )}
           </TouchableOpacity>
         </>
       )}
