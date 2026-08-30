@@ -39,7 +39,8 @@ import { PinNudgeConfig } from '../config/plantConfig';
 // migrated to Colors tokens per design §12.
 import { Colors, Spacing, FontSize } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
-import { getPrimaryMapStyle } from '../../../config/mapbox';
+import { getPrimaryMapStyle, getStandardStyleURL, themeToStandardPreset } from '../../../config/mapbox';
+import { useMapTheme } from '../../../hooks/useMapTheme';
 import { log } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
 import { BackButton } from '../../../components/BackButton';
@@ -124,6 +125,11 @@ export function PinAdjustStep({
   const originRef = useRef({ lat: gpsLat, lng: gpsLng });
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapStyle, setMapStyle] = useState<'outdoors' | 'satellite'>('outdoors');
+  // R21-v3 (2026-08-30): Plant uses Standard 3D basemap; the three-state
+  // theme controls the Standard style's lightPreset (day/dusk/night).
+  // Satellite view bypasses Standard entirely to keep raster imagery clean.
+  const plantMapTheme = useMapTheme();
+  const plantLightPreset = themeToStandardPreset(plantMapTheme);
   // Camera ref — used by the +/- zoom buttons to set both
   // centerCoordinate (locked to current pin) and zoomLevel in one
   // atomic call. Because we disable all native zoom gestures below,
@@ -415,7 +421,7 @@ export function PinAdjustStep({
                               onConfirm={() => onConfirm(pinLat, pinLng)}
                               onBack={onBack} />;
   }
-  const { MapView, Camera, ShapeSource, FillLayer, LineLayer } = Mapbox;
+  const { MapView, Camera, ShapeSource, FillLayer, LineLayer, StyleImport } = Mapbox;
 
   return (
     <View style={styles.container}>
@@ -436,7 +442,7 @@ export function PinAdjustStep({
       <View style={styles.mapWrap}>
         <MapView
           style={styles.map}
-          styleURL={mapStyle === 'satellite' ? SATELLITE_STYLE : getPrimaryMapStyle()}
+          styleURL={mapStyle === 'satellite' ? SATELLITE_STYLE : getStandardStyleURL()}
           compassEnabled={false}
           scaleBarEnabled={false}
           attributionEnabled={false}
@@ -458,6 +464,23 @@ export function PinAdjustStep({
           onMapIdle={onMapSettle}
           onCameraChanged={onCameraTick}
         >
+          {/* R21-v3 (2026-08-30): Standard style lightPreset — day/dusk/night
+              driven by useMapTheme. Satellite branch bypasses Standard so this
+              import has no target and would be a no-op; render only when the
+              basemap is actually Standard.
+              key={plantLightPreset} forces StyleImport remount whenever the
+              preset changes so the config is re-applied via a fresh native
+              attach (rnmapbox's StyleImport prop-diff reactivity is
+              unspecified — remount is the safe path and PinAdjust is a
+              short-lived screen so remount cost is negligible). */}
+          {mapStyle !== 'satellite' && StyleImport ? (
+            <StyleImport
+              key={plantLightPreset}
+              id="basemap"
+              existing
+              config={{ lightPreset: plantLightPreset }}
+            />
+          ) : null}
           <Camera
             ref={cameraRef}
             defaultSettings={{

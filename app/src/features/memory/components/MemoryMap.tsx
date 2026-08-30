@@ -29,6 +29,8 @@ import { Icon } from '../../../components/Icon';
 import { Colors } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
+import { useMapTheme } from '../../../hooks/useMapTheme';
+import { getMapStyleForTheme } from '../../../config/mapbox';
 
 interface Props {
   centerLat: number;
@@ -82,7 +84,6 @@ interface Props {
   flyToTarget?: { center: [number, number]; zoom: number; token: number } | null;
 }
 
-const SEPIA_STYLE_URL = 'mapbox://styles/mapbox/outdoors-v12';
 const INITIAL_ZOOM = 16.5;
 
 export type MemoryMapHandle = {
@@ -100,6 +101,8 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   ref,
 ) {
   const theme = useVisualTheme();
+  const memoryMapTheme = useMapTheme();
+  const memoryResolvedMapStyle = getMapStyleForTheme('outdoors', memoryMapTheme);
   const Mapbox = getMapbox();
   const allMarkers = useMarkerStore((s) => s.markers);
   const memoryPoints = useMemoryStore((s) => s.points);
@@ -356,7 +359,9 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
       <MapView
         ref={mapViewRef}
         style={styles.map}
-        styleURL={SEPIA_STYLE_URL}
+        {...(memoryResolvedMapStyle.kind === 'url'
+          ? { styleURL: memoryResolvedMapStyle.url }
+          : { styleJSON: memoryResolvedMapStyle.json })}
         compassEnabled={false}
         scaleBarEnabled={false}
         logoEnabled={false}

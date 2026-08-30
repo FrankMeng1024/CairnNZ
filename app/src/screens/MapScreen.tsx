@@ -41,9 +41,10 @@ import { OfflineMapSheet } from '../components/OfflineMapSheet';
 import { MARKER_META, MarkerType } from '../data/mockData';
 import { FLAG_TYPES } from '../data/flagTypes';
 import { getCurrentRegion } from '../config/regions';
-import { getMapStyleForLayer, getPrimaryMapStyle } from '../config/mapbox';
+import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle } from '../config/mapbox';
 import { likeMarker, reportMarker, MarkerInteractionError } from '../services/markerInteractionService';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { useMapTheme } from '../hooks/useMapTheme';
 
 // Mapbox — conditional import (native only; web uses fallback)
 let MapboxGL: any = null;
@@ -107,7 +108,9 @@ function RealMap({
   // O18 MAP-01: react to user's saved map layer preference.
   const mapLayer = useSettingsStore((s) => s.mapLayer);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
-  const styleURL = React.useMemo(() => getMapStyleForLayer(mapLayer), [mapLayer]);
+  // R21-v3: three-state theme (day/sunset/night).
+  const mapTheme = useMapTheme();
+  const resolvedMapStyle = React.useMemo(() => getMapStyleForTheme(mapLayer, mapTheme), [mapLayer, mapTheme]);
 
   // If Mapbox not available (Expo Go), show upgrade prompt
   if (!MapView) {
@@ -151,7 +154,9 @@ function RealMap({
     <View style={styles.mapContainer}>
       <MapView
         style={StyleSheet.absoluteFillObject}
-        styleURL={styleURL}
+        {...(resolvedMapStyle.kind === 'url'
+          ? { styleURL: resolvedMapStyle.url }
+          : { styleJSON: resolvedMapStyle.json })}
         logoEnabled={false}
         attributionEnabled={false}
         compassEnabled={true}

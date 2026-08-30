@@ -68,6 +68,14 @@ const MAP_STYLES = {
   // flat grey slab. Reads as a proper "night hiking map" instead of
   // a cold city dashboard.
   dark: 'mapbox://styles/mapbox/navigation-night-v1',
+  // R21-v3 (2026-08-30 user 三主题适配): dark-v11 for pure 2D dark map
+  // (used by Hike/Routes/etc in night state). navigation-night-v1
+  // retained above for legacy callers.
+  darkV11: 'mapbox://styles/mapbox/dark-v11',
+  // Standard style — 3D basemap that supports lightPreset config
+  // (day/dusk/night). Used by Plant/PinAdjust to give the cairn-planting
+  // flow a "ritual" 3D feel that reads the same across day/sunset/night.
+  standard: 'mapbox://styles/mapbox/standard',
   satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
 } as const;
 
@@ -122,6 +130,104 @@ export function getPrimaryMapStyle(): string {
  * toggle (per v299 UX) — do NOT wire this to PinAdjustStep.
  */
 export type MapLayer = 'outdoors' | 'satellite';
+
+/**
+ * R21-v3 (2026-08-30) — three-state theme applied to every mapbox surface.
+ * Values match `ScenicTimeOfDay` from utils/scenicTime.ts so callers can
+ * pipe `useScenicTimeState().timeOfDay` straight through.
+ */
+export type MapTheme = 'day' | 'sunset' | 'night';
+
+/**
+ * R21-v3 (2026-08-30) — Standard style lightPreset ids for Plant/PinAdjust.
+ * Rendered by the <StyleImport id="basemap"> child inside the MapView.
+ * Only meaningful when the loaded styleURL is Standard (mapbox/standard).
+ */
+export type StandardLightPreset = 'day' | 'dusk' | 'night';
+
+export function themeToStandardPreset(theme: MapTheme): StandardLightPreset {
+  if (theme === 'sunset') return 'dusk';
+  if (theme === 'night') return 'night';
+  return 'day';
+}
+
+/**
+ * Local packaged 2D sunset style. Bundled via metro require() so no network
+ * fetch is needed. See app/assets/map-styles/sunset-2d.json for the palette.
+ * rnmapbox `styleJSON` expects a JSON string, mapbox-gl `style` prop
+ * accepts the object directly. Return both flavours so callers can pass
+ * the right one for their target.
+ */
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const SUNSET_STYLE_JSON_OBJ = require('../../assets/map-styles/sunset-2d.json');
+const SUNSET_STYLE_JSON_STR = JSON.stringify(SUNSET_STYLE_JSON_OBJ);
+
+export function getSunsetStyleObject(): object {
+  return SUNSET_STYLE_JSON_OBJ;
+}
+
+export function getSunsetStyleJSONString(): string {
+  return SUNSET_STYLE_JSON_STR;
+}
+
+/**
+ * R21-v3 (2026-08-30) — resolve the effective 2D style for a given theme +
+ * layer combination. Returns a tagged union so callers know whether to
+ * pass `styleURL` (Mapbox-hosted style) or `styleJSON` (bundled sunset).
+ *
+ *   day + outdoors  → outdoors-v12 (URL)
+ *   day + satellite → satellite (URL)
+ *   sunset + outdoors → local sunset-2d.json (inline JSON)
+ *   sunset + satellite → satellite (URL) — satellite ignores theme by design
+ *   night + outdoors → dark-v11 (URL)
+ *   night + satellite → satellite (URL)
+ */
+export type ResolvedMapStyle =
+  | { kind: 'url'; url: string }
+  | { kind: 'json'; json: string; object: object };
+
+// R21-v3 (2026-08-30): pre-allocated tagged values so `getMapStyleForTheme`
+// returns the SAME reference for the same (layer, theme) pair every call.
+// Prevents rnmapbox / react-map-gl from perceiving a "new style" prop each
+// render and triggering avoidable style reloads — especially bad in list
+// screens (RoutesScreen) that mount many map previews.
+const RESOLVED_SATELLITE: ResolvedMapStyle = { kind: 'url', url: MAP_STYLES.satellite };
+const RESOLVED_NIGHT_OUTDOORS: ResolvedMapStyle = { kind: 'url', url: MAP_STYLES.darkV11 };
+const RESOLVED_SUNSET_OUTDOORS: ResolvedMapStyle = {
+  kind: 'json',
+  json: SUNSET_STYLE_JSON_STR,
+  object: SUNSET_STYLE_JSON_OBJ,
+};
+// R21-v3: day path stays through getPrimaryMapStyle() so
+// EXPO_PUBLIC_CAIRN_TOPO_STYLE_URL env override still works. Cached lazily
+// on first call and reused thereafter.
+let RESOLVED_DAY_OUTDOORS: ResolvedMapStyle | null = null;
+
+export function getMapStyleForTheme(
+  layer: MapLayer,
+  theme: MapTheme,
+): ResolvedMapStyle {
+  if (layer === 'satellite') return RESOLVED_SATELLITE;
+  if (theme === 'night') return RESOLVED_NIGHT_OUTDOORS;
+  if (theme === 'sunset') return RESOLVED_SUNSET_OUTDOORS;
+  if (!RESOLVED_DAY_OUTDOORS) {
+    RESOLVED_DAY_OUTDOORS = { kind: 'url', url: getPrimaryMapStyle() };
+  }
+  return RESOLVED_DAY_OUTDOORS;
+}
+
+/**
+ * R21-v3 (2026-08-30) — Standard 3D style for Plant/PinAdjust regardless
+ * of theme. The theme is applied via a separate <StyleImport> child that
+ * sets `lightPreset`. Callers do:
+ *
+ *   <MapView styleURL={getStandardStyleURL()} ...>
+ *     <StyleImport id="basemap" existing config={{ lightPreset }} />
+ *   </MapView>
+ */
+export function getStandardStyleURL(): string {
+  return MAP_STYLES.standard;
+}
 
 export function getMapStyleForLayer(layer: MapLayer, isDark?: boolean): string {
   if (layer === 'satellite') return MAP_STYLES.satellite;

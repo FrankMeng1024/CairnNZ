@@ -28,13 +28,14 @@ import { useTrackingStore } from '../store/useTrackingStore';
 import { useRouteStore } from '../store/useRouteStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { getCurrentRegion } from '../config/regions';
-import { getPrimaryMapStyle, getMapStyleForLayer } from '../config/mapbox';
+import { getPrimaryMapStyle, getMapStyleForLayer, getMapStyleForTheme } from '../config/mapbox';
 import { formatDuration } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { useAppearance } from '../hooks/useAppearance';
+import { useMapTheme } from '../hooks/useMapTheme';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { PulseDot } from '../components/PulseDot';
 import { TooShortSheet } from '../components/TooShortSheet';
@@ -202,6 +203,8 @@ export function RunningScreen() {
   // R21 (2026-08-18): dark theme parity with Hiking. Run tray + top pills
   // + Recenter FAB honour Settings Appearance so day/night reads the same.
   const { isDark: runIsDark } = useAppearance();
+  const runMapTheme = useMapTheme();
+  const runResolvedMapStyle = getMapStyleForTheme('outdoors', runMapTheme);
   const runTheme = useVisualTheme();
   // R21 (2026-08-18 user "点击 向右侧展开"): tracking action tray is
   // collapsed by default. Tap the Navigation anchor (bottom-left) to
@@ -773,7 +776,9 @@ export function RunningScreen() {
           <MapView
             key={`map-${mapEpoch}`}
             style={StyleSheet.absoluteFillObject}
-            styleURL={runIsDark ? getMapStyleForLayer('outdoors', true) : getPrimaryMapStyle()}
+            {...(runResolvedMapStyle.kind === 'url'
+              ? { styleURL: runResolvedMapStyle.url }
+              : { styleJSON: runResolvedMapStyle.json })}
             logoEnabled={false}
             attributionEnabled={false}
             scaleBarEnabled={false}
@@ -1006,7 +1011,9 @@ export function RunningScreen() {
             <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
               <MapView
                 style={StyleSheet.absoluteFillObject}
-                styleURL={runIsDark ? getMapStyleForLayer('outdoors', true) : getPrimaryMapStyle()}
+                {...(runResolvedMapStyle.kind === 'url'
+                  ? { styleURL: runResolvedMapStyle.url }
+                  : { styleJSON: runResolvedMapStyle.json })}
                 logoEnabled={false}
                 attributionEnabled={false}
                 scaleBarEnabled={false}

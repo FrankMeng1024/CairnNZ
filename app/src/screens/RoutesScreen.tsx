@@ -19,7 +19,7 @@ import { useMarkerStore, type Marker, type MarkerPermission } from '../store/use
 // longer decodes marker.note directly; MarkCard owns that.
 import { useTrackingStore } from '../store/useTrackingStore';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
-import { getPrimaryMapStyle } from '../config/mapbox';
+import { getPrimaryMapStyle, getMapStyleForTheme } from '../config/mapbox';
 import { Icon, type IconName } from '../components/Icon';
 import { HikingIcon, RunningIcon } from '../components/ActivityIcons';
 import { BackButton } from '../components/BackButton';
@@ -33,6 +33,7 @@ import { MARKER_META, type MarkerType } from '../data/mockData';
 import { MarkCard } from '../features/marks/components/MarkCard';
 import { EmptyRoutes, EmptyMarkers, IllustrationHalo } from '../components/Illustrations';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { useMapTheme } from '../hooks/useMapTheme';
 
 // ── Mapbox conditional import (for RouteSheet preview) ────────────────────
 // Native-only — on web fallback to a static placeholder.
@@ -300,6 +301,8 @@ function FilterSortBar<F extends string, S extends string>({
 // ── RouteSheet ────────────────────────────────────────────────────────────────
 // ── Route map preview (renders polyline of route.points) ───────────────────
 function RouteMapPreview({ points }: { points: { lat: number; lng: number }[] }) {
+  const routeMapTheme = useMapTheme();
+  const routeResolvedMapStyle = getMapStyleForTheme('outdoors', routeMapTheme);
   // Compute bounds for camera fit
   const bounds = useMemo(() => {
     if (!points || points.length < 2) return null;
@@ -336,7 +339,9 @@ function RouteMapPreview({ points }: { points: { lat: number; lng: number }[] })
     <View style={routePreviewStyles.mapWrap}>
       <MapView
         style={StyleSheet.absoluteFillObject}
-        styleURL={getPrimaryMapStyle()}
+        {...(routeResolvedMapStyle.kind === 'url'
+          ? { styleURL: routeResolvedMapStyle.url }
+          : { styleJSON: routeResolvedMapStyle.json })}
         logoEnabled={false}
         attributionEnabled={false}
         compassEnabled={false}

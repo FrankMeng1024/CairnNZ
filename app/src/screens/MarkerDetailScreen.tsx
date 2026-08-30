@@ -49,7 +49,7 @@ import { MarkForm } from '../features/marks/components/MarkForm';
 // looked nothing like the v10 design users see on the Memory map — visual
 // inconsistency between "where I saw it" and "where I tap to read it".
 import { CairnPin, resolveTier } from '../features/memory/components/CairnPinsLayer';
-import { getPrimaryMapStyle } from '../config/mapbox';
+import { getPrimaryMapStyle, getMapStyleForTheme } from '../config/mapbox';
 import { formatDate } from '../utils/geo';
 import { log } from '../services/appLog';
 import { ContentConfig, VisibilityConfig } from '../features/plant/config/plantConfig';
@@ -58,6 +58,7 @@ import { SyncBadge } from '../components/SyncBadge';
 // v422 D 类: marker edit/delete 是"回家做"的动作, 无网禁用按钮 + 提示
 import { useOnlineOnly } from '../hooks/useOnlineOnly';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { useMapTheme } from '../hooks/useMapTheme';
 
 let MapView: any = null;
 let CameraComponent: any = null;
@@ -100,6 +101,8 @@ const VISIBILITY_LABEL: Record<MarkerPermission, { label: string; iconName: Icon
 
 export function MarkerDetailScreen() {
   const visualTheme = useVisualTheme();
+  const markerMapTheme = useMapTheme();
+  const markerResolvedMapStyle = getMapStyleForTheme('outdoors', markerMapTheme);
   const nav = useNavigation<Nav>();
   const route = useRoute<DetailRoute>();
   const markerId = route.params?.markerId;
@@ -226,7 +229,9 @@ export function MarkerDetailScreen() {
         {MapView ? (
           <MapView
             style={styles.map}
-            styleURL={getPrimaryMapStyle()}
+            {...(markerResolvedMapStyle.kind === 'url'
+              ? { styleURL: markerResolvedMapStyle.url }
+              : { styleJSON: markerResolvedMapStyle.json })}
             compassEnabled={false}
             scaleBarEnabled={false}
             attributionEnabled={false}

@@ -15,16 +15,16 @@ import {
 import { Colors, Spacing, FontSize, Radius, Shadow } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
 import { getCurrentRegion } from '../config/regions';
-import { getMapStyleForLayer, getPrimaryMapStyle } from '../config/mapbox';
+import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle } from '../config/mapbox';
 import { useSettingsStore } from '../store/useSettingsStore';
-import { useAppearance } from '../hooks/useAppearance';
+import { useVisualTheme } from '../hooks/useVisualTheme';
+import { useMapTheme } from '../hooks/useMapTheme';
 import { haversineM } from '../utils/geo';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { MARKER_META } from '../data/mockData';
 import { FLAG_TYPES } from '../data/flagTypes';
 import { MarkerPin } from './MarkerPin';
 import type { Marker } from '../store/useMarkerStore';
-import { useVisualTheme } from '../hooks/useVisualTheme';
 
 // ── Mapbox conditional import ────────────────────────────────────────────
 // @rnmapbox/maps components are native-only — on web they may be undefined.
@@ -103,8 +103,8 @@ export function HikingMap({
   const region = getCurrentRegion();
   // O18 MAP-01: react to user's saved map layer preference (outdoors / satellite).
   const mapLayer = useSettingsStore((s) => s.mapLayer);
-  const { isDark: appearanceIsDark } = useAppearance();
   const theme = useVisualTheme();
+  const mapTheme = useMapTheme();
 
   // R114/O22 (2026-08-08) Bug 4: watch network state. When offline, Mapbox
   // tiles fail to fetch → map renders black/white. Overlay a friendly
@@ -346,12 +346,16 @@ export function HikingMap({
     );
   }
 
+  const resolvedMapStyle = getMapStyleForTheme(mapLayer, mapTheme);
+
   return (
     <View style={mapStyles.mapBg}>
       <MapView
         ref={mapViewRef}
         style={StyleSheet.absoluteFillObject}
-        styleURL={getMapStyleForLayer(mapLayer, appearanceIsDark)}
+        {...(resolvedMapStyle.kind === 'url'
+          ? { styleURL: resolvedMapStyle.url }
+          : { styleJSON: resolvedMapStyle.json })}
         logoEnabled={false}
         attributionEnabled={false}
         // Mapbox's built-in compass is hidden — we draw our own as a

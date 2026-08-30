@@ -46,6 +46,8 @@ import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
 import { debugLogger } from '../services/debugLogger';
 import { telemetryUploader } from '../services/telemetryUploader';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { useMapTheme } from '../hooks/useMapTheme';
+import { getMapStyleForTheme } from '../config/mapbox';
 
 // Conditional Mapbox import — same pattern as RoutesScreen.
 let MapView: any = null;
@@ -75,6 +77,8 @@ const SAVE_FRACTION_FLAG = 'editModeEnabled';
 
 export function RouteEditorScreen() {
   const visualTheme = useVisualTheme();
+  const editorMapTheme = useMapTheme();
+  const editorResolvedMapStyle = getMapStyleForTheme('outdoors', editorMapTheme);
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
   const route = useRoute<any>();
@@ -733,7 +737,9 @@ export function RouteEditorScreen() {
           <MapView
             ref={mapViewRef}
             style={StyleSheet.absoluteFillObject}
-            styleURL="mapbox://styles/mapbox/outdoors-v12"
+            {...(editorResolvedMapStyle.kind === 'url'
+              ? { styleURL: editorResolvedMapStyle.url }
+              : { styleJSON: editorResolvedMapStyle.json })}
             logoEnabled={false}
             attributionEnabled={false}
             scaleBarEnabled={false}

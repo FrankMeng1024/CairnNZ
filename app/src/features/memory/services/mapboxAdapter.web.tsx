@@ -37,7 +37,7 @@
  *     conversion in the layer components below.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { Map as MapGL, Source, Layer, Marker } from 'react-map-gl/mapbox';
 import type { MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -62,6 +62,11 @@ const MapInstanceContext = React.createContext<React.MutableRefObject<MapRef | n
 interface MapViewProps {
   style?: any;
   styleURL?: string;
+  /**
+   * R21-v3 (2026-08-30) — inline Mapbox GL style JSON as string, matches
+   * rnmapbox `styleJSON` prop. Used by the sunset theme path.
+   */
+  styleJSON?: string;
   onMapIdle?: (feature: any) => void;
   onWillStartLoadingMap?: () => void;
   onDidFinishLoadingMap?: () => void;
@@ -95,6 +100,7 @@ interface MapViewProps {
 export function MapView({
   style,
   styleURL,
+  styleJSON,
   onMapIdle,
   onCameraChanged,
   onWillStartLoadingMap,
@@ -114,6 +120,13 @@ export function MapView({
   // Translate mapbox:// style url to a public URL the JS SDK accepts.
   // mapbox-gl@2 actually accepts mapbox:// style URLs natively if a token
   // is set, so no rewrite needed.
+  // R21-v3 (2026-08-30): styleJSON takes precedence over styleURL when
+  // provided (matches rnmapbox precedence). We parse it once and pass the
+  // object to react-map-gl's `mapStyle` prop.
+  const parsedStyleJSON = useMemo(() => {
+    if (!styleJSON) return null;
+    try { return JSON.parse(styleJSON); } catch { return null; }
+  }, [styleJSON]);
   const styleUrl = styleURL ?? 'mapbox://styles/mapbox/outdoors-v12';
 
   // react-map-gl needs an initialViewState. We pull it from the first
@@ -192,7 +205,7 @@ export function MapView({
             }
           }}
           mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
-          mapStyle={styleUrl}
+          mapStyle={parsedStyleJSON ?? styleUrl}
           onLoad={() => {
             onDidFinishLoadingMap?.();
           }}
@@ -430,6 +443,10 @@ export function makeWebMapboxAdapter() {
     Images: NoopComponent,
     Image: NoopComponent,
     MarkerView: NoopComponent,
+    // R21-v3 (2026-08-30): StyleImport is native-only (Mapbox v11 API);
+    // web shim renders nothing so callers can still `<Mapbox.StyleImport>`
+    // unconditionally.
+    StyleImport: NoopComponent,
     available: true,
   };
 }
