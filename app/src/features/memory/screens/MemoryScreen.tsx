@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Animated } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Animated, InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -228,15 +228,33 @@ export function MemoryScreen() {
   // rather than on every individual subscribe/unsubscribe tap. This
   // prevents the map from re-rendering mid-session while user is still
   // selecting friends in the picker.
+  //
+  // 2026-08-31: wrap the fog reload in InteractionManager.runAfterInteractions
+  // so the modal-close animation + touch responder queue run first. Previously
+  // the sequence was:
+  //   close → loadFriendFog → set(version++) → FogLayer turf.buffer/union/
+  //   difference on JS thread (200-1000ms) → CairnPinsLayer rebuild →
+  //   Mapbox native source/layer updates
+  // All of which competed with modal close animation + user's next tap on
+  // the back / friends button, starving touch events for 3-5s.
   const handlePickModalClose = useCallback(() => {
+    const startTs = Date.now();
+    log('memory.picker_close.start', { subs_count: subscriptionsCount, prev: prevSubsCountRef.current });
     setPickModalOpen(false);
     if (subscriptionsCount !== prevSubsCountRef.current) {
       const added = subscriptionsCount - prevSubsCountRef.current;
-      loadFriendFog().then(() => {
-        if (friendFogToastTimerRef.current) clearTimeout(friendFogToastTimerRef.current);
-        const msg = added > 0 ? "Friend's memory added to your map" : "Friend removed from map";
-        setFriendFogToast(msg);
-        friendFogToastTimerRef.current = setTimeout(() => setFriendFogToast(null), 3000);
+      InteractionManager.runAfterInteractions(() => {
+        const fetchStart = Date.now();
+        log('memory.picker_close.fetch_start', { queued_ms: fetchStart - startTs });
+        loadFriendFog().then(() => {
+          const fetchDone = Date.now();
+          log('memory.picker_close.fetch_done', { fetch_ms: fetchDone - fetchStart, total_ms: fetchDone - startTs });
+          if (friendFogToastTimerRef.current) clearTimeout(friendFogToastTimerRef.current);
+          const msg = added > 0 ? "Friend's memory added to your map" : "Friend removed from map";
+          setFriendFogToast(msg);
+          friendFogToastTimerRef.current = setTimeout(() => setFriendFogToast(null), 3000);
+          log('memory.picker_close.toast_shown', {});
+        });
       });
       log('memory.friend_fog_reload_on_picker_close', {
         prev: prevSubsCountRef.current,
@@ -514,10 +532,17 @@ export function MemoryScreen() {
       // The pair (v357.tab_focus_entry → v357.mountKey_bumped) lets us
       // see whether mountKey actually bumped this focus (debounce-gated)
       // or was skipped (FOCUS_REMOUNT_DEBOUNCE_MS window still active).
+      // 2026-08-31: added `will_bump` field so we don't have to correlate
+      // two logs — server can see at a glance whether Settings→Memory
+      // return was fast (reuse) or slow (bump → cold Mapbox reload).
+      const _msSinceLastMount = lastMountAtRef.current === 0 ? -1 : Date.now() - lastMountAtRef.current;
+      const _willBump = lastMountAtRef.current === 0 || _msSinceLastMount >= FOCUS_REMOUNT_DEBOUNCE_MS;
       log('v357.tab_focus_entry', {
         points_n: useMemoryStore.getState().points.length,
         mountKey_pre: mountKeyLatest,
-        ms_since_last_mount: lastMountAtRef.current === 0 ? -1 : Date.now() - lastMountAtRef.current,
+        ms_since_last_mount: _msSinceLastMount,
+        threshold_ms: FOCUS_REMOUNT_DEBOUNCE_MS,
+        will_bump: _willBump,
       });
       // v303 OTA 三修:扩充 tab_focus log,包含进入时的 state 快照,server
       // 可看用户进 memory 时 fog / points / hydrate 状态。
@@ -1237,7 +1262,7 @@ const styles = StyleSheet.create({
   },
   recenterBtn: {
     position: 'absolute',
-    right: 16, bottom: 24,
+    right: 16, bottom: 110,
     width: 48, height: 48, borderRadius: 24,
     backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
@@ -1249,7 +1274,7 @@ const styles = StyleSheet.create({
   // once GPS coords known. Layers icon → tap opens the region popover.
   hierarchyBtn: {
     position: 'absolute',
-    left: 16, bottom: 24,
+    left: 16, bottom: 110,
     width: 48, height: 48, borderRadius: 24,
     backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
