@@ -61,6 +61,7 @@ import type { NZCity } from '../store/useWeatherStore';
 import { getHomeBackground, getRegisteredBackgroundLayout, getWeatherReviewBackground } from '../utils/homeBackground';
 import { useScenicTimeState } from '../hooks/useScenicTimeState';
 import { OTA_VERSION } from '../components/OtaBadge';
+import { CHANGELOG } from '../constants/changelog';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -557,6 +558,9 @@ export function SettingsScreen() {
 
   // O15 bug 1: help modal explaining what "places explored" means.
   const [showProgressHelp, setShowProgressHelp] = useState(false);
+
+  // What's new modal — shows recent OTA changelog entries.
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
 
   // Reset memory type-to-confirm
   const [showResetMemoryModal, setShowResetMemoryModal] = useState(false);
@@ -1225,24 +1229,6 @@ export function SettingsScreen() {
                   value={pushPrefs.markerReplies}
                   onToggle={() => togglePushPref('markerReplies')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
     />
-                <ToggleRow
-                  iconName="Mountain"
-                  iconColor="#4a6b38"
-                  iconBg="#e0e8d5"
-                  label="Memory highlights"
-                  hint="When a friend hikes near a place you've been"
-                  value={pushPrefs.memoryHits}
-                  onToggle={() => togglePushPref('memoryHits')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-                <ToggleRow
-                  iconName="Info"
-                  iconColor="#4a7a8a"
-                  iconBg="#e6eef0"
-                  label="Announcements"
-                  hint="Occasional product updates"
-                  value={pushPrefs.announcements}
-                  onToggle={() => togglePushPref('announcements')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
               </View>
             </>
           )}
@@ -1250,6 +1236,15 @@ export function SettingsScreen() {
           {/* ── About & Legal ── */}
           <SectionHeader title="About & Legal" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
           <View style={[styles.card, cardOverride]}>
+            <ActionRow
+              iconName="Star"
+              iconColor="#8a6e3b"
+              iconBg="#f2ece0"
+              label="What's new"
+              hint={`Latest updates in ${OTA_VERSION}`}
+              onPress={() => setShowWhatsNew(true)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
+    />
+            <View style={[styles.divider, dividerOverride]} />
             <ActionRow
               iconName="Cloud"
               iconColor="#4a7a8a"
@@ -1635,11 +1630,45 @@ export function SettingsScreen() {
         </Pressable>
       </Modal>
 
+      {/* What's new — recent OTA changelog entries (top 3) */}
+      <Modal
+        visible={showWhatsNew}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowWhatsNew(false)}
+      >
+        <Pressable
+          style={modalStyles.backdrop}
+          onPress={() => setShowWhatsNew(false)}
+          accessibilityLabel="Dismiss"
+        >
+          <Pressable style={modalStyles.card} onPress={() => { /* absorb */ }}>
+            <Text style={modalStyles.title}>What's new</Text>
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              {CHANGELOG.slice(0, 3).map((entry) => (
+                <View key={entry.version} style={{ marginBottom: 16 }}>
+                  <Text style={[helpStyles.body, { fontWeight: '700', color: Colors.primary, marginBottom: 4 }]}>
+                    {entry.version} · {entry.date}
+                  </Text>
+                  {entry.notes.map((note, i) => (
+                    <Text key={i} style={[helpStyles.body, { marginBottom: 4 }]}>· {note}</Text>
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={helpStyles.okBtn}
+              onPress={() => setShowWhatsNew(false)}
+            >
+              <Text style={helpStyles.okText}>Close</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* R114/O24 (2026-08-12): Edit Name modal removed — replaced with
           inline accordion panel next to Edit name row (matches Change
           password UX). See panel at ~line 645. */}
-
-      {/* R100 SETTINGS: tiny transient toast after save. */}
       {!!nameToast && (
         <View pointerEvents="none" style={toastStyles.wrap}>
           <View style={toastStyles.pill}>
