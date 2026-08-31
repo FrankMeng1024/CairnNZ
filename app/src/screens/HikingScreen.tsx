@@ -1888,8 +1888,19 @@ const styles = StyleSheet.create({
   // share identical dimensions (48x48) and sit on the same baseline. Label
   // uses absolute-position under each fab so the fab row stays perfectly
   // aligned regardless of whether a label is present or wraps.
+  //
+  // 2026-08-31 fix (user "hike左下角展开和收缩箭头位置不一致"): trayItem
+  // was using default overflow, so the trayFabLabel (marginTop:4 + ~14px
+  // text) added ~18px to the item's height. Because trayAnchorRow is
+  // `alignItems: 'flex-start'`, the taller trayItems pulled the anchor
+  // (label-less, 48px) toward the top of the row — anchor's screen-Y
+  // shifted up by ~9px between collapsed and expanded states. Fix:
+  // trayItem height is now pinned to 48 (matching the fab) and the
+  // label truly sits absolute-positioned below, matching what the
+  // comment above always claimed.
   trayItem: {
     width: 48,
+    height: 48,
     alignItems: 'center',
   },
   trayAnchor: {
@@ -1909,10 +1920,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12, shadowRadius: 10, elevation: 4,
   },
   trayFabLabel: {
-    marginTop: 4,
+    position: 'absolute',
+    top: 52,
+    left: 0,
+    right: 0,
     fontSize: 11,
     color: Colors.textSecondary,
     fontWeight: '600',
+    textAlign: 'center',
   },
 
   // Legacy h2* styles kept for now (unused after tray rework).

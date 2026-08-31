@@ -1630,7 +1630,7 @@ const runStyles = StyleSheet.create({
   // R21 (2026-08-18): match Hiking — anchor + fabs identical 48x48 so
   // the row is perfectly flat, labels sit under each fab in a fixed
   // 48px column.
-  trayItem: { width: 48, alignItems: 'center' },
+  trayItem: { width: 48, height: 48, alignItems: 'center' },
   trayAnchor: {
     width: 48, height: 48, borderRadius: 24,
     backgroundColor: 'rgba(255,253,247,0.94)',
@@ -1648,10 +1648,14 @@ const runStyles = StyleSheet.create({
     shadowOpacity: 0.12, shadowRadius: 10, elevation: 4,
   },
   trayFabLabel: {
-    marginTop: 2,
+    position: 'absolute',
+    top: 52,
+    left: 0,
+    right: 0,
     fontSize: 11,
     color: RunConcept.textMuted,
     fontWeight: '600',
+    textAlign: 'center',
   },
 
   unlockedWrap: { position: 'absolute', bottom: 0, left: 0, right: 0 },
