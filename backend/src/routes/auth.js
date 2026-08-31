@@ -604,8 +604,6 @@ router.post('/apple', oauthLimiter, validateBody(schemas.auth.apple), async (req
   }
 });
 
-});
-
 // ── GET /api/auth/stats ────────────────────────────────────────────────────
 // Lightweight profile stats for Settings screen: places explored + cairns.
 // Returns counts only — no bulk data download.
