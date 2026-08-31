@@ -202,21 +202,24 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
 
     // O18 batch 6.5: notify recipient that they got a new friend request.
     // Fire-and-forget so a push-service outage never blocks request creation.
-    try {
-      const [meRows] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [fromUserId]);
-      const myName = meRows[0]?.name || 'A hiker';
-      const PushNotification = require('../models/PushNotification');
-      PushNotification.enqueue({
-        recipientUserId: toUser.id,
-        actorUserId: fromUserId,
-        kind: 'friend_request',
-        relatedId: reqResult.insertId,
-        title: `${myName} wants to be your friend`,
-        body: 'Tap to review and accept.',
-      }).catch(err => console.error('[push] friend_request enqueue failed:', err.message));
-    } catch (pushErr) {
-      console.error('[push] friend_request trigger failed:', pushErr.message);
-    }
+    // 2026-08-31: push disabled — no device tokens in production and UI
+    // section hidden. Re-enable together with SettingsScreen Notifications
+    // section once push is ready end-to-end.
+    // try {
+    //   const [meRows] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [fromUserId]);
+    //   const myName = meRows[0]?.name || 'A hiker';
+    //   const PushNotification = require('../models/PushNotification');
+    //   PushNotification.enqueue({
+    //     recipientUserId: toUser.id,
+    //     actorUserId: fromUserId,
+    //     kind: 'friend_request',
+    //     relatedId: reqResult.insertId,
+    //     title: `${myName} wants to be your friend`,
+    //     body: 'Tap to review and accept.',
+    //   }).catch(err => console.error('[push] friend_request enqueue failed:', err.message));
+    // } catch (pushErr) {
+    //   console.error('[push] friend_request trigger failed:', pushErr.message);
+    // }
 
     res.status(201).json({ message: 'Friend request sent' });
   } catch (err) {
@@ -342,23 +345,24 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
 
     // O18 batch 6.5: notify the original requester that their request
     // was accepted. Fire-and-forget — do not block the response.
-    (async () => {
-      try {
-        const [meRows] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
-        const myName = meRows[0]?.name || 'A friend';
-        const PushNotification = require('../models/PushNotification');
-        await PushNotification.enqueue({
-          recipientUserId: request.from_user_id,
-          actorUserId: req.user.userId,
-          kind: 'friend_accept',
-          relatedId: requestId,
-          title: `${myName} accepted your friend request`,
-          body: 'You can now see each other\'s cairns and share hikes.',
-        });
-      } catch (pushErr) {
-        console.error('[push] friend_accept post-response enqueue failed:', pushErr.message);
-      }
-    })();
+    // 2026-08-31: push disabled — see friend_request block above for rationale.
+    // (async () => {
+    //   try {
+    //     const [meRows] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
+    //     const myName = meRows[0]?.name || 'A friend';
+    //     const PushNotification = require('../models/PushNotification');
+    //     await PushNotification.enqueue({
+    //       recipientUserId: request.from_user_id,
+    //       actorUserId: req.user.userId,
+    //       kind: 'friend_accept',
+    //       relatedId: requestId,
+    //       title: `${myName} accepted your friend request`,
+    //       body: 'You can now see each other\'s cairns and share hikes.',
+    //     });
+    //   } catch (pushErr) {
+    //     console.error('[push] friend_accept post-response enqueue failed:', pushErr.message);
+    //   }
+    // })();
   } catch (err) {
     console.error('[friends/accept]', err.message);
     res.status(500).json({ error: 'Server error' });

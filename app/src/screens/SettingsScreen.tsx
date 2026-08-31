@@ -332,19 +332,21 @@ export function SettingsScreen() {
 
   // O18 SET-05 (batch 6.5): push notification preferences.
   const [pushPrefs, setPushPrefs] = useState<{ friendRequests: boolean; markerReplies: boolean; memoryHits: boolean; announcements: boolean } | null>(null);
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { getPushPreferences } = require('../services/pushService');
-        const p = await getPushPreferences();
-        if (!cancelled && p) setPushPrefs(p);
-      } catch { /* silent */ }
-    })();
-    return () => { cancelled = true; };
-  }, [isLoggedIn]);
+  // 2026-08-31: push disabled — do not fetch preferences. Kept state + hook
+  // so the Notifications section (gated behind `false &&`) still compiles.
+  // useEffect(() => {
+  //   if (!isLoggedIn) return;
+  //   let cancelled = false;
+  //   (async () => {
+  //     try {
+  //       // eslint-disable-next-line @typescript-eslint/no-require-imports
+  //       const { getPushPreferences } = require('../services/pushService');
+  //       const p = await getPushPreferences();
+  //       if (!cancelled && p) setPushPrefs(p);
+  //     } catch { /* silent */ }
+  //   })();
+  //   return () => { cancelled = true; };
+  // }, [isLoggedIn]);
   const togglePushPref = async (key: 'friendRequests' | 'markerReplies' | 'memoryHits' | 'announcements') => {
     if (!pushPrefs) return;
     const next = { ...pushPrefs, [key]: !pushPrefs[key] };
@@ -1206,8 +1208,13 @@ export function SettingsScreen() {
            *  (was between Preferences and About). Now the user sees
            *  their achievement immediately after their identity. */}
 
-          {/* ── O18 SET-05: Notifications ────────────────────────── */}
-          {pushPrefs && (
+          {/* ── Notifications section hidden (2026-08-31): push pipeline
+              exists (device_tokens + notification_log tables, cron drain)
+              but no device tokens registered in production and the only
+              wired enqueue point is friend_request. Hiding entire section
+              until push is truly ready end-to-end. Re-enable by removing
+              the `false &&` gate below. */}
+          {false && pushPrefs && (
             <>
               <SectionHeader title="Notifications" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
               <View style={[styles.card, cardOverride]}>

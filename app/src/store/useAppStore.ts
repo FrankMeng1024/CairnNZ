@@ -100,11 +100,14 @@ export const useAppStore = create<AppState>((set) => ({
           if (!useAppStore.getState().isLoggedIn) return true;
           const currentUser = useAppStore.getState().user;
           if (!currentUser?.id) return false;
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { registerForPush } = require('../services/pushService');
-            registerForPush().catch(() => { /* silent */ });
-          } catch { /* silent */ }
+          // 2026-08-31: push disabled — do not request notification
+          // permission or register device token. Re-enable together with
+          // SettingsScreen Notifications section + backend enqueue calls.
+          // try {
+          //   // eslint-disable-next-line @typescript-eslint/no-require-imports
+          //   const { registerForPush } = require('../services/pushService');
+          //   registerForPush().catch(() => { /* silent */ });
+          // } catch { /* silent */ }
           try {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { initializePurchases } = require('../services/iapService');
@@ -137,11 +140,14 @@ export const useAppStore = create<AppState>((set) => ({
     // O18 batch 6.5: unregister push token before dropping auth state so
     // the /unregister call goes out with a valid token. Fire-and-forget —
     // never let a push failure block sign-out.
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { unregisterCurrent } = require('../services/pushService');
-      unregisterCurrent().catch(() => { /* silent */ });
-    } catch { /* pushService import failed — silent */ }
+    // 2026-08-31: push disabled — unregister call is a no-op if no token
+    // was ever registered, but skip the require() to avoid loading the
+    // module unnecessarily.
+    // try {
+    //   // eslint-disable-next-line @typescript-eslint/no-require-imports
+    //   const { unregisterCurrent } = require('../services/pushService');
+    //   unregisterCurrent().catch(() => { /* silent */ });
+    // } catch { /* pushService import failed — silent */ }
     // Sprint 6 round-9 review R9B6: log out of RevenueCat so post-logout
     // purchases don't attribute to the just-signed-out user's RC account.
     try {
