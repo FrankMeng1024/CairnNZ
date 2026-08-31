@@ -1200,13 +1200,13 @@ export function AuthScreen() {
       // first paint of Home in its terminal state.
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../services/bootDiagnostics').markBootPhase('login_before_setUser');
-      } catch {/* ignore */}
-      if (result.user) setUser(result.user);
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../services/bootDiagnostics').markBootPhase('login_before_hydrate');
       } catch {/* ignore */}
+      // Bug-1 fix: removed premature setUser before hydrate(). hydrate() may
+      // also call set({ user, isLoggedIn: true }) if getMe() succeeds, which
+      // triggered RootNavigator to flash Auth→Home before AuthScreen finished
+      // its own setUser+setLoggedIn sequence. Now user+isLoggedIn are set
+      // atomically AFTER hydrate() returns (lines below), single React render.
       await hydrate();
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1218,11 +1218,13 @@ export function AuthScreen() {
         await storage.removeItem('cairn_logout_marker');
         crashLogger.breadcrumb('login:marker_cleared');
       } catch {/* ignore */}
-      // R21 (2026-08-17): setUser first, then setLoggedIn. Reversed order
-      // prevents RootNavigator gate `isLoggedIn && user` from evaluating
-      // true-and-null for one render.
-      if (result.user) setUser(result.user);
-      setLoggedIn(true);
+      // Bug-1 fix: atomic setState so RootNavigator gate `isLoggedIn && user`
+      // evaluates true in one React render, preventing the Auth→Home→Auth flash.
+      if (result.user) {
+        useAppStore.setState({ user: result.user, isLoggedIn: true });
+      } else {
+        setLoggedIn(true);
+      }
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../services/bootDiagnostics').markBootPhase('login_after_setLoggedIn');

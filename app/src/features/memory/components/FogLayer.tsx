@@ -64,6 +64,12 @@ interface Props {
   onFogReady?: () => void;
 }
 
+// Bug-6 fix: module-level cache so FogLayer unmount/remount (tab switch)
+// reuses the previous geometry immediately instead of rebuilding from scratch.
+// The signature is the same cheap count+first3+last3 hash used by useMemo.
+let _moduleFogSig = '';
+let _moduleFogShape: Feature<Polygon | MultiPolygon> | null = null;
+
 // Corridor width in meters around each GPS line — this is the "trail width"
 // visible to the user. R114 (2026-08-07): 25 → 30. User reported that 25m
 // leaves a black stripe in the middle when walking around a building or
@@ -319,8 +325,10 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
   // flicker on Memory tab open. Adding a content signature (count + first
   // 3 + last 3 point cids) lets us bail out when the new array is
   // structurally identical to last computed fog.
-  const lastSigRef = useRef<string>('');
-  const lastShapeRef = useRef<Feature<Polygon | MultiPolygon> | null>(null);
+  // Bug-6 fix: seed instance refs from module-level cache so remount
+  // immediately reuses the last computed shape without rebuilding.
+  const lastSigRef = useRef<string>(_moduleFogSig);
+  const lastShapeRef = useRef<Feature<Polygon | MultiPolygon> | null>(_moduleFogShape);
   // v359 diagnostic: count build invocations for this FogLayer instance.
   // Lets us tell apart "first build after mount" vs "rebuild on points
   // change" vs "rebuild on geometryVersion bump". Counter is per-instance,
@@ -436,6 +444,9 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
     });
     lastSigRef.current = sig;
     lastShapeRef.current = shape;
+    // Bug-6 fix: update module-level cache so next remount seeds from this shape
+    _moduleFogSig = sig;
+    _moduleFogShape = shape;
     return shape;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, geometryVersion, useH3Fog]);

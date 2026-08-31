@@ -27,6 +27,7 @@ import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
+import { useFriendStore } from '../../../store/useFriendStore';
 import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap, type MemoryMapHandle } from '../components/MemoryMap';
@@ -186,11 +187,27 @@ export function MemoryScreen() {
   const subscriptionsCount = useMemorySubscriptionsStore((s) => s.subscriptions.length);
   const loadSubs = useMemorySubscriptionsStore((s) => s.load);
   const loadFriendFog = useFriendMemoryStore((s) => s.loadFriendFog);
+  // Bug-5 fix: pre-load friend list on Memory mount so friend picker always
+  // has data immediately (previously required visiting Friends tab first).
+  const loadFriendsFromBackend = useFriendStore((s) => s.loadFriendsFromBackend);
+  const friendsLoadedRef = useRef(false);
+  // Bug-3 fix: throttle loadSubs+loadFriendFog to at most once per 30s.
+  // Previously fired on every mount (tab switch), stacking concurrent
+  // network requests that caused the "weak signal" timeout banner.
+  const lastFriendLoadRef = useRef<number>(0);
   useEffect(() => {
-    // 冷启 / 每次 MemoryScreen mount 时拉 subscriptions + friend fog
+    // Bug-5: load friends once per mount if not already loaded this session
+    if (!friendsLoadedRef.current) {
+      friendsLoadedRef.current = true;
+      void loadFriendsFromBackend();
+    }
+    // Bug-3: throttle fog/sub refresh to 30s
+    const now = Date.now();
+    if (now - lastFriendLoadRef.current < 30_000) return;
+    lastFriendLoadRef.current = now;
     void loadSubs();
     void loadFriendFog();
-  }, [loadSubs, loadFriendFog]);
+  }, [loadSubs, loadFriendFog, loadFriendsFromBackend]);
   useEffect(() => {
     // subscribed friends 增加时 (subscribe 后 subs.length 会+1), 重拉 friend fog
     // 这样新订阅的 friend 的 points 会被立即拉到本地 → FogLayer union

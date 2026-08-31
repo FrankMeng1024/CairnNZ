@@ -197,6 +197,32 @@ export async function fetchFriendProfile(friendId: number | string): Promise<Fri
   }
 }
 
+// ── Bug-4: remove friend (unfriend) ──────────────────────────────────────
+
+/**
+ * Remove a friend by their friendship id. Optimistically removes from store.
+ */
+export async function removeFriendAPI(
+  friendId: number | string,
+): Promise<{ success: boolean; error?: string }> {
+  // Optimistic local remove
+  const prev = useFriendStore.getState().friends;
+  useFriendStore.setState({ friends: prev.filter((f) => f.id !== String(friendId)) });
+  try {
+    const res = await authenticatedFetch(`/api/friends/${friendId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      // Rollback on failure
+      useFriendStore.setState({ friends: prev });
+      const data = await res.json().catch(() => ({}));
+      return { success: false, error: (data as any).error || 'Remove failed' };
+    }
+    return { success: true };
+  } catch (err: any) {
+    useFriendStore.setState({ friends: prev });
+    return { success: false, error: err.message || 'Network error' };
+  }
+}
+
 // ── O18 FRI-block: block / unblock / blocklist ──────────────────────────
 
 export interface BlockedUser {

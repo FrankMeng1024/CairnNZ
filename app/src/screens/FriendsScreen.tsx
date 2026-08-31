@@ -25,7 +25,7 @@ import Svg, { Path } from 'react-native-svg';
 import {
   useFriendStore, sendFriendRequest, fetchFriendRequests,
   acceptFriendRequestAPI, rejectFriendRequestAPI, blockUser, fetchFriendProfile,
-  fetchOutboundRequests, cancelOutboundRequest,
+  fetchOutboundRequests, cancelOutboundRequest, removeFriendAPI,
   type OutboundRequest, type FriendProfile,
 } from '../store/useFriendStore';
 import { useMarkerStore } from '../store/useMarkerStore';
@@ -565,6 +565,16 @@ export function FriendsScreen() {
     );
   };
 
+  // Bug-4: tap → open profile detail sheet
+  const handleFriendTap = async (friend: { id: string; name: string; email: string }) => {
+    setProfileFriend(friend);
+    setProfileData(null);
+    setProfileLoading(true);
+    const p = await fetchFriendProfile(friend.id);
+    setProfileData(p);
+    setProfileLoading(false);
+  };
+
   const handleFriendLongPress = (friend: { id: string; name: string; email: string }) => {
     Alert.alert(
       friend.name,
@@ -695,6 +705,7 @@ export function FriendsScreen() {
                 id={f.id}
                 name={f.name}
                 sharedFlags={f.sharedFlags}
+                onPress={() => handleFriendTap({ id: f.id, name: f.name, email: f.email })}
                 onLongPress={() => handleFriendLongPress({ id: f.id, name: f.name, email: f.email })}
               />
             ))}
@@ -821,6 +832,48 @@ export function FriendsScreen() {
               onPress={() => { setProfileFriend(null); setProfileData(null); }}
             >
               <Text style={[s.profileCloseText, { color: theme.foreground }]}>Done</Text>
+            </TouchableOpacity>
+            {/* Bug-4: remove friend with double confirm */}
+            <TouchableOpacity
+              testID="btn-remove-friend"
+              style={[s.profileClose, { backgroundColor: theme.dangerSurface ?? T.danger + '15', borderColor: T.danger + '50', marginTop: 8 }]}
+              onPress={() => {
+                if (!profileFriend) return;
+                Alert.alert(
+                  `Remove ${profileFriend.name}?`,
+                  'They will no longer see your shared content and vice versa.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Remove friend',
+                      style: 'destructive',
+                      onPress: () => {
+                        Alert.alert(
+                          'Are you sure?',
+                          `This will permanently remove ${profileFriend.name} from your circle.`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Yes, remove',
+                              style: 'destructive',
+                              onPress: async () => {
+                                const result = await removeFriendAPI(profileFriend.id);
+                                setProfileFriend(null);
+                                setProfileData(null);
+                                if (!result.success) {
+                                  Alert.alert('Error', result.error || 'Could not remove friend.', [{ text: 'OK' }]);
+                                }
+                              },
+                            },
+                          ],
+                        );
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <Text style={[s.profileCloseText, { color: T.danger }]}>Remove friend</Text>
             </TouchableOpacity>
           </View>
         </View>

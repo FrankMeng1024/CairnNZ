@@ -40,9 +40,18 @@ const HOME_BG_ASSETS = {
   'sunny-day': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-day-soft-natural-v3-3x.jpg'),
   'sunny-sunset': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-sunset-soft-natural-v3-3x.jpg'),
   'sunny-night': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-night-soft-natural-v3-3x.jpg'),
-  'cloudy-day': require('../../assets/home/prototypes/final-nz-world-sunny/gate-a1.13/sunny-variant-a-3x.jpg'),
-  'rain-day': require('../../assets/home/prototypes/final-nz-world-sunny/gate-a1.13/sunny-variant-b-3x.jpg'),
-  'snow-day': require('../../assets/home/prototypes/final-nz-world-sunny/gate-a1.13/sunny-variant-c-3x.jpg'),
+  // Bug-2 fix: cloudy/rain/snow now have full 3-state (day/sunset/night) families
+  // using the locked-sunny-weather-rebuild-v1 assets. Previously only *-day existed,
+  // causing sunset/night weather conditions to fall back to a mismatched asset.
+  'cloudy-day':    require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/cloudy/cloudy-day-locked-parent-v1-3x.jpg'),
+  'cloudy-sunset': require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/cloudy/cloudy-sunset-locked-parent-v1-3x.jpg'),
+  'cloudy-night':  require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/cloudy/cloudy-night-locked-parent-v1-3x.jpg'),
+  'rain-day':    require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/rainy/rainy-day-locked-parent-v1-3x.jpg'),
+  'rain-sunset': require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/rainy/rainy-sunset-locked-parent-v1-3x.jpg'),
+  'rain-night':  require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/rainy/rainy-night-locked-parent-v1-3x.jpg'),
+  'snow-day':    require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/snowy/snowy-day-locked-parent-v1-3x.jpg'),
+  'snow-sunset': require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/snowy/snowy-sunset-locked-parent-v1-3x.jpg'),
+  'snow-night':  require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/snowy/snowy-night-locked-parent-v1-3x.jpg'),
 } as const;
 
 // Settings is a calmer product surface, but uses the same Sunny world and
@@ -128,8 +137,9 @@ export function resolveVariant(
   const bucket: 'sunny' | 'cloudy' | 'rain' | 'snow' =
     condition === 'fog' ? 'cloudy' : condition;
   if (bucket === 'sunny') return `sunny-${timeOfDay}` as HomeBgVariant;
-  // Non-Sunny remains frozen on its existing Day/Night architecture.
-  return `${bucket}-${timeOfDay === 'night' ? 'night' : 'day'}` as HomeBgVariant;
+  // Bug-2 fix: now that locked-sunny-weather-rebuild-v1 provides all 3 states
+  // for cloudy/rain/snow, pass timeOfDay through directly (day/sunset/night).
+  return `${bucket}-${timeOfDay}` as HomeBgVariant;
 }
 
 // Functional UI has exactly two color families. Sunny Day and the approved
