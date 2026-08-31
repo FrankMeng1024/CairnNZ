@@ -98,8 +98,19 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         body: JSON.stringify({ friend_id: friendId }),
       });
       if (res.ok) {
-        // Re-fetch to get the canonical row (name + email).
-        await get().load();
+        // Optimistic update: add locally from friendStore instead of
+        // re-fetching — avoids an extra round-trip that caused visible
+        // lag when tapping friends in the pick modal.
+        const { useFriendStore } = require('../../../store/useFriendStore');
+        const friend = useFriendStore.getState().friends.find(
+          (f: { id: string; name: string }) => Number(f.id) === friendId,
+        );
+        const newSub = {
+          friend_id: friendId,
+          friend_name: friend?.name ?? String(friendId),
+          subscribed_at: new Date().toISOString(),
+        };
+        set({ subscriptions: [...get().subscriptions, newSub] });
       }
       return res.status;
     } catch {

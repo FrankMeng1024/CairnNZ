@@ -809,34 +809,26 @@ export function FriendsScreen() {
               <View style={{ paddingVertical: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.border }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.hikeCount}</Text>
-                    <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>hikes</Text>
+                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.placesExplored}</Text>
+                    <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>
+                      {profileData.placesExplored === 1 ? 'place explored' : 'places explored'}
+                    </Text>
                   </View>
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.friendCount}</Text>
-                    <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>friends</Text>
+                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.cairnsPlanted}</Text>
+                    <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>
+                      {profileData.cairnsPlanted === 1 ? 'cairn planted' : 'cairns planted'}
+                    </Text>
                   </View>
                 </View>
-                {profileData.memberSince && (
-                  <Text style={[s.cardMeta, { textAlign: 'center', marginTop: 8, color: theme.foregroundSecondary }]}>
-                    Member since {new Date(profileData.memberSince).toLocaleDateString()}
-                  </Text>
-                )}
               </View>
             ) : (
               <Text style={[s.cardMeta, { textAlign: 'center', marginVertical: 20, color: theme.foregroundSecondary }]}>Profile unavailable.</Text>
             )}
-            <TouchableOpacity
-              testID="btn-close-profile"
-              style={[s.profileClose, { backgroundColor: theme.surface, borderColor: theme.border }]}
-              onPress={() => { setProfileFriend(null); setProfileData(null); }}
-            >
-              <Text style={[s.profileCloseText, { color: theme.foreground }]}>Done</Text>
-            </TouchableOpacity>
-            {/* Bug-4: remove friend with double confirm */}
+            {/* Remove friend with double confirm — no Done button */}
             <TouchableOpacity
               testID="btn-remove-friend"
-              style={[s.profileClose, { backgroundColor: theme.dangerSurface ?? T.danger + '15', borderColor: T.danger + '50', marginTop: 8 }]}
+              style={[s.profileClose, { backgroundColor: theme.dangerSurface ?? T.danger + '15', borderColor: T.danger + '50', marginTop: 12 }]}
               onPress={() => {
                 if (!profileFriend) return;
                 Alert.alert(

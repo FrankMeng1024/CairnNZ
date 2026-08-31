@@ -79,6 +79,12 @@ type FailReason = 'permission' | 'timeout' | 'error';
 // verifiable on release builds.
 let _lastKnownCoord: { lat: number; lng: number; ts: number } | null = null;
 
+// Bug fix: track whether fog+map have successfully loaded at least once
+// in this JS session. On subsequent mounts (tab switch / 5-min remount),
+// skip the 8s loading overlay entirely — show the map immediately since
+// cached tiles + module-level fog shape make reload near-instant.
+let _fogEverReady = false;
+
 // v357 diagnostic: module-scope counter for MemoryScreen render invocations.
 // Counts across mount/unmount within the same JS session so we can tell
 // apart "1st cold render" vs "Nth re-render after tab switch".
@@ -182,6 +188,7 @@ export function MemoryScreen() {
   const [pickModalOpen, setPickModalOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
+  const setScope = useMemoryScopeStore((s) => s.setScope);
   const [fogReady, setFogReady] = useState(false);
   // v413: friend memory 加载 — Memory 页 mount + subscribed friends 变化时拉 /api/circle/fog
   const subscriptionsCount = useMemorySubscriptionsStore((s) => s.subscriptions.length);
@@ -208,12 +215,24 @@ export function MemoryScreen() {
     void loadSubs();
     void loadFriendFog();
   }, [loadSubs, loadFriendFog, loadFriendsFromBackend]);
+  // Track previous subscriptions count to detect changes when picker closes.
+  const prevSubsCountRef = useRef(0);
   useEffect(() => {
-    // subscribed friends 增加时 (subscribe 后 subs.length 会+1), 重拉 friend fog
-    // 这样新订阅的 friend 的 points 会被立即拉到本地 → FogLayer union
-    // unsubscribe 时 length 减少也会触发, 但 friendMemory 已缓存, refetch 会返回缩短的 friend list
-    if (subscriptionsCount > 0) {
+    prevSubsCountRef.current = subscriptionsCount;
+  }, [subscriptionsCount]);
+
+  // Refresh friend fog when pick modal closes and subscriptions changed,
+  // rather than on every individual subscribe/unsubscribe tap. This
+  // prevents the map from re-rendering mid-session while user is still
+  // selecting friends in the picker.
+  const handlePickModalClose = useCallback(() => {
+    setPickModalOpen(false);
+    if (subscriptionsCount !== prevSubsCountRef.current) {
       void loadFriendFog();
+      log('memory.friend_fog_reload_on_picker_close', {
+        prev: prevSubsCountRef.current,
+        now: subscriptionsCount,
+      });
     }
   }, [subscriptionsCount, loadFriendFog]);
 
@@ -261,6 +280,21 @@ export function MemoryScreen() {
 
   // Reset overlay state on each remount (mountKey bump).
   useEffect(() => {
+    // Bug fix: if fog+map loaded successfully before in this JS session,
+    // skip the loading overlay entirely — cached tiles + module-level fog
+    // shape make reload near-instant. No 8s timer needed.
+    if (_fogEverReady) {
+      overlayHiddenRef.current = true;
+      overlayOpacity.setValue(0);
+      setMapReady(true);
+      setFogReady(true);
+      setLoadingState('ready');
+      setLoadingStage(0);
+      setSlowBannerDismissed(false);
+      slowShownAtRef.current = 0;
+      log('memory.overlay_skipped_fog_ever_ready', { mountKey });
+      return () => {};
+    }
     overlayHiddenRef.current = false;
     setMapReady(false);
     setFogReady(false);
@@ -485,6 +519,9 @@ export function MemoryScreen() {
         mountKey: mountKeyLatest,
       });
       const now = Date.now();
+      // Reset scope to 'mine' on every focus — per product spec, social
+      // view is a deliberate switch, not a persistent default.
+      useMemoryScopeStore.getState().setScope('mine');
       // S3 fix: debounce map remount separately. Cheap to keep the
       // map mounted across rapid back-and-forth; expensive to tear
       // it down and reload Mapbox tiles.
@@ -746,6 +783,7 @@ export function MemoryScreen() {
           }}
           onFogReady={() => {
             log('v359.fog_ready_cb', {});
+            _fogEverReady = true;
             setFogReady(true);
           }}
           // BUG-008 fix (Sprint 71 post-review round 2): close the
@@ -994,9 +1032,9 @@ export function MemoryScreen() {
           The pick modal itself is unchanged — only its entry point moved. */}
       <MemoryFriendPickModal
         visible={pickModalOpen}
-        onClose={() => setPickModalOpen(false)}
+        onClose={handlePickModalClose}
         onCapHit={() => {
-          setPickModalOpen(false);
+          handlePickModalClose();
           setPaywallOpen(true);
         }}
       />

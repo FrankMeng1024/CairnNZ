@@ -185,6 +185,8 @@ export interface FriendProfile {
   memberSince: string | null;
   friendCount: number;
   hikeCount: number;
+  placesExplored: number;
+  cairnsPlanted: number;
 }
 
 export async function fetchFriendProfile(friendId: number | string): Promise<FriendProfile | null> {

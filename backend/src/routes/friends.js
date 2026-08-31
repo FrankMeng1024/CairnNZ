@@ -564,6 +564,14 @@ router.get('/:id/profile', async (req, res) => {
          AND finalized_at IS NOT NULL`,
       [targetId],
     );
+    const [placesRows] = await pool.execute(
+      'SELECT COUNT(*) AS n FROM memory_points WHERE user_id = ?',
+      [targetId],
+    );
+    const [cairnsRows] = await pool.execute(
+      'SELECT COUNT(*) AS n FROM markers WHERE user_id = ?',
+      [targetId],
+    );
     return res.json({
       id: users[0].id,
       name: users[0].name,
@@ -571,6 +579,8 @@ router.get('/:id/profile', async (req, res) => {
       memberSince: users[0].created_at,
       friendCount: friendCountRows[0]?.n ?? 0,
       hikeCount: hikeCountRows[0]?.n ?? 0,
+      placesExplored: placesRows[0]?.n ?? 0,
+      cairnsPlanted: cairnsRows[0]?.n ?? 0,
     });
   } catch (err) {
     console.error('[friends/profile]', err.message);

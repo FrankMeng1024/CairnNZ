@@ -40,17 +40,17 @@ const HOME_BG_ASSETS = {
   'sunny-day': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-day-soft-natural-v3-3x.jpg'),
   'sunny-sunset': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-sunset-soft-natural-v3-3x.jpg'),
   'sunny-night': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-night-soft-natural-v3-3x.jpg'),
-  // Bug-2 fix: cloudy/rain/snow now have full 3-state (day/sunset/night) families
-  // using the locked-sunny-weather-rebuild-v1 assets. Previously only *-day existed,
-  // causing sunset/night weather conditions to fall back to a mismatched asset.
+  // Bug-2 fix: cloudy/rain/snow now have full 3-state (day/sunset/night) families.
+  // Day/night: locked-sunny-weather-rebuild-v1 (consistent world).
+  // Sunset: weather-material-polish-v2 (better sunset rendering).
   'cloudy-day':    require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/cloudy/cloudy-day-locked-parent-v1-3x.jpg'),
-  'cloudy-sunset': require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/cloudy/cloudy-sunset-locked-parent-v1-3x.jpg'),
+  'cloudy-sunset': require('../../assets/home/prototypes/weather-material-polish-v2/cloudy/cloudy-sunset-material-natural-v2-3x.jpg'),
   'cloudy-night':  require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/cloudy/cloudy-night-locked-parent-v1-3x.jpg'),
   'rain-day':    require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/rainy/rainy-day-locked-parent-v1-3x.jpg'),
-  'rain-sunset': require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/rainy/rainy-sunset-locked-parent-v1-3x.jpg'),
+  'rain-sunset': require('../../assets/home/prototypes/weather-material-polish-v2/rainy/rainy-sunset-material-natural-v2-3x.jpg'),
   'rain-night':  require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/rainy/rainy-night-locked-parent-v1-3x.jpg'),
   'snow-day':    require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/snowy/snowy-day-locked-parent-v1-3x.jpg'),
-  'snow-sunset': require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/snowy/snowy-sunset-locked-parent-v1-3x.jpg'),
+  'snow-sunset': require('../../assets/home/prototypes/weather-material-polish-v2/snowy/snowy-sunset-material-natural-v2-3x.jpg'),
   'snow-night':  require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/snowy/snowy-night-locked-parent-v1-3x.jpg'),
 } as const;
 

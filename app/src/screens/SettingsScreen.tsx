@@ -292,6 +292,28 @@ export function SettingsScreen() {
 
   // Memory stats (readonly display)
   const memoryPointCount = useMemoryStore((s) => s.points.length);
+
+  // Stats from backend — authoritative on first entry before Memory/Map tabs load.
+  const [serverStats, setServerStats] = useState<{ placesExplored: number; cairnsPlanted: number } | null>(null);
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token || cancelled) return;
+        const res = await fetch(`${API_BASE_URL}/api/auth/stats`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          setServerStats({ placesExplored: data.placesExplored ?? 0, cairnsPlanted: data.cairnsPlanted ?? 0 });
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [isLoggedIn]);
+
   // R114/O22 STORY-73024 (S3): Memory always-on GPS toggle. Reads
   // `foregroundAutoUnlockEnabled` from the memory settings store (default
   // true). When on, the ForegroundUnlockManager subscribes to
@@ -921,51 +943,20 @@ export function SettingsScreen() {
               <View style={[badgeStyles.iconBadge, { backgroundColor: '#eef3e6' }]}>
                 <Icon name="Footprints" size={22} color={Colors.primary} strokeWidth={1.8} />
               </View>
-              <Text style={[badgeStyles.value, { color: settingsBgTokens.cardTextColor }]}>{memoryPointCount}</Text>
+              <Text style={[badgeStyles.value, { color: settingsBgTokens.cardTextColor }]}>{serverStats?.placesExplored ?? memoryPointCount}</Text>
               <Text style={[badgeStyles.label, { color: settingsBgTokens.cardTextColorMuted }]}>
-                {memoryPointCount === 1 ? 'place explored' : 'places explored'}
+                {(serverStats?.placesExplored ?? memoryPointCount) === 1 ? 'place explored' : 'places explored'}
               </Text>
             </View>
             <View style={[badgeStyles.card, cardOverride]}>
               <View style={[badgeStyles.iconBadge, { backgroundColor: 'rgba(181,130,61,0.12)' }]}>
                 <Icon name="Mountain" size={22} color="#b5823d" strokeWidth={1.8} />
               </View>
-              <Text style={[badgeStyles.value, { color: settingsBgTokens.cardTextColor }]}>{myCairnCount}</Text>
+              <Text style={[badgeStyles.value, { color: settingsBgTokens.cardTextColor }]}>{serverStats?.cairnsPlanted ?? myCairnCount}</Text>
               <Text style={[badgeStyles.label, { color: settingsBgTokens.cardTextColorMuted }]}>
-                {myCairnCount === 1 ? 'cairn planted' : 'cairns planted'}
+                {(serverStats?.cairnsPlanted ?? myCairnCount) === 1 ? 'cairn planted' : 'cairns planted'}
               </Text>
             </View>
-          </View>
-
-          {/* ── Your journey (O24) ──
-           *  Moved from Home to keep Home visually calm. Shows all-time
-           *  totals (no period toggle — Settings is the full-picture view)
-           *  and a one-tap jump to the Activities list (Routes route). */}
-          <SectionHeader title="Your journey" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
-          <View style={[styles.card, cardOverride]}>
-            <View style={journeyStyles.statsRow}>
-              <View style={journeyStyles.statChip}>
-                <Icon name="Route" size={14} color={Colors.primary} strokeWidth={2} />
-                <Text style={journeyStyles.statText}>
-                  {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
-                </Text>
-              </View>
-              <View style={journeyStyles.statChip}>
-                <Icon name="Mountain" size={14} color="#b5823d" strokeWidth={2} />
-                <Text style={journeyStyles.statText}>
-                  {totalCairnCount} {totalCairnCount === 1 ? 'cairn' : 'cairns'}
-                </Text>
-              </View>
-            </View>
-            <View style={[styles.dividerFlush, dividerOverride]} />
-            <ActionRow
-              iconName="Milestone"
-              iconColor={Colors.primary}
-              iconBg={Colors.primaryLight}
-              label="View all activities"
-              hint="Full list of your hikes and runs"
-              onPress={() => nav.navigate('Routes')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
           </View>
 
           {/* ── Preferences ── */}

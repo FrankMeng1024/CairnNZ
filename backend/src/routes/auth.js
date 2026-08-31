@@ -604,6 +604,28 @@ router.post('/apple', oauthLimiter, validateBody(schemas.auth.apple), async (req
   }
 });
 
+});
+
+// ── GET /api/auth/stats ────────────────────────────────────────────────────
+// Lightweight profile stats for Settings screen: places explored + cairns.
+// Returns counts only — no bulk data download.
+router.get('/stats', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const [[placesRow], [cairnsRow]] = await Promise.all([
+      pool.execute('SELECT COUNT(*) AS n FROM memory_points WHERE user_id = ?', [userId]),
+      pool.execute('SELECT COUNT(*) AS n FROM markers WHERE user_id = ?', [userId]),
+    ]);
+    return res.json({
+      placesExplored: placesRow[0]?.n ?? 0,
+      cairnsPlanted: cairnsRow[0]?.n ?? 0,
+    });
+  } catch (err) {
+    console.error('[auth/stats]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── GET /api/auth/me ───────────────────────────────────────────────────────
 router.get('/me', authenticate, async (req, res) => {
   try {
