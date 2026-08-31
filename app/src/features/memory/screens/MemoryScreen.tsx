@@ -141,6 +141,9 @@ export function MemoryScreen() {
   const [recenterToken, setRecenterToken] = useState(0);
   const [mountKey, setMountKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
+  // Toast shown after friend fog finishes loading in background.
+  const [friendFogToast, setFriendFogToast] = useState<string | null>(null);
+  const friendFogToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 2026-08-16 Round 5 fix: MemoryScreen is kept mounted by react-navigation
   // (native-stack keeps prev screens alive), and React Native <Modal> is a
   // root-level overlay. Without an isFocused gate the "Walk to unlock" modal
@@ -228,7 +231,13 @@ export function MemoryScreen() {
   const handlePickModalClose = useCallback(() => {
     setPickModalOpen(false);
     if (subscriptionsCount !== prevSubsCountRef.current) {
-      void loadFriendFog();
+      const added = subscriptionsCount - prevSubsCountRef.current;
+      loadFriendFog().then(() => {
+        if (friendFogToastTimerRef.current) clearTimeout(friendFogToastTimerRef.current);
+        const msg = added > 0 ? "Friend's memory added to your map" : "Friend removed from map";
+        setFriendFogToast(msg);
+        friendFogToastTimerRef.current = setTimeout(() => setFriendFogToast(null), 3000);
+      });
       log('memory.friend_fog_reload_on_picker_close', {
         prev: prevSubsCountRef.current,
         now: subscriptionsCount,
@@ -330,7 +339,7 @@ export function MemoryScreen() {
           useNativeDriver: true,
         }).start();
       }
-    }, 8000); // v370: production 8s timeout. v365-v369 used 500ms for debug. User signed off on banner UX (min-show 2s + auto-close + frosted pill style).
+    }, 3000); // 3s: if both map+fog gates haven't fired by then, show slow banner. Normal loads complete well before this.
     return () => {
       if (overlayFadeTimerRef.current) {
         clearTimeout(overlayFadeTimerRef.current);
@@ -1010,6 +1019,19 @@ export function MemoryScreen() {
           >
             <Text style={styles.slowBannerCloseText}>✕</Text>
           </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Friend fog loaded toast — brief non-blocking confirmation */}
+      {friendFogToast !== null && (
+        <View
+          style={[styles.slowBanner, { top: insets.top + 8, left: 80, right: 12 }]}
+          pointerEvents="none"
+        >
+          <View style={{ marginRight: 6 }}>
+            <Icon name="Check" size={13} color={Colors.primary} strokeWidth={2.5} />
+          </View>
+          <Text style={styles.slowBannerText} numberOfLines={1}>{friendFogToast}</Text>
         </View>
       )}
 
