@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
-import { FontSize, Radius, Spacing } from './tokens';
+import { FontSize, RadiusRole, Spacing } from './tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 
 export interface Segment<T extends string> { key: T; label: string; }
@@ -32,8 +32,8 @@ export function SegmentedControl<T extends string>({ value, segments, onChange, 
             style={[
               styles.segment,
               {
-                backgroundColor: selected ? theme.tabActive : theme.tabInactive,
-                borderColor: selected ? theme.tabActive : theme.borderSubtle,
+                backgroundColor: selected ? theme.controlSelected : theme.controlInactive,
+                borderColor: selected ? theme.controlSelected : theme.borderSubtle,
                 shadowColor: theme.shadow,
               },
             ]}
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   segment: {
     flex: 1,
     minHeight: 42,
-    borderRadius: Radius.circle,
+    borderRadius: RadiusRole.segmentedControl,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

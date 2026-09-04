@@ -1,6 +1,7 @@
 import React from 'react';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Icon } from '../Icon';
+import { FamilyBCairnIcon } from './FamilyBCairnIcon';
 
 export type HomeProductIconName =
   | 'hiking'
@@ -26,6 +27,10 @@ type Props = {
  */
 export function HomeProductIcon({ name, size = 22, color }: Props) {
   const strokeWidth = size >= 26 ? 1.85 : 2;
+
+  if (name === 'leaveCairn') {
+    return <FamilyBCairnIcon size={size} color={color} />;
+  }
 
   if (name === 'trails') {
     return <Icon name="Route" size={size} color={color} strokeWidth={strokeWidth} />;
@@ -82,15 +87,7 @@ export function HomeProductIcon({ name, size = 22, color }: Props) {
           <Path {...common} d="m17.6 9.7 2.4 3.1-3.8.4" />
           <Path {...common} d="M3.5 6.2h3M2.8 10h2.6" opacity={0.62} />
         </>
-      ) : (
-        <>
-          {/* A cairn contained inside the map mark it leaves in the world. */}
-          <Path {...common} d="M12 21c3.9-4.2 6-7.5 6-10.5a6 6 0 1 0-12 0C6 13.5 8.1 16.8 12 21Z" />
-          <Path {...common} d="M8.7 13.6c.2-1.1.9-1.7 1.9-1.8h2.8c1 .1 1.7.7 1.9 1.8Z" />
-          <Path {...common} d="M10.1 10.7c.1-1 .7-1.5 1.5-1.6h.8c.8.1 1.4.6 1.5 1.6Z" />
-          <Path {...common} d="M11.2 8.1c.1-.8.4-1.2.8-1.2s.7.4.8 1.2Z" />
-        </>
-      )}
+      ) : null}
     </Svg>
   );
 }

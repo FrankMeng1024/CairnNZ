@@ -1,12 +1,11 @@
 /**
  * PrimaryButton — app-wide primary call-to-action button.
  *
- * Single visual: rounded pill (radius 28), Colors.primary deep-green fill,
- * white 700 body text, 56pt min height, Spacing.lg vertical padding — matches
- * AuthScreen.primaryBtn exactly (the reference).
+ * The authoritative shared action foundation. Geometry stays compact while
+ * semantic tokens provide primary, secondary, destructive and disabled roles.
  *
- * Optional variant="surface" prop for secondary-context uses (e.g. Google/
- * Apple SSO buttons on Auth): white fill + border, otherwise identical.
+ * Legacy `solid` / `surface` names remain aliases for `primary` /
+ * `secondary` so existing callers can migrate without a visual fork.
  *
  * Color can be tinted via `tint` prop when the caller wants the button to
  * pick up weather-adaptive tokens (e.g. Home / Settings action buttons that
@@ -14,7 +13,7 @@
  */
 import React, { useRef } from 'react';
 import { TouchableOpacity, Text, StyleSheet, Animated, ActivityIndicator, View, StyleProp, ViewStyle } from 'react-native';
-import { Colors, Spacing, FontSize } from './tokens';
+import { Spacing, FontSize, RadiusRole } from './tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 
 interface PrimaryButtonProps {
@@ -22,7 +21,7 @@ interface PrimaryButtonProps {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
-  variant?: 'solid' | 'surface';
+  variant?: 'solid' | 'surface' | 'primary' | 'secondary' | 'destructive';
   /** Optional icon rendered before the label (left-aligned). */
   leftIcon?: React.ReactNode;
   /** Optional background color override (weather-adaptive tokens). */
@@ -41,9 +40,20 @@ export function PrimaryButton({
   const pressIn = () => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, tension: 300, friction: 10 }).start();
   const pressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 8 }).start();
 
-  const isSurface = variant === 'surface';
-  const bg = tint ?? (isSurface ? theme.surfaceElevated : theme.primary);
-  const fg = textColor ?? (isSurface ? theme.foreground : theme.onPrimary);
+  const semanticVariant = variant === 'solid'
+    ? 'primary'
+    : variant === 'surface'
+      ? 'secondary'
+      : variant;
+  const inactive = Boolean(disabled || loading);
+  const palette = semanticVariant === 'destructive'
+    ? { background: 'transparent', border: theme.destructive, text: theme.destructive }
+    : semanticVariant === 'secondary'
+      ? { background: theme.secondaryAction, border: theme.borderStrong, text: theme.textPrimary }
+      : { background: theme.primaryAction, border: theme.primaryAction, text: theme.onPrimary };
+  const bg = inactive ? theme.disabledSurface : tint ?? palette.background;
+  const border = inactive ? theme.disabledBorder : palette.border;
+  const fg = inactive ? theme.disabledText : textColor ?? palette.text;
 
   return (
     <Animated.View style={[{ transform: [{ scale }] }, style]}>
@@ -52,12 +62,12 @@ export function PrimaryButton({
         onPressIn={pressIn}
         onPressOut={pressOut}
         disabled={disabled || loading}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: inactive, busy: Boolean(loading) }}
         activeOpacity={1}
         style={[
           styles.btn,
-          { backgroundColor: bg },
-          isSurface && { borderWidth: 1, borderColor: theme.border },
-          (disabled || loading) && styles.disabled,
+          { backgroundColor: bg, borderColor: border },
         ]}
       >
         {loading ? (
@@ -75,7 +85,8 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   btn: {
-    borderRadius: 28,
+    borderRadius: RadiusRole.button,
+    borderWidth: 1,
     paddingVertical: Spacing.lg,
     minHeight: 56,
     alignItems: 'center',
@@ -84,5 +95,4 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconWrap: { marginRight: 4 },
   label: { fontWeight: '700', fontSize: FontSize.body },
-  disabled: { opacity: 0.5 },
 });

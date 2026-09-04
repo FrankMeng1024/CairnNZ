@@ -2340,6 +2340,7 @@ export function AuthScreen() {
         />
         <GlassPanel
           tint="light"
+          mode="day"
           borderRadius={24}
           style={{ padding: Spacing.xl, alignItems: 'center', width: '100%', maxWidth: 400, ...Shadow.fab }}
         >

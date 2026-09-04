@@ -102,6 +102,9 @@ export interface VisualThemeTokens {
   modalSurface: string;
   sheetSurface: string;
   inputSurface: string;
+  inputFocusBorder: string;
+  controlSelected: string;
+  controlInactive: string;
   tabActive: string;
   tabInactive: string;
   textPrimary: string;
@@ -114,6 +117,9 @@ export interface VisualThemeTokens {
   scrim: string;
   primaryAction: string;
   secondaryAction: string;
+  disabledSurface: string;
+  disabledText: string;
+  disabledBorder: string;
   scenicImageOpacity: number;
   scenicBackdropOverlay: readonly [string, string, string, string];
   scenicHeroOverlay: readonly [string, string];
@@ -151,6 +157,9 @@ export const DAY_VISUAL_THEME: VisualThemeTokens = {
   modalSurface: '#FFFDF7',
   sheetSurface: '#FFFDF7',
   inputSurface: 'rgba(252,252,246,0.94)',
+  inputFocusBorder: '#2F684F',
+  controlSelected: '#2F684F',
+  controlInactive: 'rgba(246,248,243,0.64)',
   tabActive: '#2F684F',
   tabInactive: 'rgba(246,248,243,0.64)',
   textPrimary: '#17372D',
@@ -163,6 +172,9 @@ export const DAY_VISUAL_THEME: VisualThemeTokens = {
   scrim: 'rgba(17,31,25,0.36)',
   primaryAction: '#2F684F',
   secondaryAction: 'rgba(246,248,243,0.82)',
+  disabledSurface: 'rgba(228,232,225,0.78)',
+  disabledText: '#87918C',
+  disabledBorder: 'rgba(32,72,57,0.10)',
   scenicImageOpacity: 0.76,
   scenicBackdropOverlay: ['rgba(243,244,234,0.18)', 'rgba(243,244,234,0.12)', 'rgba(243,244,234,0.27)', 'rgba(243,244,234,0.44)'],
   scenicHeroOverlay: ['rgba(8,18,15,0.02)', 'rgba(8,18,15,0.28)'],
@@ -205,6 +217,9 @@ export const SUNSET_VISUAL_THEME: VisualThemeTokens = {
   modalSurface: '#514D48',
   sheetSurface: '#514D48',
   inputSurface: 'rgba(63,61,58,0.96)',
+  inputFocusBorder: '#A7C18E',
+  controlSelected: '#A7C18E',
+  controlInactive: 'rgba(74,71,67,0.76)',
   tabActive: '#A7C18E',
   tabInactive: 'rgba(74,71,67,0.76)',
   textPrimary: '#F4F0E8',
@@ -217,6 +232,9 @@ export const SUNSET_VISUAL_THEME: VisualThemeTokens = {
   scrim: 'rgba(26,20,20,0.46)',
   primaryAction: '#A7C18E',
   secondaryAction: 'rgba(82,77,71,0.90)',
+  disabledSurface: 'rgba(66,63,60,0.78)',
+  disabledText: '#918A83',
+  disabledBorder: 'rgba(244,232,216,0.10)',
   scenicImageOpacity: 0.72,
   scenicBackdropOverlay: ['rgba(82,63,55,0.14)', 'rgba(91,71,61,0.14)', 'rgba(52,49,46,0.28)', 'rgba(42,40,39,0.54)'],
   scenicHeroOverlay: ['rgba(103,72,59,0.10)', 'rgba(67,55,50,0.32)'],
@@ -256,6 +274,9 @@ export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
   modalSurface: '#303D3B',
   sheetSurface: '#303D3B',
   inputSurface: 'rgba(30,40,39,0.98)',
+  inputFocusBorder: '#91BC86',
+  controlSelected: '#91BC86',
+  controlInactive: 'rgba(27,36,40,0.66)',
   tabActive: '#91BC86',
   tabInactive: 'rgba(27,36,40,0.66)',
   textPrimary: '#F2F5EF',
@@ -268,6 +289,9 @@ export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
   scrim: 'rgba(2,8,9,0.60)',
   primaryAction: '#91BC86',
   secondaryAction: 'rgba(45,56,54,0.92)',
+  disabledSurface: 'rgba(31,40,40,0.84)',
+  disabledText: '#7E8986',
+  disabledBorder: 'rgba(225,234,230,0.10)',
   scenicImageOpacity: 0.74,
   scenicBackdropOverlay: ['rgba(10,17,20,0.18)', 'rgba(18,27,29,0.26)', 'rgba(20,29,30,0.42)', 'rgba(18,26,27,0.58)'],
   scenicHeroOverlay: ['rgba(8,18,15,0.02)', 'rgba(8,18,15,0.32)'],
@@ -302,6 +326,21 @@ export const Radius = {
   chip: 12, // O1: pending banner + small chips (was undefined, HomeScreen 546 用到)
   sm: 8,    // O1: small radius (MarkerDetailScreen 用到)
   md: 12,   // O1: medium radius (MarkerDetailScreen 用到)
+} as const;
+
+/**
+ * Component-level radius application rules. These aliases deliberately use
+ * the existing scale: panels may be softer than cards, while functional
+ * controls stay compact and only semantic pills use the pill radius.
+ */
+export const RadiusRole = {
+  card: Radius.card,
+  panel: Radius.cardLg,
+  button: Radius.button,
+  segmentedControl: Radius.pill,
+  input: Radius.card,
+  sheet: Radius.sheet,
+  modal: Radius.card,
 } as const;
 
 export const FontSize = {

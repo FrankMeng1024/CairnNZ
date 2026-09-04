@@ -35,23 +35,18 @@ const BG_ASSETS = {
 // three-time family while all non-Sunny mappings remain unchanged.
 const HOME_BG_ASSETS = {
   ...BG_ASSETS,
-  // V2 is retained only as rejected QA evidence. The final recovery rebuilds
-  // from the approved pre-V2 geometry masters and never chains V1/V2 pixels.
-  'sunny-day': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-day-soft-natural-v3-3x.jpg'),
-  'sunny-sunset': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-sunset-soft-natural-v3-3x.jpg'),
-  'sunny-night': require('../../assets/home/prototypes/weather-material-rebuild-v3/sunny/sunny-night-soft-natural-v3-3x.jpg'),
-  // Bug-2 fix: cloudy/rain/snow now have full 3-state (day/sunset/night) families.
-  // Day/night: locked-sunny-weather-rebuild-v1 (consistent world).
-  // Sunset: weather-material-polish-v2 (better sunset rendering).
-  'cloudy-day':    require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/cloudy/cloudy-day-locked-parent-v1-3x.jpg'),
-  'cloudy-sunset': require('../../assets/home/prototypes/weather-material-polish-v2/cloudy/cloudy-sunset-material-natural-v2-3x.jpg'),
-  'cloudy-night':  require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/cloudy/cloudy-night-locked-parent-v1-3x.jpg'),
-  'rain-day':    require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/rainy/rainy-day-locked-parent-v1-3x.jpg'),
-  'rain-sunset': require('../../assets/home/prototypes/weather-material-polish-v2/rainy/rainy-sunset-material-natural-v2-3x.jpg'),
-  'rain-night':  require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/rainy/rainy-night-locked-parent-v1-3x.jpg'),
-  'snow-day':    require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/snowy/snowy-day-locked-parent-v1-3x.jpg'),
-  'snow-sunset': require('../../assets/home/prototypes/weather-material-polish-v2/snowy/snowy-sunset-material-natural-v2-3x.jpg'),
-  'snow-night':  require('../../assets/home/prototypes/locked-sunny-weather-rebuild-v1/snowy/snowy-night-locked-parent-v1-3x.jpg'),
+  'sunny-day': require('../../assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-day-final-micro-3x.jpg'),
+  'sunny-sunset': require('../../assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-evening-final-micro-3x.jpg'),
+  'sunny-night': require('../../assets/home/prototypes/weather-full-frame-correction/sunny-night/sunny-night-star-micro-v2-3x.jpg'),
+  'cloudy-day': require('../../assets/home/prototypes/weather-full-frame-correction/cloudy/cloudy-day-full-frame-3x.jpg'),
+  'cloudy-sunset': require('../../assets/home/prototypes/weather-full-frame-correction/cloudy/cloudy-sunset-full-frame-3x.jpg'),
+  'cloudy-night': require('../../assets/home/prototypes/weather-full-frame-correction/cloudy/cloudy-night-full-frame-3x.jpg'),
+  'rain-day': require('../../assets/home/prototypes/weather-full-frame-correction/rainy/rainy-day-full-frame-3x.jpg'),
+  'rain-sunset': require('../../assets/home/prototypes/weather-full-frame-correction/rainy/rainy-sunset-full-frame-3x.jpg'),
+  'rain-night': require('../../assets/home/prototypes/weather-full-frame-correction/rainy/rainy-night-full-frame-3x.jpg'),
+  'snow-day': require('../../assets/home/prototypes/weather-full-frame-correction/snowy/snowy-day-full-frame-3x.jpg'),
+  'snow-sunset': require('../../assets/home/prototypes/weather-full-frame-correction/snowy/snowy-sunset-full-frame-3x.jpg'),
+  'snow-night': require('../../assets/home/prototypes/weather-full-frame-correction/snowy/snowy-night-full-frame-3x.jpg'),
 } as const;
 
 // Settings is a calmer product surface, but uses the same Sunny world and
@@ -69,16 +64,16 @@ const SETTINGS_BG_ASSETS = {
 const WEATHER_REVIEW_BG_ASSETS = {
   'sunny-review-day': require('../../assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-day-final-micro-3x.jpg'),
   'sunny-review-sunset': require('../../assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-evening-final-micro-3x.jpg'),
-  'sunny-review-night': require('../../assets/home/prototypes/deep-night-exploration/deep-night-starlight-3x.jpg'),
-  'cloudy-review-day': require('../../assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-day-material-polish-3x.jpg'),
-  'cloudy-review-sunset': require('../../assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-sunset-material-polish-3x.jpg'),
-  'cloudy-review-night': require('../../assets/home/prototypes/weather-material-polish-v1/cloudy/cloudy-night-material-polish-3x.jpg'),
-  'rain-review-day': require('../../assets/home/prototypes/weather-material-polish-v1/rainy/rainy-day-material-polish-3x.jpg'),
-  'rain-review-sunset': require('../../assets/home/prototypes/weather-material-polish-v1/rainy/rainy-sunset-material-polish-3x.jpg'),
-  'rain-review-night': require('../../assets/home/prototypes/weather-material-polish-v1/rainy/rainy-night-material-polish-3x.jpg'),
-  'snow-review-day': require('../../assets/home/prototypes/weather-material-polish-v1/snowy/snowy-day-material-polish-3x.jpg'),
-  'snow-review-sunset': require('../../assets/home/prototypes/weather-material-polish-v1/snowy/snowy-sunset-material-polish-3x.jpg'),
-  'snow-review-night': require('../../assets/home/prototypes/weather-material-polish-v1/snowy/snowy-night-material-polish-3x.jpg'),
+  'sunny-review-night': require('../../assets/home/prototypes/weather-full-frame-correction/sunny-night/sunny-night-star-micro-v2-3x.jpg'),
+  'cloudy-review-day': require('../../assets/home/prototypes/weather-full-frame-correction/cloudy/cloudy-day-full-frame-3x.jpg'),
+  'cloudy-review-sunset': require('../../assets/home/prototypes/weather-full-frame-correction/cloudy/cloudy-sunset-full-frame-3x.jpg'),
+  'cloudy-review-night': require('../../assets/home/prototypes/weather-full-frame-correction/cloudy/cloudy-night-full-frame-3x.jpg'),
+  'rain-review-day': require('../../assets/home/prototypes/weather-full-frame-correction/rainy/rainy-day-full-frame-3x.jpg'),
+  'rain-review-sunset': require('../../assets/home/prototypes/weather-full-frame-correction/rainy/rainy-sunset-full-frame-3x.jpg'),
+  'rain-review-night': require('../../assets/home/prototypes/weather-full-frame-correction/rainy/rainy-night-full-frame-3x.jpg'),
+  'snow-review-day': require('../../assets/home/prototypes/weather-full-frame-correction/snowy/snowy-day-full-frame-3x.jpg'),
+  'snow-review-sunset': require('../../assets/home/prototypes/weather-full-frame-correction/snowy/snowy-sunset-full-frame-3x.jpg'),
+  'snow-review-night': require('../../assets/home/prototypes/weather-full-frame-correction/snowy/snowy-night-full-frame-3x.jpg'),
 } as const;
 
 const FALLBACK_BG = require('../../assets/home/home-background.jpg');
@@ -86,7 +81,7 @@ const FALLBACK_BG = require('../../assets/home/home-background.jpg');
 export type ReviewWeatherCondition = 'sunny' | 'cloudy' | 'rain' | 'snow';
 export type WeatherReviewVariant = keyof typeof WEATHER_REVIEW_BG_ASSETS;
 export type CloudyReviewVariant = Extract<WeatherReviewVariant, `cloudy-review-${string}`>;
-export type HomeBgVariant = keyof typeof BG_ASSETS | 'sunny-sunset' | WeatherReviewVariant;
+export type HomeBgVariant = keyof typeof HOME_BG_ASSETS | WeatherReviewVariant;
 export type HomeBackgroundSurface = 'shared' | 'home' | 'settings';
 
 export interface HomeBackgroundTokens {
@@ -441,24 +436,27 @@ const ASSET_IDS: Record<HomeBgVariant, string> = {
   'sunny-day': 'sunny-day-final-micro-3x.jpg',
   'sunny-sunset': 'sunny-evening-final-micro-3x.jpg',
   'sunny-night': 'sunny-night-star-micro-v2-3x.jpg',
-  'cloudy-day': 'sunny-variant-a-3x.jpg',
-  'cloudy-night': 'home-bg-cloudy-night-semantic-v2-3x.jpg',
-  'rain-day': 'sunny-variant-b-3x.jpg',
-  'rain-night': 'home-bg-rainy-night-semantic-v2-3x.jpg',
-  'snow-day': 'sunny-variant-c-3x.jpg',
-  'snow-night': 'home-bg-snowy-night-semantic-v2-3x.jpg',
+  'cloudy-day': 'cloudy-day-full-frame-3x.jpg',
+  'cloudy-sunset': 'cloudy-sunset-full-frame-3x.jpg',
+  'cloudy-night': 'cloudy-night-full-frame-3x.jpg',
+  'rain-day': 'rainy-day-full-frame-3x.jpg',
+  'rain-sunset': 'rainy-sunset-full-frame-3x.jpg',
+  'rain-night': 'rainy-night-full-frame-3x.jpg',
+  'snow-day': 'snowy-day-full-frame-3x.jpg',
+  'snow-sunset': 'snowy-sunset-full-frame-3x.jpg',
+  'snow-night': 'snowy-night-full-frame-3x.jpg',
   'sunny-review-day': 'sunny-day-final-micro-3x.jpg',
   'sunny-review-sunset': 'sunny-evening-final-micro-3x.jpg',
-  'sunny-review-night': 'deep-night-starlight-3x.jpg',
-  'cloudy-review-day': 'cloudy-day-material-polish-3x.jpg',
-  'cloudy-review-sunset': 'cloudy-sunset-material-polish-3x.jpg',
-  'cloudy-review-night': 'cloudy-night-material-polish-3x.jpg',
-  'rain-review-day': 'rainy-day-material-polish-3x.jpg',
-  'rain-review-sunset': 'rainy-sunset-material-polish-3x.jpg',
-  'rain-review-night': 'rainy-night-material-polish-3x.jpg',
-  'snow-review-day': 'snowy-day-material-polish-3x.jpg',
-  'snow-review-sunset': 'snowy-sunset-material-polish-3x.jpg',
-  'snow-review-night': 'snowy-night-material-polish-3x.jpg',
+  'sunny-review-night': 'sunny-night-star-micro-v2-3x.jpg',
+  'cloudy-review-day': 'cloudy-day-full-frame-3x.jpg',
+  'cloudy-review-sunset': 'cloudy-sunset-full-frame-3x.jpg',
+  'cloudy-review-night': 'cloudy-night-full-frame-3x.jpg',
+  'rain-review-day': 'rainy-day-full-frame-3x.jpg',
+  'rain-review-sunset': 'rainy-sunset-full-frame-3x.jpg',
+  'rain-review-night': 'rainy-night-full-frame-3x.jpg',
+  'snow-review-day': 'snowy-day-full-frame-3x.jpg',
+  'snow-review-sunset': 'snowy-sunset-full-frame-3x.jpg',
+  'snow-review-night': 'snowy-night-full-frame-3x.jpg',
 };
 
 const REVIEW_PALETTES: Record<WeatherReviewVariant, ScenicUiPalette> = {

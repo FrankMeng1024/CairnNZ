@@ -1,11 +1,14 @@
 /**
- * GlassPanel — Glassmorphism container with backdrop blur.
- * Uses expo-blur on native, CSS backdrop-filter on web.
+ * GlassPanel — restrained semantic translucent material.
+ * Uses expo-blur on native and CSS backdrop-filter on web without allowing
+ * blur tint to become a second light/dark color system.
  *
  * Sprint 42 — STORY-00140: Visual Quality Foundation
  */
 import React from 'react';
 import { View, StyleSheet, Platform, ViewStyle, StyleProp } from 'react-native';
+import { getVisualTheme, RadiusRole, type VisualThemeTokens } from './tokens';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 // expo-blur may not be available in web/Expo Go — graceful fallback
 let BlurView: any = null;
@@ -17,7 +20,11 @@ try {
 
 interface GlassPanelProps {
   intensity?: number;       // blur intensity (1-100, default 20)
-  tint?: 'light' | 'dark'; // glass tint
+  /** Native blur rendering hint only; semantic colors come from `material`. */
+  tint?: 'light' | 'dark';
+  material?: 'scenic' | 'standard' | 'elevated';
+  /** For non-adaptive authorities such as Auth. Supports all three states. */
+  mode?: VisualThemeTokens['mode'];
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   borderRadius?: number;
@@ -25,32 +32,39 @@ interface GlassPanelProps {
 
 export function GlassPanel({
   intensity = 20,
-  tint = 'light',
+  tint,
+  material = 'scenic',
+  mode,
   children,
   style,
-  borderRadius = 20,
+  borderRadius = RadiusRole.panel,
 }: GlassPanelProps) {
-  const bgColor = tint === 'light'
-    ? 'rgba(250, 247, 242, 0.72)'
-    : 'rgba(26, 24, 22, 0.75)';
-
-  const borderColor = tint === 'light'
-    ? 'rgba(255, 255, 255, 0.3)'
-    : 'rgba(255, 255, 255, 0.08)';
+  const activeTheme = useVisualTheme();
+  const theme = mode ? getVisualTheme(mode) : activeTheme;
+  const bgColor = material === 'elevated'
+    ? theme.surfaceElevated
+    : material === 'standard'
+      ? theme.surfacePrimary
+      : theme.scenicSurface;
+  const borderColor = theme.borderSubtle;
+  const edgeColor = theme.borderStrong;
+  // expo-blur exposes a binary native tint API. It is only a rendering hint;
+  // the three-state semantic material above remains authoritative.
+  const blurTint = tint ?? (theme.mode === 'day' ? 'light' : 'dark');
 
   // Native with expo-blur available
   if (BlurView && Platform.OS !== 'web') {
     return (
       <BlurView
         intensity={intensity}
-        tint={tint === 'light' ? 'systemChromeMaterialLight' : 'systemChromeMaterialDark'}
+        tint={blurTint === 'light' ? 'systemChromeMaterialLight' : 'systemChromeMaterialDark'}
         style={[
           styles.container,
-          { borderRadius, borderColor },
+          { backgroundColor: bgColor, borderRadius, borderColor },
           style,
         ]}
       >
-        <View style={[styles.innerGlow, { borderRadius }]} />
+        <View style={[styles.innerGlow, { borderRadius, backgroundColor: edgeColor }]} />
         {children}
       </BlurView>
     );
@@ -72,7 +86,7 @@ export function GlassPanel({
         style,
       ]}
     >
-      <View style={[styles.innerGlow, { borderRadius }]} />
+      <View style={[styles.innerGlow, { borderRadius, backgroundColor: edgeColor }]} />
       {children}
     </View>
   );
@@ -89,7 +103,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
 });
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import Svg, { Circle, G, Line, Path, Rect } from 'react-native-svg';
+import { FamilyBCairnIcon } from './home/FamilyBCairnIcon';
 
 export type CairnIconName =
   | 'world'
@@ -35,6 +36,10 @@ export function CairnIcon({
   accent = color,
   active = false,
 }: Props) {
+  if (name === 'leaveCairn') {
+    return <FamilyBCairnIcon size={size} color={color} />;
+  }
+
   const strokeWidth = size <= 18 ? 1.82 : size >= 24 ? 1.66 : 1.74;
   const fill = active ? accent : 'none';
   const common = {
@@ -73,11 +78,6 @@ export function CairnIcon({
           <Circle {...common} cx="16.3" cy="8.6" r="2.15" />
           <Path {...common} d="M3.8 18.8c.4-3.7 1.9-5.5 4.5-5.5 2.8 0 4.3 1.8 4.6 5.5M12.7 14.4c.9-.8 2-1.2 3.4-1.1 2.4.1 3.8 1.9 4.1 5.2" />
           <Path {...common} d="M10.8 11.1c1.2.9 2.5 1.1 3.8.5" opacity={0.5} />
-        </>;
-      case 'leaveCairn':
-        return <>
-          <Path {...common} d="M4.4 20h15.2M6.1 18.2c.4-2.1 2.1-3.1 5.9-3.1s5.5 1 5.9 3.1ZM8 14.2c.4-1.8 1.7-2.7 4-2.7s3.6.9 4 2.7ZM9.9 10.5c.3-1.6 1-2.4 2.1-2.4s1.9.8 2.2 2.4Z" fill={active ? fill : 'none'} opacity={active ? 0.28 : 1} />
-          <Path {...common} d="M18.2 5.7v4.8M15.8 8.1h4.8" />
         </>;
       case 'hiking':
         return <>

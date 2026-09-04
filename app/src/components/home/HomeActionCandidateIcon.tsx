@@ -1,5 +1,6 @@
 import React from 'react';
-import Svg, { Circle, G, Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { FamilyBCairnIcon } from './FamilyBCairnIcon';
 
 export type HikingIconCandidate = 'H1' | 'H2' | 'H3' | 'H4' | 'H5';
 export type RunningIconCandidate = 'R1' | 'R2' | 'R3' | 'R4' | 'R5';
@@ -29,14 +30,7 @@ export function HomeActionCandidateIcon({ kind, candidate, size = 29, color }: P
   };
 
   if (kind === 'cairn') {
-    return (
-      <Svg width={size} height={size} viewBox="0 0 24 24">
-        <G transform="scale(0.5)" {...common} strokeWidth={2.25}>
-          <Path d="M8 38.5h25.5c4.8 0 7.4-1.3 10.5-4.8-4.8-.6-8.4-.6-12.2.2L25 36.1" />
-          <Path d="M11 33.5c.2-3.6 3.5-5.6 10.5-5.6s10.3 2 10.5 5.6M14.8 26.5c.2-3.4 2.5-5.3 6.7-5.3s6.5 1.9 6.7 5.3M17.8 19.7c.2-2.8 1.5-4.4 3.9-4.4s3.8 1.6 4 4.4" />
-        </G>
-      </Svg>
-    );
+    return <FamilyBCairnIcon size={size} color={color} />;
   }
 
   const id = candidate ?? (kind === 'hiking' ? 'H1' : 'R1');

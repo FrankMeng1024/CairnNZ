@@ -39,9 +39,9 @@ describe('Sunny three-time background mapping', () => {
     expect(night.backgroundOffsetYPct).toBeLessThan(day.backgroundOffsetYPct);
   });
 
-  it('does not add Sunset variants to the frozen non-Sunny family', () => {
-    expect(resolveVariant('rain', Date.now(), 'sunset')).toBe('rain-day');
-    expect(resolveVariant('cloudy', Date.now(), 'sunset')).toBe('cloudy-day');
+  it('resolves Sunset variants across the weather family', () => {
+    expect(resolveVariant('rain', Date.now(), 'sunset')).toBe('rain-sunset');
+    expect(resolveVariant('cloudy', Date.now(), 'sunset')).toBe('cloudy-sunset');
   });
 
   it.each(['day', 'sunset', 'night'] as const)(
@@ -51,7 +51,8 @@ describe('Sunny three-time background mapping', () => {
       const production = getHomeBackground('cloudy', Date.now(), timeOfDay, 'home');
       const sunny = getHomeBackground('sunny', Date.now(), timeOfDay, 'home');
       expect(review.variant).toBe(`cloudy-review-${timeOfDay}`);
-      expect(review.assetId).toBe(`cloudy-${timeOfDay}-material-polish-3x.jpg`);
+      expect(review.assetId).toBe(`cloudy-${timeOfDay}-full-frame-3x.jpg`);
+      expect(production.assetId).toBe(review.assetId);
       expect(review.backgroundScale).toBe(sunny.backgroundScale);
       if (timeOfDay === 'day') {
         expect(review.backgroundOffsetXPct).toBe(1.54);
@@ -74,7 +75,8 @@ describe('Sunny three-time background mapping', () => {
       const production = getHomeBackground(weather, Date.now(), timeOfDay, 'home');
       const sunny = getHomeBackground('sunny', Date.now(), timeOfDay, 'home');
       expect(review.variant).toBe(`${weather}-review-${timeOfDay}`);
-      expect(review.assetId).toBe(`${filePrefix}-${timeOfDay}-material-polish-3x.jpg`);
+      expect(review.assetId).toBe(`${filePrefix}-${timeOfDay}-full-frame-3x.jpg`);
+      expect(production.assetId).toBe(review.assetId);
       expect(review.backgroundScale).toBe(sunny.backgroundScale);
       expect(production.variant).not.toContain('review');
     }
@@ -105,11 +107,12 @@ describe('Sunny three-time background mapping', () => {
       const expected = {
         day: 'sunny-day-final-micro-3x.jpg',
         sunset: 'sunny-evening-final-micro-3x.jpg',
-        night: 'deep-night-starlight-3x.jpg',
+        night: 'sunny-night-star-micro-v2-3x.jpg',
       } as const;
       expect(review.variant).toBe(`sunny-review-${timeOfDay}`);
       expect(review.assetId).toBe(expected[timeOfDay]);
       expect(production.variant).toBe(`sunny-${timeOfDay}`);
+      expect(production.assetId).toBe(expected[timeOfDay]);
       expect(production.variant).not.toContain('review');
     },
   );
