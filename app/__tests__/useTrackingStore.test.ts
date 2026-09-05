@@ -3,6 +3,23 @@
  * Critical: ensures the 3× duplicate-fix bug from Sprint 41 telemetry cannot return.
  */
 
+const mockLocation = {
+  Accuracy: { BestForNavigation: 6, Balanced: 3 },
+  requestForegroundPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  requestBackgroundPermissionsAsync: jest.fn(async () => ({ status: 'denied' })),
+  getBackgroundPermissionsAsync: jest.fn(async () => ({ status: 'denied' })),
+  watchPositionAsync: jest.fn(async () => ({ remove: jest.fn() })),
+  getCurrentPositionAsync: jest.fn(async () => ({
+    coords: { latitude: 1, longitude: 2, altitude: 3, accuracy: 5, speed: 0 },
+    timestamp: Date.now(),
+  })),
+  hasStartedLocationUpdatesAsync: jest.fn(async () => false),
+  startLocationUpdatesAsync: jest.fn(async () => {}),
+  stopLocationUpdatesAsync: jest.fn(async () => {}),
+};
+
+jest.mock('expo-location', () => mockLocation);
+
 jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   AppState: {
@@ -24,11 +41,19 @@ jest.mock('../src/services/debugLogger', () => ({
     isEnabled: jest.fn(() => false),
   },
 }));
+jest.mock('../src/services/crashLogger', () => ({
+  crashLogger: {
+    breadcrumb: jest.fn(),
+    captureException: jest.fn(),
+  },
+}));
+jest.mock('../src/services/appLog', () => ({ log: jest.fn() }));
 jest.mock('../src/services/batteryMonitor', () => ({
   batteryMonitor: {
     start: jest.fn(async () => {}),
     stop: jest.fn(async () => {}),
     getCurrentLevel: jest.fn(() => null),
+    getIsCharging: jest.fn(() => false),
   },
 }));
 jest.mock('../src/services/networkMonitor', () => ({
@@ -52,15 +77,25 @@ jest.mock('../src/services/backgroundLocationTask', () => ({
 jest.mock('../src/services/apiService', () => ({
   authenticatedFetch: jest.fn(async () => ({ ok: false })),
 }));
+jest.mock('../src/store/useAppStore', () => ({
+  useAppStore: { getState: jest.fn(() => ({ user: { id: 'tracking-test-user' } })) },
+}));
 jest.mock('../src/services/sessionService', () => ({
-  deleteRemoteSession: jest.fn(async () => {}),
+  startSession: jest.fn(async () => null),
+  appendPoints: jest.fn(async () => true),
+  deleteRemoteSession: jest.fn(async () => true),
+  saveHikeAtomic: jest.fn(async () => ({ ok: true })),
+}));
+jest.mock('../src/services/autoPauseMonitor', () => ({
+  startAutoPauseMonitor: jest.fn(),
+  stopAutoPauseMonitor: jest.fn(),
 }));
 
 const { useTrackingStore } = require('../src/store/useTrackingStore');
 
 describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
   beforeEach(() => {
-    useTrackingStore.getState().reset();
+    useTrackingStore.setState(useTrackingStore.getInitialState(), true);
   });
 
   it('adds a fix with no prior point', () => {
@@ -123,7 +158,7 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
 
 describe('useTrackingStore.pauseTracking — pause pins', () => {
   beforeEach(() => {
-    useTrackingStore.getState().reset();
+    useTrackingStore.setState(useTrackingStore.getInitialState(), true);
   });
 
   it('drops a pin at the current location when paused', () => {
@@ -164,5 +199,56 @@ describe('useTrackingStore.pauseTracking — pause pins', () => {
     useTrackingStore.getState().pauseTracking();
 
     expect(useTrackingStore.getState().pausePins).toHaveLength(2);
+  });
+});
+
+describe('useTrackingStore — P0 operation guards', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockLocation.requestForegroundPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    useTrackingStore.setState(useTrackingStore.getInitialState(), true);
+  });
+
+  afterEach(() => {
+    useTrackingStore.getState().discardCurrentSession();
+  });
+
+  it('locks synchronously during a real start and rolls back a failed location dependency', async () => {
+    let resolvePermission: ((value: { status: string }) => void) | undefined;
+    mockLocation.requestForegroundPermissionsAsync.mockImplementationOnce(
+      () => new Promise(resolve => { resolvePermission = resolve; }),
+    );
+
+    const first = useTrackingStore.getState().startTracking();
+    expect(useTrackingStore.getState().status).toBe('requesting');
+    const second = useTrackingStore.getState().startTracking();
+    await expect(second).resolves.toBe(false);
+
+    resolvePermission?.({ status: 'denied' });
+    await expect(first).resolves.toBe(false);
+    const final = useTrackingStore.getState();
+    expect(final).toMatchObject({ status: 'idle', sessionId: null });
+    expect(['permission-denied', 'location-unavailable']).toContain(final.startError);
+    const { startSession } = require('../src/services/sessionService');
+    expect(startSession).not.toHaveBeenCalled();
+  });
+
+  it('accepts only one rapid stop pipeline', async () => {
+    useTrackingStore.setState({
+      status: 'tracking',
+      sessionId: 'p0-stop-lock',
+      remoteSessionId: 44,
+      startedAt: Date.now(),
+      distanceM: 0,
+      trackPoints: [],
+    });
+    const first = useTrackingStore.getState().stopTracking();
+    const second = useTrackingStore.getState().stopTracking();
+
+    await expect(second).resolves.toBe(false);
+    await expect(first).resolves.toBe(false);
+    const { deleteRemoteSession } = require('../src/services/sessionService');
+    expect(deleteRemoteSession).toHaveBeenCalledTimes(1);
+    expect(useTrackingStore.getState().isFinishing).toBe(false);
   });
 });

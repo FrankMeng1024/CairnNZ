@@ -31,6 +31,7 @@ export function TextField({
   onFocus,
   onBlur,
   placeholderTextColor,
+  testID,
   ...inputProps
 }: TextFieldProps) {
   const theme = useVisualTheme();
@@ -52,16 +53,19 @@ export function TextField({
         </Text>
       ) : null}
       <View
+        testID={testID ? `${testID}-shell` : undefined}
         style={[
           styles.field,
           {
             backgroundColor: inactive ? theme.disabledSurface : theme.inputSurface,
             borderColor,
+            borderWidth: focused || Boolean(error) ? 1.5 : 1,
           },
         ]}
       >
         <TextInput
           {...inputProps}
+          testID={testID}
           editable={!inactive}
           accessibilityState={{ disabled: inactive }}
           placeholderTextColor={placeholderTextColor ?? (inactive ? theme.disabledText : theme.textMuted)}
@@ -103,6 +107,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     fontSize: FontSize.body,
     backgroundColor: 'transparent',
+    outlineColor: 'transparent',
+    outlineStyle: 'solid',
+    outlineWidth: 0,
   },
   error: {
     marginTop: Spacing.xs,

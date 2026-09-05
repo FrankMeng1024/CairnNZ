@@ -18,7 +18,6 @@ import {
 import { haptic } from '../services/hapticService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { useKeepAwake } from 'expo-keep-awake';
 import { useNavigation, CommonActions, useIsFocused } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -56,6 +55,14 @@ import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
 // useSimWalkerStore import stays because it's just a Zustand store, no side effect.
 import { useSimWalkerStore } from '../dev/simWalker/useSimWalkerStore';
 import { useSettingsStore } from '../store/useSettingsStore';
+import {
+  deriveActivityOperationalState,
+  isActivitySessionVisible,
+} from '../features/activity/activityOperationalState';
+import {
+  restoreRecoverableActivity,
+  discardRecoverableActivity,
+} from '../features/activity/activityRecovery';
 
 
 // ── Main HikingScreen ──────────────────────────────────────────────────────
@@ -88,6 +95,8 @@ export function HikingScreen() {
 
   // Real tracking store
   const status = useTrackingStore(s => s.status);
+  const isFinishing = useTrackingStore(s => s.isFinishing);
+  const startError = useTrackingStore(s => s.startError);
   const durationS = useTrackingStore(s => s.durationS);
   const distanceM = useTrackingStore(s => s.distanceM);
   const elevationGainM = useTrackingStore(s => s.elevationGainM);
@@ -207,12 +216,6 @@ export function HikingScreen() {
   // avoids racing with useTrackingStore.stopTracking's own lastStopReason
   // pathway and always shows the confirmation sheet before any teardown.
   const [showTooShortConfirm, setShowTooShortConfirm] = useState(false);
-  // Initialize phase from current tracking status — if user has an active hike
-  // and re-enters this screen (Home → Hiking again), jump straight to the
-  // tracking UI instead of forcing the route picker.
-  const [phase, setPhase] = useState<'select' | 'tracking'>(() =>
-    useTrackingStore.getState().status === 'tracking' ? 'tracking' : 'select',
-  );
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
 
   // Live compass: heading in degrees from north, updated by
@@ -281,6 +284,7 @@ export function HikingScreen() {
   // user pauses via Stop, the summary sheet appears, but the live stats
   // bar stays visible so the user can still see distance/time/elev).
   const isTrackingOrPaused = status === 'tracking' || status === 'paused';
+  const hasLiveSession = status !== 'idle' || isFinishing;
 
   // v412: unfinished 恢复弹窗 state
   // 进入 Hiking 界面时检测磁盘 backup, 依赖 hydrationTs 让 iOS jetsam 复活后能重跑
@@ -297,7 +301,7 @@ export function HikingScreen() {
   } | null>(null);
   useEffect(() => {
     // 只在非 tracking/paused 状态下检测: 用户已经在 recording 中不该弹恢复
-    if (isTrackingOrPaused) return;
+    if (hasLiveSession) return;
     let cancelled = false;
     // O14 Bug 5 fix: wait 800ms before scanning disk. When the user
     // just tapped Save, stopTracking's flush → rename chain may still
@@ -404,6 +408,7 @@ export function HikingScreen() {
                         return;
                       }
                     } catch { /* swallow — if useSessionStore unavailable, fall through */ }
+                    if ((s.type || 'hiking') !== 'hiking') return;
                     setUnfinished({
                       sessionId: `remote-${s.id}`,
                       remoteId: s.id,
@@ -440,7 +445,7 @@ export function HikingScreen() {
         // 因此不能按 activityMode 过滤. 假设 hikeTrackWriter 只跟 hike, run 走另一个 writer (未来).
         const cutoff = Date.now() - 72 * 3600_000;
         const recent = normalized
-          .filter((f: any) => (f.lastTs ?? f.startedAt ?? 0) > cutoff)
+          .filter((f: any) => f.activityMode === 'hiking' && (f.lastTs ?? f.startedAt ?? 0) > cutoff)
           .sort((a: any, b: any) => (b.lastTs ?? 0) - (a.lastTs ?? 0));
         if (recent.length === 0) return;
         const latest = recent[0];
@@ -527,7 +532,7 @@ export function HikingScreen() {
       } catch { /* silent — v412 UI 恢复不影响主流程 */ }
     };
     return () => { cancelled = true; clearTimeout(delayTimer); };
-  }, [hydrationTs, isTrackingOrPaused]);
+  }, [hydrationTs, hasLiveSession]);
 
   useEffect(() => { loadRoutes(); }, []);
 
@@ -783,17 +788,12 @@ export function HikingScreen() {
     return () => { cancelled = true; };
   }, []);
 
-  // Sync phase with tracking status: if a hike is in progress (e.g. user
-  // navigated away with the hike still running), show tracking UI; otherwise
-  // show the route picker.
-  useEffect(() => {
-    if (status === 'tracking' && phase !== 'tracking') {
-      setPhase('tracking');
-    } else if (status === 'idle' && phase === 'tracking') {
-      // Session ended (stopTracking); revert to selection screen for next hike.
-      setPhase('select');
-    }
-  }, [status, phase]);
+  const operationalState = deriveActivityOperationalState({
+    trackingStatus: status,
+    isFinishing,
+    hasRecovery: unfinished !== null,
+    hasStartError: startError !== null,
+  });
 
   // R21 (2026-08-17 user "进入前 3 秒展开, 之后自动收起"): when the tracking
   // phase first mounts, open the action tray so the user sees what buttons
@@ -801,11 +801,11 @@ export function HikingScreen() {
   // hog map real-estate. Runs only on the phase transition into tracking, not
   // every render.
   useEffect(() => {
-    if (phase !== 'tracking') return;
+    if (operationalState !== 'tracking') return;
     setActionsExpanded(true);
     const t = setTimeout(() => setActionsExpanded(false), 3000);
     return () => clearTimeout(t);
-  }, [phase]);
+  }, [operationalState]);
 
   // v118: too-short modal replaced the v116 system Alert. The session is
   // now preserved by stopTracking's pre-check (see useTrackingStore), so
@@ -819,9 +819,6 @@ export function HikingScreen() {
     Animated.spring(val, { toValue: 0.95, useNativeDriver: true, tension: 300, friction: 10 }).start();
   const springOut = (val: Animated.Value) =>
     Animated.spring(val, { toValue: 1, useNativeDriver: true, tension: 300, friction: 8 }).start();
-
-  // Keep screen awake while on this screen (activity in progress)
-  useKeepAwake();
 
   const selectedMarker = markers.find(m => m.id === selectedMarkerId) ?? null;
 
@@ -997,83 +994,17 @@ export function HikingScreen() {
   // UnfinishedRecoveryModal, 抽成一个 node 避免复制粘贴导致 onContinue/onDiscard 逻辑分叉。
   const recoveryModalNode = (
     <UnfinishedRecoveryModal
-      visible={unfinished !== null && !isTrackingOrPaused}
+      visible={unfinished !== null && !hasLiveSession}
       data={unfinished}
       onContinue={async () => {
         const u = unfinished;
         if (!u) return;
         try {
-          // 先停 background location task 避免 iOS jetsam 复活后 task 已跑 → 重复
-          // v412 blocker 3 修 (subagent 视角B): 用真实 task name 'cairn-background-location', 不硬编码字符串
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const Location = require('expo-location');
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { BACKGROUND_LOCATION_TASK } = require('../services/backgroundLocationTask');
-          if (Location && typeof Location.stopLocationUpdatesAsync === 'function') {
-            await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => {});
-          }
-        } catch { /* silent */ }
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const hikeTrackWriter = require('../services/hikeTrackWriter');
-          if (typeof hikeTrackWriter.readActiveHikeTail === 'function') {
-            const hikePts: any[] = await hikeTrackWriter.readActiveHikeTail(u.sessionId, Infinity);
-            // O1 R3: HikePoint 磁盘格式 {t, lat, lng, acc, alt, src, conf}
-            // 与 TrackPoint {lat, lng, alt, accuracy, speed, t} 字段错位
-            // (acc → accuracy)。之前直接 setState 用 hikePts 导致 accuracy 字段
-            // 丢失,route_points_raw 全 null。加 mapper 修正 + 恢复 lastCoordinate
-            // 避免 gate 3 stationary suppress 用 Infinity 分支不抑制。
-            const pts = hikePts.map((p: any) => ({
-              lat: p.lat,
-              lng: p.lng,
-              alt: p.alt ?? null,
-              accuracy: p.acc ?? null,
-              speed: null,
-              t: p.t,
-            }));
-            const last = pts[pts.length - 1];
-            // 恢复到 tracking store
-            // v412 4-eye fix (Critical #2): 用 u.activityMode 不硬编码, 保 running 语义
-            useTrackingStore.setState({
-              sessionId: u.sessionId,
-              remoteSessionId: u.remoteId ?? null,
-              trackPoints: pts,
-              trackPointsSmoothed: pts,
-              trackPointsRaw: pts,
-              startedAt: u.startedAt,
-              status: 'paused', // v412 4-eye fix (Blocker #1): 先设 paused, 让 resumeTracking 走 activate*Source
-              distanceM: u.distanceM,
-              durationS: u.durationS,
-              activityMode: u.activityMode,
-              // O1 R3: 同步 seed lastCoordinate 到 tail 最后一点,不然
-              // resume 后的第一次 addTrackPoint 走 gate 3 的 Infinity 分支,
-              // stationary suppress 失效,jitter 全收进 track 虚增 distanceM
-              lastCoordinate: last
-                ? { lat: last.lat, lng: last.lng, alt: last.alt, accuracy: last.accuracy, speed: last.speed }
-                : null,
-              lastCoordinateTime: last?.t ?? null,
-            } as any);
-            if (typeof hikeTrackWriter.resumeHikeTrack === 'function') {
-              await hikeTrackWriter.resumeHikeTrack(u.sessionId);
-            }
-          }
-          // v412 4-eye fix (Blocker #1): activate*Source 是模块级私有函数, 从 store 外调不到.
-          // 改用 store 里真实存在的 resumeTracking action, 它内部会按 AppState 调 activate*Source.
-          const trackingStore = useTrackingStore.getState() as any;
-          if (typeof trackingStore.resumeTracking === 'function') {
-            await trackingStore.resumeTracking();
-          }
+          await restoreRecoverableActivity(u);
         } catch (_recoverErr) {
-          // v412 4-eye fix (Medium): 恢复失败必须留 breadcrumb, 之前 silent 让 blocker#1 静默死了
           try {
             const cl = require('../services/crashLogger');
             (cl.crashLogger ?? cl.default)?.breadcrumb?.(`v412:recovery_continue_failed ${String(_recoverErr).slice(0, 80)}`);
-          } catch { /* silent */ }
-          // 恢复失败: 简化处理 = 走 discard, 用户可以重新开
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const hikeTrackWriter = require('../services/hikeTrackWriter');
-            await hikeTrackWriter.discardActiveHike(u.sessionId);
           } catch { /* silent */ }
         }
         setUnfinished(null);
@@ -1082,25 +1013,8 @@ export function HikingScreen() {
         const u = unfinished;
         if (!u) return;
         try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const hikeTrackWriter = require('../services/hikeTrackWriter');
-          await hikeTrackWriter.discardActiveHike(u.sessionId);
-        } catch { /* silent */ }
-        // v430 fix: also DELETE server-side row so it never appears as a
-        // too-short/ghost activity. Previous discard only removed local
-        // disk files, leaving the row created by POST /sessions/start
-        // orphaned on aliyun (finalized_at NULL, dist=0, dur=0).
-        if (u.remoteId) {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { deleteRemoteSession } = require('../services/sessionService');
-            await deleteRemoteSession(u.remoteId);
-          } catch (err) {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const cl = require('../services/crashLogger');
-            (cl.crashLogger ?? cl.default)?.breadcrumb?.(`v430:discard_remote_delete_failed ${String(err).slice(0, 80)}`);
-          }
-        }
+          await discardRecoverableActivity(u);
+        } catch { /* keep the prompt dismissible; disk delete is idempotent */ }
         setUnfinished(null);
       }}
     />
@@ -1134,7 +1048,7 @@ export function HikingScreen() {
   }, [isFocused]);
 
   // ── Phase 1: Route Selection ─────────────────────────────────────────────
-  if (phase === 'select') {
+  if (!isActivitySessionVisible(operationalState)) {
     return (
       <>
       <View style={[styles.container, { backgroundColor: hikeTheme.background }]}>
@@ -1196,14 +1110,24 @@ export function HikingScreen() {
             <Animated.View style={[{ height: 52 }, { transform: [{ scale: trackBtnScale }] }]}>
               <TouchableOpacity
                 style={[styles.startHikeBtn, hikeIsDark ? { backgroundColor: hikeTheme.primary, borderColor: hikeTheme.border, borderWidth: 1 } : null]}
-                onPress={() => { haptic.impact('medium'); startTracking(); setPhase('tracking'); }}
+                onPress={async () => { haptic.impact('medium'); await startTracking(); }}
+                disabled={operationalState === 'starting'}
                 activeOpacity={1}
                 onPressIn={() => springIn(trackBtnScale)}
                 onPressOut={() => springOut(trackBtnScale)}
               >
-                <Text style={[styles.startHikeBtnText, hikeIsDark ? { color: hikeTheme.onPrimary } : null]}>Start Hiking</Text>
+                <Text style={[styles.startHikeBtnText, hikeIsDark ? { color: hikeTheme.onPrimary } : null]}>
+                  {operationalState === 'starting' ? 'Starting…' : 'Start Hiking'}
+                </Text>
               </TouchableOpacity>
             </Animated.View>
+            {startError ? (
+              <Text style={[styles.startFailureText, { color: hikeTheme.destructive }]} accessibilityRole="alert">
+                {startError === 'permission-denied'
+                  ? 'Location permission is needed to start.'
+                  : 'Couldn’t start GPS. Check your location settings and try again.'}
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -1414,13 +1338,13 @@ export function HikingScreen() {
           When pre-tracking, only the route picker + Start button are
           visible (no compass, no flag). */}
       <View style={[styles.bottomOverlay, { paddingBottom: insets.bottom + 8 }]} pointerEvents="box-none">
-        {!isTracking ? (
+        {operationalState === 'ready' ? (
           // Pre-tracking: full-width Start button.
           <View style={styles.bottomRow}>
             <Animated.View style={[{ flex: 1, height: 60 }, { transform: [{ scale: trackBtnScale }] }]}>
               <TouchableOpacity
                 style={styles.trackBtn}
-                onPress={() => { haptic.impact('medium'); startTracking(); }}
+                onPress={async () => { haptic.impact('medium'); await startTracking(); }}
                 activeOpacity={1}
                 onPressIn={() => springIn(trackBtnScale)}
                 onPressOut={() => springOut(trackBtnScale)}
@@ -1853,6 +1777,11 @@ const styles = StyleSheet.create({
   startHikeBtnText: {
     color: CONCEPT.paper,
     fontSize: 17, fontWeight: '700', letterSpacing: 0.2,
+  },
+  startFailureText: {
+    fontSize: FontSize.small,
+    lineHeight: 18,
+    textAlign: 'center',
   },
 
   // ── H1 tracking FABs (44x44) ──────────────────────────────────────────

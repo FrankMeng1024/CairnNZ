@@ -20,7 +20,6 @@ import {
 import Svg, { Polyline as SvgPolyline } from 'react-native-svg';
 import { haptic } from '../services/hapticService';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useKeepAwake } from 'expo-keep-awake';
 import { useNavigation, useFocusEffect, useIsFocused, CommonActions } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -40,7 +39,20 @@ import { useVisualTheme } from '../hooks/useVisualTheme';
 import { PulseDot } from '../components/PulseDot';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
+import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
+import { StateSurface } from '../components/StateSurface';
 import { crashLogger } from '../services/crashLogger';
+import {
+  deriveActivityOperationalState,
+  isActivitySessionVisible,
+} from '../features/activity/activityOperationalState';
+import {
+  findRecoverableActivity,
+  restoreRecoverableActivity,
+  discardRecoverableActivity,
+  type RecoverableActivity,
+} from '../features/activity/activityRecovery';
+import { useActivitySaveLossRecovery } from '../features/activity/useActivitySaveLossRecovery';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -98,12 +110,6 @@ if (Platform.OS !== 'web') {
   } catch {
     // @rnmapbox/maps not installed in this build (Expo Go) — fallback used.
   }
-}
-
-// ── Keep-awake guard ────────────────────────────────────────────────────────
-function useRunKeepAwake() {
-  // Keep screen awake whenever RunningScreen is mounted
-  useKeepAwake();
 }
 
 // Sleep-run 2026-08-16 rev-2: local PulsingDot component removed with
@@ -202,6 +208,7 @@ export function RunningScreen() {
   const routes = useRouteStore(s => s.routes);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
   const [runState, setRunState] = useState<RunState>('pre');
+  const [unfinishedRun, setUnfinishedRun] = useState<RecoverableActivity | null>(null);
   // R21 (2026-08-18): dark theme parity with Hiking. Run tray + top pills
   // + Recenter FAB honour Settings Appearance so day/night reads the same.
   const { isDark: runIsDark } = useAppearance();
@@ -260,6 +267,8 @@ export function RunningScreen() {
 
   // Real tracking store
   const status = useTrackingStore(s => s.status);
+  const isFinishing = useTrackingStore(s => s.isFinishing);
+  const startError = useTrackingStore(s => s.startError);
   const durationS = useTrackingStore(s => s.durationS);
   const distanceM = useTrackingStore(s => s.distanceM);
   const locationAvailable = useTrackingStore(s => s.locationAvailable);
@@ -288,10 +297,31 @@ export function RunningScreen() {
   // running state — in pre-/post-run states this stays null.
   const [plantToast, setPlantToast] = useState<string | null>(null);
 
-  // Keep screen awake when running
-  useRunKeepAwake();
+  const operationalState = deriveActivityOperationalState({
+    trackingStatus: status,
+    isFinishing,
+    hasRecovery: unfinishedRun !== null,
+    hasCompletedSummary: runState === 'stopped',
+    hasStartError: startError !== null,
+  });
+  useActivitySaveLossRecovery('running');
 
   useEffect(() => { loadRoutes(); }, []);
+
+  // The crash-safe writer stores both activity modes. Running previously
+  // ignored its own persisted files and silently presented a clean Start
+  // screen. Resolve only running records and host the same recovery contract
+  // as Hiking whenever this screen gains focus.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (useTrackingStore.getState().status !== 'idle') return undefined;
+      let cancelled = false;
+      void findRecoverableActivity('running').then(activity => {
+        if (!cancelled) setUnfinishedRun(activity);
+      });
+      return () => { cancelled = true; };
+    }, [status]),
+  );
 
   // Request foreground location permission on mount so the pre-start map's
   // UserLocation dot can render. If denied, dot is hidden but map still shows.
@@ -435,9 +465,13 @@ export function RunningScreen() {
   // on every focus forces a fresh `key` → MapView unmounts + remounts
   // → Mapbox replays the fly-in.
   const [mapEpoch, setMapEpoch] = useState(0);
+  const [mapLoadState, setMapLoadState] = useState<'loading' | 'ready' | 'unavailable'>(
+    MapView ? 'loading' : 'unavailable',
+  );
   useFocusEffect(
     React.useCallback(() => {
       setMapEpoch(e => e + 1);
+      setMapLoadState(MapView ? 'loading' : 'unavailable');
       setGesturesEnabled(false);
       const t = setTimeout(() => setGesturesEnabled(true), 700);
       return () => clearTimeout(t);
@@ -483,8 +517,8 @@ export function RunningScreen() {
   async function handleStart() {
     haptic.impact('medium');
     setActivityMode('running');
-    await startTracking();
-    setRunState('running');
+    const started = await startTracking();
+    if (started) setRunState('running');
   }
 
   // handleStop is now invoked from the save-name sheet's Save button.
@@ -631,7 +665,7 @@ export function RunningScreen() {
   //   • Secondary CTA "Done" → returns Home.
   //   • The old "Discard" text link is removed. Discard now only exists in
   //     the too-short flow (see TooShortSheet below), not on the summary.
-  if (runState === 'stopped') {
+  if (operationalState === 'stopped') {
     const summaryDist = dist.format(distanceM, 2);
     const goHome = () => {
       setStoppedSessionId(null);
@@ -771,7 +805,7 @@ export function RunningScreen() {
   }
 
   // ── Pre-start ─────────────────────────────────────────────────────────────
-  if (runState === 'pre') {
+  if (!isActivitySessionVisible(operationalState)) {
     return (
       <View style={{ flex: 1, backgroundColor: runTheme.background }}>
         {/* Real Mapbox basemap (or fallback if Mapbox unavailable) */}
@@ -782,10 +816,15 @@ export function RunningScreen() {
             {...(runResolvedMapStyle.kind === 'url'
               ? { styleURL: runResolvedMapStyle.url }
               : { styleJSON: runResolvedMapStyle.json })}
-            logoEnabled={false}
-            attributionEnabled={false}
+            logoEnabled
+            attributionEnabled
+            logoPosition={{ top: 152, left: 8 }}
+            attributionPosition={{ top: 152, right: 8 }}
             scaleBarEnabled={false}
             compassEnabled={false}
+            onDidFinishLoadingMap={() => setMapLoadState('ready')}
+            onDidFinishRenderingMapFully={() => setMapLoadState('ready')}
+            onDidFailLoadingMap={() => setMapLoadState('unavailable')}
             // v124 fix #2: disable gestures during the fly-in so an
             // accidental touch doesn't cancel the camera mid-animation
             // (which is what made the Running fly-in land mid-zoom
@@ -849,6 +888,17 @@ export function RunningScreen() {
             </View>
           </View>
         )}
+        {MapView && mapLoadState !== 'ready' ? (
+          <View style={runStyles.mapStateOverlay} pointerEvents="none">
+            <StateSurface
+              variant={mapLoadState === 'loading' ? 'loading' : 'unavailable'}
+              title={mapLoadState === 'loading' ? 'Loading map…' : 'Map unavailable'}
+              body={mapLoadState === 'unavailable' ? 'Your run can still be recovered safely. Try the map again when your connection returns.' : undefined}
+              material="embedded"
+              alignment="center"
+            />
+          </View>
+        ) : null}
 
         {/* Top overlay: back + GPS chip */}
         <SafeAreaView style={preStyles.topOverlay} edges={['top']} pointerEvents="box-none">
@@ -924,13 +974,23 @@ export function RunningScreen() {
               <TouchableOpacity
                 activeOpacity={0.92}
                 onPress={handleStart}
+                disabled={operationalState === 'starting'}
                 onPressIn={onStartPressIn}
                 onPressOut={onStartPressOut}
                 style={[preStyles.startBtn, runIsDark ? { backgroundColor: runTheme.primary } : null]}
               >
-                <Text style={[preStyles.startBtnText, runIsDark ? { color: runTheme.onPrimary } : null]}>Start Running</Text>
+                <Text style={[preStyles.startBtnText, runIsDark ? { color: runTheme.onPrimary } : null]}>
+                  {operationalState === 'starting' ? 'Starting…' : 'Start Running'}
+                </Text>
               </TouchableOpacity>
             </Animated.View>
+            {startError ? (
+              <Text style={[preStyles.startFailureText, { color: runTheme.destructive }]} accessibilityRole="alert">
+                {startError === 'permission-denied'
+                  ? 'Location permission is needed to start.'
+                  : 'Couldn’t start GPS. Check your location settings and try again.'}
+              </Text>
+            ) : null}
             {/* 2026-08-17 concept R0: tiny lock hint below Start Running.
                 Reassures the user that the phone screen auto-locks so they
                 can stash the device in a pocket without worrying about
@@ -1000,6 +1060,33 @@ export function RunningScreen() {
             </Animated.View>
           </Animated.View>
         )}
+        <UnfinishedRecoveryModal
+          visible={unfinishedRun !== null && status === 'idle' && !isFinishing}
+          data={unfinishedRun}
+          onContinue={async () => {
+            const activity = unfinishedRun;
+            if (!activity) return;
+            try {
+              const restored = await restoreRecoverableActivity(activity);
+              if (restored) setRunState('running');
+            } catch (error) {
+              crashLogger.breadcrumb(`running:recovery_failed ${String(error).slice(0, 80)}`);
+            } finally {
+              setUnfinishedRun(null);
+            }
+          }}
+          onDiscard={async () => {
+            const activity = unfinishedRun;
+            if (!activity) return;
+            try {
+              await discardRecoverableActivity(activity);
+            } catch (error) {
+              crashLogger.breadcrumb(`running:recovery_discard_failed ${String(error).slice(0, 80)}`);
+            } finally {
+              setUnfinishedRun(null);
+            }
+          }}
+        />
       </View>
     );
   }
@@ -1026,10 +1113,15 @@ export function RunningScreen() {
                 {...(runResolvedMapStyle.kind === 'url'
                   ? { styleURL: runResolvedMapStyle.url }
                   : { styleJSON: runResolvedMapStyle.json })}
-                logoEnabled={false}
-                attributionEnabled={false}
+                logoEnabled
+                attributionEnabled
+                logoPosition={{ top: 152, left: 8 }}
+                attributionPosition={{ top: 152, right: 8 }}
                 scaleBarEnabled={false}
                 compassEnabled={false}
+                onDidFinishLoadingMap={() => setMapLoadState('ready')}
+                onDidFinishRenderingMapFully={() => setMapLoadState('ready')}
+                onDidFailLoadingMap={() => setMapLoadState('unavailable')}
                 scrollEnabled={false}
                 zoomEnabled={false}
                 rotateEnabled={false}
@@ -1110,6 +1202,17 @@ export function RunningScreen() {
               </View>
             </View>
           )}
+          {MapView && mapLoadState !== 'ready' ? (
+            <View style={runStyles.mapStateOverlay} pointerEvents="none">
+              <StateSurface
+                variant={mapLoadState === 'loading' ? 'loading' : 'unavailable'}
+                title={mapLoadState === 'loading' ? 'Loading map…' : 'Map unavailable'}
+                body={mapLoadState === 'unavailable' ? 'Recording remains available while the map recovers.' : undefined}
+                material="embedded"
+                alignment="center"
+              />
+            </View>
+          ) : null}
           {/* R21 (2026-08-18 user "上方 下方 按钮 等等都和hike是一样的"):
               R2 top row now mirrors Hike — Back left, signal-lost pill
               on the right (only visible when tracking + lost). Kept the
@@ -1487,6 +1590,7 @@ const preStyles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
   },
   startBtnText: { fontSize: 17, fontWeight: '700', color: RunConcept.paper },
+  startFailureText: { fontSize: FontSize.small, lineHeight: 18, textAlign: 'center' },
   lockHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
   lockHint: { fontSize: FontSize.small, color: Colors.textMuted, textAlign: 'center' },
   // O1 batch 34: shareBtn, shareBtnText removed — 0 JSX references.
@@ -1562,6 +1666,12 @@ const preStyles = StyleSheet.create({
 const runStyles = StyleSheet.create({
   container: { flex: 1, backgroundColor: RunConcept.paper },
   bg: { flex: 1, backgroundColor: RunConcept.paper },
+  mapStateOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 42,
+  },
 
   statsBar: {
     flexDirection: 'row',

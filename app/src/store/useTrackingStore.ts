@@ -13,7 +13,8 @@
  *   - dynamic sampling: every 60s checks battery + movement, restarts background task
  *     if interval should change
  *
- * Web fallback: timer works, GPS values show '--'.
+ * Web/non-native fallback: recording start remains unavailable without a real
+ * location source; QA may render controlled store states without starting GPS.
  */
 import { create } from 'zustand';
 import { AppState, type AppStateStatus } from 'react-native';
@@ -116,10 +117,16 @@ async function getLocation() {
   return Location;
 }
 
-type TrackingStatus = 'idle' | 'requesting' | 'tracking' | 'paused';
+export type TrackingStatus = 'idle' | 'requesting' | 'tracking' | 'paused';
+export type TrackingStartError = 'location-unavailable' | 'permission-denied' | 'initialization-failed';
 
 interface TrackingState {
   status: TrackingStatus;
+  /** Store-boundary finish lock. UI disabling alone cannot prevent two
+   * concurrent stop/save pipelines from persisting the same session twice. */
+  isFinishing: boolean;
+  /** Last proven start failure. Cleared on a new start attempt or success. */
+  startError: TrackingStartError | null;
   sessionId: string | null;
   /** Server-side session id, set after POST /api/sessions/start succeeds.
    *  Used by the 60s incremental backup to PATCH /append-points and the
@@ -208,11 +215,11 @@ interface TrackingState {
 
   // Actions
   setActivityMode: (mode: ActivityMode) => void;
-  startTracking: () => Promise<void>;
+  startTracking: () => Promise<boolean>;
   // Optional sessionName: when supplied (from the post-stop summary sheet)
   // the saved session is tagged with this name; otherwise the session
   // gets a default name on the consumer side ("Hike — DD/MM/YYYY").
-  stopTracking: (sessionName?: string) => Promise<void>;
+  stopTracking: (sessionName?: string) => Promise<boolean>;
   pauseTracking: () => void;
   resumeTracking: () => void;
   addTrackPoint: (coord: Coordinate, timestamp?: number) => void;
@@ -233,6 +240,8 @@ interface TrackingState {
 
 const initialState = {
   status: 'idle' as TrackingStatus,
+  isFinishing: false,
+  startError: null as TrackingStartError | null,
   sessionId: null,
   remoteSessionId: null as number | null,
   activityMode: 'hiking' as ActivityMode,
@@ -273,7 +282,15 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   setActivityMode: (mode) => set({ activityMode: mode }),
 
   startTracking: async () => {
+    const beforeStart = get();
+    // Store-boundary idempotency: the synchronous requesting transition is
+    // the lock. A second tap/caller cannot initialize another writer,
+    // location subscription, timer set, or remote session.
+    if (beforeStart.status !== 'idle' || beforeStart.isFinishing) return false;
+
     const startedAt = Date.now();
+    const mode = beforeStart.activityMode;
+    const localSessionId = generateId();
     // O14 Bug 1/3/6 fix: sim-walker seed anchor.
     //
     // v450 unconditionally reset lastCoordinate=null on startTracking to
@@ -314,7 +331,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     } catch { /* swallow — sim-walker modules may not be loaded */ }
     set({
       status: 'requesting',
-      sessionId: generateId(),
+      isFinishing: false,
+      startError: null,
+      sessionId: localSessionId,
       remoteSessionId: null,
       startedAt,
       lastCoordinate: seedLast,
@@ -334,17 +353,44 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     kalmanLat = null;
     kalmanLng = null;
 
+    // Foreground location is the required native dependency for a genuine
+    // recording. Prove it before creating server/writer/monitor resources;
+    // failure returns to a retryable state rather than presenting TRACKING
+    // with no recording source.
+    const loc = await getLocation();
+    if (!loc) {
+      set({ ...initialState, activityMode: mode, startError: 'location-unavailable' });
+      return false;
+    }
+    try {
+      const fg = await loc.requestForegroundPermissionsAsync();
+      if (fg.status !== 'granted') {
+        set({ ...initialState, activityMode: mode, startError: 'permission-denied' });
+        return false;
+      }
+    } catch (err) {
+      debugLogger.logError(err, 'startTracking:foreground-permission');
+      set({ ...initialState, activityMode: mode, startError: 'location-unavailable' });
+      return false;
+    }
+
     // Kick off the server-side session row immediately. This gives us a
     // remoteId we can PATCH new points into via the 60s incremental flush
     // — so even if the app is killed mid-session, the partial track is
     // already on the server. Failure here is non-fatal; we fall back to
     // the legacy all-in-one POST at stopTracking.
-    const mode = get().activityMode;
     startSession(mode, new Date(startedAt).toISOString())
       .then((rid) => {
         if (rid) {
-          set({ remoteSessionId: rid });
-          crashLogger.breadcrumb(`session:start:server-id=${rid}`);
+          const current = get();
+          if (current.sessionId === localSessionId && current.status !== 'idle') {
+            set({ remoteSessionId: rid });
+            crashLogger.breadcrumb(`session:start:server-id=${rid}`);
+          } else {
+            // Initialization failed or was discarded before the server
+            // replied. Avoid leaving an unfinished shell remotely.
+            void deleteRemoteSession(rid).catch(() => {});
+          }
         } else {
           crashLogger.breadcrumb(`session:start:server-failed`);
         }
@@ -419,23 +465,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       }
     }, 1000);
 
-    const loc = await getLocation();
-    if (!loc) {
-      // Web fallback: tracking works with timer only, no GPS
-      set({ status: 'tracking', locationAvailable: false });
-      return;
-    }
-
     try {
-      // Foreground permission for normal use
-      const fg = await loc.requestForegroundPermissionsAsync();
-      if (fg.status !== 'granted') {
-        // Close orphan debug session so telemetry doesn't accumulate stale entries.
-        debugLogger.endSession().catch(() => {});
-        set({ status: 'tracking', locationAvailable: false });
-        return;
-      }
-
       // Background permission for lock-screen tracking — best effort, app keeps
       // working even if user denies (just no background updates).
       //
@@ -517,8 +547,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         } catch { /* silent — 教育弹窗失败不影响主流程 */ }
       }
 
-      set({ status: 'tracking', locationAvailable: true });
-
       // Pre-register the background task so we can quickly start/stop it
       // when AppState changes — but DON'T start it yet; foreground watcher
       // is the active source while app is in foreground.
@@ -532,11 +560,19 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // run concurrently.
       const startState = AppState.currentState;
       if (startState === 'background' || startState === 'inactive') {
-        if (backgroundGrantedCached) await activateBackgroundSource();
+        if (!backgroundGrantedCached) {
+          throw new Error('background-location-unavailable-at-start');
+        }
+        await activateBackgroundSource();
+        if (!backgroundTaskActive) throw new Error('background-location-source-failed');
       } else {
         // 'active' or 'unknown' → foreground watcher
         await activateForegroundSource();
+        if (!locationSubscription) throw new Error('foreground-location-source-failed');
       }
+
+      // TRACKING is entered only after a real recording source is active.
+      set({ status: 'tracking', locationAvailable: true, startError: null });
 
       // Subscribe AppState ONCE to flip sources foreground ↔ background.
       // Single-source guarantee eliminates the duplicate-fix logging bug.
@@ -833,13 +869,49 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         const { checkAndWarnLowPowerMode } = await import('../services/lowPowerModeWarn');
         void checkAndWarnLowPowerMode();
       } catch { /* swallow */ }
+      return true;
     } catch (err) {
       debugLogger.logError(err, 'startTracking');
-      set({ locationAvailable: false });
+      // Roll back every resource created during initialization. A failed
+      // start must be retryable and must not leave timers, writers or
+      // subscriptions masquerading as an active session.
+      try { appStateSubscription?.remove(); } catch { /* no-op */ }
+      appStateSubscription = null;
+      try { locationSubscription?.remove(); } catch { /* no-op */ }
+      locationSubscription = null;
+      if (backgroundTaskActive && Location) {
+        try { await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK); } catch { /* no-op */ }
+      }
+      backgroundTaskActive = false;
+      if (durationInterval) { clearInterval(durationInterval); durationInterval = null; }
+      if (drainInterval) { clearInterval(drainInterval); drainInterval = null; }
+      if (dynamicSamplingInterval) { clearInterval(dynamicSamplingInterval); dynamicSamplingInterval = null; }
+      if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
+      if (tokenRefreshInterval) { clearInterval(tokenRefreshInterval); tokenRefreshInterval = null; }
+      networkMonitor.stop();
+      sessionRecorder.stop();
+      void batteryMonitor.stop().catch(() => {});
+      void debugLogger.endSession().catch(() => {});
+      void persistBackgroundContext(null, false).catch(() => {});
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { discardActiveHike } = require('../services/hikeTrackWriter');
+        void discardActiveHike(localSessionId).catch(() => {});
+      } catch { /* writer unavailable */ }
+      const remoteId = get().sessionId === localSessionId ? get().remoteSessionId : null;
+      if (remoteId) void deleteRemoteSession(remoteId).catch(() => {});
+      set({ ...initialState, activityMode: mode, startError: 'initialization-failed' });
+      return false;
     }
   },
 
   stopTracking: async (sessionName?: string) => {
+    const stopEntry = get();
+    if (stopEntry.status === 'idle' || stopEntry.isFinishing) return false;
+    // Synchronous shared-boundary lock: repeated UI taps, auto-pause and
+    // another caller all converge on one stop/save pipeline.
+    set({ isFinishing: true });
+
     // v118 too-short pre-check (BEFORE any cleanup): if the session has
     // < 2 trackPoints, surface a "too short" sheet but DON'T tear down
     // location subscriptions / intervals. The user gets a friendly modal
@@ -938,7 +1010,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         } else {
           set({ lastStopReason: 'too-short', remoteSessionId: null });
         }
-        return;
+        set({ isFinishing: false });
+        return false;
       }
     }
 
@@ -1584,9 +1657,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       saveLostSessionId: prev.saveLostSessionId,
       saveLostPayload: prev.saveLostPayload,
     }));
+    return true;
   },
 
   pauseTracking: () => {
+    if (get().status !== 'tracking' || get().isFinishing) return;
     // Drop a flag pin at the current location so the user can see WHERE they paused.
     const cur = get().lastCoordinate;
     if (cur) {
@@ -1633,35 +1708,114 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   },
 
   resumeTracking: async () => {
-    set({ status: 'tracking' });
-    // v122 fix #6: pauseTracking cleared the duration timer so the
-    // elapsed stat froze. Restart it on resume so the counter ticks
-    // again. Internal `if (status === 'tracking')` guard makes this
-    // safe even if pause/resume are toggled rapidly.
-    if (!durationInterval) {
-      durationInterval = setInterval(() => {
-        if (get().status === 'tracking') {
-          set((s) => ({ durationS: s.durationS + 1 }));
-        }
-      }, 1000);
+    if (get().status !== 'paused' || get().isFinishing) return;
+    const rebuildingAfterProcessDeath = appStateSubscription === null;
+    const loc = await getLocation();
+    if (!loc) {
+      set({ locationAvailable: false, startError: 'location-unavailable' });
+      return;
     }
-    // v407 fix #6: defensive restart of ALL timers. Normal pauseTracking
-    // only kills durationInterval,so most resumes are OK. But场景 E
-    // (用户在 Stop dismiss 动画 220ms 内点背景触发第二次 dismiss →
-    // onCancel/resumeTracking after onConfirm/stopTracking 已跑一半)
-    // 会让 flush/drain/sampling/tokenRefresh 全死 — 用户以为在 hike,
-    // 实际 60s 无 server backup + 8h 后 token 过期。HikingScreen 加了
-    // dismiss guard 挡住这条路径,但保留这段作为最后防线,以防其它
-    // 未来入口也调 resumeTracking。
-    // 具体 timer 重启由 activateForegroundSource / activateBackgroundSource
-    // 负责(它们 own drain/sampling/flush/tokenRefresh setup) → 见 line 421+。
-    // Resume whichever source matches current AppState (treat 'unknown' as active)
+    if (rebuildingAfterProcessDeath) {
+      try {
+        const bg = await loc.getBackgroundPermissionsAsync();
+        backgroundGrantedCached = bg.status === 'granted';
+        if (backgroundGrantedCached) await registerBackgroundTask();
+      } catch { backgroundGrantedCached = false; }
+    }
+
+    // Establish a real source before presenting the recovered/paused session
+    // as TRACKING. A failed resume keeps the preserved session paused.
     const currentAppState = AppState.currentState;
     if (currentAppState === 'background' || currentAppState === 'inactive') {
-      if (backgroundGrantedCached) await activateBackgroundSource();
+      if (!backgroundGrantedCached) {
+        set({ locationAvailable: false, startError: 'permission-denied' });
+        return;
+      }
+      await activateBackgroundSource();
+      if (!backgroundTaskActive) {
+        set({ locationAvailable: false, startError: 'initialization-failed' });
+        return;
+      }
     } else {
-      // 'active' or 'unknown' → foreground watcher
       await activateForegroundSource();
+      if (!locationSubscription) {
+        set({ locationAvailable: false, startError: 'initialization-failed' });
+        return;
+      }
+    }
+    set({ status: 'tracking', locationAvailable: true, startError: null });
+
+    if (!durationInterval) {
+      durationInterval = setInterval(() => {
+        if (get().status === 'tracking') set((s) => ({ durationS: s.durationS + 1 }));
+      }, 1000);
+    }
+
+    if (rebuildingAfterProcessDeath) {
+      lastFlushedIdx = get().trackPoints.length;
+      void persistBackgroundContext(get().sessionId, true).catch(() => {});
+      void batteryMonitor.start().catch(() => {});
+      void networkMonitor.start().catch(() => {});
+      sessionRecorder.start();
+
+      appStateSubscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+        if (get().status !== 'tracking') return;
+        if (nextState === 'background' || nextState === 'inactive') {
+          enqueueActivation(async () => {
+            deactivateForegroundSource();
+            if (backgroundGrantedCached) await activateBackgroundSource();
+          });
+        } else if (nextState === 'active') {
+          enqueueActivation(async () => {
+            await activateForegroundSource();
+            deactivateBackgroundSource();
+          });
+        }
+      });
+
+      drainInterval = setInterval(() => {
+        if (get().status !== 'tracking' || !backgroundTaskActive) return;
+        for (const coordinate of drainBackgroundLocations()) {
+          get().addTrackPoint({
+            lat: coordinate.latitude,
+            lng: coordinate.longitude,
+            alt: coordinate.altitude,
+            accuracy: coordinate.accuracy ?? null,
+            speed: coordinate.speed ?? null,
+          }, coordinate.timestamp);
+        }
+      }, 1000);
+
+      incrementalFlushInterval = setInterval(async () => {
+        const current = get();
+        if (current.status !== 'tracking' || !current.remoteSessionId) return;
+        const total = current.trackPoints.length;
+        if (total <= lastFlushedIdx) return;
+        const slice = current.trackPoints.slice(lastFlushedIdx, total);
+        if (await remoteAppendPoints(current.remoteSessionId, slice)) lastFlushedIdx = total;
+      }, 120_000);
+
+      try {
+        const { startAutoPauseMonitor } = await import('../services/autoPauseMonitor');
+        startAutoPauseMonitor({
+          getStatus: () => get().status,
+          getPoints: () => get().trackPoints.map(point => ({
+            latitude: point.lat,
+            longitude: point.lng,
+            timestamp: point.t,
+            speed: point.speed ?? undefined,
+          })),
+          onSilentEnd: () => { void get().stopTracking(); },
+        });
+      } catch { /* non-fatal */ }
+
+      tokenRefreshInterval = setInterval(async () => {
+        if (get().status !== 'tracking' && get().status !== 'paused') return;
+        try {
+          const { refreshToken } = await import('../services/authService');
+          await refreshToken();
+        } catch { /* never interrupt a recording */ }
+      }, 30 * 60_000);
     }
   },
 
@@ -2131,6 +2285,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     if (drainInterval) { clearInterval(drainInterval); drainInterval = null; }
     if (dynamicSamplingInterval) { clearInterval(dynamicSamplingInterval); dynamicSamplingInterval = null; }
     if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
+    if (tokenRefreshInterval) { clearInterval(tokenRefreshInterval); tokenRefreshInterval = null; }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { stopAutoPauseMonitor } = require('../services/autoPauseMonitor');
+      stopAutoPauseMonitor();
+    } catch { /* monitor unavailable */ }
 
     networkMonitor.stop();
     sessionRecorder.stop();

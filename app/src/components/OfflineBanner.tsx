@@ -20,7 +20,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Spacing, FontSize } from './tokens';
+import { FontSize, RadiusRole, Spacing } from './tokens';
 import { Icon } from './Icon';
 import { useOnlineOnly } from '../hooks/useOnlineOnly';
 import { useVisualTheme } from '../hooks/useVisualTheme';
@@ -60,9 +60,9 @@ export function OfflineBanner() {
         },
       ]}
     >
-      <View style={[styles.bar, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
+      <View style={[styles.bar, { backgroundColor: theme.surfaceSecondary, borderColor: theme.borderSubtle }]}>
         <Icon name="CloudOff" size={14} color={theme.icon} strokeWidth={2} />
-        <Text style={[styles.text, { color: theme.foregroundSecondary }]}>You&apos;re offline. Some actions will sync when you&apos;re back.</Text>
+        <Text style={[styles.text, { color: theme.textSecondary }]}>You&apos;re offline. Some actions will sync when you&apos;re back.</Text>
       </View>
     </Animated.View>
   );
@@ -80,10 +80,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: Colors.surfaceMuted,
-    borderColor: Colors.border,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: RadiusRole.card,
     paddingHorizontal: Spacing.md,
     paddingVertical: 6,
     marginTop: Platform.OS === 'ios' ? 4 : Spacing.sm,
@@ -91,7 +89,6 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: FontSize.tiny,
-    color: Colors.textSecondary,
     fontWeight: '600',
     flexShrink: 1,
   },

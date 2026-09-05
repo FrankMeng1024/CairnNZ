@@ -24,16 +24,19 @@ interface PrimaryButtonProps {
   variant?: 'solid' | 'surface' | 'primary' | 'secondary' | 'destructive';
   /** Optional icon rendered before the label (left-aligned). */
   leftIcon?: React.ReactNode;
+  /** Preferred icon API: receives the resolved semantic foreground color. */
+  renderIcon?: (color: string) => React.ReactNode;
   /** Optional background color override (weather-adaptive tokens). */
   tint?: string;
   /** Optional text color override (weather-adaptive tokens). */
   textColor?: string;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }
 
 export function PrimaryButton({
   label, onPress, disabled, loading,
-  variant = 'solid', leftIcon, tint, textColor, style,
+  variant = 'solid', leftIcon, renderIcon, tint, textColor, style, testID,
 }: PrimaryButtonProps) {
   const theme = useVisualTheme();
   const scale = useRef(new Animated.Value(1)).current;
@@ -47,17 +50,23 @@ export function PrimaryButton({
       : variant;
   const inactive = Boolean(disabled || loading);
   const palette = semanticVariant === 'destructive'
-    ? { background: 'transparent', border: theme.destructive, text: theme.destructive }
+    ? { background: theme.destructiveSurface, border: theme.destructive, text: theme.destructive }
     : semanticVariant === 'secondary'
       ? { background: theme.secondaryAction, border: theme.borderStrong, text: theme.textPrimary }
       : { background: theme.primaryAction, border: theme.primaryAction, text: theme.onPrimary };
   const bg = inactive ? theme.disabledSurface : tint ?? palette.background;
   const border = inactive ? theme.disabledBorder : palette.border;
   const fg = inactive ? theme.disabledText : textColor ?? palette.text;
+  const resolvedIcon = renderIcon
+    ? renderIcon(fg)
+    : React.isValidElement(leftIcon)
+      ? React.cloneElement(leftIcon as React.ReactElement<{ color?: string }>, { color: fg })
+      : leftIcon;
 
   return (
     <Animated.View style={[{ transform: [{ scale }] }, style]}>
       <TouchableOpacity
+        testID={testID}
         onPress={onPress}
         onPressIn={pressIn}
         onPressOut={pressOut}
@@ -74,7 +83,7 @@ export function PrimaryButton({
           <ActivityIndicator color={fg} />
         ) : (
           <View style={styles.row}>
-            {leftIcon ? <View style={styles.iconWrap}>{leftIcon}</View> : null}
+            {resolvedIcon ? <View style={styles.iconWrap}>{resolvedIcon}</View> : null}
             <Text style={[styles.label, { color: fg }]}>{label}</Text>
           </View>
         )}
@@ -93,6 +102,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconWrap: { marginRight: 4 },
+  iconWrap: { alignItems: 'center', justifyContent: 'center' },
   label: { fontWeight: '700', fontSize: FontSize.body },
 });

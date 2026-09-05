@@ -16,7 +16,7 @@
 import React, { useRef } from 'react';
 import { TouchableOpacity, Text, StyleSheet, Animated, View, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Colors, Spacing, Radius, FontSize, IconSize, Shadow } from './tokens';
+import { Spacing, Radius, FontSize, IconSize, Shadow } from './tokens';
 import { Icon } from './Icon';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 
@@ -34,15 +34,16 @@ interface BackButtonProps {
   variant?: 'pill' | 'inline' | 'ghostRound';
   label?: string;
   onPress?: () => void;
+  testID?: string;
 }
 
-export function BackButton({ variant = 'inline', label = 'Back', onPress }: BackButtonProps) {
+export function BackButton({ variant = 'inline', label = 'Back', onPress, testID }: BackButtonProps) {
   const nav = useNavigation();
   const scale = useRef(new Animated.Value(1)).current;
   // R21 (2026-08-18): dark-aware colour. Ink becomes cream on night bg
   // so the inline back stays readable on Hike / dark map overlays.
   const theme = useVisualTheme();
-  const inkColor = theme.iconActive;
+  const inkColor = theme.icon;
 
   const handlePressIn = () =>
     Animated.spring(scale, { toValue: 0.95, useNativeDriver: true, tension: 300, friction: 10 }).start();
@@ -59,11 +60,14 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress }: Back
     return (
       <Animated.View style={{ transform: [{ scale }] }}>
         <TouchableOpacity
+          testID={testID}
           style={styles.inline}
           onPress={handlePress}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           activeOpacity={1}
+          accessibilityRole="button"
+          accessibilityLabel={label}
         >
           <Icon name="ChevronLeft" size={IconSize.sm} color={inkColor} strokeWidth={2.5} />
           <Text style={[styles.inlineText, { color: inkColor }]}>{label}</Text>
@@ -80,6 +84,7 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress }: Back
     return (
       <Animated.View style={[{ transform: [{ scale }] }, styles.ghostRoundShadow]}>
         <TouchableOpacity
+          testID={testID}
           style={[styles.ghostRound, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
           onPress={handlePress}
           onPressIn={handlePressIn}
@@ -99,22 +104,23 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress }: Back
   return (
     <Animated.View style={[{ transform: [{ scale }] }, styles.pillShadow]}>
       <TouchableOpacity
+        testID={testID}
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={1}
       >
         {BlurView ? (
-          <BlurView intensity={30} tint={theme.mode === 'night' ? 'dark' : 'light'} style={[styles.pillBlur, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <BlurView intensity={30} tint={theme.mode === 'night' ? 'dark' : 'light'} style={[styles.pillBlur, { backgroundColor: theme.scenicSurface, borderColor: theme.border }]}>
             <View style={styles.pillContent}>
-              <Icon name="ChevronLeft" size={IconSize.sm} color={theme.iconActive} strokeWidth={2.5} />
+              <Icon name="ChevronLeft" size={IconSize.sm} color={theme.icon} strokeWidth={2.5} />
               <Text style={[styles.pillText, { color: theme.foreground }]}>{label}</Text>
             </View>
           </BlurView>
         ) : (
-          <View style={[styles.pillBlur, styles.pillFallback, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={[styles.pillBlur, { backgroundColor: theme.scenicSurface, borderColor: theme.border }]}>
             <View style={styles.pillContent}>
-              <Icon name="ChevronLeft" size={IconSize.sm} color={theme.iconActive} strokeWidth={2.5} />
+              <Icon name="ChevronLeft" size={IconSize.sm} color={theme.icon} strokeWidth={2.5} />
               <Text style={[styles.pillText, { color: theme.foreground }]}>{label}</Text>
             </View>
           </View>
@@ -132,26 +138,23 @@ const styles = StyleSheet.create({
   pillBlur: {
     borderRadius: Radius.pill,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.45)', // slight tint so blur reads even with low intensity
-  },
-  pillFallback: {
-    backgroundColor: 'rgba(255,255,255,0.65)', // when BlurView absent, semi-translucent
   },
   pillContent: {
     flexDirection: 'row', alignItems: 'center', gap: 2,
     paddingHorizontal: Spacing.md, paddingVertical: 7,
   },
-  pillText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.primary },
+  pillText: { fontSize: FontSize.small, fontWeight: '600' },
   // R21 v6 (2026-08-18 user "back的风格参考auth 不应该有白色框"): match Auth
   // exactly — no background, no shadow, just ChevronLeft + "Back" text
   // deep-green on 8pt vertical padding.
   inline: {
     flexDirection: 'row', alignItems: 'center', gap: 2,
     alignSelf: 'flex-start',
+    minHeight: 44,
     paddingVertical: 8,
   },
   inlineText: {
-    fontSize: FontSize.caption, fontWeight: '600', color: Colors.primary,
+    fontSize: FontSize.caption, fontWeight: '600',
   },
   // R114 (2026-08-07): ghostRound variant styles.
   ghostRoundShadow: {
@@ -162,9 +165,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },

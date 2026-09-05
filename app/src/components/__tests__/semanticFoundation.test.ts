@@ -19,6 +19,10 @@ const requiredStringRoles: Array<keyof VisualThemeTokens> = [
   'backgroundElevated',
   'surfacePrimary',
   'surfaceSecondary',
+  'recordSurface',
+  'recordPressed',
+  'recordSelected',
+  'elevatedCardSurface',
   'scenicSurface',
   'modalSurface',
   'sheetSurface',
@@ -26,6 +30,7 @@ const requiredStringRoles: Array<keyof VisualThemeTokens> = [
   'inputFocusBorder',
   'controlSelected',
   'controlInactive',
+  'segmentedTrack',
   'textPrimary',
   'textSecondary',
   'textMuted',
@@ -36,6 +41,7 @@ const requiredStringRoles: Array<keyof VisualThemeTokens> = [
   'primaryAction',
   'secondaryAction',
   'destructive',
+  'destructiveSurface',
   'disabledSurface',
   'disabledText',
   'disabledBorder',
@@ -48,8 +54,8 @@ describe('semantic visual foundation', () => {
         expect(typeof theme[role]).toBe('string');
         expect(theme[role]).toBeTruthy();
       }
-      expect(theme.controlSelected).toBe(theme.tabActive);
-      expect(theme.controlInactive).toBe(theme.tabInactive);
+      expect(theme.controlSelected).not.toBe(theme.tabActive);
+      expect(theme.controlInactive).not.toBe(theme.tabInactive);
     }
   });
 
@@ -63,13 +69,74 @@ describe('semantic visual foundation', () => {
     expect(RadiusRole.card).toBe(Radius.card);
     expect(RadiusRole.panel).toBe(Radius.cardLg);
     expect(RadiusRole.button).toBe(Radius.button);
-    expect(RadiusRole.segmentedControl).toBe(Radius.pill);
+    expect(RadiusRole.segmentedControl).toBe(Radius.card);
+    expect(RadiusRole.segmentedItem).toBe(Radius.button);
     expect(RadiusRole.input).toBe(Radius.card);
     expect(RadiusRole.sheet).toBe(Radius.sheet);
     expect(RadiusRole.modal).toBe(Radius.card);
     expect(Math.max(...Object.values(RadiusRole))).toBeLessThanOrEqual(Radius.cardLg);
   });
+
+  it('meets representative rendered text, control and icon contrast floors', () => {
+    for (const theme of themes) {
+      const page = parseColor(theme.background);
+      const record = composite(parseColor(theme.recordSurface), page);
+      const input = composite(parseColor(theme.inputSurface), page);
+      const track = composite(parseColor(theme.segmentedTrack), page);
+      const selected = composite(parseColor(theme.controlSelected), track);
+      const destructiveSurface = composite(parseColor(theme.destructiveSurface), parseColor(theme.modalSurface));
+
+      expect(contrast(parseColor(theme.textPrimary), record)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(parseColor(theme.textSecondary), record)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(parseColor(theme.textPrimary), input)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(parseColor(theme.onPrimary), parseColor(theme.primaryAction))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(parseColor(theme.tabActive), selected)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(parseColor(theme.tabInactive), track)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(parseColor(theme.icon), record)).toBeGreaterThanOrEqual(3);
+      expect(contrast(parseColor(theme.inputFocusBorder), input)).toBeGreaterThanOrEqual(3);
+      expect(contrast(parseColor(theme.destructive), destructiveSurface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(parseColor(theme.disabledText), composite(parseColor(theme.disabledSurface), page))).toBeGreaterThanOrEqual(3);
+    }
+  });
 });
+
+type Rgba = { r: number; g: number; b: number; a: number };
+
+function parseColor(value: string): Rgba {
+  if (value.startsWith('#')) {
+    return {
+      r: Number.parseInt(value.slice(1, 3), 16),
+      g: Number.parseInt(value.slice(3, 5), 16),
+      b: Number.parseInt(value.slice(5, 7), 16),
+      a: 1,
+    };
+  }
+  const channels = value.match(/[\d.]+/g)?.map(Number);
+  if (!channels || channels.length < 3) throw new Error(`Unsupported color: ${value}`);
+  return { r: channels[0], g: channels[1], b: channels[2], a: channels[3] ?? 1 };
+}
+
+function composite(front: Rgba, back: Rgba): Rgba {
+  return {
+    r: front.r * front.a + back.r * (1 - front.a),
+    g: front.g * front.a + back.g * (1 - front.a),
+    b: front.b * front.a + back.b * (1 - front.a),
+    a: 1,
+  };
+}
+
+function contrast(first: Rgba, second: Rgba): number {
+  const luminance = ({ r, g, b }: Rgba) => {
+    const linear = [r, g, b].map(channel => {
+      const value = channel / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  };
+  const firstLuminance = luminance(first);
+  const secondLuminance = luminance(second);
+  return (Math.max(firstLuminance, secondLuminance) + 0.05) / (Math.min(firstLuminance, secondLuminance) + 0.05);
+}
 
 describe('approved Family B cairn', () => {
   it('preserves the approved source geometry exactly', () => {

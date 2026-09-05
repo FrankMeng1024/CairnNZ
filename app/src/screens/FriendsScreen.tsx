@@ -3,18 +3,18 @@
  *
  * 100% aligned to Cairn_Friends_FINAL concept (spec.json, 375x812 baseline):
  * - Paper-cream background with footprint / clean illustration layer
- * - Header: back / Friends title / add-icon
- * - Friends / Pending pill tabs (mutually exclusive)
- * - F0 Friends empty | F1 Friends list | F2 Pending both | F3 Pending incoming only |
- *   F4 Pending sent only | F5 Pending empty | F6 Add-friend sheet
+ * - Compact header with one persistent Add friend action
+ * - Friends / Requests primary navigation
+ * - F0 Friends empty | F1 Friends list | F2 Requests both | F3 Received only |
+ *   F4 Sent only | F5 Requests empty | F6 Add-friend sheet
  * - Bottom nav bar reused visually (Trails / Friends / Memory / Settings)
  * - Store logic (useFriendStore + requests) preserved intact from previous version.
  */
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
-  TextInput, Animated, Easing, ActivityIndicator,
-  KeyboardAvoidingView, Platform, Alert,
+  Animated, Easing, ActivityIndicator,
+  Keyboard, KeyboardAvoidingView, Platform, TouchableWithoutFeedback,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -33,7 +33,14 @@ import { useVisualTheme } from '../hooks/useVisualTheme';
 import { Icon, type IconName } from '../components/Icon';
 import { CairnIcon } from '../components/CairnIcon';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { StateSurface } from '../components/StateSurface';
+import { TextField } from '../components/TextField';
+import { ContentSurface } from '../components/ContentSurface';
+import { DismissButton } from '../components/DismissButton';
+import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { Colors, FontSize, IconSize, Radius, Shadow, Spacing } from '../components/tokens';
+import { deriveFriendsRequestContentState } from '../utils/friendsRequestState';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -73,15 +80,10 @@ const DS = {
 const T = {
   paper: Colors.bg,
   forest: Colors.primaryDark,
-  forestActive: Colors.primary,
   textPrimary: Colors.textPrimary,
   textSecondary: Colors.textSecondary,
   card: Colors.surface,
   cardBorder: Colors.border,
-  scrim: 'rgba(20,30,25,0.40)',
-  inputBg: Colors.surface,
-  inputBorder: Colors.border,
-  danger: Colors.danger,
 };
 
 // Avatar palette (concept F1/F2 shows colored circles with initials)
@@ -96,6 +98,9 @@ function avatarColorFor(id: string): string {
 }
 function initialsOf(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+}
+function firstNameOf(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
 }
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -131,32 +136,30 @@ function Backdrop() {
 
 // ── Friend row (F1) ─────────────────────────────────────────────────────────
 function FriendRow({
-  id, name, sharedFlags, onPress, onLongPress,
+  id, name, email, onPress, onLongPress,
 }: {
-  id: string; name: string; sharedFlags: number;
+  id: string; name: string; email: string;
   onPress?: () => void; onLongPress?: () => void;
 }) {
   const theme = useVisualTheme();
-  const meta = sharedFlags > 0
-    ? `${sharedFlags} shared ${sharedFlags === 1 ? 'flag' : 'flags'}`
-    : 'No shared flags yet';
   return (
     <TouchableOpacity
-      style={[s.card, { backgroundColor: theme.scenicSurface, borderColor: theme.borderSubtle }]}
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={500}
       activeOpacity={0.85}
       testID={`friend-card-${id}`}
     >
-      <View style={[s.avatar, { backgroundColor: avatarColorFor(id) }]}>
-        <Text style={s.avatarText}>{initialsOf(name)}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[s.cardName, { color: theme.foreground }]} numberOfLines={1}>{name}</Text>
-        <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{meta}</Text>
-      </View>
-      <CairnIcon name="otherTrace" size={20} color={theme.iconInactive} accent={theme.iconActive} />
+      <ContentSurface style={s.card}>
+        <View style={[s.avatar, { backgroundColor: avatarColorFor(id) }]}>
+          <Text style={s.avatarText}>{initialsOf(name)}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[s.cardName, { color: theme.foreground }]} numberOfLines={1}>{name}</Text>
+          <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{email}</Text>
+        </View>
+        <Icon name="ChevronRight" size={IconSize.sm} color={theme.iconInactive} strokeWidth={1.8} />
+      </ContentSurface>
     </TouchableOpacity>
   );
 }
@@ -170,7 +173,7 @@ function IncomingRow({
 }) {
   const theme = useVisualTheme();
   return (
-    <View style={[s.card, { backgroundColor: theme.surfacePrimary, borderColor: theme.borderSubtle }]} testID={`incoming-card-${id}`}>
+    <ContentSurface style={s.card} testID={`incoming-card-${id}`}>
       <View style={[s.avatar, { backgroundColor: avatarColorFor(id) }]}>
         <Text style={s.avatarText}>{initialsOf(fromName)}</Text>
       </View>
@@ -180,7 +183,7 @@ function IncomingRow({
       </View>
       <View style={s.actionRow}>
         <TouchableOpacity
-          style={[s.actionBtn, { backgroundColor: theme.surfaceSecondary, borderColor: theme.borderSubtle }]}
+          style={[s.actionBtn, { backgroundColor: theme.recordSelected, borderColor: theme.borderSubtle }]}
           onPress={onAccept}
           disabled={busy}
           hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
@@ -189,45 +192,45 @@ function IncomingRow({
           {busy ? <ActivityIndicator size="small" color={theme.iconActive} /> : <Icon name="Check" size={DS.ic_sm} color={theme.iconActive} strokeWidth={2} />}
         </TouchableOpacity>
         <TouchableOpacity
-          style={[s.actionBtn, { backgroundColor: theme.surfaceSecondary, borderColor: theme.borderSubtle }]}
+          style={[s.actionBtn, { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle }]}
           onPress={onReject}
           disabled={busy}
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 6 }}
           accessibilityLabel="Decline friend request"
         >
-          <Icon name="X" size={DS.ic_sm} color={theme.destructive} strokeWidth={2} />
+          <Icon name="X" size={DS.ic_sm} color={theme.icon} strokeWidth={2} />
         </TouchableOpacity>
       </View>
-    </View>
+    </ContentSurface>
   );
 }
 
 // ── Sent (outbound) request row (F2/F4) ─────────────────────────────────────
 function SentRow({
-  id, toName, onCancel,
+  id, toName, toEmail, onCancel,
 }: {
-  id: string; toName: string; onCancel: () => void;
+  id: string; toName: string; toEmail: string; onCancel: () => void;
 }) {
   const theme = useVisualTheme();
   return (
-    <View style={[s.card, { backgroundColor: theme.surfacePrimary, borderColor: theme.borderSubtle }]} testID={`sent-card-${id}`}>
+    <ContentSurface style={s.card} testID={`sent-card-${id}`}>
       <View style={[s.avatar, { backgroundColor: avatarColorFor(id) }]}>
         <Text style={s.avatarText}>{initialsOf(toName)}</Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[s.cardName, { color: theme.foreground }]} numberOfLines={1}>{toName}</Text>
-        <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>Waiting for response</Text>
+        <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{toEmail}</Text>
       </View>
       <TouchableOpacity
-        style={[s.actionBtn, { backgroundColor: theme.surfaceSecondary, borderColor: theme.borderSubtle }]}
+        style={[s.sentCancel, { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle }]}
         onPress={onCancel}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         accessibilityLabel="Cancel outbound request"
         testID={`btn-cancel-outbound-${id}`}
       >
-        <Icon name="Timer" size={DS.ic_sm} color={theme.icon} strokeWidth={1.9} />
+        <Text style={[s.sentCancelText, { color: theme.foregroundSecondary }]}>Cancel request</Text>
       </TouchableOpacity>
-    </View>
+    </ContentSurface>
   );
 }
 
@@ -237,15 +240,16 @@ function SentRow({
 // footprint background visible on top. Tap the visible strip to dismiss.
 // Bird hero sits ONLY in the top-right of the sheet — it does not fill the
 // whole hero area; the rest of the sheet's top curve remains soft paper.
-type AddState = 'idle' | 'loading' | 'success' | 'error';
+type AddState = 'idle' | 'loading' | 'error';
 
-function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
+function AddFriendPage({ onDismiss, onRequestSent }: { onDismiss: () => void; onRequestSent: () => void }) {
   const theme = useVisualTheme();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [err, setErr] = useState('');
   const [state, setState] = useState<AddState>('idle');
-  const successEmail = useRef('');
+  const keyboardActive = useRef(false);
+  const closing = useRef(false);
 
   // Slide + scrim animation. Sheet starts fully off-screen and glides up.
   const SHEET_TRAVEL = 760;
@@ -259,32 +263,59 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
     ]).start();
   }, []);
 
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, () => { keyboardActive.current = true; });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => { keyboardActive.current = false; });
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+    keyboardActive.current = false;
+  };
+
   const close = () => {
+    if (closing.current) return;
+    closing.current = true;
+    dismissKeyboard();
     Animated.parallel([
       Animated.timing(slide, { toValue: SHEET_TRAVEL, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
       Animated.timing(scrim, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
     ]).start(() => onDismiss());
   };
 
+  const handleBackdropPress = () => {
+    if (keyboardActive.current) {
+      dismissKeyboard();
+      return;
+    }
+    close();
+  };
+
   const submit = async () => {
     const trimmed = email.trim();
-    if (!isValidEmail(trimmed)) { setErr('Enter a valid email'); return; }
+    if (!isValidEmail(trimmed)) { setErr('Enter a valid email address.'); return; }
+    dismissKeyboard();
     setErr('');
     setState('loading');
-    successEmail.current = trimmed;
     const r = await sendFriendRequest(trimmed);
     if (r.success) {
-      setState('success');
-      setTimeout(() => { setEmail(''); setState('idle'); close(); }, 1600);
+      onRequestSent();
+      close();
     } else {
       const raw = (r.error || '').toLowerCase();
       let msg: string;
       if (raw.includes('not found') || raw.includes('no user') || raw.includes('does not exist')) {
-        msg = 'No one at Cairn uses that email yet. Ask them to sign up first.';
+        msg = 'No CairnNZ account uses that email yet.';
       } else if (raw.includes('already') && (raw.includes('friend') || raw.includes('request'))) {
         msg = 'You already sent a request or are friends with this person.';
       } else if (raw.includes('yourself') || raw.includes('self')) {
-        msg = "You can't friend yourself.";
+        msg = 'You can’t send a request to your own account.';
       } else {
         msg = r.error || "Couldn't send. Check your connection and try again.";
       }
@@ -311,39 +342,46 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
       {/* Scrim behind sheet — the small strip above the sheet is tappable */}
       <Animated.View style={[s.f6Scrim, {
         opacity: scrim,
-        backgroundColor: theme.scrim,
+        backgroundColor: theme.readabilityScrim,
       }]}>
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
-          onPress={close}
-          accessibilityLabel="Close add friend sheet"
+          onPress={handleBackdropPress}
+          accessibilityLabel="Dismiss keyboard or close add friend sheet"
         />
       </Animated.View>
 
       {/* Rising sheet */}
       <Animated.View style={[s.f6Sheet, {
         backgroundColor: theme.sheetSurface,
-        borderColor: theme.borderSubtle,
+        borderColor: theme.borderStrong,
         paddingBottom: Math.max(insets.bottom, Spacing.lg),
         transform: [{ translateY: slide }],
-      }]}>
-        <KeyboardAvoidingView
-          style={s.f6Keyboard}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={0}
-        >
+      }]} testID="add-friend-sheet">
+        <TouchableWithoutFeedback onPress={dismissKeyboard} accessible={false}>
+          <KeyboardAvoidingView
+            style={s.f6Keyboard}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={0}
+          >
         {/* HERO — landscape asset fills the top of the sheet */}
-        <View style={s.f6HeroBox} pointerEvents="none">
+          <View
+            style={[s.f6HeroBox, { backgroundColor: theme.backgroundElevated }]}
+            pointerEvents="none"
+            testID="add-friend-artwork"
+          >
           <Image
             source={birdWebUri ? { uri: birdWebUri } : birdModule}
             style={s.f6HeroImg}
             resizeMode="cover"
           />
-          <LinearGradient
-            colors={theme.scenicHeroOverlay}
-            style={StyleSheet.absoluteFill}
-          />
+          {birdIsNight ? (
+            <LinearGradient
+              colors={theme.scenicHeroOverlay}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : null}
         </View>
 
         {/* Arched paper — SVG dome cutout on top edge so it reads as a true
@@ -351,16 +389,16 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
         <View style={s.f6Arch} pointerEvents="box-none">
           <Svg
             width="100%"
-            height={90}
-            viewBox="0 0 390 90"
+            height={64}
+            viewBox="0 0 390 64"
             preserveAspectRatio="none"
             style={s.f6ArchSvg}
+            testID="add-friend-arch-shape"
           >
-            {/* Wide shallow dome — matches concept where the arc is broad
-                rather than tall. Peak dips ~50px into hero, sides start
-                flush with sheet edges. */}
+            {/* Low, broad dome keeps the scenic artwork present without
+                turning the foreground transition into a dominant arch. */}
             <Path
-              d="M 0,90 C 100,-10 290,-10 390,90 L 390,90 L 0,90 Z"
+              d="M 0,64 C 105,8 285,8 390,64 L 390,64 L 0,64 Z"
               fill={theme.sheetSurface}
             />
           </Svg>
@@ -368,8 +406,12 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
           <View style={[s.f6ArchBody, { backgroundColor: theme.sheetSurface }]}>
             {/* Mail badge — sits at arch peak (SVG dome crest) */}
             <View style={s.f6MailBadge}>
-              <View style={[s.f6MailCircle, { backgroundColor: theme.modalSurface, borderColor: theme.borderSubtle }]}>
-                <Icon name="Mail" size={DS.ic_md} color={theme.iconActive} strokeWidth={1.9} />
+              <View style={[s.f6MailCircle, {
+                backgroundColor: theme.modalSurface,
+                borderColor: theme.borderSubtle,
+                shadowColor: theme.shadow,
+              }]}>
+                <Icon name="Mail" size={DS.ic_md} color={theme.icon} strokeWidth={1.9} />
               </View>
             </View>
 
@@ -377,70 +419,60 @@ function AddFriendPage({ onDismiss }: { onDismiss: () => void }) {
               contentContainerStyle={s.f6ScrollBody}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             >
-              <Text style={[s.f6Title, { color: theme.foreground }]}>Add a Friend</Text>
+              <Text style={[s.f6Title, { color: theme.foreground }]}>Add friend</Text>
               <Text style={[s.f6Body, { color: theme.foregroundSecondary }]}>
-                {state === 'success'
-                  ? `Request sent to ${successEmail.current}`
-                  : 'Enter their email address to\nsend a friend request.'}
+                Enter their email address to{`\n`}send a friend request.
               </Text>
 
-              {state !== 'success' && (
-                <>
-                  <Text style={[s.f6InputLabel, { color: theme.foregroundSecondary }]}>Email Address</Text>
-                  <View style={[s.f6InputWrap, { backgroundColor: theme.inputSurface, borderColor: err ? theme.destructive : theme.borderSubtle }]}>
-                  <TextInput
-                    style={[s.f6Input, { color: theme.foreground }]}
-                      placeholder="name@email.com"
-                      placeholderTextColor={theme.muted}
-                      value={email}
-                      onChangeText={(t) => { setEmail(t); if (err) setErr(''); }}
+              <TextField
+                    label="Email address"
+                    error={err}
+                    placeholder="name@email.com"
+                    value={email}
+                    onChangeText={(text) => { setEmail(text); if (err) setErr(''); }}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
                     returnKeyType="send"
                     onSubmitEditing={submit}
-                    editable={state !== 'loading'}
-                  />
-                </View>
-                  {!!err && <Text style={[s.f6Err, { color: theme.destructive }]}>{err}</Text>}
-
-                  <TouchableOpacity
-                    style={[s.f6Send, { backgroundColor: theme.primary }, (!email.trim() || state === 'loading') && { opacity: 0.55 }]}
+                    onFocus={() => { keyboardActive.current = true; }}
+                    disabled={state === 'loading'}
+                    containerStyle={s.f6Field}
+                    inputStyle={s.f6Input}
+                    testID="add-friend-email"
+              />
+              <PrimaryButton
+                    label="Send request"
                     onPress={submit}
-                    disabled={!email.trim() || state === 'loading'}
-                    activeOpacity={0.9}
-                  >
-                    {state === 'loading'
-                      ? <ActivityIndicator size="small" color={theme.onPrimary} />
-                      : (
-                        <>
-                          <Icon name="Send" size={DS.ic_sm} color={theme.onPrimary} strokeWidth={1.9} />
-                          <Text style={[s.f6SendText, { color: theme.onPrimary }]}>Send Request</Text>
-                        </>
-                      )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={s.f6Cancel} onPress={close} activeOpacity={0.7}>
-                    <Text style={[s.f6CancelText, { color: theme.foregroundSecondary }]}>Cancel</Text>
-                  </TouchableOpacity>
-                </>
-              )}
+                    disabled={!email.trim()}
+                    loading={state === 'loading'}
+                    variant="primary"
+                    // Night expresses hierarchy through tonal elevation,
+                    // not a full green block. The cool selected-control
+                    // material carries the surface; pearl content stays
+                    // primary, while PrimaryButton's semantic border keeps
+                    // a restrained natural cue. Day and Sunset are unchanged.
+                    tint={theme.mode === 'night' ? theme.controlSelected : undefined}
+                    textColor={theme.mode === 'night' ? theme.textPrimary : undefined}
+                    renderIcon={(color) => <Icon name="Send" size={DS.ic_sm} color={color} strokeWidth={2} />}
+                    style={s.f6Send}
+              />
             </ScrollView>
           </View>
         </View>
 
-        {/* Close X — top-left over hero */}
-        <TouchableOpacity
-          style={[s.f6Close, { backgroundColor: theme.modalSurface, borderColor: theme.borderSubtle }]}
+        {/* Shared dismiss convention: sheets close from the top-right. */}
+        <DismissButton
+          style={s.f6Close}
           onPress={close}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityLabel="Close"
-          accessibilityRole="button"
-        >
-          <Icon name="X" size={DS.ic_md} color={theme.icon} strokeWidth={1.9} />
-        </TouchableOpacity>
-        </KeyboardAvoidingView>
+          label="Close add friend"
+          contained
+          testID="add-friend-close"
+        />
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </Animated.View>
     </View>
   );
@@ -498,6 +530,16 @@ export function FriendsScreen() {
   const [profileFriend, setProfileFriend] = useState<{ id: string; name: string; email: string } | null>(null);
   const [profileData, setProfileData] = useState<FriendProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [removeConfirming, setRemoveConfirming] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeError, setRemoveError] = useState('');
+  const [cancelRequestTarget, setCancelRequestTarget] = useState<OutboundRequest | null>(null);
+  const [cancelRequestBusy, setCancelRequestBusy] = useState(false);
+  const [cancelRequestError, setCancelRequestError] = useState('');
+  const [friendActionTarget, setFriendActionTarget] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [blockConfirming, setBlockConfirming] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [blockError, setBlockError] = useState('');
 
   const loadRequests = async () => {
     try {
@@ -525,7 +567,6 @@ export function FriendsScreen() {
   const friends = useMemo(
     () => storeFriends.map((f) => ({
       id: f.id, name: f.name, email: f.email,
-      sharedFlags: (f as typeof f & { sharedFlags?: number }).sharedFlags ?? 0,
     })),
     [storeFriends],
   );
@@ -548,25 +589,29 @@ export function FriendsScreen() {
   };
 
   const handleCancelOutbound = (req: OutboundRequest) => {
-    Alert.alert(
-      `Cancel request to ${req.toName}?`,
-      '',
-      [
-        { text: 'Keep', style: 'cancel' },
-        {
-          text: 'Cancel request',
-          style: 'destructive',
-          onPress: async () => {
-            const ok = await cancelOutboundRequest(req.id);
-            if (ok) setOutbound((prev) => prev.filter((r) => r.id !== req.id));
-          },
-        },
-      ],
-    );
+    setCancelRequestError('');
+    setCancelRequestTarget(req);
+  };
+
+  const confirmCancelOutbound = async () => {
+    if (!cancelRequestTarget || cancelRequestBusy) return;
+    setCancelRequestBusy(true);
+    setCancelRequestError('');
+    const ok = await cancelOutboundRequest(cancelRequestTarget.id);
+    setCancelRequestBusy(false);
+    if (!ok) {
+      setCancelRequestError('Could not cancel this request. Try again.');
+      return;
+    }
+    setOutbound((prev) => prev.filter((r) => r.id !== cancelRequestTarget.id));
+    setCancelRequestTarget(null);
   };
 
   // Bug-4: tap → open profile detail sheet
   const handleFriendTap = async (friend: { id: string; name: string; email: string }) => {
+    setRemoveConfirming(false);
+    setRemoveBusy(false);
+    setRemoveError('');
     setProfileFriend(friend);
     setProfileData(null);
     setProfileLoading(true);
@@ -576,62 +621,68 @@ export function FriendsScreen() {
   };
 
   const handleFriendLongPress = (friend: { id: string; name: string; email: string }) => {
-    Alert.alert(
-      friend.name,
-      friend.email,
-      [
-        {
-          text: 'View profile',
-          onPress: async () => {
-            setProfileFriend(friend);
-            setProfileData(null);
-            setProfileLoading(true);
-            const p = await fetchFriendProfile(friend.id);
-            setProfileData(p);
-            setProfileLoading(false);
-          },
-        },
-        {
-          text: 'Block',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              `Block ${friend.name}?`,
-              'They will no longer see your public cairns, and this friendship will be removed. You can unblock later in Settings.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Block',
-                  style: 'destructive',
-                  onPress: async () => {
-                    const r = await blockUser(friend.id);
-                    if (r.error) { Alert.alert('Block failed', r.error, [{ text: 'OK' }]); return; }
-                    await loadFriendsFromBackend();
-                    void loadCircleMarkers();
-                  },
-                },
-              ],
-            );
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-    );
+    setBlockConfirming(false);
+    setBlockBusy(false);
+    setBlockError('');
+    setFriendActionTarget(friend);
+  };
+
+  const confirmBlockFriend = async () => {
+    if (!friendActionTarget || blockBusy) return;
+    setBlockBusy(true);
+    setBlockError('');
+    const result = await blockUser(friendActionTarget.id);
+    setBlockBusy(false);
+    if (result.error) {
+      setBlockError(result.error);
+      return;
+    }
+    setFriendActionTarget(null);
+    setBlockConfirming(false);
+    await loadFriendsFromBackend();
+    void loadCircleMarkers();
   };
 
   const hasFriends = friends.length > 0;
   const hasIncoming = incoming.length > 0;
   const hasOutbound = outbound.length > 0;
-  const pendingEmpty = !hasIncoming && !hasOutbound;
+  const requestContentState = deriveFriendsRequestContentState(incoming.length, outbound.length);
+  const pendingEmpty = requestContentState === 'empty';
+  const showReceived = requestContentState === 'received' || requestContentState === 'both';
+  const showSent = requestContentState === 'sent' || requestContentState === 'both';
+
+  const closeProfile = () => {
+    if (removeBusy) return;
+    setProfileFriend(null);
+    setProfileData(null);
+    setRemoveConfirming(false);
+    setRemoveError('');
+  };
+
+  const confirmRemoveFriend = async () => {
+    if (!profileFriend || removeBusy) return;
+    setRemoveBusy(true);
+    setRemoveError('');
+    const result = await removeFriendAPI(profileFriend.id);
+    setRemoveBusy(false);
+    if (!result.success) {
+      setRemoveError(result.error || 'Could not remove friend. Try again.');
+      return;
+    }
+    setProfileFriend(null);
+    setProfileData(null);
+    setRemoveConfirming(false);
+    setRemoveError('');
+  };
 
   // State derivation follows spec F0..F5 (F6 handled via showAdd overlay):
   //   Friends tab + no friends              → F0 (clean bg + empty illustration)
   //   Friends tab + has friends             → F1 (footprints bg + list)
-  //   Pending tab + incoming AND sent       → F2
-  //   Pending tab + incoming only           → F3
-  //   Pending tab + sent only               → F4
-  //   Pending tab + neither                 → F5 (clean bg)
-  // Concept: both Friends and Pending tabs share the footprints backdrop.
+  //   Requests tab + received AND sent      → F2
+  //   Requests tab + received only          → F3
+  //   Requests tab + sent only              → F4
+  //   Requests tab + neither                → F5 (clean bg)
+  // Both primary tabs retain the scenic Friends backdrop.
   return (
     <View style={[s.root, { backgroundColor: theme.background }]}>
       <Backdrop />
@@ -649,24 +700,15 @@ export function FriendsScreen() {
         </TouchableOpacity>
         <View style={s.titleBlock}>
           <Text style={[s.hTitle, { color: headerColor }]}>Friends</Text>
-          <Text style={[s.hSubtitle, { color: theme.scenicTextMuted }]}>Paths that cross yours</Text>
         </View>
-        <TouchableOpacity
-          style={s.hIcon}
-          onPress={() => setShowAdd(true)}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityLabel="Add friend"
-          accessibilityRole="button"
-        >
-          <Icon name="Plus" size={DS.ic_md} color={headerColor} strokeWidth={1.9} />
-        </TouchableOpacity>
+        <View style={s.hIcon} accessible={false} />
       </View>
 
       {/* Tabs */}
       <SegmentedControl
         value={tab}
-        onChange={setTab}
-        segments={[{ key: 'friends', label: 'Friends' }, { key: 'pending', label: 'Pending' }]}
+        onChange={(value) => setTab(value as 'friends' | 'pending')}
+        segments={[{ key: 'friends', label: 'Friends' }, { key: 'pending', label: 'Requests' }]}
         containerStyle={s.tabsRow}
         testID="friends-tabs"
       />
@@ -676,12 +718,18 @@ export function FriendsScreen() {
         style={s.scroll}
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
+        pointerEvents={showAdd ? 'none' : 'auto'}
+        testID="friends-content"
       >
         {initialLoading && !hasFriends && !hasIncoming && !hasOutbound && (
-          <View style={s.loadingBlock} accessibilityLabel="Loading friends">
-            <ActivityIndicator size="small" color={theme.iconActive} />
-            <Text style={[s.loadingText, { color: theme.foregroundSecondary }]}>Checking your circle…</Text>
-          </View>
+          <StateSurface
+            variant="loading"
+            title="Loading friends…"
+            material="embedded"
+            alignment="center"
+            style={s.loadingBlock}
+            testID="friends-loading-state"
+          />
         )}
         {/* Friends tab */}
         {!initialLoading && tab === 'friends' && !hasFriends && (
@@ -690,21 +738,20 @@ export function FriendsScreen() {
               <CairnIcon name="friends" size={IconSize.lg} color={theme.iconActive} accent={theme.accent} active />
             </View>
             <View style={s.emptyTextGroup}>
-              <Text style={[s.emptyEyebrow, { color: theme.foregroundSecondary }]}>QUIETLY CONNECTED</Text>
               <Text style={[s.emptyTitle, { color: theme.foreground }]}>No friends yet</Text>
-              <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>Add a friend by email to see where your paths cross.</Text>
+              <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>Add someone by email to connect on CairnNZ.</Text>
             </View>
           </View>
         )}
         {tab === 'friends' && hasFriends && (
           <>
-            <Text style={[s.sectionTitle, { color: theme.foregroundSecondary }]}>YOUR CIRCLE · {friends.length}</Text>
+            <Text style={[s.sectionTitle, { color: theme.foregroundSecondary }]}>{friends.length} {friends.length === 1 ? 'friend' : 'friends'}</Text>
             {friends.map((f) => (
               <FriendRow
                 key={f.id}
                 id={f.id}
                 name={f.name}
-                sharedFlags={f.sharedFlags}
+                email={f.email}
                 onPress={() => handleFriendTap({ id: f.id, name: f.name, email: f.email })}
                 onLongPress={() => handleFriendLongPress({ id: f.id, name: f.name, email: f.email })}
               />
@@ -712,23 +759,23 @@ export function FriendsScreen() {
           </>
         )}
 
-        {/* Pending tab */}
+        {/* Requests tab */}
         {!initialLoading && tab === 'pending' && pendingEmpty && (
           <View style={s.emptyBlock}>
             <View style={[s.emptyIconMark, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
               <Icon name="Mail" size={DS.ic_lg} color={theme.iconActive} strokeWidth={1.8} />
             </View>
             <View style={s.emptyTextGroup}>
-              <Text style={[s.emptyTitle, { color: theme.foreground }]}>No pending requests</Text>
-              <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>New requests and sent invites will appear here.</Text>
+              <Text style={[s.emptyTitle, { color: theme.foreground }]}>No friend requests</Text>
+              <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>Received and sent requests will appear here.</Text>
             </View>
           </View>
         )}
-        {tab === 'pending' && (hasIncoming || hasOutbound) && (
+        {tab === 'pending' && !pendingEmpty && (
           <>
-            {hasIncoming && (
+            {showReceived && (
               <>
-                <Text style={[s.sectionTitle, { color: theme.foregroundSecondary }]}>INCOMING · {incoming.length}</Text>
+                <Text style={[s.sectionTitle, { color: theme.foregroundSecondary }]}>Received · {incoming.length}</Text>
                 {incoming.map((r) => (
                   <IncomingRow
                     key={r.id}
@@ -742,51 +789,47 @@ export function FriendsScreen() {
                 ))}
               </>
             )}
-            {!hasIncoming && (
-              <Text style={[s.mutedNote, { color: theme.foregroundSecondary }]}>No incoming requests</Text>
-            )}
-            {hasOutbound && (
+            {showSent && (
               <>
-                <Text style={[s.sectionTitle, { marginTop: 20, color: theme.foregroundSecondary }]}>SENT · {outbound.length}</Text>
+                <Text style={[s.sectionTitle, { marginTop: 20, color: theme.foregroundSecondary }]}>Sent · {outbound.length}</Text>
                 {outbound.map((r) => (
                   <SentRow
                     key={r.id}
                     id={String(r.id)}
                     toName={r.toName}
+                    toEmail={r.toEmail}
                     onCancel={() => handleCancelOutbound(r)}
                   />
                 ))}
               </>
-            )}
-            {!hasOutbound && hasIncoming && (
-              <Text style={[s.mutedNote, { marginTop: 20, color: theme.foregroundSecondary }]}>No sent requests yet</Text>
             )}
           </>
         )}
       </ScrollView>
 
       {/* One stable primary action position across list, empty and loading states. */}
-      {!initialLoading && (
-        <TouchableOpacity
-          style={[s.floatingAdd, { backgroundColor: theme.primary, bottom: Math.max(insets.bottom, Spacing.xl) }]}
+      {!initialLoading && !showAdd && (
+        <PrimaryButton
+          label="Add friend"
           onPress={() => setShowAdd(true)}
-          activeOpacity={0.9}
-          accessibilityLabel="Add a Friend"
-          accessibilityRole="button"
-        >
-          <Icon name="Plus" size={DS.ic_sm} color={theme.onPrimary} strokeWidth={2} />
-          <Text style={[s.floatingAddText, { color: theme.onPrimary }]}>Add a Friend</Text>
-        </TouchableOpacity>
+          variant="primary"
+          renderIcon={(color) => <Icon name="Plus" size={DS.ic_sm} color={color} strokeWidth={2} />}
+          style={[s.floatingAdd, { bottom: Math.max(insets.bottom, Spacing.xl) }]}
+        />
       )}
 
       {/* Add-friend full-screen page */}
-      {showAdd && <AddFriendPage onDismiss={() => setShowAdd(false)} />}
+      {showAdd && (
+        <AddFriendPage
+          onDismiss={() => setShowAdd(false)}
+          onRequestSent={() => { void loadRequests(); }}
+        />
+      )}
 
-      {/* Profile modal (unchanged UX from previous version, minimal card) */}
+      {/* Friends-local profile composition; cross-product detail shells remain out of scope. */}
       {profileFriend && (
-        <View style={[s.profileOverlay, { backgroundColor: theme.scrim }]}>
-          <View style={[s.profileCard, { backgroundColor: theme.modalSurface, borderColor: theme.borderSubtle }]}>
-            <View style={s.profileHeaderRow}>
+        <ModalCard visible onDismiss={closeProfile} testID="friend-profile-modal">
+          <View style={s.profileHeaderRow}>
               <View style={[s.avatar, { backgroundColor: avatarColorFor(profileFriend.id) }]}>
                 <Text style={s.avatarText}>{initialsOf(profileFriend.name)}</Text>
               </View>
@@ -794,19 +837,22 @@ export function FriendsScreen() {
                 <Text style={[s.profileName, { color: theme.foreground }]}>{profileFriend.name}</Text>
                 <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]}>{profileFriend.email}</Text>
               </View>
-              <TouchableOpacity
-                style={[s.profileDismiss, { borderColor: theme.border }]}
-                onPress={() => { setProfileFriend(null); setProfileData(null); }}
-                accessibilityRole="button"
-                accessibilityLabel="Close profile"
-              >
-                <Icon name="X" size={IconSize.sm} color={theme.icon} strokeWidth={2} />
-              </TouchableOpacity>
+              <DismissButton
+                onPress={closeProfile}
+                label="Close profile"
+                testID="friend-profile-close"
+              />
             </View>
             {profileLoading ? (
-              <ActivityIndicator color={theme.primary} style={{ marginVertical: 20 }} />
+              <StateSurface
+                variant="loading"
+                title="Loading profile…"
+                material="embedded"
+                alignment="center"
+                style={s.profileState}
+              />
             ) : profileData ? (
-              <View style={{ paddingVertical: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.border }}>
+              <View style={[s.profileStats, { borderColor: theme.borderSubtle }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
                   <View style={{ alignItems: 'center' }}>
                     <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.placesExplored}</Text>
@@ -823,52 +869,101 @@ export function FriendsScreen() {
                 </View>
               </View>
             ) : (
-              <Text style={[s.cardMeta, { textAlign: 'center', marginVertical: 20, color: theme.foregroundSecondary }]}>Profile unavailable.</Text>
+              <StateSurface
+                variant="unavailable"
+                title="Profile unavailable"
+                body="Try opening this profile again in a moment."
+                material="embedded"
+                alignment="center"
+                style={s.profileState}
+              />
             )}
-            {/* Remove friend with double confirm — no Done button */}
-            <TouchableOpacity
-              testID="btn-remove-friend"
-              style={[s.profileClose, { backgroundColor: theme.dangerSurface ?? T.danger + '15', borderColor: T.danger + '50', marginTop: 12 }]}
-              onPress={() => {
-                if (!profileFriend) return;
-                Alert.alert(
-                  `Remove ${profileFriend.name}?`,
-                  'They will no longer see your shared content and vice versa.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Remove friend',
-                      style: 'destructive',
-                      onPress: () => {
-                        Alert.alert(
-                          'Are you sure?',
-                          `This will permanently remove ${profileFriend.name} from your circle.`,
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Yes, remove',
-                              style: 'destructive',
-                              onPress: async () => {
-                                const result = await removeFriendAPI(profileFriend.id);
-                                setProfileFriend(null);
-                                setProfileData(null);
-                                if (!result.success) {
-                                  Alert.alert('Error', result.error || 'Could not remove friend.', [{ text: 'OK' }]);
-                                }
-                              },
-                            },
-                          ],
-                        );
-                      },
-                    },
-                  ],
-                );
-              }}
-            >
-              <Text style={[s.profileCloseText, { color: T.danger }]}>Remove friend</Text>
-            </TouchableOpacity>
+            <View style={s.profileRemoveShell} testID="friend-profile-remove-region">
+              {removeConfirming ? (
+                <View style={s.removeConfirmation} testID="friend-profile-remove-confirmation">
+                  <Text style={[s.removeWarning, { color: theme.foregroundSecondary }]}>
+                    You’ll lose access to routes, cairns, and explored areas shared by this friend. Your own exploration won’t be affected.
+                  </Text>
+                  {removeError ? <Text style={[s.removeError, { color: theme.destructive }]}>{removeError}</Text> : null}
+                  <PrimaryButton
+                    label="Remove friend"
+                    variant="destructive"
+                    onPress={confirmRemoveFriend}
+                    loading={removeBusy}
+                    style={s.profileRemoveAction}
+                    testID="friend-profile-remove-final"
+                  />
+                </View>
+              ) : (
+                <PrimaryButton
+                  label="Remove friend"
+                  variant="secondary"
+                  onPress={() => setRemoveConfirming(true)}
+                  style={s.profileRemoveAction}
+                  testID="friend-profile-remove-trigger"
+                />
+              )}
+            </View>
+        </ModalCard>
+      )}
+
+      {cancelRequestTarget && (
+        <ModalCard
+          visible
+          onDismiss={() => { if (!cancelRequestBusy) setCancelRequestTarget(null); }}
+          dismissible={!cancelRequestBusy}
+          testID="cancel-request-modal"
+        >
+          <ModalCardHeader
+            title={`Cancel request to ${cancelRequestTarget.toName}?`}
+            body="They won’t receive this friend request."
+            onClose={() => setCancelRequestTarget(null)}
+          />
+          {cancelRequestError ? <Text style={[s.dialogError, { color: theme.destructive }]}>{cancelRequestError}</Text> : null}
+          <View style={s.dialogActions}>
+            <PrimaryButton label="Cancel request" variant="destructive" onPress={confirmCancelOutbound} loading={cancelRequestBusy} style={s.dialogAction} testID="cancel-request-confirm" />
           </View>
-        </View>
+        </ModalCard>
+      )}
+
+      {friendActionTarget && (
+        <ModalCard
+          visible
+          onDismiss={() => { if (!blockBusy) setFriendActionTarget(null); }}
+          dismissible={!blockBusy}
+          testID="friend-actions-modal"
+        >
+          <ModalCardHeader
+            title={blockConfirming ? `Block ${firstNameOf(friendActionTarget.name)}?` : friendActionTarget.name}
+            body={blockConfirming
+              ? 'This friendship will end, and they will no longer see your public cairns. You can unblock them later in Settings.'
+              : friendActionTarget.email}
+            onClose={() => setFriendActionTarget(null)}
+          />
+          {blockError ? <Text style={[s.dialogError, { color: theme.destructive }]}>{blockError}</Text> : null}
+          <View style={s.dialogActions}>
+            {blockConfirming ? (
+              <>
+                <PrimaryButton label="Back" variant="secondary" onPress={() => setBlockConfirming(false)} style={s.dialogAction} />
+                <PrimaryButton label={`Block ${firstNameOf(friendActionTarget.name)}`} variant="destructive" onPress={confirmBlockFriend} loading={blockBusy} style={s.dialogAction} />
+              </>
+            ) : (
+              <>
+                <PrimaryButton
+                  label="View profile"
+                  variant="primary"
+                  onPress={() => {
+                    const friend = friendActionTarget;
+                    setFriendActionTarget(null);
+                    void handleFriendTap(friend);
+                  }}
+                  style={s.dialogAction}
+                />
+                <PrimaryButton label="Block friend" variant="secondary" onPress={() => setBlockConfirming(true)} style={s.dialogAction} />
+              </>
+            )}
+          </View>
+        </ModalCard>
       )}
     </View>
   );
@@ -901,7 +996,6 @@ const s = StyleSheet.create({
     letterSpacing: -0.25,
   },
   titleBlock: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  hSubtitle: { marginTop: 2, fontSize: FontSize.small, fontWeight: DS.fw_medium, letterSpacing: 0.15 },
 
   // ── Tabs (centered, equal width, φ-related dimensions) ───────────────────
   tabsRow: {
@@ -915,42 +1009,26 @@ const s = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: DS.contentPad,
-    paddingTop: Spacing.base,
+    paddingTop: Spacing.xxl,
     paddingBottom: 104,
     gap: DS.sp3,
   },
 
   loadingBlock: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.md,
     paddingTop: 96,
   },
-  loadingText: { fontSize: FontSize.caption, fontWeight: '500' },
 
   sectionTitle: {
-    fontSize: 10,
+    fontSize: DS.fs_caption,
     fontWeight: DS.fw_semibold,
     color: T.forest,
     paddingHorizontal: DS.sp1,
     paddingBottom: DS.sp2,
-    letterSpacing: 1.25,
+    letterSpacing: 0.2,
   },
-  mutedNote: {
-    fontSize: DS.fs_meta,
-    color: T.textSecondary,
-    paddingHorizontal: DS.sp1,
-    paddingTop: DS.sp2,
-    fontStyle: 'italic',
-  },
-
   // ── Cards (friend / incoming / sent) ─────────────────────────────────────
   card: {
     minHeight: 64,
-    backgroundColor: T.card,
-    borderWidth: 1,
-    borderColor: T.cardBorder,
-    borderRadius: Radius.card,
     paddingHorizontal: DS.sp4,
     paddingVertical: DS.sp3,
     flexDirection: 'row',
@@ -988,12 +1066,22 @@ const s = StyleSheet.create({
   actionBtn: {
     width: 38,
     height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: T.cardBorder,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sentCancel: {
+    minHeight: 38,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.button,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sentCancelText: {
+    fontSize: FontSize.small,
+    fontWeight: DS.fw_semibold,
   },
 
   // ── Empty states (F0 friends-empty, F5 pending-empty) ────────────────────
@@ -1018,13 +1106,6 @@ const s = StyleSheet.create({
     maxWidth: 272,
     paddingTop: DS.sp3,
   },
-  emptyEyebrow: {
-    fontSize: 9,
-    lineHeight: 12,
-    fontWeight: DS.fw_semibold,
-    letterSpacing: 1.55,
-    marginBottom: DS.sp2,
-  },
   emptyTitle: {
     fontSize: DS.fs_emptyTitle,
     fontWeight: DS.fw_bold,
@@ -1047,20 +1128,7 @@ const s = StyleSheet.create({
     position: 'absolute',
     left: Spacing.lg,
     right: Spacing.lg,
-    height: 48,
-    backgroundColor: T.forestActive,
-    borderRadius: Radius.button,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: DS.sp2,
     ...Shadow.elevated,
-  },
-  floatingAddText: {
-    color: '#fff',
-    fontSize: DS.fs_body,
-    fontWeight: DS.fw_bold,
-    letterSpacing: 0.2,
   },
 
   // ── Add-friend rising sheet ───────────────────────────────────────────────
@@ -1071,14 +1139,12 @@ const s = StyleSheet.create({
   },
   f6Scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: T.scrim,
   },
   f6Sheet: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
-    // Human review asked for a softer invitation surface, not a near-full
-    // page takeover. The shorter detent keeps Friends visibly present.
-    height: '74%',
+    // Leaves the primary tabs breathing room while still covering the first row.
+    height: '80.2%',
     borderTopLeftRadius: Radius.sheet,
     borderTopRightRadius: Radius.sheet,
     borderWidth: 1,
@@ -1093,9 +1159,8 @@ const s = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 148,
+    height: 180,
     overflow: 'hidden',
-    backgroundColor: '#E8E4D6',
     borderTopLeftRadius: Radius.sheet,
     borderTopRightRadius: Radius.sheet,
   },
@@ -1105,12 +1170,13 @@ const s = StyleSheet.create({
     left: 0,
     width: '100%',
     height: '100%',
+    transform: [{ scale: 1.06 }],
   },
   f6Arch: {
     position: 'absolute',
     left: 0,
     right: 0,
-    top: 94,
+    top: 108,
     bottom: 0,
   },
   f6ArchSvg: {
@@ -1123,28 +1189,15 @@ const s = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: 62,
+    top: 48,
     bottom: 0,
-    backgroundColor: T.paper,
     paddingTop: Spacing.lg,
   },
   f6Close: {
     position: 'absolute',
     top: Spacing.base,
-    left: Spacing.base,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    right: Spacing.base,
     zIndex: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
   },
   f6MailBadge: {
     position: 'absolute',
@@ -1158,12 +1211,9 @@ const s = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: Radius.card,
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: T.cardBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
@@ -1190,60 +1240,15 @@ const s = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: DS.sp5,
   },
-  f6InputLabel: {
-    fontSize: DS.fs_label,
-    fontWeight: DS.fw_semibold,
-    color: T.forest,
+  f6Field: {
     marginTop: DS.sp6,
-    marginBottom: DS.sp2,
-    letterSpacing: 0.3,
-  },
-  f6InputWrap: {
-    height: 52,
-    borderRadius: Radius.button,
-    backgroundColor: T.inputBg,
-    borderWidth: 1,
-    borderColor: T.inputBorder,
-    paddingHorizontal: DS.sp5,
-    justifyContent: 'center',
   },
   f6Input: {
-    fontSize: DS.fs_body,
-    color: T.textPrimary,
-    paddingVertical: 0,
-  },
-  f6Err: {
-    fontSize: DS.fs_meta,
-    color: T.danger,
-    marginTop: DS.sp2,
-    marginLeft: DS.sp3,
+    minHeight: 50,
+    paddingHorizontal: DS.sp5,
   },
   f6Send: {
-    height: 52,
-    borderRadius: Radius.button,
-    backgroundColor: T.forestActive,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: DS.sp2,
     marginTop: DS.sp6,
-  },
-  f6SendText: {
-    color: '#fff',
-    fontSize: DS.fs_cardName,
-    fontWeight: DS.fw_bold,
-    letterSpacing: 0.2,
-  },
-  f6Cancel: {
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: DS.sp2,
-  },
-  f6CancelText: {
-    color: T.forest,
-    fontSize: DS.fs_body,
-    fontWeight: DS.fw_semibold,
   },
 
   // ── Bottom nav (matches Home) ─────────────────────────────────────────────
@@ -1279,24 +1284,6 @@ const s = StyleSheet.create({
   },
 
   // ── Profile modal ─────────────────────────────────────────────────────────
-  profileOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: DS.sp6,
-    zIndex: 100,
-  },
-  profileCard: {
-    backgroundColor: T.paper,
-    borderRadius: Radius.card,
-    borderWidth: 1,
-    padding: DS.sp5,
-    width: '100%',
-    maxWidth: 340,
-    ...Shadow.modal,
-  },
   profileHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1307,13 +1294,10 @@ const s = StyleSheet.create({
     fontSize: FontSize.h3,
     fontWeight: '600',
   },
-  profileDismiss: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  profileStats: {
+    paddingVertical: Spacing.base,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
   },
   profileStat: {
     fontSize: DS.fs_headerTitle,
@@ -1324,19 +1308,27 @@ const s = StyleSheet.create({
     fontSize: DS.fs_meta,
     color: T.textSecondary,
   },
-  profileClose: {
-    backgroundColor: T.forestActive,
-    height: 48,
-    borderWidth: 1,
-    borderRadius: Radius.button,
+  profileState: { paddingVertical: Spacing.base },
+  profileRemoveShell: {
     marginTop: DS.sp3,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingTop: Spacing.md,
   },
-  profileCloseText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: DS.fw_semibold,
-    fontSize: DS.fs_body,
+  profileRemoveAction: { width: '100%' },
+  removeConfirmation: { gap: Spacing.md },
+  removeWarning: { fontSize: FontSize.small, lineHeight: 19 },
+  removeError: {
+    fontSize: FontSize.small,
+    lineHeight: 17,
+  },
+  dialogActions: {
+    gap: Spacing.sm,
+  },
+  dialogAction: {
+    width: '100%',
+  },
+  dialogError: {
+    fontSize: FontSize.small,
+    lineHeight: 18,
+    marginBottom: Spacing.md,
   },
 });

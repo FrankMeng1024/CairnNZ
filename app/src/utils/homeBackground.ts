@@ -5,13 +5,11 @@
  * Output: HomeBackgroundTokens — 一整套 tokens 供 HomeScreen 用。
  *
  * Production visual system: weather selects exactly one scenic asset;
- * Day/Night selects exactly one functional UI palette. No component color
- * changes by weather, which keeps Rainy Night and Sunny Night in one system.
+ * Day/Sunset/Night selects one deliberate functional UI material state. No
+ * component color changes by weather, keeping every condition in one system.
  *
  * fog → cloudy fallback (no dedicated asset).
- * Sunny has the approved 3-state family: Day / Sunset / Deep Night.
- * Other weather mappings remain on their existing two-state paths until a
- * later weather-family Gate explicitly expands them.
+ * Every weather condition has an approved Day / Sunset / Night mapping.
  */
 import type { WeatherCondition } from '../store/useWeatherStore';
 import { resolveScenicTimeOfDay, type ScenicTimeOfDay } from './scenicTime';
@@ -137,9 +135,8 @@ export function resolveVariant(
   return `${bucket}-${timeOfDay}` as HomeBgVariant;
 }
 
-// Functional UI has exactly two color families. Sunny Day and the approved
-// early-evening state only adjust scenic material density within those
-// families; weather never creates another component theme.
+// Home illumination has three deliberate material states: Day, Sunset and
+// Night. Weather changes scenery; it never creates another component theme.
 type ScenicUiPalette = {
   textColor: string;
   textColorMuted: string;
@@ -236,11 +233,10 @@ const NIGHT_UI_PALETTE: ScenicUiPalette = {
   settingsCardBorderColor: 'rgba(211,222,229,0.20)',
 };
 
-// The approved Sunny evening is sunset/early blue hour rather than deep
-// night. Keep the Night color family, but let more of the readable world
-// remain visible through the local Home materials.
-const SUNNY_EVENING_UI_PALETTE: ScenicUiPalette = {
-  ...NIGHT_UI_PALETTE,
+// Transitional compatibility palette for surfaces outside Home. Its explicit
+// values preserve their pre-Phase-A rendering without deriving Sunset from
+// Night; Phase B will recalibrate shared primitives against the new authority.
+const LEGACY_SUNSET_COMPAT_UI_PALETTE: ScenicUiPalette = {
   // Cool pearl separates from the warm dusk band without feeling clinical.
   textColor: '#E6EBEF',
   textColorMuted: 'rgba(226,233,237,0.88)',
@@ -258,6 +254,35 @@ const SUNNY_EVENING_UI_PALETTE: ScenicUiPalette = {
   tabBarTextColor: '#E5DCD2',
   actionIconColor: '#EFE5D9',
   navIconColor: '#DDD4CA',
+  invertIcons: true,
+  settingsBackgroundColor: '#554E59',
+  settingsVeilColor: 'rgba(69,63,72,0.58)',
+  settingsCardBackgroundColor: 'rgba(76,70,78,0.82)',
+  settingsCardBorderColor: 'rgba(242,229,211,0.22)',
+};
+
+// Home Sunset authority: retained golden-hour light. The scenery still carries
+// daylight, so functional controls use illuminated warm-mineral material and
+// grounded foregrounds rather than entering Night ahead of the environment.
+const SUNNY_HOME_SUNSET_UI_PALETTE: ScenicUiPalette = {
+  textColor: '#E6EBEF',
+  textColorMuted: 'rgba(226,233,237,0.88)',
+  textShadowColor: 'rgba(25,24,32,0.48)',
+  heroTextShadowRadius: 4,
+  heroTextShadowOffsetY: 1,
+  cardBackgroundColor: 'rgba(226,213,199,0.74)',
+  cardBorderColor: 'rgba(255,244,228,0.56)',
+  cardTextColor: '#1F2F2A',
+  cardTextColorMuted: '#2B3834',
+  actionButtonBackgroundColor: 'rgba(224,210,197,0.70)',
+  actionButtonTextColor: '#1F2F2A',
+  tabBarBackgroundColor: 'rgba(218,207,198,0.72)',
+  tabBarBorderColor: 'rgba(255,244,228,0.52)',
+  tabBarTextColor: '#1F2F2A',
+  actionIconColor: '#304B42',
+  navIconColor: '#304B42',
+  invertIcons: false,
+  // Settings remains pixel-compatible in Phase A; shared calibration is Phase B.
   settingsBackgroundColor: '#554E59',
   settingsVeilColor: 'rgba(69,63,72,0.58)',
   settingsCardBackgroundColor: 'rgba(76,70,78,0.82)',
@@ -296,7 +321,7 @@ const CLOUDY_REVIEW_DAY_UI_PALETTE: ScenicUiPalette = {
 };
 
 const CLOUDY_REVIEW_SUNSET_UI_PALETTE: ScenicUiPalette = {
-  ...SUNNY_EVENING_UI_PALETTE,
+  ...LEGACY_SUNSET_COMPAT_UI_PALETTE,
   textColor: '#EEF0F1',
   textColorMuted: 'rgba(231,234,235,0.88)',
   textShadowColor: 'rgba(25,27,31,0.56)',
@@ -327,7 +352,7 @@ const RAIN_REVIEW_DAY_UI_PALETTE: ScenicUiPalette = {
 };
 
 const RAIN_REVIEW_SUNSET_UI_PALETTE: ScenicUiPalette = {
-  ...SUNNY_EVENING_UI_PALETTE,
+  ...LEGACY_SUNSET_COMPAT_UI_PALETTE,
   textColor: '#EEF1F2',
   textColorMuted: 'rgba(230,235,237,0.88)',
   textShadowColor: 'rgba(16,20,27,0.62)',
@@ -461,7 +486,7 @@ const ASSET_IDS: Record<HomeBgVariant, string> = {
 
 const REVIEW_PALETTES: Record<WeatherReviewVariant, ScenicUiPalette> = {
   'sunny-review-day': SUNNY_HOME_UI_PALETTE,
-  'sunny-review-sunset': SUNNY_EVENING_UI_PALETTE,
+  'sunny-review-sunset': SUNNY_HOME_SUNSET_UI_PALETTE,
   'sunny-review-night': SUNNY_NIGHT_UI_PALETTE,
   'cloudy-review-day': CLOUDY_REVIEW_DAY_UI_PALETTE,
   'cloudy-review-sunset': CLOUDY_REVIEW_SUNSET_UI_PALETTE,
@@ -523,7 +548,9 @@ export function getHomeBackground(
   const p = variant === 'sunny-day'
     ? SUNNY_HOME_UI_PALETTE
     : variant === 'sunny-sunset'
-      ? SUNNY_EVENING_UI_PALETTE
+      ? surface === 'home'
+        ? SUNNY_HOME_SUNSET_UI_PALETTE
+        : LEGACY_SUNSET_COMPAT_UI_PALETTE
     : variant === 'sunny-night'
       ? SUNNY_NIGHT_UI_PALETTE
     : variant.endsWith('-night')

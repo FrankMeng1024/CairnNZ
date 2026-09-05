@@ -87,6 +87,10 @@ export type RootStackParamList = {
   Debug: undefined;
   /** Sprint 68 STORY-00532: dev-only preview for MarkDetailSheet 4 forms. */
   MarkDetailDevPreview: undefined;
+  /** Batch 2: dev-only shared transient-contract review harness. */
+  TransientContractPreview: undefined;
+  /** Phase B-1: dev-only three-theme production-primitive lab. */
+  ThreeThemeComponentLab: undefined;
   Gate1IconSheet: undefined;
 };
 
@@ -232,6 +236,18 @@ export function RootNavigator() {
             <Stack.Screen name="Memory"      component={MemoryScreen} />
             <Stack.Screen name="Debug"       component={DebugScreen} />
             {__DEV__ && <Stack.Screen name="MarkDetailDevPreview" component={MarkDetailDevPreviewScreen} />}
+            {__DEV__ && (
+              <Stack.Screen
+                name="TransientContractPreview"
+                getComponent={() => require('../components/dev/TransientContractPreviewScreen').TransientContractPreviewScreen}
+              />
+            )}
+            {__DEV__ && (
+              <Stack.Screen
+                name="ThreeThemeComponentLab"
+                getComponent={() => require('../components/dev/ThreeThemeComponentLabScreen').ThreeThemeComponentLabScreen}
+              />
+            )}
             {__DEV__ && <Stack.Screen name="Gate1IconSheet" component={Gate1IconSheetScreen} />}
           </>
         ) : (

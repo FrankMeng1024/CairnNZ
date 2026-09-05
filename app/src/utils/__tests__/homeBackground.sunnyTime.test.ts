@@ -39,6 +39,64 @@ describe('Sunny three-time background mapping', () => {
     expect(night.backgroundOffsetYPct).toBeLessThan(day.backgroundOffsetYPct);
   });
 
+  it('keeps Home Sunset independent from Night while preserving non-Home compatibility', () => {
+    const homeSunset = getHomeBackground('sunny', Date.now(), 'sunset', 'home');
+    const sharedSunset = getHomeBackground('sunny', Date.now(), 'sunset', 'shared');
+    const homeNight = getHomeBackground('sunny', Date.now(), 'night', 'home');
+
+    expect(homeSunset.cardBackgroundColor).toBe('rgba(226,213,199,0.74)');
+    expect(homeSunset.actionButtonTextColor).toBe('#1F2F2A');
+    expect(homeSunset.invertIcons).toBe(false);
+    expect(homeSunset.cardBackgroundColor).not.toBe(homeNight.cardBackgroundColor);
+    expect(homeSunset.actionButtonBackgroundColor).not.toBe(homeNight.actionButtonBackgroundColor);
+    expect(sharedSunset.cardBackgroundColor).toBe('rgba(67,63,70,0.60)');
+    expect(sharedSunset.invertIcons).toBe(true);
+  });
+
+  it('regression-locks the accepted Home Day and Night material values', () => {
+    const day = getHomeBackground('sunny', Date.now(), 'day', 'home');
+    const night = getHomeBackground('sunny', Date.now(), 'night', 'home');
+
+    expect({
+      text: day.textColor,
+      muted: day.textColorMuted,
+      card: day.cardBackgroundColor,
+      cardBorder: day.cardBorderColor,
+      action: day.actionButtonBackgroundColor,
+      actionText: day.actionButtonTextColor,
+      nav: day.tabBarBackgroundColor,
+      icon: day.actionIconColor,
+    }).toEqual({
+      text: '#2D3131',
+      muted: 'rgba(45,49,49,0.82)',
+      card: 'rgba(241,239,231,0.78)',
+      cardBorder: 'rgba(255,255,255,0.58)',
+      action: 'rgba(239,237,229,0.74)',
+      actionText: '#243B34',
+      nav: 'rgba(237,235,227,0.78)',
+      icon: '#29483E',
+    });
+    expect({
+      text: night.textColor,
+      muted: night.textColorMuted,
+      card: night.cardBackgroundColor,
+      cardBorder: night.cardBorderColor,
+      action: night.actionButtonBackgroundColor,
+      actionText: night.actionButtonTextColor,
+      nav: night.tabBarBackgroundColor,
+      icon: night.actionIconColor,
+    }).toEqual({
+      text: '#E8EDF0',
+      muted: 'rgba(220,229,234,0.86)',
+      card: 'rgba(37,46,58,0.66)',
+      cardBorder: 'rgba(208,220,231,0.22)',
+      action: 'rgba(39,49,61,0.62)',
+      actionText: '#F2F5EF',
+      nav: 'rgba(32,42,53,0.68)',
+      icon: '#DCE7E7',
+    });
+  });
+
   it('resolves Sunset variants across the weather family', () => {
     expect(resolveVariant('rain', Date.now(), 'sunset')).toBe('rain-sunset');
     expect(resolveVariant('cloudy', Date.now(), 'sunset')).toBe('cloudy-sunset');

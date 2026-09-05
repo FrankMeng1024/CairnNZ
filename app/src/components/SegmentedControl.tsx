@@ -13,15 +13,18 @@ interface Props<T extends string> {
 }
 
 /**
- * The canonical CairnNZ page-tab grammar: independent floating pills.
- * The row owns spacing only; every segment resolves its own Day / Sunset /
- * Night material from semantic visual tokens.
+ * The canonical CairnNZ page-tab grammar: one containing track with related
+ * active and inactive states. Screens own placement, not material decisions.
  */
 export function SegmentedControl<T extends string>({ value, segments, onChange, containerStyle, testID }: Props<T>) {
   const theme = useVisualTheme();
   return (
-    <View style={[styles.track, containerStyle]} accessibilityRole="tablist" testID={testID}>
-      {segments.map(segment => {
+    <View
+      style={[styles.track, { backgroundColor: theme.segmentedTrack, borderColor: theme.borderSubtle }, containerStyle]}
+      accessibilityRole="tablist"
+      testID={testID}
+    >
+      {segments.map((segment, index) => {
         const selected = segment.key === value;
         return (
           <Pressable
@@ -31,14 +34,20 @@ export function SegmentedControl<T extends string>({ value, segments, onChange, 
             onPress={() => onChange(segment.key)}
             style={[
               styles.segment,
+              index === 0 && styles.firstSegment,
+              index === segments.length - 1 && styles.lastSegment,
               {
                 backgroundColor: selected ? theme.controlSelected : theme.controlInactive,
-                borderColor: selected ? theme.controlSelected : theme.borderSubtle,
-                shadowColor: theme.shadow,
+                borderColor: selected ? theme.borderStrong : 'transparent',
               },
             ]}
           >
-            <Text style={[styles.label, { color: selected ? theme.onPrimary : theme.textPrimary }, selected && styles.selected]}>{segment.label}</Text>
+            <Text
+              testID={testID ? `${testID}-${selected ? 'active' : 'inactive'}` : undefined}
+              style={[styles.label, { color: selected ? theme.tabActive : theme.tabInactive }, selected && styles.selected]}
+            >
+              {segment.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -47,19 +56,29 @@ export function SegmentedControl<T extends string>({ value, segments, onChange, 
 }
 
 const styles = StyleSheet.create({
-  track: { flexDirection: 'row', gap: Spacing.md },
+  track: {
+    flexDirection: 'row',
+    borderRadius: RadiusRole.segmentedControl,
+    borderWidth: 1,
+    padding: 1,
+    overflow: 'hidden',
+  },
   segment: {
     flex: 1,
-    minHeight: 42,
-    borderRadius: RadiusRole.segmentedControl,
+    minHeight: 40,
+    borderRadius: 0,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.md,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 2,
+  },
+  firstSegment: {
+    borderTopLeftRadius: RadiusRole.segmentedItem,
+    borderBottomLeftRadius: RadiusRole.segmentedItem,
+  },
+  lastSegment: {
+    borderTopRightRadius: RadiusRole.segmentedItem,
+    borderBottomRightRadius: RadiusRole.segmentedItem,
   },
   label: { fontSize: FontSize.caption, fontWeight: '600' },
   selected: { fontWeight: '700' },

@@ -359,8 +359,10 @@ export function HikingMap({
         {...(resolvedMapStyle.kind === 'url'
           ? { styleURL: resolvedMapStyle.url }
           : { styleJSON: resolvedMapStyle.json })}
-        logoEnabled={false}
-        attributionEnabled={false}
+        logoEnabled
+        attributionEnabled
+        logoPosition={{ top: 152, left: 8 }}
+        attributionPosition={{ top: 152, right: 8 }}
         // Mapbox's built-in compass is hidden — we draw our own as a
         // bottom-left chip so it sits in a predictable spot relative to
         // Place Flag (right). showCompass is also

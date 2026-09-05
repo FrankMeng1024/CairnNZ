@@ -44,6 +44,7 @@ import { GlassPanel } from '../components/GlassPanel';
 import { crashLogger } from '../services/crashLogger';
 import { prewarmMapTiles } from '../services/mapboxPrewarm';
 import { OtaBadge } from '../components/OtaBadge';
+import { OTP_LENGTH, applyOtpCellInput, eligibleClipboardOtp, normalizeOtpInput } from '../utils/authOtp';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -424,7 +425,7 @@ function OtpInput({ value, onChange, onComplete, error, autoFocus, autoSubmit = 
 
   const applyValue = (next: string) => {
     // Only digits, max 6.
-    const clean = next.replace(/\D/g, '').slice(0, 6);
+    const clean = normalizeOtpInput(next);
     onChange(clean);
     if (clean.length === 6) {
       // Fire completion callback on the next microtask so parent state
@@ -438,23 +439,19 @@ function OtpInput({ value, onChange, onComplete, error, autoFocus, autoSubmit = 
   };
 
   const onCellChange = (idx: number, raw: string) => {
-    // Native paste handler: if raw > 1 char (autofill or paste), replace whole value.
-    const clean = raw.replace(/\D/g, '');
-    if (clean.length > 1) {
-      applyValue(clean);
+    // Native paste/autofill can provide the complete code to one cell.
+    const next = applyOtpCellInput(value, idx, raw);
+    const pasted = normalizeOtpInput(raw).length > 1;
+    if (pasted) {
+      applyValue(next);
       // Focus the last non-empty cell (or 5 if fully filled).
-      const focusIdx = Math.min(clean.length, 5);
+      const focusIdx = Math.min(next.length, OTP_LENGTH - 1);
       setTimeout(() => { try { refs.current[focusIdx]?.focus?.(); } catch { /* silent */ } }, 0);
       return;
     }
-    // Single-char change: replace digit at idx.
-    const arr = value.split('');
-    while (arr.length < 6) arr.push('');
-    arr[idx] = clean; // may be '' when clearing
-    const merged = arr.slice(0, 6).join('');
-    applyValue(merged);
+    applyValue(next);
     // Advance focus if a digit was entered and we're not at the last box.
-    if (clean && idx < 5) {
+    if (next[idx] && idx < OTP_LENGTH - 1) {
       try { refs.current[idx + 1]?.focus?.(); } catch { /* silent */ }
     }
   };
@@ -476,9 +473,11 @@ function OtpInput({ value, onChange, onComplete, error, autoFocus, autoSubmit = 
           onChangeText={(v) => onCellChange(i, v)}
           onKeyPress={(e) => onKeyPress(i, e.nativeEvent.key)}
           keyboardType="number-pad"
-          maxLength={1}
+          // iOS applies maxLength before onChangeText. A length of one
+          // truncates a six-digit paste/autofill to its first digit.
+          maxLength={OTP_LENGTH}
           textContentType={i === 0 ? 'oneTimeCode' : 'none'}
-          autoComplete={i === 0 ? 'sms-otp' : 'off'}
+          autoComplete={i === 0 ? (Platform.OS === 'android' ? 'sms-otp' : 'one-time-code') : 'off'}
           autoFocus={autoFocus && i === 0}
           style={{
             flex: 1,
@@ -1502,30 +1501,33 @@ export function AuthScreen() {
   useEffect(() => {
     if (view !== 'verify') return;
     let cancelled = false;
-    const tryAutoFill = async () => {
+    const tryAutoFill = async (trigger: 'view' | 'foreground') => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const Clipboard = require('expo-clipboard');
         const txt = await Clipboard.getStringAsync();
         if (cancelled) return;
-        const digits = String(txt || '').replace(/\D/g, '');
-        // Only autofill if:
-        //   - clipboard has EXACTLY 6 digits
-        //   - user hasn't typed anything yet (respect manual input)
-        //   - not already verifying
-        if (digits.length === 6 && !verifyCode_ && !verifyLoading) {
-          setVerifyCode_(digits);
-          void handleVerify(digits);
+        const candidate = eligibleClipboardOtp(txt, {
+          verificationActive: view === 'verify',
+          currentCode: verifyCode_,
+          verifying: verifyLoading,
+        });
+        crashLogger.breadcrumb(`auth:otp_clipboard trigger=${trigger} outcome=${candidate ? 'accepted' : 'ignored'}`);
+        if (candidate) {
+          setVerifyCode_(candidate);
+          void handleVerify(candidate);
         }
-      } catch { /* silent — clipboard access may be denied */ }
+      } catch {
+        crashLogger.breadcrumb(`auth:otp_clipboard trigger=${trigger} outcome=unavailable`);
+      }
     };
     // Fire once on view entry.
-    void tryAutoFill();
+    void tryAutoFill('view');
     // Fire again when user comes back from another app (mail app).
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { AppState } = require('react-native');
     const sub = AppState.addEventListener('change', (s: string) => {
-      if (s === 'active') void tryAutoFill();
+      if (s === 'active') void tryAutoFill('foreground');
     });
     return () => { cancelled = true; sub.remove(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps

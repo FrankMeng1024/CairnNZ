@@ -18,12 +18,10 @@
  * denying location means the feature won't work.
  */
 import React from 'react';
-import { View, Text, StyleSheet, Linking } from 'react-native';
-import { Spacing, Radius, FontSize } from './tokens';
-import { Icon } from './Icon';
-import { useVisualTheme } from '../hooks/useVisualTheme';
+import { Linking } from 'react-native';
 import { ModalCard } from './ModalCard';
-import { AppButton } from './AppButton';
+import { PrimaryButton } from './PrimaryButton';
+import { StateSurface } from './StateSurface';
 
 interface Props {
   visible: boolean;
@@ -32,7 +30,6 @@ interface Props {
 }
 
 export function PermissionDeniedModal({ visible, featureName, onDismiss }: Props) {
-  const theme = useVisualTheme();
   const openSettings = () => {
     Linking.openSettings().catch(() => { /* best-effort */ });
     onDismiss();
@@ -40,42 +37,19 @@ export function PermissionDeniedModal({ visible, featureName, onDismiss }: Props
 
   return (
     <ModalCard visible={visible} onDismiss={onDismiss} testID="permission-denied-modal">
-        <View style={styles.content}>
-          <View style={[styles.iconWrap, { backgroundColor: theme.surface }]}>
-            <Icon name="MapPin" size={28} color={theme.iconActive} strokeWidth={1.8} />
-          </View>
-          <Text style={[styles.title, { color: theme.foreground }]}>{featureName} needs your location</Text>
-          <Text style={[styles.body, { color: theme.foregroundSecondary }]}>
-            Turn on location for Cairn in Settings to use this feature.
-          </Text>
-          <AppButton label="Open Settings" onPress={openSettings} style={styles.action} />
-          <AppButton label="Not now" onPress={onDismiss} variant="tertiary" style={styles.action} />
-        </View>
+      <StateSurface
+        variant="permission"
+        material="embedded"
+        alignment="center"
+        title={`${featureName} needs your location`}
+        body="Turn on location for Cairn in Settings to use this feature."
+        actions={(
+          <>
+            <PrimaryButton label="Open Settings" onPress={openSettings} />
+            <PrimaryButton label="Not now" onPress={onDismiss} variant="secondary" />
+          </>
+        )}
+      />
     </ModalCard>
   );
 }
-
-const styles = StyleSheet.create({
-  content: { alignItems: 'center' },
-  iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
-  },
-  title: {
-    fontSize: FontSize.h3,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: Spacing.sm,
-  },
-  body: {
-    fontSize: FontSize.body,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: Spacing.lg,
-  },
-  action: { alignSelf: 'stretch', marginTop: Spacing.sm },
-});
