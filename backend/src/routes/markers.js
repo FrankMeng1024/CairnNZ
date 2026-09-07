@@ -117,7 +117,8 @@ router.get('/', async (req, res) => {
     // for 30 years = ~4700). Client already sorts by created_at DESC
     // so the newest 5000 win.
     const [markers] = await pool.execute(
-      `SELECT id, user_id, type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at
+      `SELECT id, user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
+              type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at
        FROM markers WHERE user_id = ? ORDER BY created_at DESC LIMIT 5000`,
       [req.user.userId]
     );
@@ -190,8 +191,13 @@ router.get('/public', async (req, res) => {
 
 // ── Create marker ───────────────────────────────────────────────────────────
 router.post('/', validateBody(schemas.marker.create), idempotency, async (req, res) => {
+  let conn = null;
   try {
-    const { type, text, lat, lng, alt, permission, approximate } = req.body;
+    const {
+      client_cairn_id,
+      origin_activity_client_id,
+      type, text, lat, lng, alt, permission, approximate,
+    } = req.body;
 
     if (!type || lat == null || lng == null) {
       return res.status(400).json({ error: 'type, lat, lng required' });
@@ -222,27 +228,98 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
     // from client POST. Retained as null for column write consistency.
     let publicSnapshotJson = null;
 
-    const [result] = await pool.execute(
-      `INSERT INTO markers (user_id, type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-      [req.user.userId, type, text || '', lat, lng, alt || null, perm, approx, publicSnapshotJson]
-    );
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    // One durable per-user lock gives Create and both delete shapes a common
+    // ordering across backend processes. Tombstone visibility can therefore
+    // never depend on which HTTP handler wins an in-process race.
+    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [req.user.userId]);
+    if (client_cairn_id) {
+      const [tombstones] = await conn.execute(
+        `SELECT client_cairn_id FROM marker_client_tombstones
+         WHERE user_id = ? AND client_cairn_id = ? FOR UPDATE`,
+        [req.user.userId, client_cairn_id],
+      );
+      if (tombstones[0]) {
+        await conn.rollback();
+        return res.status(409).json({
+          error: 'Cairn was deleted by the client.',
+          code: 'CAIRN_TOMBSTONED',
+          client_cairn_id,
+        });
+      }
+    }
+    let originSessionId = null;
+    if (origin_activity_client_id) {
+      const [originRows] = await conn.execute(
+        `SELECT id FROM sessions WHERE user_id = ? AND client_activity_id = ? LIMIT 1`,
+        [req.user.userId, origin_activity_client_id],
+      );
+      originSessionId = originRows[0]?.id ?? null;
+    }
 
+    const [result] = await conn.execute(
+      `INSERT INTO markers
+         (user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
+          type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE
+         id=LAST_INSERT_ID(id),
+         origin_session_id=COALESCE(origin_session_id, VALUES(origin_session_id))`,
+      [
+        req.user.userId, client_cairn_id ?? null,
+        origin_activity_client_id ?? null, originSessionId,
+        type, text || '', lat, lng, alt ?? null, perm, approx, publicSnapshotJson,
+      ]
+    );
+    const [storedRows] = await conn.execute(
+      `SELECT id, user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
+              type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at
+       FROM markers WHERE id = ? AND user_id = ? FOR UPDATE`,
+      [result.insertId, req.user.userId],
+    );
+    const stored = storedRows[0];
+    if (!stored) throw new Error('Cairn reconciliation row missing.');
+    if (client_cairn_id) {
+      const sameFacts =
+        stored.client_cairn_id === client_cairn_id &&
+        (stored.origin_activity_client_id ?? null) === (origin_activity_client_id ?? null) &&
+        stored.type === type && stored.text === (text || '') &&
+        Number(stored.lat) === Number(lat) && Number(stored.lng) === Number(lng) &&
+        (stored.alt == null ? null : Number(stored.alt)) === (alt == null ? null : Number(alt)) &&
+        stored.permission === perm && Boolean(stored.approximate) === Boolean(approx);
+      if (!sameFacts) {
+        const mismatch = new Error('Cairn client identity was reused for different facts.');
+        mismatch.code = 'CAIRN_IDENTITY_MISMATCH';
+        throw mismatch;
+      }
+    }
+    await conn.commit();
     res.status(201).json({
-      id: result.insertId,
+      id: stored.id,
+      client_cairn_id: stored.client_cairn_id ?? null,
+      origin_activity_client_id: stored.origin_activity_client_id ?? null,
+      origin_session_id: stored.origin_session_id ?? null,
       // BUG-006 fix (Sprint 71 post-review round 2): echo user_id so the
       // client addMarker post-sync can populate Marker.authorId with the
       // real owner id instead of preserving the caller-passed 'local' /
       // 'server' literal. Without this, in-session new marks remain
       // tier='stranger' until the next app restart triggers GET (BUG-001).
-      user_id: req.user.userId,
-      type, text: text || '', lat, lng, alt, permission: perm, approximate: !!approximate,
-      public_snapshot: publicSnapshotJson,
-      created_at: new Date().toISOString(),
+      user_id: stored.user_id,
+      type: stored.type, text: stored.text, lat: Number(stored.lat), lng: Number(stored.lng),
+      alt: stored.alt == null ? null : Number(stored.alt), permission: stored.permission,
+      approximate: Boolean(stored.approximate), public_snapshot: stored.public_snapshot,
+      created_at: stored.created_at,
     });
   } catch (err) {
+    if (conn) try { await conn.rollback(); } catch { /* ignore */ }
+    if (err.code === 'CAIRN_IDENTITY_MISMATCH') {
+      return res.status(409).json({ error: err.message, code: err.code });
+    }
     console.error('[markers/create]', err.message);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
@@ -320,17 +397,68 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
 });
 
 // ── Delete marker ───────────────────────────────────────────────────────────
-router.delete('/:id', async (req, res) => {
+router.delete('/client/:clientCairnId', async (req, res) => {
+  const clientCairnId = String(req.params.clientCairnId || '');
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(clientCairnId)) {
+    return res.status(400).json({ error: 'Invalid client Cairn ID.' });
+  }
+  const conn = await pool.getConnection();
   try {
-    const [result] = await pool.execute(
-      'DELETE FROM markers WHERE id = ? AND user_id = ?',
-      [req.params.id, req.user.userId]
+    await conn.beginTransaction();
+    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [req.user.userId]);
+    await conn.execute(
+      `INSERT INTO marker_client_tombstones (user_id, client_cairn_id)
+       VALUES (?, ?) ON DUPLICATE KEY UPDATE deleted_at = deleted_at`,
+      [req.user.userId, clientCairnId],
     );
-    if (result.affectedRows === 0) return res.status(404).json({ error: 'Marker not found' });
+    const [result] = await conn.execute(
+      `DELETE FROM markers WHERE user_id = ? AND client_cairn_id = ?`,
+      [req.user.userId, clientCairnId],
+    );
+    await conn.commit();
+    return res.json({ ok: true, deleted: result.affectedRows > 0, client_cairn_id: clientCairnId });
+  } catch (err) {
+    try { await conn.rollback(); } catch { /* ignore */ }
+    console.error('[markers/delete-client]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [req.user.userId]);
+    const [rows] = await conn.execute(
+      `SELECT client_cairn_id FROM markers
+       WHERE id = ? AND user_id = ? FOR UPDATE`,
+      [req.params.id, req.user.userId],
+    );
+    if (!rows[0]) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Marker not found' });
+    }
+    if (rows[0].client_cairn_id) {
+      await conn.execute(
+        `INSERT INTO marker_client_tombstones (user_id, client_cairn_id)
+         VALUES (?, ?) ON DUPLICATE KEY UPDATE deleted_at = deleted_at`,
+        [req.user.userId, rows[0].client_cairn_id],
+      );
+    }
+    await conn.execute(
+      'DELETE FROM markers WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.userId],
+    );
+    await conn.commit();
     res.json({ message: 'Marker deleted' });
   } catch (err) {
+    try { await conn.rollback(); } catch { /* ignore */ }
     console.error('[markers/delete]', err.message);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
   }
 });
 

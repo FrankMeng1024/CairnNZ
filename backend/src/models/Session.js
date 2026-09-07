@@ -2,6 +2,9 @@
  * Session model — wraps sessions table queries.
  */
 const pool = require('../config/db');
+const crypto = require('crypto');
+
+const LEGACY_ZERO_SHELL_STALE_HOURS = 6;
 
 /**
  * mysql2 returns JSON columns as JS arrays/objects on modern MySQL+driver
@@ -43,7 +46,7 @@ const Session = {
     // that have real data (distance or duration > 0, even if PATCH never
     // completed due to network — user can still see them and manually delete).
     const [rows] = await pool.execute(
-      `SELECT id, user_id, route_id, type, start_time, end_time, distance_m, duration_s, name, created_at
+      `SELECT id, user_id, client_activity_id, route_id, type, start_time, end_time, distance_m, duration_s, name, created_at
        FROM sessions
        WHERE user_id = ?
          AND (finalized_at IS NOT NULL OR distance_m > 0 OR duration_s > 0)
@@ -56,14 +59,13 @@ const Session = {
   // v430: find latest unfinished session (POST /start done but no PATCH /save)
   async findLatestUnfinished(userId) {
     const [rows] = await pool.execute(
-      `SELECT id, type, start_time
+      `SELECT id, client_activity_id, type, start_time, created_at
        FROM sessions
        WHERE user_id = ?
          AND finalized_at IS NULL
-         AND distance_m = 0
-         AND duration_s = 0
-         AND start_time > (NOW() - INTERVAL 72 HOUR)
-       ORDER BY id DESC
+         AND abandoned_at IS NULL
+         AND end_time = start_time
+       ORDER BY start_time DESC, id DESC
        LIMIT 1`,
       [userId]
     );
@@ -71,16 +73,45 @@ const Session = {
   },
 
   async deleteByIdAndUser(id, userId) {
-    const [result] = await pool.execute(
-      `DELETE FROM sessions WHERE id = ? AND user_id = ?`,
-      [id, userId]
-    );
-    return result.affectedRows > 0;
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      // Match Start/client-ID discard lock order so concurrent legacy deletes,
+      // retries, and creates cannot deadlock into an unprotected resurrection.
+      await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);
+      const [rows] = await conn.execute(
+        `SELECT client_activity_id FROM sessions
+         WHERE id = ? AND user_id = ? FOR UPDATE`,
+        [id, userId],
+      );
+      if (!rows[0]) {
+        await conn.rollback();
+        return false;
+      }
+      if (rows[0].client_activity_id) {
+        await conn.execute(
+          `INSERT INTO activity_client_tombstones (user_id, client_activity_id)
+           VALUES (?, ?) ON DUPLICATE KEY UPDATE discarded_at = discarded_at`,
+          [userId, rows[0].client_activity_id],
+        );
+      }
+      const [result] = await conn.execute(
+        `DELETE FROM sessions WHERE id = ? AND user_id = ?`,
+        [id, userId],
+      );
+      await conn.commit();
+      return result.affectedRows > 0;
+    } catch (error) {
+      try { await conn.rollback(); } catch { /* ignore */ }
+      throw error;
+    } finally {
+      conn.release();
+    }
   },
 
   async findByIdAndUser(id, userId) {
     const [rows] = await pool.execute(
-      `SELECT id, user_id, route_id, type, start_time, end_time, distance_m, duration_s, name, route_points, route_points_raw, flags, created_at
+      `SELECT id, user_id, client_activity_id, route_id, type, start_time, end_time, distance_m, duration_s, name, route_points, route_points_raw, flags, finalized_at, created_at
        FROM sessions WHERE id = ? AND user_id = ?`,
       [id, userId]
     );
@@ -103,13 +134,177 @@ const Session = {
    * will overwrite it with the real end time. Without this placeholder
    * the NOT NULL constraint on end_time would reject the insert.
    */
-  async createEmpty({ userId, type, startTime }) {
-    const [result] = await pool.execute(
-      `INSERT INTO sessions (user_id, type, start_time, end_time, distance_m, duration_s, route_points, flags)
-       VALUES (?, ?, ?, ?, 0, 0, JSON_ARRAY(), NULL)`,
-      [userId, type, startTime, startTime]
-    );
-    return result.insertId;
+  async createEmpty({ userId, clientActivityId, type, startTime }) {
+    // The users row is the durable per-account mutex. Unlike an in-process
+    // lock it serializes separate backend processes and survives restarts.
+    // The generated active-slot unique index is the final fail-closed DB
+    // invariant if a future write path forgets this transaction protocol.
+    const conn = await pool.getConnection();
+    let transactionCommitted = false;
+    try {
+      await conn.beginTransaction();
+      const [owners] = await conn.execute(
+        'SELECT id FROM users WHERE id = ? FOR UPDATE',
+        [userId],
+      );
+      if (!owners[0]) {
+        const error = new Error('Activity owner does not exist.');
+        error.code = 'ACTIVITY_OWNER_NOT_FOUND';
+        throw error;
+      }
+      if (clientActivityId) {
+        const [tombstones] = await conn.execute(
+          `SELECT client_activity_id FROM activity_client_tombstones
+           WHERE user_id = ? AND client_activity_id = ? FOR UPDATE`,
+          [userId, clientActivityId],
+        );
+        if (tombstones[0]) {
+          const error = new Error('Activity was discarded by the client.');
+          error.code = 'ACTIVITY_TOMBSTONED';
+          throw error;
+        }
+        const [sameIdentityRows] = await conn.execute(
+          `SELECT id, client_activity_id, type, start_time, finalized_at, abandoned_at
+           FROM sessions
+           WHERE user_id = ? AND client_activity_id = ?
+           LIMIT 1 FOR UPDATE`,
+          [userId, clientActivityId],
+        );
+        if (sameIdentityRows[0]) {
+          const same = sameIdentityRows[0];
+          if (same.type !== type) {
+            const error = new Error('Activity client identity was reused for different facts.');
+            error.code = 'ACTIVITY_IDENTITY_MISMATCH';
+            throw error;
+          }
+          if (same.abandoned_at !== null && same.finalized_at === null) {
+            const error = new Error('Activity requires legacy reconciliation before it can resume.');
+            error.code = 'ACTIVITY_RECONCILIATION_REQUIRED';
+            error.existingActivity = same;
+            throw error;
+          }
+          await conn.commit();
+          transactionCommitted = true;
+          return {
+            id: same.id,
+            clientActivityId: same.client_activity_id,
+            created: false,
+            idempotentReplay: true,
+          };
+        }
+      }
+      await conn.execute(
+        `UPDATE sessions
+         SET abandoned_at = UTC_TIMESTAMP(), abandon_reason = 'legacy_stale_zero_shell'
+         WHERE user_id = ?
+           AND client_activity_id IS NULL
+           AND finalized_at IS NULL
+           AND abandoned_at IS NULL
+           AND start_time < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${LEGACY_ZERO_SHELL_STALE_HOURS} HOUR)
+           AND distance_m = 0 AND duration_s = 0
+           AND (route_points IS NULL OR JSON_LENGTH(route_points) = 0)
+           AND (route_points_raw IS NULL OR JSON_LENGTH(route_points_raw) = 0)`,
+        [userId],
+      );
+      const [activeRows] = await conn.execute(
+        `SELECT id, client_activity_id, type, start_time, created_at,
+                distance_m, duration_s,
+                COALESCE(JSON_LENGTH(route_points), 0) AS point_count,
+                COALESCE(JSON_LENGTH(route_points_raw), 0) AS raw_point_count
+         FROM sessions
+         WHERE user_id = ?
+           AND finalized_at IS NULL
+           AND abandoned_at IS NULL
+           AND end_time = start_time
+         ORDER BY start_time DESC, id DESC
+         LIMIT 2 FOR UPDATE`,
+        [userId],
+      );
+      if (activeRows.length > 1) {
+        const error = new Error('Multiple unfinished Activities require reconciliation.');
+        error.code = 'MULTIPLE_UNFINISHED_ACTIVITIES';
+        error.existingActivities = activeRows;
+        throw error;
+      }
+      if (activeRows[0]) {
+        const active = activeRows[0];
+        if (!active.client_activity_id && clientActivityId) {
+          active.client_activity_id = crypto.randomUUID();
+          await conn.execute(
+            'UPDATE sessions SET client_activity_id = ? WHERE id = ? AND user_id = ?',
+            [active.client_activity_id, active.id, userId],
+          );
+          // This is an identity migration, not creation of the attempted new
+          // Activity. Commit it while the per-user lock is held so every lost
+          // response/retry resolves the legacy shell to the same business ID.
+          await conn.commit();
+          transactionCommitted = true;
+        }
+        if (!clientActivityId && !active.client_activity_id) {
+          if (active.type !== type) {
+            const error = new Error('Another unfinished Activity must be resolved first.');
+            error.code = 'UNFINISHED_ACTIVITY_EXISTS';
+            error.existingActivity = active;
+            throw error;
+          }
+          await conn.commit();
+          transactionCommitted = true;
+          return {
+            id: active.id,
+            clientActivityId: null,
+            created: false,
+            idempotentReplay: true,
+            legacyReplay: true,
+          };
+        }
+        const error = new Error('Another unfinished Activity must be resolved first.');
+        error.code = 'UNFINISHED_ACTIVITY_EXISTS';
+        error.existingActivity = active;
+        throw error;
+      }
+      const [result] = await conn.execute(
+        `INSERT INTO sessions
+           (user_id, client_activity_id, type, start_time, end_time, distance_m, duration_s, route_points, flags)
+         VALUES (?, ?, ?, ?, ?, 0, 0, JSON_ARRAY(), NULL)
+         ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)`,
+        [userId, clientActivityId ?? null, type, startTime, startTime]
+      );
+      const id = result.insertId;
+      if (clientActivityId) {
+        const [identityRows] = await conn.execute(
+          `SELECT client_activity_id, type FROM sessions WHERE id = ? AND user_id = ? FOR UPDATE`,
+          [id, userId],
+        );
+        if (!identityRows[0] || identityRows[0].client_activity_id !== clientActivityId || identityRows[0].type !== type) {
+          const error = new Error('Activity client identity was reused for different facts.');
+          error.code = 'ACTIVITY_IDENTITY_MISMATCH';
+          throw error;
+        }
+        // Cairn-first is legal. Resolve any weak provenance written before
+        // this Activity reached the server.
+        await conn.execute(
+          `UPDATE markers
+           SET origin_session_id = ?
+           WHERE user_id = ? AND origin_activity_client_id = ? AND origin_session_id IS NULL`,
+          [id, userId, clientActivityId],
+        );
+      }
+      await conn.commit();
+      transactionCommitted = true;
+      return {
+        id,
+        clientActivityId: clientActivityId ?? null,
+        created: result.affectedRows === 1,
+        idempotentReplay: result.affectedRows !== 1,
+      };
+    } catch (err) {
+      if (!transactionCommitted) {
+        try { await conn.rollback(); } catch { /* ignore */ }
+      }
+      throw err;
+    } finally {
+      conn.release();
+    }
   },
 
   /**
@@ -133,12 +328,17 @@ const Session = {
     try {
       await conn.beginTransaction();
       const [rows] = await conn.execute(
-        `SELECT route_points FROM sessions WHERE id = ? AND user_id = ? FOR UPDATE`,
+        `SELECT route_points, finalized_at FROM sessions WHERE id = ? AND user_id = ? FOR UPDATE`,
         [id, userId]
       );
       if (!rows[0]) {
         await conn.rollback();
         return false;
+      }
+      if (rows[0].finalized_at !== null) {
+        // A stale incremental retry must never mutate a completed Activity.
+        await conn.commit();
+        return true;
       }
       const existing = parseJsonCol(rows[0].route_points) ?? [];
       const existingArr = Array.isArray(existing) ? existing : [];

@@ -57,7 +57,7 @@ router.get('/unfinished', authenticate, async (req, res) => {
 // PATCH calls. This decouples "start tracking" from "finish tracking" so
 // crashes mid-session don't lose data.
 router.post('/start', authenticate, validateBody(schemas.session.start), idempotency, async (req, res) => {
-  const { type, start_time } = req.body;
+  const { type, start_time, client_activity_id } = req.body;
   if (!type || !['hiking', 'running'].includes(type)) {
     return res.status(400).json({ error: 'type must be "hiking" or "running".' });
   }
@@ -65,13 +65,51 @@ router.post('/start', authenticate, validateBody(schemas.session.start), idempot
     return res.status(400).json({ error: 'start_time must be a valid ISO date.' });
   }
   try {
-    const id = await Session.createEmpty({
+    const started = await Session.createEmpty({
       userId: req.user.userId,
+      clientActivityId: client_activity_id ?? null,
       type,
       startTime: new Date(start_time),
     });
-    return res.status(201).json({ id });
+    return res.status(201).json({
+      id: started.id,
+      client_activity_id: started.clientActivityId,
+      idempotent_replay: started.idempotentReplay || undefined,
+      legacy_replay: started.legacyReplay || undefined,
+    });
   } catch (err) {
+    if (
+      err.code === 'ACTIVITY_TOMBSTONED'
+      || err.code === 'ACTIVITY_IDENTITY_MISMATCH'
+      || err.code === 'ACTIVITY_RECONCILIATION_REQUIRED'
+      || err.code === 'UNFINISHED_ACTIVITY_EXISTS'
+      || err.code === 'MULTIPLE_UNFINISHED_ACTIVITIES'
+    ) {
+      const existing = err.existingActivity;
+      return res.status(409).json({
+        error: err.message,
+        code: err.code,
+        client_activity_id,
+        ...(existing ? {
+          existing_activity: {
+            id: existing.id,
+            client_activity_id: existing.client_activity_id ?? null,
+            type: existing.type,
+            start_time: existing.start_time,
+            point_count: Number(existing.point_count ?? 0),
+            raw_point_count: Number(existing.raw_point_count ?? 0),
+          },
+        } : {}),
+        ...(Array.isArray(err.existingActivities) ? {
+          existing_activities: err.existingActivities.map(existingActivity => ({
+            id: existingActivity.id,
+            client_activity_id: existingActivity.client_activity_id ?? null,
+            type: existingActivity.type,
+            start_time: existingActivity.start_time,
+          })),
+        } : {}),
+      });
+    }
     console.error('[sessions/start]', err);
     return res.status(500).json({ error: 'Server error.' });
   }
@@ -220,6 +258,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
   }
   const userId = req.user.userId;
   const {
+    client_activity_id,
     end_time,
     distance_m,
     duration_s,
@@ -276,7 +315,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
 
     // 1. FOR UPDATE 锁行, 校验归属 + 未 finalize
     const [rows] = await conn.execute(
-      `SELECT id, start_time, end_time, finalized_at FROM sessions
+      `SELECT id, client_activity_id, start_time, end_time, finalized_at FROM sessions
        WHERE id=? AND user_id=? FOR UPDATE`,
       [id, userId]
     );
@@ -287,6 +326,31 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
       // detect 该场景 → 清 remoteId → 下次触发 syncDaemon 走
       // 'startSession + saveHikeAtomic' 路径重新入库,而不是无限 404 重试。
       return res.status(404).json({ error: 'Session not found.', code: 'SESSION_NOT_FOUND_RESYNC' });
+    }
+
+    // Rollout bridge: a server shell created by an older client may not yet
+    // have its immutable client identity. Attach it while the owned row is
+    // locked, before either finalization or idempotent replay. Never attach a
+    // tombstoned or conflicting identity.
+    if (client_activity_id && rows[0].client_activity_id && rows[0].client_activity_id !== client_activity_id) {
+      await conn.rollback();
+      return res.status(409).json({ error: 'Activity identity mismatch.', code: 'ACTIVITY_IDENTITY_MISMATCH' });
+    }
+    if (client_activity_id && !rows[0].client_activity_id) {
+      const [tombstones] = await conn.execute(
+        `SELECT client_activity_id FROM activity_client_tombstones
+         WHERE user_id = ? AND client_activity_id = ? FOR UPDATE`,
+        [userId, client_activity_id],
+      );
+      if (tombstones[0]) {
+        await conn.rollback();
+        return res.status(409).json({ error: 'Activity was discarded by the client.', code: 'ACTIVITY_TOMBSTONED' });
+      }
+      await conn.execute(
+        `UPDATE sessions SET client_activity_id = ? WHERE id = ? AND user_id = ?`,
+        [client_activity_id, id, userId],
+      );
+      rows[0].client_activity_id = client_activity_id;
     }
 
     // v3.3 已 finalize 判定 (backend subagent B2 修): finalized_at 非 NULL OR
@@ -306,6 +370,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
       return res.status(200).json({
         ok: true,
         session_id: id,
+        client_activity_id: rows[0].client_activity_id ?? null,
         finalized_at: rows[0].finalized_at || rows[0].end_time,
         memory: { accepted: 0, rejected: 0 },
         idempotent_replay: true,
@@ -351,8 +416,12 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
           rejected++;
           continue;
         }
-        // v412: server 端算 cid, client 不算 (§1.7 保证跨端一致)
-        const cid = deterministicCid(userId, p.ts, p.lat, p.lng);
+        // The central Memory producer already assigned an immutable client
+        // event identity. Reuse it across direct Memory sync and Activity
+        // finalization; legacy payloads still receive a deterministic ID.
+        const cid = (typeof p.cid === 'string' && p.cid.length > 0 && p.cid.length <= 36)
+          ? p.cid
+          : deterministicCid(userId, p.ts, p.lat, p.lng);
         validRows.push([userId, p.lat, p.lng, p.ts, cid]);
       }
       const CHUNK = 50;
@@ -393,6 +462,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     return res.status(200).json({
       ok: true,
       session_id: id,
+      client_activity_id: rows[0].client_activity_id ?? null,
       finalized_at: finalizedAtDate.toISOString(),
       memory: { accepted, rejected },
     });
@@ -410,6 +480,48 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
 });
 
 // ── GET /api/sessions/:id ──────────────────────────────────────────────────
+// A discarded local Activity may not yet know its numeric server ID (for
+// example, the /start response was lost). The immutable client identity lets
+// cleanup remove any matching unfinished shell without guessing by mode/time.
+router.delete('/client/:clientActivityId', authenticate, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const clientActivityId = String(req.params.clientActivityId || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(clientActivityId)) {
+      return res.status(400).json({ error: 'Invalid client Activity ID.' });
+    }
+
+    await conn.beginTransaction();
+    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [req.user.userId]);
+    // Serialize discard against an in-flight finalize. Whichever operation
+    // acquired the Activity row first completes, then this discard removes
+    // the row regardless of whether that stale finalize just committed.
+    await conn.execute(
+      `SELECT id FROM sessions
+       WHERE user_id = ? AND client_activity_id = ? FOR UPDATE`,
+      [req.user.userId, clientActivityId],
+    );
+    await conn.execute(
+      `INSERT INTO activity_client_tombstones (user_id, client_activity_id)
+       VALUES (?, ?) ON DUPLICATE KEY UPDATE discarded_at = discarded_at`,
+      [req.user.userId, clientActivityId],
+    );
+    const [result] = await conn.execute(
+      `DELETE FROM sessions
+       WHERE user_id = ? AND client_activity_id = ?`,
+      [req.user.userId, clientActivityId],
+    );
+    await conn.commit();
+    return res.json({ ok: true, deleted: result.affectedRows > 0, client_activity_id: clientActivityId });
+  } catch (err) {
+    try { await conn.rollback(); } catch { /* ignore */ }
+    console.error('[sessions/delete-client]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
+  }
+});
+
 router.get('/:id', authenticate, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id || isNaN(id)) {

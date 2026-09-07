@@ -26,9 +26,13 @@ const lng = Joi.number().min(-180).max(180);
 const alt = Joi.number().min(-1000).max(10000).allow(null);
 const isoDate = Joi.string().isoDate();
 const positiveInt = Joi.number().integer().min(0);
+const clientUuid = Joi.string().guid({ version: ['uuidv4'] });
 
 // ── Markers ────────────────────────────────────────────────────────────
 const markerCreate = Joi.object({
+  client_op_id: clientUuid,
+  client_cairn_id: clientUuid,
+  origin_activity_client_id: clientUuid.allow(null),
   type: Joi.string().valid(
     'cairn', 'danger', 'water', 'junction', 'scenic', 'supply',
     'shelter', 'hazard', 'note', 'free'
@@ -73,11 +77,17 @@ const markerUpdate = Joi.object({
 
 // ── Sessions ───────────────────────────────────────────────────────────
 const sessionStart = Joi.object({
+  client_op_id: clientUuid,
+  client_activity_id: clientUuid,
   type: Joi.string().valid('hiking', 'running').required(),
   start_time: isoDate.required(),
 });
 
 const sessionAppendPoints = Joi.object({
+  // Current clients attach the stable operation id in the body so the
+  // idempotency middleware can replay queued/lost append requests. Keep it
+  // optional for legacy clients that sent only { points }.
+  client_op_id: clientUuid,
   points: Joi.array().items(
     Joi.object({
       lat: lat.required(),
@@ -85,6 +95,8 @@ const sessionAppendPoints = Joi.object({
       alt: alt,
       t: Joi.number().integer().min(0).required(),
       acc: Joi.number().min(0).allow(null),
+      segment_id: Joi.string().min(1).max(80),
+      segment_start_reason: Joi.string().valid('start', 'resume', 'process-recovery', 'gps-reacquired', 'legacy').allow(null),
     })
   ).min(1).max(500).required(),
 });
@@ -95,6 +107,8 @@ const pointObj = Joi.object({
   alt: alt,
   t: Joi.number().integer().min(0),
   acc: Joi.number().min(0).allow(null),
+  segment_id: Joi.string().min(1).max(80),
+  segment_start_reason: Joi.string().valid('start', 'resume', 'process-recovery', 'gps-reacquired', 'legacy').allow(null),
 });
 
 // R96: memory_points 字段名 schema/handler 不一致修复。
@@ -115,6 +129,12 @@ const memoryPointObjInline = Joi.object({
 });
 
 const sessionSave = Joi.object({
+  // Current requests use the X-Idempotency-Key header, while queued/legacy
+  // shapes may use the middleware's body fallback.
+  client_op_id: clientUuid,
+  // Optional during staged rollout so pre-migration clients can still
+  // finalize. New clients always send it and validate the echoed mapping.
+  client_activity_id: clientUuid,
   end_time: isoDate.required(),
   distance_m: Joi.number().min(0).max(1000000).default(0),
   duration_s: positiveInt.default(0),
@@ -132,6 +152,9 @@ const sessionSave = Joi.object({
 });
 
 const sessionUpdate = Joi.object({
+  // Historical session_finalize operations are replayed by offlineQueue with
+  // client_op_id added to the body. It must not become a terminal 400.
+  client_op_id: clientUuid,
   end_time: isoDate,
   distance_m: Joi.number().min(0).max(1000000),
   duration_s: positiveInt,
