@@ -5,9 +5,8 @@
  * 1. Pre-start (R0): route selection card + full-width Start Running pill
  * 2. Running (R1 + R2): map + polyline + top stats bar; persistent 3-button
  *    action tray (Pause / Cairn / Done). No lock overlay, no compass ring.
- * 3. Save-name sheet: opens on Done tap. Collects an optional session name
- *    and drives the transition to R4 via handleStop(name) → stopTracking.
- * 4. Complete (R4): hero image + stat trio + View Activity / Done CTAs.
+ * 3. Save-name sheet: freezes recording, collects an optional name, saves
+ *    through the shared Activity lifecycle, then opens Activity Detail.
  *
  * Uses useTrackingStore (real GPS via expo-location, graceful web fallback).
  * activityMode set to 'running' before startTracking.
@@ -15,9 +14,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated, Easing, ScrollView,
-  Platform, Image, TextInput, KeyboardAvoidingView, Keyboard, Share,
+  Platform, Image, TextInput, KeyboardAvoidingView, Keyboard,
 } from 'react-native';
-import Svg, { Polyline as SvgPolyline } from 'react-native-svg';
 import { haptic } from '../services/hapticService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect, useIsFocused, CommonActions } from '@react-navigation/native';
@@ -46,17 +44,26 @@ import {
   deriveActivityOperationalState,
   isActivitySessionVisible,
 } from '../features/activity/activityOperationalState';
+import { saveEligibility } from '../features/activity/activityContracts';
 import {
   findRecoverableActivity,
   restoreRecoverableActivity,
+  saveRecoverableActivity,
   discardRecoverableActivity,
   type RecoverableActivity,
 } from '../features/activity/activityRecovery';
 import { useActivitySaveLossRecovery } from '../features/activity/useActivitySaveLossRecovery';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
+import { ActivitySimulatorPanel } from '../features/activitySimulator/ActivitySimulatorPanel';
+import { selectedActivityLocationSource } from '../features/activitySimulator/activityLocationProvider';
+import { registerSimulatorMapCenterGetter } from '../features/activitySimulator/simulatorMapBridge';
+import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
+import { activityFreshnessNow } from '../features/activitySimulator/simulatorTime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-type RunState = 'pre' | 'running' | 'stopped';
+type RunState = 'pre' | 'running';
 
 // ── Concept tokens (sleep-run 2026-08-15) ────────────────────────────────
 // Concept was locked to forest green for BOTH R0 button and R1 polyline
@@ -90,6 +97,7 @@ let CameraComponent: any = null;
 // O1 batch 34 removed these when R1 was reduced to a compass-only card.
 let ShapeSource: any = null;
 let LineLayer: any = null;
+let CircleLayer: any = null;
 let UserLocationComponent: any = null;
 // 2026-08-17 concept R1: green start-dot marker at trackPoints[0].
 // PointAnnotation is the same Mapbox primitive HikingMap uses; imported
@@ -104,6 +112,7 @@ if (Platform.OS !== 'web') {
     CameraComponent = Mapbox.Camera;
     ShapeSource = Mapbox.ShapeSource;
     LineLayer = Mapbox.LineLayer;
+    CircleLayer = Mapbox.CircleLayer;
     UserLocationComponent = Mapbox.UserLocation;
     PointAnnotationComponent = Mapbox.PointAnnotation;
     StyleImport = Mapbox.StyleImport;
@@ -136,70 +145,6 @@ function StatItem({ value, label, title }: { value: string; label: string; title
   );
 }
 
-/**
- * Sleep-run 2026-08-16: R4 mini-map polyline preview.
- *
- * Same fallback approach as StopSummarySheet.MiniMapPolyline — projects
- * trackPoints into an SVG viewBox with padding, aggressive downsampling for
- * long tracks, aspect-preserving scale so the shape reads correctly.
- *
- * Static (no Mapbox), because R4 renders while the tracking map may still
- * hold a GL context; standing up a second Mapbox surface here would compete
- * for GPU on lower-end devices with no benefit — the goal is a preview,
- * not a live map.
- */
-function RunMiniMapPolyline({ points, stroke, width, height }: {
-  points: Array<{ lat: number; lng: number }>;
-  stroke: string;
-  width: number;
-  height: number;
-}) {
-  if (!points || points.length < 2) return null;
-
-  const step = Math.max(1, Math.floor(points.length / 200));
-  const sampled: Array<{ lat: number; lng: number }> = [];
-  for (let i = 0; i < points.length; i += step) sampled.push(points[i]);
-  if (sampled[sampled.length - 1] !== points[points.length - 1]) {
-    sampled.push(points[points.length - 1]);
-  }
-
-  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-  for (const p of sampled) {
-    if (p.lat < minLat) minLat = p.lat;
-    if (p.lat > maxLat) maxLat = p.lat;
-    if (p.lng < minLng) minLng = p.lng;
-    if (p.lng > maxLng) maxLng = p.lng;
-  }
-  const latSpan = Math.max(1e-6, maxLat - minLat);
-  const lngSpan = Math.max(1e-6, maxLng - minLng);
-  const pad = 10;
-  const w = width - pad * 2;
-  const h = height - pad * 2;
-  const scale = Math.min(w / lngSpan, h / latSpan);
-  const offsetX = pad + (w - lngSpan * scale) / 2;
-  const offsetY = pad + (h - latSpan * scale) / 2;
-
-  const coords = sampled
-    .map(p => {
-      const x = offsetX + (p.lng - minLng) * scale;
-      const y = offsetY + (maxLat - p.lat) * scale;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-
-  return (
-    <Svg width={width} height={height}>
-      <SvgPolyline
-        points={coords}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={2.5}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </Svg>
-  );
-}
 
 // ── Main ────────────────────────────────────────────────────────────────────
 export function RunningScreen() {
@@ -209,6 +154,7 @@ export function RunningScreen() {
   const loadRoutes = useRouteStore(s => s.loadRoutes);
   const [runState, setRunState] = useState<RunState>('pre');
   const [unfinishedRun, setUnfinishedRun] = useState<RecoverableActivity | null>(null);
+  const [unfinishedResolutionRequested, setUnfinishedResolutionRequested] = useState(false);
   // R21 (2026-08-18): dark theme parity with Hiking. Run tray + top pills
   // + Recenter FAB honour Settings Appearance so day/night reads the same.
   const { isDark: runIsDark } = useAppearance();
@@ -216,6 +162,11 @@ export function RunningScreen() {
   const runResolvedMapStyle = getMapStyleForTheme('outdoors', runMapTheme);
   const runLightPreset = themeToStandardPreset(runMapTheme);
   const runTheme = useVisualTheme();
+  const debugMode = useSettingsStore(state => state.debugMode);
+  const simulatorEnabled = useActivitySimulatorStore(state => state.enabled);
+  const simulatorPosition = useActivitySimulatorStore(state => state.current);
+  const simulatorSignal = useActivitySimulatorStore(state => state.signal);
+  const simulatorVirtualTimestamp = useActivitySimulatorStore(state => state.virtualTimestampMs);
   // R21 (2026-08-18 user "点击 向右侧展开"): tracking action tray is
   // collapsed by default. Tap the Navigation anchor (bottom-left) to
   // expand → Pause / Cairn / Finish slides out to the right.
@@ -227,12 +178,6 @@ export function RunningScreen() {
   // R21 (2026-08-18): follow-camera state so Recenter FAB is only shown
   // when the user has dragged the map off-position.
   const [runFollowUser, setRunFollowUser] = useState(true);
-  // O18 RUN-07: capture sessionId at Stop so 'View activity detail' can
-  // navigate to MapHistory even after stopTracking clears the store's id.
-  const [stoppedSessionId, setStoppedSessionId] = useState<string | number | null>(null);
-  // Sleep-run 2026-08-16: R4 mini-map card width — measured onLayout so the
-  // SVG polyline preview scales responsively across iPhone widths.
-  const [r4MiniMapWidth, setR4MiniMapWidth] = useState(0);
   // O18 ONB-04: shared permission-denied modal state.
   const [permissionDeniedVisible, setPermissionDeniedVisible] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
@@ -262,11 +207,16 @@ export function RunningScreen() {
   // and transitions to R4.
   const [showSaveSheet, setShowSaveSheet] = useState(false);
   const [pendingName, setPendingName] = useState('');
+  const finishPausedBySheet = useRef(false);
   const saveSheetSlide = useRef(new Animated.Value(300)).current;
   const saveSheetOpacity = useRef(new Animated.Value(0)).current;
 
   // Real tracking store
   const status = useTrackingStore(s => s.status);
+  const locationProviderSource = useTrackingStore(s => s.locationProviderSource);
+  const showSimulator = activitySimulatorBuildCapable
+    && debugMode
+    && (simulatorEnabled || locationProviderSource === 'simulator');
   const isFinishing = useTrackingStore(s => s.isFinishing);
   const startError = useTrackingStore(s => s.startError);
   const durationS = useTrackingStore(s => s.durationS);
@@ -301,17 +251,16 @@ export function RunningScreen() {
     trackingStatus: status,
     isFinishing,
     hasRecovery: unfinishedRun !== null,
-    hasCompletedSummary: runState === 'stopped',
+    hasCompletedSummary: false,
     hasStartError: startError !== null,
   });
   useActivitySaveLossRecovery('running');
 
   useEffect(() => { loadRoutes(); }, []);
 
-  // The crash-safe writer stores both activity modes. Running previously
-  // ignored its own persisted files and silently presented a clean Start
-  // screen. Resolve only running records and host the same recovery contract
-  // as Hiking whenever this screen gains focus.
+  // The writer stores both modes under one global unfinished-Activity rule.
+  // Discover that record even when it is a Hike: attempting to Start Run must
+  // resolve the previous Activity before a new GPS owner can be created.
   useFocusEffect(
     React.useCallback(() => {
       if (useTrackingStore.getState().status !== 'idle') return undefined;
@@ -338,6 +287,13 @@ export function RunningScreen() {
     let cancelled = false;
     (async () => {
       try {
+        if (selectedActivityLocationSource() === 'simulator') {
+          if (!cancelled) {
+            setForegroundGranted(true);
+            setPermissionBlocked(false);
+          }
+          return;
+        }
         const Location = await import('expo-location');
         const perm = await Location.getForegroundPermissionsAsync();
         if (cancelled) return;
@@ -423,6 +379,29 @@ export function RunningScreen() {
   // synchronously on every userPos change when in instant mode (skip the
   // flyTo animation; we already know where the user is).
   const cameraRef = useRef<any>(null);
+  const mapViewRef = useRef<any>(null);
+  useEffect(() => registerSimulatorMapCenterGetter(async () => {
+    try {
+      const raw = mapViewRef.current?.getCenter?.();
+      const center = raw && typeof raw.then === 'function' ? await raw : raw;
+      if (Array.isArray(center) && center.length >= 2) {
+        return { lat: Number(center[1]), lng: Number(center[0]) };
+      }
+      if (center && Number.isFinite(center.lat) && Number.isFinite(center.lng)) {
+        return { lat: Number(center.lat), lng: Number(center.lng) };
+      }
+    } catch { /* map not ready */ }
+    return null;
+  }), []);
+  useEffect(() => {
+    if (!showSimulator || !runFollowUser || !cameraRef.current) return;
+    cameraRef.current.setCamera?.({
+      centerCoordinate: [simulatorPosition.lng, simulatorPosition.lat],
+      zoomLevel: runState === 'running' ? 16 : 15,
+      animationDuration: 250,
+      animationMode: 'easeTo',
+    });
+  }, [showSimulator, runFollowUser, runState, simulatorPosition.lat, simulatorPosition.lng]);
   // v123 fix #2: use followUserLocation+flyTo every entry, ignoring
   // whether lastCoordinate is already known. User wants the same fly-in
   // experience on every Running open (so their entry is consistent),
@@ -496,29 +475,47 @@ export function RunningScreen() {
   // R2 action tray (Pause / Cairn / Done) is always visible.
 
   // Save-name sheet lifecycle. Opens on Done tap, closes on Save or Cancel.
-  const openSaveSheet = () => {
+  const openSaveSheet = async () => {
+    // Freeze GPS, active time and metrics before naming/review. If this run
+    // was already manually paused, cancelling the sheet must leave it paused.
+    finishPausedBySheet.current = useTrackingStore.getState().status === 'tracking';
+    if (finishPausedBySheet.current) await pauseTracking();
     setShowSaveSheet(true);
     Animated.parallel([
       Animated.timing(saveSheetSlide, { toValue: 0, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       Animated.timing(saveSheetOpacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.ease), useNativeDriver: true }),
     ]).start();
   };
-  const closeSaveSheet = (then?: () => void) => {
+  const closeSaveSheet = (then?: () => void, restoreRecording = true) => {
     Keyboard.dismiss();
     Animated.parallel([
       Animated.timing(saveSheetSlide, { toValue: 300, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(saveSheetOpacity, { toValue: 0, duration: 180, easing: Easing.in(Easing.ease), useNativeDriver: true }),
     ]).start(() => {
       setShowSaveSheet(false);
+      if (restoreRecording && finishPausedBySheet.current) resumeTracking();
+      finishPausedBySheet.current = false;
       then?.();
     });
   };
 
   async function handleStart() {
     haptic.impact('medium');
+    if (unfinishedRun) {
+      setUnfinishedResolutionRequested(true);
+      return;
+    }
     setActivityMode('running');
     const started = await startTracking();
-    if (started) setRunState('running');
+    if (started) {
+      setRunState('running');
+    } else {
+      const authoritative = await findRecoverableActivity('running');
+      if (authoritative) {
+        setUnfinishedRun(authoritative);
+        setUnfinishedResolutionRequested(true);
+      }
+    }
   }
 
   // handleStop is now invoked from the save-name sheet's Save button.
@@ -540,14 +537,21 @@ export function RunningScreen() {
     // 'View Activity' can navigate to MapHistory.
     const capturedId = useTrackingStore.getState().sessionId;
     const trimmed = name && name.trim().length > 0 ? name.trim() : undefined;
-    await stopTracking(trimmed);
+    const saved = await stopTracking(trimmed);
     const stillTracking = useTrackingStore.getState().status !== 'idle';
     const stopReason = useTrackingStore.getState().lastStopReason;
-    if (!stillTracking) {
-      setStoppedSessionId(capturedId ?? null);
-      setRunState('stopped');
-      // Successful stop → clear pendingName so a subsequent run starts clean.
+    if (saved && !stillTracking && capturedId) {
       setPendingName('');
+      nav.dispatch(
+        CommonActions.reset({
+          index: 2,
+          routes: [
+            { name: 'Home' },
+            { name: 'Routes', params: { initialTab: 'activities' } },
+            { name: 'MapHistory', params: { sessionId: capturedId } },
+          ],
+        }),
+      );
     } else if (stopReason !== 'too-short') {
       // Stop refused for a reason other than too-short (rare — e.g. already
       // idle). Also clear pendingName so the sheet doesn't retain stale data.
@@ -566,10 +570,18 @@ export function RunningScreen() {
   // hazard broadcast. A hazard mid-run should be an explicit choice via
   // PlantScreen, not the default.
   async function handlePlantCairn() {
-    if (!lastCoordinate) {
+    const freshnessNow = locationProviderSource === 'simulator'
+      ? simulatorVirtualTimestamp
+      : activityFreshnessNow(locationProviderSource);
+    const acceptedFixIsFresh = lastCoordinate
+      && useTrackingStore.getState().lastCoordinateTime !== null
+      && freshnessNow - Number(useTrackingStore.getState().lastCoordinateTime) <= 30_000;
+    if (!acceptedFixIsFresh || (locationProviderSource === 'simulator' && simulatorSignal === 'lost')) {
       // Should be rare — locked mode keeps GPS active. Don't throw,
       // just bail out silently with a haptic to acknowledge press.
       haptic.notification('warning');
+      setPlantToast('Current GPS location unavailable');
+      setTimeout(() => setPlantToast(null), 2000);
       return;
     }
     haptic.impact('heavy');
@@ -614,7 +626,10 @@ export function RunningScreen() {
   // of no accepted GPS fix during active tracking.
   const RUN_SIGNAL_GAP_MS = 120_000;
   const lastTrackT = trackPoints.length > 0 ? trackPoints[trackPoints.length - 1].t : null;
-  const signalLostFor = (lastTrackT != null) ? (Date.now() - lastTrackT) : 0;
+  const freshnessNow = locationProviderSource === 'simulator'
+    ? simulatorVirtualTimestamp
+    : activityFreshnessNow(locationProviderSource);
+  const signalLostFor = (lastTrackT != null) ? Math.max(0, freshnessNow - lastTrackT) : 0;
   const signalLost = lastTrackT != null && signalLostFor > RUN_SIGNAL_GAP_MS;
   const signalLostMin = Math.floor(signalLostFor / 60_000);
   // Pace: min/km (or min/mi if imperial) — seconds per meter → minutes per unit
@@ -641,168 +656,26 @@ export function RunningScreen() {
     if (!trackPoints || trackPoints.length < 2) {
       return { type: 'FeatureCollection', features: [] } as any;
     }
+    const segments: Array<Array<[number, number]>> = [];
+    let current: Array<[number, number]> = [];
+    trackPoints.forEach((point, index) => {
+      const previous = trackPoints[index - 1];
+      if (previous && previous.segmentId && point.segmentId && previous.segmentId !== point.segmentId) {
+        if (current.length >= 2) segments.push(current);
+        current = [];
+      }
+      current.push([point.lng, point.lat]);
+    });
+    if (current.length >= 2) segments.push(current);
     return {
       type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: trackPoints.map(p => [p.lng, p.lat]),
-          },
-          properties: {},
-        },
-      ],
+      features: segments.map(coordinates => ({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates },
+        properties: {},
+      })),
     } as any;
   }, [trackPoints]);
-
-  // ── Stopped state (R4 Complete) ────────────────────────────────────────────
-  // Sleep-run 2026-08-16 rev-2: redesigned per R4-complete.png.
-  //   • Hero image uses aspectRatio 16/10 (no fixed 320px height).
-  //   • Stat values render in dark ink (#1E2A24) — the forest green is
-  //     reserved for the primary CTA. Labels are simplified: km / time / /km.
-  //   • Primary CTA "View Activity" → MapHistory detail for the saved run.
-  //   • Secondary CTA "Done" → returns Home.
-  //   • The old "Discard" text link is removed. Discard now only exists in
-  //     the too-short flow (see TooShortSheet below), not on the summary.
-  if (operationalState === 'stopped') {
-    const summaryDist = dist.format(distanceM, 2);
-    const goHome = () => {
-      setStoppedSessionId(null);
-      setRunState('pre');
-      nav.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{ name: 'Home' }],
-        })
-      );
-    };
-    const goActivityDetail = () => {
-      if (stoppedSessionId == null) { goHome(); return; }
-      nav.dispatch(
-        CommonActions.reset({
-          index: 2,
-          routes: [
-            { name: 'Home' },
-            { name: 'Routes', params: { initialTab: 'activities' } },
-            { name: 'MapHistory', params: { sessionId: stoppedSessionId } },
-          ],
-        })
-      );
-    };
-    // Sleep-run 2026-08-16 (R4 concept): share this run via the iOS system
-    // share sheet. Built-in React Native Share API — no new dependency.
-    const shareRun = async () => {
-      try {
-        const message = `I just ran ${summaryDist} ${dist.unit} in ${durationDisplay} — tracked with CairnNZ.`;
-        await Share.share({ message });
-      } catch {
-        // User cancelled or share unavailable — no-op.
-      }
-    };
-
-    return (
-      <SafeAreaView style={[completeStyles.container, { backgroundColor: runTheme.background }]} edges={['top', 'bottom']}>
-        <ScrollView contentContainerStyle={completeStyles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Header row (fix 3): Back chevron (left) + Share icon (right).
-              Back is semantically equivalent to Done — the run is already
-              saved, so both routes go Home. Without a Back the R4 screen
-              had no visible way to leave besides the CTAs which felt like
-              a dead-end when a user just wanted to bail. */}
-          <View style={completeStyles.headerRow}>
-            {/* R21 v3 (2026-08-17): unified back button to Auth standard —
-                was icon-only ChevronLeft (24pt, no "Back" label); users had
-                to guess the affordance. Now inline "Back" text + chevron,
-                matches Sign In / Sign Up / Settings across the app. */}
-            <BackButton variant="inline" onPress={goHome} />
-            <View style={{ flex: 1 }} />
-            <TouchableOpacity
-              onPress={shareRun}
-              style={completeStyles.shareBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Share this run"
-              activeOpacity={0.6}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Icon name="Share2" size={22} color={runTheme.iconActive} strokeWidth={2} />
-            </TouchableOpacity>
-          </View>
-          <Image
-            source={require('../../assets/running/run-complete-hero.png')}
-            style={completeStyles.hero}
-            resizeMode="cover"
-          />
-          <Text style={[completeStyles.title, { color: runTheme.foreground }]}>Run Complete</Text>
-          <View style={completeStyles.statsRow}>
-            <View style={completeStyles.statCell}>
-              <Text style={[completeStyles.statVal, { color: runTheme.foreground }]}>{summaryDist}</Text>
-              <Text style={[completeStyles.statLbl, { color: runTheme.muted }]}>{dist.unit}</Text>
-            </View>
-            <View style={completeStyles.statCell}>
-              <Text style={[completeStyles.statVal, { color: runTheme.foreground }]}>{durationDisplay}</Text>
-              <Text style={[completeStyles.statLbl, { color: runTheme.muted }]}>time</Text>
-            </View>
-            <View style={completeStyles.statCell}>
-              <Text style={[completeStyles.statVal, { color: runTheme.foreground }]}>{paceDisplay}</Text>
-              <Text style={[completeStyles.statLbl, { color: runTheme.muted }]}>/{dist.unit}</Text>
-            </View>
-          </View>
-
-          {/* Mini-map preview (concept R4). SVG polyline over rounded paper
-              card — same fallback strategy as StopSummarySheet. Static so
-              the R4 screen doesn't need to spin up another Mapbox context. */}
-          <View
-            style={[completeStyles.miniMapCard, { backgroundColor: runTheme.surface, borderColor: runTheme.border }]}
-            onLayout={(e) => setR4MiniMapWidth(e.nativeEvent.layout.width)}
-          >
-            {r4MiniMapWidth > 0 && (
-              <RunMiniMapPolyline
-                points={trackPoints.map(p => ({ lat: p.lat, lng: p.lng }))}
-                stroke={runTheme.iconActive}
-                width={r4MiniMapWidth}
-                height={130}
-              />
-            )}
-          </View>
-
-          {/* "Great run!" feedback card (concept R4). Small fern icon + bold
-              header + muted subtitle. Reinforces the exploration story before
-              the primary CTA. */}
-          <View style={[completeStyles.feedbackCard, { backgroundColor: runTheme.surface, borderColor: runTheme.border }]}>
-            <View style={[completeStyles.feedbackIcon, { backgroundColor: runTheme.surfaceElevated }]}>
-              <Icon name="Leaf" size={22} color={runTheme.iconActive} strokeWidth={2} />
-            </View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[completeStyles.feedbackTitle, { color: runTheme.foreground }]}>Great run!</Text>
-              <Text style={[completeStyles.feedbackSubtitle, { color: runTheme.foregroundSecondary }]}>
-                Another piece of your world explored.
-              </Text>
-            </View>
-          </View>
-
-          <View style={completeStyles.ctaGroup}>
-            <TouchableOpacity
-              style={[completeStyles.primaryBtn, { backgroundColor: runTheme.primary }]}
-              onPress={goActivityDetail}
-              accessibilityRole="button"
-              accessibilityLabel="View this run in Activity Detail"
-              activeOpacity={0.9}
-            >
-              <Text style={[completeStyles.primaryBtnText, { color: runTheme.onPrimary }]}>View Activity</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={goHome}
-              style={completeStyles.doneBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Done — return home"
-            >
-              <Text style={[completeStyles.doneBtnText, { color: runTheme.primary }]}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
 
   // ── Pre-start ─────────────────────────────────────────────────────────────
   if (!isActivitySessionVisible(operationalState)) {
@@ -812,6 +685,7 @@ export function RunningScreen() {
         {MapView ? (
           <MapView
             key={`map-${mapEpoch}`}
+            ref={mapViewRef}
             style={StyleSheet.absoluteFillObject}
             {...(runResolvedMapStyle.kind === 'url'
               ? { styleURL: runResolvedMapStyle.url }
@@ -833,6 +707,16 @@ export function RunningScreen() {
             zoomEnabled={gesturesEnabled}
             rotateEnabled={gesturesEnabled}
             pitchEnabled={gesturesEnabled}
+            onLongPress={(event: any) => {
+              if (!showSimulator) return;
+              const coordinates = event?.geometry?.coordinates ?? event?.features?.[0]?.geometry?.coordinates;
+              if (Array.isArray(coordinates) && coordinates.length >= 2) {
+                useActivitySimulatorStore.getState().setMapSelection({
+                  lat: Number(coordinates[1]),
+                  lng: Number(coordinates[0]),
+                });
+              }
+            }}
           >
             {/* R21-v3 v2 (2026-08-30): Standard style lightPreset — day/dusk/night. */}
             {StyleImport ? (
@@ -854,7 +738,7 @@ export function RunningScreen() {
             {CameraComponent && (
               <CameraComponent
                 ref={cameraRef}
-                followUserLocation={!instantCamera && foregroundGranted}
+                followUserLocation={!showSimulator && !instantCamera && foregroundGranted}
                 followZoomLevel={15}
                 followPitch={0}
                 animationDuration={instantCamera ? 0 : 600}
@@ -866,14 +750,24 @@ export function RunningScreen() {
                 // Auckland-zoom-2 made Running fly horizontally across
                 // the globe to the user's actual GPS, instead of zooming
                 // in straight from the full-globe view.
-                defaultSettings={instantCamera && lastCoordinate
+                defaultSettings={showSimulator
+                  ? { centerCoordinate: [simulatorPosition.lng, simulatorPosition.lat], zoomLevel: 15 }
+                  : instantCamera && lastCoordinate
                   ? { centerCoordinate: [lastCoordinate.lng, lastCoordinate.lat], zoomLevel: 15 }
                   : undefined}
               />
             )}
-            {UserLocationComponent && foregroundGranted && (
+            {showSimulator && ShapeSource && CircleLayer ? (
+              <ShapeSource
+                id="run-simulator-puck"
+                shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: [simulatorPosition.lng, simulatorPosition.lat] }, properties: {} } as any}
+              >
+                <CircleLayer id="run-simulator-puck-halo" style={{ circleRadius: 14, circleColor: '#1E88E5', circleOpacity: 0.25 }} />
+                <CircleLayer id="run-simulator-puck-dot" style={{ circleRadius: 7, circleColor: '#1E88E5', circleStrokeWidth: 2, circleStrokeColor: '#ffffff' }} />
+              </ShapeSource>
+            ) : UserLocationComponent && foregroundGranted ? (
               <UserLocationComponent visible androidRenderMode="normal" />
-            )}
+            ) : null}
           </MapView>
         ) : (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: runTheme.background }}>
@@ -1061,7 +955,7 @@ export function RunningScreen() {
           </Animated.View>
         )}
         <UnfinishedRecoveryModal
-          visible={unfinishedRun !== null && status === 'idle' && !isFinishing}
+          visible={unfinishedResolutionRequested && unfinishedRun !== null && status === 'idle' && !isFinishing}
           data={unfinishedRun}
           onContinue={async () => {
             const activity = unfinishedRun;
@@ -1072,6 +966,31 @@ export function RunningScreen() {
             } catch (error) {
               crashLogger.breadcrumb(`running:recovery_failed ${String(error).slice(0, 80)}`);
             } finally {
+              setUnfinishedResolutionRequested(false);
+              setUnfinishedRun(null);
+            }
+          }}
+          onSave={async () => {
+            const activity = unfinishedRun;
+            if (!activity) return;
+            try {
+              const saved = await saveRecoverableActivity(activity);
+              if (saved) {
+                nav.dispatch(
+                  CommonActions.reset({
+                    index: 2,
+                    routes: [
+                      { name: 'Home' },
+                      { name: 'Routes', params: { initialTab: 'activities' } },
+                      { name: 'MapHistory', params: { sessionId: activity.clientActivityId } },
+                    ],
+                  }),
+                );
+              }
+            } catch (error) {
+              crashLogger.breadcrumb(`running:recovery_save_failed ${String(error).slice(0, 80)}`);
+            } finally {
+              setUnfinishedResolutionRequested(false);
               setUnfinishedRun(null);
             }
           }}
@@ -1083,10 +1002,12 @@ export function RunningScreen() {
             } catch (error) {
               crashLogger.breadcrumb(`running:recovery_discard_failed ${String(error).slice(0, 80)}`);
             } finally {
+              setUnfinishedResolutionRequested(false);
               setUnfinishedRun(null);
             }
           }}
         />
+        {showSimulator ? <ActivitySimulatorPanel /> : null}
       </View>
     );
   }
@@ -1107,8 +1028,9 @@ export function RunningScreen() {
               geometry rebuilt from the same trackPoints already read for
               signal-lost detection. */}
           {MapView && (
-            <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+            <View style={StyleSheet.absoluteFillObject} pointerEvents={showSimulator ? 'auto' : 'none'}>
               <MapView
+                ref={mapViewRef}
                 style={StyleSheet.absoluteFillObject}
                 {...(runResolvedMapStyle.kind === 'url'
                   ? { styleURL: runResolvedMapStyle.url }
@@ -1122,10 +1044,20 @@ export function RunningScreen() {
                 onDidFinishLoadingMap={() => setMapLoadState('ready')}
                 onDidFinishRenderingMapFully={() => setMapLoadState('ready')}
                 onDidFailLoadingMap={() => setMapLoadState('unavailable')}
-                scrollEnabled={false}
-                zoomEnabled={false}
-                rotateEnabled={false}
+                scrollEnabled={showSimulator}
+                zoomEnabled={showSimulator}
+                rotateEnabled={showSimulator}
                 pitchEnabled={false}
+                onLongPress={(event: any) => {
+                  if (!showSimulator) return;
+                  const coordinates = event?.geometry?.coordinates ?? event?.features?.[0]?.geometry?.coordinates;
+                  if (Array.isArray(coordinates) && coordinates.length >= 2) {
+                    useActivitySimulatorStore.getState().setMapSelection({
+                      lat: Number(coordinates[1]),
+                      lng: Number(coordinates[0]),
+                    });
+                  }
+                }}
               >
                 {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
                 {StyleImport ? (
@@ -1138,12 +1070,14 @@ export function RunningScreen() {
                 ) : null}
                 {CameraComponent && (
                   <CameraComponent
-                    followUserLocation={foregroundGranted}
+                    followUserLocation={!showSimulator && foregroundGranted}
                     followZoomLevel={16}
                     followPitch={0}
                     animationDuration={600}
                     animationMode="flyTo"
-                    defaultSettings={lastCoordinate
+                    defaultSettings={showSimulator
+                      ? { centerCoordinate: [simulatorPosition.lng, simulatorPosition.lat], zoomLevel: 16 }
+                      : lastCoordinate
                       ? { centerCoordinate: [lastCoordinate.lng, lastCoordinate.lat], zoomLevel: 16 }
                       : undefined}
                   />
@@ -1168,9 +1102,17 @@ export function RunningScreen() {
                     />
                   </ShapeSource>
                 )}
-                {UserLocationComponent && foregroundGranted && (
+                {showSimulator && ShapeSource && CircleLayer ? (
+                  <ShapeSource
+                    id="run-active-simulator-puck"
+                    shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: [simulatorPosition.lng, simulatorPosition.lat] }, properties: {} } as any}
+                  >
+                    <CircleLayer id="run-active-simulator-puck-halo" style={{ circleRadius: 14, circleColor: '#1E88E5', circleOpacity: 0.25 }} />
+                    <CircleLayer id="run-active-simulator-puck-dot" style={{ circleRadius: 7, circleColor: '#1E88E5', circleStrokeWidth: 2, circleStrokeColor: '#ffffff' }} />
+                  </ShapeSource>
+                ) : UserLocationComponent && foregroundGranted ? (
                   <UserLocationComponent visible androidRenderMode="normal" />
-                )}
+                ) : null}
                 {/* 2026-08-17 concept R1: green start-dot marker at
                     trackPoints[0]. Renders as soon as we have at least
                     one recorded fix so the trailhead is visible even
@@ -1329,12 +1271,17 @@ export function RunningScreen() {
                       <TouchableOpacity
                         style={[runStyles.trayFab, runIsDark ? { backgroundColor: runTheme.surface, borderColor: runTheme.border } : null]}
                         activeOpacity={0.85}
-                        onPress={() => {
+                        onPress={async () => {
                           haptic.impact('medium');
-                          const ts = useTrackingStore.getState();
                           setRunActionsExpanded(false);
-                          // R21 (2026-08-18): too-short guard mirrors Hike.
-                          const isTooShort = ts.trackPoints.length < 2 || ts.distanceM < 20;
+                          await pauseTracking();
+                          const frozen = useTrackingStore.getState();
+                          // The same authority used by Finish and recovery is
+                          // evaluated only after the GPS fence is durable.
+                          const isTooShort = !saveEligibility(
+                            frozen.trackPoints,
+                            frozen.distanceM,
+                          ).eligible;
                           if (isTooShort) {
                             setShowTooShortConfirmRun(true);
                             return;
@@ -1396,14 +1343,14 @@ export function RunningScreen() {
                   // preserves the user's chosen name across a too-short
                   // TooShortSheet resolution.
                   const name = pendingName;
-                  closeSaveSheet(() => { void handleStop(name); });
+                  closeSaveSheet(() => { void handleStop(name); }, false);
                 }}
               />
               <TouchableOpacity
                 style={[runStyles.saveSheetBtn, { backgroundColor: runTheme.primary }]}
                 onPress={() => {
                   const name = pendingName;
-                  closeSaveSheet(() => { void handleStop(name); });
+                  closeSaveSheet(() => { void handleStop(name); }, false);
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Save this run"
@@ -1433,19 +1380,16 @@ export function RunningScreen() {
         onContinue={() => {
           setShowTooShortConfirmRun(false);
           clearLastStopReason();
+          if (useTrackingStore.getState().status === 'paused') void resumeTracking();
         }}
         onDiscard={() => {
           setShowTooShortConfirmRun(false);
           clearLastStopReason();
           discardCurrentSession();
-          // Fix 4 (STATE-LEAK-STOPPED-SESSION-ID): after a too-short
-          // discard there is no persisted session to view. Explicitly
-          // null out stoppedSessionId so R4's "View Activity" falls back
-          // to Home instead of navigating to an old / wrong session.
-          setStoppedSessionId(null);
-          // Fix 1: also drop the SaveSheet name — this run is gone.
+          // Drop the SaveSheet name — this run is gone, and there is no
+          // false completion state for a discarded Activity.
           setPendingName('');
-          setRunState('stopped');
+          setRunState('pre');
         }}
       />
       {/* O18 ONB-04: permission-denied modal for Running. */}
@@ -1454,6 +1398,7 @@ export function RunningScreen() {
         featureName="Running"
         onDismiss={() => setPermissionDeniedVisible(false)}
       />
+      {showSimulator ? <ActivitySimulatorPanel /> : null}
     </View>
   );
 }
@@ -1657,7 +1602,6 @@ const preStyles = StyleSheet.create({
     paddingHorizontal: Spacing.base, gap: Spacing.sm,
   },
 });
-
 // ── Styles: running (R1/R2 concept, sleep-run 2026-08-16 rev-2) ────────────
 // R1 is a clean map-first view; R2 is a persistent 3-button action tray.
 // The dark lock overlay and compass ring styles from the previous rev have
@@ -1866,99 +1810,5 @@ const runStyles = StyleSheet.create({
   saveSheetCancel: { alignSelf: 'center', paddingVertical: Spacing.sm },
   saveSheetCancelText: {
     fontSize: 15, fontWeight: '600', color: RunConcept.textMuted,
-  },
-});
-
-// ── Styles: R4 complete (sleep-run 2026-08-16 rev-2) ───────────────────────
-// Aligned to concept R4-complete.png:
-//   • Hero: full-width image with aspectRatio 16/10 (no fixed pixel height).
-//   • Stat values: dark textPrimary ink — forest green is reserved for the
-//     primary CTA. Labels simplified to km / time / /km.
-//   • Two-CTA layout: primary "View Activity" (forest pill) + secondary
-//     "Done" text link. Discard is intentionally omitted here.
-const completeStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: RunConcept.paper },
-  scroll: { flexGrow: 1, paddingBottom: Spacing.xl },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
-  },
-  // R21 v3 (2026-08-17): backBtn removed — replaced by shared
-  // <BackButton variant="inline" onPress={goHome} />. Was
-  // { padding: 6 } for a bespoke icon-only 24pt ChevronLeft.
-  shareBtn: {
-    padding: 6,
-  },
-  hero: {
-    width: '100%',
-    aspectRatio: 16 / 10,
-    marginTop: Spacing.sm,
-  },
-  title: {
-    fontSize: 24, fontWeight: '800', color: RunConcept.textPrimary,
-    textAlign: 'center', letterSpacing: -0.4,
-    marginTop: Spacing.md, marginHorizontal: Spacing.xl,
-  },
-  statsRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    marginTop: Spacing.xl, marginHorizontal: Spacing.xl,
-  },
-  statCell: { flex: 1, alignItems: 'center', gap: 4 },
-  statVal: {
-    fontSize: 30, fontWeight: '900', color: RunConcept.textPrimary,
-    letterSpacing: -0.8,
-  },
-  statLbl: { fontSize: 12, fontWeight: '600', color: RunConcept.textMuted },
-  miniMapCard: {
-    marginTop: Spacing.xl,
-    marginHorizontal: Spacing.xl,
-    height: 130,
-    borderRadius: 16,
-    backgroundColor: '#EFEAE0',
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  feedbackCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: Spacing.md,
-    marginHorizontal: Spacing.xl,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: '#EFEAE0',
-    borderWidth: 1,
-  },
-  feedbackIcon: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: '#E0DACB',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  feedbackTitle: {
-    fontSize: 15, fontWeight: '800',
-    color: RunConcept.textPrimary,
-    letterSpacing: -0.2,
-  },
-  feedbackSubtitle: {
-    fontSize: 13, fontWeight: '500',
-    color: RunConcept.textMuted,
-  },
-  ctaGroup: {
-    marginTop: Spacing.xxl, marginHorizontal: Spacing.xl, gap: Spacing.md,
-  },
-  primaryBtn: {
-    backgroundColor: RunConcept.forest, borderRadius: 28,
-    height: 56, alignItems: 'center', justifyContent: 'center',
-  },
-  primaryBtnText: {
-    fontSize: 17, fontWeight: '700', color: RunConcept.paper,
-  },
-  doneBtn: { alignSelf: 'center', paddingVertical: Spacing.sm },
-  doneBtnText: {
-    fontSize: 15, fontWeight: '700', color: RunConcept.textMuted,
   },
 });

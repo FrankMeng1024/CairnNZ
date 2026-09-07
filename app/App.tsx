@@ -34,6 +34,9 @@ import { API_BASE_URL } from './src/config/api';
 // via checkpoint drain (still have per-phase aliyun log events).
 import { markBootPhase } from './src/services/bootDiagnostics';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { PassiveMemoryRecorder } from './src/features/memory/components/PassiveMemoryRecorder';
+import { activitySimulatorBuildCapable } from './src/features/activitySimulator/capability';
+import { hydrateActivitySimulatorForUser } from './src/features/activitySimulator/useActivitySimulatorStore';
 
 // First side-effect: report that module loading completed. This runs
 // AFTER all the imports above (which is when iOS jetsam most likely
@@ -166,6 +169,8 @@ if (Platform.OS === 'web') {
 function AppRoot() {
   const hydrate = useAppStore(s => s.hydrate);
   const hydrated = useAppStore(s => s.hydrated);
+  const simulatorOwnerUserId = useAppStore(s => s.user?.id ?? null);
+  const simulatorDebugGate = useSettingsStore(s => s.debugMode);
   const hydrateSettings = useSettingsStore(s => s.hydrate);
   const lastAppState = useRef<string>(AppState.currentState);
   // O7 (2026-07-26): track whether the app has passed through 'background'
@@ -180,6 +185,18 @@ function AppRoot() {
   // call getFlagsSync() — see overrides on first paint, not just after
   // the eventual async resolution.
   const [flagsPrimed, setFlagsPrimed] = useState(false);
+
+  useEffect(() => {
+    if (!activitySimulatorBuildCapable) return;
+    void hydrateActivitySimulatorForUser(simulatorOwnerUserId ? String(simulatorOwnerUserId) : null);
+  }, [simulatorOwnerUserId]);
+  useEffect(() => {
+    if (activitySimulatorBuildCapable && simulatorDebugGate) return;
+    const tracking = useTrackingStore.getState();
+    if (tracking.locationProviderSource === 'simulator' && tracking.status === 'tracking') {
+      void tracking.pauseTracking();
+    }
+  }, [simulatorDebugGate]);
 
   // PRD3 E-012: load Inter font family. fontsLoaded === true once all weights
   // are ready. If loading fails (no network on first run, etc), fontError is
@@ -335,21 +352,6 @@ function AppRoot() {
       hydrateSettings().catch((err: unknown) => {
         // eslint-disable-next-line no-console
         console.warn('[hydrateSettings failed]', err);
-      }).then(() => {
-        // R21 (2026-08-18 user "关app再进就没虚拟摇杆了"): if debugMode is
-        // on after hydrate, auto-enable Sim walker so the DEV workflow
-        // survives cold restarts. Fixes prior behaviour where sim walker
-        // only turned on when the toggle was flipped in Settings.
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { useSettingsStore: sset } = require('./src/store/useSettingsStore');
-          const isDebug = sset.getState().debugMode;
-          if (isDebug) {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { useSimWalkerStore } = require('./src/dev/simWalker/useSimWalkerStore');
-            useSimWalkerStore.getState().setActive(true);
-          }
-        } catch { /* silent */ }
       });
       markBootPhase('ue_main_after_hydrate_settings');
     } catch (err) {
@@ -774,6 +776,7 @@ function AppRoot() {
   return (
     <>
       <RootNavigator />
+      <PassiveMemoryRecorder />
       {/* v322 ARCHITECTURE FIX: ForegroundUnlockManager moved into
           MemoryScreen. User question 2026-06-24: "Home page has no
           fog UI — why does H3 hydrate run on login?" Answer: because

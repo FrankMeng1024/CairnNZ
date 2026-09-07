@@ -35,13 +35,14 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { crashLogger } from './crashLogger';
 import networkMonitor from './networkMonitor';
 
-const MAX_ATTEMPTS = 8;
 
 export type SyncState = 'pending' | 'syncing' | 'synced' | 'failed';
 
 interface OfflineEntry<T> {
   /** 前端生成 uuid, 也作为后端 idempotency key */
   localId: string;
+  /** Immutable owner captured before the first async boundary. */
+  ownerId?: string;
   /** 业务数据本身 */
   data: T;
   savedAt: number;
@@ -59,37 +60,43 @@ interface OfflineEntityConfig<T, Server> {
    * v423 B3 fix: marker/session queue 应该分 userId, 否则 logout/login 后前用户
    * 的 pending 会被新用户 auth token 上传, 归属错误.
    */
-  storageKey: string | (() => string);
+  storageKey: string | ((ownerId?: string) => string);
+  /** Required for user-owned entities. Called synchronously at operation start. */
+  captureOwnerId?: () => string;
+  /** Prevents network/callback/UI work after an account switch. */
+  isOwnerCurrent?: (ownerId: string) => boolean;
   /**
    * 有网时如何调后端。抛异常会被 catch 走失败分支。
    * 返回值传给 onSyncSuccess。
    */
-  syncToServer: (localData: T, localId: string) => Promise<Server>;
+  syncToServer: (localData: T, localId: string, ownerId: string) => Promise<Server>;
   /**
    * 服务器成功后调用, 让 store 把本地 placeholder 替换成真实体。
    * 同时传 data 让 store 能 reconcile 到具体业务对象 (如 A 类 vote 找 markerId)。
    */
-  onSyncSuccess?: (localId: string, server: Server, data: T) => void;
+  onSyncSuccess?: (localId: string, server: Server, data: T, ownerId: string) => Promise<void> | void;
   /**
    * 硬失败 (4xx 非 401 表示后端拒了 payload) 时调用。
    * data 传回让 store 决定回滚哪个前端乐观 UI (如 A 类 vote 找到 markerId 撤回 +1)。
    */
-  onSyncFailure?: (localId: string, error: any, data: T) => void;
+  onSyncFailure?: (localId: string, error: any, data: T, ownerId: string) => void;
   /**
    * 是否被视为 "auth 错" 需暂停 drain。默认判 401。
    */
   isAuthError?: (error: any) => boolean;
+  /** Committed user data must remain repairable after any number of failures. */
+  retainOnPermanentFailure?: boolean;
 }
 
 interface OfflineEntity<T> {
   /** 存一条到本地, 立即返回 localId。前端可用 localId 立即渲染 placeholder。 */
-  saveLocal: (data: T) => Promise<{ localId: string; savedAt: number }>;
+  saveLocal: (data: T, ownerId?: string) => Promise<{ localId: string; savedAt: number }>;
   /** 列出所有本地未同步 (pending/syncing/failed) 的项。 */
   listPending: () => Promise<OfflineEntry<T>[]>;
   /** 主动触发 drain。networkMonitor + AppState 自动触发, 用户也可 pull-to-refresh。 */
   drain: () => Promise<{ synced: number; failed: number; remaining: number }>;
   /** 用户"放弃"某条 (硬失败后)。删本地条目。 */
-  discard: (localId: string) => Promise<void>;
+  discard: (localId: string, ownerId?: string) => Promise<void>;
   /** 订阅本 entity 队列变化 (UI 更新 SyncBadge)。 */
   subscribe: (cb: (entries: OfflineEntry<T>[]) => void) => () => void;
   /** 单条状态读 (UI 单卡片用)。 */
@@ -163,8 +170,12 @@ export function createOfflineEntity<T, Server = unknown>(
   wireDaemonOnce();
 
   const { kind, syncToServer, onSyncSuccess, onSyncFailure } = config;
-  const resolveKey = (): string =>
-    typeof config.storageKey === 'function' ? config.storageKey() : config.storageKey;
+  const retainOnPermanentFailure = config.retainOnPermanentFailure ?? false;
+  const captureOwnerId = (): string => String(config.captureOwnerId?.() ?? '');
+  const resolveKey = (ownerId: string): string =>
+    typeof config.storageKey === 'function' ? config.storageKey(ownerId) : config.storageKey;
+  const ownerStillCurrent = (ownerId: string): boolean =>
+    !config.isOwnerCurrent || config.isOwnerCurrent(ownerId);
   const isAuthError = config.isAuthError ?? ((err: any) => err?.status === 401 || err === 401);
 
   const listeners: Array<(entries: OfflineEntry<T>[]) => void> = [];
@@ -186,8 +197,8 @@ export function createOfflineEntity<T, Server = unknown>(
     }
   }
 
-  async function read(): Promise<OfflineEntry<T>[]> {
-    const key = resolveKey();
+  async function read(ownerId: string): Promise<OfflineEntry<T>[]> {
+    const key = resolveKey(ownerId);
     // v423 B3 fix: 若 storageKey resolver 返回 empty (userId 未 hydrate),
     // 不读磁盘 (避免读到 'undefined' 后缀的错误 key).
     if (!key || key.endsWith(':')) return [];
@@ -201,8 +212,8 @@ export function createOfflineEntity<T, Server = unknown>(
     }
   }
 
-  async function write(entries: OfflineEntry<T>[]): Promise<void> {
-    const key = resolveKey();
+  async function write(ownerId: string, entries: OfflineEntry<T>[]): Promise<void> {
+    const key = resolveKey(ownerId);
     if (!key || key.endsWith(':')) {
       // v423 B1 fix: 无有效 storageKey (未 hydrate) → 抛异常让上层知道
       // saveLocal 失败, 而不是静默丢. addMarker 会 catch 并回滚 UI.
@@ -216,20 +227,24 @@ export function createOfflineEntity<T, Server = unknown>(
       // 会造成 saveLocal 假成功, marker 只存内存不进队列, 重启就丢.
       throw err;
     }
-    emit(entries);
+    emit(entries, ownerId);
   }
 
-  function emit(entries: OfflineEntry<T>[]): void {
+  function emit(entries: OfflineEntry<T>[], ownerId: string): void {
+    if (ownerId && !ownerStillCurrent(ownerId)) return;
     for (const l of listeners) {
       try { l(entries); } catch { /* ignore */ }
     }
   }
 
-  async function saveLocal(data: T): Promise<{ localId: string; savedAt: number }> {
+  async function saveLocal(data: T, requestedOwnerId?: string): Promise<{ localId: string; savedAt: number }> {
+    const ownerId = String(requestedOwnerId ?? captureOwnerId());
+    if (config.captureOwnerId && !ownerId) throw new Error('offline_entity_owner_required');
     const localId = uuidv4();
     const savedAt = Date.now();
     const entry: OfflineEntry<T> = {
       localId,
+      ownerId: ownerId || undefined,
       data,
       savedAt,
       syncState: 'pending',
@@ -238,9 +253,9 @@ export function createOfflineEntity<T, Server = unknown>(
     // v423 C2 fix: read-modify-write 包 withLock, 防止与 drain 的 write(remaining)
     // 并发覆盖. 若锁内 write throw (B1), 让异常传出让 addMarker catch.
     await withLock(async () => {
-      const q = await read();
+      const q = await read(ownerId);
       q.push(entry);
-      await write(q);
+      await write(ownerId, q);
       crashLogger.breadcrumb(`offlineEntity:save kind=${kind} localId=${localId.slice(0, 8)} size=${q.length}`);
     });
 
@@ -250,19 +265,21 @@ export function createOfflineEntity<T, Server = unknown>(
   }
 
   async function listPending(): Promise<OfflineEntry<T>[]> {
-    return read();
+    return read(captureOwnerId());
   }
 
   async function getEntry(localId: string): Promise<OfflineEntry<T> | null> {
-    const q = await read();
+    const q = await read(captureOwnerId());
     return q.find((e) => e.localId === localId) ?? null;
   }
 
-  async function discard(localId: string): Promise<void> {
+  async function discard(localId: string, requestedOwnerId?: string): Promise<void> {
+    const ownerId = String(requestedOwnerId ?? captureOwnerId());
+    if (config.captureOwnerId && !ownerId) throw new Error('offline_entity_owner_required');
     await withLock(async () => {
-      const q = await read();
+      const q = await read(ownerId);
       const next = q.filter((e) => e.localId !== localId);
-      await write(next);
+      await write(ownerId, next);
       crashLogger.breadcrumb(`offlineEntity:discard kind=${kind} localId=${localId.slice(0, 8)}`);
     });
   }
@@ -272,9 +289,14 @@ export function createOfflineEntity<T, Server = unknown>(
     draining = true;
     let synced = 0;
     let failed = 0;
+    const ownerId = captureOwnerId();
+    if (config.captureOwnerId && (!ownerId || !ownerStillCurrent(ownerId))) {
+      draining = false;
+      return { synced: 0, failed: 0, remaining: 0 };
+    }
     try {
       // v423 C2 fix: read 也走 lock, 保证与 saveLocal/write 序列化 快照一致.
-      const q = await withLock(async () => read());
+      const q = await withLock(async () => read(ownerId));
       if (q.length === 0) return { synced: 0, failed: 0, remaining: 0 };
       crashLogger.breadcrumb(`offlineEntity:drain_start kind=${kind} size=${q.length}`);
 
@@ -284,6 +306,16 @@ export function createOfflineEntity<T, Server = unknown>(
       let stopped = false;
 
       for (const entry of q) {
+        const entryOwnerId = String(entry.ownerId ?? ownerId);
+        if (entry.ownerId && entryOwnerId !== ownerId) {
+          results.set(entry.localId, 'keep');
+          continue;
+        }
+        if (entryOwnerId && !ownerStillCurrent(entryOwnerId)) {
+          results.set(entry.localId, 'keep');
+          stopped = true;
+          continue;
+        }
         if (stopped) {
           results.set(entry.localId, 'keep');
           continue;
@@ -298,13 +330,20 @@ export function createOfflineEntity<T, Server = unknown>(
           entry.syncState = 'syncing';
           // v423 C3 fix: 中间态 emit 用 map 生成稳定 shape, 不用 indexOf.
           // 该 emit 只影响订阅者 UI, 不写盘.
-          emit(q.map((e) => e.localId === entry.localId ? entry : e));
+          emit(q.map((e) => e.localId === entry.localId ? entry : e), ownerId);
 
-          const server = await syncToServer(entry.data, entry.localId);
+          const server = await syncToServer(entry.data, entry.localId, entryOwnerId);
+          if (entryOwnerId && !ownerStillCurrent(entryOwnerId)) {
+            entry.syncState = 'pending';
+            results.set(entry.localId, 'keep');
+            stopped = true;
+            continue;
+          }
           synced += 1;
           crashLogger.breadcrumb(`offlineEntity:synced kind=${kind} localId=${entry.localId.slice(0, 8)}`);
-          try { onSyncSuccess?.(entry.localId, server, entry.data); } catch (e) {
+          try { await onSyncSuccess?.(entry.localId, server, entry.data, entryOwnerId); } catch (e) {
             crashLogger.breadcrumb(`offlineEntity:onSyncSuccess_threw kind=${kind} err=${String(e).slice(0, 60)}`);
+            throw e;
           }
           results.set(entry.localId, 'drop');
         } catch (err: any) {
@@ -325,19 +364,10 @@ export function createOfflineEntity<T, Server = unknown>(
             failed += 1;
             entry.syncState = 'failed';
             crashLogger.breadcrumb(`offlineEntity:hard_fail kind=${kind} status=${status} localId=${entry.localId.slice(0, 8)}`);
-            try { onSyncFailure?.(entry.localId, err, entry.data); } catch (e) {
+            try { onSyncFailure?.(entry.localId, err, entry.data, entryOwnerId); } catch (e) {
               crashLogger.breadcrumb(`offlineEntity:onSyncFailure_threw kind=${kind} err=${String(e).slice(0, 60)}`);
             }
-            results.set(entry.localId, 'drop');
-            continue;
-          }
-
-          if (entry.attempts >= MAX_ATTEMPTS) {
-            failed += 1;
-            entry.syncState = 'failed';
-            crashLogger.breadcrumb(`offlineEntity:exhausted kind=${kind} localId=${entry.localId.slice(0, 8)}`);
-            try { onSyncFailure?.(entry.localId, err, entry.data); } catch { /* ignore */ }
-            results.set(entry.localId, 'drop');
+            results.set(entry.localId, retainOnPermanentFailure ? 'keep' : 'drop');
             continue;
           }
           entry.syncState = 'pending';
@@ -349,7 +379,7 @@ export function createOfflineEntity<T, Server = unknown>(
       // entry (drain 中 syncToServer 可能耗时 30s, 期间 saveLocal 会写盘).
       // 只处理本轮 quipped 的 localId; 新条目直接保留.
       const remaining = await withLock(async () => {
-        const fresh = await read();
+        const fresh = await read(ownerId);
         const kept = fresh.filter((e) => {
           const r = results.get(e.localId);
           // 未处理的 (新加入的) 保留; keep 也保留; drop 删除.
@@ -360,7 +390,7 @@ export function createOfflineEntity<T, Server = unknown>(
           const processedEntry = q.find((qe) => qe.localId === e.localId);
           return processedEntry && results.get(e.localId) === 'keep' ? processedEntry : e;
         });
-        await write(merged);
+        await write(ownerId, merged);
         return merged;
       });
       crashLogger.breadcrumb(`offlineEntity:drain_end kind=${kind} synced=${synced} failed=${failed} remaining=${remaining.length}`);
@@ -373,7 +403,8 @@ export function createOfflineEntity<T, Server = unknown>(
   function subscribe(cb: (entries: OfflineEntry<T>[]) => void): () => void {
     listeners.push(cb);
     // 立即推一次当前状态
-    read().then((entries) => {
+    const ownerId = captureOwnerId();
+    read(ownerId).then((entries) => {
       try { cb(entries); } catch { /* ignore */ }
     }).catch(() => { /* O1: swallow read errors, subscriber gets no snapshot */ });
     return () => {

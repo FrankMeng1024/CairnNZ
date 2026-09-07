@@ -29,6 +29,11 @@ import * as Location from 'expo-location';
 import { GpsSamplingConfig } from '../config/plantConfig';
 import { log } from '../../../services/appLog';
 import { kalmanInit, kalmanUpdate } from '../../../utils/geo';
+import {
+  readTrustedSimulatorLocation,
+  selectedActivityLocationSource,
+} from '../../activitySimulator/activityLocationProvider';
+import { appendSimulatorLog } from '../../activitySimulator/simulatorLog';
 
 export interface SampleResult {
   ok: boolean;
@@ -58,6 +63,35 @@ const MIN_READINGS_FOR_DECISION = 2;
  */
 export async function sampleGpsWindow(): Promise<SampleResult> {
   log('plant.gps_window_start', { windowSec: GpsSamplingConfig.windowSeconds, intervalMs: GpsSamplingConfig.sampleIntervalMs });
+  if (selectedActivityLocationSource() === 'simulator') {
+    const fix = readTrustedSimulatorLocation();
+    if (!fix) {
+      appendSimulatorLog('GPS_REJECT', 'plant_simulator_location_unavailable', {
+        rejectionReason: 'no-readings',
+      });
+      return makeFailure('no-readings');
+    }
+    // Plant still uses its normal fusion/quality decision. Deterministic
+    // readings represent successive observations at the same current fix;
+    // hidden position while LOST is never exposed to this path.
+    const readings: RawReading[] = Array.from({ length: 5 }, (_, index) => ({
+      lat: fix.lat,
+      lng: fix.lng,
+      accuracy: fix.accuracyM,
+      timestamp: fix.timestamp + index,
+    }));
+    const result = decideFromReadings(readings);
+    appendSimulatorLog(result.ok ? 'GPS_ACCEPT' : 'GPS_REJECT', 'plant_gps_window_decided', {
+      accepted: result.ok,
+      rejectionReason: result.reason ?? null,
+      lat: fix.lat,
+      lng: fix.lng,
+      altitude: fix.altitudeM,
+      accuracy: fix.accuracyM,
+      samplesUsed: result.samplesUsed,
+    }, { virtualTimestamp: fix.timestamp });
+    return result;
+  }
   const { status } = await Location.getForegroundPermissionsAsync();
   if (status !== 'granted') {
     log('plant.gps_permission_denied', { status });

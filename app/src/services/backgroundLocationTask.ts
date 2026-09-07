@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { debugLogger } from './debugLogger';
 import { crashLogger } from './crashLogger';
+import { newSegmentId, shouldStartNewSegment, type SegmentedTrackPoint } from '../features/activity/activityContracts';
 
 export const BACKGROUND_LOCATION_TASK = 'cairn-background-location';
 
@@ -39,8 +40,36 @@ const STORAGE_KEY_SESSION = 'cairn_bg_active_session_id';
 const STORAGE_KEY_HIKE_ACTIVE = 'cairn_bg_hike_active';
 // v409: 保留老 key 仅用于 hydrate 迁移检测,新写入统一用 HIKE_ACTIVE
 const STORAGE_KEY_LEGACY_ENABLED = 'cairn_bg_logging_enabled';
+const STORAGE_KEY_ACTIVITY_CONTEXT = 'cairn_bg_activity_context_v2';
 
-export { STORAGE_KEY_SESSION, STORAGE_KEY_HIKE_ACTIVE, STORAGE_KEY_LEGACY_ENABLED };
+export { STORAGE_KEY_SESSION, STORAGE_KEY_HIKE_ACTIVE, STORAGE_KEY_LEGACY_ENABLED, STORAGE_KEY_ACTIVITY_CONTEXT };
+
+export interface DurableActivityContext {
+  clientActivityId: string;
+  userId: string;
+  ownerGeneration: string;
+  segmentId: string;
+  activityMode: 'hiking' | 'running';
+  /** Reject native batches sampled before this ownership generation began. */
+  acceptAfterMs: number;
+}
+
+// The native callback and UI lifecycle can run on interleaved promise turns.
+// Serialize the complete "validate live lease -> journal append" operation with
+// lease mutation. Therefore Finish/Logout either waits for a commit that began
+// before its fence, or disables the lease before the callback can validate.
+let ownershipTail: Promise<void> = Promise.resolve();
+async function withOwnershipBoundary<T>(operation: () => Promise<T>): Promise<T> {
+  const prior = ownershipTail.catch(() => undefined);
+  let release: () => void = () => undefined;
+  ownershipTail = new Promise<void>((resolve) => { release = resolve; });
+  await prior;
+  try {
+    return await operation();
+  } finally {
+    release();
+  }
+}
 
 /**
  * Persist current session_id + hike-active flag for the background task
@@ -53,21 +82,45 @@ export { STORAGE_KEY_SESSION, STORAGE_KEY_HIKE_ACTIVE, STORAGE_KEY_LEGACY_ENABLE
 export async function persistBackgroundContext(
   sessionId: string | null,
   hikeActive: boolean,
-): Promise<void> {
-  try {
-    if (sessionId) {
+  context?: DurableActivityContext | null,
+): Promise<boolean> {
+  return withOwnershipBoundary(async () => {
+    try {
+    if (hikeActive) {
+      if (!sessionId || !context) return false;
       await AsyncStorage.setItem(STORAGE_KEY_SESSION, sessionId);
+      await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify(context));
+      // Enable last: a headless callback must never observe `active` before
+      // the complete owner context is durable.
+      await AsyncStorage.setItem(STORAGE_KEY_HIKE_ACTIVE, '1');
     } else {
+      // Disable first: queued native callbacks are fenced before owner keys
+      // are removed one by one.
+      await AsyncStorage.setItem(STORAGE_KEY_HIKE_ACTIVE, '0');
+      await AsyncStorage.removeItem(STORAGE_KEY_ACTIVITY_CONTEXT);
       await AsyncStorage.removeItem(STORAGE_KEY_SESSION);
     }
-    await AsyncStorage.setItem(STORAGE_KEY_HIKE_ACTIVE, hikeActive ? '1' : '0');
     // v409 fix #5 migration: 清老 key 避免 hydrate 时 stale 干扰
     if (!hikeActive) {
       try { await AsyncStorage.removeItem(STORAGE_KEY_LEGACY_ENABLED); } catch { /* ignore */ }
     }
-  } catch {
-    // best effort
-  }
+      return true;
+    } catch {
+      if (!hikeActive) {
+        // Removing descriptive owner keys is cleanup; the durable live bit is
+        // the safety boundary. Retry that boundary once and report success only
+        // when a callback can no longer consider the lease active.
+        try {
+          await AsyncStorage.setItem(STORAGE_KEY_HIKE_ACTIVE, '0');
+          return (await AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE)) === '0';
+        } catch { /* caller must fail closed */ }
+      } else {
+        // A partially written acquire must never inherit a prior `1` live bit.
+        try { await AsyncStorage.setItem(STORAGE_KEY_HIKE_ACTIVE, '0'); } catch { /* caller fails closed */ }
+      }
+      return false;
+    }
+  });
 }
 
 // Singleton queue of pending background updates — store drains this on each foreground tick
@@ -80,6 +133,10 @@ export type LocationCoords = {
   speed: number | null;
   heading: number | null;
   timestamp: number;
+  clientActivityId?: string;
+  ownerGeneration?: string;
+  segmentId?: string;
+  segmentStartReason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
 };
 
 const pendingBackgroundLocations: LocationCoords[] = [];
@@ -99,39 +156,50 @@ export function drainBackgroundLocations(): LocationCoords[] {
  * 完整 tail 都在同一个文件,hydrate 补 replay 一次读齐。
  * gate 从 debugLogger.enabled 换成 STORAGE_KEY_HIKE_ACTIVE (语义换了)。
  */
-async function appendDirectlyToHikeTrack(events: object[]): Promise<void> {
+async function appendDirectlyToHikeTrack(events: any[], context: DurableActivityContext): Promise<any[]> {
   try {
-    const FS = await import('expo-file-system/legacy');
-    if (!FS.documentDirectory) return;
-
-    const rawSid = await AsyncStorage.getItem(STORAGE_KEY_SESSION);
-    if (!rawSid) return; // no active session — drop silently
-    const sid = String(rawSid).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
-    if (!sid) return;
-
-    const dir = FS.documentDirectory + 'cairn-hike-tracks/active/';
-    const dirInfo = await FS.getInfoAsync(dir);
-    if (!dirInfo.exists) {
-      await FS.makeDirectoryAsync(dir, { intermediates: true });
+    // Runtime require avoids a module-load cycle while still sharing the same
+    // canonical writer, transaction, schema, and mutex as foreground points.
+    // It also works in TaskManager's constrained headless CommonJS runtime.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { appendBackgroundHikePoints, readActiveHikeTail } = require('./hikeTrackWriter');
+    const tail = await readActiveHikeTail(context.clientActivityId);
+    let previous = (tail[tail.length - 1] ?? null) as SegmentedTrackPoint | null;
+    let activeSegmentId = previous?.segmentId ?? context.segmentId;
+    const accepted: any[] = [];
+    for (const event of events) {
+      if (!Number.isFinite(event.lat) || !Number.isFinite(event.lng) || !Number.isFinite(event.t)) continue;
+      // Native providers may deliver an old queued batch after Resume.  A
+      // generation timestamp is necessary but not sufficient: within one
+      // generation samples must also be strictly chronological.
+      if (event.t < context.acceptAfterMs || (previous && event.t <= previous.t)) continue;
+      if (event.acc != null && event.acc > 25) continue;
+      if (context.activityMode === 'hiking' && event.speed != null && event.speed > 4.17) continue;
+      const startsGap = shouldStartNewSegment({
+        previous,
+        next: { lat: event.lat, lng: event.lng, t: event.t, accuracy: event.acc ?? null },
+        mode: context.activityMode,
+      });
+      if (startsGap) activeSegmentId = newSegmentId(context.clientActivityId, event.t);
+      const point = {
+        ...event,
+        clientActivityId: context.clientActivityId,
+        ownerGeneration: context.ownerGeneration,
+        segmentId: activeSegmentId,
+        ...(startsGap ? { segmentStartReason: 'gps-reacquired' as const } : {}),
+      };
+      accepted.push(point);
+      previous = { ...point, accuracy: point.acc ?? null } as SegmentedTrackPoint;
     }
-    const path = dir + sid + '.jsonl';
-
-    // Read existing + append (still read-modify-write because expo-file-system
-    // legacy has no native append; but each call is atomic-write within JS
-    // callback, so at worst we lose the last chunk on kill mid-write).
-    const lines = events.map((e) => JSON.stringify({ ...e, session_id: sid })).join('\n') + '\n';
-    let existing = '';
-    const info = await FS.getInfoAsync(path);
-    if (info.exists) {
-      existing = await FS.readAsStringAsync(path);
-      // Cap at 50MB
-      if (existing.length > 50 * 1024 * 1024) {
-        existing = existing.slice(-30 * 1024 * 1024);
-      }
+    if (accepted.length === 0) return [];
+    await appendBackgroundHikePoints(accepted, context.userId);
+    if (activeSegmentId !== context.segmentId) {
+      await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify({ ...context, segmentId: activeSegmentId }));
     }
-    await FS.writeAsStringAsync(path, existing + lines);
-  } catch {
-    // best effort
+    return accepted;
+  } catch (error) {
+    crashLogger.breadcrumb(`activity:bg_journal_rejected ${String(error).slice(0, 80)}`);
+    return [];
   }
 }
 
@@ -144,7 +212,7 @@ let registered = false;
 // an async function created a microtask-gap window where headless wakes
 // could arrive before registration completed. We now use a synchronous
 // `require()` guarded by Platform check.
-const handleBackgroundLocationTask = async ({ data, error }: { data: any; error: any }) => {
+const handleBackgroundLocationTask = async ({ data, error }: { data: any; error: any }) => withOwnershipBoundary(async () => {
   crashLogger.breadcrumb(
     `k10:task_fire loc_count=${data?.locations?.length ?? 0} err=${error ? String(error).slice(0, 40) : 'none'} elapsed_ms=${Date.now() - moduleLoadTs}`
   );
@@ -154,25 +222,52 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
   }
   const payload = data as { locations?: Array<{ coords: LocationCoords; timestamp: number }> };
   const locations = payload?.locations ?? [];
+  let context: DurableActivityContext | null = null;
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT);
+    context = raw ? JSON.parse(raw) : null;
+  } catch { context = null; }
+  if (
+    !context
+    || typeof context.clientActivityId !== 'string'
+    || typeof context.userId !== 'string'
+    || typeof context.ownerGeneration !== 'string'
+    || typeof context.segmentId !== 'string'
+  ) return;
+  context.activityMode = context.activityMode === 'running' ? 'running' : 'hiking';
+  context.acceptAfterMs = Number.isFinite(context.acceptAfterMs) ? context.acceptAfterMs : 0;
+  const hikeActive = (await AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE)) === '1';
+  const activeSid = await AsyncStorage.getItem(STORAGE_KEY_SESSION);
+  const hasActiveSid = !!activeSid;
+  const legacyEnabled = (await AsyncStorage.getItem(STORAGE_KEY_LEGACY_ENABLED)) === '1';
+  // A v2 owner context is accepted only with the v2 live bit. The historical
+  // debug flag is inspected for diagnostics/migration, never as recording
+  // authority after Finish or Logout has disabled the live lease.
+  if (!hikeActive) return;
+  if (activeSid !== context.clientActivityId) return;
   const events: object[] = [];
   for (const loc of locations) {
+    const sampleTimestamp = loc.timestamp || Date.now();
+    if (sampleTimestamp < (context.acceptAfterMs || 0)) {
+      crashLogger.breadcrumb(`activity:bg_stale_sample_rejected t=${sampleTimestamp}`);
+      continue;
+    }
     const coords: LocationCoords = {
       ...loc.coords,
-      timestamp: loc.timestamp,
+      timestamp: sampleTimestamp,
+      clientActivityId: context.clientActivityId,
+      ownerGeneration: context.ownerGeneration,
+      segmentId: context.segmentId,
     };
-    pendingBackgroundLocations.push(coords);
     events.push({
-      ts: loc.timestamp || Date.now(),
-      event: 'gps_fix',
+      t: sampleTimestamp,
       lat: coords.latitude,
-      lon: coords.longitude,
-      accuracy_m: coords.accuracy,
-      altitude_m: coords.altitude,
-      altitude_accuracy_m: coords.altitudeAccuracy,
-      speed_mps: coords.speed,
-      heading_deg: coords.heading,
-      raw_or_filtered: 'raw',
-      source: 'background',
+      lng: coords.longitude,
+      acc: coords.accuracy,
+      alt: coords.altitude,
+      speed: coords.speed,
+      src: 'bg',
+      conf: 1,
     });
   }
   if (events.length === 0) return;
@@ -182,22 +277,33 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       debugLogger.log(e as any);
     }
-    return;
   }
   try {
-    const hikeActive = (await AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE)) === '1';
-    const hasActiveSid = !!(await AsyncStorage.getItem(STORAGE_KEY_SESSION));
-    const legacyEnabled = (await AsyncStorage.getItem(STORAGE_KEY_LEGACY_ENABLED)) === '1';
     crashLogger.breadcrumb(
       `k10:path_b hikeActive=${hikeActive} hasSid=${hasActiveSid} legacy=${legacyEnabled}`
     );
-    if (!hikeActive && !(legacyEnabled && hasActiveSid)) return;
-    await appendDirectlyToHikeTrack(events);
-    crashLogger.breadcrumb(`k10:path_b_write n=${events.length}`);
+    const accepted = await appendDirectlyToHikeTrack(events, context);
+    for (const point of accepted) {
+      pendingBackgroundLocations.push({
+        latitude: point.lat,
+        longitude: point.lng,
+        altitude: point.alt ?? null,
+        accuracy: point.acc ?? null,
+        altitudeAccuracy: null,
+        speed: point.speed ?? null,
+        heading: null,
+        timestamp: point.t,
+        clientActivityId: point.clientActivityId,
+        ownerGeneration: point.ownerGeneration,
+        segmentId: point.segmentId,
+        segmentStartReason: point.segmentStartReason,
+      });
+    }
+    crashLogger.breadcrumb(`k10:path_b_write n=${accepted.length}`);
   } catch (e: any) {
     crashLogger.breadcrumb(`k10:path_b_err ${String(e?.message || e).slice(0, 60)}`);
   }
-};
+});
 
 // Synchronous top-level registration. Guarded by Platform + try/catch so
 // web / Expo Go without dev client don't crash on import.

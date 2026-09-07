@@ -25,6 +25,8 @@ import type { MarkerPermission } from '../store/useMarkerStore';
 // ─── B 类: Plant cairn (create marker) ────────────────────────────────────
 
 export interface MarkerCreatePayload {
+  /** Immutable owner captured with the committed outbox entity. */
+  userId: string;
   type: MarkerType;
   text: string;
   lat: number;
@@ -35,6 +37,8 @@ export interface MarkerCreatePayload {
   /** v422+: optional location name from Mapbox reverse geocode (max 30 chars).
    *  Content step v3 uses this instead of title. Backend column TBD. */
   location_name?: string | null;
+  /** Immutable provenance written in the same outbox record as the Cairn. */
+  originActivityClientId?: string | null;
 }
 
 export interface MarkerCreateServerResponse {
@@ -51,12 +55,12 @@ export interface MarkerCreateServerResponse {
  *          (通常 B 类不回滚, 保留本地 + 标 syncState='failed' 让用户手动重试)
  * 每个 store 实例注册一次 (store 层做)。
  */
-let markerCreateAckHandler: ((localId: string, server: MarkerCreateServerResponse) => void) | null = null;
-let markerCreateFailHandler: ((localId: string, err: any) => void) | null = null;
+let markerCreateAckHandler: ((localId: string, server: MarkerCreateServerResponse, ownerId: string) => Promise<void> | void) | null = null;
+let markerCreateFailHandler: ((localId: string, err: any, ownerId: string) => void) | null = null;
 
 export function setMarkerCreateAckHandler(
-  ack: (localId: string, server: MarkerCreateServerResponse) => void,
-  fail?: (localId: string, err: any) => void,
+  ack: (localId: string, server: MarkerCreateServerResponse, ownerId: string) => Promise<void> | void,
+  fail?: (localId: string, err: any, ownerId: string) => void,
 ): void {
   markerCreateAckHandler = ack;
   markerCreateFailHandler = fail ?? null;
@@ -103,21 +107,27 @@ async function fetchOrThrow(path: string, method: string, body: any): Promise<an
 
 export const offlineMarkers = createOfflineEntity<MarkerCreatePayload, MarkerCreateServerResponse>({
   kind: 'marker_create',
+  retainOnPermanentFailure: true,
   // v423 B3 fix: per-user storageKey. 户外用户 A 攒了 pending marker 后
   // logout, 若 key 不带 userId 则 B 登录后 daemon 会用 B 的 token 上传 A 的
   // marker, 归属错乱. 现在 A 的队列存 @cairn:offline_markers:v2:A_id,
-  // B 只看到自己的空队列. clearMarkersQueueForUser() 提供 logout 清理入口.
-  storageKey: () => {
+  // B 只看到自己的空队列. Logout hides A's queue and never deletes it.
+  captureOwnerId: () => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useMarkerStore } = require('../store/useMarkerStore');
-      const uid = useMarkerStore.getState().userId;
-      return uid ? `@cairn:offline_markers:v2:${uid}` : '';
-    } catch {
-      return '';
-    }
+      return String(useMarkerStore.getState().userId ?? '');
+    } catch { return ''; }
   },
-  syncToServer: async (data, localId) => {
+  isOwnerCurrent: (ownerId) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useMarkerStore } = require('../store/useMarkerStore');
+      return String(useMarkerStore.getState().userId ?? '') === ownerId;
+    } catch { return false; }
+  },
+  storageKey: ownerId => ownerId ? `@cairn:offline_markers:v2:${ownerId}` : '',
+  syncToServer: async (data, localId, ownerId) => {
     // v423 B2 fix: hydrate 前 daemon 不能上传. 否则 ack handler 里
     // `if (s.userId) storage.setItem(...)` skip 写盘, 且 hydrate 从 MMKV 读
     // 旧数据覆盖内存, 刚 sync 的 marker 蒸发. 抛 5xx 让 entry 保留队列, 等
@@ -125,8 +135,8 @@ export const offlineMarkers = createOfflineEntity<MarkerCreatePayload, MarkerCre
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useMarkerStore } = require('../store/useMarkerStore');
-      const uid = useMarkerStore.getState().userId;
-      if (!uid) {
+      const uid = String(useMarkerStore.getState().userId ?? '');
+      if (!uid || uid !== ownerId || data.userId !== ownerId) {
         const err: any = new Error('store not hydrated');
         err.status = 503;  // 走 backoff 保留
         throw err;
@@ -138,30 +148,25 @@ export const offlineMarkers = createOfflineEntity<MarkerCreatePayload, MarkerCre
       err.status = 503;
       throw err;
     }
-    return fetchOrThrow('/api/markers', 'POST', { ...data, client_op_id: localId });
+    const { originActivityClientId, ...marker } = data;
+    return fetchOrThrow('/api/markers', 'POST', {
+      ...marker,
+      client_cairn_id: localId,
+      origin_activity_client_id: originActivityClientId ?? null,
+      client_op_id: localId,
+    });
   },
-  onSyncSuccess: (localId, server) => {
-    try { markerCreateAckHandler?.(localId, server); } catch { /* store 崩了不能拖累 daemon */ }
+  onSyncSuccess: async (localId, server, data, ownerId) => {
+    // Never drop the durable Cairn outbox after server acceptance until its
+    // independent Memory evidence is durably reconciled as well.
+    const { recordMemoryEvidence } = require('../features/memory/services/recordMemoryEvidence');
+    await recordMemoryEvidence({ lat: data.lat, lng: data.lng, atMs: Date.now(), source: 'reconciliation', ownerUserId: ownerId });
+    await markerCreateAckHandler?.(localId, server, ownerId);
   },
-  onSyncFailure: (localId, err) => {
-    try { markerCreateFailHandler?.(localId, err); } catch { /* silent */ }
+  onSyncFailure: (localId, err, _data, ownerId) => {
+    try { markerCreateFailHandler?.(localId, err, ownerId); } catch { /* silent */ }
   },
 });
-
-/**
- * v423 B3 fix: logout 或 user-switch 时调, 清 current userId 的 queue.
- * 内部靠 discard 每条 entry — 触发 subscribe 通知 UI 更新.
- */
-export async function clearMarkersQueueForCurrentUser(): Promise<void> {
-  try {
-    const pending = await offlineMarkers.listPending();
-    for (const entry of pending) {
-      await offlineMarkers.discard(entry.localId);
-    }
-  } catch {
-    /* silent — logout flow 不能因 queue clear 失败卡死 */
-  }
-}
 
 // O1 batch 36: removed voting scaffold (VoteAction, VoteReason, MarkerVotePayload,
 // MarkerVoteServerResponse, setMarkerVoteHandlers, offlineVotes, issueNonce,

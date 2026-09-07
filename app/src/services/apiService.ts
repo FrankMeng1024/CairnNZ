@@ -162,7 +162,7 @@ export async function authenticatedFetch(
     crashLogger.breadcrumb(`apiService:401_hard_logout path=${path}`);
     crashLogger.breadcrumb(`signout_reason=401_invalid path=${path}`);
     await clearToken();
-    useAppStore.getState().logout();
+    await useAppStore.getState().logout();
   }
 
   return res;

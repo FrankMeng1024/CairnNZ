@@ -19,11 +19,11 @@ import type { MarkerType } from '../data/mockData';
 import {
   offlineMarkers,
   setMarkerCreateAckHandler,
-  clearMarkersQueueForCurrentUser,
   type MarkerCreatePayload,
   type MarkerCreateServerResponse,
 } from '../services/markerOfflineEntities';
 import type { SyncState } from '../services/offlineEntity';
+import { tombstoneMarker, isMarkerTombstoned } from '../services/markerTombstones';
 
 // Sprint 6 review C3 (2026-07-30): serialize concurrent hydrate() calls
 // so a race between login + focus + nav can't overwrite user A's markers
@@ -40,6 +40,10 @@ export type MarkerPermission = 'personal' | 'group' | 'public';
 
 export interface Marker {
   id: string;
+  /** Immutable local business identity. Legacy hydrated rows may omit it. */
+  clientCairnId?: string;
+  /** Optional server mapping; never replaces clientCairnId. */
+  serverCairnId?: string;
   type: MarkerType;
   regionCode: string;      // e.g. 'nz' — frontend concept, not in backend
   lat: number;
@@ -48,7 +52,8 @@ export interface Marker {
   authorId: string;        // 'local' for offline; userId for synced
   createdAt: number;       // Unix ms
   permission: MarkerPermission;
-  sessionId?: string;      // which tracking session this was planted in
+  sessionId?: string;      // legacy alias
+  originActivityClientId?: string | null;
   synced?: boolean;        // true = exists in backend, false = local-only
   alt?: number;
   approximate?: boolean;   // true if placed with stale/no GPS signal
@@ -121,6 +126,8 @@ function fromBackend(row: {
    *  server-side per v4 row Q). Optional on /api/markers (own) path. */
   user_id?: number | string;
   author_name?: string | null;
+  client_cairn_id?: string | null;
+  origin_activity_client_id?: string | null;
 }): Marker {
   // v300: backend may return public_snapshot as either a parsed object
   // (mysql2 JSON columns auto-parse) or a JSON string (some drivers /
@@ -134,7 +141,10 @@ function fromBackend(row: {
     }
   }
   return {
-    id: String(row.id),
+    id: row.client_cairn_id || String(row.id),
+    clientCairnId: row.client_cairn_id || undefined,
+    serverCairnId: String(row.id),
+    originActivityClientId: row.origin_activity_client_id ?? null,
     type: row.type as MarkerType,
     regionCode: 'nz',           // default — backend doesn't store this
     lat: row.lat,
@@ -209,6 +219,8 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   hidingIds: [],
 
   addMarker: async (data) => {
+    const ownerId = String(get().userId ?? '');
+    if (!ownerId) throw new Error('marker_owner_required');
     // v422 offline-first: 无论在线离线, 走同一条路径
     //   1. 立即生成 local placeholder (localId, synced=false, syncState='pending')
     //   2. offlineMarkers.saveLocal → 存本地 kv + 触发 drain
@@ -230,7 +242,20 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     // 存 offlineMarkers entity, 拿到 localId (= idempotency key).
     // v423 B1 fix: saveLocal 现在会在 AsyncStorage 满 / hydrate 未完成时 throw.
     // 我们 catch 并向用户报"存不下", 不让 marker 在内存里假成功.
+    // Capture provenance at the commit boundary itself. Full Plant does not
+    // need to thread Activity state through navigation, and Quick Cairn may
+    // still pass the legacy sessionId alias. Only a genuinely unfinished
+    // live/paused Activity is authoritative.
+    let activeActivityClientId: string | null = data.originActivityClientId ?? data.sessionId ?? null;
+    try {
+      const { useTrackingStore } = require('./useTrackingStore');
+      const tracking = useTrackingStore.getState();
+      if ((tracking.status === 'tracking' || tracking.status === 'paused') && tracking.sessionId) {
+        activeActivityClientId = tracking.sessionId;
+      }
+    } catch { /* standalone Plant remains valid with null provenance */ }
     const payload: MarkerCreatePayload = {
+      userId: ownerId,
       type: data.type,
       text: data.note,
       lat: data.lat,
@@ -238,13 +263,27 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       alt: data.alt,
       permission: data.permission,
       approximate: data.approximate || false,
+      originActivityClientId: activeActivityClientId,
     };
     let localId: string;
     try {
-      const saved = await offlineMarkers.saveLocal(payload);
+      const saved = await offlineMarkers.saveLocal(payload, ownerId);
       localId = saved.localId;
     } catch (err) {
       crashLogger.breadcrumb(`marker:saveLocal_failed err=${String(err).slice(0, 80)}`);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const tracking = require('./useTrackingStore').useTrackingStore.getState();
+        if (tracking.locationProviderSource === 'simulator') {
+          const reason = `Cairn local commit failed: ${String(err).slice(0, 100)}`;
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../features/activitySimulator/useActivitySimulatorStore').useActivitySimulatorStore.getState().setLastFailure(reason);
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../features/activitySimulator/simulatorLog').appendSimulatorLog('ERROR', 'cairn_local_commit_failed', {
+            errorCode: String(err).slice(0, 120),
+          }, { userId: ownerId, clientActivityId: activeActivityClientId });
+        }
+      } catch { /* diagnostics cannot replace the real Plant error */ }
       // 不静默丢: 抛给上层 (PlantScreen commit 会 catch 显示 Alert "Could not plant cairn").
       throw err;
     }
@@ -252,17 +291,49 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     const marker: Marker = {
       ...data,
       id: localId,       // 前端立即用 localId 作 id, ack 后被替换
+      clientCairnId: localId,
+      originActivityClientId: activeActivityClientId,
       localId,
       createdAt: Date.now(),
       synced: false,
       syncState: 'pending',
       publicSnapshot,
     };
+    if (String(get().userId ?? '') !== ownerId) {
+      // The durable A-owned outbox row is intentionally retained.  A will
+      // rebuild its placeholder on the next hydrate; it must never be
+      // projected into the account that replaced A while this save awaited.
+      throw new Error('marker_owner_changed_after_commit');
+    }
     set((s) => {
+      if (String(s.userId ?? '') !== ownerId) return s;
       const next = [...s.markers, marker];
-      if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
+      storage.setItem(storageKey(ownerId), JSON.stringify(next));
       return { markers: next };
     });
+    try {
+      // Local-only simulator diagnostics; never sent through appLog.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const tracking = require('./useTrackingStore').useTrackingStore.getState();
+      if (tracking.locationProviderSource === 'simulator') {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { appendSimulatorLog } = require('../features/activitySimulator/simulatorLog');
+        appendSimulatorLog('CAIRN_COMMIT', 'cairn_local_commit_succeeded', {
+          cairnClientIdSuffix: localId.slice(-8),
+          originActivitySuffix: activeActivityClientId?.slice(-8) ?? null,
+          lat: data.lat,
+          lng: data.lng,
+          permission: data.permission,
+          syncState: 'pending',
+        }, { userId: ownerId, clientActivityId: activeActivityClientId });
+        if (activeActivityClientId) {
+          appendSimulatorLog('CAIRN_ASSOCIATION', 'cairn_activity_association_committed', {
+            cairnClientIdSuffix: localId.slice(-8),
+            originActivitySuffix: activeActivityClientId.slice(-8),
+          }, { userId: ownerId, clientActivityId: activeActivityClientId });
+        }
+      }
+    } catch { /* diagnostics cannot affect the durable Cairn commit */ }
 
     // v397: log unconditionally at the START so we know addMarker hit this
     // path at all (v396 had no plant_unlock logs in production → either the
@@ -279,50 +350,34 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       });
     } catch {/* never throw on log */}
 
-    // v380: plant-unlocks-memory — when a user plants a mark, also unlock
-    // the fog at that point (25m radius, same as walking unlock).
-    //
-    // v396 真 fix: recordPoint has 12.5m CULL that silently returns if
-    // any of the last 32 visited points is within 12.5m. Plant on a
-    // partially-explored boundary triggers the cull → fog stays closed.
-    // We now directly push a VisitedPoint, bypassing cull. Plant must
-    // ALWAYS unlock its own location.
+    // Final accepted Cairn coordinate is genuine explored-place evidence.
+    // Use the shared authority so an Activity or passive producer at the same
+    // place becomes one semantic Memory unlock.
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { useMemoryStore } = require('../features/memory/store/useMemoryStore');
-      // v399 真根因 (FogLayer.tsx:160): `if (seg.length < 2) continue` —
-      // 单点 segment 在 turf.buffer 前被跳过 (lineString 需要 ≥2 点).
-      // v400: single point — FogLayer.tsx:160 now buffers single-point
-      // segments via turf.point + buffer. plant 中心严格在 fog hole 圆心.
-      const ts = Math.floor(Date.now());
-      const cidBase = `plant-${ts}-${Math.floor(Math.random() * 1e9).toString(36)}`;
-      const planted = [
-        { lat: data.lat, lng: data.lng, ts, cid: `${cidBase}-0`, synced: false },
-      ];
-      const state = useMemoryStore.getState();
-      const newPoints = [...state.points, ...planted];
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { log } = require('../services/appLog');
-      log('v422.plant_unlock', {
-        lat: Number(data.lat.toFixed(5)),
-        lng: Number(data.lng.toFixed(5)),
-        points_before: state.points.length,
-        points_added: planted.length,
-        points_after: newPoints.length,
-        geom_v_before: state.geometryVersion,
+      const { recordMemoryEvidence } = require('../features/memory/services/recordMemoryEvidence');
+      await recordMemoryEvidence({
+        lat: data.lat,
+        lng: data.lng,
+        atMs: Date.now(),
+        source: 'cairn',
+        ownerUserId: ownerId,
       });
-      useMemoryStore.setState({
-        points: newPoints,
-        geometryVersion: state.geometryVersion + 1,
-        _bucketIndex: null,
-        _unsyncedCount: state._unsyncedCount + planted.length,
-      });
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { useH3VisitedStore } = require('../features/memory/store/useH3VisitedStore');
-      for (const p of planted) {
-        useH3VisitedStore.getState().addPointToCells(p.lat, p.lng, p.ts);
-      }
     } catch (err) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const tracking = require('./useTrackingStore').useTrackingStore.getState();
+        if (tracking.locationProviderSource === 'simulator') {
+          const reason = `Cairn Memory commit failed: ${String(err).slice(0, 100)}`;
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../features/activitySimulator/useActivitySimulatorStore').useActivitySimulatorStore.getState().setLastFailure(reason);
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../features/activitySimulator/simulatorLog').appendSimulatorLog('ERROR', 'cairn_memory_commit_failed', {
+            cairnClientIdSuffix: localId.slice(-8),
+            errorCode: String(err).slice(0, 120),
+          }, { userId: ownerId, clientActivityId: activeActivityClientId });
+        }
+      } catch { /* diagnostics only */ }
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { log } = require('../services/appLog');
@@ -397,14 +452,31 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
 
   deleteMarker: async (id) => {
     crashLogger.breadcrumb(`marker:delete:start id=${id}`);
+    const current = get().markers.find((marker) => marker.id === id);
+    const clientCairnId = current?.clientCairnId ?? current?.localId;
+    const serverCairnId = current?.serverCairnId ?? (current?.synced ? current.id : undefined);
+    const ownerId = String(get().userId ?? '');
+    // Tombstone and cancel create work before hiding the product object.
+    if (ownerId && clientCairnId) await tombstoneMarker(ownerId, clientCairnId);
+    if (clientCairnId && ownerId) await offlineMarkers.discard(clientCairnId, ownerId);
+    if (get().userId !== ownerId) throw new Error('marker_owner_changed_after_commit');
     set((s) => {
+      if (s.userId !== ownerId) return s;
       const next = s.markers.filter((m) => m.id !== id);
       if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
       return { markers: next };
     });
 
     try {
-      const res = await authenticatedFetch(`/api/markers/${id}`, { method: 'DELETE' });
+      if (get().userId !== ownerId) return;
+      if (!clientCairnId && !serverCairnId) return;
+      const primaryPath = clientCairnId
+        ? `/api/markers/client/${encodeURIComponent(clientCairnId)}`
+        : `/api/markers/${serverCairnId}`;
+      let res = await authenticatedFetch(primaryPath, { method: 'DELETE' });
+      if (!res.ok && clientCairnId && serverCairnId) {
+        res = await authenticatedFetch(`/api/markers/${serverCairnId}`, { method: 'DELETE' });
+      }
       crashLogger.breadcrumb(`marker:delete:remote ok=${res.ok} id=${id}`);
     } catch (err) {
       crashLogger.breadcrumb(`marker:delete:remote-error ${String(err).slice(0, 80)}`);
@@ -476,10 +548,8 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     // during a slow hydrate resurrected the just-cleared markers when
     // the hydrate's storage-read completed after clearMarkers ran.
     markerHydrateGeneration += 1;
-    // v423 B3 fix: logout 时也清 offline marker queue. 否则 A logout → B login
-    // 后 B 的 auth token 会上传 A 的 pending marker → server 归到 B 名下.
-    // 顺序: 先 clear queue (async, 用 current userId), 再 reset state.
-    clearMarkersQueueForCurrentUser().catch(() => { /* best-effort */ });
+    // Logout/user switch hides this user's data but deliberately preserves
+    // its user-scoped cache and committed outbox for a later matching login.
     // BUG-010 fix: also reset cross-session slices so a logout/login
     // doesn't leak prior user's circle data into the new session.
     // BUG-014 fix (round 4): also reset memory subscriptions slice via
@@ -709,6 +779,58 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
         crashLogger.breadcrumb('marker_hydrate:no_cache');
         set({ markers: [], userId });
       }
+      // The business outbox is itself committed Cairn product data. Rebuild
+      // any missing placeholder before network hydration so a process death
+      // can never leave a durable create row with no Cairn visible in-product.
+      try {
+        const pending = await offlineMarkers.listPending();
+        const visiblePending: Marker[] = [];
+        for (const entry of pending) {
+          if (await isMarkerTombstoned(userId, entry.localId)) continue;
+          const data = entry.data;
+          // If the process died immediately after the Cairn outbox commit,
+          // finish its Memory side-effect before network hydration. This is
+          // limited to still-pending commits, so an intentional later Reset
+          // Memory is not undone by every historical Cairn on login.
+          try {
+            const { recordMemoryEvidence } = require('../features/memory/services/recordMemoryEvidence');
+            await recordMemoryEvidence({
+              lat: data.lat,
+              lng: data.lng,
+              atMs: entry.savedAt,
+              source: 'reconciliation',
+              ownerUserId: userId,
+            });
+          } catch { /* pending Cairn remains and reconciliation will retry */ }
+          visiblePending.push({
+            id: entry.localId,
+            clientCairnId: entry.localId,
+            localId: entry.localId,
+            type: data.type,
+            regionCode: 'nz',
+            lat: data.lat,
+            lng: data.lng,
+            alt: data.alt,
+            note: data.text || '',
+            authorId: userId,
+            createdAt: entry.savedAt,
+            permission: data.permission,
+            approximate: data.approximate,
+            originActivityClientId: data.originActivityClientId ?? null,
+            synced: false,
+            syncState: entry.syncState,
+          });
+        }
+        if (visiblePending.length > 0) {
+          const current = get().markers;
+          const existing = new Set(current.map(marker => marker.clientCairnId ?? marker.id));
+          const merged = [...current, ...visiblePending.filter(marker => !existing.has(marker.id))];
+          await storage.setItem(key, JSON.stringify(merged));
+          set({ markers: merged, userId });
+        }
+      } catch (outboxError) {
+        crashLogger.breadcrumb(`marker_hydrate:outbox_rebuild_failed ${String(outboxError).slice(0, 80)}`);
+      }
       // 2. Then fetch from backend (async, updates state when done)
       get().loadFromBackend();
     })();
@@ -740,37 +862,52 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
 // 注意: 本 handler 不能抛异常, 抛会拖累 offlineEntity daemon. 全部 try/catch。
 
 setMarkerCreateAckHandler(
-  (localId, server: MarkerCreateServerResponse) => {
+  async (localId, server: MarkerCreateServerResponse, ownerId) => {
     try {
+      if (!ownerId) throw new Error('marker_ack_owner_missing');
+      // Never use the account that happens to be active when a response
+      // resolves.  The owner was captured in the durable outbox entry.
+      if (String(useMarkerStore.getState().userId ?? '') !== ownerId) {
+        throw new Error('marker_ack_owner_not_current');
+      }
+      if (await isMarkerTombstoned(ownerId, localId)) {
+        const deleted = await authenticatedFetch(`/api/markers/${server.id}`, { method: 'DELETE' });
+        if (!deleted.ok && deleted.status !== 404) throw new Error('marker_tombstone_reconciliation_failed');
+        return;
+      }
       const serverAuthorId =
         server.user_id != null ? String(server.user_id) : undefined;
-      useMarkerStore.setState((s) => {
-        const next = s.markers.map((m) => {
+      const snapshot = useMarkerStore.getState();
+      const next = snapshot.markers.map((m) => {
           if (m.localId !== localId && m.id !== localId) return m;
           return {
             ...m,
-            id: String(server.id),
+            id: m.clientCairnId ?? localId,
+            clientCairnId: m.clientCairnId ?? localId,
+            serverCairnId: String(server.id),
             authorId: serverAuthorId ?? m.authorId,
             synced: true,
             syncState: 'synced' as SyncState,
           };
-        });
-        if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
-        return { markers: next };
       });
+      await storage.setItem(storageKey(ownerId), JSON.stringify(next));
+      if (String(useMarkerStore.getState().userId ?? '') !== ownerId) throw new Error('marker_ack_owner_changed');
+      useMarkerStore.setState({ markers: next });
       crashLogger.breadcrumb(`marker:ack localId=${localId.slice(0, 8)} serverId=${server.id}`);
     } catch (err) {
       crashLogger.breadcrumb(`marker:ack_threw ${String(err).slice(0, 60)}`);
+      throw err;
     }
   },
-  (localId, err) => {
+  (localId, err, ownerId) => {
     try {
       useMarkerStore.setState((s) => {
+        if (String(s.userId ?? '') !== ownerId) return s;
         const next = s.markers.map((m) => {
           if (m.localId !== localId && m.id !== localId) return m;
           return { ...m, syncState: 'failed' as SyncState };
         });
-        if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
+        storage.setItem(storageKey(ownerId), JSON.stringify(next));
         return { markers: next };
       });
       crashLogger.breadcrumb(`marker:fail localId=${localId.slice(0, 8)} err=${String(err?.status ?? err).slice(0, 40)}`);

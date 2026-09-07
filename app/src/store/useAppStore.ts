@@ -68,7 +68,7 @@ interface AppState {
   // Sign In form. Cleared on next successful login.
   sessionExpired: boolean;
   setSessionExpired: (v: boolean) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 
   // v412 4-eye fix (Critical #4): hydrationTs 供 HikingScreen 的 v412 unfinished recovery
   // useEffect 依赖数组用. hydrate 结束时 set({hydrationTs: Date.now()}), 让 iOS jetsam
@@ -79,7 +79,7 @@ interface AppState {
   hydrate: () => Promise<void>;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   isLoggedIn: false,
   setLoggedIn: (v) => {
     set({ isLoggedIn: v });
@@ -135,8 +135,22 @@ export const useAppStore = create<AppState>((set) => ({
   // v412 4-eye fix (Critical #4): 供 HikingScreen recovery useEffect 依赖数组用
   hydrationTs: 0,
 
-  logout: () => {
+  logout: async () => {
     crashLogger.breadcrumb('logout:start');
+    // Immediately revoke any live recorder from the outgoing account. This
+    // begins synchronously and hides the store before auth state changes;
+    // durable owner-scoped recovery data remains for a later matching login.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useTrackingStore } = require('./useTrackingStore');
+      await useTrackingStore.getState().suspendForUserSwitch();
+      crashLogger.breadcrumb('logout:activity_suspended');
+    } catch (error) {
+      crashLogger.breadcrumb(`logout:activity_suspend_failed ${String(error).slice(0, 80)}`);
+      // Do not release the account while its native lease cannot be proven
+      // disabled. The caller may retry once durable storage is available.
+      throw error;
+    }
     // O18 batch 6.5: unregister push token before dropping auth state so
     // the /unregister call goes out with a valid token. Fire-and-forget —
     // never let a push failure block sign-out.
@@ -161,6 +175,13 @@ export const useAppStore = create<AppState>((set) => ({
     crashLogger.breadcrumb('logout:sessions_cleared');
     useMarkerStore.getState().clearMarkers();
     crashLogger.breadcrumb('logout:markers_cleared');
+    // Detach while the outgoing user's in-memory snapshot is still present.
+    // detachMemoryPersistence snapshots synchronously before its first await;
+    // clearing the store first used to overwrite Account A's durable Memory
+    // with an empty payload during logout.
+    try { detachMemorySync(); } catch { /* swallow */ }
+    try { await detachMemoryPersistence(); } catch { /* durable store remains authoritative */ }
+    crashLogger.breadcrumb('logout:memory_sync_detached');
     // Round-5 R5-M6: also clear memory points + H3 fog cells so the next
     // sign-in doesn't briefly show the previous user's data. Pre-fix,
     // ForegroundUnlockManager cleaned this up on the next foreground tick
@@ -172,27 +193,14 @@ export const useAppStore = create<AppState>((set) => ({
       useMemoryStore.getState().resetForUserSwitch();
       crashLogger.breadcrumb('logout:memory_reset');
     } catch { /* swallow — memoryStore may not be initialized on cold-boot logout */ }
-    // v405: 断开 memory sync + memory persistence,避免 logout 后
-    // 后续 pushPendingPoints 用旧 userId 推数据到新用户。
-    try { detachMemorySync(); } catch { /* swallow */ }
-    try { void detachMemoryPersistence(); } catch { /* swallow */ }
-    crashLogger.breadcrumb('logout:memory_sync_detached');
-    // Sprint 6 round-21 R21B1: also clear SAF-01 payload state + disk
-    // blob. Pre-fix, logout cleared sessions/markers/memory but the
-    // SAF-01 saveLostSessionId + saveLostPayload survived in-memory,
-    // and `cairn_saf01_payload` stayed on disk. Cross-user leak:
-    // User A's crash blob would be visible to User B on the same
-    // device after B signs in (Alert would re-fire with A's context).
-    // Now: reset trackingStore's SAF-01 fields + remove disk blob.
-    // Belt-and-suspenders with R21B2 (hydrateSaf01 userId gate).
+    // Hide the emergency Save payload from the signed-out UI, but preserve
+    // its per-user durable copy. Logout is not account deletion; the original
+    // owner may need to resume recovery after signing in again.
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useTrackingStore } = require('./useTrackingStore');
       useTrackingStore.setState({ saveLostSessionId: null, saveLostPayload: null });
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { storage: safStorage } = require('./storage');
-      safStorage.removeItem('cairn_saf01_payload').catch(() => {});
-      crashLogger.breadcrumb('logout:saf01_cleared');
+      crashLogger.breadcrumb('logout:saf01_hidden');
     } catch { /* swallow — trackingStore or storage not loaded */ }
     // Sprint 72 STORY-00549: 硬清标记 — 阻止下次冷启动 auto-login。
     // 用户下次点 Sign In 成功后 AuthScreen 清此标记。
@@ -263,17 +271,21 @@ export const useAppStore = create<AppState>((set) => ({
           // 顺序: hydrateMemoryForUser (从 AsyncStorage 载 unsynced points
           // 到 useMemoryStore) → attachMemorySync (subscriber 检测到 unsynced
           // count 就 schedulePush)。反过来会漏掉旧 unsynced points。
+          let memoryHydrated = false;
           try {
             await hydrateMemoryForUser(user.id);
+            memoryHydrated = true;
             crashLogger.breadcrumb(`v405:mem_hydrate_ok user_id=${user.id}`);
           } catch (memErr) {
             crashLogger.breadcrumb(`v405:mem_hydrate_failed ${String(memErr).slice(0, 80)}`);
           }
-          try {
-            attachMemorySync(user.id);
-            crashLogger.breadcrumb(`v405:mem_sync_attached user_id=${user.id}`);
-          } catch (attachErr) {
-            crashLogger.breadcrumb(`v405:mem_sync_attach_failed ${String(attachErr).slice(0, 80)}`);
+          if (memoryHydrated) {
+            try {
+              attachMemorySync(user.id);
+              crashLogger.breadcrumb(`v405:mem_sync_attached user_id=${user.id}`);
+            } catch (attachErr) {
+              crashLogger.breadcrumb(`v405:mem_sync_attach_failed ${String(attachErr).slice(0, 80)}`);
+            }
           }
           // v404: fetch backend sessions on cold boot even though isLoggedIn=false.
           // 登录成功后 UI 需要立刻看到 activity 列表，避免登录后再等一轮网络。
@@ -326,6 +338,9 @@ export const useAppStore = create<AppState>((set) => ({
             const preservedRemoteIds = new Set(
               preservedLocals.map((s) => s.remoteId).filter((v): v is number => v != null)
             );
+            const preservedClientIds = new Set(
+              preservedLocals.map((s) => s.clientActivityId ?? s.id),
+            );
             // R96 修补 C.2: remote === null 表示 fetchSessions 失败(5xx/网络错)。
             // 此时 remoteSessions=[] + preservedLocals 拿到全部 beforeMerge
             // 意味 "保留本地不清 UI"。如果 remote 是真实数组(可能为空),
@@ -334,9 +349,12 @@ export const useAppStore = create<AppState>((set) => ({
               ? []
               : remote
                   .filter((r) => !preservedRemoteIds.has(r.id))
+                  .filter((r) => !r.client_activity_id || !preservedClientIds.has(r.client_activity_id))
                   .map((r) => ({
-                    id: String(r.id),
+                    id: r.client_activity_id || String(r.id),
+                    clientActivityId: r.client_activity_id || undefined,
                     remoteId: r.id,
+                    serverActivityId: r.id,
                     activityMode: r.type as SessionActivityMode,
                     regionCode: 'nz',
                     startedAt: new Date(r.start_time).getTime(),
@@ -354,43 +372,32 @@ export const useAppStore = create<AppState>((set) => ({
               ? beforeMerge  // 保留全部本地(含 synced 已从本地 hydrate 的)
               : preservedLocals;
             const merged = [...preservedAllLocals, ...remoteSessions];
-            // O18 SAF-06 (2026-07-29): rebuild orphaned pending rows.
-            // If a prior version of the app already wiped the in-memory
-            // pending session (bug fixed above), the payload may still be
-            // sitting on disk in pendingSyncStore. Rebuild a placeholder
-            // TrackingSession for each such file so the user sees the grey
-            // card + banner and can retry sync. Placeholders have empty
-            // trackPoints (loadTrackPoints will fall back to storage which
-            // is empty — the retry itself will re-populate on success via
-            // markSynced updating remoteId).
+            // The verified pending file is the completion intent. Roll every
+            // owner-matching intent forward into both durable Detail storage
+            // and completed-local lifecycle before recovery detection runs.
+            // This covers process death after phase 1 (intent), phase 2
+            // (summary/trace), or phase 3 (registry completion).
             try {
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               const { listPending } = require('../services/pendingSyncStore');
               const disk = await listPending();
-              const existingLocalIds = new Set(merged.map((s) => s.id));
-              const orphans = (Array.isArray(disk) ? disk : []).filter((h: any) => (
-                h && h.localId && !existingLocalIds.has(h.localId)
+              const ownedIntents = (Array.isArray(disk) ? disk : []).filter((h: any) => (
+                h
+                && h.localId
+                && String(h.userId ?? '') === String(user.id)
               ));
-              for (const h of orphans) {
-                const payload = h.payload ?? {};
-                merged.push({
-                  id: h.localId,
-                  remoteId: h.remoteId ?? undefined,
-                  activityMode: h.activityMode || 'hiking',
-                  regionCode: 'nz',
-                  startedAt: h.createdAt || Date.now(),
-                  endedAt: payload.end_time ? new Date(payload.end_time).getTime() : (h.createdAt || Date.now()),
-                  durationS: payload.duration_s || 0,
-                  distanceM: payload.distance_m || 0,
-                  elevationGainM: 0,
-                  trackPoints: [],
-                  markerIds: [],
-                  name: payload.name || undefined,
-                  syncState: 'pending' as const,
-                });
+              for (const h of ownedIntents) {
+                const { reconcileCompletedActivityIntent } = require('../features/activity/completedActivityIntent');
+                const completedLocal = await reconcileCompletedActivityIntent(String(user.id), h);
+                const existingIndex = merged.findIndex((session) => (
+                  session.id === h.localId
+                  || (h.remoteId != null && session.remoteId === h.remoteId)
+                ));
+                if (existingIndex >= 0) merged[existingIndex] = completedLocal;
+                else merged.push(completedLocal);
               }
-              if (orphans.length > 0) {
-                crashLogger.breadcrumb(`hydrate:rebuilt_orphan_pending count=${orphans.length}`);
+              if (ownedIntents.length > 0) {
+                crashLogger.breadcrumb(`hydrate:reconciled_completed_intents count=${ownedIntents.length}`);
               }
             } catch (orphanErr) {
               crashLogger.breadcrumb(`hydrate:orphan_rebuild_failed ${String(orphanErr).slice(0, 80)}`);
@@ -467,16 +474,19 @@ export const useAppStore = create<AppState>((set) => ({
         diskMetas = await listActiveHikes();
       } catch { /* best effort */ }
 
-      // Priority: 优先用磁盘 metas (有 started_at + total_points 完整信息)
+      // Priority: durable file + registry identity. Unfinished Activities do
+      // not silently expire after an arbitrary time horizon.
       if (diskMetas.length > 0) {
         const newest = diskMetas[0];
-        const ageMs = Date.now() - newest.started_at;
-        if (ageMs > 24 * 60 * 60_000) {
-          crashLogger.breadcrumb(`v409:disk_hike_stale_24h id=${newest.session_id}`);
-          // >24h 视为 stale, 磁盘不删 (可能想留 debug),只清 AsyncStorage marker
-          try { await AsyncStorage.removeItem('cairn_bg_active_session_id'); } catch { /* ignore */ }
-        } else {
-          crashLogger.breadcrumb(`v409:disk_hike_recovered id=${newest.session_id} pts=${newest.total_points} age_ms=${ageMs}`);
+        crashLogger.breadcrumb(`activity:disk_recoverable id=${newest.session_id} pts=${newest.total_points}`);
+        const currentUserId = String(get().user?.id ?? '');
+        if (currentUserId) {
+          try {
+            const { ensureUnfinishedActivityRegistry } = require('../features/activity/activityRecovery');
+            await ensureUnfinishedActivityRegistry(currentUserId);
+          } catch (registryError) {
+            crashLogger.breadcrumb(`activity:registry_migration_failed ${String(registryError).slice(0, 80)}`);
+          }
         }
       } else if (activeSid) {
         // Legacy fallback: 老 marker 存在但磁盘无 → 仍走 Sprint 72 STORY-00551 逻辑
@@ -484,13 +494,7 @@ export const useAppStore = create<AppState>((set) => ({
         const found = localSessions.find(s => s.id === activeSid);
         const startedAt = found?.startedAt;
         const ageMs = startedAt ? Date.now() - startedAt : undefined;
-        // Stale > 24h → silent end, do NOT surface banner
-        if (ageMs != null && ageMs > 24 * 60 * 60_000) {
-          crashLogger.breadcrumb(`unfinished_session:silent_end id=${activeSid} reason=stale_24h`);
-          try { await AsyncStorage.removeItem('cairn_bg_active_session_id'); } catch { /* ignore */ }
-        } else {
-          crashLogger.breadcrumb(`unfinished_session:detected id=${activeSid} age_ms=${ageMs ?? 'unknown'}`);
-        }
+        crashLogger.breadcrumb(`unfinished_session:detected id=${activeSid} age_ms=${ageMs ?? 'unknown'}`);
       }
 
       // v409: cold-start 触发一次 offline queue drain — 防止 kill 前有未

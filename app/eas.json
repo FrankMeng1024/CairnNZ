@@ -13,7 +13,8 @@
         "simulator": true
       },
       "env": {
-        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false"
+        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false",
+        "EXPO_PUBLIC_ACTIVITY_SIMULATOR_ENABLED": "true"
       }
     },
     "development": {
@@ -29,7 +30,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.yiiling.cn",
-        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false"
+        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false",
+        "EXPO_PUBLIC_ACTIVITY_SIMULATOR_ENABLED": "true"
       }
     },
     "preview": {
@@ -45,7 +47,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.yiiling.cn",
-        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false"
+        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false",
+        "EXPO_PUBLIC_ACTIVITY_SIMULATOR_ENABLED": "true"
       }
     },
     "production": {
@@ -57,7 +60,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.yiiling.cn",
-        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false"
+        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false",
+        "EXPO_PUBLIC_ACTIVITY_SIMULATOR_ENABLED": "false"
       }
     }
   },

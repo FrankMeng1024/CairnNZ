@@ -2,20 +2,19 @@
  * hikeTrackWriter — v409 独立 hike 磁盘落盘服务
  *
  * Purpose:
- *   - 每次 GPS callback 同步 append 一行 JSONL 到 active/{sid}.jsonl
+ *   - every accepted GPS callback awaits one verified journal replacement
  *   - stopTracking 时 rename 到 completed/ 目录
  *   - hydrate 时可读 tail 恢复未完成 hike
  *
- * Design decisions (see docs/audit-v404/v409-DESIGN.md §2):
- *   - 纯 append (write mode 'a' 语义),绝不 read-modify-write
- *   - Crash safety: 写中断只丢 1 行,tail-recover 时 skip malformed
+ * Design decisions (see docs/review/free-activity-final):
+ *   - verified two-snapshot replacement because Expo FileSystem has no append
+ *   - Crash safety: recovery selects the most complete valid active/next/bak snapshot
  *   - 与 debugLogger 完全解耦(独立目录 cairn-hike-tracks/, 独立 gate)
- *   - 内部 write buffer (~30s 或 50 点) 减少 fsync 频率;但 background 场景
- *     每次 append 直接 fsync 确保 iOS jetsam 后不丢 (少数几行内)
+ *   - every accepted point commits immediately; there is no long-lived buffer
  *
  * JSONL schema per line (~85 bytes):
  *   { "t": 1720260000000, "lat": -36.848461, "lng": 174.763336,
- *     "acc": 8.5, "alt": 42.3, "src": "fg|bg|slc", "conf": 1 }
+ *     "acc": 8.5, "alt": 42.3, "src": "fg|bg|slc|sim", "conf": 1 }
  *
  * File layout:
  *   {docDir}/cairn-hike-tracks/
@@ -28,25 +27,27 @@
  * same file layout via appendDirectlyToHikeTrack().
  */
 
-import type { LocationCoords } from './backgroundLocationTask';
-
 const HIKE_DIR = 'cairn-hike-tracks/';
 const ACTIVE_DIR = HIKE_DIR + 'active/';
 const COMPLETED_DIR = HIKE_DIR + 'completed/';
 const META_DIR = HIKE_DIR + 'meta/';
 
-// Write buffer: flush every N ms or every M points, whichever comes first.
-const FLUSH_INTERVAL_MS = 30_000;
-const FLUSH_POINT_COUNT = 50;
+// Commit policy: flush every accepted point. The former timer/count buffer
+// routinely lost an accepted foreground tail on abrupt process death.
 
-interface HikePoint {
+export interface HikePoint {
   t: number;
   lat: number;
   lng: number;
   acc?: number | null;
   alt?: number | null;
-  src?: 'fg' | 'bg' | 'slc';
+  speed?: number | null;
+  src?: 'fg' | 'bg' | 'slc' | 'sim';
   conf?: number; // 1=high (GPS), 0.5=low (cell/WiFi), 0=gap fill only
+  clientActivityId: string;
+  ownerGeneration: string;
+  segmentId: string;
+  segmentStartReason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
 }
 
 export interface HikeMeta {
@@ -54,21 +55,25 @@ export interface HikeMeta {
   started_at: number;
   ended_at?: number;
   activity_mode: 'hiking' | 'running';
+  user_id?: string;
+  owner_generation?: string;
   remote_id?: number;
   last_ts?: number;
   total_points: number;
   uploaded: boolean;
+  /** Local-only provider identity used to restore Simulator Activities. */
+  location_source?: 'real' | 'simulator';
 }
 
 interface WriterState {
   sessionId: string;
   buffer: HikePoint[];
-  flushTimer: ReturnType<typeof setTimeout> | null;
   totalPoints: number;
   lastFlushError: string | null;
 }
 
 let state: WriterState | null = null;
+let durableWriteTail: Promise<void> = Promise.resolve();
 
 /**
  * Dynamic import expo-file-system/legacy — same pattern as
@@ -170,6 +175,74 @@ async function ensureDirs(fs: any): Promise<void> {
   }
 }
 
+function activeCandidates(basePath: string): string[] {
+  return [basePath, `${basePath}.next`, `${basePath}.bak`];
+}
+
+function isSaneStoredCoordinate(point: any): boolean {
+  return Number.isFinite(point?.t)
+    && point.t > 0
+    && Number.isFinite(point?.lat)
+    && point.lat >= -90
+    && point.lat <= 90
+    && Number.isFinite(point?.lng)
+    && point.lng >= -180
+    && point.lng <= 180;
+}
+
+async function readBestSnapshot(fs: any, basePath: string): Promise<string> {
+  let best = '';
+  let bestLines = -1;
+  for (const path of activeCandidates(basePath)) {
+    try {
+      const info = await fs.getInfoAsync(path);
+      if (!info.exists) continue;
+      const value = await fs.readAsStringAsync(path);
+      let validLines = 0;
+      for (const line of value.split('\n')) {
+        if (!line.trim()) continue;
+        try {
+          const point = JSON.parse(line);
+          if (!isSaneStoredCoordinate(point)) break;
+          validLines += 1;
+        } catch { break; }
+      }
+      if (validLines > bestLines) {
+        best = value;
+        bestLines = validLines;
+      }
+    } catch { /* try the next crash-recovery candidate */ }
+  }
+  return best;
+}
+
+/**
+ * expo-file-system has no append primitive. This two-snapshot transaction
+ * keeps the previous complete journal until the replacement has been written
+ * and verified. Recovery accepts active, .next, or .bak after a process death
+ * and selects the snapshot containing the most complete valid prefix.
+ */
+async function appendSnapshot(fs: any, basePath: string, lines: string): Promise<void> {
+  const run = durableWriteTail.then(async () => {
+    const existing = await readBestSnapshot(fs, basePath);
+    const nextPath = `${basePath}.next`;
+    const backupPath = `${basePath}.bak`;
+    const replacement = existing + lines;
+    await fs.writeAsStringAsync(nextPath, replacement);
+    const verified = await fs.readAsStringAsync(nextPath);
+    if (verified !== replacement) throw new Error('activity_journal_verification_failed');
+    try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
+    try {
+      const current = await fs.getInfoAsync(basePath);
+      if (current.exists) await fs.moveAsync({ from: basePath, to: backupPath });
+    } catch { /* active may already be in .bak after a prior interrupted commit */ }
+    await fs.moveAsync({ from: nextPath, to: basePath });
+    try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
+  });
+  durableWriteTail = run.catch(() => {});
+  await run;
+}
+
 /**
  * Start writing a new hike track. Called from useTrackingStore.startTracking.
  * Overwrites any prior state — caller must call renameToCompleted() first
@@ -178,29 +251,37 @@ async function ensureDirs(fs: any): Promise<void> {
 export async function startHikeTrack(sessionId: string, meta: Omit<HikeMeta, 'session_id' | 'total_points' | 'uploaded' | 'last_ts'>): Promise<void> {
   const fs = await getFs();
   if (!fs) {
-    state = { sessionId, buffer: [], flushTimer: null, totalPoints: 0, lastFlushError: 'web-no-fs' };
+    state = { sessionId, buffer: [], totalPoints: 0, lastFlushError: 'web-no-fs' };
     return;
   }
   await ensureDirs(fs);
-  // Truncate any old file with same sid (rare but idempotent-safe)
+  // Truncate every crash-recovery snapshot with the same immutable id.
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
-  try {
-    const info = await fs.getInfoAsync(activePath);
-    if (info.exists) await fs.deleteAsync(activePath, { idempotent: true });
-  } catch { /* best effort */ }
+  for (const path of activeCandidates(activePath)) {
+    try {
+      const info = await fs.getInfoAsync(path);
+      if (info.exists) await fs.deleteAsync(path, { idempotent: true });
+    } catch { /* best effort */ }
+  }
   // Write initial meta
   const fullMeta: HikeMeta = {
     session_id: sessionId,
     started_at: meta.started_at,
     activity_mode: meta.activity_mode,
+    user_id: meta.user_id,
+    owner_generation: meta.owner_generation,
     remote_id: meta.remote_id,
     total_points: 0,
     uploaded: false,
   };
-  try {
-    await fs.writeAsStringAsync(fs.documentDirectory + META_DIR + sessionId + '.json', JSON.stringify(fullMeta));
-  } catch { /* best effort */ }
-  state = { sessionId, buffer: [], flushTimer: null, totalPoints: 0, lastFlushError: null };
+  await fs.writeAsStringAsync(
+    fs.documentDirectory + META_DIR + sessionId + '.json',
+    JSON.stringify(fullMeta),
+  );
+  // The empty anchor makes a just-started Activity discoverable even if the
+  // process dies before CoreLocation delivers its first acceptable sample.
+  await fs.writeAsStringAsync(activePath, '');
+  state = { sessionId, buffer: [], totalPoints: 0, lastFlushError: null };
 }
 
 /**
@@ -216,7 +297,7 @@ export async function startHikeTrack(sessionId: string, meta: Omit<HikeMeta, 'se
 export async function resumeHikeTrack(sessionId: string): Promise<{ resumed: boolean; totalPoints: number }> {
   const fs = await getFs();
   if (!fs) {
-    state = { sessionId, buffer: [], flushTimer: null, totalPoints: 0, lastFlushError: 'web-no-fs' };
+    state = { sessionId, buffer: [], totalPoints: 0, lastFlushError: 'web-no-fs' };
     return { resumed: true, totalPoints: 0 };
   }
   // Read existing meta to preserve total_points count
@@ -226,31 +307,30 @@ export async function resumeHikeTrack(sessionId: string): Promise<{ resumed: boo
     const meta: HikeMeta = JSON.parse(metaRaw);
     existingTotal = meta.total_points ?? 0;
   } catch { /* meta absent — start fresh count but don't fail */ }
-  state = { sessionId, buffer: [], flushTimer: null, totalPoints: existingTotal, lastFlushError: null };
+  state = { sessionId, buffer: [], totalPoints: existingTotal, lastFlushError: null };
   return { resumed: true, totalPoints: existingTotal };
 }
 
 /**
- * Append one GPS point. Buffered — flushed to disk every 30s or every
- * 50 points, whichever comes first. Sync call, non-blocking.
+ * Append one GPS point and return only after its verified journal replacement.
  *
  * NOTE: Only appends if there is an active state (startHikeTrack called).
  * If state is null (e.g. background task fired before session start), the
  * point is dropped here — background task path handles JS-dead case by
  * writing directly via appendDirectlyToHikeTrack.
  */
-export function appendHikePoint(point: HikePoint): void {
-  if (!state) return;
+export function appendHikePoint(point: HikePoint): Promise<void> {
+  if (!state || state.sessionId !== point.clientActivityId) return Promise.resolve();
   state.buffer.push(point);
   state.totalPoints++;
-  if (state.buffer.length >= FLUSH_POINT_COUNT) {
-    void flushBuffer();
-  } else if (!state.flushTimer) {
-    state.flushTimer = setTimeout(() => { void flushBuffer(); }, FLUSH_INTERVAL_MS);
-  }
+  // A foreground point is not accepted by the Activity store until this
+  // promise resolves. Flush every accepted point so process death cannot
+  // routinely lose a timer-sized tail. The serialized snapshot writer keeps
+  // concurrent foreground/background commits from overwriting each other.
+  return flushBuffer();
 }
 
-// O1 R1: mutex — flushBuffer 有多个 caller (30s timer, 50pts trigger,
+// O1 R1: mutex — flushBuffer has multiple callers (point, stop, AppState,
 // stopTracking, background AppState). 无 mutex 时并发 flush 会 truncate
 // 已经写入的数据 (concurrent read-existing 拿旧 file,write 用旧+空 覆盖)。
 // O6 fix: 老的 mutex 是 "check-then-set-null" pattern, 会有 race: A 完成
@@ -266,10 +346,6 @@ async function flushBuffer(): Promise<void> {
   const next = flushChainTail.then(async () => {
     if (!state) return;
     const s = state; // narrow for TS
-    if (s.flushTimer) {
-      clearTimeout(s.flushTimer);
-      s.flushTimer = null;
-    }
     if (s.buffer.length === 0) return;
     const toWrite = s.buffer;
     s.buffer = [];
@@ -278,16 +354,7 @@ async function flushBuffer(): Promise<void> {
     const activePath = fs.documentDirectory + ACTIVE_DIR + s.sessionId + '.jsonl';
     const lines = toWrite.map(p => JSON.stringify(p)).join('\n') + '\n';
     try {
-      // expo-file-system/legacy doesn't have native append; use read+write.
-      // For crash safety we chunk the read to avoid holding entire file if huge.
-      // 30s buffer × 1h = ~120 flushes, each concat writes O(file_size).
-      // For 1h/3600pts file (~350KB), each write is 350KB × 120 = manageable.
-      let existing = '';
-      try {
-        const info = await fs.getInfoAsync(activePath);
-        if (info.exists) existing = await fs.readAsStringAsync(activePath);
-      } catch { /* best effort */ }
-      await fs.writeAsStringAsync(activePath, existing + lines);
+      await appendSnapshot(fs, activePath, lines);
       // Update meta
       const metaPath = fs.documentDirectory + META_DIR + s.sessionId + '.json';
       try {
@@ -302,6 +369,7 @@ async function flushBuffer(): Promise<void> {
       s.lastFlushError = String(e).slice(0, 80);
       // Re-buffer for next attempt (don't drop)
       s.buffer = toWrite.concat(s.buffer);
+      throw e;
     }
   });
   // 用 catch 屏蔽 chain 里单次失败,避免一次抛错把整条 chain 变成
@@ -321,23 +389,22 @@ export async function renameToCompleted(sessionId: string, endedAt: number, remo
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
   const completedPath = fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl';
   const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
-  // O16 B2: detect whether we actually have a JSONL to move. Sim-walker
-  // sessions never call appendHikePoint, so active/{sid}.jsonl never
-  // exists. Pre-fix, we still ran the meta update path — leaving an
-  // orphan meta file forever. Now: only update meta when we actually
-  // rename (there's a completed JSONL to pair with). Otherwise, delete
-  // the meta so the disk isn't leaking one file per sim-walker save.
+  // Detect whether a JSONL exists before updating its paired metadata.
+  // Initialization failures or legacy zero-point sessions can have only meta.
   let activeExisted = false;
   try {
-    const info = await fs.getInfoAsync(activePath);
-    if (info.exists) {
-      await fs.moveAsync({ from: activePath, to: completedPath });
+    await durableWriteTail.catch(() => {});
+    const snapshot = await readBestSnapshot(fs, activePath);
+    if (snapshot) {
+      await fs.writeAsStringAsync(completedPath, snapshot);
+      for (const candidate of activeCandidates(activePath)) {
+        try { await fs.deleteAsync(candidate, { idempotent: true }); } catch {}
+      }
       activeExisted = true;
     }
   } catch { /* best effort */ }
   if (activeExisted) {
-    // Real hike (or hybrid sim + real GPS): update meta with ended_at
-    // and remote_id so listActiveHikes doesn't see it as unfinished.
+    // Update meta with ended_at and remote_id so recovery does not surface it.
     try {
       const metaRaw = await fs.readAsStringAsync(metaPath);
       const meta: HikeMeta = JSON.parse(metaRaw);
@@ -346,9 +413,7 @@ export async function renameToCompleted(sessionId: string, endedAt: number, remo
       await fs.writeAsStringAsync(metaPath, JSON.stringify(meta));
     } catch { /* best effort */ }
   } else {
-    // Pure sim-walker case (no disk points ever written). No completed
-    // JSONL means the meta has no counterpart — delete it so
-    // meta/ directory doesn't accumulate one orphan per sim save.
+    // No completed JSONL means meta has no counterpart; delete the orphan.
     try {
       await fs.deleteAsync(metaPath, { idempotent: true });
     } catch { /* best effort */ }
@@ -369,9 +434,12 @@ export async function listActiveHikes(): Promise<HikeMeta[]> {
     if (!info.exists) return [];
     const files = await fs.readDirectoryAsync(activeDir);
     const metas: HikeMeta[] = [];
+    const sessionIds = new Set<string>();
     for (const f of files) {
-      if (!f.endsWith('.jsonl')) continue;
-      const sid = f.replace('.jsonl', '');
+      const match = f.match(/^(.*)\.jsonl(?:\.next|\.bak)?$/);
+      if (match?.[1]) sessionIds.add(match[1]);
+    }
+    for (const sid of sessionIds) {
       try {
         const metaRaw = await fs.readAsStringAsync(fs.documentDirectory + META_DIR + sid + '.json');
         metas.push(JSON.parse(metaRaw));
@@ -392,17 +460,30 @@ export async function readActiveHikeTail(sessionId: string): Promise<HikePoint[]
   if (!fs) return [];
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
   try {
-    const info = await fs.getInfoAsync(activePath);
-    if (!info.exists) return [];
-    const content = await fs.readAsStringAsync(activePath);
+    await durableWriteTail.catch(() => {});
+    const content = await readBestSnapshot(fs, activePath);
+    if (!content) return [];
     const lines = content.split('\n');
     const points: HikePoint[] = [];
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
         const p = JSON.parse(line);
-        if (typeof p.lat === 'number' && typeof p.lng === 'number' && typeof p.t === 'number') {
-          points.push(p);
+        // New canonical records are explicit. Valid legacy foreground rows
+        // remain recoverable as one legacy segment. Debug/background rows in
+        // the incompatible {ts,lon} schema are deliberately not reinterpreted.
+        if (!isSaneStoredCoordinate(p)) break;
+        if (typeof p.clientActivityId === 'string' && p.clientActivityId !== sessionId) break;
+        {
+          points.push({
+            ...p,
+            clientActivityId: typeof p.clientActivityId === 'string' ? p.clientActivityId : sessionId,
+            ownerGeneration: typeof p.ownerGeneration === 'string' ? p.ownerGeneration : 'legacy',
+            segmentId: typeof p.segmentId === 'string' ? p.segmentId : 'legacy-0',
+            ...(typeof p.segmentStartReason === 'string'
+              ? { segmentStartReason: p.segmentStartReason }
+              : points.length === 0 ? { segmentStartReason: 'legacy' as const } : {}),
+          });
         }
       } catch { /* skip malformed */ }
     }
@@ -418,18 +499,13 @@ export async function readActiveHikeTail(sessionId: string): Promise<HikePoint[]
  *
  * O14 Bug 2 fix: pre-fix, this only deleted the JSONL + meta on
  * disk. Module-scoped `state` was left with sessionId + non-empty
- * buffer + a live flushTimer. 30s later the timer fired, flushBuffer
- * ran, and it recreated the JSONL from the buffer — resurrecting
- * the file we just deleted. The user then saw "unfinished hike"
- * pop up on the next Hike-screen mount, even though they Discarded.
- * Fix: first clear the in-memory state (cancel timer, drop buffer,
- * null out `state`), then await any in-flight flush chain to drain,
- * then delete on disk.
+ * buffer and a delayed flush. The flush could recreate the JSONL after
+ * deletion. The writer now commits immediately, but invalidating state and
+ * waiting for the in-flight write remains necessary before deleting disk.
  */
 export async function discardActiveHike(sessionId: string): Promise<void> {
   // (1) invalidate the module state so any queued flushBuffer becomes a no-op
   if (state && state.sessionId === sessionId) {
-    if (state.flushTimer) { clearTimeout(state.flushTimer); state.flushTimer = null; }
     state.buffer = [];
     state = null;
   }
@@ -441,8 +517,11 @@ export async function discardActiveHike(sessionId: string): Promise<void> {
   if (!fs) return;
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
   const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
-  try { await fs.deleteAsync(activePath, { idempotent: true }); } catch {}
-  try { await fs.deleteAsync(metaPath, { idempotent: true }); } catch {}
+  await durableWriteTail.catch(() => {});
+  for (const candidate of activeCandidates(activePath)) {
+    await deleteAndVerifyAbsent(fs, candidate);
+  }
+  await deleteAndVerifyAbsent(fs, metaPath);
 }
 
 /**
@@ -450,4 +529,107 @@ export async function discardActiveHike(sessionId: string): Promise<void> {
  */
 export async function flushNow(): Promise<void> {
   await flushBuffer();
+}
+
+/** Persist a late server mapping without changing the client identity. */
+export async function updateHikeMeta(
+  sessionId: string,
+  patch: Partial<Pick<HikeMeta, 'remote_id' | 'owner_generation' | 'user_id'>>,
+): Promise<void> {
+  const fs = await getFs();
+  if (!fs) return;
+  const path = fs.documentDirectory + META_DIR + sessionId + '.json';
+  try {
+    const raw = await fs.readAsStringAsync(path);
+    await fs.writeAsStringAsync(path, JSON.stringify({ ...JSON.parse(raw), ...patch }));
+  } catch { /* recovery remains local even if mapping persistence fails */ }
+}
+
+/** Per-Activity heavy-data cleanup after durable server handoff. */
+export async function deleteCompletedHikeTrack(sessionId: string): Promise<void> {
+  const fs = await getFs();
+  if (!fs) return;
+  await flushChainTail.catch(() => {});
+  await deleteAndVerifyAbsent(fs, fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl');
+  await deleteAndVerifyAbsent(fs, fs.documentDirectory + META_DIR + sessionId + '.json');
+}
+
+async function deleteAndVerifyAbsent(fs: any, path: string): Promise<void> {
+  await fs.deleteAsync(path, { idempotent: true });
+  if ((await fs.getInfoAsync(path)).exists) throw new Error('activity_journal_cleanup_incomplete');
+}
+
+/**
+ * Prove ownership once before a multi-location cleanup removes the meta file.
+ * A missing meta is acceptable only when no Activity journal artifact exists.
+ */
+export async function assertHikeTrackCleanupOwner(sessionId: string, expectedUserId: string): Promise<void> {
+  if (!expectedUserId || expectedUserId === 'guest') throw new Error('activity_journal_owner_required');
+  const fs = await getFs();
+  if (!fs) return;
+  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  const completedPath = fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl';
+  const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
+  const artifactPaths = [...activeCandidates(activePath), completedPath, metaPath];
+  const infos = await Promise.all(artifactPaths.map(path => fs.getInfoAsync(path)));
+  if (!infos.some(info => info.exists)) return;
+  const metaInfo = infos[infos.length - 1];
+  if (!metaInfo.exists) throw new Error('activity_journal_owner_unavailable');
+  const meta = JSON.parse(await fs.readAsStringAsync(metaPath)) as HikeMeta;
+  if (String(meta.user_id ?? '') !== String(expectedUserId)) {
+    throw new Error('activity_journal_owner_mismatch');
+  }
+}
+
+/**
+ * ACK cleanup for every heavy Activity-journal location. Ownership metadata
+ * is deliberately removed last so a crash/failure after either trace delete
+ * can be retried safely on the next launch.
+ */
+export async function deleteAcknowledgedHikeTrackArtifacts(
+  sessionId: string,
+  expectedUserId: string,
+): Promise<void> {
+  if (state && state.sessionId === sessionId) {
+    state.buffer = [];
+    state = null;
+  }
+  await flushChainTail.catch(() => {});
+  await durableWriteTail.catch(() => {});
+  await assertHikeTrackCleanupOwner(sessionId, expectedUserId);
+  const fs = await getFs();
+  if (!fs) return;
+  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  for (const candidate of activeCandidates(activePath)) {
+    await deleteAndVerifyAbsent(fs, candidate);
+  }
+  await deleteAndVerifyAbsent(fs, fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl');
+  await deleteAndVerifyAbsent(fs, fs.documentDirectory + META_DIR + sessionId + '.json');
+}
+
+/** Canonical durable entry point used by the headless background task. */
+export async function appendBackgroundHikePoints(points: HikePoint[], expectedUserId?: string): Promise<void> {
+  if (points.length === 0) return;
+  const sessionId = points[0].clientActivityId;
+  if (!sessionId || points.some(point => point.clientActivityId !== sessionId)) {
+    throw new Error('mixed_activity_background_batch');
+  }
+  const fs = await getFs();
+  if (!fs) return;
+  await ensureDirs(fs);
+  const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
+  const meta = JSON.parse(await fs.readAsStringAsync(metaPath)) as HikeMeta;
+  if (meta.ended_at) throw new Error('background_activity_already_finalized');
+  if (expectedUserId && meta.user_id && meta.user_id !== expectedUserId) {
+    throw new Error('stale_background_user');
+  }
+  if (meta.owner_generation && points.some(point => point.ownerGeneration !== meta.owner_generation)) {
+    throw new Error('stale_background_owner_generation');
+  }
+  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  const lines = points.map(point => JSON.stringify(point)).join('\n') + '\n';
+  await appendSnapshot(fs, activePath, lines);
+  meta.total_points = (meta.total_points ?? 0) + points.length;
+  meta.last_ts = points[points.length - 1].t;
+  await fs.writeAsStringAsync(metaPath, JSON.stringify(meta));
 }

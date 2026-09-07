@@ -25,6 +25,10 @@ jest.mock('../src/services/apiService', () => ({
 }));
 jest.mock('../src/services/sessionService', () => ({
   deleteRemoteSession: jest.fn(async () => {}),
+  deleteRemoteSessionByClientId: jest.fn(async () => true),
+}));
+jest.mock('../src/services/crashLogger', () => ({
+  crashLogger: { breadcrumb: jest.fn(), captureException: jest.fn() },
 }));
 
 describe('useSessionStore — per-user isolation', () => {
@@ -38,7 +42,7 @@ describe('useSessionStore — per-user isolation', () => {
 
     // Hydrate as user A
     await useSessionStore.getState().hydrate('userA');
-    useSessionStore.getState().addSession({
+    await useSessionStore.getState().addSession({
       id: 'sess-a-1',
       activityMode: 'hiking',
       regionCode: 'nz',
@@ -58,7 +62,7 @@ describe('useSessionStore — per-user isolation', () => {
     expect(useSessionStore.getState().currentUserId).toBe('userB');
 
     // Add user B session
-    useSessionStore.getState().addSession({
+    await useSessionStore.getState().addSession({
       id: 'sess-b-1',
       activityMode: 'running',
       regionCode: 'nz',
@@ -85,7 +89,7 @@ describe('useSessionStore — per-user isolation', () => {
 
     // Logged-in user A creates a session
     await useSessionStore.getState().hydrate('userA');
-    useSessionStore.getState().addSession({
+    await useSessionStore.getState().addSession({
       id: 'sess-a-1',
       activityMode: 'hiking',
       regionCode: 'nz',
@@ -110,7 +114,7 @@ describe('useSessionStore — per-user isolation', () => {
 
     // User A has data
     await useSessionStore.getState().hydrate('userA');
-    useSessionStore.getState().addSession({
+    await useSessionStore.getState().addSession({
       id: 'sess-a-1',
       activityMode: 'hiking',
       regionCode: 'nz',
@@ -125,7 +129,7 @@ describe('useSessionStore — per-user isolation', () => {
 
     // Switch to user B and clear
     await useSessionStore.getState().hydrate('userB');
-    useSessionStore.getState().clearSessions();
+    await useSessionStore.getState().clearSessions();
 
     // User A's data should still exist in storage
     await useSessionStore.getState().hydrate('userA');
@@ -137,7 +141,7 @@ describe('useSessionStore — per-user isolation', () => {
     const { useSessionStore } = require('../src/store/useSessionStore');
 
     await useSessionStore.getState().hydrate('userA');
-    useSessionStore.getState().addSession({
+    await useSessionStore.getState().addSession({
       id: 'sess-a-1',
       activityMode: 'hiking',
       regionCode: 'nz',
@@ -163,7 +167,7 @@ describe('useSessionStore — per-user isolation', () => {
     const { useSessionStore } = require('../src/store/useSessionStore');
 
     await useSessionStore.getState().hydrate('userA');
-    useSessionStore.getState().addSession({
+    await useSessionStore.getState().addSession({
       id: 'sess-a-pp',
       activityMode: 'running',
       regionCode: 'nz',
@@ -187,5 +191,49 @@ describe('useSessionStore — per-user isolation', () => {
     expect(sessions[0].pausePins).toHaveLength(2);
     expect(sessions[0].pausePins?.[0]).toMatchObject({ lat: 31.5, lng: 121.5 });
     expect(sessions[0].pausePins?.[1]).toMatchObject({ lat: 31.6, lng: 121.6 });
+  });
+
+  it('never evicts pending local-authoritative Activities at the 100-item history cap', async () => {
+    const storage = setupAsyncStorageMock();
+    const { useSessionStore } = require('../src/store/useSessionStore');
+
+    await useSessionStore.getState().hydrate('userA');
+    await useSessionStore.getState().addSession({
+      id: 'old-pending',
+      activityMode: 'hiking',
+      regionCode: 'nz',
+      startedAt: 1,
+      endedAt: 2,
+      durationS: 1,
+      distanceM: 1,
+      elevationGainM: 0,
+      trackPoints: [{ lat: -41, lng: 174, t: 1 }],
+      markerIds: [],
+      syncState: 'pending',
+    });
+    for (let index = 0; index < 105; index += 1) {
+      await useSessionStore.getState().addSession({
+        id: `server-${index}`,
+        remoteId: index + 1,
+        activityMode: 'running',
+        regionCode: 'nz',
+        startedAt: index + 10,
+        endedAt: index + 11,
+        durationS: 1,
+        distanceM: 1,
+        elevationGainM: 0,
+        trackPoints: [],
+        markerIds: [],
+        syncState: 'synced',
+      });
+    }
+
+    const sessions = useSessionStore.getState().sessions;
+    expect(sessions).toHaveLength(101);
+    expect(sessions.some((session: { id: string }) => session.id === 'old-pending')).toBe(true);
+    expect(JSON.parse(storage.cairn_sessions_userA)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'old-pending', syncState: 'pending' })]),
+    );
+    expect(storage['cairn_trackpoints_userA_old-pending']).toBeDefined();
   });
 });

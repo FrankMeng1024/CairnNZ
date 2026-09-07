@@ -1,13 +1,15 @@
 /**
- * UnfinishedRecoveryModal — v412 未完成 hike/run 恢复弹窗
+ * UnfinishedRecoveryModal — unfinished Activity resolution sheet
  *
- * 用户点 Hiking/Running 卡进入界面时, 如果磁盘上有 < 72h 的 unfinished backup,
- * 界面上叠一个 Modal 让用户选:
- *   [继续这条]  — 内存加载磁盘 GPS, 继续 recording
- *   [丢弃]      — 删磁盘, 界面回到 Start 按钮
+ * The screen may discover the single user-scoped recovery record without
+ * interrupting browsing. It presents this sheet only when the user tries to
+ * start another Activity (or explicitly opens the Home recovery card):
+ *   Resume  — restore this exact clientActivityId and record a new segment
+ *   Save    — finalize the durable portion through normal Save authority
+ *   Discard — tombstone the Activity; Cairns and Memory remain
  *
- * v3.3 强制选择: iOS 左边缘 swipe / Android Back / tap outside 全部无效,
- *                用户必须点两个按钮之一才能关。
+ * While visible, dismissal is explicit so the attempted new Start cannot
+ * bypass the zero-or-one unfinished Activity contract.
  *
  * 视觉与 TooShortSheet 一致 (Colors.surface card, primary CTA).
  */
@@ -28,6 +30,8 @@ interface UnfinishedData {
   startedAt: number;    // Unix ms
   distanceM: number;
   durationS: number;
+  pointCount?: number;
+  saveEligible?: boolean;
   lastPointAt: number;  // Unix ms of last GPS point (for "X hours ago")
 }
 
@@ -35,6 +39,7 @@ interface Props {
   visible: boolean;
   data: UnfinishedData | null;
   onContinue: () => void;
+  onSave: () => void;
   onDiscard: () => void;
 }
 
@@ -53,7 +58,7 @@ function formatDuration(s: number): string {
   return h > 0 ? `${h} hr ${mm} min` : `${m} min`;
 }
 
-export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }: Props) {
+export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onDiscard }: Props) {
   const insets = useSafeAreaInsets();
   const slideY = useRef(new Animated.Value(500)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -131,11 +136,11 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
         <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
           <Icon name="MapPin" size={28} color={iconColor} strokeWidth={2} />
         </View>
-        <Text style={[styles.title, { color: primaryText }]}>Resume this {label.toLowerCase()}?</Text>
+        <Text style={[styles.title, { color: primaryText }]}>Your previous {label.toLowerCase()} wasn’t finished.</Text>
         {/* O18 SAF-06: subtitle makes it explicit the hike was preserved
             through a force-quit / crash so users know their data is safe. */}
         <Text style={[styles.subtitle, { color: mutedText }]}>
-          We saved everything up to your last GPS fix. Continue where you left off, or discard and start fresh.
+          Everything through the last accepted GPS fix is safe. Resume it, save the recorded portion, or discard the Activity.
         </Text>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
@@ -157,7 +162,16 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
           onPress={() => dismiss(onContinue)}
           testID="unfinished-continue"
         >
-          <Text style={styles.btnPrimaryText}>Continue</Text>
+          <Text style={styles.btnPrimaryText}>Resume {label}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.btnSecondary, data.saveEligible === false && styles.btnDisabled]}
+          activeOpacity={0.7}
+          disabled={data.saveEligible === false}
+          onPress={() => dismiss(onSave)}
+          testID="unfinished-save"
+        >
+          <Text style={[styles.btnSecondaryText, { color: primaryText }]}>Save {label}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.btnSecondary}
@@ -165,7 +179,7 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onDiscard }
           onPress={() => dismiss(onDiscard)}
           testID="unfinished-discard"
         >
-          <Text style={[styles.btnSecondaryText, { color: mutedText }]}>Discard</Text>
+          <Text style={[styles.btnSecondaryText, { color: mutedText }]}>Discard {label}</Text>
         </TouchableOpacity>
       </Animated.View>
     </Animated.View>
@@ -179,6 +193,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     zIndex: 260,   // 高于 TooShortSheet (250), 确保 hike 恢复优先
   },
+  btnDisabled: { opacity: 0.38 },
   sheet: {
     backgroundColor: Colors.surface,
     borderTopLeftRadius: Radius.sheet,

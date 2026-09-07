@@ -14,28 +14,32 @@
  *   - On user logout / change: detach persistence subscription, flush
  *     pending writes, then re-hydrate for the new user.
  *
- * Triggered from the app root via <ForegroundUnlockManager />.
+ * Mounted by MemoryScreen for hydration/sync. Passive GPS ownership now lives
+ * at app root in PassiveMemoryRecorder so it is explicit and independently
+ * gated from Activity capture.
  * Renders nothing — pure side-effect component.
  */
 
 import { useEffect, useRef } from 'react';
 import { AppState, InteractionManager } from 'react-native';
 import * as Location from 'expo-location';
-// O1: unlockEngine deleted — memory unlock now only via flushHikingToMemory
+// The retired unlockEngine remains intentionally absent. All current
+// producers now enter through recordMemoryEvidence below or through the
+// explicit Activity recorder.
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useAppStore } from '../../../store/useAppStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { hydrateMemoryForUser, detachMemoryPersistence, flushMemoryNow } from '../services/memoryPersistence';
-// O1: unlockEngine service deleted — real-time GPS auto-unlock has been
-// dead since v322 (ForegroundUnlockManager watcher body has early `return`).
-// Memory now only unlocks via flushHikingToMemory (Save Hike). O4 rollback
-// (2026-07-26): removed the sim-walker realtime recordPoint path too.
-// sim-walker writes to trackPoints only; memory unlocks only after Save.
+// ForegroundUnlockManager owns hydration/sync. When managePassiveGps is
+// explicitly enabled it also observes non-Activity exploration, gated by the
+// passive preference; Activity capture has its own always-active producer.
 // v305 OTA: H3 hex-cell fog layer — replaces turf.union polygon path.
 import { hydrateH3ForUser, detachH3Persistence, flushH3Now } from '../services/h3Persistence';
 import { attachMemorySync, detachMemorySync, pullMemoryFromServer, pushMemoryNow } from '../../../services/memorySync';
 import { log } from '../../../services/appLog';
+import { recordMemoryEvidence } from '../services/recordMemoryEvidence';
+import { useTrackingStore } from '../../../store/useTrackingStore';
 
 // BUG-E fix (v371 post-OTA): tracks which userIds we've already
 // reconciled this app-session. First pull per user uses reconcile=true
@@ -50,7 +54,7 @@ const WATCH_OPTIONS: Location.LocationOptions = {
   distanceInterval: 5,    // OR 5m of motion, whichever comes first
 };
 
-export function ForegroundUnlockManager() {
+export function ForegroundUnlockManager({ managePassiveGps = false }: { managePassiveGps?: boolean }) {
   // v312: mark mount so we can see whether ForegroundUnlockManager
   // ever renders. v311 server data showed boot dying after AuthScreen
   // mounted — checking if FGUM mount runs at all.
@@ -59,13 +63,8 @@ export function ForegroundUnlockManager() {
     require('../../../services/bootDiagnostics').markBootPhase('fgum_render_enter');
   } catch {/* ignore */}
   const enabled = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
-  // O1: recordMode kept only as a log field for memory.watcher_started
-  // (diagnostic — tells us if user was in 'active' or 'passive' record
-  // mode when the foreground watcher subscribed). All Q9+R6 gate logic
-  // that read recordMode/sessionActive/trackingStatus was removed in
-  // v346 (native fog) + O1 (unlockEngine deletion) — memory only
-  // unlocks via flushHikingToMemory (Save Hike). O4: sim-walker no longer
-  // touches memory in realtime — same Save-only path.
+  // recordMode is retained only as a diagnostic log field. Product gating is
+  // the passive preference plus the explicit no-live-Activity check below.
   const recordMode = useMemorySettingsStore((s) => s.recordMode);
   const userId = useAppStore((s) => s.user?.id ?? null);
   // v314 fix: also require isLoggedIn=true. v312/v313 server data showed
@@ -264,6 +263,7 @@ export function ForegroundUnlockManager() {
   // anyway (no user → nowhere to record fog clearing).
   const isLoggedInForGps = useAppStore((s) => s.isLoggedIn);
   useEffect(() => {
+    if (!managePassiveGps) return;
     let cancelled = false;
     // Serialize concurrent start() calls so a fast inactive→active
     // bounce doesn't create two subscriptions.
@@ -286,20 +286,17 @@ export function ForegroundUnlockManager() {
             loc.coords.longitude,
             loc.timestamp ?? Date.now(),
           );
-          // v334: PHASE 2 deferred (after 2026-07-01 eas build).
-          // v333 product decision: Memory unlocks ONLY via the hiking-save
-          // activity → memory transaction. Standing still / panning the
-          // map / opening Memory tab MUST NOT auto-unlock cells around
-          // the user — that contradicts "no hike imported = ALL fog".
-          // The setLastWatcherFix above is kept because it powers the
-          // UserLocation blue dot + stableCoord flicker fix, both of
-          // which are pure VISUAL position rendering (no fog clearing).
-          // O1: removed dead branch (was `return;` then unreachable code
-          // calling performInitialRevealIfNeeded/processReading). The
-          // unlockEngine service is deleted in O1 as memory only unlocks
-          // via flushHikingToMemory (Save Hike). O4: sim-walker no longer
-          // touches memory in realtime either — same Save-only path.
-          return;
+          // The preference controls only passive/non-Activity exploration.
+          // Explicit Hike/Run samples use the Activity recorder's mandatory
+          // incremental Memory path, so this watcher must not double-produce.
+          const activityStatus = useTrackingStore.getState().status;
+          if (activityStatus !== 'idle') return;
+          void recordMemoryEvidence({
+            lat: loc.coords.latitude,
+            lng: loc.coords.longitude,
+            atMs: loc.timestamp ?? Date.now(),
+            source: 'passive',
+          });
         });
         log('memory.watcher_started', { mode: recordModeRef.current });
         if (cancelled) {
@@ -363,8 +360,7 @@ export function ForegroundUnlockManager() {
       listener.remove();
       stop();
     };
-  }, [enabled, isLoggedInForGps]);
+  }, [enabled, isLoggedInForGps, managePassiveGps]);
 
   return null;
 }
-

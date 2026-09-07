@@ -41,7 +41,8 @@ import { useMemorySettingsStore } from '../features/memory/store/useMemorySettin
 import { useMarkerStore } from '../store/useMarkerStore';
 // O24 SETTINGS-JOURNEY: sessions count for the new Your journey section.
 import { useSessionStore } from '../store/useSessionStore';
-import { useSimWalkerStore } from '../dev/simWalker/useSimWalkerStore';
+import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
+import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
 import { logout, patchName } from '../services/authService';
 import { haptic } from '../services/hapticService';
 import { deleteAllMemoryFromServer } from '../services/memorySync';
@@ -260,8 +261,8 @@ function TypeToConfirmModal({
 export function SettingsScreen() {
   const nav = useNavigation<Nav>();
   const { user, isLoggedIn, logout: appLogout, setUser } = useAppStore();
-  const simWalkerActive = useSimWalkerStore((s) => s.active);
-  const setSimWalkerActive = useSimWalkerStore((s) => s.setActive);
+  const activitySimulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
+  const setActivitySimulatorEnabled = useActivitySimulatorStore((s) => s.setEnabled);
 
   // Weather location override (dev testing)
   const weatherOverride = useWeatherStore((s) => s.locationOverride);
@@ -315,12 +316,9 @@ export function SettingsScreen() {
     return () => { cancelled = true; };
   }, [isLoggedIn]);
 
-  // R114/O22 STORY-73024 (S3): Memory always-on GPS toggle. Reads
-  // `foregroundAutoUnlockEnabled` from the memory settings store (default
-  // true). When on, the ForegroundUnlockManager subscribes to
-  // watchPositionAsync while the app is running so memory tiles unlock
-  // automatically without a hike being started. Off = memory only grows
-  // via Save Hike (flushHikingToMemory).
+  // Passive exploration toggle. Explicit Hike/Run capture is unconditional;
+  // this preference only permits foreground exploration outside Activities
+  // and intentionally defaults off.
   const memoryAlwaysOn = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
   const setMemorySetting = useMemorySettingsStore((s) => s.set);
   const allMarkers = useMarkerStore((s) => s.markers);
@@ -522,7 +520,7 @@ export function SettingsScreen() {
         if (!dbgMountedRef.current) return;
         try { await logout(); } catch { /* swallow */ }
         try { await storage.removeItem('cairn_remember_me'); } catch { /* swallow */ }
-        appLogout();
+        await appLogout();
         nav.replace('Auth');
       }, 1500);
       return; // do not fall through to finally's setPwLoading(false) — flow ends
@@ -651,8 +649,7 @@ export function SettingsScreen() {
     setFeedbackError('');
     log('settings.feedback.pick_added', { count: outcome.photos.length });
   };
-  // Legacy alias — some old sim-walker debug flows may still expect the
-  // pre-O13 name. Kept as an alias so no other file needs changes.
+  // Kept as a local name because the feedback form still uses it.
   const handleDebugUpload = handlePickAttachments;
 
   // O13 bug 5: dbgRowLabel / dbgRowDisabled removed — legacy debug row was
@@ -968,16 +965,13 @@ export function SettingsScreen() {
           {/* ── Preferences ── */}
           <SectionHeader title="Preferences" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
           <View style={[styles.card, cardOverride]}>
-            {/* R114/O22 STORY-73024 (S3): Memory always-on GPS. When on,
-                the app records memory points whenever it's open (foreground
-                or lock-screen resume), not just during Hike/Run sessions.
-                Default on. */}
+            {/* Passive Memory only. Explicit Hike/Run capture is always on. */}
             <ToggleRow
               iconName="MapPin"
               iconColor={Colors.primary}
               iconBg={Colors.primaryLight}
-              label="Memory always-on GPS"
-              hint="Fill in your map whenever the app is open, not just during hikes."
+              label="Record exploration outside activities"
+              hint="When on, places explored while CairnNZ is open can be added to Memory. Hikes and Runs always record Memory."
               value={memoryAlwaysOn}
               onToggle={() => setMemorySetting('foregroundAutoUnlockEnabled', !memoryAlwaysOn)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
     />
@@ -1224,7 +1218,7 @@ export function SettingsScreen() {
                   iconBg="#e6ede0"
                   label="Friend requests"
                   hint="When someone wants to add you"
-                  value={pushPrefs.friendRequests}
+                  value={pushPrefs?.friendRequests ?? false}
                   onToggle={() => togglePushPref('friendRequests')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
     />
                 <ToggleRow
@@ -1233,7 +1227,7 @@ export function SettingsScreen() {
                   iconBg="#f5e6cc"
                   label="Cairn activity"
                   hint="Replies and reactions on your cairns"
-                  value={pushPrefs.markerReplies}
+                  value={pushPrefs?.markerReplies ?? false}
                   onToggle={() => togglePushPref('markerReplies')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
     />
               </View>
@@ -1559,7 +1553,7 @@ export function SettingsScreen() {
                 // in SecureStore) but even if it worked, clearing would
                 // defeat the purpose of remember-me. User must uncheck
                 // "Remember me on this device" during sign-in to clear.
-                appLogout();
+                await appLogout();
                 crashLogger.breadcrumb('signout:after_appLogout');
               }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
     />
@@ -1575,10 +1569,26 @@ export function SettingsScreen() {
                   iconColor={Colors.primary}
                   iconBg={Colors.primaryLight}
                   label="Debug mode"
-                  hint="Enables sim-walker + verbose telemetry"
+                  hint="Enables internal diagnostics"
                   value={debugMode}
                   onToggle={() => updateSetting('debugMode', !debugMode)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
     />
+                {activitySimulatorBuildCapable ? (
+                  <>
+                    <View style={[styles.divider, dividerOverride]} />
+                    <ToggleRow
+                      iconName="MapPin"
+                      iconColor={Colors.primary}
+                      iconBg={Colors.primaryLight}
+                      label="Activity Simulator"
+                      hint="Internal QA virtual GPS for Hike and Run"
+                      value={activitySimulatorEnabled}
+                      onToggle={() => setActivitySimulatorEnabled(!activitySimulatorEnabled)}
+                      textColor={settingsBgTokens.cardTextColor}
+                      mutedColor={settingsBgTokens.cardTextColorMuted}
+                    />
+                  </>
+                ) : null}
                 <View style={[styles.divider, dividerOverride]} />
                 <ActionRow
                   iconName="Settings2"
@@ -1759,7 +1769,7 @@ export function SettingsScreen() {
             try {
               await logout();
             } catch { /* swallow */ }
-            appLogout();
+            await appLogout();
             Alert.alert(
               'Account scheduled for deletion',
               `Your account will be permanently deleted on ${deadlineStr}. To restore it, sign in with your email and password before that date.`,

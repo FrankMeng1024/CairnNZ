@@ -12,7 +12,6 @@
  *   - Discard replaced by a header X close (safety: no one-tap data loss)
  *
  * API additions (additive, non-breaking):
- *   - onConfirmAndHome(name): variant of onConfirm — save then nav Home.
  *     Falls back to onConfirm if the caller doesn't wire it (both save;
  *     only nav destination differs, decided in HikingScreen).
  *   - onDiscard retained for backward compat but no longer surfaced in UI
@@ -47,7 +46,6 @@ type Props = {
   /** 2026-08-16 (H4 redesign): optional variant — save + go Home.
    *  If omitted, the "Done" CTA falls back to onConfirm (same save
    *  path; HikingScreen decides where to navigate). */
-  onConfirmAndHome?: (name: string) => void;
   /** Legacy Discard hook — no longer surfaced in the UI as of the H4
    *  redesign. Kept in the prop shape so existing callers compile; may
    *  be dropped in a follow-up once all downstream call sites are
@@ -151,7 +149,7 @@ function MiniMapPolyline({ points, stroke, width, height }: {
   );
 }
 
-export function StopSummarySheet({ summary, onCancel, onConfirm, onConfirmAndHome, onDiscard: _onDiscard, saving = false, savingStep = null }: Props) {
+export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onDiscard, saving = false, savingStep = null }: Props) {
   // _onDiscard is intentionally unused in the H4 redesign — see prop docs.
   const [name, setName] = useState('');
   // Sleep-run 2026-08-16: mini-map card width is measured at layout so the

@@ -58,6 +58,7 @@ let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribe: (() => void) | null = null;
 let currentUserId: string | null = null;
+let persistenceState: 'detached' | 'hydrating' | 'writable' | 'blocked' = 'detached';
 /**
  * Generation token. Bumped on every hydrate/detach. Stale awaits check
  * this and bail out, so concurrent user switches can't corrupt state.
@@ -122,9 +123,12 @@ function deserialize(raw: string): { points: VisitedPoint[]; initialRevealDone: 
     if ((parsed.v !== 2 && parsed.v !== 3) || !Array.isArray(parsed.points)) return null;
     const points: VisitedPoint[] = [];
     for (const p of parsed.points) {
-      if (typeof p?.a !== 'number' || typeof p?.o !== 'number') continue;
-      if (!isFinite(p.a) || !isFinite(p.o)) continue;
-      const ts = typeof p.t === 'number' ? p.t : Date.now();
+      if (typeof p?.a !== 'number' || typeof p?.o !== 'number') return null;
+      if (!isFinite(p.a) || p.a < -90 || p.a > 90 || !isFinite(p.o) || p.o < -180 || p.o > 180) return null;
+      if (typeof p.t !== 'number' || !Number.isFinite(p.t) || p.t <= 0) return null;
+      if (p.s !== 0 && p.s !== 1) return null;
+      if (parsed.v === 3 && (typeof p.c !== 'string' || p.c.length === 0)) return null;
+      const ts = p.t;
       const cid = (typeof p.c === 'string' && p.c.length > 0)
         ? p.c
         : legacyDeterministicCid(p.a, p.o, ts);
@@ -170,11 +174,10 @@ function clearTimers(): void {
 async function flush(userId: string, snapshot: { points: VisitedPoint[]; initialRevealDone: boolean }): Promise<void> {
   if (!userId) return;
   const payload = serialize(snapshot.points, snapshot.initialRevealDone);
-  try {
-    await storage.setItem(storageKey(userId), JSON.stringify(payload));
-  } catch {
-    // AsyncStorage quota exceeded / disk error. Drop silently.
-  }
+  // Memory evidence is a committed product record, not a best-effort cache.
+  // Propagate quota / disk errors so recordMemoryEvidence cannot report a
+  // durable commit when AsyncStorage rejected the write.
+  await storage.setItem(storageKey(userId), JSON.stringify(payload), { strict: true });
 }
 
 /**
@@ -190,7 +193,7 @@ let latestSnapshotUserId: string | null = null;
 
 function scheduleFlush(): void {
   const userIdAtSchedule = currentUserId;
-  if (!userIdAtSchedule) return;
+  if (!userIdAtSchedule || persistenceState !== 'writable') return;
   const state = useMemoryStore.getState();
   // Update the latest snapshot on EVERY call. Both timers read this
   // when they fire — so the maxWaitTimer always uses the freshest data.
@@ -208,7 +211,7 @@ function scheduleFlush(): void {
       maxWaitTimer = null;
     }
     if (latestSnapshot && latestSnapshotUserId === userIdAtSchedule) {
-      void flush(userIdAtSchedule, latestSnapshot);
+      void flush(userIdAtSchedule, latestSnapshot).catch(() => {});
     }
   }, DEBOUNCE_MS);
 
@@ -220,7 +223,7 @@ function scheduleFlush(): void {
         flushTimer = null;
       }
       if (latestSnapshot && latestSnapshotUserId === userIdAtSchedule) {
-        void flush(userIdAtSchedule, latestSnapshot);
+        void flush(userIdAtSchedule, latestSnapshot).catch(() => {});
       }
     }, MAX_WAIT_MS);
   }
@@ -233,9 +236,20 @@ function scheduleFlush(): void {
 export async function flushMemoryNow(): Promise<void> {
   const userId = currentUserId;
   if (!userId) return;
+  if (persistenceState !== 'writable') throw new Error('memory_persistence_unavailable');
   clearTimers();
   const state = useMemoryStore.getState();
   await flush(userId, { points: state.points.slice(), initialRevealDone: state.initialRevealDone });
+}
+
+/** Attach the durable local Memory authority on first product write. */
+export async function ensureMemoryPersistenceForUser(userId: string): Promise<void> {
+  if (!userId) throw new Error('memory_user_required');
+  if (currentUserId === userId && persistenceState === 'writable' && unsubscribe) return;
+  if (currentUserId === userId && persistenceState === 'blocked') {
+    throw new Error('memory_hydration_blocked');
+  }
+  await hydrateMemoryForUser(userId);
 }
 
 /**
@@ -248,90 +262,45 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('../../../services/bootDiagnostics').markBootPhase('memhydrate_entry');
   } catch {/* ignore */}
-  // v317: persisted gate — if a previous session died mid-hydrate
-  // (sync JSON.parse death, iOS watchdog SIGKILL), this flag is still
-  // set on disk. Skip the hydrate entirely so the app boots even if
-  // the memory cache is too big for Hermes JSON.parse.
+  const myGeneration = ++generation;
+  await detachMemoryPersistence(false);
+  if (myGeneration !== generation) return;
+
+  // Clearing the prior account's in-memory projection is safe; writing that
+  // empty projection over this user's durable record is not. The subscriber
+  // is attached only after a complete, supported payload is proven valid.
+  useMemoryStore.getState().resetForUserSwitch();
+  currentUserId = userId;
+  persistenceState = 'hydrating';
+
+  const block = (reason: string): never => {
+    persistenceState = 'blocked';
+    throw new Error(reason);
+  };
+
   if (hasMemoryHydrateFailedBefore()) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require('../../../services/bootDiagnostics').markBootPhase('memhydrate_gate_blocked');
     } catch {/* ignore */}
-    // Still attach subscriber so future flushes work (but skip the parse).
-    currentUserId = userId;
-    unsubscribe = useMemoryStore.subscribe(() => {
-      scheduleFlush();
-    });
-    return;
+    block('memory_hydration_previously_failed');
   }
-  // v321 fine-grained: confirm gate check passed
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_gate_check');
-  } catch {/* ignore */}
-  // v317: mark in-progress on disk BEFORE the heavy parse so that if
-  // we sync-die, next boot reads the flag and skips hydrate.
-  markMemoryHydrateInProgress();
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_markInProgress');
-  } catch {/* ignore */}
-  // Bump generation; any in-flight hydrate from a prior call will see
-  // a mismatch on resume and bail out.
-  const myGeneration = ++generation;
-
-  // Detach prior subscription FIRST and force-flush prior user before
-  // we overwrite currentUserId. This is the cross-user data-corruption
-  // fix.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_before_detach');
-  } catch {/* ignore */}
-  await detachMemoryPersistence();
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_detach');
-  } catch {/* ignore */}
-
-  if (myGeneration !== generation) return;
-
-  // O1 fix (v0.2.6.3): reset the in-memory store NOW (after the old
-  // user's flush completed in detachMemoryPersistence). This way the
-  // hydrate replacePoints below has a clean slate AND the empty-disk
-  // case (no raw) leaves the store correctly empty for the new user.
-  useMemoryStore.getState().resetForUserSwitch();
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_resetSwitch');
-  } catch {/* ignore */}
-
-  currentUserId = userId;
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_before_getitem');
-  } catch {/* ignore */}
+    await markMemoryHydrateInProgress();
+  } catch {
+    block('memory_hydration_gate_write_failed');
+  }
   let raw: string | null = null;
   try {
     raw = await storage.getItem(storageKey(userId));
   } catch {
-    raw = null;
+    block('memory_hydration_read_failed');
   }
-
-  // Generation check after async read.
   if (myGeneration !== generation) return;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_getitem', { raw_len: raw ? raw.length : -1 });
-  } catch {/* ignore */}
 
-  if (raw) {
-    // v314/v315 fix: guard against MB-sized AsyncStorage payloads. JSON.parse
-    // on multi-MB raw in Hermes sync-blocks main thread → iOS watchdog
-    // SIGKILL. Bail rather than freeze. v315: tightened from 2MB to 500KB
-    // — server beacons showed app dying inside JSON.parse with payloads
-    // smaller than 2MB on lower-end devices.
-    const MAX_RAW_BYTES = 500_000;  // 500 KB
+  if (raw !== null) {
+    const MAX_RAW_BYTES = 500_000;
     if (raw.length > MAX_RAW_BYTES) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -340,108 +309,29 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
           limit: MAX_RAW_BYTES,
         });
       } catch {/* ignore */}
-      // Subscribe still attached below for future flushes — but skip
-      // the parse + replacePoints to avoid the freeze.
-    } else {
-      const decoded = deserialize(raw);
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_decode', { points_n: decoded ? decoded.points.length : -1 });
-      } catch {/* ignore */}
-      if (decoded) {
-      // L7 fix: use the store's replacePoints action which bumps
-      // geometryVersion and rebuilds _bucketIndex. Direct setState
-      // bypassed those, leaving FogLayer / CairnPinsLayer stale.
-      //
-      // R-round B2 migration (v0.2.6.x): legacy v290 users had
-      // recordCircleUnlock ignore radiusMeters → single point only.
-      // After OTA-291 the hex-grid tile path won't re-run because
-      // initialRevealDone=true. Detect this signature (initialRevealDone
-      // AND only a handful of points) and force a re-reveal so the
-      // user finally sees the connected fog they were promised.
-      // Threshold 50: a single visit + plant on day 1 = ~2-3 points;
-      // even an active week of walking is well under 50 unique cells
-      // before the next launch. New hex grid emits ~560 points,
-      // leaving headroom on both sides.
-      const needsRevealMigration =
-        decoded.initialRevealDone && decoded.points.length < 50;
-      const migratedInitialRevealDone = needsRevealMigration
-        ? false
-        : decoded.initialRevealDone;
-      // v351 migration: strip plant-origin points from local cache.
-      // Pre-v351 PlantScreen.tsx:180 called recordCircleUnlock which
-      // wrote a single point per plant into useMemoryStore.points,
-      // then memorySync pushed those to server. v351 dropped that
-      // PlantScreen call AND cleaned server-side (DELETE FROM
-      // memory_points WHERE user_id=N AND client_id NOT LIKE
-      // 'migration-%'). But local AsyncStorage may still hold the
-      // hydrated plant points from a previous run. Plant points have
-      // UUID-style client_id (NOT 'migration-' prefix); hike points
-      // written by flushHikingToMemory ALSO have UUID cids in some
-      // versions — so we can't filter by cid alone. Instead detect
-      // plant pattern: small spatially-tight cluster (<10 points
-      // within 30m of each other) with cid != 'migration-*'. Any
-      // such cluster gets dropped — they're plant artefacts not hike
-      // tracks. Hike tracks are 50+ points strung along a path, not
-      // tightly clustered.
-      // v397: user explicit request that plant unlock its own location.
-      // v351 stripPlantClusters used to delete plant-origin points from
-      // local cache on hydrate; that's now reversed — plant points are
-      // legitimate visited points that user wants to keep.
-      const cleanedPoints = decoded.points;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_v351_plant_strip', {
-          before: decoded.points.length,
-          after: cleanedPoints.length,
-          stripped: decoded.points.length - cleanedPoints.length,
-        });
-      } catch {/* ignore */}
-      // v401 真根因: hydrate 在 plant 后才完成 (boot lifecycle 异步).
-      // AsyncStorage 是 plant 前的 snapshot, replacePoints 直接抹掉
-      // in-memory 包含的 plant points. 真机 log 证明:
-      //   77520 v399.plant_unlock points_after=372
-      //   81511 fog_built n=372 (plant hole 短暂出现)
-      //   81557 memhydrate_v351_plant_strip + replacepoints_entry
-      //   81906 fog_built n=371 (replacePoints 把 plant 删了)
-      // 修法: hydrate 前抓 in-memory 的 unsynced points (plant 来的),
-      // 合并到 cache 后 replacePoints. 跟 reconcile 同样的逻辑.
-      const inMemoryUnsynced = useMemoryStore.getState().points.filter((p) => !p.synced);
-      const mergedForHydrate = inMemoryUnsynced.length > 0
-        ? [...cleanedPoints, ...inMemoryUnsynced].sort((a, b) => a.ts - b.ts)
-        : cleanedPoints;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_keep_inmem_unsynced', {
-          cache_n: cleanedPoints.length,
-          unsynced_n: inMemoryUnsynced.length,
-          merged_n: mergedForHydrate.length,
-        });
-      } catch {/* ignore */}
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_before_replacepoints', { points_n: mergedForHydrate.length });
-      } catch {/* ignore */}
-      useMemoryStore.getState().replacePoints(mergedForHydrate, migratedInitialRevealDone);
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_after_replacepoints');
-      } catch {/* ignore */}
+      block('memory_hydration_payload_too_large');
     }
-    }  // close v314 else (raw.length <= MAX_RAW_BYTES)
+    const decoded = deserialize(raw);
+    if (!decoded) {
+      persistenceState = 'blocked';
+      throw new Error('memory_hydration_corrupt_or_partial');
+    }
+
+    const needsRevealMigration = decoded.initialRevealDone && decoded.points.length < 50;
+    const inMemoryUnsynced = useMemoryStore.getState().points.filter((point) => !point.synced);
+    const mergedForHydrate = inMemoryUnsynced.length > 0
+      ? [...decoded.points, ...inMemoryUnsynced].sort((a, b) => a.ts - b.ts)
+      : decoded.points;
+    useMemoryStore.getState().replacePoints(
+      mergedForHydrate,
+      needsRevealMigration ? false : decoded.initialRevealDone,
+    );
   }
 
-  // v317: hydrate completed (or raw was null/empty). Clear in-progress flag.
-  markMemoryHydrateSuccess();
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../../../services/bootDiagnostics').markBootPhase('memhydrate_success_cleared_flag');
-  } catch {/* ignore */}
-
-  // Subscribe to subsequent updates so we persist on change.
-  unsubscribe = useMemoryStore.subscribe(() => {
-    scheduleFlush();
-  });
+  await markMemoryHydrateSuccess();
+  if (myGeneration !== generation) return;
+  persistenceState = 'writable';
+  unsubscribe = useMemoryStore.subscribe(() => scheduleFlush());
 }
 
 /**
@@ -449,7 +339,8 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
  * clearing currentUserId. Async so callers must await — otherwise the
  * pending flush would resolve after currentUserId is cleared.
  */
-export async function detachMemoryPersistence(): Promise<void> {
+export async function detachMemoryPersistence(invalidateInFlight = true): Promise<void> {
+  if (invalidateInFlight) generation += 1;
   if (unsubscribe) {
     unsubscribe();
     unsubscribe = null;
@@ -462,8 +353,10 @@ export async function detachMemoryPersistence(): Promise<void> {
     const state = useMemoryStore.getState();
     const snapshot = { points: state.points.slice(), initialRevealDone: state.initialRevealDone };
     currentUserId = null;
-    await flush(userId, snapshot);
+    const shouldFlush = persistenceState === 'writable';
+    persistenceState = 'detached';
+    if (shouldFlush) await flush(userId, snapshot);
+  } else {
+    persistenceState = 'detached';
   }
 }
-
-

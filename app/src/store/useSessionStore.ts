@@ -13,7 +13,8 @@
 import { create } from 'zustand';
 import { storage } from './storage';
 import type { Coordinate } from '../utils/geo';
-import { deleteRemoteSession } from '../services/sessionService';
+import { deleteRemoteSession, deleteRemoteSessionByClientId } from '../services/sessionService';
+import { tombstoneActivity } from '../features/activity/activityRegistry';
 import { crashLogger } from '../services/crashLogger';
 
 // O18 SAF-03: serialize concurrent hydrate() calls so a race between the
@@ -22,16 +23,21 @@ import { crashLogger } from '../services/crashLogger';
 // no-ops if user matches.
 let hydrateInFlight: Promise<void> | null = null;
 let hydrateInFlightUserId: string | null = null;
+let sessionWriteTail: Promise<void> = Promise.resolve();
 
 export type ActivityMode = 'hiking' | 'running';
 
 export interface TrackPoint extends Coordinate {
   t: number;  // Unix ms timestamp
+  segmentId?: string;
+  segmentStartReason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
 }
 
 export interface TrackingSession {
   id: string;
+  clientActivityId?: string;
   remoteId?: number;           // backend session ID — set after successful sync
+  serverActivityId?: number;
   activityMode: ActivityMode;
   regionCode: string;         // geo-extensible: 'nz', 'au', etc.
   startedAt: number;          // Unix ms
@@ -52,7 +58,7 @@ export interface TrackingSession {
    *   - 'synced' (default): 已在服务器, 卡片正常可点
    *   - 'pending': 已 Save 但未同步 (pendingSyncStore 里有 payload), 灰卡不可点
    *   - 'syncing': SyncDaemon 正在上传该条 (短暂) */
-  syncState?: 'synced' | 'pending' | 'syncing';
+  syncState?: 'synced' | 'pending' | 'syncing' | 'sync_error';
 }
 
 const MAX_SESSIONS = 100;
@@ -61,11 +67,29 @@ const sessionsKey = (userId: string) => `cairn_sessions_${userId}`;
 const trackPointsKey = (userId: string, sessionId: string) =>
   `cairn_trackpoints_${userId}_${sessionId}`;
 
+function retainPendingAndCapHistory(sessions: TrackingSession[]): TrackingSession[] {
+  let retainedServerBacked = 0;
+  return sessions.filter(session => {
+    if (session.syncState && session.syncState !== 'synced') return true;
+    if (retainedServerBacked >= MAX_SESSIONS) return false;
+    retainedServerBacked += 1;
+    return true;
+  });
+}
+
+async function persistedSessionsFor(userId: string): Promise<TrackingSession[]> {
+  const raw = await storage.getItem(sessionsKey(userId));
+  if (!raw) return [];
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed)) throw new Error('session_store_corrupt');
+  return parsed.map(session => ({ ...session, trackPoints: [] }));
+}
+
 interface SessionState {
   sessions: TrackingSession[];
   currentUserId: string;            // 'guest' before login, real userId after
-  addSession: (session: TrackingSession) => void;
-  deleteSession: (id: string) => void;
+  addSession: (session: TrackingSession, ownerUserId?: string) => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
   /** O18 HIST-03: rename a completed hike. Persists via storage.setItem. */
   renameSession: (id: string, name: string) => void;
   clearSessions: () => void;       // called on logout to remove prior user's data
@@ -87,18 +111,26 @@ interface SessionState {
     distanceM?: number;
     elevationGainM?: number;
     name?: string;
-  }) => void;
+  }, ownerUserId?: string) => Promise<boolean>;
+  markSyncState: (localId: string, syncState: 'pending' | 'syncing' | 'sync_error', ownerUserId?: string) => Promise<void>;
   /** 用户长按灰卡"放弃"调用: 从 sessions 数组删除, 不通知服务器 */
-  removeLocal: (localId: string) => void;
+  removeLocal: (localId: string, ownerUserId?: string) => Promise<void>;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   sessions: [],
   currentUserId: 'guest',
 
-  addSession: (session) => {
-    const userId = get().currentUserId;
-    set((s) => {
+  addSession: async (session, requestedOwnerUserId) => {
+    // Capture before entering the shared async tail. Completion-time account
+    // state must never decide which user's durable key receives this entity.
+    const ownerUserId = String(requestedOwnerUserId ?? get().currentUserId ?? '');
+    if (!ownerUserId || ownerUserId === 'guest') throw new Error('session_owner_required');
+    const run = sessionWriteTail.then(async () => {
+      const live = get();
+      const base = live.currentUserId === ownerUserId
+        ? live.sessions
+        : await persistedSessionsFor(ownerUserId);
       // O16 C1: dedupe by session.id. Pre-fix, a double-tap Save race
       // or a retry from HikingScreen's wall-clock catch could add the
       // same local id twice, producing duplicate activity cards. Server
@@ -116,33 +148,35 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       // and merges in-place. Prevents ghost duplicate card that would
       // appear after a race between drainPending completion and remote
       // list refresh.
-      let existingIdx = s.sessions.findIndex((x) => x.id === session.id);
+      let existingIdx = base.findIndex((x) => x.id === session.id);
       if (existingIdx < 0 && session.remoteId) {
-        existingIdx = s.sessions.findIndex(
+        existingIdx = base.findIndex(
           (x) => x.remoteId && x.remoteId === session.remoteId,
         );
       }
       let next;
       if (existingIdx >= 0) {
-        next = s.sessions.slice();
+        next = base.slice();
         next[existingIdx] = { ...next[existingIdx], ...session };
       } else {
-        // Prepend newest first, prune oldest beyond MAX_SESSIONS
-        next = [session, ...s.sessions].slice(0, MAX_SESSIONS);
+        next = [session, ...base];
       }
+      next = retainPendingAndCapHistory(next);
       // Store summary without trackPoints to keep localStorage small;
       // trackPoints stored separately under per-user key
       const summaries = next.map(({ trackPoints: _, ...rest }) => rest);
-      storage.setItem(sessionsKey(userId), JSON.stringify(summaries));
+      await storage.setItem(sessionsKey(ownerUserId), JSON.stringify(summaries), { strict: true });
       if (session.trackPoints.length > 0) {
-        storage.setItem(
-          trackPointsKey(userId, session.id),
+        await storage.setItem(
+          trackPointsKey(ownerUserId, session.id),
           JSON.stringify(session.trackPoints),
+          { strict: true },
         );
       }
-      return { sessions: next };
+      if (get().currentUserId === ownerUserId) set({ sessions: next });
     });
-
+    sessionWriteTail = run.catch(() => {});
+    await run;
   },
 
   // O18 HIST-03: rename a saved hike. Persists the summary list to storage.
@@ -166,26 +200,33 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   clearSessions: () => {
-    const userId = get().currentUserId;
-    storage.removeItem(sessionsKey(userId));
-    // Note: trackpoints keyed per-session-id are not enumerable on AsyncStorage
-    // without listing all keys. They become orphaned but unreachable since
-    // sessions list is gone. Acceptable trade-off; full cleanup would require
-    // AsyncStorage.getAllKeys() filter.
-    set({ sessions: [] });
+    // Logout is not account deletion. Hide the active user's in-memory view,
+    // but retain its scoped summaries/points so pending data returns on login.
+    set({ sessions: [], currentUserId: 'guest' });
   },
 
-  deleteSession: (id) => {
-    const userId = get().currentUserId;
+  deleteSession: async (id) => {
+    const userId = String(get().currentUserId ?? '');
     const session = get().sessions.find((s) => s.id === id);
+    const clientActivityId = session?.clientActivityId ?? session?.id;
     crashLogger.breadcrumb(`session:delete:start id=${id} hasRemoteId=${!!session?.remoteId}`);
-    set((s) => {
-      const next = s.sessions.filter((sess) => sess.id !== id);
-      const summaries = next.map(({ trackPoints: _, ...rest }) => rest);
-      storage.setItem(sessionsKey(userId), JSON.stringify(summaries));
-      storage.removeItem(trackPointsKey(userId, id));
-      return { sessions: next };
-    });
+    if (session && userId !== 'guest' && clientActivityId) {
+      await tombstoneActivity({
+        userId,
+        clientActivityId,
+        serverActivityId: session.remoteId ?? null,
+      });
+      try {
+        const { removePending } = require('../services/pendingSyncStore');
+        await removePending(clientActivityId, userId);
+      } catch { /* no pending payload */ }
+    }
+    const base = get().currentUserId === userId ? get().sessions : await persistedSessionsFor(userId);
+    const next = base.filter((sess) => sess.id !== id);
+    const summaries = next.map(({ trackPoints: _, ...rest }) => rest);
+    await storage.setItem(sessionsKey(userId), JSON.stringify(summaries), { strict: true });
+    await storage.removeItem(trackPointsKey(userId, id));
+    if (get().currentUserId === userId) set({ sessions: next });
     // Mirror deletion to backend.
     //
     // Sessions can be in two shapes:
@@ -197,10 +238,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     //      generated by generateId(); remoteId is set ONLY when the
     //      session has been uploaded. Pre-upload sessions exist only
     //      in local storage — there's no backend row to delete.
-    if (session?.remoteId != null) {
-      deleteRemoteSession(session.remoteId)
-        .then((ok) => crashLogger.breadcrumb(`session:delete:remote ok=${ok} target=${session.remoteId}`))
-        .catch((err) => crashLogger.breadcrumb(`session:delete:remote-error ${String(err).slice(0, 80)}`));
+    if (session && clientActivityId && get().currentUserId === userId) {
+      const cancelled = await deleteRemoteSessionByClientId(clientActivityId);
+      const ok = cancelled || (session.remoteId != null
+        ? await deleteRemoteSession(session.remoteId)
+        : false);
+      crashLogger.breadcrumb(`session:delete:remote ok=${ok} target=${session.remoteId ?? clientActivityId}`);
     } else {
       crashLogger.breadcrumb(`session:delete:local-only id=${id}`);
     }
@@ -224,16 +267,23 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   // (需 caller 传 hike 里 payload 摘要,activityMode 等)。
   // 语义变"确保这条 session 以 synced 状态在 store 里存在",不再
   // 假设 addSession 早就跑过。
-  markSynced: (localId, remoteId, upsertData) => {
+  markSynced: async (localId, remoteId, upsertData, requestedOwnerUserId) => {
+    const ownerUserId = String(requestedOwnerUserId ?? get().currentUserId ?? '');
+    if (!ownerUserId || ownerUserId === 'guest') return false;
     // R110 P2-15: merge semantic verified —— in-memory 分支用 `{...sess, ...}` spread,
     // 现有 sess 字段 (name/description/durationS 等) 保留优先, 只覆盖 remoteId/syncState.
     // upsert 分支只在内存里找不到该 localId 时走 (真孤立), 无服务端 name 需要保留.
-    set((s) => {
-      const idx = s.sessions.findIndex((sess) => sess.id === localId);
+    let didUpdate = false;
+    const run = sessionWriteTail.then(async () => {
+      const live = get();
+      const base = live.currentUserId === ownerUserId
+        ? live.sessions
+        : await persistedSessionsFor(ownerUserId);
+      const idx = base.findIndex((sess) => sess.id === localId);
       let updated: TrackingSession[];
       if (idx >= 0) {
         // Found: 原路径 in-place mutate
-        updated = s.sessions.map((sess, i) =>
+        updated = base.map((sess, i) =>
           i === idx
             ? { ...sess, remoteId, syncState: 'synced' as const }
             : sess
@@ -255,27 +305,64 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           name: upsertData.name,
           syncState: 'synced' as const,
         };
-        updated = [upsertSession, ...s.sessions];
+        updated = [upsertSession, ...base];
       } else {
         // 无 upsertData 兜底:保持原 silent no-op 行为(不该发生,但防御性)
-        return {};
+        return;
       }
+      updated = retainPendingAndCapHistory(updated);
       const summaries = updated.map(({ trackPoints: _, ...rest }) => rest);
-      storage.setItem(sessionsKey(get().currentUserId), JSON.stringify(summaries));
-      return { sessions: updated };
+      await storage.setItem(sessionsKey(ownerUserId), JSON.stringify(summaries), { strict: true });
+      if (get().currentUserId === ownerUserId) set({ sessions: updated });
+      didUpdate = true;
     });
+    sessionWriteTail = run.catch(() => {});
+    await run;
+    return didUpdate;
+  },
+
+  markSyncState: async (localId, syncState, requestedOwnerUserId) => {
+    const ownerUserId = String(requestedOwnerUserId ?? get().currentUserId ?? '');
+    if (!ownerUserId || ownerUserId === 'guest') return;
+    const run = sessionWriteTail.then(async () => {
+      const live = get();
+      const base = live.currentUserId === ownerUserId
+        ? live.sessions
+        : await persistedSessionsFor(ownerUserId);
+      const next = base.map(session =>
+        session.id === localId ? { ...session, syncState } : session,
+      );
+      await storage.setItem(
+        sessionsKey(ownerUserId),
+        JSON.stringify(next.map(({ trackPoints: _, ...rest }) => rest)),
+        { strict: true },
+      );
+      if (get().currentUserId === ownerUserId) set({ sessions: next });
+    });
+    sessionWriteTail = run.catch(() => {});
+    await run;
   },
 
   // v412: 用户长按灰卡"放弃"调用 (无 remoteId or 未成功同步的场景)
-  removeLocal: (localId) => {
-    const userId = get().currentUserId;
-    set((s) => {
-      const next = s.sessions.filter((sess) => sess.id !== localId);
-      const summaries = next.map(({ trackPoints: _, ...rest }) => rest);
-      storage.setItem(sessionsKey(userId), JSON.stringify(summaries));
-      storage.removeItem(trackPointsKey(userId, localId));
-      return { sessions: next };
+  removeLocal: async (localId, requestedOwnerUserId) => {
+    const ownerUserId = String(requestedOwnerUserId ?? get().currentUserId ?? '');
+    if (!ownerUserId || ownerUserId === 'guest') return;
+    const run = sessionWriteTail.then(async () => {
+      const live = get();
+      const base = live.currentUserId === ownerUserId
+        ? live.sessions
+        : await persistedSessionsFor(ownerUserId);
+      const next = base.filter((sess) => sess.id !== localId);
+      await storage.setItem(
+        sessionsKey(ownerUserId),
+        JSON.stringify(next.map(({ trackPoints: _, ...rest }) => rest)),
+        { strict: true },
+      );
+      await storage.removeItem(trackPointsKey(ownerUserId, localId));
+      if (get().currentUserId === ownerUserId) set({ sessions: next });
     });
+    sessionWriteTail = run.catch(() => {});
+    await run;
   },
 
   hydrate: async (userId = 'guest') => {
@@ -376,4 +463,8 @@ export async function loadTrackPoints(sessionId: string): Promise<TrackPoint[]> 
   } catch {
     return [];
   }
+}
+
+export async function removeLocalTrackPoints(userId: string, sessionId: string): Promise<void> {
+  await storage.removeItem(trackPointsKey(userId, sessionId));
 }

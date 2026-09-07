@@ -48,12 +48,12 @@ export function hasMemoryHydrateFailedBefore(): boolean {
   return cachedFlag === true;
 }
 
-export function markMemoryHydrateInProgress(): void {
+export async function markMemoryHydrateInProgress(): Promise<void> {
   cachedFlag = true;
-  void AsyncStorage.setItem(STORAGE_KEY, '1').catch(() => {/* ignore */});
+  await AsyncStorage.setItem(STORAGE_KEY, '1');
 }
 
-export function markMemoryHydrateSuccess(): void {
+export async function markMemoryHydrateSuccess(): Promise<void> {
   cachedFlag = false;
-  void AsyncStorage.removeItem(STORAGE_KEY).catch(() => {/* ignore */});
+  await AsyncStorage.removeItem(STORAGE_KEY);
 }

@@ -18,6 +18,9 @@ interface TrackPointLike {
   /** Either ISO string (incremental flow) or epoch ms (legacy flow). */
   t?: number;
   timestamp?: string;
+  acc?: number | null;
+  segment_id?: string;
+  segment_start_reason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
 }
 
 interface SessionPayload {
@@ -39,6 +42,7 @@ interface SessionPayload {
 
 interface RemoteSession {
   id: number;
+  client_activity_id?: string | null;
   user_id: number;
   type: 'hiking' | 'running';
   start_time: string;
@@ -68,17 +72,98 @@ interface RemoteSession {
 export async function startSession(
   type: 'hiking' | 'running',
   startTime: string,
+  clientActivityId?: string,
 ): Promise<number | null> {
+  const resolution = await startSessionResolved(type, startTime, clientActivityId);
+  return resolution.kind === 'started' ? resolution.serverActivityId : null;
+}
+
+export interface RemoteUnfinishedActivity {
+  id: number;
+  clientActivityId: string;
+  type: 'hiking' | 'running';
+  startedAt: string;
+  pointCount: number;
+  rawPointCount: number;
+}
+
+export type StartSessionResolution =
+  | { kind: 'started'; serverActivityId: number; clientActivityId: string | null }
+  | { kind: 'conflict'; code: string; existing: RemoteUnfinishedActivity | null }
+  | { kind: 'unavailable' };
+
+/**
+ * Start with an explicit singleton result. A network timeout is not a failed
+ * local Start: the immutable business ID safely reconciles later. A 409 is
+ * different — the server proved that another Activity owns the account slot.
+ */
+export async function startSessionResolved(
+  type: 'hiking' | 'running',
+  startTime: string,
+  clientActivityId?: string,
+  timeoutMs = 5_000,
+): Promise<StartSessionResolution> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await authenticatedFetch('/api/sessions/start', {
       method: 'POST',
-      body: JSON.stringify({ type, start_time: startTime }),
+      headers: clientActivityId ? { 'X-Idempotency-Key': clientActivityId } : undefined,
+      signal: controller.signal,
+      body: JSON.stringify({
+        type,
+        start_time: startTime,
+        ...(clientActivityId ? { client_activity_id: clientActivityId, client_op_id: clientActivityId } : {}),
+      }),
     });
-    if (!res.ok) return null;
+    if (res.status === 409) {
+      let body: any = null;
+      try { body = await res.json(); } catch { /* malformed conflict */ }
+      const existing = body?.existing_activity;
+      return {
+        kind: 'conflict',
+        code: typeof body?.code === 'string' ? body.code : 'UNFINISHED_ACTIVITY_EXISTS',
+        existing: existing
+          && typeof existing.id === 'number'
+          && typeof existing.client_activity_id === 'string'
+          && (existing.type === 'hiking' || existing.type === 'running')
+          ? {
+              id: existing.id,
+              clientActivityId: existing.client_activity_id,
+              type: existing.type,
+              startedAt: existing.start_time,
+              pointCount: Number(existing.point_count ?? 0),
+              rawPointCount: Number(existing.raw_point_count ?? 0),
+            }
+          : null,
+      };
+    }
+    if (!res.ok) return { kind: 'unavailable' };
     const data = await res.json();
-    return typeof data?.id === 'number' ? data.id : null;
+    if (typeof data?.id !== 'number') return { kind: 'unavailable' };
+    if (clientActivityId && data?.client_activity_id !== clientActivityId) return { kind: 'unavailable' };
+    return {
+      kind: 'started',
+      serverActivityId: data.id,
+      clientActivityId: data?.client_activity_id ?? null,
+    };
   } catch {
-    return null;
+    return { kind: 'unavailable' };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** Cancel a stale/late remote shell using the immutable business identity. */
+export async function deleteRemoteSessionByClientId(clientActivityId: string): Promise<boolean> {
+  try {
+    const res = await authenticatedFetch(
+      `/api/sessions/client/${encodeURIComponent(clientActivityId)}`,
+      { method: 'DELETE' },
+    );
+    return res.ok || res.status === 404;
+  } catch {
+    return false;
   }
 }
 
@@ -168,14 +253,21 @@ interface SaveHikeAtomicPayload {
   distance_m: number;
   duration_s: number;
   name: string;
-  route_points: Array<{ lat: number; lng: number; t: number }>;
-  route_points_raw: Array<{ lat: number; lng: number; t: number; acc?: number | null }>;
-  memory_points: Array<{ lat: number; lng: number; ts: number }>;
+  route_points: Array<{
+    lat: number; lng: number; t: number; alt?: number | null; acc?: number | null;
+    segment_id?: string; segment_start_reason?: string;
+  }>;
+  route_points_raw: Array<{
+    lat: number; lng: number; t: number; alt?: number | null; acc?: number | null;
+    segment_id?: string; segment_start_reason?: string;
+  }>;
+  memory_points: Array<{ lat: number; lng: number; ts: number; cid?: string }>;
 }
 
 interface SaveHikeAtomicResult {
   ok: true;
   session_id: number;
+  client_activity_id: string;
   finalized_at: string;
   memory: { accepted: number; rejected: number };
   idempotent_replay?: boolean;
@@ -185,6 +277,7 @@ export async function saveHikeAtomic(
   remoteId: number,
   payload: SaveHikeAtomicPayload,
   idempotencyKey: string,
+  clientActivityId: string,
 ): Promise<SaveHikeAtomicResult> {
   const path = `/api/sessions/${remoteId}/save`;
   // O18 SAF-07 (2026-07-29): user reported "network request failed" on
@@ -218,7 +311,7 @@ export async function saveHikeAtomic(
       'Content-Type': 'application/json',
       'X-Idempotency-Key': idempotencyKey,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, client_activity_id: clientActivityId }),
   });
   let res: Response;
   let lastNetErrMsg = '';
@@ -288,7 +381,7 @@ export async function saveHikeAtomic(
   // would call markSynced(remoteId=undefined) → sessions list corrupted.
   // Now: if the reply doesn't match the contract, throw so the retry /
   // pending-sync path takes over.
-  if (!body || body.ok !== true || typeof body.session_id !== 'number') {
+  if (!body || body.ok !== true || typeof body.session_id !== 'number' || body.client_activity_id !== clientActivityId) {
     // O18 SAF-07: log malformed to aliyun.
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports

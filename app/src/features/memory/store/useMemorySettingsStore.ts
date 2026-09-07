@@ -2,11 +2,11 @@
  * Memory settings store — user preferences for memory unlocking.
  *
  * Keys:
- *   - foregroundAutoUnlockEnabled (default: true)
- *       App-foreground GPS continuously clears fog as user walks.
- *   - recordMode (default: 'always')
- *       'always'         — record memory whenever app is foreground
- *       'session-only'   — only during an active Hiking/Running session
+ *   - foregroundAutoUnlockEnabled (default: false)
+ *       Permits foreground exploration outside an explicit Activity.
+ *       Hike/Run Memory capture is always active and ignores this setting.
+ *   - recordMode (legacy persisted adapter; normalized to session-only unless
+ *       passive exploration was explicitly enabled by the user)
  *   - showFriendOverlay (default: true)
  *       Whether the Memory map shows friends' shared fog overlaid.
  *   - firstVisitDone (default: false)
@@ -41,8 +41,10 @@ interface MemorySettingsState extends MemorySettings {
 }
 
 const DEFAULTS: MemorySettings = {
-  foregroundAutoUnlockEnabled: true,
-  recordMode: 'always',
+  // This controls only passive exploration outside an explicit Activity.
+  // Activity Memory capture is unconditional and lives in the recorder.
+  foregroundAutoUnlockEnabled: false,
+  recordMode: 'session-only',
   showFriendOverlay: true,
   firstVisitDone: false,
   // v305 OTA: H3 hex fog 默认开启。
@@ -50,7 +52,10 @@ const DEFAULTS: MemorySettings = {
 };
 
 function persist(state: MemorySettings): void {
-  void storage.setItem(STORAGE_KEY, JSON.stringify(state));
+  void storage.setItem(STORAGE_KEY, JSON.stringify({
+    ...state,
+    passiveExplorationContractVersion: 1,
+  }));
 }
 
 async function tryLoad(): Promise<MemorySettings | null> {
@@ -59,11 +64,18 @@ async function tryLoad(): Promise<MemorySettings | null> {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return null;
-    const recordModeRaw = parsed.recordMode;
+    // The former setting defaulted to an always-on recorder. Its persisted
+    // `true` is not proof of consent to the new passive-exploration product
+    // behavior, so every pre-contract payload receives the new OFF default
+    // once. Subsequent explicit choices carry the version marker above.
+    const migratedToPassiveContract = parsed.passiveExplorationContractVersion === 1;
+    const recordModeRaw = migratedToPassiveContract ? parsed.recordMode : 'session-only';
     const recordMode: RecordMode =
-      recordModeRaw === 'session-only' ? 'session-only' : 'always';
+      recordModeRaw === 'always' ? 'always' : 'session-only';
     return {
-      foregroundAutoUnlockEnabled: Boolean(parsed.foregroundAutoUnlockEnabled ?? DEFAULTS.foregroundAutoUnlockEnabled),
+      foregroundAutoUnlockEnabled: migratedToPassiveContract
+        ? Boolean(parsed.foregroundAutoUnlockEnabled ?? DEFAULTS.foregroundAutoUnlockEnabled)
+        : false,
       recordMode,
       showFriendOverlay: Boolean(parsed.showFriendOverlay ?? DEFAULTS.showFriendOverlay),
       firstVisitDone: Boolean(parsed.firstVisitDone ?? DEFAULTS.firstVisitDone),

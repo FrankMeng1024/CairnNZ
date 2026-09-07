@@ -34,6 +34,7 @@ function breadcrumb(msg: string): void {
 }
 
 export interface PendingHike {
+  contractVersion?: 2 | 3;
   localId: string;                 // uuid, hike 结束时生成
   userId: string;                  // 归属用户
   remoteId: number | null;         // 若 hike 开始时也离线, POST /sessions/start 未成 → null
@@ -41,19 +42,51 @@ export interface PendingHike {
   // v412 blocker 1 修 (subagent 视角B): 必须存 activityMode, syncDaemon 用它 startSession
   // 而非硬编码 'hiking'. 否则 running 离线 save 变成 hiking session.
   activityMode: 'hiking' | 'running';
+  /** Original Activity start time. Added after v412; legacy rows fall back
+   * to the first route point/createdAt during reconciliation. */
+  startedAt?: number;
   payload: {
     end_time: string;              // ISO 8601
     distance_m: number;
     duration_s: number;
     name: string;
-    route_points: Array<{ lat: number; lng: number; t: number }>;
-    route_points_raw: Array<{ lat: number; lng: number; t: number; acc?: number | null }>;
-    memory_points: Array<{ lat: number; lng: number; ts: number }>;
+    route_points: Array<{
+      lat: number;
+      lng: number;
+      t: number;
+      segment_id?: string;
+      segment_start_reason?: PendingSegmentStartReason;
+    }>;
+    route_points_raw: Array<{
+      lat: number;
+      lng: number;
+      t: number;
+      acc?: number | null;
+      alt?: number | null;
+      segment_id?: string;
+      segment_start_reason?: PendingSegmentStartReason;
+    }>;
+    memory_points: Array<{ lat: number; lng: number; ts: number; cid?: string }>;
   };
   createdAt: number;
   lastAttemptAt: number | null;
   attemptCount: number;
+  /** Complete local Detail projection committed with the sync payload. */
+  summary?: {
+    startedAt: number;
+    endedAt: number;
+    distanceM: number;
+    durationS: number;
+    elevationGainM: number;
+    name: string;
+    markerIds: string[];
+  };
 }
+
+type PendingSegmentStartReason = 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
+const SEGMENT_START_REASONS = new Set<PendingSegmentStartReason>([
+  'start', 'resume', 'process-recovery', 'gps-reacquired', 'legacy',
+]);
 
 /**
  * 复用 hikeTrackWriter 的 getFs pattern (native = expo-file-system/legacy, web = localStorage shim).
@@ -62,8 +95,9 @@ export interface PendingHike {
 async function getFs(): Promise<any | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const legacy = await import('expo-file-system/legacy');
-    if (legacy && legacy.documentDirectory) return legacy;
+    const imported = require('expo-file-system/legacy');
+    const legacy = imported?.documentDirectory ? imported : imported?.default;
+    if (legacy?.documentDirectory) return legacy;
   } catch {
     /* fallthrough to web shim */
   }
@@ -126,6 +160,12 @@ async function getFs(): Promise<any | null> {
         const raw = window.localStorage.getItem(listKey);
         return raw ? JSON.parse(raw) : [];
       },
+      async moveAsync(opts: { from: string; to: string }) {
+        const raw = window.localStorage.getItem(opts.from);
+        if (raw === null) throw new Error(`File not found: ${opts.from}`);
+        await this.writeAsStringAsync(opts.to, raw);
+        await this.deleteAsync(opts.from);
+      },
     };
   }
   return null;
@@ -139,86 +179,234 @@ async function ensureDir(fs: any) {
   }
 }
 
+interface PendingEnvelope {
+  format: 'cairn-pending-activity';
+  version: 3;
+  generation: number;
+  checksum: string;
+  payload: PendingHike;
+}
+
+let mutationTail: Promise<void> = Promise.resolve();
+async function withMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const prior = mutationTail.catch(() => undefined);
+  let release: () => void = () => undefined;
+  mutationTail = new Promise<void>((resolve) => { release = resolve; });
+  await prior;
+  try { return await operation(); } finally { release(); }
+}
+
+function checksum(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+function isValidPending(hike: any): hike is PendingHike {
+  const validPoint = (point: any): boolean => !!point
+    && Number.isFinite(point.lat) && point.lat >= -90 && point.lat <= 90
+    && Number.isFinite(point.lng) && point.lng >= -180 && point.lng <= 180
+    && Number.isFinite(point.t) && point.t > 0
+    && (point.segment_id == null || (
+      typeof point.segment_id === 'string'
+      && point.segment_id.length >= 1
+      && point.segment_id.length <= 80
+    ))
+    && (point.segment_start_reason == null || SEGMENT_START_REASONS.has(point.segment_start_reason));
+  const validMemoryPoint = (point: any): boolean => !!point
+    && Number.isFinite(point.lat) && point.lat >= -90 && point.lat <= 90
+    && Number.isFinite(point.lng) && point.lng >= -180 && point.lng <= 180
+    && Number.isFinite(point.ts) && point.ts > 0;
+  const validSummary = (summary: any): boolean => summary == null || (
+    Number.isFinite(summary.startedAt)
+    && Number.isFinite(summary.endedAt)
+    && summary.endedAt >= summary.startedAt
+    && Number.isFinite(summary.distanceM) && summary.distanceM >= 0
+    && Number.isFinite(summary.durationS) && summary.durationS >= 0
+    && Number.isFinite(summary.elevationGainM)
+    && typeof summary.name === 'string'
+    && Array.isArray(summary.markerIds)
+    && summary.markerIds.every((id: any) => typeof id === 'string')
+  );
+  return !!hike
+    && typeof hike.localId === 'string'
+    && typeof hike.userId === 'string'
+    && typeof hike.idempotencyKey === 'string'
+    && (hike.activityMode === 'hiking' || hike.activityMode === 'running')
+    && !!hike.payload
+    && Array.isArray(hike.payload.route_points)
+    && hike.payload.route_points.every(validPoint)
+    && Array.isArray(hike.payload.route_points_raw)
+    && hike.payload.route_points_raw.every(validPoint)
+    && Array.isArray(hike.payload.memory_points)
+    && hike.payload.memory_points.every(validMemoryPoint)
+    && validSummary(hike.summary);
+}
+
+function candidatePaths(basePath: string): string[] {
+  return [basePath, `${basePath}.next`, `${basePath}.bak`];
+}
+
+async function readCandidate(fs: any, path: string): Promise<{ hike: PendingHike; generation: number } | null> {
+  const info = await fs.getInfoAsync(path);
+  if (!info.exists) return null;
+  const raw = await fs.readAsStringAsync(path);
+  const parsed = JSON.parse(raw);
+  if (parsed?.format === 'cairn-pending-activity' && parsed?.version === 3) {
+    const envelope = parsed as PendingEnvelope;
+    const encodedPayload = JSON.stringify(envelope.payload);
+    if (!Number.isSafeInteger(envelope.generation) || envelope.generation < 1) return null;
+    if (envelope.checksum !== checksum(encodedPayload) || !isValidPending(envelope.payload)) return null;
+    return { hike: envelope.payload, generation: envelope.generation };
+  }
+  // Backward-compatible v2/plain payload. It is promoted to a verified v3
+  // snapshot on its first mutation/list reconciliation.
+  return isValidPending(parsed) ? { hike: parsed, generation: 0 } : null;
+}
+
+async function readBest(fs: any, basePath: string): Promise<{ hike: PendingHike; generation: number } | null> {
+  let best: { hike: PendingHike; generation: number } | null = null;
+  let anyCandidate = false;
+  for (const path of candidatePaths(basePath)) {
+    try {
+      const info = await fs.getInfoAsync(path);
+      if (!info.exists) continue;
+      anyCandidate = true;
+      const candidate = await readCandidate(fs, path);
+      if (candidate && (!best || candidate.generation > best.generation)) best = candidate;
+    } catch { /* another valid generation may still exist */ }
+  }
+  if (!best && anyCandidate) throw new Error(`pending_activity_corrupt:${basePath}`);
+  return best;
+}
+
+async function writeVerified(fs: any, basePath: string, hike: PendingHike, generation: number): Promise<void> {
+  const payload = { ...hike, contractVersion: 3 as const };
+  const encodedPayload = JSON.stringify(payload);
+  const encodedEnvelope = JSON.stringify({
+    format: 'cairn-pending-activity',
+    version: 3,
+    generation,
+    checksum: checksum(encodedPayload),
+    payload,
+  } satisfies PendingEnvelope);
+  const nextPath = `${basePath}.next`;
+  const backupPath = `${basePath}.bak`;
+  await fs.writeAsStringAsync(nextPath, encodedEnvelope);
+  const staged = await readCandidate(fs, nextPath);
+  if (!staged || staged.generation !== generation) throw new Error('pending_activity_stage_verify_failed');
+  await fs.deleteAsync(backupPath, { idempotent: true });
+  const current = await fs.getInfoAsync(basePath);
+  if (current.exists) await fs.moveAsync({ from: basePath, to: backupPath });
+  await fs.moveAsync({ from: nextPath, to: basePath });
+  const committed = await readCandidate(fs, basePath);
+  if (!committed || committed.generation !== generation) throw new Error('pending_activity_commit_verify_failed');
+  await fs.deleteAsync(backupPath, { idempotent: true });
+}
+
+function basePathFor(fs: any, localId: string): string {
+  return fs.documentDirectory + PENDING_DIR + localId + '.json';
+}
+
 export async function savePending(hike: PendingHike): Promise<void> {
-  const fs = await getFs();
-  if (!fs) return;
-  await ensureDir(fs);
-  const path = fs.documentDirectory + PENDING_DIR + hike.localId + '.json';
-  await fs.writeAsStringAsync(path, JSON.stringify(hike));
+  if (!isValidPending(hike)) throw new Error('pending_activity_invalid');
+  await withMutation(async () => {
+    const fs = await getFs();
+    if (!fs) throw new Error('pending_activity_storage_unavailable');
+    await ensureDir(fs);
+    const basePath = basePathFor(fs, hike.localId);
+    const prior = await readBest(fs, basePath);
+    const merged = !hike.summary && prior?.hike.summary
+      ? { ...hike, summary: prior.hike.summary }
+      : hike;
+    await writeVerified(fs, basePath, merged, (prior?.generation ?? 0) + 1);
+  });
   breadcrumb(`pendingSync:save localId=${hike.localId} remoteId=${hike.remoteId ?? 'null'} pts=${hike.payload?.route_points?.length ?? 0}`);
 }
 
 export async function listPending(): Promise<PendingHike[]> {
-  const fs = await getFs();
-  if (!fs) return [];
-  await ensureDir(fs);
-  const dir = fs.documentDirectory + PENDING_DIR;
-  const filenames: string[] = await fs.readDirectoryAsync(dir);
-  const hikes: PendingHike[] = [];
-  for (const fn of filenames) {
-    if (!fn.endsWith('.json')) continue;
-    try {
-      const raw = await fs.readAsStringAsync(dir + fn);
-      const hike = JSON.parse(raw) as PendingHike;
-      // basic sanity check
-      if (hike && typeof hike.localId === 'string' && hike.payload) {
-        hikes.push(hike);
-      }
-    } catch {
-      /* skip malformed */
+  return withMutation(async () => {
+    const fs = await getFs();
+    if (!fs) throw new Error('pending_activity_storage_unavailable');
+    await ensureDir(fs);
+    const dir = fs.documentDirectory + PENDING_DIR;
+    const filenames: string[] = await fs.readDirectoryAsync(dir);
+    const localIds = new Set<string>();
+    for (const filename of filenames) {
+      const match = filename.match(/^(.*)\.json(?:\.next|\.bak)?$/);
+      if (match?.[1]) localIds.add(match[1]);
     }
-  }
-  // 按 createdAt 升序: 老的先重试
-  hikes.sort((a, b) => a.createdAt - b.createdAt);
-  breadcrumb(`pendingSync:list count=${hikes.length}${hikes.length > 0 ? ' localIds=' + hikes.map(h => h.localId.slice(0, 8)).join(',') : ''}`);
-  return hikes;
+    const hikes: PendingHike[] = [];
+    for (const localId of localIds) {
+      const basePath = basePathFor(fs, localId);
+      const best = await readBest(fs, basePath);
+      if (!best) continue;
+      let hike = best.hike;
+      if (best.generation === 0 || hike.contractVersion !== 3) {
+        if (hike.contractVersion !== 2) {
+          // A pre-client-identity request may have received a legacy cached ACK.
+          // Rotate once while promoting; all later retries retain this identity.
+          const rand = (n: number) => Math.random().toString(16).slice(2, 2 + n).padEnd(n, '0');
+          hike = { ...hike, idempotencyKey: `${rand(8)}-${rand(4)}-4${rand(3)}-8${rand(3)}-${rand(12)}` };
+        }
+        await writeVerified(fs, basePath, hike, Math.max(1, best.generation + 1));
+        hike = { ...hike, contractVersion: 3 };
+      }
+      hikes.push(hike);
+    }
+    hikes.sort((a, b) => a.createdAt - b.createdAt);
+    breadcrumb(`pendingSync:list count=${hikes.length}${hikes.length > 0 ? ' localIds=' + hikes.map(h => h.localId.slice(0, 8)).join(',') : ''}`);
+    return hikes;
+  });
 }
 
-export async function removePending(localId: string): Promise<void> {
-  const fs = await getFs();
-  if (!fs) return;
-  const path = fs.documentDirectory + PENDING_DIR + localId + '.json';
-  try {
-    await fs.deleteAsync(path, { idempotent: true });
-    breadcrumb(`pendingSync:remove localId=${localId}`);
-  } catch {
-    /* file might not exist; that's fine */
-  }
+export async function removePending(localId: string, expectedUserId: string): Promise<void> {
+  if (!expectedUserId || expectedUserId === 'guest') throw new Error('pending_activity_owner_required');
+  await withMutation(async () => {
+    const fs = await getFs();
+    if (!fs) throw new Error('pending_activity_storage_unavailable');
+    const basePath = basePathFor(fs, localId);
+    const current = await readBest(fs, basePath);
+    if (current && String(current.hike.userId) !== String(expectedUserId)) {
+      throw new Error('pending_activity_owner_mismatch');
+    }
+    for (const path of candidatePaths(basePath)) await fs.deleteAsync(path, { idempotent: true });
+    for (const path of candidatePaths(basePath)) {
+      if ((await fs.getInfoAsync(path)).exists) throw new Error('pending_activity_cleanup_incomplete');
+    }
+  });
+  breadcrumb(`pendingSync:remove localId=${localId} owner=${expectedUserId}`);
+}
+
+async function mutatePending(localId: string, mutation: (hike: PendingHike) => void): Promise<void> {
+  await withMutation(async () => {
+    const fs = await getFs();
+    if (!fs) throw new Error('pending_activity_storage_unavailable');
+    const basePath = basePathFor(fs, localId);
+    const current = await readBest(fs, basePath);
+    if (!current) throw new Error('pending_activity_missing');
+    const next = { ...current.hike };
+    mutation(next);
+    await writeVerified(fs, basePath, next, current.generation + 1);
+  });
 }
 
 export async function markAttempt(localId: string): Promise<void> {
-  const fs = await getFs();
-  if (!fs) return;
-  const path = fs.documentDirectory + PENDING_DIR + localId + '.json';
-  try {
-    const raw = await fs.readAsStringAsync(path);
-    const hike = JSON.parse(raw) as PendingHike;
+  let attempts = 0;
+  await mutatePending(localId, (hike) => {
     hike.lastAttemptAt = Date.now();
     hike.attemptCount = (hike.attemptCount || 0) + 1;
-    await fs.writeAsStringAsync(path, JSON.stringify(hike));
-    breadcrumb(`pendingSync:attempt localId=${localId} n=${hike.attemptCount}`);
-  } catch {
-    /* silent — race with removePending is OK */
-  }
+    attempts = hike.attemptCount;
+  });
+  breadcrumb(`pendingSync:attempt localId=${localId} n=${attempts}`);
 }
 
 export async function updateRemoteId(localId: string, remoteId: number | null): Promise<void> {
-  // R96 修补 A.3: 允许 remoteId = null。原签名只接受 number 用于"补 remoteId
-  // (原本 null 现在有了)"; 现在也用于"清 remoteId" —— syncDaemon 拿到
-  // SESSION_NOT_FOUND_RESYNC 后调 updateRemoteId(id, null) 让 pending 走
-  // startSession + saveHikeAtomic 重传路径,避免死指针无限 404。
-  const fs = await getFs();
-  if (!fs) return;
-  const path = fs.documentDirectory + PENDING_DIR + localId + '.json';
-  try {
-    const raw = await fs.readAsStringAsync(path);
-    const hike = JSON.parse(raw) as PendingHike;
-    hike.remoteId = remoteId;
-    await fs.writeAsStringAsync(path, JSON.stringify(hike));
-    breadcrumb(`pendingSync:updateRemoteId localId=${localId} remoteId=${remoteId ?? 'null'}`);
-  } catch {
-    /* silent */
-  }
+  await mutatePending(localId, (hike) => { hike.remoteId = remoteId; });
+  breadcrumb(`pendingSync:updateRemoteId localId=${localId} remoteId=${remoteId ?? 'null'}`);
 }
 
 /**
@@ -233,20 +421,15 @@ export async function updateRemoteId(localId: string, remoteId: number | null): 
  * 要跳过本轮避免 markAttempt 无脑累加。
  */
 export async function resetForResync(localId: string): Promise<boolean> {
-  const fs = await getFs();
-  if (!fs) return false;
-  const path = fs.documentDirectory + PENDING_DIR + localId + '.json';
   try {
-    const raw = await fs.readAsStringAsync(path);
-    const hike = JSON.parse(raw) as PendingHike;
-    hike.remoteId = null;
-    // 生成新 idempotency key (UUID v4 简化实现:32 hex + 4 dash)
-    // 不引 uuid 包避免 bundle 增大;crypto.randomUUID 在 hermes/RN 上不一定有,
-    // 退回到 Math.random 拼接(碰撞几率 ~2^-100,可接受)。
-    const rand = (n: number) => Math.random().toString(16).slice(2, 2 + n).padEnd(n, '0');
-    hike.idempotencyKey = `${rand(8)}-${rand(4)}-${rand(4)}-${rand(4)}-${rand(12)}`;
-    await fs.writeAsStringAsync(path, JSON.stringify(hike));
-    breadcrumb(`pendingSync:resetForResync localId=${localId} newKey=${hike.idempotencyKey.slice(0, 8)}`);
+    let newKey = '';
+    await mutatePending(localId, (hike) => {
+      hike.remoteId = null;
+      const rand = (n: number) => Math.random().toString(16).slice(2, 2 + n).padEnd(n, '0');
+      newKey = `${rand(8)}-${rand(4)}-${rand(4)}-${rand(4)}-${rand(12)}`;
+      hike.idempotencyKey = newKey;
+    });
+    breadcrumb(`pendingSync:resetForResync localId=${localId} newKey=${newKey.slice(0, 8)}`);
     return true;
   } catch {
     return false;

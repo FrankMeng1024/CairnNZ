@@ -36,6 +36,7 @@ import type { TrackingSession } from '../store/useSessionStore';
 import type { Marker } from '../store/useMarkerStore';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
+import { segmentTrace } from '../features/activity/activityContracts';
 
 // ── Conditional Mapbox import ─────────────────────────────────────────────
 // Native: render the track on top of a real Mapbox map. Web / Expo Go:
@@ -68,6 +69,17 @@ const { width: W, height: H } = Dimensions.get('window');
 const MAP_H = H - 380;
 // Map bounds for coordinate mapping
 const MAP_PADDING = 40;
+
+function formatActivityPace(durationS: number, distanceM: number, imperial: boolean): string {
+  const unitM = imperial ? 1609.344 : 1000;
+  if (!(durationS > 0) || distanceM < 20) return '--';
+  const secondsPerUnit = durationS / (distanceM / unitM);
+  if (!Number.isFinite(secondsPerUnit) || secondsPerUnit <= 0) return '--';
+  const roundedSeconds = Math.round(secondsPerUnit);
+  const minutes = Math.floor(roundedSeconds / 60);
+  const seconds = roundedSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
 
 // ── Spring press wrapper ────────────────────────────────────────────────────
 function PressRow({
@@ -198,45 +210,17 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
         />
       )}
       {ShapeSource && LineLayer && (() => {
-        // v79 fix: split by time AND distance double-check. v78 used
-        // dt>30s alone which false-triggered on red lights / slow walks
-        // / dynamic-sampling stationary ticks (verified on real data:
-        // session 31 had 8 false-positive dashed segments, all at
-        // dt=33-87s with dist 1-8m). New rule: dt > 120s AND dist > 200m
-        // → only fires for genuine signal-loss like metro segments.
-        // Same threshold as live HikingScreen so the user sees the same
-        // shape across hike/history.
-        const GAP_THRESHOLD_MS = 120_000;
-        const GAP_DIST_THRESHOLD_M = 200;
-        type Seg = { coords: [number, number][]; gap: boolean };
-        const segs: Seg[] = [];
-        if (pts.length >= 2) {
-          let cur: Seg = { coords: [[pts[0].lng, pts[0].lat]], gap: false };
-          for (let i = 1; i < pts.length; i++) {
-            const prev = pts[i - 1];
-            const p = pts[i];
-            const dt = (prev.t != null && p.t != null) ? (p.t - prev.t) : 0;
-            const distM = haversineM({ lat: prev.lat, lng: prev.lng }, { lat: p.lat, lng: p.lng });
-            if (dt > GAP_THRESHOLD_MS && distM > GAP_DIST_THRESHOLD_M) {
-              if (cur.coords.length >= 2) segs.push(cur);
-              segs.push({ coords: [[prev.lng, prev.lat], [p.lng, p.lat]], gap: true });
-              cur = { coords: [[p.lng, p.lat]], gap: false };
-            } else {
-              cur.coords.push([p.lng, p.lat]);
-            }
-          }
-          if (cur.coords.length >= 2) segs.push(cur);
-        }
-        const solidFeatures = segs.filter(s => !s.gap).map((s, i) => ({
+        const trace = segmentTrace(pts);
+        const solidFeatures = trace.segments.filter(segment => segment.length >= 2).map((segment, i) => ({
           type: 'Feature' as const,
           id: `solid-${i}`,
-          geometry: { type: 'LineString' as const, coordinates: s.coords },
+          geometry: { type: 'LineString' as const, coordinates: segment.map(point => [point.lng, point.lat]) },
           properties: {},
         }));
-        const gapFeatures = segs.filter(s => s.gap).map((s, i) => ({
+        const gapFeatures = trace.gaps.map((gap, i) => ({
           type: 'Feature' as const,
           id: `gap-${i}`,
-          geometry: { type: 'LineString' as const, coordinates: s.coords },
+          geometry: { type: 'LineString' as const, coordinates: [[gap.from.lng, gap.from.lat], [gap.to.lng, gap.to.lat]] },
           properties: {},
         }));
         return (
@@ -399,11 +383,14 @@ function TrackPolyline({ session }: { session: TrackingSession }) {
   });
 
   // Draw as connected line segments using thin Views positioned absolutely
-  const segments: { x1: number; y1: number; x2: number; y2: number }[] = [];
+  const segments: { x1: number; y1: number; x2: number; y2: number; gap: boolean }[] = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const a = toPixel(pts[i].lat, pts[i].lng);
     const b = toPixel(pts[i + 1].lat, pts[i + 1].lng);
-    segments.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+    segments.push({
+      x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+      gap: (pts[i].segmentId || 'legacy-0') !== (pts[i + 1].segmentId || 'legacy-0'),
+    });
   }
 
   return (
@@ -421,8 +408,11 @@ function TrackPolyline({ session }: { session: TrackingSession }) {
               left: seg.x1,
               top: seg.y1,
               width: length,
-              height: 3,
-              backgroundColor: color + 'cc',
+              height: seg.gap ? 0 : 3,
+              backgroundColor: seg.gap ? 'transparent' : color + 'cc',
+              borderTopWidth: seg.gap ? 2 : 0,
+              borderStyle: seg.gap ? 'dashed' : 'solid',
+              borderColor: seg.gap ? Colors.textMuted : 'transparent',
               borderRadius: 2,
               transform: [{ rotate: `${angle}deg` }],
               transformOrigin: 'left center',
@@ -526,7 +516,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
   const expandedHeight = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 210] });
 
   // v412: 离线未同步 hike = 纯 placeholder 灰卡, 主体不可点, 只能长按放弃
-  const isPendingSync = session.syncState === 'pending' || session.syncState === 'syncing';
+  const isPendingSync = session.syncState === 'pending' || session.syncState === 'syncing' || session.syncState === 'sync_error';
 
   const handleLongPressAbandon = () => {
     if (!isPendingSync) return;
@@ -574,18 +564,10 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
         // the automatic cycle. Long-press still opens the abandon menu.
         <TouchableOpacity
           activeOpacity={0.7}
-          onPress={async () => {
-            try {
-              const { drainPending } = require('../services/syncDaemon');
-              await drainPending();
-            } catch (e) {
-              // eslint-disable-next-line no-console
-              console.warn('[HIST-08] manual sync trigger failed:', e);
-            }
-          }}
+          onPress={onViewOnMap}
           onLongPress={handleLongPressAbandon}
           delayLongPress={800}
-          accessibilityLabel="Tap to retry sync, long-press to discard"
+          accessibilityLabel="Open saved Activity. Long-press to discard."
         >
           <View style={[cardStyles.routeCard, { opacity: 0.62, backgroundColor: theme.surface, borderColor: theme.border }]}>
             <LinearGradient
@@ -607,7 +589,11 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
                 <Icon name="CloudOff" size={12} color={theme.iconInactive} strokeWidth={2} />
                 <Text style={{ color: theme.foregroundSecondary, fontSize: FontSize.caption }}>
-                  {session.syncState === 'syncing' ? 'Syncing…' : 'Saved offline — tap to retry sync'}
+                  {session.syncState === 'syncing'
+                    ? 'Syncing…'
+                    : session.syncState === 'sync_error'
+                      ? 'Sync issue · Retrying'
+                      : 'Waiting to sync'}
                 </Text>
               </View>
             </LinearGradient>
@@ -796,6 +782,12 @@ export function MapHistoryScreen() {
   // O12: settings-aware distance format for detail modal + stat displays.
   const dist = useDistance();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  // A Detail screen owns its projection for the lifetime of this mount. Sync
+  // may delete handed-off local files while the screen is open; retaining the
+  // summary and trace here prevents a subsequent failed server fetch from
+  // replacing a visible Activity with an empty state.
+  const detailSessionSnapshots = useRef(new Map<string, TrackingSession>());
+  const detailTrackSnapshots = useRef(new Map<string, import('../store/useSessionStore').TrackPoint[]>());
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [tab, setTab] = useState<'routes' | 'flags'>('routes');
@@ -864,7 +856,17 @@ export function MapHistoryScreen() {
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
-  const selectedSession = sessions.find(s => s.id === selectedSessionId) ?? null;
+  const liveSelectedSession = sessions.find(s => s.id === selectedSessionId) ?? null;
+  const retainedSelectedSession = selectedSessionId
+    ? detailSessionSnapshots.current.get(selectedSessionId) ?? null
+    : null;
+  const selectedSession = retainedSelectedSession
+    ? {
+        ...retainedSelectedSession,
+        remoteId: liveSelectedSession?.remoteId ?? retainedSelectedSession.remoteId,
+        syncState: liveSelectedSession?.syncState ?? retainedSelectedSession.syncState,
+      }
+    : liveSelectedSession;
   const selectedMarker = markers.find(m => m.id === selectedMarkerId) ?? null;
 
   // Load track points on demand when session is selected.
@@ -888,6 +890,26 @@ export function MapHistoryScreen() {
   const [loadedTrackPoints, setLoadedTrackPoints] = useState<import('../store/useSessionStore').TrackPoint[] | null>(null);
   useEffect(() => {
     if (!selectedSessionId) { setLoadedTrackPoints(null); return; }
+    const session = useSessionStore.getState().sessions.find(s => s.id === selectedSessionId) ?? null;
+    if (session && !detailSessionSnapshots.current.has(selectedSessionId)) {
+      detailSessionSnapshots.current.set(selectedSessionId, {
+        ...session,
+        trackPoints: [...(session.trackPoints ?? [])],
+        markerIds: [...(session.markerIds ?? [])],
+      });
+    }
+    const retainedTrack = detailTrackSnapshots.current.get(selectedSessionId);
+    if (retainedTrack) {
+      setLoadedTrackPoints(retainedTrack);
+      return;
+    }
+    if (session && Array.isArray(session.trackPoints) && session.trackPoints.length >= 2) {
+      const snapshot = session.trackPoints.map(point => ({ ...point }));
+      detailTrackSnapshots.current.set(selectedSessionId, snapshot);
+      setLoadedTrackPoints(snapshot);
+      return;
+    }
+    setLoadedTrackPoints(null);
     let cancelled = false;
     // O6 (2026-07-26): 添加 15s 超时。之前 fetchSessionDetail 无超时,
     // 若网络卡住 (server slow / 用户切飞行模式 mid-fetch) 就永远
@@ -897,7 +919,6 @@ export function MapHistoryScreen() {
     const timeoutMs = 15000;
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     (async () => {
-      const session = sessions.find(s => s.id === selectedSessionId);
       const remoteId = session?.remoteId;
       if (remoteId != null) {
         const detailPromise = fetchSessionDetail(remoteId);
@@ -921,7 +942,10 @@ export function MapHistoryScreen() {
             lng: p.lng,
             alt: p.alt ?? null,
             t: typeof p.t === 'number' ? p.t : (p.timestamp ? Date.parse(p.timestamp) : Date.now()),
+            segmentId: p.segment_id ?? p.segmentId ?? 'legacy-0',
+            segmentStartReason: p.segment_start_reason ?? p.segmentStartReason,
           }));
+          detailTrackSnapshots.current.set(selectedSessionId, normalised);
           setLoadedTrackPoints(normalised);
           return;
         }
@@ -932,13 +956,22 @@ export function MapHistoryScreen() {
       // spinner and show the correct message ("too short" for distanceM===0
       // sessions, or a clean "no route data" state for others).
       const local = await loadTrackPoints(selectedSessionId);
-      if (!cancelled) setLoadedTrackPoints(local ?? []);
-    })().catch(() => { if (!cancelled) setLoadedTrackPoints([]); });
+      if (!cancelled) {
+        const snapshot = local ?? [];
+        detailTrackSnapshots.current.set(selectedSessionId, snapshot);
+        setLoadedTrackPoints(snapshot);
+      }
+    })().catch(() => {
+      if (!cancelled) {
+        const retained = detailTrackSnapshots.current.get(selectedSessionId) ?? [];
+        setLoadedTrackPoints(retained);
+      }
+    });
     return () => {
       cancelled = true;
       if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
     };
-  }, [selectedSessionId, sessions]);
+  }, [selectedSessionId]);
 
   // Merge loaded track points into the selected session for display.
   // v261: when loadedTrackPoints === null we are still loading; pass [] so
@@ -968,6 +1001,12 @@ export function MapHistoryScreen() {
   // smoothed. Same split as Strava.
   const smoothedTrackPoints = React.useMemo(() => {
     if (!sessionForDisplay || sessionForDisplay.trackPoints.length === 0) return [];
+    // New Activities were already accepted/smoothed by the centralized
+    // recorder. Preserve their explicit segment identities exactly; legacy
+    // flat tracks alone use the historical render-only cleanup below.
+    if (sessionForDisplay.trackPoints.some(point => point.segmentId && point.segmentId !== 'legacy-0')) {
+      return sessionForDisplay.trackPoints;
+    }
     // v(post-O2): Kalman Q 1e-9 → 1e-7. 1e-9 heavily trusted the prior, which
     // over-smoothed U-turns/out-and-back — the return leg lagged the outbound
     // leg by 5-15m and rendered as a visible parallel line rather than
@@ -1081,6 +1120,9 @@ export function MapHistoryScreen() {
   const routeFlags: Marker[] = (() => {
     if (!sessionForDisplay || sessionForDisplay.trackPoints.length === 0) return [];
     return markers.filter(m => {
+      if (m.originActivityClientId) {
+        return m.originActivityClientId === (sessionForDisplay.clientActivityId ?? sessionForDisplay.id);
+      }
       // Cheap bounding-box reject before haversine to keep this fast on
       // long hikes with many flags. ~0.001° lat/lng ≈ 100m at NZ
       // latitudes, well above the 50m threshold.
@@ -1156,8 +1198,12 @@ export function MapHistoryScreen() {
             </View>
             <View style={styles.trackStatDivider} />
             <View style={[styles.trackStat, { borderLeftWidth: 2, borderLeftColor: Colors.textMuted }]}>
-              <Text style={styles.trackStatValue}>+{dist.formatElevation(selectedSession.elevationGainM ?? 0)}{dist.elevUnit}</Text>
-              <Text style={styles.trackStatUnit}>elev</Text>
+              <Text style={styles.trackStatValue}>
+                {selectedSession.activityMode === 'running'
+                  ? formatActivityPace(selectedSession.durationS, selectedSession.distanceM, dist.imperial)
+                  : `+${dist.formatElevation(selectedSession.elevationGainM ?? 0)}${dist.elevUnit}`}
+              </Text>
+              <Text style={styles.trackStatUnit}>{selectedSession.activityMode === 'running' ? `/${dist.unit}` : 'elev'}</Text>
             </View>
           </View>
         )}
@@ -1193,7 +1239,12 @@ export function MapHistoryScreen() {
       {/* Top bar — overlays map */}
       <SafeAreaView style={styles.topBar} edges={['top']}>
         <View style={styles.topRow}>
-          <BackButton variant="inline" />
+          <BackButton
+            variant="inline"
+            onPress={targetSessionId
+              ? () => nav.navigate('Routes', { initialTab: 'activities' })
+              : undefined}
+          />
           {/* User decision 2026-08-16: Trails index view (no targetSessionId)
               has NO top title — the tab bar (Activities/Routes/Cairns) below
               already anchors the context. Only detail views show a title.
@@ -1416,8 +1467,14 @@ export function MapHistoryScreen() {
               <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>time</Text>
             </View>
             <View style={styles.singleStat}>
-              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>+{dist.formatElevation(selectedSession.elevationGainM ?? 0)}{dist.elevUnit}</Text>
-              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>elev</Text>
+              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>
+                {selectedSession.activityMode === 'running'
+                  ? formatActivityPace(selectedSession.durationS, selectedSession.distanceM, dist.imperial)
+                  : `+${dist.formatElevation(selectedSession.elevationGainM ?? 0)}${dist.elevUnit}`}
+              </Text>
+              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>
+                {selectedSession.activityMode === 'running' ? `/${dist.unit}` : 'elev'}
+              </Text>
             </View>
           </View>
           {/* Meta row: activity type · date · time-of-day (concept crops/02). */}
@@ -1435,6 +1492,18 @@ export function MapHistoryScreen() {
               {new Date(selectedSession.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
             </Text>
           </View>
+          {selectedSession.syncState !== 'synced' ? (
+            <View style={styles.detailMetaRow}>
+              <Icon name="CloudOff" size={13} color={visualTheme.iconInactive} strokeWidth={2} />
+              <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>
+                {selectedSession.syncState === 'syncing'
+                  ? 'Syncing…'
+                  : selectedSession.syncState === 'sync_error'
+                    ? 'Sync issue · Retrying'
+                    : 'Waiting to sync'}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[styles.actionPillDanger, { flex: 1, backgroundColor: visualTheme.surface, borderColor: visualTheme.destructive }, deleteConfirm && { backgroundColor: visualTheme.destructive, borderColor: visualTheme.destructive }]}
@@ -1457,20 +1526,37 @@ export function MapHistoryScreen() {
               ]}
               disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}
               onPress={() => {
-                // v198 Bug 1+2 fix: open RouteEditorScreen in save-as-route
-                // draft mode (fromSessionId) instead of persisting directly.
                 const ts = selectedSession;
-                crashLogger.breadcrumb(`saveroute:nav-to-editor session=${ts.id}`);
-                (nav as any).navigate('RouteEditor', {
-                  fromSessionId: ts.id,
-                  fromSessionTrackPoints: (loadedTrackPoints ?? []).map(p => ({
+                const realSegments = segmentTrace(loadedTrackPoints ?? []).segments
+                  .filter(segment => segment.length >= 2);
+                const openSegment = (segment: typeof realSegments[number]) => {
+                  crashLogger.breadcrumb(`saveroute:nav-to-editor session=${ts.id} segment=${segment[0]?.segmentId ?? 'legacy'}`);
+                  (nav as any).navigate('RouteEditor', {
+                    fromSessionId: ts.id,
+                    fromSessionTrackPoints: segment.map(p => ({
                     lat: p.lat,
                     lng: p.lng,
                     alt: p.alt ?? null,
                     t: p.t,
                     accuracy: (p as any).accuracy ?? null,
-                  })),
-                });
+                    })),
+                  });
+                };
+                if (realSegments.length <= 1) {
+                  if (realSegments[0]) openSegment(realSegments[0]);
+                  return;
+                }
+                Alert.alert(
+                  'Choose a recorded segment',
+                  'The dashed gaps were not recorded and cannot become route geometry. Choose one real segment to edit.',
+                  [
+                    ...realSegments.map((segment, index) => ({
+                      text: `Segment ${index + 1}`,
+                      onPress: () => openSegment(segment),
+                    })),
+                    { text: 'Cancel', style: 'cancel' as const },
+                  ],
+                );
               }}
               accessibilityRole="button"
               accessibilityLabel="Save as route"

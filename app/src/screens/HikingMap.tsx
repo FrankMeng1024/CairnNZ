@@ -6,7 +6,7 @@
  * - Real Mapbox native (iOS/Android) when @rnmapbox/maps is available.
  * - Web/Expo-Go fallback: simple tile placeholder with overlay MarkerPins.
  * - Polyline splits at signal-loss gaps (dt > 120s AND dist > 200m).
- * - sim-walker puck (debug mode): skips Mapbox.UserLocation, draws own dot.
+ * - Simulator puck: skips Mapbox.UserLocation and draws the synthetic source.
  */
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
@@ -25,6 +25,8 @@ import { MARKER_META } from '../data/mockData';
 import { FLAG_TYPES } from '../data/flagTypes';
 import { MarkerPin } from './MarkerPin';
 import type { Marker } from '../store/useMarkerStore';
+import { registerSimulatorMapCenterGetter } from '../features/activitySimulator/simulatorMapBridge';
+import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
 
 // ── Mapbox conditional import ────────────────────────────────────────────
 // @rnmapbox/maps components are native-only — on web they may be undefined.
@@ -59,10 +61,7 @@ type HikingMapProps = {
   // the polyline at GPS-signal-loss gaps. When two consecutive points are
   // separated by more than GAP_THRESHOLD_MS in time, we render that
   // segment as a dashed "lost signal" line instead of a solid track.
-  // v448: segmentBreak flag from sim-walker so ⟲/↶ can break the
-  // polyline cleanly instead of drawing a straight line to the new
-  // anchor. Only present on sim-walker-generated points.
-  trackPoints: Array<{ lat: number; lng: number; t?: number; segmentBreak?: boolean }>;
+  trackPoints: Array<{ lat: number; lng: number; t?: number; segmentId?: string }>;
   onMarkerPress: (id: string) => void;
   // When a saved route is selected and the user isn't already at its
   // start, we draw a dashed "approach" line from the user's current
@@ -88,18 +87,14 @@ type HikingMapProps = {
   // v119: optional ref the parent fills with an imperative recenter()
   // function so the recenter button can flyTo the user's location even
   // when the cameraRef itself is private to HikingMap.
-  // v447: when true, skip Mapbox.UserLocation (native hardware GPS)
-  // and draw the blue dot from userPos ourselves. This is the ONLY way
-  // to make the puck follow sim-walker's synthetic position, because
-  // Mapbox.UserLocation is bound to CoreLocation at native level and
-  // ignores any coordinate prop we pass.
-  debugMode?: boolean;
+  /** Fixed provider is Simulator; never use this merely for generic Debug Mode. */
+  simulatorEnabled?: boolean;
   recenterImperativeRef?: React.MutableRefObject<(() => void) | null>;
 };
 
 export function HikingMap({
   markers, trackPoints, onMarkerPress, routeStart, userPos,
-  instantCamera, followUser = true, onUserGesture, recenterImperativeRef, debugMode,
+  instantCamera, followUser = true, onUserGesture, recenterImperativeRef, simulatorEnabled,
   trackStartVariant = null,
 }: HikingMapProps) {
   const region = getCurrentRegion();
@@ -187,10 +182,7 @@ export function HikingMap({
         const p = trackPoints[i];
         const dt = (prev.t != null && p.t != null) ? (p.t - prev.t) : 0;
         const distM = haversineM({ lat: prev.lat, lng: prev.lng }, { lat: p.lat, lng: p.lng });
-        // v448: sim-walker sets segmentBreak on the first tick after
-        // ⟲ (relocate) or ↶ (undo) so the polyline breaks cleanly at
-        // the new anchor instead of drawing a straight line to it.
-        const isSegmentBreak = (p as any).segmentBreak === true;
+        const isSegmentBreak = Boolean(prev.segmentId && p.segmentId && prev.segmentId !== p.segmentId);
         const isGap = !isSegmentBreak && dt > GAP_THRESHOLD_MS && distM > GAP_DIST_THRESHOLD_M;
         if (isSegmentBreak) {
           // Close the current segment, start a fresh one at the new
@@ -240,14 +232,9 @@ export function HikingMap({
   // auto-fly-to-puck animation that runs even when defaultSettings is
   // provided. Without this, "Resume" still flies in from globe view.
   const cameraRef = useRef<any>(null);
-  // v447: MapView ref so we can query current center via getCenter() for
-  // sim-walker's ⟲ button (which sets injector.currentPos to the map's
-  // viewport center — the "recenter to where I'm looking" gesture).
+  // The bounded bridge exposes only map center selection to the QA panel.
   const mapViewRef = useRef<any>(null);
 
-  // v447: register a getter with mapCenterProvider so SimWalkerOverlay
-  // (which lives sibling-to-map and can't reach this ref directly) can
-  // pull the current viewport center on ⟲ tap.
   useEffect(() => {
     const getter = async () => {
       try {
@@ -262,10 +249,7 @@ export function HikingMap({
         return null;
       }
     };
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { registerMapCenterGetter, unregisterMapCenterGetter } = require('../dev/simWalker/mapCenterProvider');
-    registerMapCenterGetter(getter);
-    return () => { unregisterMapCenterGetter(getter); };
+    return registerSimulatorMapCenterGetter(getter);
   }, []);
 
   // v119: expose an imperative recenter() to the parent so the recenter
@@ -384,6 +368,16 @@ export function HikingMap({
             onUserGesture?.();
           }
         }}
+        onLongPress={(event: any) => {
+          if (!simulatorEnabled) return;
+          const coordinates = event?.geometry?.coordinates ?? event?.features?.[0]?.geometry?.coordinates;
+          if (Array.isArray(coordinates) && coordinates.length >= 2) {
+            useActivitySimulatorStore.getState().setMapSelection({
+              lat: Number(coordinates[1]),
+              lng: Number(coordinates[0]),
+            });
+          }
+        }}
         // R114/O24 (2026-08-12): primary trigger — fires when style +
         // first tile batch loaded (basemap visible). More reliable than
         // onDidFinishRenderingMapFully across Mapbox SDK versions.
@@ -415,29 +409,26 @@ export function HikingMap({
           // Mapbox auto-recenters on every GPS fix (original behaviour).
           // While false, the user can pan/zoom freely until they tap the
           // recenter button.
-          followUserLocation={!instantCamera && followUser}
+          followUserLocation={!simulatorEnabled && !instantCamera && followUser}
           followZoomLevel={15}
           followPitch={0}
           animationDuration={instantCamera ? 0 : 600}
           animationMode={instantCamera ? 'none' : 'flyTo'}
-          defaultSettings={instantCamera && userPos
+          defaultSettings={(instantCamera || simulatorEnabled) && userPos
             ? { centerCoordinate: [userPos.lng, userPos.lat], zoomLevel: 15 }
             : undefined}
         />
-        {/* v447: In debug mode, skip Mapbox.UserLocation (bound to
-             CoreLocation hardware, ignores our coord prop) and draw
-             the puck ourselves so it follows sim-walker's userPos. */}
-        {debugMode && userPos ? (
+        {simulatorEnabled && userPos ? (
           <ShapeSource
-            id="sim-walker-puck"
+            id="activity-simulator-puck"
             shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: [userPos.lng, userPos.lat] }, properties: {} } as any}
           >
             <CircleLayer
-              id="sim-walker-puck-halo"
+              id="activity-simulator-puck-halo"
               style={{ circleRadius: 14, circleColor: '#1E88E5', circleOpacity: 0.25 }}
             />
             <CircleLayer
-              id="sim-walker-puck-dot"
+              id="activity-simulator-puck-dot"
               style={{ circleRadius: 7, circleColor: '#1E88E5', circleStrokeWidth: 2, circleStrokeColor: '#ffffff' }}
             />
           </ShapeSource>
@@ -618,10 +609,8 @@ export function HikingMap({
           // touch on this view is consumed and never reaches MapView.
         />
       )}
-      {/* v447: dashed circle overlay marking the screen center. Only
-          visible in debug mode. This is the point the ⟲ button will
-          use as the new "current position" anchor when tapped. */}
-      {debugMode && (
+      {/* Simulator-only map-center target used by “Use map center”. */}
+      {simulatorEnabled && (
         <View pointerEvents="none" style={mapStyles.debugCenterCircle} />
       )}
     </View>

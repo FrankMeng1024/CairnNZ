@@ -1,3 +1,14 @@
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+jest.mock('../src/features/activitySimulator/activityLocationProvider', () => ({
+  readTrustedSimulatorLocation: jest.fn(() => null),
+  selectedActivityLocationSource: jest.fn(() => 'real'),
+}));
+jest.mock('../src/features/activitySimulator/simulatorLog', () => ({
+  appendSimulatorLog: jest.fn(),
+}));
+
 /**
  * Unit tests — gpsSampler.decideFromReadings
  *
@@ -5,7 +16,10 @@
  * readings, verify the weighted-mean and gating logic.
  */
 
-import { decideFromReadings } from '../src/features/plant/services/gpsSampler';
+import { decideFromReadings, sampleGpsWindow } from '../src/features/plant/services/gpsSampler';
+
+const simulatorProvider = require('../src/features/activitySimulator/activityLocationProvider');
+const { appendSimulatorLog } = require('../src/features/activitySimulator/simulatorLog');
 
 interface Reading { lat: number; lng: number; accuracy: number; timestamp: number; }
 
@@ -66,5 +80,41 @@ describe('gpsSampler · decideFromReadings', () => {
     ]);
     expect(out.ok).toBe(false);
     expect(out.reason).toBe('too-jumpy');
+  });
+});
+
+describe('gpsSampler · accelerated Simulator provider', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    simulatorProvider.selectedActivityLocationSource.mockReturnValue('simulator');
+  });
+
+  it('feeds a historical non-future fix through the normal Plant fusion decision', async () => {
+    const virtualTimestamp = Date.now() - 12 * 60 * 60_000;
+    simulatorProvider.readTrustedSimulatorLocation.mockReturnValue({
+      lat: -45.0312,
+      lng: 168.6626,
+      altitudeM: 350,
+      accuracyM: 5,
+      timestamp: virtualTimestamp,
+    });
+
+    await expect(sampleGpsWindow()).resolves.toMatchObject({
+      ok: true,
+      lat: -45.0312,
+      lng: 168.6626,
+      samplesUsed: 5,
+    });
+    expect(appendSimulatorLog).toHaveBeenCalledWith(
+      'GPS_ACCEPT',
+      'plant_gps_window_decided',
+      expect.objectContaining({ accepted: true, altitude: 350 }),
+      { virtualTimestamp },
+    );
+  });
+
+  it('fails closed instead of exposing hidden Simulator position during GPS loss', async () => {
+    simulatorProvider.readTrustedSimulatorLocation.mockReturnValue(null);
+    await expect(sampleGpsWindow()).resolves.toMatchObject({ ok: false, reason: 'no-readings' });
   });
 });

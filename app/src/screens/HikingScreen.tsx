@@ -49,19 +49,23 @@ import { useAppearance } from '../hooks/useAppearance';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
 import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
-// v429 hotfix: SimWalkerOverlay static import removed to prevent gpsInjector
-// top-level side-effects from running on every HikingScreen mount (bundling
-// still includes the module but only runs when the gate is fully open).
-// useSimWalkerStore import stays because it's just a Zustand store, no side effect.
-import { useSimWalkerStore } from '../dev/simWalker/useSimWalkerStore';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
+import { ActivitySimulatorPanel } from '../features/activitySimulator/ActivitySimulatorPanel';
+import { selectedActivityLocationSource } from '../features/activitySimulator/activityLocationProvider';
+import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
+import { activityFreshnessNow } from '../features/activitySimulator/simulatorTime';
 import {
   deriveActivityOperationalState,
   isActivitySessionVisible,
 } from '../features/activity/activityOperationalState';
+import { saveEligibility } from '../features/activity/activityContracts';
 import {
+  findRecoverableActivity,
   restoreRecoverableActivity,
+  saveRecoverableActivity,
   discardRecoverableActivity,
+  type RecoverableActivity,
 } from '../features/activity/activityRecovery';
 
 
@@ -71,14 +75,14 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type UIState = 'map' | 'detail';
 
 export function HikingScreen() {
-  // v430 fix: __DEV__ gate removed. User wanted sim-walker visible in
-  // production build when debugMode is toggled ON. Since debugMode requires
-  // 5-tap on version + is only user-reachable via Settings, this is safe
-  // — no accidental leak to normal users. Bundle still contains the
-  // sim-walker module (~10KB gzipped), acceptable pending R2 dynamic import.
   const debugMode = useSettingsStore((s) => s.debugMode);
-  const simWalkerActive = useSimWalkerStore((s) => s.active);
-  const showSimWalker = debugMode && simWalkerActive;
+  const simulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
+  const simulatorPosition = useActivitySimulatorStore((s) => s.current);
+  const simulatorVirtualTimestamp = useActivitySimulatorStore((s) => s.virtualTimestampMs);
+  const locationProviderSource = useTrackingStore((s) => s.locationProviderSource);
+  const showSimulator = activitySimulatorBuildCapable
+    && debugMode
+    && (simulatorEnabled || locationProviderSource === 'simulator');
 
   const nav = useNavigation<Nav>();
   const isFocused = useIsFocused();
@@ -204,11 +208,9 @@ export function HikingScreen() {
   //   true   → foreground location granted
   //   false  → user denied; banner is shown
   const [hasLocationPermission, setHasLocationPermission] = useState<boolean | null>(null);
-  // O14 Bug 4: keep the sheet mounted with a "Saving…" spinner during
-  // stopTracking's async flush+rename chain. Pre-fix, the sheet dismissed
-  // immediately on tap-Save and the user saw the Hiking screen with the
-  // Start-Hiking button visible while tracking was still finalising
-  // (up to 30s) — very confusing.
+  // Keep the sheet mounted with a "Saving…" spinner until the authoritative
+  // local completion boundary returns. A transport timeout must never make
+  // the UI claim that an uncommitted Activity was saved.
   const [savingHike, setSavingHike] = useState(false);
   // R21 (2026-08-18 user "finish如果too short现在没任何提示 应该有提示 让
   // 用户选择resume 或者discard"): local flag that forces TooShortSheet
@@ -290,248 +292,20 @@ export function HikingScreen() {
   // 进入 Hiking 界面时检测磁盘 backup, 依赖 hydrationTs 让 iOS jetsam 复活后能重跑
   // v412 4-eye fix (Critical #4): hydrationTs 现在是 useAppStore 真实字段, 冷启 hydrate 完成后会变
   const hydrationTs = useAppStore(s => s.hydrationTs ?? 0);
-  const [unfinished, setUnfinished] = useState<{
-    sessionId: string;
-    remoteId?: number | null;
-    activityMode: 'hiking' | 'running';
-    startedAt: number;
-    distanceM: number;
-    durationS: number;
-    lastPointAt: number;
-  } | null>(null);
+  const [unfinished, setUnfinished] = useState<RecoverableActivity | null>(null);
+  const [unfinishedResolutionRequested, setUnfinishedResolutionRequested] = useState(false);
   useEffect(() => {
     // 只在非 tracking/paused 状态下检测: 用户已经在 recording 中不该弹恢复
     if (hasLiveSession) return;
-    let cancelled = false;
-    // O14 Bug 5 fix: wait 800ms before scanning disk. When the user
-    // just tapped Save, stopTracking's flush → rename chain may still
-    // be finalising active/{sid}.jsonl → completed. Racing straight
-    // into listActiveHikes would see the not-yet-renamed file and
-    // surface the just-Saved hike as "unfinished". 800ms is enough
-    // to cover 99% of finalise wall-times and is invisible to a user
-    // who arrived here by manual nav (not from Save).
-    const delayTimer = setTimeout(() => { runDetect(); }, 800);
-    const runDetect = async () => {
-      if (cancelled) return;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const hikeTrackWriter = require('../services/hikeTrackWriter');
-        if (typeof hikeTrackWriter.listActiveHikes !== 'function') return;
-        const active = await hikeTrackWriter.listActiveHikes();
-        if (cancelled || !Array.isArray(active)) return;
-        // O1 batch 28.2: log recovery 触发条件,便于诊断 Bug 5
-        // "save&end 后错误弹上次未完成"。若 active.length > 0 说明磁盘
-        // 还有 active/*.jsonl 未清 → save 路径 markUploaded 时机问题。
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const cl = require('../services/crashLogger');
-          (cl.crashLogger ?? cl.default)?.breadcrumb?.(`recovery:list active_n=${active.length}${active.length > 0 ? ' sids=' + active.map((f: any) => (f.session_id ?? f.sessionId ?? '?').slice(0, 8)).join(',') : ''}`);
-        } catch {/* silent */}
-
-        // v430 dual-source detection: if disk has NO active file, ALSO
-        // check server for a dangling POST /start row that never got saved.
-        // Root cause: startHikeTrack fire-and-forget could lose the meta
-        // write if user killed app immediately after tapping Start (fixed
-        // separately by await, but backend-side detection catches historic
-        // rows too).
-        if (active.length === 0) {
-          try {
-            const { API_BASE_URL } = require('../config/api');
-            const { getToken } = require('../services/tokenStore');
-            const token = await getToken();
-            if (token) {
-              const controller = new AbortController();
-              const timer = setTimeout(() => controller.abort(), 5_000);
-              try {
-                const res = await fetch(`${API_BASE_URL}/api/sessions/unfinished`, {
-                  headers: { Authorization: `Bearer ${token}` },
-                  signal: controller.signal,
-                });
-                clearTimeout(timer);
-                if (res.ok) {
-                  const j = await res.json();
-                  if (j.session) {
-                    const s = j.session;
-                    // O16 A1 fix: cross-check the local session store BEFORE
-                    // surfacing an "unfinished hike" modal for the remote row.
-                    //
-                    // Root cause of user's report ("sim-walker save hike
-                    // 成功也弹 unfinished"): sim-walker never writes to disk
-                    // via appendHikePoint (__simwalkerAddTrackPoint only
-                    // mutates the store), so listActiveHikes returns []
-                    // → we fall into this remote branch. If the just-Saved
-                    // hike is `saved_pending` (server 5xx / wall timeout /
-                    // syncDaemon not drained yet), server row still has
-                    // finalized_at=NULL, distance_m=0, duration_s=0 →
-                    // /sessions/unfinished returns it → we prompt recovery
-                    // for a hike the user already Saved.
-                    //
-                    // Fix: look up useSessionStore.sessions by remoteId.
-                    // If found (ANY syncState: pending / synced / etc.),
-                    // the user already committed this locally — don't
-                    // pop the modal. Poke drainPending so the server
-                    // catches up.
-                    try {
-                      // eslint-disable-next-line @typescript-eslint/no-require-imports
-                      const { useSessionStore } = require('../store/useSessionStore');
-                      const localSessions = useSessionStore.getState().sessions;
-                      const remoteStartedAt = Date.parse(s.start_time);
-                      // O16 A1 + B1: broaden the match. Server may return
-                      // this row when saveHikeAtomic partially failed
-                      // (remoteId=null on local) OR before syncDaemon
-                      // caught up. Match by:
-                      //   (a) remoteId (fast path when save succeeded),
-                      //   (b) startedAt within a ±60s window (offline
-                      //       sim-walker save where remoteId is still
-                      //       null but the user clearly clicked Save).
-                      const localMatch = localSessions.find((ss: any) => {
-                        if (ss.remoteId != null && ss.remoteId === s.id) return true;
-                        if (Number.isFinite(remoteStartedAt) && Number.isFinite(ss.startedAt)) {
-                          if (Math.abs(ss.startedAt - remoteStartedAt) < 60_000) return true;
-                        }
-                        return false;
-                      });
-                      if (localMatch) {
-                        try {
-                          // eslint-disable-next-line @typescript-eslint/no-require-imports
-                          const cl = require('../services/crashLogger');
-                          (cl.crashLogger ?? cl.default)?.breadcrumb?.(
-                            `o16:unfinished_skip_local_match sid=${s.id} match_by=${localMatch.remoteId === s.id ? 'remoteId' : 'startedAt'}`,
-                          );
-                        } catch { /* swallow */ }
-                        // Nudge sync so the server row gets updated.
-                        try {
-                          // eslint-disable-next-line @typescript-eslint/no-require-imports
-                          const { drainPending } = require('../services/syncDaemon');
-                          void drainPending().catch(() => {});
-                        } catch { /* swallow */ }
-                        return;
-                      }
-                    } catch { /* swallow — if useSessionStore unavailable, fall through */ }
-                    if ((s.type || 'hiking') !== 'hiking') return;
-                    setUnfinished({
-                      sessionId: `remote-${s.id}`,
-                      remoteId: s.id,
-                      activityMode: s.type || 'hiking',
-                      startedAt: Date.parse(s.start_time),
-                      distanceM: 0,
-                      durationS: 0,
-                      lastPointAt: Date.parse(s.start_time),
-                    });
-                    return;
-                  }
-                }
-              } catch { clearTimeout(timer); /* silent */ }
-            }
-          } catch { /* silent */ }
-          return;
-        }
-
-        // v412 修 (real UI test): hikeTrackWriter.listActiveHikes 返回 snake_case
-        // (session_id / last_ts), 老代码用 camelCase 匹配 filter 空. 兼容两种命名.
-        const norm = (f: any) => ({
-          sessionId: f.session_id ?? f.sessionId,
-          lastTs: f.last_ts ?? f.lastTs,
-          startedAt: f.started_at ?? f.startedAt,
-          activityMode: f.activity_mode ?? f.activityMode ?? 'hiking',
-          remoteId: f.remote_id ?? f.remoteId ?? null,
-          distanceM: f.distance_m ?? f.distanceM ?? 0,
-          durationS: f.duration_s ?? f.durationS ?? 0,
+    {
+      let current = true;
+      const timer = setTimeout(() => {
+        void findRecoverableActivity('hiking').then(activity => {
+          if (current) setUnfinished(activity);
         });
-        const normalized = active.map(norm);
-
-        // 72h 内: 弹恢复; 72h 外: 静默删 (由 syncDaemon/hikeTracksCache 别处兜底)
-        // v412 修 (real UI test): hikeTrackWriter.listActiveHikes 不返回 activityMode 字段
-        // 因此不能按 activityMode 过滤. 假设 hikeTrackWriter 只跟 hike, run 走另一个 writer (未来).
-        const cutoff = Date.now() - 72 * 3600_000;
-        const recent = normalized
-          .filter((f: any) => f.activityMode === 'hiking' && (f.lastTs ?? f.startedAt ?? 0) > cutoff)
-          .sort((a: any, b: any) => (b.lastTs ?? 0) - (a.lastTs ?? 0));
-        if (recent.length === 0) return;
-        const latest = recent[0];
-        // 读文件 tail 拿最后 GPS 点作 lastPointAt
-        let lastPointAt = latest.lastTs || latest.startedAt || Date.now();
-        let distanceM = latest.distanceM || 0;
-        let durationS = latest.durationS || 0;
-        // O11 (2026-07-27): 若磁盘 jsonl 是空 (sim-walker session 没 write
-        // 到 disk / 老 bug 导致 meta 存在但 points 丢), 弹 recovery modal 是
-        // 无意义的 — 用户 Continue 后 trackPoints=[], 看到空 hike. 跳过.
-        let hasPointsOnDisk = false;
-        try {
-          if (typeof hikeTrackWriter.readActiveHikeTail === 'function') {
-            const tail = await hikeTrackWriter.readActiveHikeTail(latest.sessionId, 1);
-            if (Array.isArray(tail) && tail.length > 0) {
-              lastPointAt = tail[tail.length - 1].t || lastPointAt;
-              hasPointsOnDisk = true;
-            }
-          }
-          const start = latest.startedAt || (lastPointAt - 40 * 60_000);
-          durationS = Math.max(1, Math.floor((lastPointAt - start) / 1000));
-        } catch { /* silent */ }
-        if (!hasPointsOnDisk) {
-          // 磁盘空 → 静默 discard 这个 meta+jsonl 避免下次再弹。
-          try {
-            const { discardActiveHike } = require('../services/hikeTrackWriter');
-            if (typeof discardActiveHike === 'function') {
-              await discardActiveHike(latest.sessionId);
-            }
-          } catch { /* silent */ }
-          try {
-            const cl = require('../services/crashLogger');
-            (cl.crashLogger ?? cl.default)?.breadcrumb?.(`recovery:skipped_empty sid=${latest.sessionId.slice(0, 8)}`);
-          } catch { /* silent */ }
-          return; // 不 setUnfinished
-        }
-        // O16 C3: local-session cross-check ALSO on the disk-based
-        // branch. Mixed sim-walker + real GPS sessions can leave an
-        // active JSONL that was renamed (unlikely) OR a stale one from
-        // a prior background TaskManager write. If the same startedAt
-        // (or remoteId) already exists in useSessionStore, the user
-        // clearly Saved this hike; don't re-surface it as unfinished.
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { useSessionStore } = require('../store/useSessionStore');
-          const localSessions = useSessionStore.getState().sessions;
-          const latchedStarted = latest.startedAt || lastPointAt;
-          const localMatch = localSessions.find((ss: any) => {
-            if (latest.remoteId != null && ss.remoteId === latest.remoteId) return true;
-            if (Number.isFinite(latchedStarted) && Number.isFinite(ss.startedAt)) {
-              if (Math.abs(ss.startedAt - latchedStarted) < 60_000) return true;
-            }
-            return false;
-          });
-          if (localMatch) {
-            try {
-              const cl = require('../services/crashLogger');
-              (cl.crashLogger ?? cl.default)?.breadcrumb?.(
-                `o16:unfinished_skip_local_disk sid=${latest.sessionId.slice(0, 8)}`,
-              );
-            } catch { /* silent */ }
-            // Also clean the orphan disk file so it doesn't keep triggering.
-            try {
-              const { discardActiveHike } = require('../services/hikeTrackWriter');
-              if (typeof discardActiveHike === 'function') {
-                await discardActiveHike(latest.sessionId);
-              }
-            } catch { /* silent */ }
-            return;
-          }
-        } catch { /* swallow — fall through and surface modal */ }
-        setUnfinished({
-          sessionId: latest.sessionId,
-          remoteId: latest.remoteId ?? null,
-          // v412 4-eye fix (Critical #2): 用真实 activityMode, 不硬编码 'hiking'
-          // hikeTrackWriter.startHikeTrack 存 meta.activity_mode, norm() 里已带过来.
-          // 兜底 'hiking' 只在字段缺失 (v411 前老数据) 时启用.
-          activityMode: (latest.activityMode === 'running' ? 'running' : 'hiking'),
-          startedAt: latest.startedAt || lastPointAt,
-          distanceM,
-          durationS,
-          lastPointAt,
-        });
-      } catch { /* silent — v412 UI 恢复不影响主流程 */ }
-    };
-    return () => { cancelled = true; clearTimeout(delayTimer); };
+      }, 100);
+      return () => { current = false; clearTimeout(timer); };
+    }
   }, [hydrationTs, hasLiveSession]);
 
   useEffect(() => { loadRoutes(); }, []);
@@ -557,8 +331,8 @@ export function HikingScreen() {
     if (saf01AlertShownRef.current) return;
     saf01AlertShownRef.current = true;
     Alert.alert(
-      "We couldn't save this hike",
-      "Your device may be low on storage. Your hike is still recorded in the app. Tap Retry to try saving again, or Discard to remove it.",
+      "We couldn't save this activity",
+      "Your device may be low on storage. Your Activity is still recorded in the app. Tap Retry to try saving again, or Discard to remove it.",
       [
         {
           text: 'Discard',
@@ -669,8 +443,8 @@ export function HikingScreen() {
       if (saf01AlertShownRef.current) return;
       saf01AlertShownRef.current = true;
       Alert.alert(
-        "We couldn't save this hike",
-        "Your device may be low on storage. Your hike is still recorded in the app. Tap Retry to try saving again, or Discard to remove it.",
+        "We couldn't save this activity",
+        "Your device may be low on storage. Your Activity is still recorded in the app. Tap Retry to try saving again, or Discard to remove it.",
         [
           {
             text: 'Discard',
@@ -727,21 +501,10 @@ export function HikingScreen() {
     let cancelled = false;
     (async () => {
       try {
-        // O14 Bug 3/6 fix: skip GPS prime when sim-walker is active.
-        // Pre-fix, entering Hiking screen while joystick is on would
-        // fetch a real GPS fix (usually the user's home) and clobber
-        // gpsInjector.currentPos in lastCoordinate — the next Start
-        // Hike then seeded from home, drew a long line to the joystick,
-        // and the "continues from where I stopped" complaint appeared.
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { useSimWalkerStore } = require('../dev/simWalker/useSimWalkerStore');
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { useSettingsStore: uss } = require('../store/useSettingsStore');
-          if (uss.getState().debugMode && useSimWalkerStore.getState().active) {
-            return;
-          }
-        } catch { /* swallow — sim-walker not loaded, proceed with real GPS prime */ }
+        if (selectedActivityLocationSource() === 'simulator') {
+          if (!cancelled) setHasLocationPermission(true);
+          return;
+        }
         const perm = await Location.getForegroundPermissionsAsync();
         if (!perm.granted) {
           const req = await Location.requestForegroundPermissionsAsync();
@@ -795,6 +558,22 @@ export function HikingScreen() {
     hasStartError: startError !== null,
   });
 
+  const handleStartHike = async () => {
+    haptic.impact('medium');
+    if (unfinished) {
+      setUnfinishedResolutionRequested(true);
+      return;
+    }
+    const started = await startTracking();
+    if (!started) {
+      const authoritative = await findRecoverableActivity('hiking');
+      if (authoritative) {
+        setUnfinished(authoritative);
+        setUnfinishedResolutionRequested(true);
+      }
+    }
+  };
+
   // R21 (2026-08-17 user "进入前 3 秒展开, 之后自动收起"): when the tracking
   // phase first mounts, open the action tray so the user sees what buttons
   // exist (Pause / Cairn / Done). Auto-collapse after 3 seconds so it doesn't
@@ -830,56 +609,41 @@ export function HikingScreen() {
     setUi('map');
   }
 
-  // 2026-08-16 (H4 redesign): unified save-then-navigate helper. Both
-  // sheet CTAs ("View Activity" and "Done") save via stopTracking; only
-  // the post-save destination differs. Extracted from the two former
-  // inline callbacks to avoid duplicating the wall-clock timeout + nav
-  // guard logic (v405/v407 fixes) in two places.
-  async function saveHikeAndNav(name: string, dest: 'activity' | 'home') {
+  // Unified save-then-navigate helper. Every successful completion lands on
+  // Activity Detail; unsuccessful local commit remains paused/retryable.
+  async function saveHikeAndNav(name: string) {
     // O14 Bug 4 fix: flip saving state BEFORE dismissing the sheet so
     // the sheet shows "Saving…" spinner + disabled buttons while
     // stopTracking runs its flush+rename chain (up to 15s wall).
     setSavingHike(true);
-    // v405: Snapshot sessionId + trackPoints BEFORE stopTracking clears
-    // the store. Needed for auto-nav below and for "too-short" defensive
-    // check (skip nav if session was discarded).
+    // Snapshot identity before stopTracking clears the live store.
     const preState = useTrackingStore.getState();
     const capturedSessionId = preState.sessionId;
-    const wasTooShort = preState.trackPoints.length < 2 || preState.distanceM < 20;
-
-    // v407 fix #5 / O7 (2026-07-26): 30s wall-clock around stopTracking.
-    // Under weak network, pushMemoryNow + finalize can each stall 30s;
-    // the wall lets the UI unstick while the store's own memorySync
-    // backoff loop continues in the background.
-    const STOP_WALL_TIMEOUT_MS = 30000;
+    let saved = false;
     try {
-      await Promise.race([
-        stopTracking(name),
-        new Promise<void>((_, reject) => setTimeout(() => reject(new Error('stopTracking_timeout_30s')), STOP_WALL_TIMEOUT_MS)),
-      ]);
+      saved = await stopTracking(name);
     } catch (err) {
-      // stopTracking's local addSession is synchronous — data is safe on
-      // disk. Server sync retries via memorySync backoff.
       // eslint-disable-next-line no-console
-      console.warn('[v407] stopTracking wall-timeout / error:', String(err));
+      console.warn('[activity] stopTracking error:', String(err));
     }
-    // O14 Bug 4: clear saving state + dismiss sheet in one go once
-    // stopTracking has finished (or wall-timed out).
     setSavingHike(false);
-    setStopSummary(null);
+    if (saved || useTrackingStore.getState().lastStopReason === 'too-short') {
+      setStopSummary(null);
+    }
 
     // v407 fix #3: snapshot isLoggedIn before nav — auto-logout during
     // stopTracking would leave only Auth in the stack and reset would
     // throw.
     const stillLoggedIn = useAppStore.getState().isLoggedIn;
-    if (wasTooShort || !stillLoggedIn) {
-      // Too-short: TooShortSheet will render via lastStopReason observer.
+    if (!saved || !stillLoggedIn) {
+      // Too-short/local failure remains on the Activity surface. TooShortSheet
+      // is driven by lastStopReason; a storage failure remains paused.
       // Not-logged-in: auto-logout handler owns the redirect to Auth.
       return;
     }
 
     try {
-      if (dest === 'activity' && capturedSessionId) {
+      if (capturedSessionId) {
         // Primary "View Activity" — land on MapHistory detail with the
         // Routes(activities) list as the back-stack target.
         nav.dispatch(
@@ -890,14 +654,6 @@ export function HikingScreen() {
               { name: 'Routes', params: { initialTab: 'activities' } },
               { name: 'MapHistory', params: { sessionId: capturedSessionId } },
             ],
-          })
-        );
-      } else {
-        // Secondary "Done" — save is complete, just go Home. Clean stack.
-        nav.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'Home' }],
           })
         );
       }
@@ -962,7 +718,10 @@ export function HikingScreen() {
   // actionable info.
   const SIGNAL_GAP_MS = 120_000;
   const lastTrackT = trackPoints.length > 0 ? trackPoints[trackPoints.length - 1].t : null;
-  const signalLostFor = (lastTrackT != null) ? (Date.now() - lastTrackT) : 0;
+  const freshnessNow = locationProviderSource === 'simulator'
+    ? simulatorVirtualTimestamp
+    : activityFreshnessNow(locationProviderSource);
+  const signalLostFor = (lastTrackT != null) ? Math.max(0, freshnessNow - lastTrackT) : 0;
   const signalLost = lastTrackT != null && signalLostFor > SIGNAL_GAP_MS;
   const signalLostMin = Math.floor(signalLostFor / 60_000);
 
@@ -994,7 +753,7 @@ export function HikingScreen() {
   // UnfinishedRecoveryModal, 抽成一个 node 避免复制粘贴导致 onContinue/onDiscard 逻辑分叉。
   const recoveryModalNode = (
     <UnfinishedRecoveryModal
-      visible={unfinished !== null && !hasLiveSession}
+      visible={unfinishedResolutionRequested && unfinished !== null && !hasLiveSession}
       data={unfinished}
       onContinue={async () => {
         const u = unfinished;
@@ -1007,6 +766,28 @@ export function HikingScreen() {
             (cl.crashLogger ?? cl.default)?.breadcrumb?.(`v412:recovery_continue_failed ${String(_recoverErr).slice(0, 80)}`);
           } catch { /* silent */ }
         }
+        setUnfinishedResolutionRequested(false);
+        setUnfinished(null);
+      }}
+      onSave={async () => {
+        const u = unfinished;
+        if (!u) return;
+        try {
+          const saved = await saveRecoverableActivity(u);
+          if (saved) {
+            nav.dispatch(
+              CommonActions.reset({
+                index: 2,
+                routes: [
+                  { name: 'Home' },
+                  { name: 'Routes', params: { initialTab: 'activities' } },
+                  { name: 'MapHistory', params: { sessionId: u.clientActivityId } },
+                ],
+              }),
+            );
+          }
+        } catch { /* local journal remains recoverable */ }
+        setUnfinishedResolutionRequested(false);
         setUnfinished(null);
       }}
       onDiscard={async () => {
@@ -1015,6 +796,7 @@ export function HikingScreen() {
         try {
           await discardRecoverableActivity(u);
         } catch { /* keep the prompt dismissible; disk delete is idempotent */ }
+        setUnfinishedResolutionRequested(false);
         setUnfinished(null);
       }}
     />
@@ -1031,6 +813,11 @@ export function HikingScreen() {
   // hasLocationPermission stays false (dot stays amber).
   useEffect(() => {
     if (!isFocused) return;
+    if (selectedActivityLocationSource() === 'simulator') {
+      setHasLocationPermission(true);
+      setPermissionDeniedVisible(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -1052,7 +839,14 @@ export function HikingScreen() {
     return (
       <>
       <View style={[styles.container, { backgroundColor: hikeTheme.background }]}>
-        <HikingMap markers={[]} trackPoints={[]} onMarkerPress={() => {}} />
+        <HikingMap
+          markers={[]}
+          trackPoints={[]}
+          onMarkerPress={() => {}}
+          userPos={showSimulator ? simulatorPosition : lastCoordinate}
+          simulatorEnabled={showSimulator}
+          instantCamera={showSimulator}
+        />
 
         {/* Top overlay: concept-locked stats strip (4 items in one row).
             Values are live even before tracking starts (all zero) so the
@@ -1110,7 +904,7 @@ export function HikingScreen() {
             <Animated.View style={[{ height: 52 }, { transform: [{ scale: trackBtnScale }] }]}>
               <TouchableOpacity
                 style={[styles.startHikeBtn, hikeIsDark ? { backgroundColor: hikeTheme.primary, borderColor: hikeTheme.border, borderWidth: 1 } : null]}
-                onPress={async () => { haptic.impact('medium'); await startTracking(); }}
+                onPress={handleStartHike}
                 disabled={operationalState === 'starting'}
                 activeOpacity={1}
                 onPressIn={() => springIn(trackBtnScale)}
@@ -1209,6 +1003,7 @@ export function HikingScreen() {
         {/* v412 4-eye fix (Critical #3): recoveryModalNode 已提到最外层 Fragment, 见函数结尾. */}
       </View>
       {recoveryModalNode}
+      {showSimulator ? <ActivitySimulatorPanel /> : null}
       </>
     );
   }
@@ -1224,13 +1019,13 @@ export function HikingScreen() {
     <View style={[styles.container, { backgroundColor: hikeTheme.background }]}>
       <HikingMap
         markers={markers}
-        trackPoints={(trackPointsSmoothed.length >= 2 ? trackPointsSmoothed : trackPoints).map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentBreak: (tp as any).segmentBreak }))}
+        trackPoints={(trackPointsSmoothed.length >= 2 ? trackPointsSmoothed : trackPoints).map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentId: tp.segmentId }))}
         onMarkerPress={(id) => { setSelectedMarkerId(id); setUi('detail'); }}
         routeStart={routePolyline.length > 0
           ? { lat: routePolyline[0].lat, lng: routePolyline[0].lng }
           : null}
-        userPos={lastCoordinate ? { lat: lastCoordinate.lat, lng: lastCoordinate.lng } : null}
-        debugMode={debugMode}
+        userPos={showSimulator ? simulatorPosition : (lastCoordinate ? { lat: lastCoordinate.lat, lng: lastCoordinate.lng } : null)}
+        simulatorEnabled={showSimulator}
         // 2026-08-17 concept H1: blue dot at track start once we
         // have at least one recorded GPS point. The blue variant
         // matches the hiking screen's palette in the concept sheet.
@@ -1344,7 +1139,7 @@ export function HikingScreen() {
             <Animated.View style={[{ flex: 1, height: 60 }, { transform: [{ scale: trackBtnScale }] }]}>
               <TouchableOpacity
                 style={styles.trackBtn}
-                onPress={async () => { haptic.impact('medium'); await startTracking(); }}
+                onPress={handleStartHike}
                 activeOpacity={1}
                 onPressIn={() => springIn(trackBtnScale)}
                 onPressOut={() => springOut(trackBtnScale)}
@@ -1426,7 +1221,7 @@ export function HikingScreen() {
                     activeOpacity={0.85}
                     accessibilityRole="button"
                     accessibilityLabel={status === 'paused' ? 'Resume hike' : 'Pause hike'}
-                    onPress={() => {
+                    onPress={async () => {
                       haptic.impact('light');
                       if (status === 'paused') resumeTracking();
                       else pauseTracking();
@@ -1466,30 +1261,33 @@ export function HikingScreen() {
                     activeOpacity={0.85}
                     accessibilityRole="button"
                     accessibilityLabel="Finish hike"
-                    onPress={() => {
+                    onPress={async () => {
                       haptic.impact('medium');
                       const ts = useTrackingStore.getState();
                       setActionsExpanded(false);
                       if (!ts.startedAt) {
-                        stopTracking();
+                        await stopTracking();
                         return;
                       }
-                      // R21 (2026-08-18): too-short guard — surface the
-                      // TooShortSheet directly so the user always sees a
-                      // confirmation before the hike is torn down.
-                      const isTooShort = ts.trackPoints.length < 2 || ts.distanceM < 20;
+                      await pauseTracking();
+                      const frozen = useTrackingStore.getState();
+                      // The shared eligibility authority runs only after the
+                      // final in-flight accepted point has committed.
+                      const isTooShort = !saveEligibility(
+                        frozen.trackPoints,
+                        frozen.distanceM,
+                      ).eligible;
                       if (isTooShort) {
                         setShowTooShortConfirm(true);
                         return;
                       }
-                      pauseTracking();
                       setStopSummary({
-                        distanceM: ts.distanceM,
-                        durationS: ts.durationS,
-                        elevationGainM: ts.elevationGainM,
-                        activityMode: ts.activityMode,
-                        trackPoints: ts.trackPoints.map(p => ({ lat: p.lat, lng: p.lng })),
-                        startedAt: ts.startedAt,
+                        distanceM: frozen.distanceM,
+                        durationS: frozen.durationS,
+                        elevationGainM: frozen.elevationGainM,
+                        activityMode: frozen.activityMode,
+                        trackPoints: frozen.trackPoints.map(p => ({ lat: p.lat, lng: p.lng })),
+                        startedAt: frozen.startedAt!,
                       });
                     }}
                   >
@@ -1576,46 +1374,16 @@ export function HikingScreen() {
             setStopSummary(null);
           }}
           onDiscard={async () => {
-            // O1 batch 28.4: Discard 走完整清理路径 (与 recoveryModal.onDiscard
-            // 一致): 清 disk active/*.jsonl + 删 remote session + 清 store。
-            // 不清 memory_points — sim-walker/hike 走路时不实时写 memory
-            // (v450/O4 行为),memory 只在 Save Hike 时由 flushHikingToMemory
-            // 一次合入。Discard 不需要清 memory 因为根本没 unlock 过。
-            const preState = useTrackingStore.getState();
-            const capturedSessionId = preState.sessionId;
-            const capturedRemoteId = preState.remoteSessionId;
-            try {
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              const hikeTrackWriter = require('../services/hikeTrackWriter');
-              if (capturedSessionId) {
-                await hikeTrackWriter.discardActiveHike(capturedSessionId);
-              }
-            } catch { /* silent */ }
-            if (capturedRemoteId) {
-              try {
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                const { deleteRemoteSession } = require('../services/sessionService');
-                await deleteRemoteSession(capturedRemoteId);
-              } catch (err) {
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                const cl = require('../services/crashLogger');
-                (cl.crashLogger ?? cl.default)?.breadcrumb?.(`o1:stop_discard_remote_failed ${String(err).slice(0, 80)}`);
-              }
-            }
-            discardCurrentSession();
+            // The store owns the crash-safe order: durable tombstone first,
+            // then pending cancellation, server cancellation and file cleanup.
+            await discardCurrentSession();
             setStopSummary(null);
           }}
           onConfirm={async (name) => {
             // 2026-08-16 (H4 redesign): primary "View Activity" CTA —
             // save then nav.reset into MapHistory detail (existing v405
             // behavior).
-            await saveHikeAndNav(name, 'activity');
-          }}
-          onConfirmAndHome={async (name) => {
-            // 2026-08-16 (H4 redesign): secondary "Done" CTA — save,
-            // then land on Home instead of MapHistory. Same save path
-            // as onConfirm; only the post-save nav differs.
-            await saveHikeAndNav(name, 'home');
+            await saveHikeAndNav(name);
           }}
           // O1: removed onSaveAsRoute prop — hike is activity not template
         />
@@ -1630,11 +1398,12 @@ export function HikingScreen() {
         onContinue={() => {
           setShowTooShortConfirm(false);
           clearLastStopReason();
+          if (useTrackingStore.getState().status === 'paused') void resumeTracking();
         }}
         onDiscard={() => {
           setShowTooShortConfirm(false);
           clearLastStopReason();
-          discardCurrentSession();
+          void discardCurrentSession();
         }}
       />
       {/* O18 ONB-04: permission-denied modal — shown when GPS was rejected
@@ -1647,22 +1416,7 @@ export function HikingScreen() {
       {/* v412: 未完成 hike 恢复弹窗 — 挂在 Fragment 顶层, 见下方 */}
     </View>
     {recoveryModalNode}
-    {/* v428: sim-walker overlay. v430 removed __DEV__ gate so users
-        can activate sim-walker in production builds via Settings
-        (debugMode 5-tap → simWalkerActive toggle). Actual gate at
-        line ~1174: debugMode && simWalkerActive.
-        v429 hotfix: lazy-require inside gate so gpsInjector side-effects
-        don't run at HikingScreen mount time on production builds. */}
-    {showSimWalker && (() => {
-      try {
-        const { SimWalkerOverlay } = require('../dev/simWalker/SimWalkerOverlay');
-        return <SimWalkerOverlay />;
-      } catch (e: any) {
-        // eslint-disable-next-line no-console
-        console.warn('[sim-walker] failed to load:', e?.message);
-        return null;
-      }
-    })()}
+    {showSimulator ? <ActivitySimulatorPanel /> : null}
     </>
   );
 }

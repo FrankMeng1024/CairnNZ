@@ -26,6 +26,12 @@ import { useScenicTimeState } from '../hooks/useScenicTimeState';
 import { resolveCurrentCountry } from '../services/countryService';
 import { getHomeBackground, getWeatherReviewBackground } from '../utils/homeBackground';
 import { SUNNY_AMBIENT_MOTION_ENABLED } from '../config/homeVisual';
+import {
+  ensureUnfinishedActivityRegistry,
+  findRecoverableActivity,
+  restoreRecoverableActivity,
+  type RecoverableActivity,
+} from '../features/activity/activityRecovery';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -91,26 +97,24 @@ export function HomeScreen() {
   const hikingIconCandidate = useWeatherStore(s => s.hikingIconCandidate);
   const runningIconCandidate = useWeatherStore(s => s.runningIconCandidate);
 
-  // R21 (2026-08-18 user "如果正有一个正在进行 未完成的hike ... 展示的内容是
-  // 最后一个未完成的action, N-1个未完成的action, last 完成了的 action,
-  // empty action"): read unfinished hike/run backups from disk. Home
-  // reveals them ahead of completed sessions so a returning user is
-  // reminded to resume or discard first. Refreshes on focus.
-  const [unfinishedHikes, setUnfinishedHikes] = useState<Array<{ session_id: string; started_at: number; activity_mode: 'hiking' | 'running' }>>([]);
+  // The bounded registry exposes at most one unfinished Activity for the
+  // signed-in user. Home may show it without blocking unrelated browsing;
+  // tapping the card targets its exact immutable client identity.
+  const [unfinishedActivity, setUnfinishedActivity] = useState<RecoverableActivity | null>(null);
   const refreshUnfinished = React.useCallback(async () => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { listActiveHikes } = require('../services/hikeTrackWriter');
-      const list = await listActiveHikes();
-      setUnfinishedHikes(
-        list.map((m: any) => ({
-          session_id: m.session_id,
-          started_at: m.started_at,
-          activity_mode: m.activity_mode,
-        })).sort((a: any, b: any) => b.started_at - a.started_at),
-      );
+      const userId = String(user?.id ?? '');
+      if (!userId) return setUnfinishedActivity(null);
+      await ensureUnfinishedActivityRegistry(userId);
+      const registry = await import('../features/activity/activityRegistry');
+      const unfinished = await registry.getUnfinishedActivity(userId);
+      if (!unfinished) return setUnfinishedActivity(null);
+      setUnfinishedActivity(await findRecoverableActivity({
+        clientActivityId: unfinished.clientActivityId,
+        userId,
+      }));
     } catch { /* silent — no disk = empty */ }
-  }, []);
+  }, [user?.id]);
   // R21 (2026-08-18 user "点击 discard 回到 homepage, 依旧展示 unfinish"):
   // re-list on every focus so Discard from Hiking clears the card
   // immediately. sessions.length dep kept so save-hike also refreshes.
@@ -227,20 +231,19 @@ export function HomeScreen() {
   // R21 (2026-08-18): priority display — most recent unfinished action wins
   // over the last completed hike. Users see "resume or discard" instead of
   // "here's an old completed hike" when there's an in-progress session.
-  const topUnfinished = unfinishedHikes[0] ?? null;
-  const otherUnfinishedCount = Math.max(0, unfinishedHikes.length - 1);
+  const topUnfinished = unfinishedActivity;
   const showUnfinished = !!topUnfinished;
 
   const lastHikeTitle = showUnfinished
-    ? (topUnfinished.activity_mode === 'running' ? 'Run in progress' : 'Hike in progress')
+    ? (topUnfinished.activityMode === 'running' ? 'Unfinished Run' : 'Unfinished Hike')
     : (lastHike?.name || 'Recent hike');
   const lastHikeMeta = showUnfinished
-    ? `Tap to resume or discard${otherUnfinishedCount > 0 ? ` · +${otherUnfinishedCount} more unfinished` : ''} · Started ${formatRelativeDay(topUnfinished.started_at)}`
+    ? `${formatDistanceKm(topUnfinished.distanceM)} · ${formatDuration(topUnfinished.durationS)} · ${formatRelativeDay(topUnfinished.startedAt)}`
     : (lastHike
     ? `${formatDistanceKm(lastHike.distanceM || 0)} · ${formatDuration(lastHike.durationS || 0)} · ${formatRelativeDay(lastHike.startedAt)}`
     : '');
   const lastHikeDetails = showUnfinished
-    ? ['Resume available', formatRelativeDay(topUnfinished.started_at), ...(otherUnfinishedCount > 0 ? [`+${otherUnfinishedCount} pending`] : [])]
+    ? ['Interrupted', 'Resume', formatRelativeDay(topUnfinished.startedAt)]
     : (lastHike
       ? [formatDistanceKm(lastHike.distanceM || 0), formatDuration(lastHike.durationS || 0), formatRelativeDay(lastHike.startedAt)]
       : []);
@@ -328,7 +331,16 @@ export function HomeScreen() {
             lastHikeDetails={lastHikeDetails}
             lastHikeEyebrow={showUnfinished ? 'Unfinished' : 'Last hike'}
             onLastHikePress={showUnfinished
-              ? () => nav.navigate(topUnfinished!.activity_mode === 'running' ? 'Running' : 'Hiking')
+              ? () => {
+                  const activity = topUnfinished!;
+                  void restoreRecoverableActivity(activity).then(restored => {
+                    if (!restored) return;
+                    nav.navigate(
+                      activity.activityMode === 'running' ? 'Running' : 'Hiking',
+                      { recoverClientActivityId: activity.clientActivityId },
+                    );
+                  });
+                }
               : undefined}
             bgAsset={bgTokens.bgAsset}
             bgTokens={bgTokens}

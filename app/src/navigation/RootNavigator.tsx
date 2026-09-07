@@ -60,8 +60,8 @@ markBootPhase('navigator_module_loaded');
 export type RootStackParamList = {
   Auth: undefined;
   Home: undefined;
-  Hiking: undefined;
-  Running: undefined;
+  Hiking: { recoverClientActivityId?: string } | undefined;
+  Running: { recoverClientActivityId?: string } | undefined;
   MapHistory: { sessionId?: string; routeId?: string } | undefined;
   Routes: { initialTab?: 'routes' | 'activities' | 'flags' } | undefined;
   RouteEditor: { routeId?: string; fromSessionId?: string } | undefined;
@@ -149,7 +149,7 @@ export function RootNavigator() {
       ref={navigationRef ?? undefined}
       onReady={() => {
         markBootPhase('navigation_container_ready', { isLoggedIn: !!isLoggedIn });
-        // R113 restore: expose nav helpers + settings/sim-walker stores
+        // R113 restore: expose nav helpers + internal QA stores
         // to __cairnStores for Playwright web QA. Guarded on Platform.OS==='web'.
         try {
           if (Platform.OS === 'web' && typeof globalThis !== 'undefined') {
@@ -171,11 +171,11 @@ export function RootNavigator() {
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.useWeatherStore = require('../store/useWeatherStore').useWeatherStore;
               // eslint-disable-next-line @typescript-eslint/no-require-imports
-              stores.useSimWalkerStore = require('../dev/simWalker/useSimWalkerStore').useSimWalkerStore;
+              stores.useActivitySimulatorStore = require('../features/activitySimulator/useActivitySimulatorStore').useActivitySimulatorStore;
               // eslint-disable-next-line @typescript-eslint/no-require-imports
-              stores.gpsInjector = require('../dev/simWalker/gpsInjector').gpsInjector;
+              stores.activitySimulatorEngine = require('../features/activitySimulator/activitySimulatorEngine').activitySimulatorEngine;
               // Route-following: exposed so Playwright can drive turn-by-turn
-              // scenarios without going through the simWalker UI. Both stores
+              // scenarios without going through the Simulator panel. Both stores
               // stay accessible for the whole session; test cleans up.
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.useTrackingStore = require('../store/useTrackingStore').useTrackingStore;

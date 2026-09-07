@@ -27,12 +27,12 @@ const setupMocks = (getMeImpl: () => any) => {
   }));
   jest.doMock('../src/services/a8Migration', () => ({
     runA8Migration: jest.fn(async () => ({ showToast: false })),
-  }));
+  }), { virtual: true });
   jest.doMock('../src/store/useArOriginStore', () => ({
     useArOriginStore: {
       getState: () => ({ hydrate: jest.fn(async () => {}), setMigrationToast: jest.fn() }),
     },
-  }));
+  }), { virtual: true });
   jest.doMock('../src/services/sessionService', () => ({
     fetchSessions: jest.fn(async () => []),
   }));
@@ -47,6 +47,16 @@ const setupMocks = (getMeImpl: () => any) => {
       getState: () => ({ hydrate: jest.fn(async () => {}), clearMarkers: jest.fn() }),
     },
   }));
+  jest.doMock('../src/store/useTrackingStore', () => {
+    const suspendForUserSwitch = jest.fn(async () => undefined);
+    return {
+      useTrackingStore: {
+        getState: () => ({ suspendForUserSwitch }),
+        setState: jest.fn(),
+        __suspendForUserSwitch: suspendForUserSwitch,
+      },
+    };
+  });
   // v405: hydrate 现在 attach memory sync + hydrate memory points。
   // mock 两者,避免测试拉入 expo-* native deps。
   jest.doMock('../src/services/memorySync', () => ({
@@ -57,6 +67,15 @@ const setupMocks = (getMeImpl: () => any) => {
     hydrateMemoryForUser: jest.fn(async () => {}),
     detachMemoryPersistence: jest.fn(async () => {}),
   }));
+  jest.doMock('../src/features/memory/store/useMemoryStore', () => {
+    const resetForUserSwitch = jest.fn();
+    return {
+      useMemoryStore: {
+        getState: () => ({ resetForUserSwitch }),
+        __resetForUserSwitch: resetForUserSwitch,
+      },
+    };
+  });
 };
 
 describe('useAppStore.hydrate', () => {
@@ -94,7 +113,7 @@ describe('useAppStore.hydrate', () => {
       expect(state.hydrated).toBe(true);
     });
 
-    it('v404: valid JWT → user pre-warmed, but isLoggedIn STAYS false (cold boot 必登)', async () => {
+    it('valid JWT restores the authenticated user on cold boot', async () => {
       const realUser = { id: '42', name: 'Frank', email: 'frank@example.com' };
       setupMocks(() => realUser);
       const { useAppStore } = require('../src/store/useAppStore');
@@ -102,11 +121,7 @@ describe('useAppStore.hydrate', () => {
       await useAppStore.getState().hydrate();
       const state = useAppStore.getState();
 
-      // v404 rule: 任何 cold boot 都不 auto-login。hydrate 触发 = 一定
-      // 是 cold boot(JS bundle 重启),用户必须手动重登。切后台/回前台
-      // 走 warm resume,不经过 hydrate,内存里 isLoggedIn 保留。
-      expect(state.isLoggedIn).toBe(false);
-      // user pre-warmed 使登录后 UI 立可见,不留空白
+      expect(state.isLoggedIn).toBe(true);
       expect(state.user).toEqual(realUser);
       expect(state.hydrated).toBe(true);
     });
@@ -136,10 +151,18 @@ describe('useAppStore.hydrate', () => {
       const memPersist = require('../src/features/memory/services/memoryPersistence');
       const { useAppStore } = require('../src/store/useAppStore');
 
-      useAppStore.getState().logout();
+      await useAppStore.getState().logout();
 
+      const trackingStore = require('../src/store/useTrackingStore');
+      expect(trackingStore.useTrackingStore.__suspendForUserSwitch).toHaveBeenCalled();
       expect(memSync.detachMemorySync).toHaveBeenCalled();
       expect(memPersist.detachMemoryPersistence).toHaveBeenCalled();
+      const memoryStore = require('../src/features/memory/store/useMemoryStore');
+      const reset = memoryStore.useMemoryStore.__resetForUserSwitch;
+      expect(memPersist.detachMemoryPersistence.mock.invocationCallOrder[0])
+        .toBeLessThan(reset.mock.invocationCallOrder[0]);
+      expect(trackingStore.useTrackingStore.__suspendForUserSwitch.mock.invocationCallOrder[0])
+        .toBeLessThan(memPersist.detachMemoryPersistence.mock.invocationCallOrder[0]);
     });
 
     it('lands on Sign In when network throws (offline first launch)', async () => {
@@ -156,12 +179,12 @@ describe('useAppStore.hydrate', () => {
     });
   });
 
-  describe('dev bypass (only in __DEV__)', () => {
+  describe('removed dev bypass', () => {
     beforeEach(() => {
       (global as any).__DEV__ = true;
     });
 
-    it('activates bypass when both __DEV__ and env="true"', async () => {
+    it('does not synthesize a user even when the obsolete env flag is true', async () => {
       process.env.EXPO_PUBLIC_PLAYWRIGHT_BYPASS = 'true';
       setupMocks(() => null);
       const { useAppStore } = require('../src/store/useAppStore');
@@ -169,8 +192,8 @@ describe('useAppStore.hydrate', () => {
       await useAppStore.getState().hydrate();
       const state = useAppStore.getState();
 
-      expect(state.isLoggedIn).toBe(true);
-      expect(state.user?.email).toBe('pw@cairn.nz');
+      expect(state.isLoggedIn).toBe(false);
+      expect(state.user).toBeNull();
       expect(state.hydrated).toBe(true);
     });
 
