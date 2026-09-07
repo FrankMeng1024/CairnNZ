@@ -1,0 +1,18 @@
+{
+  "viewport": "390x844",
+  "qaOnlyFixture": "Charlotte Ngata-Smith-Williams",
+  "warning": "You’ll lose access to routes, cairns, and explored areas shared by this friend. Your own exploration won’t be affected.",
+  "finalButtonText": "Remove friend",
+  "finalButtonBox": {
+    "x": 49,
+    "y": 520,
+    "width": 292,
+    "height": 61
+  },
+  "afterMaterial": {
+    "background": "rgb(61, 77, 95)",
+    "border": "rgb(143, 166, 139)",
+    "foreground": "rgb(241, 243, 240)"
+  },
+  "runtimeErrors": []
+}

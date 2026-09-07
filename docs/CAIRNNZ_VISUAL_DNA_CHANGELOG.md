@@ -163,3 +163,19 @@ Resolve these through the roadmap Gates and record them here only after explicit
 **Status:** APPROVED — GATE 0 LOCKED
 
 Human review approved the Gate 0 visual direction with three clarifications: functional usability and accessibility are hard constraints outside the Home visual-success ranking; navigation existence and structure remain product-behavior decisions; and water > cloud > vegetation is provisional for Sunny only. These clarifications remove ambiguity without changing the core visual direction. Gate A1 remains not started, and all listed open topics remain open.
+
+---
+
+## 2026-09-05 — Three-theme visual authority
+
+**Status:** APPROVED — Phase A
+
+**Previous assumption:** functional UI had two color families; Sunset could inherit Night and receive local warm overrides.
+
+**Decision:** CairnNZ has three equal semantic illumination states: Day — Breathable Field Light, Sunset — Retained Golden-Hour Light, and Night — Moonlit Mineral Quiet. Sunset is an independent state: daylight is leaving, but the world still has light.
+
+**System consequence:** screen families share a tonal surface ladder, contrast floors, environment-aware scrims, stable icon/control geometry, and global back/dismiss/destructive interaction conventions. Value and material relationships precede hue selection. External systems supply principles, never the CairnNZ palette.
+
+**Implementation boundary:** current Home Sunset is the rendered color/material authority. Shared primitive recalibration is deferred to Phase B; Friends and other production families remain unchanged in Phase A.
+
+**Evidence:** `docs/review/three-theme-authority-phase-a/home-before-after-board.jpg`, `docs/review/three-theme-authority-phase-a/home-material-comparison.jpg`, and exact 390×844 source captures in that gate.

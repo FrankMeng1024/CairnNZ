@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" role="img" aria-labelledby="title" style="color:#24453E">
+  <title id="title">Run</title>
+  <circle cx="29.2" cy="8.5" r="2.8" fill="currentColor"/>
+  <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m26.5 13.2-5.7 11.1" stroke-width="3.4"/>
+    <path d="m25 16.4-6.3 1.6-4.4-3.5M25.8 15.7l5.7 4.4 5-3.7M20.8 24.3l8.1 5.8 10.5-.3M20.8 24.3l-5.6 7.2-8 5.6" stroke-width="2.6"/>
+  </g>
+</svg>

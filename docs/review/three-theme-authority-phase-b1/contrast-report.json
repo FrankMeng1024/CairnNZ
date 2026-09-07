@@ -1,0 +1,962 @@
+[
+  {
+    "theme": "day",
+    "name": "primary button label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 6.53,
+    "pass": true,
+    "foreground": {
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 1
+    },
+    "background": {
+      "r": 47,
+      "g": 104,
+      "b": 79,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "primary button icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 6.53,
+    "pass": true,
+    "foreground": {
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 1
+    },
+    "background": {
+      "r": 47,
+      "g": 104,
+      "b": 79,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "secondary button label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 11.31,
+    "pass": true,
+    "foreground": {
+      "r": 23,
+      "g": 55,
+      "b": 45,
+      "a": 1
+    },
+    "background": {
+      "r": 241.24,
+      "g": 239.6,
+      "b": 231.36,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "disabled button label",
+    "kind": "text",
+    "floor": 3,
+    "ratio": 3.98,
+    "pass": true,
+    "foreground": {
+      "r": 104,
+      "g": 117,
+      "b": 111,
+      "a": 1
+    },
+    "background": {
+      "r": 231.3,
+      "g": 234.64,
+      "b": 226.98,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "final destructive label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 4.78,
+    "pass": true,
+    "foreground": {
+      "r": 174,
+      "g": 57,
+      "b": 47,
+      "a": 1
+    },
+    "background": {
+      "r": 235.00000000000003,
+      "g": 225.9,
+      "b": 216,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "active tab label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 7.31,
+    "pass": true,
+    "foreground": {
+      "r": 35,
+      "g": 72,
+      "b": 59,
+      "a": 1
+    },
+    "background": {
+      "r": 211,
+      "g": 222,
+      "b": 201,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "inactive tab label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 4.82,
+    "pass": true,
+    "foreground": {
+      "r": 88,
+      "g": 107,
+      "b": 99,
+      "a": 1
+    },
+    "background": {
+      "r": 238.07999999999998,
+      "g": 236.62,
+      "b": 228.26,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "record text",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 11.35,
+    "pass": true,
+    "foreground": {
+      "r": 23,
+      "g": 55,
+      "b": 45,
+      "a": 1
+    },
+    "background": {
+      "r": 241.44,
+      "g": 240.10000000000002,
+      "b": 231.66,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "field value",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 11.56,
+    "pass": true,
+    "foreground": {
+      "r": 23,
+      "g": 55,
+      "b": 45,
+      "a": 1
+    },
+    "background": {
+      "r": 243.95999999999998,
+      "g": 242.08,
+      "b": 234,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "focus boundary",
+    "kind": "border",
+    "floor": 3,
+    "ratio": 5.83,
+    "pass": true,
+    "foreground": {
+      "r": 47,
+      "g": 104,
+      "b": 79,
+      "a": 1
+    },
+    "background": {
+      "r": 243.95999999999998,
+      "g": 242.08,
+      "b": 234,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "neutral functional icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 6.89,
+    "pass": true,
+    "foreground": {
+      "r": 53,
+      "g": 91,
+      "b": 75,
+      "a": 1
+    },
+    "background": {
+      "r": 243,
+      "g": 244,
+      "b": 234,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "active functional icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 6.87,
+    "pass": true,
+    "foreground": {
+      "r": 35,
+      "g": 94,
+      "b": 69,
+      "a": 1
+    },
+    "background": {
+      "r": 243,
+      "g": 244,
+      "b": 234,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "back icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 6.89,
+    "pass": true,
+    "foreground": {
+      "r": 53,
+      "g": 91,
+      "b": 75,
+      "a": 1
+    },
+    "background": {
+      "r": 243,
+      "g": 244,
+      "b": 234,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "close icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 6.89,
+    "pass": true,
+    "foreground": {
+      "r": 53,
+      "g": 91,
+      "b": 75,
+      "a": 1
+    },
+    "background": {
+      "r": 243,
+      "g": 244,
+      "b": 234,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "sheet primary text",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 11.87,
+    "pass": true,
+    "foreground": {
+      "r": 23,
+      "g": 55,
+      "b": 45,
+      "a": 1
+    },
+    "background": {
+      "r": 247,
+      "g": 245,
+      "b": 237,
+      "a": 1
+    }
+  },
+  {
+    "theme": "day",
+    "name": "modal primary text",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 11.98,
+    "pass": true,
+    "foreground": {
+      "r": 23,
+      "g": 55,
+      "b": 45,
+      "a": 1
+    },
+    "background": {
+      "r": 248,
+      "g": 246,
+      "b": 239,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "primary button label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 4.78,
+    "pass": true,
+    "foreground": {
+      "r": 255,
+      "g": 249,
+      "b": 240,
+      "a": 1
+    },
+    "background": {
+      "r": 95,
+      "g": 117,
+      "b": 95,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "primary button icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 4.78,
+    "pass": true,
+    "foreground": {
+      "r": 255,
+      "g": 249,
+      "b": 240,
+      "a": 1
+    },
+    "background": {
+      "r": 95,
+      "g": 117,
+      "b": 95,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "secondary button label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 9.6,
+    "pass": true,
+    "foreground": {
+      "r": 36,
+      "g": 51,
+      "b": 46,
+      "a": 1
+    },
+    "background": {
+      "r": 228.88000000000002,
+      "g": 217.96,
+      "b": 206.2,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "disabled button label",
+    "kind": "text",
+    "floor": 3,
+    "ratio": 3.26,
+    "pass": true,
+    "foreground": {
+      "r": 98,
+      "g": 107,
+      "b": 102,
+      "a": 1
+    },
+    "background": {
+      "r": 203.12,
+      "g": 198.64,
+      "b": 189.64,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "final destructive label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 4.7,
+    "pass": true,
+    "foreground": {
+      "r": 135,
+      "g": 50,
+      "b": 48,
+      "a": 1
+    },
+    "background": {
+      "r": 210.28,
+      "g": 191.15,
+      "b": 182.70000000000002,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "active tab label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 7.71,
+    "pass": true,
+    "foreground": {
+      "r": 38,
+      "g": 59,
+      "b": 51,
+      "a": 1
+    },
+    "background": {
+      "r": 203,
+      "g": 211,
+      "b": 183,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "inactive tab label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 4.64,
+    "pass": true,
+    "foreground": {
+      "r": 78,
+      "g": 91,
+      "b": 85,
+      "a": 1
+    },
+    "background": {
+      "r": 217.68,
+      "g": 206.84,
+      "b": 197.84,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "record text",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 8.82,
+    "pass": true,
+    "foreground": {
+      "r": 36,
+      "g": 51,
+      "b": 46,
+      "a": 1
+    },
+    "background": {
+      "r": 220.68,
+      "g": 209.12,
+      "b": 197,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "field value",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 9.63,
+    "pass": true,
+    "foreground": {
+      "r": 36,
+      "g": 51,
+      "b": 46,
+      "a": 1
+    },
+    "background": {
+      "r": 228.48000000000002,
+      "g": 218.48,
+      "b": 206.6,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "focus boundary",
+    "kind": "border",
+    "floor": 3,
+    "ratio": 3.23,
+    "pass": true,
+    "foreground": {
+      "r": 108,
+      "g": 125,
+      "b": 93,
+      "a": 1
+    },
+    "background": {
+      "r": 228.48000000000002,
+      "g": 218.48,
+      "b": 206.6,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "neutral functional icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 6.13,
+    "pass": true,
+    "foreground": {
+      "r": 48,
+      "g": 75,
+      "b": 66,
+      "a": 1
+    },
+    "background": {
+      "r": 216,
+      "g": 206,
+      "b": 197,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "active functional icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 5.36,
+    "pass": true,
+    "foreground": {
+      "r": 56,
+      "g": 84,
+      "b": 72,
+      "a": 1
+    },
+    "background": {
+      "r": 216,
+      "g": 206,
+      "b": 197,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "back icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 6.13,
+    "pass": true,
+    "foreground": {
+      "r": 48,
+      "g": 75,
+      "b": 66,
+      "a": 1
+    },
+    "background": {
+      "r": 216,
+      "g": 206,
+      "b": 197,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "close icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 6.13,
+    "pass": true,
+    "foreground": {
+      "r": 48,
+      "g": 75,
+      "b": 66,
+      "a": 1
+    },
+    "background": {
+      "r": 216,
+      "g": 206,
+      "b": 197,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "sheet primary text",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 10.45,
+    "pass": true,
+    "foreground": {
+      "r": 36,
+      "g": 51,
+      "b": 46,
+      "a": 1
+    },
+    "background": {
+      "r": 238,
+      "g": 227,
+      "b": 214,
+      "a": 1
+    }
+  },
+  {
+    "theme": "sunset",
+    "name": "modal primary text",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 10.63,
+    "pass": true,
+    "foreground": {
+      "r": 36,
+      "g": 51,
+      "b": 46,
+      "a": 1
+    },
+    "background": {
+      "r": 239,
+      "g": 229,
+      "b": 217,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "primary button label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 6.38,
+    "pass": true,
+    "foreground": {
+      "r": 21,
+      "g": 32,
+      "b": 25,
+      "a": 1
+    },
+    "background": {
+      "r": 143,
+      "g": 166,
+      "b": 139,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "primary button icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 6.38,
+    "pass": true,
+    "foreground": {
+      "r": 21,
+      "g": 32,
+      "b": 25,
+      "a": 1
+    },
+    "background": {
+      "r": 143,
+      "g": 166,
+      "b": 139,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "secondary button label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 10.35,
+    "pass": true,
+    "foreground": {
+      "r": 241,
+      "g": 243,
+      "b": 240,
+      "a": 1
+    },
+    "background": {
+      "r": 45.44,
+      "g": 58.2,
+      "b": 72.96000000000001,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "disabled button label",
+    "kind": "text",
+    "floor": 3,
+    "ratio": 5,
+    "pass": true,
+    "foreground": {
+      "r": 154,
+      "g": 164,
+      "b": 169,
+      "a": 1
+    },
+    "background": {
+      "r": 40.739999999999995,
+      "g": 51.620000000000005,
+      "b": 64.5,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "final destructive label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 7.68,
+    "pass": true,
+    "foreground": {
+      "r": 255,
+      "g": 172,
+      "b": 164,
+      "a": 1
+    },
+    "background": {
+      "r": 47.4,
+      "g": 43.31999999999999,
+      "b": 51.92,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "active tab label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 7.67,
+    "pass": true,
+    "foreground": {
+      "r": 238,
+      "g": 242,
+      "b": 240,
+      "a": 1
+    },
+    "background": {
+      "r": 61,
+      "g": 77,
+      "b": 95,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "inactive tab label",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 7.18,
+    "pass": true,
+    "foreground": {
+      "r": 173,
+      "g": 183,
+      "b": 188,
+      "a": 1
+    },
+    "background": {
+      "r": 30.4,
+      "g": 41.28,
+      "b": 54.16,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "record text",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 12.35,
+    "pass": true,
+    "foreground": {
+      "r": 241,
+      "g": 243,
+      "b": 240,
+      "a": 1
+    },
+    "background": {
+      "r": 34.44,
+      "g": 45.959999999999994,
+      "b": 59.48,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "field value",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 12.93,
+    "pass": true,
+    "foreground": {
+      "r": 241,
+      "g": 243,
+      "b": 240,
+      "a": 1
+    },
+    "background": {
+      "r": 30.8,
+      "g": 42.74,
+      "b": 55.699999999999996,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "focus boundary",
+    "kind": "border",
+    "floor": 3,
+    "ratio": 6.13,
+    "pass": true,
+    "foreground": {
+      "r": 154,
+      "g": 175,
+      "b": 146,
+      "a": 1
+    },
+    "background": {
+      "r": 30.8,
+      "g": 42.74,
+      "b": 55.699999999999996,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "neutral functional icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 13.04,
+    "pass": true,
+    "foreground": {
+      "r": 220,
+      "g": 228,
+      "b": 231,
+      "a": 1
+    },
+    "background": {
+      "r": 21,
+      "g": 30,
+      "b": 41,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "active functional icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 12.2,
+    "pass": true,
+    "foreground": {
+      "r": 211,
+      "g": 223,
+      "b": 209,
+      "a": 1
+    },
+    "background": {
+      "r": 21,
+      "g": 30,
+      "b": 41,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "back icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 13.04,
+    "pass": true,
+    "foreground": {
+      "r": 220,
+      "g": 228,
+      "b": 231,
+      "a": 1
+    },
+    "background": {
+      "r": 21,
+      "g": 30,
+      "b": 41,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "close icon",
+    "kind": "icon",
+    "floor": 3,
+    "ratio": 13.04,
+    "pass": true,
+    "foreground": {
+      "r": 220,
+      "g": 228,
+      "b": 231,
+      "a": 1
+    },
+    "background": {
+      "r": 21,
+      "g": 30,
+      "b": 41,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "sheet primary text",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 9.02,
+    "pass": true,
+    "foreground": {
+      "r": 241,
+      "g": 243,
+      "b": 240,
+      "a": 1
+    },
+    "background": {
+      "r": 53,
+      "g": 67,
+      "b": 85,
+      "a": 1
+    }
+  },
+  {
+    "theme": "night",
+    "name": "modal primary text",
+    "kind": "text",
+    "floor": 4.5,
+    "ratio": 9.02,
+    "pass": true,
+    "foreground": {
+      "r": 241,
+      "g": 243,
+      "b": 240,
+      "a": 1
+    },
+    "background": {
+      "r": 53,
+      "g": 67,
+      "b": 85,
+      "a": 1
+    }
+  }
+]

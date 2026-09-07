@@ -1,0 +1,341 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "captures": {
+    "home-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/home-day-390x844.png"
+    },
+    "friends-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/friends-day-390x844.png"
+    },
+    "tabs-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/tabs-day.png",
+      "box": {
+        "x": 102.53999328613281,
+        "y": 160.6999969482422,
+        "width": 184.92002868652344,
+        "height": 29.479995727539062
+      }
+    },
+    "record-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/record-day.png",
+      "box": {
+        "x": 61.66999816894531,
+        "y": 222.33999633789062,
+        "width": 266.66001892089844,
+        "height": 45.560028076171875
+      }
+    },
+    "primary-action-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/primary-action-day.png",
+      "box": {
+        "x": 64.3499984741211,
+        "y": 677.27001953125,
+        "width": 261.3000259399414,
+        "height": 40.8699951171875
+      }
+    },
+    "add-friend-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/add-friend-day-390x844.png"
+    },
+    "sheet-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/sheet-day.png",
+      "box": {
+        "x": 50.94999694824219,
+        "y": 272.13983154296875,
+        "width": 288.09999084472656,
+        "height": 462.08013916015625
+      }
+    },
+    "field-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/field-day.png",
+      "box": {
+        "x": 68.3699951171875,
+        "y": 505.9698486328125,
+        "width": 253.260009765625,
+        "height": 33.5
+      }
+    },
+    "send-action-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/send-action-day.png",
+      "box": {
+        "x": 67.69999694824219,
+        "y": 556.2198486328125,
+        "width": 254.59999084472656,
+        "height": 40.8699951171875
+      }
+    },
+    "secondary-action-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/secondary-action-day.png",
+      "box": {
+        "x": 177.8731231689453,
+        "y": 612.1648559570312,
+        "width": 34.253753662109375,
+        "height": 12.73004150390625
+      }
+    },
+    "close-icon-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/close-icon-day.png",
+      "box": {
+        "x": 62.339996337890625,
+        "y": 283.52984619140625,
+        "width": 24.12000274658203,
+        "height": 24.1199951171875
+      }
+    },
+    "profile-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/profile-day-390x844.png"
+    },
+    "modal-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/modal-day.png",
+      "box": {
+        "x": 81.0999984741211,
+        "y": 344.2799987792969,
+        "width": 227.8000259399414,
+        "height": 155.44000244140625
+      }
+    },
+    "destructive-utility-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/destructive-utility-day.png",
+      "box": {
+        "x": 95.16999816894531,
+        "y": 454.83001708984375,
+        "width": 199.66001892089844,
+        "height": 30.819976806640625
+      }
+    },
+    "destructive-confirmation-day": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/destructive-confirmation-day.png",
+      "box": {
+        "x": 95.16999816894531,
+        "y": 360.3599853515625,
+        "width": 199.66001892089844,
+        "height": 164.820068359375
+      }
+    },
+    "home-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/home-sunset-390x844.png"
+    },
+    "friends-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/friends-sunset-390x844.png"
+    },
+    "tabs-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/tabs-sunset.png",
+      "box": {
+        "x": 102.53999328613281,
+        "y": 160.6999969482422,
+        "width": 184.92002868652344,
+        "height": 29.479995727539062
+      }
+    },
+    "record-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/record-sunset.png",
+      "box": {
+        "x": 61.66999816894531,
+        "y": 222.33999633789062,
+        "width": 266.66001892089844,
+        "height": 45.560028076171875
+      }
+    },
+    "primary-action-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/primary-action-sunset.png",
+      "box": {
+        "x": 64.3499984741211,
+        "y": 677.27001953125,
+        "width": 261.3000259399414,
+        "height": 40.8699951171875
+      }
+    },
+    "add-friend-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/add-friend-sunset-390x844.png"
+    },
+    "sheet-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/sheet-sunset.png",
+      "box": {
+        "x": 50.94999694824219,
+        "y": 272.13983154296875,
+        "width": 288.09999084472656,
+        "height": 462.08013916015625
+      }
+    },
+    "field-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/field-sunset.png",
+      "box": {
+        "x": 68.3699951171875,
+        "y": 505.9698486328125,
+        "width": 253.260009765625,
+        "height": 33.5
+      }
+    },
+    "send-action-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/send-action-sunset.png",
+      "box": {
+        "x": 67.69999694824219,
+        "y": 556.2198486328125,
+        "width": 254.59999084472656,
+        "height": 40.8699951171875
+      }
+    },
+    "secondary-action-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/secondary-action-sunset.png",
+      "box": {
+        "x": 177.8731231689453,
+        "y": 612.1648559570312,
+        "width": 34.253753662109375,
+        "height": 12.73004150390625
+      }
+    },
+    "close-icon-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/close-icon-sunset.png",
+      "box": {
+        "x": 62.339996337890625,
+        "y": 283.52984619140625,
+        "width": 24.12000274658203,
+        "height": 24.1199951171875
+      }
+    },
+    "profile-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/profile-sunset-390x844.png"
+    },
+    "modal-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/modal-sunset.png",
+      "box": {
+        "x": 81.0999984741211,
+        "y": 344.2799987792969,
+        "width": 227.8000259399414,
+        "height": 155.44000244140625
+      }
+    },
+    "destructive-utility-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/destructive-utility-sunset.png",
+      "box": {
+        "x": 95.16999816894531,
+        "y": 454.83001708984375,
+        "width": 199.66001892089844,
+        "height": 30.819976806640625
+      }
+    },
+    "destructive-confirmation-sunset": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/destructive-confirmation-sunset.png",
+      "box": {
+        "x": 95.16999816894531,
+        "y": 360.3599853515625,
+        "width": 199.66001892089844,
+        "height": 164.820068359375
+      }
+    },
+    "home-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/home-night-390x844.png"
+    },
+    "friends-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/friends-night-390x844.png"
+    },
+    "tabs-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/tabs-night.png",
+      "box": {
+        "x": 102.53999328613281,
+        "y": 160.6999969482422,
+        "width": 184.92002868652344,
+        "height": 29.479995727539062
+      }
+    },
+    "record-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/record-night.png",
+      "box": {
+        "x": 61.66999816894531,
+        "y": 222.33999633789062,
+        "width": 266.66001892089844,
+        "height": 45.560028076171875
+      }
+    },
+    "primary-action-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/primary-action-night.png",
+      "box": {
+        "x": 64.3499984741211,
+        "y": 677.27001953125,
+        "width": 261.3000259399414,
+        "height": 40.8699951171875
+      }
+    },
+    "add-friend-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/add-friend-night-390x844.png"
+    },
+    "sheet-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/sheet-night.png",
+      "box": {
+        "x": 50.94999694824219,
+        "y": 272.13983154296875,
+        "width": 288.09999084472656,
+        "height": 462.08013916015625
+      }
+    },
+    "field-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/field-night.png",
+      "box": {
+        "x": 68.3699951171875,
+        "y": 505.9698486328125,
+        "width": 253.260009765625,
+        "height": 33.5
+      }
+    },
+    "send-action-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/send-action-night.png",
+      "box": {
+        "x": 67.69999694824219,
+        "y": 556.2198486328125,
+        "width": 254.59999084472656,
+        "height": 40.8699951171875
+      }
+    },
+    "secondary-action-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/secondary-action-night.png",
+      "box": {
+        "x": 177.8731231689453,
+        "y": 612.1648559570312,
+        "width": 34.253753662109375,
+        "height": 12.73004150390625
+      }
+    },
+    "close-icon-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/close-icon-night.png",
+      "box": {
+        "x": 62.339996337890625,
+        "y": 283.52984619140625,
+        "width": 24.12000274658203,
+        "height": 24.1199951171875
+      }
+    },
+    "profile-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/captures/profile-night-390x844.png"
+    },
+    "modal-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/modal-night.png",
+      "box": {
+        "x": 81.0999984741211,
+        "y": 344.2799987792969,
+        "width": 227.8000259399414,
+        "height": 155.44000244140625
+      }
+    },
+    "destructive-utility-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/destructive-utility-night.png",
+      "box": {
+        "x": 95.16999816894531,
+        "y": 454.83001708984375,
+        "width": 199.66001892089844,
+        "height": 30.819976806640625
+      }
+    },
+    "destructive-confirmation-night": {
+      "path": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/three-theme-visual-authority-audit/components/destructive-confirmation-night.png",
+      "box": {
+        "x": 95.16999816894531,
+        "y": 360.3599853515625,
+        "width": 199.66001892089844,
+        "height": 164.820068359375
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "file": "auth",
+    "meanAbsoluteChannelDifference": 0.0302,
+    "maximumChannelDifference": 6,
+    "changedChannelPercent": 2.9965
+  },
+  {
+    "file": "home-day",
+    "meanAbsoluteChannelDifference": 0,
+    "maximumChannelDifference": 0,
+    "changedChannelPercent": 0
+  },
+  {
+    "file": "home-sunset",
+    "meanAbsoluteChannelDifference": 0.0686,
+    "maximumChannelDifference": 28,
+    "changedChannelPercent": 0.5379
+  },
+  {
+    "file": "home-night",
+    "meanAbsoluteChannelDifference": 0.0019,
+    "maximumChannelDifference": 2,
+    "changedChannelPercent": 0.1896
+  }
+]

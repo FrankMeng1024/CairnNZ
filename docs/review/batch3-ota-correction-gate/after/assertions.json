@@ -1,0 +1,12 @@
+{
+  "firstBackdropTapKeptSheet": true,
+  "firstBackdropTapBlurredField": true,
+  "firstBackdropTapRetainedValue": true,
+  "secondBackdropTapClosedSheet": true,
+  "parentRowsSuppressed": true,
+  "underlyingPrimaryActionHidden": true,
+  "insideTapKeptSheet": true,
+  "insideTapBlurredField": true,
+  "insideTapRetainedValue": true,
+  "explicitCloseDismissedSheetWithFocus": true
+}

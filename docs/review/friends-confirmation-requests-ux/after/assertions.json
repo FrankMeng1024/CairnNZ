@@ -1,0 +1,68 @@
+{
+  "matrix": {
+    "requests-empty": {
+      "receivedSections": 0,
+      "sentSections": 0,
+      "globalEmptyStates": 1,
+      "negativeCategoryMessages": 0
+    },
+    "requests-received-only": {
+      "receivedSections": 1,
+      "sentSections": 0,
+      "globalEmptyStates": 0,
+      "negativeCategoryMessages": 0
+    },
+    "requests-sent-only": {
+      "receivedSections": 0,
+      "sentSections": 1,
+      "globalEmptyStates": 0,
+      "negativeCategoryMessages": 0
+    },
+    "requests-received-sent": {
+      "receivedSections": 1,
+      "sentSections": 1,
+      "globalEmptyStates": 0,
+      "negativeCategoryMessages": 0
+    }
+  },
+  "transitions": {
+    "sentOnlyCancelFinal": {
+      "receivedSections": 0,
+      "sentSections": 0,
+      "globalEmptyStates": 1,
+      "negativeCategoryMessages": 0
+    },
+    "bothCancelFinalSent": {
+      "receivedSections": 1,
+      "sentSections": 0,
+      "globalEmptyStates": 0,
+      "negativeCategoryMessages": 0
+    },
+    "receivedOnlyAcceptFinal": {
+      "receivedSections": 0,
+      "sentSections": 0,
+      "globalEmptyStates": 1,
+      "negativeCategoryMessages": 0
+    },
+    "bothDeclineFinalReceived": {
+      "receivedSections": 0,
+      "sentSections": 1,
+      "globalEmptyStates": 0,
+      "negativeCategoryMessages": 0
+    }
+  },
+  "confirmation": {
+    "removeFriend": {
+      "dialogCount": 1,
+      "warningVisible": true,
+      "finalActionCount": 1,
+      "cancelActionCount": 0
+    },
+    "cancelRequest": {
+      "dialogCount": 1,
+      "finalActionCount": 1,
+      "keepActionCount": 0,
+      "closeVisible": true
+    }
+  }
+}

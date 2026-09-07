@@ -1,5 +1,7 @@
 STATUS: COMPLETE
 
+> **Historical migration record:** binary Day/Night wording and the former eight-asset Home family below describe the 2026-08-22 migration state. As of 2026-09-05, current authority is the independent Day/Sunset/Night system in `CAIRNNZ_VISUAL_DNA.md` and `VISUAL_SYSTEM.md`. Do not derive current theme behavior or Home asset status from this historical record.
+
 ## Corrective real-runtime harmonization — 2026-08-22
 
 - Auth remained unchanged and was rendered first as the quality/art-direction anchor: believable editorial realism, broad soft daylight, layered haze, restrained natural color, controlled highlights, tactile texture, quiet UI zones, and optimistic calm.

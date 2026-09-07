@@ -1,0 +1,14 @@
+{
+  "viewport": "390x844",
+  "assertions": {
+    "warningVisible": true,
+    "removeRegionBorderTop": "0px",
+    "finalActionCount": 1,
+    "sendMaterial": {
+      "backgroundColor": "rgba(143, 166, 139, 0.82)",
+      "borderColor": "rgb(143, 166, 139)",
+      "foregroundColor": "rgb(21, 32, 25)"
+    },
+    "runtimeErrors": []
+  }
+}

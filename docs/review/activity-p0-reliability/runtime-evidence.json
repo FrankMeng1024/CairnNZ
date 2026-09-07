@@ -1,0 +1,26 @@
+{
+  "viewport": "390x844",
+  "renderer": "Expo Web",
+  "states": [
+    "HIKING · READY",
+    "HIKING · STARTING",
+    "HIKING · TRACKING",
+    "HIKING · PAUSED",
+    "HIKING · FINISHING",
+    "HIKING · RECOVERY",
+    "RUNNING · READY",
+    "RUNNING · STARTING",
+    "RUNNING · TRACKING",
+    "RUNNING · PAUSED",
+    "RUNNING · FINISHING",
+    "RUNNING · RECOVERY",
+    "HIKING · MAP UNAVAILABLE",
+    "RUNNING · MAP UNAVAILABLE"
+  ],
+  "assertions": {
+    "pausedStartCount": 0,
+    "recoveryModeIsolation": true
+  },
+  "limitation": "Native GPS, background execution, lock-screen behavior, and Mapbox ornaments require physical-device OTA verification.",
+  "runtimeErrors": []
+}

@@ -1,0 +1,17 @@
+{
+  "day": {
+    "changedChannelBytes": 11819,
+    "totalChannelBytes": 987480,
+    "meanAbsoluteChannelDelta": 0.8883187507595091
+  },
+  "sunset": {
+    "changedChannelBytes": 145325,
+    "totalChannelBytes": 987480,
+    "meanAbsoluteChannelDelta": 15.265858549033904
+  },
+  "night": {
+    "changedChannelBytes": 128351,
+    "totalChannelBytes": 987480,
+    "meanAbsoluteChannelDelta": 0.13259002713979018
+  }
+}

@@ -2,7 +2,7 @@
 
 ## Direction
 
-Primary Visual Anchor: `app/assets/home/home-bg-sunny-day-semantic-v2-master.png`.
+Brand color authority: the complete current production Home rendered at 390×844 in Day, Sunset, and Night. The three current Sunny runtime assets remain unchanged; the UI/material relationship, not an external palette, anchors shared-system calibration.
 
 Auth (`app/assets/auth/landing-hero.jpg`) is the locked quality and art-direction calibration anchor. Its visual DNA is believable editorial realism, broad soft daylight, layered atmospheric haze, restrained sage/forest/stone color, controlled saturation and highlights, fine natural texture, quiet interaction zones, and optimistic calm. CairnNZ visual assets combine natural atmospheric realism, restrained editorial/field-journal detail, and optimistic outdoor energy. Functional UI stays clean, modern, restrained, and product-focused.
 
@@ -13,17 +13,17 @@ Preserve `app/assets/auth/landing-hero.jpg`, the Friends day/night backgrounds, 
 ## Two axes
 
 - Weather selects Home scenery only: Sunny, Cloudy, Rainy, Snowy.
-- Day/Night selects functional UI tokens only. `Rainy Night = rainy-night scenery + NIGHT tokens`.
-- Day and Night are two expressions of the same CairnNZ product. Cloudy and Rainy must remain inviting, dimensional, and exploration-positive.
-- Mapbox activity screens use Mapbox plus DAY or NIGHT tokens; never Home scenery.
+- Day/Sunset/Night selects functional UI material relationships. `Rainy Sunset = rainy-sunset scenery + SUNSET material`; `Rainy Night = rainy-night scenery + NIGHT material`.
+- Day, Sunset, and Night are three equal expressions of the same CairnNZ product. Sunset is independent—not modified Night—and retains visibly living daylight. Cloudy and Rainy remain inviting, dimensional, and exploration-positive in all three states.
+- Mapbox activity screens use Mapbox plus DAY, SUNSET, or NIGHT semantics; never Home scenery.
 
-Canonical tokens live in `app/src/components/tokens.ts`; `app/src/hooks/useVisualTheme.ts` is the component entry point. Weather selection and Home delivery live in `app/src/utils/homeBackground.ts`.
+Canonical shared tokens live in `app/src/components/tokens.ts`; `app/src/hooks/useVisualTheme.ts` is the component entry point. Weather selection and Home delivery live in `app/src/utils/homeBackground.ts`. Phase B-1 calibrates the shared Day/Sunset/Night surface ladder against the accepted Home authority; Home remains independently regression-locked. The rendered relationship matrix and interaction rules in `CAIRNNZ_VISUAL_DNA.md` govern later screen composition migrations.
 
 ## Composition
 
 Home keeps its existing layout. Scenic detail must yield beneath greeting, metrics, primary actions, cards, tabs, and navigation. Compose in this order: scenery → systematic atmospheric/readability layer → functional UI. Prefer sky, mist, depth, and low-detail terrain under content; do not solve readability by blacking out the landscape.
 
-The eight Home assets share one exact landscape world, composition, focal logic, and generation lineage. Derive future weather or lighting variants from the semantic Primary Visual Anchor—not as independent scenes or color grades—retain the mobile cover crop, and validate at 390×844 and 430×932. Cloudy and Rainy require genuine luminous atmosphere, believable moisture/material cues, and an inviting exposure in the underlying image. Settings reuses this world with stronger veil and surface opacity.
+The twelve Home assets share one landscape family, composition intent, and focal logic. Derive future weather or lighting variants from the locked Home family—not as independent scenes or color grades—retain the mobile cover crop, and validate at 390×844 and 430×932. Cloudy and Rainy require genuine luminous atmosphere, believable moisture/material cues, and an inviting exposure in the underlying image. Settings reuses this world with stronger veil and surface opacity.
 
 ## Product families
 
@@ -34,9 +34,9 @@ The eight Home assets share one exact landscape world, composition, focal logic,
 
 ## Components
 
-Primary actions are rounded spruce fills with `onPrimary`; quiet actions use `surface`/`surfaceElevated` plus `border`. Cards and lists use restrained translucency, one-pixel semantic borders, consistent rounded corners, and low elevation. Tabs use a shared container with a solid active segment. Popups, sheets, and modals use `surfaceElevated`, semantic scrims, a shared handle/border, and the same action hierarchy. Avoid excessive glass effects.
+Primary actions use `PrimaryButton`; quiet actions use the relevant standard/elevated semantic material plus a fine border. `ContentSurface` governs only record/elevated material and leaves domain-row composition to screens. `SegmentedControl` uses one shared track whose active and inactive choices remain visibly related. `TextField`, `BottomSheetFrame`, and `ModalCard` own their semantic material levels; `DismissButton` and `BackButton` own neutral functional icon contrast while callers own top-right/top-left placement. Every family follows the three-state rendered relationships in `CAIRNNZ_VISUAL_DNA.md`; avoid excessive glass effects.
 
-Functional icons use `app/src/components/Icon.tsx` (Lucide geometry), approximately 1.9–2.0 stroke weight, and semantic `iconActive`/`iconInactive` colors. Do not create separate Day/Night PNG icon sets. Raster artwork is reserved for scenery and illustration.
+Functional icons use the established production geometry and semantic active/inactive colors. Geometry stays fixed across Day/Sunset/Night; only environmental contrast relationships change. Do not create separate time-state PNG icon sets. Raster artwork is reserved for scenery and illustration.
 
 ## Asset production
 

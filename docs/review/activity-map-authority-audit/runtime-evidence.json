@@ -1,0 +1,6 @@
+{
+  "viewport": "390x844",
+  "renderer": "Expo Web",
+  "limitation": "HikingScreen and RunningScreen intentionally do not load @rnmapbox/maps on Web; captures prove app chrome and fallback states, not native tiles.",
+  "runtimeErrors": []
+}

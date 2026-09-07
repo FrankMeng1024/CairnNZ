@@ -1,7 +1,8 @@
 # CairnNZ Visual DNA
 
-**Status:** APPROVED — GATE 0 LOCKED
+**Status:** APPROVED — GATE 0 + THREE-THEME AUTHORITY LOCKED
 **Established:** 2026-08-24
+**Three-theme authority formalized:** 2026-09-05
 **Applies to:** all future CairnNZ visual design, asset generation, UI refinement, and visual QA
 
 ## Authority and use
@@ -47,7 +48,7 @@ The first impression should be real. The second should be refined and intentiona
 
 # Level 1 — Locked Core DNA
 
-These principles are system-level. They do not drift between screens, weather states, Day/Night, or future features unless an explicitly approved system-level decision changes them and records that change in `CAIRNNZ_VISUAL_DNA_CHANGELOG.md`.
+These principles are system-level. They do not drift between screens, weather states, Day/Sunset/Night, or future features unless an explicitly approved system-level decision changes them and records that change in `CAIRNNZ_VISUAL_DNA_CHANGELOG.md`.
 
 ## 1. Presence
 
@@ -184,7 +185,7 @@ The Locked Core DNA remains constant. Its visual expression adapts to the produc
 
 **Primary role:** enter CairnNZ calmly and credibly.
 
-Auth contributes believable realism, atmospheric softness, restrained exposure, natural color, quiet interaction zones, and comfortable UI/background integration. It is a useful compatibility reference, not the universal master composition. Auth does not need to carry the full memory/trace system and currently requires no Day/Night variant.
+Auth contributes believable realism, atmospheric softness, restrained exposure, natural color, quiet interaction zones, and comfortable UI/background integration. It is a useful compatibility reference, not the universal master composition. Auth does not need to carry the full memory/trace system and currently requires no Day/Sunset/Night variant.
 
 ## Home — invitation
 
@@ -217,11 +218,11 @@ Technical refinement cannot compensate for failure in the first three levels.
 
 Weather changes light, atmosphere, moisture, material response, ecological behavior, and emotional cadence while preserving exploration desire. Weather is not a global color grade and must not replace the Home geography.
 
-See “Home canonical world” and “Eight Home states” below.
+See “Home canonical world” and “Twelve Home states” below.
 
-## Day and Night — one world under different illumination
+## Day, Sunset, and Night — one world under changing illumination
 
-Day and Night preserve product identity, component geometry, icon geometry, spatial hierarchy, terrain, and core content. They may transform:
+Day, Sunset, and Night are three equal semantic states of one CairnNZ system. Sunset is not a Night palette with warm overrides, and no product screen may replace this three-state relationship with a binary Day/Night branch where material meaning is required. All three preserve product identity, component geometry, icon geometry, spatial hierarchy, terrain, and core content. They may transform:
 
 - Environmental illumination and sky
 - Luminance distribution
@@ -230,7 +231,72 @@ Day and Night preserve product identity, component geometry, icon geometry, spat
 - Accent luminosity and semantic contrast
 - Reflections and atmospheric depth
 
-Day is not simply cream surfaces. Night is not simply green surfaces. Scenic, utility, map-led, and transient screens express the same time system differently according to their role.
+The states are:
+
+- **Day — Breathable Field Light:** open, natural, mineral, grounded, and warm without yellowing. Daylight remains dominant; foregrounds are dark spruce or graphite.
+- **Sunset — Retained Golden-Hour Light:** transitional, alive, inviting, slightly luminous, atmospheric, and still visibly daylight. **Daylight is leaving, but the world still has light.** Sunset is never dim Day, early Night, brown UI, an orange wash, gray dusk, or muted lifeless controls.
+- **Night — Moonlit Mineral Quiet:** atmospheric, cool, blue/slate mineral, calm, readable, scenic, and softly luminous. Night is never green-black, pure black, dead gray, neon, or generic dark mode.
+
+Scenic, utility, map-led, and transient screens compose these relationships differently according to role. They do not invent page-specific theme interpretations.
+
+### Three-theme rendered component authority
+
+The descriptions below govern the result on screen, not merely token naming. “Translucent” always means enough environmental relationship to retain context while maintaining reliable text contrast; it never authorizes glass-everything or uncontrolled blur.
+
+| UI family | Day — Breathable Field Light | Sunset — Retained Golden-Hour Light | Night — Moonlit Mineral Quiet | Avoid |
+|---|---|---|---|---|
+| Page / environment | High-value mineral daylight; natural warm-neutral bias, low artificial saturation, open luminance | Warm remaining daylight with controlled rose/gold influence; brighter than Night and visibly alive | Deep cool slate/blue-mineral layers with readable environmental depth, never a flat fill | Sterile white Day, brown/orange Sunset, green-black Night |
+| Primary text | Dark spruce/graphite, high contrast, opaque and grounded | Dark warm graphite on illuminated surfaces or soft pearl over scenery; choose by real local luminance | Soft pearl, high but not glaring contrast | Pure black/white used mechanically without environmental testing |
+| Secondary text | Softer mineral graphite, one clear value step below primary | Warm-neutral graphite or softened pearl; remains legible and energetic | Cool mist/stone, visibly subordinate but readable | Low-opacity gray that disappears into texture |
+| Muted/supporting text | Quiet neutral with sufficient contrast; reduced emphasis by value, not tiny size | Warm stone-neutral; lighter and clearer than a dimmed-Day treatment | Blue-gray mineral with enough lift from the surface | Muddy taupe, dead gray, opacity-only illegibility |
+| Primary icons | Dark spruce/graphite, compact and optically clear | Grounded spruce/graphite on lit material or warm pearl over scenery | Soft luminous pearl/mineral | Reusing Night-white assets on lit Day/Sunset controls |
+| Secondary icons | Lower-value/saturation relative to primary without becoming faint | Warm-neutral mineral, coherent with local text | Cool slate-pearl, restrained | Random green, pure gray, or theme-independent hardcoding |
+| Active tab | Strongest foreground plus a restrained natural accent or clearly lifted field | Visibly illuminated and warm-neutral; active state remains lively without orange saturation | Luminous neutral foreground with restrained natural accent | Green fill as the only active signal; oversized pill |
+| Inactive tab | Quiet but readable on a light mineral track | Warm-neutral and clearly subordinate without looking disabled | Cool-mineral and readable, never muddy | Equal visual weight with active; disappearing labels |
+| Segmented-control track | Light mineral standard surface with low elevation and fine border | Warm illuminated mineral track, translucent only when context remains controlled | Cool slate track with layered separation from page | Brown slab, black capsule, glass ornament |
+| List / record surface | Restrained light mineral surface, efficient density, subtle border | Warm, lifted, and slightly luminous; lighter than Night and not visually heavy | Cool-mineral standard surface, differentiated from page without broad green planes | Floating-card-every-row, opaque white, charcoal Sunset |
+| Elevated card | One material step above records, controlled opacity/elevation | Warm mineral lift with a light-catching edge | Denser cool-slate material with a soft mineral edge | Giant radius, heavy shadow, generic modal white |
+| Sheet / modal surface | Natural mineral elevated surface integrated with its parent | Warm dusk-neutral elevated material with sufficient retained light | Layered cool-mineral surface, not black or green | Detached white card, dark brown panel, excessive blur |
+| Text field surface | Quiet standard surface with legible border and minimal decoration | Warm illuminated inset surface distinct from sheet/card | Cool inset mineral surface distinct from its container | Oversized/decorative field, page-local rgba |
+| Field text / placeholder / focus | Dark grounded text; placeholder visibly softer; focus uses restrained natural emphasis | Warm graphite; placeholder stays legible; focus gains controlled golden/natural lift without glow | Pearl input text; cool-muted placeholder; focus receives a clear mineral/natural edge | Placeholder as disabled text; orange glow; neon focus |
+| Primary button | Grounded spruce/natural action with clear on-primary contrast | Alive natural action balanced to warm surroundings; neither pale-white nor orange | Restrained natural action lifted from cool material | Theme-invariant button that belongs to only one state |
+| Secondary button | Mineral surface/border action subordinate to primary | Warm-neutral surface or quiet inline action | Cool-mineral surface or quiet inline action | Every action as a filled pill |
+| Destructive action | Neutral utility presentation until armed; final action uses controlled danger semantics | Same hierarchy, with danger adapted to warm material rather than persistent bright red | Same hierarchy, with unmistakable but non-neon final danger | Permanent high-saturation red block |
+| Close X | Clear neutral icon on the elevated surface, compact hit-target-aware geometry | Warm-neutral/dark or pearl according to local surface value | Soft pearl/mineral | Inconsistent side placement or decorative circle by default |
+| Navigation back | Clear neutral top-left chevron/back affordance | Same geometry and position; color follows Sunset foreground relationship | Same geometry and position; softly luminous | Conflating navigation with modal dismissal |
+| Borders / separators | Fine light-catching or mineral separator, low contrast but visible | Warm light-catching edge that prevents muddy surface merging | Cool mineral edge separating dark layers | Heavy outlines or invisible same-value edges |
+| Scrim / overlay | Soft neutral suppression preserving parent context | Warm-neutral suppression that does not kill golden-hour light | Cool translucent suppression, not hard black | Opaque black, page-local tint hacks, content bisected by weak layering |
+| Disabled state | Lower contrast and saturation while retaining form and label legibility | Warm-neutral reduction without appearing brown/dead | Cool-mineral reduction without disappearing | Opacity so low the control vanishes; disabled confused with inactive |
+
+### Tonal hierarchy and contrast rules
+
+Choose visual values in this order: **semantic role → immediate environment → surface hierarchy → required foreground contrast → lightness/value → translucency/material → chroma → hue → final exact color**. External systems provide interaction and accessibility principles, not CairnNZ colors; rendered Home Day, corrected Home Sunset, and Home Night are the brand anchors.
+
+Hierarchy is primarily a value/material relationship, not a collection of unrelated hues:
+
+> **environment/page → record/content surface → elevated card → sheet/modal → active/interactive element**
+
+- **Day:** bright natural environment → light warm-mineral translucent record → slightly more opaque card → mostly opaque warm-mineral sheet/modal → restrained natural spruce action.
+- **Sunset:** warm remaining environmental light → mid-light illuminated-stone record → slightly stronger warm illuminated card → clearly separated dusk-stone sheet/modal → lifted sage/mineral-gold action. **The sun is low, not gone.**
+- **Night:** deep blue-charcoal environment → cool slate record one value step higher → subtly higher card → clearly elevated blue-slate/charcoal sheet/modal → restrained desaturated natural cue.
+
+Raise hierarchy first through lightness/value, material thickness, border separation, and controlled accent. Do not use glow, heavy shadow, bright borders, or high-chroma color to compensate for collapsed layers. Records stay efficient and relatively close to the environmental layer; cards are moderately more opaque; text-heavy sheets, modals, and fields use enough material thickness to protect readability. One opacity does not serve every role.
+
+Scrims reduce background competition; they do not change the time of day. Day uses low-opacity neutral or spruce-charcoal only when required. Sunset uses low-to-moderate warm-violet/mineral-charcoal while preserving golden highlights. Night uses cool navy/mineral-charcoal while preserving terrain depth. A universal black overlay is prohibited.
+
+Accessibility contrast is a hard floor, not an aesthetic target. Normal functional text targets at least **4.5:1** against its actual rendered material; large text targets at least **3:1**. Functional icons, focus indicators, selected-state indicators, and other control-identifying information target at least **3:1** against adjacent rendered colors. Small supporting text over scenery or translucent material should sit comfortably above the minimum where practical. Hue alone never communicates state.
+
+Active and inactive tabs are two states of one control system. Their geometry and material ancestry remain shared; primary distinction comes from tonal value, foreground hierarchy, and restrained semantic accent. Day uses a stronger natural active relationship over a light mineral track; Sunset uses lifted illuminated sage/mineral-gold over warm illuminated mineral; Night uses elevated cool slate with a quiet natural cue over quieter cool slate. Avoid active bright-green versus inactive near-black or brown contrasts.
+
+### Global interaction conventions
+
+- Navigational back is a top-left chevron or equivalent back affordance.
+- A dismissible sheet or modal places its close X at top-right.
+- An explicit X closes immediately.
+- A backdrop interaction while the software keyboard is visible dismisses the keyboard only. It must not also dismiss the parent surface.
+- With the keyboard closed, backdrop dismissal is allowed only when that surface is intentionally dismissible.
+- Omit a redundant Cancel action when it has exactly the same consequence as X and there is no unsaved-choice ambiguity.
+- A destructive action is visually neutral in its normal state. First activation arms or expands the originating row; the final irreversible action alone becomes visibly destructive. Avoid nested confirmation modals, redundant second popups, and persistent high-saturation red blocks.
 
 ## Memory — consequential exploration
 
@@ -260,7 +326,7 @@ Memory should become a flagship derivation from the DNA. Its final visual langua
 **Primary role:** support safe, legible recording and navigation.
 
 - Map, route, status, metrics, GPS state, and primary controls take precedence over environmental impact.
-- Use the shared typography, mature icon character, materials, Day/Night logic, and trace language.
+- Use the shared typography, mature icon character, materials, Day/Sunset/Night logic, and trace language.
 - Operational states must remain readable in sunlight, low light, motion, and stress.
 - Outdoor-important controls may receive larger hit targets; the entire interface must not become visually oversized.
 - Do not place Home scenery behind Mapbox-led workflows.
@@ -271,14 +337,14 @@ Memory should become a flagship derivation from the DNA. Its final visual langua
 
 - Information hierarchy, filters, lists, tabs, and empty/loading states dominate.
 - Use restrained environmental cues or illustrations only where they aid meaning.
-- Preserve the shared materials, spacing rhythm, icon maturity, and Day/Night system.
+- Preserve the shared materials, spacing rhythm, icon maturity, and Day/Sunset/Night system.
 - Do not compete with content using a cinematic background.
 
 ## Settings — maintenance inside the same product
 
 **Primary role:** calm, precise configuration.
 
-- Inherit typography, materials, colors, icon maturity, control scale, spacing, and Day/Night relationships.
+- Inherit typography, materials, colors, icon maturity, control scale, spacing, and Day/Sunset/Night relationships.
 - Settings does not require a full scenic identity.
 - Surface hierarchy and form clarity outrank atmosphere.
 - Avoid generic SaaS drift, unrelated greens, and decorative scenery that reduces scanability.
@@ -288,7 +354,7 @@ Memory should become a flagship derivation from the DNA. Its final visual langua
 - Standard surfaces organize persistent content.
 - Elevated surfaces establish temporary hierarchy.
 - Scrims create focus without making the app feel blacked out.
-- Fields, validation, disabled states, errors, loading, confirmations, and recovery states use shared semantic roles in both Day and Night.
+- Fields, validation, disabled states, errors, loading, confirmations, and recovery states use shared semantic roles across Day, Sunset, and Night.
 - Functional state must be obvious through more than color alone.
 - Transient UI should feel like the same material family as its parent screen, at a higher elevation—not a separate theme.
 
@@ -305,7 +371,7 @@ Memory should become a flagship derivation from the DNA. Its final visual langua
 - Navigation should feel integrated with its environment and screen role.
 - Scenic navigation uses stable, restrained environmental material with visible depth; it must not terminate scenery as an opaque slab.
 - Utility navigation may be denser and more neutral.
-- Icon identity and label hierarchy remain stable across Day/Night.
+- Icon identity and label hierarchy remain stable across Day/Sunset/Night.
 - Navigation visibility and structure are product-behavior decisions. Visual work must preserve the currently approved behavior unless a product-level Gate explicitly authorizes a change.
 - Visual design must not hide, add, relocate, or reinterpret navigation or screen hierarchy merely to improve composition. The DNA governs how navigation looks and integrates visually; it does not independently decide whether navigation exists on a screen.
 
@@ -316,7 +382,7 @@ The target character is mature modern wayfinding with cartographic/humanist deta
 - Compact, precise, calm, and optically balanced
 - Mostly outline where appropriate, with purposeful small fills
 - Refined terminals, controlled asymmetry, and meaningful negative space
-- Same geometry across Day/Night; semantic contrast changes
+- Same geometry across Day/Sunset/Night; semantic contrast changes
 - Active states add information or a restrained field, not only thicker/greener strokes
 - Familiar operational symbols remain conventional where clarity matters
 
@@ -446,7 +512,7 @@ It remains a **proof**, not the DNA itself and not yet a production integration 
 
 # Home Canonical World
 
-The eight Home states must feel like the same CairnNZ world experiencing different conditions—not eight unrelated New Zealand wallpapers.
+The twelve Home states must feel like the same CairnNZ world experiencing different conditions—not twelve unrelated New Zealand wallpapers.
 
 Preserve where practical:
 
@@ -473,37 +539,53 @@ Semantic generation/editing must preserve geography. Color grading alone is not 
 
 **Hard rule: weather should change experience, not remove exploration desire.** Every condition must remain worth opening the app to see. This does not mean making every state Sunny; it means using the truthful attractive qualities of each condition—diffuse softness, wet ecological richness, reflective snow clarity, or calm night depth—without erasing geography, life, or the wish to explore.
 
-## Eight Home states
+## Twelve Home states
 
 ### 1. Sunny Day — desire
 
 Bright, living, fresh, and highly desirable. Clear late-morning or early-afternoon daylight, visible sunlit environmental planes, healthy green land, comfortable sky, and open distance. No requirement for an in-frame sun disk.
 
-### 2. Cloudy Day — calm freshness
+### 2. Sunny Sunset — retained light
+
+The clear world holds warm remaining daylight. UI materials remain illuminated and grounded rather than switching prematurely to Night. Avoid orange fantasy light, brown controls, or charcoal slabs.
+
+### 3. Sunny Night — clear calm
+
+The same clear world after sunset: readable terrain, calm sky, water and trail continuity, cool mineral atmosphere, restrained natural highlights, and inviting depth. No fantasy moonlight or near-black luxury treatment.
+
+### 4. Cloudy Day — calm freshness
 
 Soft diffuse daylight, dimensional layered cloud, alive greens, clear geography, and breathable depth. Cloud does not mean dark; the world should feel calm and walkable.
 
-### 3. Rainy Day — wet life
+### 5. Cloudy Sunset — diffuse golden transition
 
-Visible rain or moisture, richer plants, wet stone and track material, changing water, low cloud, and atmospheric depth. Avoid storm-warning drama, muddy darkness, or gray depression.
-
-### 4. Snowy Day — crisp transformation
-
-Bright, reflective, spatial, and exploratory. Snow transforms surfaces while preserving terrain depth, vegetation evidence, track logic, and environmental life. Avoid flat white, dull gray, or lifeless blue treatment.
-
-### 5. Sunny Night — clear calm
-
-The same clear world after sunset: readable terrain, calm sky, water and trail continuity, cool mineral atmosphere, restrained natural highlights, and inviting depth. No fantasy moonlight or near-black luxury treatment.
+Cloud-filtered warm light remains dimensional and inviting. Preserve atmospheric lift and avoid gray-brown flattening.
 
 ### 6. Cloudy Night — soft layered night
 
 Slate and blue-gray atmospheric light, softened distance, readable terrain, and navigable spatial layers. Cloud cover may reduce contrast without erasing the world.
 
-### 7. Rainy Night — reflective atmosphere
+### 7. Rainy Day — wet life
+
+Visible rain or moisture, richer plants, wet stone and track material, changing water, low cloud, and atmospheric depth. Avoid storm-warning drama, muddy darkness, or gray depression.
+
+### 8. Rainy Sunset — wet retained light
+
+Warm remaining light interacts with moisture, reflection, mist, and wet materials. Avoid murky brown overlays or storm-warning darkness.
+
+### 9. Rainy Night — reflective atmosphere
 
 Wet reflection, surface response, rain/mist depth, and quiet environmental luminosity make the world visually interesting. Avoid black storm imagery, opaque green UI, or lost geography.
 
-### 8. Snowy Night — reflected visibility
+### 10. Snowy Day — crisp transformation
+
+Bright, reflective, spatial, and exploratory. Snow transforms surfaces while preserving terrain depth, vegetation evidence, track logic, and environmental life. Avoid flat white, dull gray, or lifeless blue treatment.
+
+### 11. Snowy Sunset — reflective retained light
+
+Snow carries the remaining warm daylight without becoming yellow or fantasy-lit. Preserve crisp depth, cool shadow structure, and a quiet luminous transition.
+
+### 12. Snowy Night — reflected visibility
 
 Snow naturally lifts ambient visibility and separates terrain. Preserve quiet clarity, trail and mountain depth, and restrained cool-neutral color. Avoid dead blue-black snow or fantasy glow.
 
@@ -518,6 +600,26 @@ Night must preserve terrain readability, water, tree silhouettes, trail logic, a
 Use layered material density, controlled transparency, fine edge highlights, readable neutral text, restrained accents, and environmental visibility. Avoid deep-green overlays, black slabs, green-everything UI, neon, black/gold luxury, and environment disappearance.
 
 Exact Night token values and cross-screen material density remain open until Gate A3/A4 and later system validation.
+
+---
+
+# Sunset System
+
+**Hard rule: Daylight is leaving, but the world still has light.** Sunset is an independent material state, never Night plus warm overrides.
+
+Sunset preserves environmental visibility and outdoor energy through warm remaining luminance, restrained golden/rose influence, illuminated mineral surfaces, grounded readable foregrounds, and light-catching edges. It must occupy a real visual middle between Day and Night while retaining the same geometry and hierarchy.
+
+Avoid charcoal or dark-brown utility slabs, gray-dusk deadness, page-local orange washes, Night pearl-on-dark controls used too early, and desaturation presented as premium. Exact shared primitive values are to be calibrated under cross-screen Phase B regression; current Home Sunset is the rendered authority for the relationship.
+
+---
+
+# Locked Friends decisions for the next Friends correction
+
+These product decisions are recorded now but are not implementation authorization for Phase A:
+
+- Remove the `sharedFlags`, `3 shared flags`, and `No shared flags yet` UI. The active Friends API/store supplies no verified meaningful metric; do not invent one.
+- Remove Friend later uses the inline destructive convention above. Verified consequences are: the relationship is removed; the person no longer appears as a Friend; their friend-shared Routes and Marks/Cairns become inaccessible; Fog-of-World unlocked only by that friend's shared exploration contribution is revoked. Personally explored areas remain unlocked, and areas supported by another valid source remain unlocked. Copy must not imply deletion of the user's own exploration.
+- Friends copy direction: remove `Paths that cross yours` unless future verified product meaning requires replacement; remove the `YOUR CIRCLE · n` concept and use a simple friend count only where useful; rename `Pending` to `Requests`, `INCOMING` to `Received`, `SENT` to `Sent`, `Checking your circle…` to `Loading friends…`, `Add a Friend` to `Add friend`, `Email Address` to `Email address`, and `Send Request` to `Send request`; remove `QUIETLY CONNECTED`; remove unnecessary all-caps; prefer clear functional language to poetic language.
 
 ---
 
@@ -557,7 +659,7 @@ Rejected work is evidence. Do not erase or cosmetically reinterpret these failur
 
 ### Historical interpretation
 
-The early Gate 1/2 alpine-lake work produced valuable principles—same-world continuity, environmental UI, Memory consequence, quiet Friends presence, and Day/Night identity—but its Home geography is no longer a composition mandate. The later Sunny V1/V2/V3 and dry Living Valley results demonstrated that technical improvement and continuity can preserve an emotionally wrong environment. This is why the DNA now locks experiential properties rather than a rejected mountain silhouette.
+The early Gate 1/2 alpine-lake work produced valuable principles—same-world continuity, environmental UI, Memory consequence, quiet Friends presence, and time-state identity—but its Home geography is no longer a composition mandate. The later Sunny V1/V2/V3 and dry Living Valley results demonstrated that technical improvement and continuity can preserve an emotionally wrong environment. This is why the DNA now locks experiential properties rather than a rejected mountain silhouette.
 
 ---
 
@@ -609,17 +711,16 @@ Across all roles, distinguish:
 Do not fake certainty on these topics:
 
 - **Final functional icon system:** Gate 1/2 explorations exist, but the mature production family remains unapproved.
-- **Exact Night material tokens:** foundation and prohibited patterns are locked; numerical colors, density, blur, border, and elevation await cross-screen proof.
+- **Exact shared three-theme material tokens:** Home Day/Sunset/Night are the rendered anchors; numerical shared values, density, blur, border, and elevation await Phase B cross-screen proof.
 - **Exact production motion implementation:** the standalone Refinement 3 HTML proves a perceptual idea, not a React Native architecture.
 - **Battery and frame-rate budget:** benchmark targets, refresh cadence, decode cost, and Low Power Mode behavior remain provisional.
 - **Weather-specific micro-motion:** only the Sunny hierarchy has been prototyped; other conditions require their own restrained behavior.
-- **Final Home production integration:** Refinement 3 is the strongest proof, but Gate A1 has not occurred.
-- **Final canonical eight-state assets:** same-world and emotional rules are locked; the family has not been derived from the new Sunny world.
+- **Future Home image refinement:** the current twelve-state mapping remains accepted and untouched by this authority phase; any later sharpness/image work is a separate explicit gate.
 - **Memory derivation:** product role and principles are locked; final visual design is open.
 - **Friends derivation:** product role and principles are locked; final populated/empty architecture remains open to validation.
 - **Cross-screen transition language:** continuity principles are known; exact transitions and motion remain open.
 - **Detailed typography scale and font decision:** character is locked; full production scale is not.
-- **Detailed scenic/standard/elevated tokens:** material roles are locked; exact values remain open.
+- **Detailed scenic/record/card/sheet tokens:** the tonal ladder is locked; exact shared values remain open for Phase B.
 - **Brand-grade cairn form:** failure conditions are known; a recurring production symbol is not yet approved.
 
 Mark uncertain evidence **PROVISIONAL**. Do not convert one successful generated result into a system lock without cross-screen proof and explicit approval.

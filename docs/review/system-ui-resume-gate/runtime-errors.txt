@@ -1,0 +1,13 @@
+console: Failed to load resource: the server responded with a status of 401 ()
+console: Error: An API access token is required to use Mapbox GL. See https://docs.mapbox.com/api/overview/#access-tokens-and-token-scopes
+    at t.RequestManager._makeAPIURL (http://127.0.0.1:8081/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:237180:27)
+    at t.RequestManager.normalizeStyleURL (http://127.0.0.1:8081/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:237128:55)
+    at Kt.loadURL (http://127.0.0.1:8081/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:242170:40)
+    at Map._updateStyle (http://127.0.0.1:8081/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:250347:53)
+    at Map.setStyle (http://127.0.0.1:8081/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:250337:302)
+    at new Map (http://127.0.0.1:8081/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:250054:675)
+    at Mapbox._initialize (http://127.0.0.1:8081/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:368085:19)
+    at new Mapbox (http://127.0.0.1:8081/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:367980:12)
+    at http://127.0.0.1:8081/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:367688:20
+pageerror: Cannot read properties of undefined (reading '0')
+pageerror: Wake Lock permission request denied

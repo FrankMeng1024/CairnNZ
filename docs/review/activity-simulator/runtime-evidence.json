@@ -1,0 +1,18 @@
+{
+  "viewport": "390x844",
+  "renderer": "Expo Web",
+  "capability": "EXPO_PUBLIC_ACTIVITY_SIMULATOR_ENABLED=true",
+  "states": [
+    "HIKE READY · COLLAPSED",
+    "HIKE READY · EXPANDED",
+    "RUN ACTIVE · COLLAPSED"
+  ],
+  "assertions": {
+    "hikeCollapsedVisible": true,
+    "hikeExpandedVisible": true,
+    "runActiveCollapsedVisible": true,
+    "acceleratedTimeScaleVisible": "10x"
+  },
+  "runtimeErrors": [],
+  "limitation": "Controlled render evidence only; native GPS/background/process behavior requires physical-device OTA QA."
+}

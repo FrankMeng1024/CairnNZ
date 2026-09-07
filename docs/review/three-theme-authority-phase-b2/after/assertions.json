@@ -1,0 +1,74 @@
+{
+  "addFriendBounds": {
+    "sheet": {
+      "x": 50.94999694824219,
+      "y": 222.18296813964844,
+      "width": 288.09999084472656,
+      "height": 512.0370025634766
+    },
+    "firstUnderlyingRow": {
+      "x": 61.66999816894531,
+      "y": 223.67999267578125,
+      "width": 266.66001892089844,
+      "height": 45.55999755859375
+    },
+    "field": {
+      "x": 68.3699951171875,
+      "y": 456.0129699707031,
+      "width": 253.260009765625,
+      "height": 33.5
+    },
+    "action": {
+      "x": 67.69999694824219,
+      "y": 506.2629699707031,
+      "width": 254.59999084472656,
+      "height": 40.869964599609375
+    },
+    "close": {
+      "x": 300.8599853515625,
+      "y": 233.57296752929688,
+      "width": 26.800048828125,
+      "height": 26.800018310546875
+    }
+  },
+  "sheetStartsAboveFirstRow": true,
+  "parentListRemainsVisible": true,
+  "closeIsTopRight": true,
+  "firstBackdropTapKeptSheet": true,
+  "firstBackdropTapBlurredField": true,
+  "firstBackdropTapRetainedValue": true,
+  "secondBackdropTapClosedSheet": true,
+  "insideTapKeptSheet": true,
+  "insideTapBlurredField": true,
+  "insideTapRetainedValue": true,
+  "explicitCloseDismissedFocusedSheet": true,
+  "addFriendEntryPointCount": 1,
+  "copyRemoved": true,
+  "requestsLabelPresent": true,
+  "profileBounds": {
+    "x": 24,
+    "y": 301,
+    "width": 342,
+    "height": 242
+  },
+  "inlineRemove": {
+    "confirmationVisible": true,
+    "nestedDialogCount": 1,
+    "cancelButtonCount": 0,
+    "finalActionCount": 1
+  },
+  "requestRowBounds": {
+    "received": {
+      "x": 61.66999816894531,
+      "y": 223.67999267578125,
+      "width": 266.66001892089844,
+      "height": 45.55999755859375
+    },
+    "sent": {
+      "x": 61.66999816894531,
+      "y": 313.46002197265625,
+      "width": 266.66001892089844,
+      "height": 45.55999755859375
+    }
+  }
+}

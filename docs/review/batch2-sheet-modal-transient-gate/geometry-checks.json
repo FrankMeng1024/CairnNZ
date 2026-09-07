@@ -1,0 +1,122 @@
+[
+  {
+    "name": "day bottom action safe area",
+    "inside": true,
+    "box": {
+      "x": 50.94999694824219,
+      "y": 671.239990234375,
+      "width": 288.09999084472656,
+      "height": 62.97998046875
+    }
+  },
+  {
+    "name": "day bottom sheet",
+    "inside": true,
+    "box": {
+      "x": 0,
+      "y": 603,
+      "width": 390,
+      "height": 241
+    }
+  },
+  {
+    "name": "day modal card",
+    "inside": true,
+    "box": {
+      "x": 24,
+      "y": 265.5,
+      "width": 342,
+      "height": 313
+    }
+  },
+  {
+    "name": "day production MarkDetailSheet",
+    "inside": true,
+    "box": {
+      "x": 0,
+      "y": 613,
+      "width": 390,
+      "height": 231
+    }
+  },
+  {
+    "name": "sunset bottom action safe area",
+    "inside": true,
+    "box": {
+      "x": 50.94999694824219,
+      "y": 671.239990234375,
+      "width": 288.09999084472656,
+      "height": 62.97998046875
+    }
+  },
+  {
+    "name": "sunset bottom sheet",
+    "inside": true,
+    "box": {
+      "x": 0,
+      "y": 603,
+      "width": 390,
+      "height": 241
+    }
+  },
+  {
+    "name": "sunset modal card",
+    "inside": true,
+    "box": {
+      "x": 24,
+      "y": 265.5,
+      "width": 342,
+      "height": 313
+    }
+  },
+  {
+    "name": "sunset production MarkDetailSheet",
+    "inside": true,
+    "box": {
+      "x": 0,
+      "y": 613,
+      "width": 390,
+      "height": 231
+    }
+  },
+  {
+    "name": "night bottom action safe area",
+    "inside": true,
+    "box": {
+      "x": 50.94999694824219,
+      "y": 671.239990234375,
+      "width": 288.09999084472656,
+      "height": 62.97998046875
+    }
+  },
+  {
+    "name": "night bottom sheet",
+    "inside": true,
+    "box": {
+      "x": 0,
+      "y": 603,
+      "width": 390,
+      "height": 241
+    }
+  },
+  {
+    "name": "night modal card",
+    "inside": true,
+    "box": {
+      "x": 24,
+      "y": 265.5,
+      "width": 342,
+      "height": 313
+    }
+  },
+  {
+    "name": "night production MarkDetailSheet",
+    "inside": true,
+    "box": {
+      "x": 0,
+      "y": 613,
+      "width": 390,
+      "height": 231
+    }
+  }
+]

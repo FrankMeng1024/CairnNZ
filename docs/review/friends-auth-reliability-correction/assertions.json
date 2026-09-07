@@ -1,0 +1,30 @@
+{
+  "removeFriend": {
+    "oneDialog": true,
+    "profileHeightBefore": 268,
+    "profileHeightAfter": 337,
+    "profileHeightDelta": 69,
+    "removeRegionHeightBefore": 74,
+    "removeRegionHeightAfter": 143,
+    "removeConfirmationComputed": {
+      "height": "130px",
+      "minHeight": "0px",
+      "paddingTop": "0px",
+      "paddingBottom": "0px"
+    },
+    "warningVisible": true,
+    "finalActionVisible": true,
+    "noCancel": true
+  },
+  "addFriendCloseMs": 371,
+  "requestRefresh": {
+    "newRequestVisible": true,
+    "incomingEmailVisible": true,
+    "existingSentEmailVisible": true
+  },
+  "cancelDialog": {
+    "sharedModalVisible": true,
+    "dialogCount": 1,
+    "requestRemovedImmediately": true
+  }
+}

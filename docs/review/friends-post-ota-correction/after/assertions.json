@@ -1,0 +1,135 @@
+{
+  "tabBounds": {
+    "track": {
+      "x": 102.53999328613281,
+      "y": 160.6999969482422,
+      "width": 184.92002868652344,
+      "height": 29.479995727539062
+    },
+    "active": {
+      "x": 103.87999725341797,
+      "y": 162.04000854492188,
+      "width": 91.12000274658203,
+      "height": 26.79998779296875
+    },
+    "inactive": {
+      "x": 195,
+      "y": 162.04000854492188,
+      "width": 91.1199951171875,
+      "height": 26.79998779296875
+    }
+  },
+  "tabIntegration": {
+    "activeInsideTrack": true,
+    "adjoiningGap": 0
+  },
+  "addFriendBounds": {
+    "sheet": {
+      "x": 50.94999694824219,
+      "y": 233.42640686035156,
+      "width": 288.09999084472656,
+      "height": 500.79356384277344
+    },
+    "firstUnderlyingRow": {
+      "x": 61.66999816894531,
+      "y": 234.39999389648438,
+      "width": 266.66001892089844,
+      "height": 45.560028076171875
+    },
+    "field": {
+      "x": 68.3699951171875,
+      "y": 467.25640869140625,
+      "width": 253.260009765625,
+      "height": 33.5
+    },
+    "action": {
+      "x": 67.69999694824219,
+      "y": 517.5064086914062,
+      "width": 254.59999084472656,
+      "height": 40.8699951171875
+    },
+    "close": {
+      "x": 300.8599853515625,
+      "y": 244.81640625,
+      "width": 26.800048828125,
+      "height": 26.79998779296875
+    },
+    "artwork": {
+      "x": 51.6199951171875,
+      "y": 234.09640502929688,
+      "width": 286.760009765625,
+      "height": 120.60000610351562
+    },
+    "arch": {
+      "x": 51.6199951171875,
+      "y": 306.4564208984375,
+      "width": 286.760009765625,
+      "height": 42.8800048828125
+    }
+  },
+  "sheetStartsAboveFirstRow": true,
+  "sheetTabBreathingRoom": 43.25,
+  "parentListRemainsVisible": true,
+  "closeIsTopRight": true,
+  "firstBackdropTapKeptSheet": true,
+  "firstBackdropTapBlurredField": true,
+  "firstBackdropTapRetainedValue": true,
+  "secondBackdropTapClosedSheet": true,
+  "insideTapKeptSheet": true,
+  "insideTapBlurredField": true,
+  "insideTapRetainedValue": true,
+  "explicitCloseDismissedFocusedSheet": true,
+  "addFriendEntryPointCount": 1,
+  "multiFriendCountPresent": true,
+  "copyRemoved": true,
+  "requestsLabelPresent": true,
+  "profileBounds": {
+    "normal": {
+      "x": 24,
+      "y": 301,
+      "width": 342,
+      "height": 242
+    },
+    "armed": {
+      "x": 24,
+      "y": 297,
+      "width": 342,
+      "height": 250
+    }
+  },
+  "removeRegionBounds": {
+    "normal": {
+      "x": 49,
+      "y": 470,
+      "width": 292,
+      "height": 48
+    },
+    "armed": {
+      "x": 49,
+      "y": 466,
+      "width": 292,
+      "height": 56
+    }
+  },
+  "inlineRemove": {
+    "confirmationVisible": true,
+    "nestedDialogCount": 1,
+    "cancelButtonCount": 0,
+    "finalActionCount": 1,
+    "normalChevronCount": 0
+  },
+  "requestRowBounds": {
+    "received": {
+      "x": 61.66999816894531,
+      "y": 234.39999389648438,
+      "width": 266.66001892089844,
+      "height": 45.560028076171875
+    },
+    "sent": {
+      "x": 61.66999816894531,
+      "y": 431.3800048828125,
+      "width": 266.66001892089844,
+      "height": 45.55999755859375
+    }
+  }
+}

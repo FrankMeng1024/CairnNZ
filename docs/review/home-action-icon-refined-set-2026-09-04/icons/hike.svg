@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" role="img" aria-labelledby="title" style="color:#24453E">
+  <title id="title">Hike</title>
+  <circle cx="19.8" cy="8.3" r="2.8" fill="currentColor"/>
+  <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19.1 13.4 18.2 23.5" stroke-width="3.4"/>
+    <path d="m18.8 16.2-5.5 4.9-4-2.9M19.4 16.1l6.3 4.7 5.4-2.5M18.2 23.5l6.1 6 2.6 9.9M18.2 23.5l-5.8 7.9-5.8 5.7M31.1 18.3l4.8 21.2" stroke-width="2.6"/>
+    <path d="M5.6 40.5 42.3 34.4" stroke-width="2.25"/>
+  </g>
+</svg>
