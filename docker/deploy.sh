@@ -44,10 +44,10 @@ fi
 echo "→ Step 1/6: git pull hiking-app master…"
 REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
-# 30s timeout so a wedged network doesn't hang the deploy indefinitely.
-# If the fetch stalls, deploy exits — operator investigates and re-runs.
+# Allow an initial asset-heavy production catch-up to complete while still
+# bounding a genuinely wedged fetch. Progress is monitored by the operator.
 GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10' \
-  timeout 120 git fetch origin master
+  timeout 1800 git fetch origin master
 git reset --hard origin/master
 echo "  ✓ Repo now at $(git log --oneline -1)"
 cd "$SCRIPT_DIR"
