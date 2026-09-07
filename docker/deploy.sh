@@ -63,53 +63,14 @@ cd "$SCRIPT_DIR"
 # on an existing populated DB — its unconditional `DROP TABLE sessions`
 # succeeded and only `DROP TABLE users` failed (FK), destroying real
 # hike data. Guard: if a migration file contains DROP/TRUNCATE, skip
-# it and print a warning unless MIGRATION_ALLOW_DESTRUCTIVE=1 is set.
+# it and fail without advancing the ledger unless
+# MIGRATION_ALLOW_DESTRUCTIVE=1 is set. Migration-specific verifiers handle
+# MySQL DDL auto-commit and partial reruns before the ledger can advance.
 echo "→ Step 2/6: running pending DB migrations…"
 LAST_APPLIED_FILE="$SCRIPT_DIR/.migrations_applied"
-LAST_APPLIED=$(cat "$LAST_APPLIED_FILE" 2>/dev/null || echo "000")
-MIGRATIONS_DIR="$REPO_ROOT/backend/src/migrations"
-MIG_APPLIED=0
-for mig_path in $(ls "$MIGRATIONS_DIR"/[0-9]*.sql 2>/dev/null | sort); do
-  mig_file=$(basename "$mig_path")
-  mig_num=$(echo "$mig_file" | grep -oE '^[0-9]+')
-  if [ -z "$mig_num" ]; then continue; fi
-  # Numeric compare — 031 > 004, not string "031" > "004" (both are 3-digit
-  # so it happens to work either way, but the intent is numeric).
-  if [ "$((10#$mig_num))" -le "$((10#$LAST_APPLIED))" ]; then
-    continue
-  fi
-  # ── Destructive guard ─────────────────────────────────────────────────
-  # Detect DROP TABLE / TRUNCATE / DELETE-without-WHERE. These are OK for
-  # fresh-install migrations but catastrophic on a populated production
-  # DB. Skip by default with a warning; operator can re-run with
-  # MIGRATION_ALLOW_DESTRUCTIVE=1 after verifying it's safe.
-  if grep -qiE '^\s*(DROP\s+TABLE|TRUNCATE\s+TABLE)' "$mig_path" \
-     || grep -qiE '^\s*DELETE\s+FROM\s+\w+\s*;' "$mig_path"; then
-    if [ "${MIGRATION_ALLOW_DESTRUCTIVE:-0}" != "1" ]; then
-      echo "  ⚠️  SKIP $mig_file — contains destructive statements (DROP/TRUNCATE)."
-      echo "     If this is a fresh install, run with MIGRATION_ALLOW_DESTRUCTIVE=1"
-      echo "     Marking as applied to prevent repeat warning."
-      echo "$mig_num" > "$LAST_APPLIED_FILE"
-      continue
-    fi
-    echo "  ▸ applying $mig_file (destructive — allowed by env flag)"
-  else
-    echo "  ▸ applying $mig_file"
-  fi
-  if ! mysql -h127.0.0.1 -uroot -p"$DB_PASSWORD" cairn < "$mig_path" 2>&1 | tee /tmp/mig_out_$$; then
-    if grep -qE 'Duplicate column|already exists|Duplicate key|Duplicate entry|Cannot drop table.*referenced by' /tmp/mig_out_$$; then
-      echo "    (already applied — skipping)"
-    else
-      echo "❌ Migration $mig_file failed. Fix and re-run."
-      rm -f /tmp/mig_out_$$
-      exit 1
-    fi
-  fi
-  rm -f /tmp/mig_out_$$
-  echo "$mig_num" > "$LAST_APPLIED_FILE"
-  MIG_APPLIED=$((MIG_APPLIED + 1))
-done
-echo "  ✓ Migrations complete ($MIG_APPLIED new, last=$(cat "$LAST_APPLIED_FILE"))"
+REPO_ROOT="$REPO_ROOT" LAST_APPLIED_FILE="$LAST_APPLIED_FILE" \
+  DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_NAME=cairn DB_PASSWORD="$DB_PASSWORD" \
+  "$SCRIPT_DIR/run-pending-migrations.sh"
 
 # ── Step 3: build backend image ──────────────────────────────────────────
 echo "→ Step 3/6: docker compose build backend…"
