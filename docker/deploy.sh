@@ -47,7 +47,7 @@ cd "$REPO_ROOT"
 # Allow an initial asset-heavy production catch-up to complete while still
 # bounding a genuinely wedged fetch. Progress is monitored by the operator.
 GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10' \
-  timeout 1800 git fetch origin master
+  timeout 10800 git fetch origin master
 git reset --hard origin/master
 echo "  ✓ Repo now at $(git log --oneline -1)"
 cd "$SCRIPT_DIR"
