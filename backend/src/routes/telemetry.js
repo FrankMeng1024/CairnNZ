@@ -2,7 +2,7 @@
  * Telemetry routes — receive debug logger session uploads from Cairn app.
  *
  *   POST /api/telemetry/sessions
- *     Headers: X-API-Key: <shared secret>
+ *     Auth: signed-in Bearer JWT or X-API-Key operations credential
  *     Body:    { session_id, device_info, started_at, ended_at, events: [...] }
  *              OR raw JSONL string (Content-Type: application/x-ndjson)
  *
@@ -15,19 +15,23 @@
  *     Headers: X-API-Key
  *     Returns: full session including raw_jsonl
  *
- * Auth: simple X-API-Key shared secret. Set CAIRN_TELEMETRY_API_KEY in .env.
- *       This is device-level auth, not user auth — multiple devices share one key.
- *       Rotate on suspected leak.
+ * Retrieval auth: X-API-Key operations credential. Set
+ * CAIRN_TELEMETRY_API_KEY in the server environment and rotate on suspected
+ * leak. The key is never returned to or persisted by this route.
  *
  * Rate limit: 60 requests / 5 min per IP — prevents disk fill from leaked key.
  */
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const crypto = require('crypto');
 const pool = require('../config/db');
+const authenticate = require('../middleware/authenticate');
+const { sanitizeQaJsonl } = require('../utils/qaTelemetryPrivacy');
 
 const router = express.Router();
 
 const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10MB hard cap per upload
+const QA_RETENTION_DAYS = 14;
 
 // ── Rate limiting ──────────────────────────────────────────────────────────
 const uploadLimiter = rateLimit({
@@ -45,31 +49,35 @@ const readLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// ── Auth middleware (disabled for dev) ────────────────────────────────────
-// TODO(O2): 隐私漏洞。requireApiKey 是空 no-op,3 route (POST /sessions,
-// GET /sessions, GET /sessions/:session_id) 都以为它在保护。生产上如果
-// nginx 未额外拦截 /api/telemetry 就是公开的。修法二选一:
-//   (a) 实现 X-API-Key 检查: 读 process.env.CAIRN_TELEMETRY_API_KEY,
-//       与 req.header('X-API-Key') 常量时间比对; 无 env var 时 fail-closed
-//   (b) 若确定 nginx 已 100% 拦截, 删掉 middleware + 改 comment 明说
-//       "auth 由前置代理负责"
-// 用户 2026-07-26 O1 sprint 已 ack 此 TODO,暂不处理。
-//
-// Sprint 6 round-24 R24 investigation (2026-07-29): confirmed the
-// client-side telemetryUploader.ts:127-141 does NOT send X-API-Key
-// header. Server env var CAIRN_TELEMETRY_API_KEY is set on aliyun but
-// unused. Enabling option (a) server-side without a coordinated client
-// OTA that adds the header would 401 every crash-report upload from
-// every real user, breaking the crash reporter permanently. Fix must
-// be shipped as: (1) client OTA adds X-API-Key header from settings,
-// (2) verify field of view on real device sends the header, (3) THEN
-// enable server-side enforcement. Deferred to a coordinated Sprint.
-function requireApiKey(req, res, next) {
-  next();
+// ── Auth middleware ───────────────────────────────────────────────────────
+// Upload accepts either the signed-in app JWT or the server-held operations
+// key. Retrieval is operations-only and always requires the key. A missing
+// server key fails closed; no credential is ever written to telemetry.
+function hasValidApiKey(req) {
+  const expected = String(process.env.CAIRN_TELEMETRY_API_KEY || '');
+  const supplied = String(req.header('X-API-Key') || '');
+  if (!expected || !supplied) return false;
+  const expectedBytes = Buffer.from(expected);
+  const suppliedBytes = Buffer.from(supplied);
+  return expectedBytes.length === suppliedBytes.length
+    && crypto.timingSafeEqual(expectedBytes, suppliedBytes);
+}
+
+function requireReadApiKey(req, res, next) {
+  if (!process.env.CAIRN_TELEMETRY_API_KEY) {
+    return res.status(503).json({ error: 'Telemetry retrieval is not configured.' });
+  }
+  if (!hasValidApiKey(req)) return res.status(401).json({ error: 'Telemetry authorization required.' });
+  return next();
+}
+
+function requireUploadAuth(req, res, next) {
+  if (hasValidApiKey(req)) return next();
+  return authenticate(req, res, next);
 }
 
 // ── POST /api/telemetry/sessions ───────────────────────────────────────────
-router.post('/sessions', uploadLimiter, requireApiKey, async (req, res) => {
+router.post('/sessions', uploadLimiter, requireUploadAuth, async (req, res) => {
   const body = req.body;
 
   // Accept two formats:
@@ -145,6 +153,22 @@ router.post('/sessions', uploadLimiter, requireApiKey, async (req, res) => {
     return res.status(400).json({ error: 'Invalid session_id.' });
   }
 
+  // Defense in depth for Internal QA data. The client performs the same
+  // fail-private scrub before upload, but the server never trusts that a
+  // caller is current or correctly implemented. Precise coordinates survive
+  // only on explicitly synthetic events; real/unknown coordinates and all
+  // credential-shaped values are removed before storage.
+  if (activityMode === 'qa_activity') {
+    try {
+      const sanitized = sanitizeQaJsonl(rawJsonl);
+      rawJsonl = sanitized.jsonl;
+      eventsCount = sanitized.eventsCount;
+    } catch (error) {
+      const tooLarge = error.code === 'QA_PAYLOAD_TOO_LARGE' || error.code === 'QA_EVENT_LIMIT';
+      return res.status(tooLarge ? 413 : 400).json({ error: error.message });
+    }
+  }
+
   const rawSizeBytes = Buffer.byteLength(rawJsonl, 'utf8');
   if (rawSizeBytes > MAX_BODY_BYTES) {
     return res.status(413).json({ error: `Payload too large (${rawSizeBytes} > ${MAX_BODY_BYTES} bytes).` });
@@ -194,6 +218,21 @@ router.post('/sessions', uploadLimiter, requireApiKey, async (req, res) => {
       ]
     );
 
+    // Internal QA rows are intentionally disposable. Opportunistic cleanup
+    // keeps the reused telemetry table bounded without a migration or a new
+    // analytics system. Historical crash/activity telemetry is untouched.
+    if (activityMode === 'qa_activity') {
+      try {
+        await pool.execute(
+          `DELETE FROM telemetry_sessions
+            WHERE activity_mode = 'qa_activity'
+              AND uploaded_at < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL ${QA_RETENTION_DAYS} DAY)`,
+        );
+      } catch (cleanupError) {
+        console.warn('[telemetry] QA retention cleanup failed:', cleanupError.message);
+      }
+    }
+
     return res.status(200).json({
       ok: true,
       session_id: sessionId,
@@ -216,7 +255,7 @@ router.post('/sessions', uploadLimiter, requireApiKey, async (req, res) => {
 //       客户端 crash / breadcrumb。前端不调用此 endpoint(0 处 fetch)。
 // 保护: requireApiKey — 需 X-Api-Key header, 生产 nginx 不暴露给公网 SPA。
 // 不进 client bundle; 保留供 SSH+curl 分析线上 crash log。
-router.get('/sessions', readLimiter, requireApiKey, async (req, res) => {
+router.get('/sessions', readLimiter, requireReadApiKey, async (req, res) => {
   const since = req.query.since;
   // Sprint 6 R50: clamp limit [1, 200] — pre-fix, a negative like
   // ?limit=-500 passed the `|| 50` (only 0/NaN are falsy for Number),
@@ -257,7 +296,7 @@ router.get('/sessions', readLimiter, requireApiKey, async (req, res) => {
 // ── GET /api/telemetry/sessions/:session_id ────────────────────────────────
 // ⚠️ DEV TOOL ONLY (2026-07-20 phase3 decision) — 单条 telemetry 详情查询。
 // 前端不调; requireApiKey 保护; 保留供开发者 SSH+curl 排查特定 session。
-router.get('/sessions/:session_id', readLimiter, requireApiKey, async (req, res) => {
+router.get('/sessions/:session_id', readLimiter, requireReadApiKey, async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT * FROM telemetry_sessions WHERE session_id = ? LIMIT 1`,
