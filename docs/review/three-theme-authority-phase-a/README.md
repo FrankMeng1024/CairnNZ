@@ -2,6 +2,11 @@
 
 Focused 390×844 Expo Web evidence for the Home Day/Sunset/Night authority. Production Home was rendered before and after the Phase A change with the same Sunny assets, state, viewport, and account fixture.
 
+The JPG/PNG captures named below are reproducible local-only outputs and are
+ignored by Git. Recreate them with
+`node app/scripts/three-theme-phase-a-home-qa.mjs`; tracked hashes, metrics,
+runtime-error text, and this review remain the durable authority.
+
 - `home-before-after-board.jpg`: complete Home comparison; Day and Night are regression references and Sunset is the only intended visual change.
 - `home-material-comparison.jpg`: actual post-change Home crops for card material, navigation/control material, primary and secondary text, primary and secondary icons, and material edge treatment across all three states.
 - `before/` and `after/`: exact full-frame source captures.

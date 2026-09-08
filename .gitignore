@@ -83,3 +83,62 @@ backend/scripts/seed/output/
 # R114/O21: debug artifacts (do not commit)
 bundle-inspect.js
 scripts/r113/.testuser.json
+
+# Generated QA/review visuals. Keep Markdown/JSON evidence and source artwork
+# tracked; these runtime captures and composite boards are reproducible local
+# artifacts and must not inflate deploy-bearing master.
+/_debug/**/*.png
+/_debug/**/*.jpg
+/_debug/**/*.jpeg
+/_debug/**/*.webp
+/.tmp-debug/**/*.png
+/.tmp-debug/**/*.jpg
+/.tmp-debug/**/*.jpeg
+/.tmp-debug/**/*.webp
+/docs/review/**/captures/**/*.png
+/docs/review/**/captures/**/*.jpg
+/docs/review/**/captures/**/*.jpeg
+/docs/review/**/captures/**/*.webp
+/docs/review/**/screenshots/**/*.png
+/docs/review/**/screenshots/**/*.jpg
+/docs/review/**/screenshots/**/*.jpeg
+/docs/review/**/screenshots/**/*.webp
+/docs/review/**/components/**/*.png
+/docs/review/**/components/**/*.jpg
+/docs/review/**/components/**/*.jpeg
+/docs/review/**/components/**/*.webp
+/docs/review/**/before/**/*.png
+/docs/review/**/before/**/*.jpg
+/docs/review/**/before/**/*.jpeg
+/docs/review/**/before/**/*.webp
+/docs/review/**/after/**/*.png
+/docs/review/**/after/**/*.jpg
+/docs/review/**/after/**/*.jpeg
+/docs/review/**/after/**/*.webp
+/docs/review/**/*-390x844.png
+/docs/review/**/*board*.png
+/docs/review/**/*board*.jpg
+/docs/review/**/*board*.jpeg
+/docs/review/**/*preview*.png
+/docs/review/**/*preview*.jpg
+/docs/review/**/*preview*.jpeg
+/docs/review/**/*sheet*.png
+/docs/review/**/*sheet*.jpg
+/docs/review/**/*sheet*.jpeg
+/docs/review/**/*comparison*.png
+/docs/review/**/*comparison*.jpg
+/docs/review/**/*comparison*.jpeg
+/docs/review/**/*runtime*.png
+/docs/review/**/*runtime*.jpg
+/docs/review/**/*runtime*.jpeg
+/docs/review/**/*-master.png
+/docs/review/**/*semantic-check*.png
+/docs/review/**/*home-size*.png
+/docs/review/**/*validation*.png
+
+# These audits have no proven tracked generator and retain unique visual
+# authority; keep them eligible for tracking until reproducibility is proven.
+!/docs/review/global-visual-audit-2026-09-04/
+!/docs/review/global-visual-audit-2026-09-04/**
+!/docs/review/global-product-domain-audit/
+!/docs/review/global-product-domain-audit/**

@@ -2,6 +2,11 @@
 
 Focused 390×844 Expo Web evidence for the Friends Profile and Add Friend correction.
 
+The JPG/PNG captures named below are reproducible local-only outputs and are
+ignored by Git. Recreate them with
+`node app/scripts/batch3-ota-correction-qa.mjs`; the tracked assertions and
+runtime-error text remain the durable review evidence.
+
 - `before-after-board.jpg` compares Profile and Add Friend in Day, Sunset, and Night.
 - `after/remove-friend-normal-390x844.png` and `after/remove-friend-confirmation-390x844.png` prove the destructive hierarchy.
 - `after/overlay-parent-suppressed-390x844.png` proves that underlying list rows and the persistent CTA are suppressed while Add Friend is open.

@@ -4,6 +4,10 @@ Review-only exploration of five fundamentally different semantic metaphors. This
 
 ## Review paths
 
+The PNG boards are reproducible local-only outputs and are ignored by Git.
+Recreate them from the tracked SVG/icon sources with
+`node docs/review/hiking-running-concept-diversity-gate/build-review.cjs`.
+
 - Concept directions: `docs/review/hiking-running-concept-diversity-gate/concept-directions-board.png`
 - Actual Home size: `docs/review/hiking-running-concept-diversity-gate/home-size-board.png`
 - Current Home context: `docs/review/hiking-running-concept-diversity-gate/home-context-board.png`

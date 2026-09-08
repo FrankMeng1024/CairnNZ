@@ -2,6 +2,11 @@
 
 All screenshots are real Expo Web runtime captures at 390×844 using production primitives and semantic theme values.
 
+The JPG/PNG captures named below are reproducible local-only outputs and are
+ignored by Git. Recreate them with `node app/scripts/three-theme-phase-b1-qa.mjs`;
+tracked reports, inventories, and runtime-error text remain the durable
+evidence.
+
 - `three-theme-component-system-board.jpg`: controls, fields, sheets, and modals across Day / Sunset / Night.
 - `surface-ladder-board.jpg`: page → record → elevated card → sheet/modal → active action.
 - `production-regression-board.jpg`: matched before/after captures for Home, Friends, Trails, and Settings.

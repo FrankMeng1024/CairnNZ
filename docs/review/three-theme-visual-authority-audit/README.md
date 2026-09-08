@@ -2,6 +2,11 @@
 
 Audit-only evidence captured from the current unmodified production Home and Friends runtime at a 390×844 browser viewport.
 
+The JPG/PNG captures named below are reproducible local-only outputs and are
+ignored by Git. Recreate them with
+`node app/scripts/three-theme-visual-authority-audit.mjs`; tracked metrics,
+runtime-error text, and this audit remain the durable evidence.
+
 - `three-theme-runtime-board.jpg`: Home, Friends main, Add Friend, and Profile across Day, Sunset, and Night.
 - `three-theme-component-board.jpg`: direct component-level comparison across the same three themes.
 - `captures/`: full-screen source captures.

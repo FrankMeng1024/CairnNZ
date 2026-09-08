@@ -10,12 +10,16 @@ Review-only icon exploration. The ten candidates are independent; matching numbe
 
 ## Review boards
 
+The PNG boards are reproducible local-only outputs and are ignored by Git.
+Recreate them from the tracked editable SVG/icon sources with
+`node docs/review/non-human-hiking-running-reset-gate/build-review.cjs`.
+
 - Master: `docs/review/non-human-hiking-running-reset-gate/non-human-icon-master.png`
 - Home size: `docs/review/non-human-hiking-running-reset-gate/non-human-icon-home-size.png`
 - Semantic check: `docs/review/non-human-hiking-running-reset-gate/non-human-icon-semantic-check.png`
 - Home preview: `docs/review/non-human-hiking-running-reset-gate/non-human-icon-home-preview.png`
 
-Editable SVG versions of every board and all ten source icons are stored beside the PNGs.
+Editable SVG versions of every board and all ten source icons remain tracked.
 
 ## Hiking evaluation
 

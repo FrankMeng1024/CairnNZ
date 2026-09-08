@@ -96,6 +96,10 @@ The tracking store records factual Activities. It does not make a P0 claim that 
 
 ## QA evidence
 
+Generated visual outputs below are local-only and ignored by Git. Recreate
+them with `node app/scripts/activity-p0-reliability-qa.mjs`; the tracked JSON
+and test contracts remain the durable evidence.
+
 - `activity-p0-runtime-board.jpg`: actual production screens at 390x844 with controlled in-memory states.
 - `runtime-evidence.json`: state list, paused-control assertion, mode-isolation assertion, and runtime errors.
 - `activityOperationalState.test.ts`: exclusive-state/invariant checks.

@@ -21,9 +21,8 @@ Earlier human studies were too skeletal and exposed awkward joint/anatomy decisi
 - `icons/hike.svg`
 - `icons/run.svg`
 - `icons/leave-a-cairn.svg`
-- `master-review-sheet.svg` / `.png`
-- `home-size-review-sheet.svg` / `.png`
-- `home-row-preview.svg` / `.png`
+- tracked source: `master-review-sheet.svg`, `home-size-review-sheet.svg`, and `home-row-preview.svg`
+- ignored local-only output: the corresponding generated `.png` review renders
 
 Rebuild the PNG review outputs from the repository root with:
 
