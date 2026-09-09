@@ -522,6 +522,24 @@ router.delete('/client/:clientActivityId', authenticate, async (req, res) => {
   }
 });
 
+// Rename is a server-authoritative completed-Activity mutation. A deleted or
+// unfinished row cannot report false success.
+router.patch('/:id/name', authenticate, validateBody(schemas.session.rename), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id || isNaN(id)) return res.status(400).json({ error: 'Invalid session ID.' });
+  try {
+    const renamed = await Session.renameCompleted(id, req.user.userId, req.body.name.trim());
+    if (!renamed) {
+      return res.status(404).json({ error: 'Completed Activity not found.', code: 'ACTIVITY_NOT_FOUND' });
+    }
+    const session = await Session.findByIdAndUser(id, req.user.userId);
+    return res.status(200).json({ ok: true, session });
+  } catch (err) {
+    console.error('[sessions/rename]', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 router.get('/:id', authenticate, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id || isNaN(id)) {

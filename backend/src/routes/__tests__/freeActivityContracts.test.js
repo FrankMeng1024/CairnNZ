@@ -145,3 +145,32 @@ test('legacy numeric delete paths tombstone any discovered client identity trans
     assert.match(source, /conn\.commit/);
   }
 });
+
+test('completed Activity rename is authenticated, validated and rejects deleted rows', () => {
+  const schemas = require('../../middleware/schemas');
+  const routes = read('src/routes/sessions.js');
+  const model = read('src/models/Session.js');
+  assert.equal(schemas.session.rename.validate({ name: 'Hike — corrected' }).error, undefined);
+  assert.ok(schemas.session.rename.validate({ name: '   ' }).error);
+  assert.match(routes, /router\.patch\('\/:id\/name', authenticate, validateBody\(schemas\.session\.rename\)/);
+  assert.match(routes, /ACTIVITY_NOT_FOUND/);
+  assert.match(model, /async renameCompleted[\s\S]*finalized_at IS NOT NULL/);
+});
+
+test('Activity-derived Route creation is serialized against source deletion', () => {
+  const schemas = require('../../middleware/schemas');
+  const routeSchema = schemas.route.create.validate({
+    name: 'From Activity',
+    points: [{ lat: -45, lng: 168 }, { lat: -45.001, lng: 168.001 }],
+    source_activity_client_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  });
+  assert.equal(routeSchema.error, undefined);
+  const routes = read('src/routes/routes.js');
+  const model = read('src/models/Route.js');
+  assert.match(routes, /source_activity_client_id/);
+  assert.match(routes, /SOURCE_ACTIVITY_NOT_FOUND/);
+  const guardedCreate = model.slice(model.indexOf('if (!sourceActivityClientId'));
+  assert.ok(guardedCreate.indexOf('SELECT id FROM users WHERE id = ? FOR UPDATE') < guardedCreate.indexOf('SELECT id FROM sessions'));
+  assert.ok(guardedCreate.indexOf('SELECT id FROM sessions') < guardedCreate.indexOf('const [result] = await insert(conn)'));
+  assert.match(guardedCreate, /finalized_at IS NOT NULL/);
+});

@@ -20,7 +20,10 @@ router.use(authenticate);
 
 // ── POST /api/routes ────────────────────────────────────────────────────────
 router.post('/', validateBody(schemas.route.create), async (req, res) => {
-  const { name, description, points, waypoints, distance_m, elevation_gain_m, permission } = req.body;
+  const {
+    name, description, points, waypoints, distance_m, elevation_gain_m, permission,
+    source_activity_client_id, source_session_id,
+  } = req.body;
 
   // v120 debug: dump body shape so we can see exactly why JSON.stringify
   // produces "[object Object],[object Object]" in storage.
@@ -64,10 +67,18 @@ router.post('/', validateBody(schemas.route.create), async (req, res) => {
       distanceM: distance_m ?? 0,
       elevationGainM: elevation_gain_m ?? 0,
       permission, // already validated above; Route.create defaults undefined → 'personal'
+      sourceActivityClientId: source_activity_client_id,
+      sourceSessionId: source_session_id,
     });
     const route = await Route.findByIdAndUser(id, req.user.userId);
     return res.status(201).json({ route });
   } catch (err) {
+    if (err.code === 'SOURCE_ACTIVITY_NOT_FOUND') {
+      return res.status(409).json({
+        error: 'Source Activity no longer exists or has not completed syncing.',
+        code: err.code,
+      });
+    }
     console.error('[routes/create]', err);
     return res.status(500).json({ error: 'Server error.' });
   }

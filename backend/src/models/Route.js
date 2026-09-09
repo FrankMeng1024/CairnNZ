@@ -18,7 +18,10 @@ function parseJsonCol(v) {
 }
 
 const Route = {
-  async create({ userId, name, description, points, waypoints, distanceM, elevationGainM, permission }) {
+  async create({
+    userId, name, description, points, waypoints, distanceM, elevationGainM, permission,
+    sourceActivityClientId, sourceSessionId,
+  }) {
     // v120 fix: explicitly validate + stringify so mysql2 doesn't fall
     // through to Array.toString() for the JSON column. The "[object
     // Object],[object Object]" corruption seen in route id=1 happened
@@ -31,21 +34,51 @@ const Route = {
     // and rejected unknown values. Accept ('personal','friend') and default to
     // 'personal' when undefined to preserve previous behavior.
     const perm = permission === 'friend' ? 'friend' : 'personal';
-    const [result] = await pool.execute(
+    const insert = async (executor) => executor.execute(
       `INSERT INTO routes (user_id, name, description, points, waypoints, distance_m, elevation_gain_m, permission)
        VALUES (?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?)`,
-      [
-        userId,
-        name,
-        description ?? null,
-        pointsJson,
-        waypointsJson,
-        distanceM ?? 0,
-        elevationGainM ?? 0,
-        perm,
-      ]
+      [userId, name, description ?? null, pointsJson, waypointsJson, distanceM ?? 0, elevationGainM ?? 0, perm],
     );
-    return result.insertId;
+    if (!sourceActivityClientId && !sourceSessionId) {
+      const [result] = await insert(pool);
+      return result.insertId;
+    }
+
+    // Match Activity deletion's users-row/session-row lock order. A Route
+    // either commits before deletion (and legitimately survives it) or the
+    // deletion wins and this mutation is rejected; there is no check/create
+    // race that can turn a deleted Detail into a new Route.
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);
+      const [activities] = sourceActivityClientId
+        ? await conn.execute(
+          `SELECT id FROM sessions
+           WHERE user_id = ? AND client_activity_id = ? AND finalized_at IS NOT NULL
+           LIMIT 1 FOR UPDATE`,
+          [userId, sourceActivityClientId],
+        )
+        : await conn.execute(
+          `SELECT id FROM sessions
+           WHERE user_id = ? AND id = ? AND finalized_at IS NOT NULL
+           LIMIT 1 FOR UPDATE`,
+          [userId, sourceSessionId],
+        );
+      if (!activities[0]) {
+        const error = new Error('Source Activity not found.');
+        error.code = 'SOURCE_ACTIVITY_NOT_FOUND';
+        throw error;
+      }
+      const [result] = await insert(conn);
+      await conn.commit();
+      return result.insertId;
+    } catch (error) {
+      try { await conn.rollback(); } catch { /* ignore */ }
+      throw error;
+    } finally {
+      conn.release();
+    }
   },
 
   // List — omits heavy points JSON for performance

@@ -125,6 +125,15 @@ const Session = {
     };
   },
 
+  async renameCompleted(id, userId, name) {
+    const [result] = await pool.execute(
+      `UPDATE sessions SET name = ?
+       WHERE id = ? AND user_id = ? AND finalized_at IS NOT NULL`,
+      [name, id, userId],
+    );
+    return result.affectedRows > 0;
+  },
+
   /**
    * Create an empty session row at the start of tracking. Returns the
    * insert id so the client can use it for incremental append + final

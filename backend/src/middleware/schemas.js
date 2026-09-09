@@ -164,6 +164,10 @@ const sessionUpdate = Joi.object({
   name: Joi.string().max(100).allow(null, ''),
 }).min(1);
 
+const sessionRename = Joi.object({
+  name: Joi.string().trim().min(1).max(100).required(),
+});
+
 // ── Routes ─────────────────────────────────────────────────────────────
 // Sprint 6 R94 BUG-1: schema aligned to what client (routeService.ts) sends
 // and what handler (routes.js POST /) destructures. Pre-fix, schema demanded
@@ -200,6 +204,10 @@ const routeCreate = Joi.object({
   // "not allowed for client writes" 400 message (better UX than a
   // generic Joi validation error).
   permission: Joi.string().valid('personal', 'group', 'friend', 'public'),
+  // Optional immutable provenance. When supplied, route creation is allowed
+  // only while that completed Activity still exists for this owner.
+  source_activity_client_id: clientUuid,
+  source_session_id: Joi.number().integer().min(1),
 });
 
 const routeUpdate = Joi.object({
@@ -342,6 +350,7 @@ module.exports = {
     appendPoints: sessionAppendPoints,
     save: sessionSave,
     update: sessionUpdate,
+    rename: sessionRename,
   },
   route: {
     create: routeCreate,
