@@ -67,6 +67,7 @@ export async function sampleGpsWindow(): Promise<SampleResult> {
     const fix = readTrustedSimulatorLocation();
     if (!fix) {
       appendSimulatorLog('GPS_REJECT', 'plant_simulator_location_unavailable', {
+        locationSource: 'no-trustworthy-accepted-simulator-fix',
         rejectionReason: 'no-readings',
       });
       return makeFailure('no-readings');
@@ -82,6 +83,7 @@ export async function sampleGpsWindow(): Promise<SampleResult> {
     }));
     const result = decideFromReadings(readings);
     appendSimulatorLog(result.ok ? 'GPS_ACCEPT' : 'GPS_REJECT', 'plant_gps_window_decided', {
+      locationSource: 'last-canonically-accepted-simulator',
       accepted: result.ok,
       rejectionReason: result.reason ?? null,
       lat: fix.lat,
@@ -90,6 +92,15 @@ export async function sampleGpsWindow(): Promise<SampleResult> {
       accuracy: fix.accuracyM,
       samplesUsed: result.samplesUsed,
     }, { virtualTimestamp: fix.timestamp });
+    if (result.ok) {
+      appendSimulatorLog('GPS_ACCEPT', 'hike_cairn_location_selected', {
+        locationSource: 'last-canonically-accepted-simulator',
+        acceptedFixTimestamp: fix.timestamp,
+        lat: fix.lat,
+        lng: fix.lng,
+        accuracy: fix.accuracyM,
+      }, { coordinateSource: 'simulator', virtualTimestamp: fix.timestamp });
+    }
     return result;
   }
   const { status } = await Location.getForegroundPermissionsAsync();

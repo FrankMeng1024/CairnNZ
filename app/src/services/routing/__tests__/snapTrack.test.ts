@@ -5,7 +5,7 @@
 // Set token before requiring SUT (env-read at module-load is safer)
 process.env.EXPO_PUBLIC_MAPBOX_TOKEN = 'test-token';
 
-import { snapTrack, type RawPoint } from '../snapTrack';
+import { evaluateMatchedGeometryQuality, snapTrack, type RawPoint } from '../snapTrack';
 
 const realFetch = global.fetch;
 let fetchMock: jest.Mock;
@@ -51,6 +51,18 @@ function fakeOkResponse(n: number, confidence = 0.9): any {
       code: 'Ok',
       matchings: [{ confidence, geometry: { coordinates: coords } }],
     }),
+  };
+}
+
+function fakeEchoResponse(url: string, confidence = 0.9): any {
+  const encoded = new URL(url).pathname.split('/').at(-1) ?? '';
+  const coords = encoded.split(';').map((entry) => {
+    const [lng, lat] = entry.split(',').map(Number);
+    return [lng, lat] as [number, number];
+  });
+  return {
+    status: 200,
+    json: async () => ({ code: 'Ok', matchings: [{ confidence, geometry: { coordinates: coords } }] }),
   };
 }
 
@@ -101,13 +113,45 @@ describe('snapTrack — happy path (single GOOD run)', () => {
   });
 
   test('200-point line → 3 chunks → 3 Mapbox calls', async () => {
-    fetchMock.mockResolvedValue(fakeOkResponse(70, 0.9));
+    fetchMock.mockImplementation((url: string) => Promise.resolve(fakeEchoResponse(url, 0.9)));
     const r = await snapTrack(lineNorth(200), { mapboxToken: 'x' });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     // chunkBounds for 200 pts at chunk=80 overlap=10 → [0,80] [70,150] [140,200] = 3 chunks
     expect(r.stats.apiCalls).toBe(3);
     expect(r.stats.chunksOk).toBe(3);
+  });
+});
+
+describe('snapTrack — derived geometry truthfulness', () => {
+  test('accepts a correction inside the raw accuracy envelope', () => {
+    const raw = lineNorth(12).map(point => ({ ...point, accuracy: 5 }));
+    const matched = raw.map(point => ({
+      lat: point.lat,
+      lng: point.lng + 2 / (111_320 * Math.cos(point.lat * Math.PI / 180)),
+    }));
+    expect(evaluateMatchedGeometryQuality(raw, matched)).toMatchObject({
+      accepted: true,
+      reason: 'accepted',
+    });
+  });
+
+  test('rejects a nearby-path correction outside the raw accuracy envelope', async () => {
+    const raw = lineNorth(12).map(point => ({ ...point, accuracy: 5 }));
+    const shifted = raw.map(point => ([
+      point.lng + 22 / (111_320 * Math.cos(point.lat * Math.PI / 180)),
+      point.lat,
+    ]));
+    fetchMock.mockResolvedValue({
+      status: 200,
+      json: async () => ({ code: 'Ok', matchings: [{ confidence: 0.95, geometry: { coordinates: shifted } }] }),
+    });
+
+    const result = await snapTrack(raw, { mapboxToken: 'x' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats).toMatchObject({ chunksOk: 0, chunksFallback: 1, qualityFallbacks: 1 });
+    expect(result.stats.maxP95DeviationM).toBeGreaterThan(15);
   });
 });
 

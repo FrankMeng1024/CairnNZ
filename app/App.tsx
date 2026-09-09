@@ -35,8 +35,15 @@ import { API_BASE_URL } from './src/config/api';
 import { markBootPhase } from './src/services/bootDiagnostics';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { PassiveMemoryRecorder } from './src/features/memory/components/PassiveMemoryRecorder';
+import { hydrateMemoryForUser } from './src/features/memory/services/memoryPersistence';
+import { attachMemorySync, pullMemoryFromServer } from './src/services/memorySync';
 import { activitySimulatorBuildCapable } from './src/features/activitySimulator/capability';
-import { hydrateActivitySimulatorForUser } from './src/features/activitySimulator/useActivitySimulatorStore';
+import { hydrateActivitySimulatorForUser, useActivitySimulatorStore } from './src/features/activitySimulator/useActivitySimulatorStore';
+import { activitySimulatorEngine } from './src/features/activitySimulator/activitySimulatorEngine';
+import {
+  appendSimulatorLog,
+  beginQaTelemetrySession,
+} from './src/features/activitySimulator/simulatorLog';
 
 // First side-effect: report that module loading completed. This runs
 // AFTER all the imports above (which is when iOS jetsam most likely
@@ -169,10 +176,17 @@ if (Platform.OS === 'web') {
 function AppRoot() {
   const hydrate = useAppStore(s => s.hydrate);
   const hydrated = useAppStore(s => s.hydrated);
+  const isLoggedIn = useAppStore(s => s.isLoggedIn);
   const simulatorOwnerUserId = useAppStore(s => s.user?.id ?? null);
   const simulatorDebugGate = useSettingsStore(s => s.debugMode);
+  const simulatorCapabilityEnabled = useActivitySimulatorStore(s => s.enabled);
+  const simulatorHydratedUserId = useActivitySimulatorStore(s => s.hydratedUserId);
   const hydrateSettings = useSettingsStore(s => s.hydrate);
+  const settingsHydrated = useSettingsStore(s => s.hydrated);
   const lastAppState = useRef<string>(AppState.currentState);
+  const activeQaSessionRef = useRef<string | null>(null);
+  const activeQaUserRef = useRef<string | null>(null);
+  const lastQaDebugStateRef = useRef<boolean | null>(null);
   // O7 (2026-07-26): track whether the app has passed through 'background'
   // since the last drainPending fire. iOS lifecycle inserts 'inactive'
   // between 'background' and 'active' on foregrounding, so a strict gate
@@ -186,17 +200,86 @@ function AppRoot() {
   // the eventual async resolution.
   const [flagsPrimed, setFlagsPrimed] = useState(false);
 
+  // O41: one account-scoped Memory authority for Home and MemoryScreen.
+  // Reacting to authenticated state (instead of running only inside the
+  // cold-boot hydrator) also covers password/Apple/register/restore login.
+  // Local durable evidence paints first; bounded server reconciliation is
+  // deliberately asynchronous and never depends on visiting MemoryScreen.
+  useEffect(() => {
+    if (!isLoggedIn || !simulatorOwnerUserId) return;
+    const userId = String(simulatorOwnerUserId);
+    let cancelled = false;
+    void (async () => {
+      try {
+        await hydrateMemoryForUser(userId);
+        if (cancelled) return;
+        const current = useAppStore.getState();
+        if (!current.isLoggedIn || String(current.user?.id ?? '') !== userId) return;
+        attachMemorySync(userId);
+        crashLogger.breadcrumb(`o41:mem_authority_attached user_id=${userId}`);
+        void pullMemoryFromServer(userId, { reconcile: true });
+        crashLogger.breadcrumb(`o41:mem_reconcile_started user_id=${userId}`);
+      } catch (error) {
+        crashLogger.breadcrumb(`o41:mem_authority_failed ${String(error).slice(0, 80)}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, simulatorOwnerUserId]);
+
   useEffect(() => {
     if (!activitySimulatorBuildCapable) return;
     void hydrateActivitySimulatorForUser(simulatorOwnerUserId ? String(simulatorOwnerUserId) : null);
   }, [simulatorOwnerUserId]);
   useEffect(() => {
-    if (activitySimulatorBuildCapable && simulatorDebugGate) return;
-    const tracking = useTrackingStore.getState();
-    if (tracking.locationProviderSource === 'simulator' && tracking.status === 'tracking') {
-      void tracking.pauseTracking();
+    if (!activitySimulatorBuildCapable || !settingsHydrated || !simulatorOwnerUserId) {
+      activeQaSessionRef.current = null;
+      activeQaUserRef.current = null;
+      lastQaDebugStateRef.current = null;
+      return;
     }
-  }, [simulatorDebugGate]);
+    const userId = String(simulatorOwnerUserId);
+    if (simulatorHydratedUserId !== userId) return;
+    if (!activeQaSessionRef.current || activeQaUserRef.current !== userId) {
+      const nextQaSessionId = beginQaTelemetrySession(userId);
+      activeQaSessionRef.current = nextQaSessionId;
+      activeQaUserRef.current = userId;
+      lastQaDebugStateRef.current = null;
+      appendSimulatorLog('APP', 'app_start', {
+        appState: AppState.currentState,
+        debugMode: simulatorDebugGate,
+      }, { userId, qaSessionId: nextQaSessionId, coordinateSource: 'none' });
+    }
+    const openQaSessionId = activeQaSessionRef.current;
+    if (!openQaSessionId || lastQaDebugStateRef.current === simulatorDebugGate) return;
+    appendSimulatorLog('DEBUG', simulatorDebugGate ? 'debug_mode_on' : 'debug_mode_off', {}, {
+      userId,
+      qaSessionId: openQaSessionId,
+      coordinateSource: 'none',
+      force: true,
+    });
+    lastQaDebugStateRef.current = simulatorDebugGate;
+  }, [
+    settingsHydrated,
+    simulatorDebugGate,
+    simulatorHydratedUserId,
+    simulatorOwnerUserId,
+  ]);
+  useEffect(() => {
+    if (activitySimulatorBuildCapable && simulatorDebugGate && simulatorCapabilityEnabled) return;
+    const tracking = useTrackingStore.getState();
+    // The safety shutdown is Simulator-provider continuity only. A normal
+    // real-GPS Activity must never be paused or touched because a dormant
+    // Simulator preference happens to be persisted.
+    if (tracking.locationProviderSource !== 'simulator') return;
+    void (async () => {
+      if (tracking.status === 'tracking') {
+        await tracking.pauseTracking();
+      }
+      await activitySimulatorEngine.stopRuntime();
+    })();
+  }, [simulatorDebugGate, simulatorCapabilityEnabled]);
 
   // PRD3 E-012: load Inter font family. fontsLoaded === true once all weights
   // are ready. If loading fails (no network on first run, etc), fontError is
@@ -684,6 +767,11 @@ function AppRoot() {
         to: norm(next),
         tracking_active: trackingActive,
       });
+      appendSimulatorLog('APP', next === 'active' ? 'app_foregrounded' : 'app_backgrounded', {
+        from: norm(prev),
+        to: norm(next),
+        trackingActive,
+      }, { coordinateSource: 'none' });
       // O6 (2026-07-26): 前后台切回时也触发 pendingSync drain。
       // syncDaemon 契约声明有 3 个触发时机: (1) hydrate, (2) NetInfo, (3)
       // AppState — 前两个已连,AppState 之前只用于 debug log 没接 drain。
@@ -726,8 +814,6 @@ function AppRoot() {
   // DEFAULTS.units='metric' for imperial users on cold start. Both hydrates
   // run in parallel (useEffect above), so the wait is bounded by the slower
   // one — usually <200ms.
-  const settingsHydrated = useSettingsStore(s => s.hydrated);
-
   // Don't block forever on font loading — show app once hydrated even if
   // fonts errored. If they're loaded, body text will use Inter; if not,
   // it falls back to system default.
@@ -898,9 +984,8 @@ function WebPhoneFrame({ children }: { children: React.ReactNode }) {
         backgroundColor: '#2a2a2a',
         alignItems: 'center',
         justifyContent: 'center',
-        // @ts-expect-error web-only style
         minHeight: '100vh',
-      }}
+      } as any}
     >
       <View
         style={{
@@ -909,13 +994,10 @@ function WebPhoneFrame({ children }: { children: React.ReactNode }) {
           backgroundColor: '#F4EFE6',
           borderRadius: 48,
           overflow: 'hidden',
-          // @ts-expect-error web-only shadow syntax
           boxShadow: '0 30px 90px rgba(0,0,0,0.5), 0 0 0 12px #1a1a1a',
-          // @ts-expect-error web-only CSS transform + origin
           transform: `scale(${SCALE})`,
-          // @ts-expect-error web-only transform-origin
           transformOrigin: 'center center',
-        }}
+        } as any}
       >
         {children}
       </View>

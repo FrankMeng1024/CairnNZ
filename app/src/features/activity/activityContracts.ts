@@ -30,6 +30,26 @@ export interface ActivityStats {
   activeDurationS: number;
 }
 
+/**
+ * Activity time belongs to the lifecycle, not to GPS geometry. The accumulated
+ * portion is frozen at Pause; while Tracking, the provider clock contributes
+ * the open interval. Real Activities use wall time and Simulator Activities
+ * use their bounded virtual clock.
+ */
+export function calculateLifecycleDurationMs(args: {
+  accumulatedMs: number;
+  activeSinceMs: number | null;
+  nowMs: number;
+}): number {
+  const accumulatedMs = Number.isFinite(args.accumulatedMs)
+    ? Math.max(0, args.accumulatedMs)
+    : 0;
+  if (args.activeSinceMs === null || !Number.isFinite(args.activeSinceMs)) {
+    return accumulatedMs;
+  }
+  return accumulatedMs + Math.max(0, args.nowMs - args.activeSinceMs);
+}
+
 export interface SaveEligibility {
   eligible: boolean;
   reason: 'eligible' | 'not-enough-points' | 'not-enough-distance';
@@ -153,7 +173,10 @@ export function toServerPoint(point: TrackPoint): {
   return {
     lat: point.lat,
     lng: point.lng,
-    t: point.t,
+    // Core Location timestamps can contain fractional milliseconds on iOS.
+    // The server contract is integer epoch milliseconds, so normalize at the
+    // shared boundary (also repairs pre-fix pending payloads when replayed).
+    t: Math.floor(point.t),
     ...(point.alt != null ? { alt: point.alt } : {}),
     ...(point.accuracy != null ? { acc: point.accuracy } : {}),
     ...(segmented.segmentId ? { segment_id: segmented.segmentId } : {}),

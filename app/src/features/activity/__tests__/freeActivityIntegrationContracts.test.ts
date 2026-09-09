@@ -75,6 +75,53 @@ describe('Free Activity integration contracts', () => {
     expect(publish).toBeGreaterThan(durable);
   });
 
+  test('Activity duration is lifecycle-clocked and accepted GPS points do not own timer progress', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    const ingest = source.slice(source.indexOf('addTrackPoint: async'), source.indexOf('linkMarker:', source.indexOf('addTrackPoint: async')));
+    expect(source).toContain('calculateLifecycleDurationMs({');
+    expect(source).toContain('startActivityLifecycleTimer(localSessionId)');
+    expect(source).toContain('const finalDurationS = Math.max(0, Math.floor(s.durationS))');
+    expect(ingest).not.toMatch(/durationS:\s*s\.durationS\s*\+/);
+  });
+
+  test('rejected fixes advance only raw-fix dedupe time, never the accepted continuity anchor', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    for (const reason of ['poor-accuracy', 'hiking-overspeed', 'stationary-suppressed', 'indoor-drift-suppressed']) {
+      const start = source.indexOf(`acceptance.reason = '${reason}'`);
+      const end = source.indexOf('\n        }', start);
+      const branch = source.slice(start, end);
+      expect(start).toBeGreaterThan(0);
+      expect(branch).toContain('lastFixTimestamp: t');
+      expect(branch).not.toContain('lastCoordinateTime: t');
+    }
+  });
+
+  test('late journaled background points drain after a foreground handoff', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    const drain = source.slice(
+      source.indexOf('drainInterval = setInterval'),
+      source.indexOf('// ── Dynamic sampling', source.indexOf('drainInterval = setInterval')),
+    );
+    expect(drain).toContain("if (get().status !== 'tracking') return");
+    expect(drain).not.toContain('if (!backgroundTaskActive) return');
+    expect(drain).toContain('drainBackgroundLocations()');
+  });
+
+  test('live Hike and Run traces render the canonical accepted array tail', () => {
+    const hike = read('src/screens/HikingScreen.tsx');
+    const run = read('src/screens/RunningScreen.tsx');
+    expect(hike).toContain('? trackPoints.map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentId: tp.segmentId }))');
+    expect(hike).not.toContain('? trackPointsSmoothed.map');
+    expect(run).toContain('trackPoints={trackPoints}');
+  });
+
+  test('real GPS health is accepted-fix freshness, not provider activation alone', () => {
+    const hike = read('src/screens/HikingScreen.tsx');
+    const run = read('src/screens/RunningScreen.tsx');
+    expect(hike).toContain('const gpsFixHealthy = isTracking && locationAvailable && lastTrackT !== null && !signalLost');
+    expect(run).toContain("const gpsFixHealthy = status === 'tracking' && locationAvailable && lastTrackT !== null && !signalLost");
+  });
+
   test('wake-up one-shot GPS callback is fenced to its captured Activity owner', () => {
     const source = read('src/store/useTrackingStore.ts');
     const wake = source.slice(source.indexOf('const wakeOwnerSessionId'), source.indexOf("k7:wake_kick_err"));

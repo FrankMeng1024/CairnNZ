@@ -40,6 +40,9 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     jest.doMock('../crashLogger', () => ({
       crashLogger: { breadcrumb, captureException: jest.fn() },
     }));
+    jest.doMock('../../features/activitySimulator/simulatorLog', () => ({
+      appendSimulatorLog: jest.fn(),
+    }));
   });
 
   const point = (timestamp: number, latitude = -41) => ({
@@ -109,5 +112,33 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     await handler({ data: { locations: [point(3_000)] }, error: null });
     expect(appendBackgroundHikePoints).not.toHaveBeenCalled();
     expect(task.drainBackgroundLocations()).toEqual([]);
+  });
+
+  it('assigns repeated long-loss reacquisitions to independent real segments', async () => {
+    const task = require('../backgroundLocationTask');
+    await task.persistBackgroundContext('activity-a', true, {
+      clientActivityId: 'activity-a',
+      userId: 'user-a',
+      ownerGeneration: 'generation-1',
+      segmentId: 'segment-1',
+      activityMode: 'hiking',
+      acceptAfterMs: 1_000,
+    });
+
+    await handler({
+      data: { locations: [
+        point(1_000, -41),
+        point(11_000, -41.0001),
+        point(601_000, -41.01),
+        point(611_000, -41.0101),
+        point(1_301_000, -41.02),
+        point(1_311_000, -41.0201),
+      ] },
+      error: null,
+    });
+
+    const accepted = appendBackgroundHikePoints.mock.calls[0][0];
+    expect(new Set(accepted.map((item: any) => item.segmentId))).toHaveProperty('size', 3);
+    expect(accepted.filter((item: any) => item.segmentStartReason === 'gps-reacquired')).toHaveLength(2);
   });
 });

@@ -1,41 +1,14 @@
 /**
- * FogLayer — v346 buffered-path fog of war (path-shaped cutout).
+ * FogLayer — vector fog with evidence-bounded cutouts.
  *
- * Architecture (replaces v331-v345 hybrid Skia+ImageSource pipeline):
+ * A single ShapeSource covers the world and subtracts 30m buffered footprints
+ * around persisted Memory evidence. The flat Memory store has no Activity or
+ * segment identity, so this layer never joins adjacent rows into a LineString:
+ * overlapping accepted evidence still reads as a walked corridor, while GPS
+ * gaps and fresh Activities cannot acquire invented traversal.
  *
- *   Single ShapeSource + FillLayer:
- *     - Outer ring = world rect
- *     - Inner rings = turf.buffer(GPS path, 25m) corridors per hike segment
- *     - Result: fog covers everywhere EXCEPT where the user actually walked
- *
- * Why this works where v331-v345 didn't:
- *   - v331-v345 used <ImageSource url={mask.uri}> with Skia-rendered PNG.
- *     - v331-v342 tried file:// URI → silent fail (rnmapbox/maps#1457, open
- *       5+ years on iOS Mapbox SDK 11.x)
- *     - v343 tried data:image/png;base64 → also silent fail (verified by
- *       v344 magenta diagnostic — user saw zero magenta = data: rejected)
- *     - The "Skia + ImageSource" architecture is fundamentally incompatible
- *       with Mapbox iOS SDK 11.20.1 dynamic image loading. No OTA fix exists.
- *   - v346 abandons raster entirely: GPS path → turf.buffer → polygon hole.
- *     Mapbox ShapeSource + GeoJSON polygon-with-holes IS supported and works.
- *
- * Spike validation (_spike/v346-fog-options/spike-A-z14.png etc):
- *   - 10-point GPS path + turf.buffer 25m → 1 polygon ring with ~60 vertices
- *   - z14/z12: VISIBLE — clean ribbon shape, basemap roads readable
- *   - z9: corridor becomes sub-pixel (~1m wide on screen) — acceptable
- *
- * Avoids the v325-v330 earcut bug (mapbox-gl-js#7023):
- *   - v325-v330 used N independent small holes (one per H3 cell) → triggers
- *     earcut tessellation failure at zoom-out
- *   - v346 uses ONE buffered corridor per hike (or unioned for all hikes) →
- *     ~60-200 vertices total → well below earcut threshold
- *
- * Triggers:
- *   - userCenter changes → recompute fog if needed (geometry doesn't depend
- *     on viewport; pan/zoom doesn't trigger rebuild)
- *   - useMemoryStore.points changes (new hike saved) → recompute corridors
- *
- * No Skia, no PNG, no transport, no http URL, no file://, no data: URI.
+ * This remains the vector replacement for the retired Skia/ImageSource mask;
+ * there is no raster transport, temporary URL, or screen-owned calculation.
  */
 
 import React, { useEffect, useMemo, useRef } from 'react';
@@ -48,10 +21,8 @@ import { log } from '../../../services/appLog';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import bufferTurf from '@turf/buffer';
 import differenceTurf from '@turf/difference';
-import unionTurf from '@turf/union';
-import simplifyTurf from '@turf/simplify';
-import { lineString, polygon, multiLineString, featureCollection, multiPolygon } from '@turf/helpers';
-import type { Feature, Polygon, MultiPolygon, LineString, MultiLineString } from 'geojson';
+import { polygon, multiPoint, featureCollection } from '@turf/helpers';
+import type { Feature, Polygon, MultiPolygon } from 'geojson';
 
 interface Props {
   /** Current map center. Reserved for future use (e.g. recompute on big pan). */
@@ -70,83 +41,27 @@ interface Props {
 let _moduleFogSig = '';
 let _moduleFogShape: Feature<Polygon | MultiPolygon> | null = null;
 
-// Corridor width in meters around each GPS line — this is the "trail width"
+// Footprint radius in meters around each Memory evidence row — this is the "trail width"
 // visible to the user. R114 (2026-08-07): 25 → 30. User reported that 25m
 // leaves a black stripe in the middle when walking around a building or
 // along a wide road (path only clears a narrow ribbon). Kept in sync with
 // UnlockConfig.radiusMeters (memoryConfig.ts).
 const CORRIDOR_WIDTH_M = 30;
-// Douglas-Peucker simplification tolerance — 5m smooths jitter without
-// distorting visible path shape.
-const SIMPLIFY_TOLERANCE_DEG = 5 / 111320;
-// Max GPS points per hike before chunking (keeps turf.buffer cost bounded).
-const MAX_POINTS_PER_HIKE = 2000;
-// Recompute the fog geometry at most once per N ms (the points store is
-// append-only during hike, but we only re-render after each save).
-const RECOMPUTE_DEBOUNCE_MS = 500;
-
+// Maximum evidence rows rendered in one pass. If a lifetime account exceeds
+// this budget, deterministic sampling retains the geographic evidence without
+// ever constructing a connector between sampled rows.
+const MAX_EVIDENCE_POINTS = 2000;
 /**
- * Group GPS points into hike segments. A new segment starts when there is
- * a > 5 minute gap between consecutive points (likely a new hike).
+ * Build the fog GeoJSON from persisted Memory evidence footprints.
  *
- * Note: Cairn's useMemoryStore.points is a flat array across all hikes; we
- * synthesise hike boundaries from timestamp gaps. In future, when sessions
- * store explicit hike IDs, we can group by hikeId instead.
+ * The persisted store is intentionally a flat set of accepted evidence rows;
+ * it does not carry Activity or segment identity. Therefore it is never safe
+ * to infer traversal by joining adjacent rows. Buffering a MultiPoint clears
+ * only the radius around evidence that actually exists. Overlapping buffers
+ * naturally form a continuous walked corridor, while GPS gaps and fresh
+ * Activities remain disconnected regardless of their timestamps.
  */
-function segmentByGap(points: Array<{ lat: number; lng: number; ts: number }>): Array<Array<[number, number]>> {
-  if (points.length === 0) return [];
-  // v354 fix: increase HIKE_GAP_MS 5min → 60min AND add spatial
-  // proximity merge. User reported "中间有尖角洞" — root cause was
-  // a single hike with a 29-minute rest break got split into two
-  // segments. Buffer 25m each, parallel offset 20-50m, resulted in
-  // an unbridged sharp wedge between corridors.
-  // Two fixes here:
-  //   (1) HIKE_GAP_MS 5min → 60min — rest breaks during a single
-  //       walk count as one hike, not two
-  //   (2) AFTER time-based split, if segment[i] last point is within
-  //       SPATIAL_MERGE_RADIUS_M of segment[i+1] first point, merge.
-  //       Catches the case where two real hikes happen to start/end
-  //       at the same trailhead but >60min apart.
-  const HIKE_GAP_MS = 60 * 60 * 1000;
-  const SPATIAL_MERGE_RADIUS_M = 100;
-  const segments: Array<Array<[number, number]>> = [];
-  let current: Array<[number, number]> = [];
-  let prevTs = points[0].ts;
-  for (const p of points) {
-    if (p.ts - prevTs > HIKE_GAP_MS && current.length > 0) {
-      segments.push(current);
-      current = [];
-    }
-    current.push([p.lng, p.lat]);
-    prevTs = p.ts;
-  }
-  if (current.length > 0) segments.push(current);
-  // Spatial proximity merge: walk segments in order, merge i+1 into i
-  // if last(i) is within 100m of first(i+1).
-  const merged: Array<Array<[number, number]>> = [];
-  const M_PER_DEG_LAT = 111320;
-  for (const seg of segments) {
-    const prev = merged[merged.length - 1];
-    if (prev && prev.length > 0 && seg.length > 0) {
-      const [plng, plat] = prev[prev.length - 1];
-      const [nlng, nlat] = seg[0];
-      const dLat = (nlat - plat) * M_PER_DEG_LAT;
-      const cosLat = Math.cos((plat * Math.PI) / 180);
-      const dLng = (nlng - plng) * M_PER_DEG_LAT * cosLat;
-      if (dLat * dLat + dLng * dLng < SPATIAL_MERGE_RADIUS_M * SPATIAL_MERGE_RADIUS_M) {
-        prev.push(...seg);
-        continue;
-      }
-    }
-    merged.push([...seg]);
-  }
-  return merged;
-}
-
-/**
- * Build the fog GeoJSON: world rect with corridor-shaped holes.
- */
-function buildFogShape(
+export function buildFogShape(
   points: Array<{ lat: number; lng: number; ts: number }>,
 ): Feature<Polygon | MultiPolygon> | null {
   // World rect — slightly inset from poles to avoid Mapbox projection edge cases.
@@ -163,100 +78,33 @@ function buildFogShape(
     return world;
   }
 
-  const segments = segmentByGap(points);
-  // v400: single-point segments are now buffered via turf.point instead
-  // of skipped — pre-v400 a single VisitedPoint (e.g. from plant-unlock)
-  // formed a segment of length 1, was skipped (lineString needs ≥2 pts),
-  // produced no fog hole. Now: 1-point → turf.point + buffer; ≥2-point →
-  // turf.lineString + buffer. Plant center sits exactly at the hole center.
-  const corridors: Array<Feature<Polygon | MultiPolygon>> = [];
-  for (const seg of segments) {
-    if (seg.length === 0) continue;
-    if (seg.length === 1) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { point: turfPoint } = require('@turf/helpers');
-        const p = turfPoint(seg[0]);
-        const buf = bufferTurf(p, CORRIDOR_WIDTH_M, { units: 'meters', steps: 16 });
-        if (buf && buf.geometry) corridors.push(buf as Feature<Polygon | MultiPolygon>);
-      } catch (e: any) {
-        log('fog.buffer_failed', { seg_len: 1, err: String(e?.message ?? e).slice(0, 100) });
-      }
-      continue;
-    }
-    // Cap at MAX_POINTS_PER_HIKE per segment (defensive — turf.buffer cost
-    // scales with vertex count).
-    const capped = seg.length > MAX_POINTS_PER_HIKE
-      ? seg.filter((_, i) => i % Math.ceil(seg.length / MAX_POINTS_PER_HIKE) === 0)
-      : seg;
-    try {
-      let line = lineString(capped);
-      // Simplify before buffering — fewer vertices = faster buffer + cleaner shape.
-      try {
-        line = simplifyTurf(line, { tolerance: SIMPLIFY_TOLERANCE_DEG, highQuality: false });
-      } catch {/* simplify can fail on duplicate points; use unsimplified */}
-      // v351: steps 8 → 16. v349-v350 used steps:8 (quadrant segments,
-      // 32 vertices per full circle = 11.25° per segment). At z16 a 25m
-      // corridor cap is ~80-150px wide on screen, so each segment was
-      // 3-5px — visible jagged "dog-bitten" edges per user feedback.
-      // steps:16 → 64 vertices per circle, 5.6° per segment, sub-pixel
-      // smooth at z14+. Vertex budget: 5-hike accum × 30 GPS pts × 16
-      // = ~2400 verts, still well under the ~5000 vert earcut bug
-      // threshold (#7023 was confirmed broken at 1848 in v325-v330 era,
-      // but those were N independent small holes; we have 1 MultiPolygon
-      // with corridors — different geometry class, higher safe threshold).
-      const buf = bufferTurf(line, CORRIDOR_WIDTH_M, { units: 'meters', steps: 16 });
-      if (buf && buf.geometry) {
-        corridors.push(buf as Feature<Polygon | MultiPolygon>);
-      }
-    } catch (e: any) {
-      log('fog.buffer_failed', { seg_len: seg.length, err: String(e?.message ?? e).slice(0, 100) });
-    }
+  const stride = Math.max(1, Math.ceil(points.length / MAX_EVIDENCE_POINTS));
+  const coordinates = points
+    .filter((_, index) => index % stride === 0 || index === points.length - 1)
+    .map((point) => [point.lng, point.lat] as [number, number]);
+  let evidence: Feature<Polygon | MultiPolygon> | null = null;
+  try {
+    const buffered = bufferTurf(multiPoint(coordinates), CORRIDOR_WIDTH_M, {
+      units: 'meters',
+      steps: 16,
+    });
+    if (buffered?.geometry) evidence = buffered as Feature<Polygon | MultiPolygon>;
+  } catch (error: any) {
+    log('fog.buffer_failed', {
+      evidence_n: coordinates.length,
+      err: String(error?.message ?? error).slice(0, 100),
+    });
   }
-
-  if (corridors.length === 0) return world;
-
-  // v352 fix: replace direct push-into-MultiPolygon with progressive
-  // turf.union. Pre-v352 code stacked all per-segment buffers as
-  // sibling polygons in one MultiPolygon, but GeoJSON spec forbids
-  // sibling overlap — polyclip-ts (turf.difference's underlying engine)
-  // applies even-odd rule to overlapping siblings, treating overlap
-  // regions as HOLES. Result: when the user crossed the same area
-  // twice (folded path or close-by parallel segments), the overlap
-  // created sharp diamond-shaped "unsolved" spikes inside what should
-  // be revealed corridors. User-visible as: "中间有一片没解锁的尖锐位置".
-  //
-  // turf.union calls polyclip's union path (different from difference)
-  // which correctly merges overlapping polygons into a single non-
-  // overlapping polygon-with-no-internal-holes. Then differenceTurf
-  // sees one clean shape and produces clean fog cutouts.
-  //
-  // Cost: O(N²) for N segments via reduce, but N is small (<20 typical
-  // for a user's lifetime hike count). <100ms for typical case.
-  let merged: Feature<Polygon | MultiPolygon> | null = null;
-  for (const c of corridors) {
-    if (!merged) {
-      merged = c;
-      continue;
-    }
-    try {
-      const u = unionTurf(featureCollection([merged as any, c as any]) as any);
-      if (u && u.geometry) merged = u as Feature<Polygon | MultiPolygon>;
-      // If union fails, keep previous merged — better than dropping segments.
-    } catch (e: any) {
-      log('fog.union_failed', { err: String(e?.message ?? e).slice(0, 100) });
-    }
-  }
-  if (!merged) return world;
+  if (!evidence) return world;
 
   try {
-    const fc = featureCollection([world as any, merged as any]);
+    const fc = featureCollection([world as any, evidence as any]);
     const fog = differenceTurf(fc as any);
     if (fog && fog.geometry) {
       return fog as Feature<Polygon | MultiPolygon>;
     }
   } catch (e: any) {
-    log('fog.difference_failed', { n_corridors: corridors.length, err: String(e?.message ?? e).slice(0, 100) });
+    log('fog.difference_failed', { evidence_n: coordinates.length, err: String(e?.message ?? e).slice(0, 100) });
   }
   // Fallback: solid world fog (no holes) — never blank screen.
   return world;
@@ -362,17 +210,23 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
     // now visually identical to the final state outside corridors,
     // so the holes appearing is the only visible transition.
     if (points.length === 0) {
-      // Use cached lastShapeRef if available (after first build), else
-      // synthesize solid world rect on first call. lastShapeRef will be
-      // updated to the corridor-cut version once points arrive.
-      if (lastShapeRef.current) return lastShapeRef.current;
-      return polygon([[
+      // Empty is authoritative after account switch/server reset as well as
+      // during first hydration. Reusing the module cache here would keep the
+      // previous Memory holes visible after a successful reset (and could
+      // briefly expose another account's geometry). Replace every cache with
+      // solid fog; a later non-empty hydrate will rebuild normally.
+      const solidFog = polygon([[
         [-180, -85],
         [180, -85],
         [180, 85],
         [-180, 85],
         [-180, -85],
       ]]);
+      lastSigRef.current = '';
+      lastShapeRef.current = solidFog;
+      _moduleFogSig = '';
+      _moduleFogShape = solidFog;
+      return solidFog;
     }
     // v356: content-hash short-circuit. Build a cheap signature from
     // count + first 3 + last 3 cids. If unchanged from last build,

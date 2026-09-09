@@ -11,6 +11,7 @@ import { deleteRemoteSession, deleteRemoteSessionByClientId } from '../../servic
 import { BACKGROUND_LOCATION_TASK, persistBackgroundContext } from '../../services/backgroundLocationTask';
 import { useAppStore } from '../../store/useAppStore';
 import {
+  calculateLifecycleDurationMs,
   calculateActivityStats,
   newSegmentId,
   type SegmentedTrackPoint,
@@ -25,7 +26,9 @@ import {
 import { recordMemoryEvidence } from '../memory/services/recordMemoryEvidence';
 import { removePending } from '../../services/pendingSyncStore';
 import type { ActivityLocationSource } from '../activitySimulator/types';
-import { activityTimestampForSource } from '../activitySimulator/simulatorTime';
+import { activityFreshnessNow, activityTimestampForSource } from '../activitySimulator/simulatorTime';
+import { endSimulatorProvider } from '../activitySimulator/activityLocationProvider';
+import { appendSimulatorLog } from '../activitySimulator/simulatorLog';
 
 export interface RecoverableActivity {
   sessionId: string;
@@ -125,6 +128,18 @@ export async function findRecoverableActivity(
     const points = rawPoints.map(point => toTrackPoint(point, meta.session_id));
     const lastPointAt = points[points.length - 1]?.t ?? meta.last_ts ?? meta.started_at;
     const stats = calculateActivityStats(points);
+    const locationProviderSource = meta.location_source ?? registered?.locationProviderSource ?? 'real';
+    const hasLifecycleClock = Number.isFinite(registered?.activeDurationMs)
+      || Number.isFinite(registered?.activeSinceMs);
+    const recoveredDurationS = hasLifecycleClock
+      ? Math.floor(calculateLifecycleDurationMs({
+          accumulatedMs: Number(registered?.activeDurationMs ?? 0),
+          activeSinceMs: Number.isFinite(registered?.activeSinceMs)
+            ? Number(registered?.activeSinceMs)
+            : null,
+          nowMs: activityFreshnessNow(locationProviderSource),
+        }) / 1000)
+      : stats.activeDurationS;
     const eligibility = (await import('./activityContracts')).saveEligibility(points, stats.distanceM);
     return {
       sessionId: meta.session_id,
@@ -135,11 +150,11 @@ export async function findRecoverableActivity(
       activityMode: meta.activity_mode ?? mode ?? 'hiking',
       startedAt: meta.started_at,
       distanceM: stats.distanceM,
-      durationS: stats.activeDurationS,
+      durationS: recoveredDurationS,
       pointCount: points.length,
       saveEligible: eligibility.eligible,
       lastPointAt,
-      locationProviderSource: meta.location_source ?? registered?.locationProviderSource ?? 'real',
+      locationProviderSource,
     };
   }
   // Registry commit precedes native source activation. If the process died in
@@ -155,7 +170,15 @@ export async function findRecoverableActivity(
       activityMode: registered.activityMode,
       startedAt: registered.startedAt,
       distanceM: 0,
-      durationS: 0,
+      durationS: Number.isFinite(registered.activeDurationMs) || Number.isFinite(registered.activeSinceMs)
+        ? Math.floor(calculateLifecycleDurationMs({
+            accumulatedMs: Number(registered.activeDurationMs ?? 0),
+            activeSinceMs: Number.isFinite(registered.activeSinceMs)
+              ? Number(registered.activeSinceMs)
+              : null,
+            nowMs: activityFreshnessNow(registered.locationProviderSource ?? 'real'),
+          }) / 1000)
+        : 0,
       pointCount: 0,
       saveEligible: false,
       lastPointAt: registered.lastMeaningfulAt,
@@ -195,7 +218,9 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
     isFinishing: false,
     startError: null,
     distanceM: stats.distanceM,
-    durationS: stats.activeDurationS,
+    durationS: activity.durationS,
+    activeDurationAccumulatedMs: Math.max(0, activity.durationS * 1000),
+    activeDurationStartedAtMs: null,
     elevationGainM: stats.elevationGainM,
     activityMode: activity.activityMode,
     lastCoordinate: last ? {
@@ -234,6 +259,8 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
     liveOwnerGeneration: newOwnerGeneration,
     currentSegmentId: recoverySegmentId,
     nextSegmentStartReason: 'process-recovery',
+    activeDurationMs: Math.max(0, activity.durationS * 1000),
+    activeSinceMs: null,
   });
   // Reconcile Activity evidence that was journaled before a prior process
   // death but may not yet have reached the Memory store.
@@ -246,6 +273,16 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
       ownerUserId: activity.userId,
     });
   }
+  appendSimulatorLog('ACTIVITY_RECOVERY', 'activity_recovery_loaded', {
+    providerSource: locationProviderSource,
+    pointCount: points.length,
+    recoverySegmentId,
+    saveEligible: activity.saveEligible,
+  }, {
+    userId: activity.userId,
+    clientActivityId: activity.clientActivityId,
+    coordinateSource: 'none',
+  });
   return true;
 }
 
@@ -296,4 +333,14 @@ export async function discardRecoverableActivity(activity: RecoverableActivity):
   // known. This makes any reordered/lost start, append or finish retry a no-op.
   const cancelled = await deleteRemoteSessionByClientId(activity.clientActivityId);
   if (!cancelled && activity.remoteId) await deleteRemoteSession(activity.remoteId);
+  if (activity.locationProviderSource === 'simulator') {
+    appendSimulatorLog('ACTIVITY_RECOVERY', 'simulator_recovery_discarded', {
+      pointCount: acceptedPoints.length,
+    }, {
+      userId: activity.userId,
+      clientActivityId: activity.clientActivityId,
+      coordinateSource: 'none',
+    });
+    await endSimulatorProvider('discarded');
+  }
 }

@@ -191,14 +191,21 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
   // Apply whatever pages we got — O7 partial-result rule.
   if (accumulated.length === 0) {
     // BUG-E fix: in reconcile mode, an empty server result means
-    // "server canonically has zero points" — wipe local. Without this
-    // branch, server-side delete is invisible to client forever.
+    // "server canonically has zero synced points". Drop stale synced cache
+    // rows while retaining only genuinely unsynced local evidence so an
+    // offline Activity is not erased before its first upload. The supported
+    // account reset aborts pending work and clearAll()s locally, so reset
+    // points cannot be resurrected through this branch.
     if (reconcile && !aborted) {
+      const localUnsynced = useMemoryStore.getState().points.filter((point) => !point.synced);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('./appLog').log('v371.pull_memory_reconcile_server_empty', { local_n: useMemoryStore.getState().points.length });
+        require('./appLog').log('o41.pull_memory_reconcile_server_empty', {
+          local_n: useMemoryStore.getState().points.length,
+          unsynced_n: localUnsynced.length,
+        });
       } catch {/* ignore */}
-      useMemoryStore.getState().replacePoints([], useMemoryStore.getState().initialRevealDone);
+      useMemoryStore.getState().replacePoints(localUnsynced, useMemoryStore.getState().initialRevealDone);
       return;
     }
     // If we were aborted with NO pages, nothing to merge. Schedule a

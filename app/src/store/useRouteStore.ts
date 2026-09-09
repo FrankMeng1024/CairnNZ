@@ -111,7 +111,10 @@ interface RouteStore {
   loadRouteDetail: (id: string) => Promise<void>;
 
   // CRUD
-  addRoute: (route: Omit<Route, 'id' | 'createdAt' | 'updatedAt' | 'runCount' | 'isActive'>) => Promise<string | null>;
+  addRoute: (
+    route: Omit<Route, 'id' | 'createdAt' | 'updatedAt' | 'runCount' | 'isActive'>,
+    sourceActivity?: { clientActivityId?: string; serverActivityId?: number },
+  ) => Promise<string | null>;
   updateRoute: (id: string, updates: Partial<Route>) => Promise<void>;
   deleteRoute: (id: string) => Promise<void>;
 
@@ -186,7 +189,7 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     }));
   },
 
-  addRoute: async (routeData) => {
+  addRoute: async (routeData, sourceActivity) => {
     const created = await createRoute({
       name: routeData.name,
       description: routeData.description,
@@ -197,6 +200,8 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       // Sprint 69 STORY-00535: thread permission to backend POST /api/routes.
       // Caller (RouteEditorScreen) defaults to 'friend' per v4.U binding.
       permission: routeData.permission,
+      source_activity_client_id: sourceActivity?.clientActivityId,
+      source_session_id: sourceActivity?.serverActivityId,
     });
     if (!created) return null;
     const route: Route = {

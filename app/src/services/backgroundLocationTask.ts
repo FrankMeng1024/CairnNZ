@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { debugLogger } from './debugLogger';
 import { crashLogger } from './crashLogger';
+import { appendSimulatorLog } from '../features/activitySimulator/simulatorLog';
 import { newSegmentId, shouldStartNewSegment, type SegmentedTrackPoint } from '../features/activity/activityContracts';
 
 export const BACKGROUND_LOCATION_TASK = 'cairn-background-location';
@@ -259,6 +260,18 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
       ownerGeneration: context.ownerGeneration,
       segmentId: context.segmentId,
     };
+    appendSimulatorLog('LOCATION', 'real_activity_location_callback', {
+      sampleSource: 'background',
+      sequenceTimestamp: Math.floor(sampleTimestamp),
+      callbackWallTimestamp: Date.now(),
+      accuracyM: coords.accuracy,
+      speedMps: coords.speed,
+      nativeBatchSize: locations.length,
+    }, {
+      userId: context.userId,
+      clientActivityId: context.clientActivityId,
+      coordinateSource: 'real',
+    });
     events.push({
       t: sampleTimestamp,
       lat: coords.latitude,

@@ -179,6 +179,8 @@ function activeCandidates(basePath: string): string[] {
   return [basePath, `${basePath}.next`, `${basePath}.bak`];
 }
 
+const truncationPath = (basePath: string) => `${basePath}.truncate.json`;
+
 function isSaneStoredCoordinate(point: any): boolean {
   return Number.isFinite(point?.t)
     && point.t > 0
@@ -191,6 +193,12 @@ function isSaneStoredCoordinate(point: any): boolean {
 }
 
 async function readBestSnapshot(fs: any, basePath: string): Promise<string> {
+  let maximumLines: number | null = null;
+  try {
+    const raw = await fs.readAsStringAsync(truncationPath(basePath));
+    const value = Number(JSON.parse(raw)?.maximumLines);
+    if (Number.isInteger(value) && value >= 0) maximumLines = value;
+  } catch { /* no pending crash-safe truncation */ }
   let best = '';
   let bestLines = -1;
   for (const path of activeCandidates(basePath)) {
@@ -198,17 +206,19 @@ async function readBestSnapshot(fs: any, basePath: string): Promise<string> {
       const info = await fs.getInfoAsync(path);
       if (!info.exists) continue;
       const value = await fs.readAsStringAsync(path);
-      let validLines = 0;
+      const valid: string[] = [];
       for (const line of value.split('\n')) {
         if (!line.trim()) continue;
         try {
           const point = JSON.parse(line);
           if (!isSaneStoredCoordinate(point)) break;
-          validLines += 1;
+          valid.push(line);
         } catch { break; }
       }
+      const bounded = maximumLines === null ? valid : valid.slice(0, maximumLines);
+      const validLines = bounded.length;
       if (validLines > bestLines) {
-        best = value;
+        best = bounded.length > 0 ? `${bounded.join('\n')}\n` : '';
         bestLines = validLines;
       }
     } catch { /* try the next crash-recovery candidate */ }
@@ -238,6 +248,30 @@ async function appendSnapshot(fs: any, basePath: string, lines: string): Promise
     } catch { /* active may already be in .bak after a prior interrupted commit */ }
     await fs.moveAsync({ from: nextPath, to: basePath });
     try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
+    try { await fs.deleteAsync(truncationPath(basePath), { idempotent: true }); } catch {}
+  });
+  durableWriteTail = run.catch(() => {});
+  await run;
+}
+
+async function replaceSnapshotWithPrefix(fs: any, basePath: string, replacement: string, maximumLines: number): Promise<void> {
+  const run = durableWriteTail.then(async () => {
+    const nextPath = `${basePath}.next`;
+    const backupPath = `${basePath}.bak`;
+    // This cap is committed first. If iOS kills the process during the swap,
+    // recovery bounds every old/new candidate to the corrected Activity tail.
+    await fs.writeAsStringAsync(truncationPath(basePath), JSON.stringify({ maximumLines }));
+    await fs.writeAsStringAsync(nextPath, replacement);
+    const verified = await fs.readAsStringAsync(nextPath);
+    if (verified !== replacement) throw new Error('activity_journal_truncation_verification_failed');
+    try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
+    try {
+      const current = await fs.getInfoAsync(basePath);
+      if (current.exists) await fs.moveAsync({ from: basePath, to: backupPath });
+    } catch { /* active may already have moved before a process interruption */ }
+    await fs.moveAsync({ from: nextPath, to: basePath });
+    try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
+    await fs.deleteAsync(truncationPath(basePath), { idempotent: true });
   });
   durableWriteTail = run.catch(() => {});
   await run;
@@ -263,6 +297,7 @@ export async function startHikeTrack(sessionId: string, meta: Omit<HikeMeta, 'se
       if (info.exists) await fs.deleteAsync(path, { idempotent: true });
     } catch { /* best effort */ }
   }
+  try { await fs.deleteAsync(truncationPath(activePath), { idempotent: true }); } catch {}
   // Write initial meta
   const fullMeta: HikeMeta = {
     session_id: sessionId,
@@ -400,6 +435,7 @@ export async function renameToCompleted(sessionId: string, endedAt: number, remo
       for (const candidate of activeCandidates(activePath)) {
         try { await fs.deleteAsync(candidate, { idempotent: true }); } catch {}
       }
+      try { await fs.deleteAsync(truncationPath(activePath), { idempotent: true }); } catch {}
       activeExisted = true;
     }
   } catch { /* best effort */ }
@@ -521,6 +557,7 @@ export async function discardActiveHike(sessionId: string): Promise<void> {
   for (const candidate of activeCandidates(activePath)) {
     await deleteAndVerifyAbsent(fs, candidate);
   }
+  await deleteAndVerifyAbsent(fs, truncationPath(activePath));
   await deleteAndVerifyAbsent(fs, metaPath);
 }
 
@@ -529,6 +566,40 @@ export async function discardActiveHike(sessionId: string): Promise<void> {
  */
 export async function flushNow(): Promise<void> {
   await flushBuffer();
+}
+
+/**
+ * Internal-QA Activity tail correction. The crash marker is written before
+ * the verified snapshot swap, so recovery can never select the longer
+ * pre-correction `.bak` merely because it contains more valid lines.
+ */
+export async function truncateActiveHikeTrack(sessionId: string, points: HikePoint[]): Promise<void> {
+  if (!state || state.sessionId !== sessionId) throw new Error('activity_journal_not_active');
+  await flushBuffer();
+  const fs = await getFs();
+  if (!fs) {
+    state.totalPoints = points.length;
+    state.buffer = [];
+    return;
+  }
+  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  const replacement = points.length > 0
+    ? `${points.map(point => JSON.stringify(point)).join('\n')}\n`
+    : '';
+  await replaceSnapshotWithPrefix(fs, activePath, replacement, points.length);
+  state.totalPoints = points.length;
+  state.buffer = [];
+  const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
+  try {
+    const metaRaw = await fs.readAsStringAsync(metaPath);
+    const meta: HikeMeta = JSON.parse(metaRaw);
+    meta.total_points = points.length;
+    meta.last_ts = points[points.length - 1]?.t;
+    await fs.writeAsStringAsync(metaPath, JSON.stringify(meta));
+  } catch {
+    // The verified journal is the route authority. A stale advisory count must
+    // never turn a successfully committed tail correction into a false failure.
+  }
 }
 
 /** Persist a late server mapping without changing the client identity. */
@@ -570,7 +641,7 @@ export async function assertHikeTrackCleanupOwner(sessionId: string, expectedUse
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
   const completedPath = fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl';
   const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
-  const artifactPaths = [...activeCandidates(activePath), completedPath, metaPath];
+  const artifactPaths = [...activeCandidates(activePath), truncationPath(activePath), completedPath, metaPath];
   const infos = await Promise.all(artifactPaths.map(path => fs.getInfoAsync(path)));
   if (!infos.some(info => info.exists)) return;
   const metaInfo = infos[infos.length - 1];
@@ -603,6 +674,7 @@ export async function deleteAcknowledgedHikeTrackArtifacts(
   for (const candidate of activeCandidates(activePath)) {
     await deleteAndVerifyAbsent(fs, candidate);
   }
+  await deleteAndVerifyAbsent(fs, truncationPath(activePath));
   await deleteAndVerifyAbsent(fs, fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl');
   await deleteAndVerifyAbsent(fs, fs.documentDirectory + META_DIR + sessionId + '.json');
 }

@@ -31,10 +31,20 @@ export function simulatorRuntimeAuthorized(): boolean {
   return isActivitySimulatorAuthorized(useSettingsStore.getState().debugMode);
 }
 
+export function resolveActivityLocationSource(
+  buildCapable: boolean,
+  debugMode: boolean,
+  simulatorEnabled: boolean,
+): ActivityLocationSource {
+  return buildCapable && debugMode && simulatorEnabled ? 'simulator' : 'real';
+}
+
 export function selectedActivityLocationSource(): ActivityLocationSource {
-  return simulatorRuntimeAuthorized() && useActivitySimulatorStore.getState().enabled
-    ? 'simulator'
-    : 'real';
+  return resolveActivityLocationSource(
+    activitySimulatorBuildCapable,
+    useSettingsStore.getState().debugMode,
+    useActivitySimulatorStore.getState().enabled,
+  );
 }
 
 export async function prepareSimulatorProvider(userId: string): Promise<boolean> {
@@ -43,10 +53,15 @@ export async function prepareSimulatorProvider(userId: string): Promise<boolean>
     await hydrateActivitySimulatorForUser(userId);
   }
   const state = useActivitySimulatorStore.getState();
-  return state.enabled
+  const ready = state.enabled
+    && state.startConfigured
     && state.hydratedUserId === userId
     && Number.isFinite(state.current.lat)
     && Number.isFinite(state.current.lng);
+  if (!ready && state.enabled && !state.startConfigured) {
+    state.setLastFailure('Set a Simulator start point before starting the Activity.');
+  }
+  return ready;
 }
 
 function leaseFrom(context: ActivityProviderContext): SimulatorActivityLease {
@@ -75,6 +90,7 @@ export function activateSimulatorProvider(
       clientActivityId: sample.clientActivityId,
       ownerGeneration: sample.ownerGeneration,
       segmentId: sample.segmentId,
+      segmentStartReason: sample.segmentStartReason,
       source: 'simulator',
     }, sample.timestamp);
   if (resume) {
@@ -101,6 +117,27 @@ export function pauseSimulatorProvider(): void {
   activitySimulatorEngine.pauseActivity();
 }
 
+export async function pauseSimulatorProviderForCorrection(): Promise<void> {
+  await activitySimulatorEngine.pauseForCorrection();
+}
+
+export function restoreSimulatorProviderTail(args: {
+  coordinate: { lat: number; lng: number };
+  altitudeM: number;
+  virtualTimestampMs: number;
+  segmentId: string;
+}): void {
+  activitySimulatorEngine.restoreCommittedTail(args);
+}
+
+export async function reacquireSimulatorProviderAt(
+  coordinate: { lat: number; lng: number },
+  segmentId: string,
+  nextSignal: Exclude<import('./types').SimulatorSignal, 'lost'> = 'normal',
+): Promise<void> {
+  await activitySimulatorEngine.reacquireAt(coordinate, segmentId, nextSignal);
+}
+
 export async function endSimulatorProvider(
   reason: 'completed' | 'discarded' | 'account-switch' | 'start-failed',
 ): Promise<void> {
@@ -111,7 +148,7 @@ export function isSimulatorProviderBound(clientActivityId?: string | null): bool
   return activitySimulatorEngine.isActivityBound(clientActivityId);
 }
 
-/** Current synthetic physical fix for normal foreground consumers such as Plant. */
+/** Last canonically accepted synthetic fix for foreground consumers such as Plant. */
 export function readTrustedSimulatorLocation(): {
   lat: number;
   lng: number;
@@ -121,14 +158,25 @@ export function readTrustedSimulatorLocation(): {
 } | null {
   if (!simulatorRuntimeAuthorized()) return null;
   const state = useActivitySimulatorStore.getState();
-  if (!state.enabled || state.signal !== 'normal') return null;
-  return {
-    lat: state.current.lat,
-    lng: state.current.lng,
-    altitudeM: state.altitudeM,
-    accuracyM: simulatorAccuracyMeters(state),
-    timestamp: state.boundActivityClientId && state.virtualTimestampMs > 0
-      ? state.virtualTimestampMs
-      : Date.now(),
-  };
+  if (!state.enabled || !state.startConfigured || state.signal === 'lost') return null;
+  try {
+    // Dynamic resolution avoids a store initialization cycle. A hidden Lost
+    // position and an unaccepted Poor/teleport sample are never Cairn input.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const tracking = require('../../store/useTrackingStore').useTrackingStore.getState();
+    if (
+      tracking.locationProviderSource !== 'simulator'
+      || !tracking.lastCoordinate
+      || tracking.lastCoordinateTime === null
+    ) return null;
+    return {
+      lat: tracking.lastCoordinate.lat,
+      lng: tracking.lastCoordinate.lng,
+      altitudeM: tracking.lastCoordinate.alt ?? state.altitudeM,
+      accuracyM: tracking.lastCoordinate.accuracy ?? simulatorAccuracyMeters(state),
+      timestamp: tracking.lastCoordinateTime,
+    };
+  } catch {
+    return null;
+  }
 }

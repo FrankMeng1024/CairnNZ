@@ -15,6 +15,8 @@ interface RoutePayload {
   // Sprint 69 STORY-00535: visibility tier ('personal' | 'friend'). Backend
   // rejects 'public' from clients via Sprint 67 H1.
   permission?: 'personal' | 'friend';
+  source_activity_client_id?: string;
+  source_session_id?: number;
 }
 
 interface RemoteRoute {
@@ -88,11 +90,17 @@ export async function createRoute(payload: RoutePayload): Promise<Route | null> 
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      let body: any = null;
+      try { body = await res.json(); } catch { /* non-JSON response */ }
+      const error = new Error(body?.error ?? `Route create failed (${res.status})`);
+      (error as any).code = body?.code ?? `HTTP_${res.status}`;
+      throw error;
+    }
     const data = await res.json();
     return data?.route ? remoteToLocal(data.route) : null;
-  } catch {
-    return null;
+  } catch (error) {
+    throw error;
   }
 }
 

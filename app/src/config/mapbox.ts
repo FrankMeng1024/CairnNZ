@@ -6,18 +6,28 @@
  */
 import { Platform } from 'react-native';
 
-const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
+const MAPBOX_TOKEN = (process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '').trim();
+
+/** Public Mapbox tokens are bundled client configuration, never telemetry. */
+export function isMapboxTokenConfigured(): boolean {
+  return MAPBOX_TOKEN.startsWith('pk.') && MAPBOX_TOKEN.length >= 40;
+}
 
 export function initMapbox() {
   if (Platform.OS === 'web') {
     // On web, set token directly on mapbox-gl (async import to avoid SSR issues)
-    import('mapbox-gl').then((mapboxgl) => {
-      mapboxgl.default.accessToken = MAPBOX_TOKEN;
-    });
+    if (isMapboxTokenConfigured()) {
+      import('mapbox-gl').then((mapboxgl) => {
+        mapboxgl.default.accessToken = MAPBOX_TOKEN;
+      });
+    }
   } else {
     // Native only: @rnmapbox/maps API
     const Mapbox = require('@rnmapbox/maps').default;
-    Mapbox.setAccessToken(MAPBOX_TOKEN);
+    // An O37 OTA without its EAS environment called setAccessToken(''),
+    // replacing any native/default token and producing 401s for every source.
+    // Empty configuration must never mutate the native singleton.
+    if (isMapboxTokenConfigured()) Mapbox.setAccessToken(MAPBOX_TOKEN);
     Mapbox.setTelemetryEnabled(false);
     // R114/O22 Bug 4: pre-warm the NZ tile cache at app boot. On first
     // launch (or after a fresh install) the map otherwise renders as a
@@ -29,7 +39,7 @@ export function initMapbox() {
     // the worst case.
     try {
       const offline = (Mapbox as any).offlineManager;
-      if (offline && typeof offline.createPack === 'function') {
+      if (isMapboxTokenConfigured() && offline && typeof offline.createPack === 'function') {
         const styleURL = process.env.EXPO_PUBLIC_CAIRN_TOPO_STYLE_URL
           ?? 'mapbox://styles/mapbox/standard';
         offline.getPack('cairn-nz-warmup').then((pack: unknown) => {
@@ -159,11 +169,10 @@ export function themeToStandardPreset(theme: MapTheme): StandardLightPreset {
  * to Standard and cannot be disabled via config — pitch=0 hides it
  * effectively (only shading remains, no elevation parallax).
  *
- * R21-v3 v4 (2026-08-30) — additional refinements for hiking/outdoor
- * feel (免费, 全部 Mapbox Standard 内建):
- *   - theme=faded → basemap tuned down so cairn pins + route + fog
- *     stand out; matches Cairn's "map is a canvas, your data is the
- *     content" ethos
+ * R21-v3 v4 / O38 — supported Mapbox Standard configuration for an outdoor
+ * activity map. O38 restores the default cartographic hierarchy because the
+ * earlier faded theme made minor paths and context needlessly coarse:
+ *   - theme=default → retain useful basemap/path contrast
  *   - font=Spectral → warmer, more editorial serif; feels like a
  *     printed hiking map rather than a car dashboard
  *   - showTransitLabels=false → public-transit stops/lines are noise
@@ -186,7 +195,9 @@ type StandardConfig = { [key: string]: string | boolean };
 export function buildStandardConfig(theme: MapTheme): StandardConfig {
   return {
     lightPreset: themeToStandardPreset(theme),
-    theme: 'faded',
+    // O38: restore cartographic hierarchy. `faded` deliberately suppresses
+    // basemap contrast; the default theme keeps trail/road context legible.
+    theme: 'default',
     font: 'Spectral',
     show3dObjects: false,
     show3dBuildings: false,
@@ -195,6 +206,9 @@ export function buildStandardConfig(theme: MapTheme): StandardConfig {
     show3dTrees: false,
     showTransitLabels: false,
     showPedestrianRoads: true,
+    showPlaceLabels: true,
+    showPointOfInterestLabels: true,
+    showRoadLabels: true,
   };
 }
 

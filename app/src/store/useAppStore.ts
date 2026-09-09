@@ -15,8 +15,8 @@ import { crashLogger } from '../services/crashLogger';
 // v405: memorySync attach 从 FGUM 提前到 hydrate,让 stopTracking →
 // pushMemoryNow 无论用户是否进过 Memory tab 都能 push。见 happy-path
 // 诊断报告 修复 1。
-import { attachMemorySync, detachMemorySync } from '../services/memorySync';
-import { hydrateMemoryForUser, detachMemoryPersistence } from '../features/memory/services/memoryPersistence';
+import { detachMemorySync } from '../services/memorySync';
+import { detachMemoryPersistence } from '../features/memory/services/memoryPersistence';
 
 // O12 (2026-07-27): UIMode / uiMode / setUIMode removed. Was Explorer/Navigator
 // double-switch — dead code (only 'brg' placeholder stat used isExpert). Also
@@ -262,31 +262,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           set({ user, isLoggedIn: true });
           crashLogger.breadcrumb(`hydrate:cold_boot_prewarm user_id=${user.id}`);
           try { await useMarkerStore.getState().hydrate(user.id); } catch { /* swallow */ }
-          // v405: hydrate memory points from AsyncStorage + attach memory
-          // sync. 修复 happy path bug: pre-v405 attachMemorySync 只在
-          // MemoryScreen 挂载时跑,用户 hike → save → pushMemoryNow 因
-          // activeUserId=null 直接 return, memory_points 表无新增。
-          // 现在 cold-boot 就 attach,任何屏幕的 pushMemoryNow 都能 push。
-          //
-          // 顺序: hydrateMemoryForUser (从 AsyncStorage 载 unsynced points
-          // 到 useMemoryStore) → attachMemorySync (subscriber 检测到 unsynced
-          // count 就 schedulePush)。反过来会漏掉旧 unsynced points。
-          let memoryHydrated = false;
-          try {
-            await hydrateMemoryForUser(user.id);
-            memoryHydrated = true;
-            crashLogger.breadcrumb(`v405:mem_hydrate_ok user_id=${user.id}`);
-          } catch (memErr) {
-            crashLogger.breadcrumb(`v405:mem_hydrate_failed ${String(memErr).slice(0, 80)}`);
-          }
-          if (memoryHydrated) {
-            try {
-              attachMemorySync(user.id);
-              crashLogger.breadcrumb(`v405:mem_sync_attached user_id=${user.id}`);
-            } catch (attachErr) {
-              crashLogger.breadcrumb(`v405:mem_sync_attach_failed ${String(attachErr).slice(0, 80)}`);
-            }
-          }
+          // O41: canonical Memory initialization is owned by AppRoot's
+          // authenticated-user effect. Keeping it out of this cold-boot-only
+          // function also covers password, Apple, registration, and account
+          // restore login paths without depending on a screen lifecycle.
           // v404: fetch backend sessions on cold boot even though isLoggedIn=false.
           // 登录成功后 UI 需要立刻看到 activity 列表，避免登录后再等一轮网络。
           try {

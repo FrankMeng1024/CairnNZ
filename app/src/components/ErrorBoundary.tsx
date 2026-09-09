@@ -37,6 +37,17 @@ export class ErrorBoundary extends React.Component<Props, State> {
     crashLogger.breadcrumb(
       `errorBoundary:${this.props.tag}: ${String(error?.message || error).slice(0, 120)}`,
     );
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../features/activitySimulator/simulatorLog').appendSimulatorLog('ERROR', 'react_error_boundary', {
+        boundary: this.props.tag,
+        errorName: error.name,
+        message: error.message,
+        componentStackTop: info?.componentStack?.split('\n').slice(0, 4).join('\n') ?? null,
+      }, { coordinateSource: 'none' });
+    } catch {
+      // Internal QA telemetry cannot affect fallback rendering.
+    }
     // Persist to crash store so it uploads on next launch.
     try {
       // crashLogger doesn't expose a public "report" method, but the global

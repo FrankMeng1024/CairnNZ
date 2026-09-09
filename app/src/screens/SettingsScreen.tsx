@@ -35,6 +35,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppStore } from '../store/useAppStore';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { useTrackingStore } from '../store/useTrackingStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 // R114/O22 STORY-73024 (S3): Memory always-on toggle read/write.
 import { useMemorySettingsStore } from '../features/memory/store/useMemorySettingsStore';
@@ -43,6 +44,7 @@ import { useMarkerStore } from '../store/useMarkerStore';
 import { useSessionStore } from '../store/useSessionStore';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
+import { resolveSimulatorContinuityLock } from '../features/activitySimulator/simulatorContinuity';
 import { logout, patchName } from '../services/authService';
 import { haptic } from '../services/hapticService';
 import { deleteAllMemoryFromServer } from '../services/memorySync';
@@ -73,11 +75,12 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 // ── Row helpers ────────────────────────────────────────────────────────────
 function ToggleRow({
   iconName, iconColor, iconBg, label, hint, value, onToggle,
-  textColor, mutedColor,
+  textColor, mutedColor, disabled, testID,
 }: {
   iconName: IconName; iconColor: string; iconBg: string;
   label: string; hint?: string;
   value: boolean; onToggle: () => void;
+  disabled?: boolean; testID?: string;
   // R21 (2026-08-17): optional weather/appearance-adaptive text colors.
   // When bg is dark (night variant), the default deep-green label + grey
   // hint disappear; caller passes cardTextColor + cardTextColorMuted so
@@ -85,7 +88,7 @@ function ToggleRow({
   textColor?: string; mutedColor?: string;
 }) {
   return (
-    <View style={rowStyles.row}>
+    <View style={[rowStyles.row, disabled ? { opacity: 0.5 } : null]}>
       <View style={[rowStyles.iconWrap, { backgroundColor: iconBg }]}>
         <Icon name={iconName} size={18} color={iconColor} strokeWidth={1.8} />
       </View>
@@ -94,8 +97,11 @@ function ToggleRow({
         {hint ? <Text style={[rowStyles.hint, mutedColor ? { color: mutedColor } : null]} numberOfLines={2}>{hint}</Text> : null}
       </View>
       <Switch
+        testID={testID}
+        accessibilityLabel={label}
         value={value}
         onValueChange={onToggle}
+        disabled={disabled}
         trackColor={{ false: Colors.switchTrack, true: Colors.primary }}
         thumbColor={Colors.surface}
       />
@@ -263,6 +269,16 @@ export function SettingsScreen() {
   const { user, isLoggedIn, logout: appLogout, setUser } = useAppStore();
   const activitySimulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
   const setActivitySimulatorEnabled = useActivitySimulatorStore((s) => s.setEnabled);
+  const simulatorBoundActivityId = useActivitySimulatorStore((s) => s.boundActivityClientId);
+  const trackingStatus = useTrackingStore((s) => s.status);
+  const trackingSessionId = useTrackingStore((s) => s.sessionId);
+  const trackingProviderSource = useTrackingStore((s) => s.locationProviderSource);
+  const simulatorContinuity = resolveSimulatorContinuityLock({
+    boundActivityClientId: simulatorBoundActivityId,
+    trackingStatus,
+    trackingSessionId,
+    providerSource: trackingProviderSource,
+  });
 
   // Weather location override (dev testing)
   const weatherOverride = useWeatherStore((s) => s.locationOverride);
@@ -1581,9 +1597,13 @@ export function SettingsScreen() {
                       iconColor={Colors.primary}
                       iconBg={Colors.primaryLight}
                       label="Activity Simulator"
-                      hint="Internal QA virtual GPS for Hike and Run"
+                      hint={simulatorContinuity.locked
+                        ? simulatorContinuity.reason ?? 'Resolve the Simulator Activity first'
+                        : 'Internal QA virtual GPS for Hike and Run'}
                       value={activitySimulatorEnabled}
                       onToggle={() => setActivitySimulatorEnabled(!activitySimulatorEnabled)}
+                      disabled={simulatorContinuity.locked}
+                      testID="activity-simulator-toggle"
                       textColor={settingsBgTokens.cardTextColor}
                       mutedColor={settingsBgTokens.cardTextColorMuted}
                     />

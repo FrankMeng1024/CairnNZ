@@ -1,20 +1,37 @@
 import { destinationPoint, distanceMeters, initialBearingDegrees } from './geodesy';
 import { appendSimulatorLog } from './simulatorLog';
 import { persistActivitySimulatorNow, simulatorAccuracyMeters, useActivitySimulatorStore } from './useActivitySimulatorStore';
-import type { SimulatorActivityLease } from './types';
+import type { SimulatorActivityLease, SimulatorSignal } from './types';
 import { advanceSimulatorClock } from './simulatorTime';
 
 export const SIMULATOR_SAMPLE_INTERVAL_MS = 1_000;
 // Acceleration is represented by ordered canonical evidence, not one giant
-// leap per wall tick. Ten virtual seconds keeps the worst-case 30x batch to
-// three samples during a normal 1 Hz tick and avoids sparse Memory geometry.
+// leap per wall tick. Ten virtual seconds keeps 30x at three samples and 120x
+// at twelve samples during a normal 1 Hz tick, avoiding sparse Memory geometry.
 export const SIMULATOR_MAX_VIRTUAL_SAMPLE_INTERVAL_MS = 10_000;
+// A 120x normal timer tick becomes twelve ordered ten-second canonical
+// samples. If JS was suspended, do not replay more than this in one turn:
+// delayed wall time is Debug wait-time noise, not missing Activity movement.
+export const SIMULATOR_MAX_VIRTUAL_ADVANCE_PER_TICK_MS = 120_000;
+export const SIMULATOR_MAX_SAMPLES_PER_TICK = Math.ceil(
+  SIMULATOR_MAX_VIRTUAL_ADVANCE_PER_TICK_MS / SIMULATOR_MAX_VIRTUAL_SAMPLE_INTERVAL_MS,
+);
 export const SIMULATOR_JOYSTICK_DEAD_ZONE = 0.12;
 const WAYPOINT_ARRIVAL_M = 1;
 // Do not replay an unbounded timer backlog after JS was suspended. A real
 // process/background interruption is represented by recovery/segment state,
 // not by flooding thousands of delayed synthetic callbacks on foregrounding.
 const MAX_WALL_ELAPSED_TICK_MS = 5_000;
+
+/**
+ * Poor GPS still produces a live but degraded feed. The deterministic cycle
+ * deliberately mixes usable and unusable fixes so the shared production
+ * accuracy gate — not the Simulator — decides which samples become Activity
+ * evidence. This also keeps native QA runs reproducible.
+ */
+export function poorSimulatorAccuracyMeters(sequence: number): number {
+  return [18, 48, 22, 60][Math.abs(Math.floor(sequence)) % 4];
+}
 
 export interface SimulatorCanonicalSample {
   lat: number;
@@ -27,6 +44,7 @@ export interface SimulatorCanonicalSample {
   clientActivityId?: string;
   ownerGeneration?: string;
   segmentId?: string;
+  segmentStartReason?: 'gps-reacquired';
   source: 'simulator';
   sequence: number;
 }
@@ -49,6 +67,9 @@ class ActivitySimulatorEngine {
   private sink: ActivitySink | null = null;
   private passiveListeners = new Set<PassiveListener>();
   private ticking = false;
+  private correctionPaused = false;
+  private providerPaused = false;
+  private frozenReportedPosition: { lat: number; lng: number; altitudeM: number } | null = null;
 
   startRuntime(): void {
     if (this.timer) return;
@@ -68,6 +89,9 @@ class ActivitySimulatorEngine {
     this.lease = { ...lease };
     this.sink = sink;
     this.lastTickWallMs = Date.now();
+    this.correctionPaused = false;
+    this.providerPaused = false;
+    this.frozenReportedPosition = null;
     const simulatorSessionId = useActivitySimulatorStore.getState().bindActivity(
       lease.ownerUserId,
       lease.clientActivityId,
@@ -95,14 +119,16 @@ class ActivitySimulatorEngine {
 
   pauseActivity(): void {
     this.sink = null;
+    this.providerPaused = true;
     appendSimulatorLog('ACTIVITY_STATE', 'simulator_provider_paused', {
-      virtualMovementStillAllowed: true,
+      virtualMovementStillAllowed: false,
     });
   }
 
   resumeActivity(lease: SimulatorActivityLease, sink: ActivitySink): void {
     this.lease = { ...lease };
     this.sink = sink;
+    this.providerPaused = false;
     // One millisecond of wall time guarantees the forced Resume anchor is
     // strictly newer than the pre-interruption sample without inventing a
     // meaningful Activity interval.
@@ -120,6 +146,9 @@ class ActivitySimulatorEngine {
     const lease = this.lease;
     this.sink = null;
     this.lease = null;
+    this.correctionPaused = false;
+    this.providerPaused = false;
+    this.frozenReportedPosition = null;
     if (lease) {
       appendSimulatorLog('SIM_SESSION', 'simulator_activity_unbound', { reason }, {
         userId: lease.ownerUserId,
@@ -130,7 +159,15 @@ class ActivitySimulatorEngine {
     // persisted simulator binding/context so the original owner can recover;
     // completion/discard/start failure end the simulator session normally.
     if (reason !== 'account-switch') {
-      useActivitySimulatorStore.getState().unbindActivity();
+      const clearOrigin = reason === 'completed' || reason === 'discarded';
+      if (clearOrigin && lease) {
+        appendSimulatorLog('SIM_SESSION', 'virtual_origin_cleared', { reason }, {
+          userId: lease.ownerUserId,
+          clientActivityId: lease.clientActivityId,
+          coordinateSource: 'none',
+        });
+      }
+      useActivitySimulatorStore.getState().unbindActivity({ clearOrigin });
     }
     await persistActivitySimulatorNow().catch(() => {});
   }
@@ -148,37 +185,85 @@ class ActivitySimulatorEngine {
     return !!this.lease && (!clientActivityId || this.lease.clientActivityId === clientActivityId);
   }
 
+  async pauseForCorrection(): Promise<void> {
+    this.correctionPaused = true;
+    useActivitySimulatorStore.getState().releaseJoystick();
+    for (let attempt = 0; this.ticking && attempt < 200; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 5));
+    }
+    if (this.ticking) throw new Error('simulator_pipeline_busy');
+  }
+
+  restoreCommittedTail(args: {
+    coordinate: { lat: number; lng: number };
+    altitudeM: number;
+    virtualTimestampMs: number;
+    segmentId: string;
+  }): void {
+    if (this.lease) this.lease = { ...this.lease, segmentId: args.segmentId, segmentStartReason: undefined };
+    useActivitySimulatorStore.getState().restoreRuntimeTail(
+      args.coordinate,
+      args.altitudeM,
+      args.virtualTimestampMs,
+    );
+    this.frozenReportedPosition = null;
+    this.lastTickWallMs = Date.now();
+    this.correctionPaused = false;
+  }
+
+  async reacquireAt(
+    coordinate: { lat: number; lng: number },
+    segmentId: string,
+    nextSignal: Exclude<SimulatorSignal, 'lost'> = 'normal',
+  ): Promise<void> {
+    this.correctionPaused = true;
+    useActivitySimulatorStore.getState().releaseJoystick();
+    if (this.lease) this.lease = { ...this.lease, segmentId, segmentStartReason: 'gps-reacquired' };
+    const state = useActivitySimulatorStore.getState();
+    useActivitySimulatorStore.getState().restoreRuntimeTail(
+      coordinate,
+      state.altitudeM,
+      state.virtualTimestampMs,
+    );
+    useActivitySimulatorStore.getState().setSignal(nextSignal);
+    this.frozenReportedPosition = null;
+    this.lastTickWallMs = Date.now() - 1;
+    this.correctionPaused = false;
+    await this.tick(Date.now(), true);
+  }
+
   /** Public for deterministic unit tests and compact QA scenario actions. */
   async tick(nowMs = Date.now(), forceSample = false): Promise<void> {
-    if (this.ticking) return;
+    if (this.ticking || this.correctionPaused || this.providerPaused) return;
     this.ticking = true;
     try {
       const state = useActivitySimulatorStore.getState();
       const previousWall = this.lastTickWallMs ?? nowMs;
-      const elapsedWallMs = Math.max(0, Math.min(MAX_WALL_ELAPSED_TICK_MS, nowMs - previousWall));
+      const wallElapsedCapMs = Math.min(
+        MAX_WALL_ELAPSED_TICK_MS,
+        SIMULATOR_MAX_VIRTUAL_ADVANCE_PER_TICK_MS / Math.max(1, state.timeScale),
+      );
+      const elapsedWallMs = Math.max(0, Math.min(wallElapsedCapMs, nowMs - previousWall));
       this.lastTickWallMs = nowMs;
       const activityBound = !!this.lease;
-      const effectiveTimeScale = activityBound ? state.timeScale : 1;
+      // Configuration is inert until Start binds an Activity lease. The SIM
+      // panel may prepare a start/destination/waypoint queue, but it cannot
+      // advance a virtual location, publish a passive fix, or affect a map
+      // lifecycle while the ordinary pre-Activity map is in use.
+      if (!activityBound) return;
+      const effectiveTimeScale = state.timeScale;
       const activityStartedAtMs = state.virtualActivityStartedAtMs ?? (state.virtualTimestampMs || nowMs);
-      const clock = activityBound
-        ? advanceSimulatorClock({
-            activityStartedAtMs,
-            previousVirtualTimestampMs: state.virtualTimestampMs || activityStartedAtMs,
-            wallElapsedMs: elapsedWallMs,
-            wallClockTimestampMs: nowMs,
-            timeScale: effectiveTimeScale,
-          })
-        : {
-            virtualTimestampMs: nowMs,
-            appliedVirtualElapsedMs: elapsedWallMs,
-            effectiveVirtualElapsedMs: 0,
-            limitReached: false,
-            maximumVirtualTimestampMs: nowMs,
-          };
+      const clock = advanceSimulatorClock({
+        activityStartedAtMs,
+        previousVirtualTimestampMs: state.virtualTimestampMs || activityStartedAtMs,
+        wallElapsedMs: elapsedWallMs,
+        wallClockTimestampMs: nowMs,
+        timeScale: effectiveTimeScale,
+      });
       // The limit banner is already durable. Stay quiescent until the tester
       // uses the real Finish/Discard lifecycle instead of rewriting the same
       // provider state once per second forever.
-      if (activityBound && state.clockLimitReached && clock.appliedVirtualElapsedMs <= 0) return;
+      if (state.clockLimitReached && clock.appliedVirtualElapsedMs <= 0) return;
       const nextBatchSequence = state.batchSequence + 1;
       const shouldPublish = forceSample || elapsedWallMs >= SIMULATOR_SAMPLE_INTERVAL_MS * 0.5;
       const elapsedVirtualMs = clock.appliedVirtualElapsedMs;
@@ -186,6 +271,9 @@ class ActivitySimulatorEngine {
         1,
         Math.ceil(elapsedVirtualMs / SIMULATOR_MAX_VIRTUAL_SAMPLE_INTERVAL_MS),
       );
+      if (sampleCount > SIMULATOR_MAX_SAMPLES_PER_TICK) {
+        throw new Error('simulator_sample_burst_bound_exceeded');
+      }
       let remainingVirtualMs = elapsedVirtualMs;
       let consumedVirtualMs = 0;
       let current = state.current;
@@ -209,6 +297,8 @@ class ActivitySimulatorEngine {
           magnitude = 1;
           remainingDistanceM = (state.speedKmh / 3.6) * (stepVirtualMs / 1000);
         }
+
+        const requestedDistanceM = remainingDistanceM;
 
         let guard = 0;
         while (state.autopilotActive && magnitude > 0 && useActivitySimulatorStore.getState().waypoints.length > 0 && guard < 12) {
@@ -260,8 +350,11 @@ class ActivitySimulatorEngine {
             lng: current.lng,
             altitude: altitudeM,
             movedDistanceM,
+            requestedDistanceM,
             bearingDegrees: bearing,
+            joystickActive: state.joystickActive,
             joystickMagnitude: magnitude,
+            autopilotActive: state.autopilotActive,
             signal: state.signal,
             timeScale: effectiveTimeScale,
             effectiveVirtualElapsed: effectiveVirtualElapsedMs,
@@ -271,14 +364,28 @@ class ActivitySimulatorEngine {
           }, { virtualTimestamp: virtualTimestampMs });
         }
 
-        if (!shouldPublish || state.signal === 'lost') continue;
+        if (state.signal === 'lost') {
+          this.frozenReportedPosition = null;
+          continue;
+        }
+        if (!shouldPublish) continue;
         if (!this.sink && this.passiveListeners.size === 0) continue;
         // Once the bounded clock is exhausted, do not emit duplicate timestamps.
-        if (activityBound && stepVirtualMs <= 0 && state.sampleSequence > 0) continue;
+        if (stepVirtualMs <= 0 && state.sampleSequence > 0) continue;
+        if (state.signal === 'frozen' && !this.frozenReportedPosition) {
+          this.frozenReportedPosition = { ...stepStart, altitudeM: state.altitudeM };
+        } else if (state.signal !== 'frozen') {
+          this.frozenReportedPosition = null;
+        }
+        const reported = state.signal === 'frozen' && this.frozenReportedPosition
+          ? this.frozenReportedPosition
+          : current;
         await this.emitSample({
           state,
-          current,
-          altitudeM,
+          current: reported,
+          altitudeM: state.signal === 'frozen' && this.frozenReportedPosition
+            ? this.frozenReportedPosition.altitudeM
+            : altitudeM,
           moving,
           magnitude,
           bearing,
@@ -326,17 +433,29 @@ class ActivitySimulatorEngine {
       lat: args.current.lat,
       lng: args.current.lng,
       alt: args.altitudeM,
-      accuracy: simulatorAccuracyMeters(args.state),
+      accuracy: args.state.signal === 'poor'
+        ? poorSimulatorAccuracyMeters(sequence)
+        : simulatorAccuracyMeters(args.state),
       speed: args.moving ? args.state.speedKmh / 3.6 * args.magnitude : 0,
       course: args.bearing,
       timestamp: args.virtualTimestampMs,
       clientActivityId: this.lease?.clientActivityId,
       ownerGeneration: this.lease?.ownerGeneration,
       segmentId: this.lease?.segmentId,
+      segmentStartReason: this.lease?.segmentStartReason,
       source: 'simulator',
       sequence,
     };
     useActivitySimulatorStore.setState({ sampleSequence: sequence });
+    useActivitySimulatorStore.getState().recordGeneratedSample({
+      sequence,
+      atMs: sample.timestamp,
+      lat: sample.lat,
+      lng: sample.lng,
+      bearingDegrees: sample.course,
+      joystickMagnitude: args.magnitude,
+      effectiveVirtualElapsedMs: args.effectiveVirtualElapsedMs,
+    });
     appendSimulatorLog('SIM_SAMPLE', 'simulator_sample_generated', {
       sequence,
       lat: sample.lat,
@@ -346,6 +465,9 @@ class ActivitySimulatorEngine {
       configuredSpeedKmh: args.state.speedKmh,
       emittedSpeedMps: sample.speed,
       course: sample.course,
+      joystickActive: args.state.joystickActive,
+      joystickMagnitude: args.magnitude,
+      autopilotActive: args.state.autopilotActive,
       signal: args.state.signal,
       activityBound: !!this.sink,
       timeScale: args.effectiveTimeScale,
@@ -354,6 +476,18 @@ class ActivitySimulatorEngine {
       batchSampleIndex: args.batchSampleIndex,
       batchSampleCount: args.batchSampleCount,
     }, { virtualTimestamp: sample.timestamp });
+    if (sequence === 1) {
+      appendSimulatorLog('PROVIDER', 'simulator_first_sample_generated', {
+        sequence,
+        segmentId: sample.segmentId ?? null,
+        providerLocked: true,
+      }, {
+        userId: this.lease?.ownerUserId,
+        clientActivityId: this.lease?.clientActivityId,
+        virtualTimestamp: sample.timestamp,
+        coordinateSource: 'simulator',
+      });
+    }
 
     for (const listener of this.passiveListeners) {
       try { listener(sample); } catch { /* one passive consumer cannot stop the provider */ }
@@ -369,6 +503,8 @@ class ActivitySimulatorEngine {
         reason: decision.reason,
         sequence,
         atMs: sample.timestamp,
+        lat: sample.lat,
+        lng: sample.lng,
         segmentId: decision.segmentId,
         memoryCommitted: decision.memoryCommitted,
         memoryDeduplicated: decision.memoryDeduplicated,
@@ -384,6 +520,24 @@ class ActivitySimulatorEngine {
           virtualTimestamp: sample.timestamp,
         });
         this.lease = { ...leaseAtEmission, segmentId: decision.segmentId };
+      }
+      if (decision.accepted && sequence === 1) {
+        appendSimulatorLog('PROVIDER', 'simulator_first_point_accepted', {
+          sequence,
+          segmentId: decision.segmentId ?? null,
+        }, {
+          userId: leaseAtEmission.ownerUserId,
+          clientActivityId: leaseAtEmission.clientActivityId,
+          virtualTimestamp: sample.timestamp,
+          coordinateSource: 'simulator',
+        });
+      }
+      // Keep the segment-start marker until an accepted sample establishes
+      // the new component. A rejected first Poor fix must not consume the
+      // only explicit continuity break and let the next fix attach to the
+      // previous segment.
+      if (decision.accepted && leaseAtEmission.segmentStartReason === 'gps-reacquired' && this.lease) {
+        this.lease = { ...this.lease, segmentStartReason: undefined };
       }
       appendSimulatorLog(
         decision.accepted ? 'GPS_ACCEPT' : 'GPS_REJECT',
@@ -404,7 +558,14 @@ class ActivitySimulatorEngine {
       );
     } catch (error) {
       const reason = String(error instanceof Error ? error.message : error).slice(0, 160);
-      useActivitySimulatorStore.getState().recordDecision({ accepted: false, reason, sequence, atMs: sample.timestamp });
+      useActivitySimulatorStore.getState().recordDecision({
+        accepted: false,
+        reason,
+        sequence,
+        atMs: sample.timestamp,
+        lat: sample.lat,
+        lng: sample.lng,
+      });
       appendSimulatorLog('ERROR', 'simulator_sample_pipeline_error', {
         sequence,
         errorCode: reason,

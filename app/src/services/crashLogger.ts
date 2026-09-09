@@ -22,6 +22,8 @@ import { Platform } from 'react-native';
 import * as Application from 'expo-application';
 import { storage } from '../store/storage';
 import { BUILD_HASH } from '../constants/buildHash';
+import { getToken } from './tokenStore';
+import { sanitizeTelemetryJsonlForUpload } from './telemetryPrivacy';
 
 // v224 — single source of truth for the IPA's native binary version.
 // expo-application reads CFBundleShortVersionString (iOS) at IPA-build time
@@ -42,6 +44,7 @@ interface CrashReport {
   appState?: string;
   reactNativeVersion?: string;
   lastEvents?: string[];
+  qaSessionId?: string | null;
 }
 
 // Module-level ring buffer — captures last N events even if logger session is off.
@@ -80,8 +83,34 @@ function buildCrashJsonl(report: CrashReport): { sessionId: string; jsonl: strin
     is_fatal: report.isFatal ?? true,
     rn_version: report.reactNativeVersion,
     breadcrumbs: report.lastEvents ?? [],
+    qaSessionId: report.qaSessionId ?? null,
+    coordinateSource: 'none',
   };
   return { sessionId, jsonl: JSON.stringify(event) };
+}
+
+function currentQaSessionId(): string | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('../features/activitySimulator/useActivitySimulatorStore')
+      .useActivitySimulatorStore.getState().qaSessionId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function appendQaError(eventName: string, error: unknown, fatal: boolean): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../features/activitySimulator/simulatorLog').appendSimulatorLog('ERROR', eventName, {
+      errorName: error instanceof Error ? error.name : typeof error,
+      message: error instanceof Error ? error.message : String(error),
+      fatal,
+      stackTop: error instanceof Error ? error.stack?.split('\n').slice(0, 3).join('\n') ?? null : null,
+    }, { coordinateSource: 'none' });
+  } catch {
+    // QA instrumentation must never replace the primary crash path.
+  }
 }
 
 export const crashLogger = {
@@ -107,10 +136,12 @@ export const crashLogger = {
             ? JSON.stringify(Platform.constants.reactNativeVersion)
             : undefined,
           lastEvents: [...recentEvents],
+          qaSessionId: currentQaSessionId(),
         };
         // Persist FIRST (sync-ish via Promise — RN may still kill us mid-flight,
         // but AsyncStorage on iOS uses fast NSUserDefaults for small writes).
         persistCrash(report);
+        appendQaError('uncaught_js_error', error, Boolean(isFatal));
         // Then defer to RN's default handler so the redbox / native crash
         // still surfaces to the user (don't swallow fatal errors).
         if (prevHandler) prevHandler(error, isFatal);
@@ -127,8 +158,10 @@ export const crashLogger = {
           message: reason?.message ?? String(reason),
           stack: reason?.stack ?? 'no stack',
           lastEvents: [...recentEvents],
+          qaSessionId: currentQaSessionId(),
         };
         persistCrash(report);
+        appendQaError('unhandled_promise_rejection', reason, false);
       });
     }
   },
@@ -183,14 +216,12 @@ export const crashLogger = {
     try {
       const report = await this.drainLastCrash();
       if (!report) return;
-      const { sessionId, jsonl } = buildCrashJsonl(report);
+      const { sessionId, jsonl: unsafeJsonl } = buildCrashJsonl(report);
+      const jsonl = sanitizeTelemetryJsonlForUpload(unsafeJsonl);
+      if (!jsonl) return;
       const url = apiBaseUrl.replace(/\/$/, '') + '/api/telemetry/sessions';
-      // Sprint 6 round-24 R24: include X-API-Key when configured in
-      // settings. Same rationale as telemetryUploader.ts fix — a
-      // future coordinated Sprint will enable server-side key enforcement,
-      // and by that time this header must already be shipping in the
-      // client. Header omitted when key isn't configured, matching the
-      // server-side pass-through behavior today.
+      // Use the same authenticated upload contract as normal and QA
+      // telemetry. Retrieval remains operations-key-only on the server.
       const crashHeaders: Record<string, string> = {
         'Content-Type': 'application/x-ndjson',
         'X-Cairn-Device-Os': 'ios',
@@ -206,6 +237,8 @@ export const crashLogger = {
         const key = useSettingsStore.getState().telemetryApiKey;
         if (key) crashHeaders['X-API-Key'] = key;
       } catch { /* silent — settings store not loaded during crash boot */ }
+      const token = await getToken();
+      if (token) crashHeaders.Authorization = `Bearer ${token}`;
       await fetch(url, {
         method: 'POST',
         headers: crashHeaders,
@@ -301,4 +334,3 @@ export const crashLogger = {
     }
   },
 };
-

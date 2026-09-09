@@ -48,6 +48,7 @@ import {
   listPending,
   markAttempt,
   removePending,
+  renamePendingActivity,
   savePending,
   updateRemoteId,
   type PendingHike,
@@ -129,5 +130,27 @@ describe('verified pending Activity snapshots', () => {
     expect((await listPending()).map((item) => item.localId)).toEqual(['activity-one']);
     await expect(removePending('activity-one', 'account-a')).resolves.toBeUndefined();
     await expect(listPending()).resolves.toEqual([]);
+  });
+
+  test('pending rename atomically updates both upload payload and Detail summary', async () => {
+    const item = pending();
+    item.summary = {
+      startedAt: 100,
+      endedAt: 1_000,
+      distanceM: 100,
+      durationS: 60,
+      elevationGainM: 5,
+      name: 'Offline hike',
+      markerIds: [],
+    };
+    await savePending(item);
+    await expect(renamePendingActivity('activity-one', 'account-a', 'Renamed offline')).resolves.toBe(true);
+    await expect(listPending()).resolves.toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({ name: 'Renamed offline' }),
+        summary: expect.objectContaining({ name: 'Renamed offline' }),
+      }),
+    ]);
+    await expect(renamePendingActivity('activity-one', 'account-b', 'Wrong owner')).resolves.toBe(false);
   });
 });

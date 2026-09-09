@@ -141,10 +141,34 @@ describe('telemetryUploader — upload behavior', () => {
     const r = await telemetryUploader.upload(id);
     expect(r.ok).toBe(true);
     expect(capturedHeaders['Content-Type']).toBe('application/x-ndjson');
-    // S2 removed X-API-Key auth; header should not be sent.
-    expect(capturedHeaders['X-API-Key']).toBeUndefined();
+    expect(capturedHeaders['X-API-Key']).toBe('test-key-123');
     expect(typeof capturedBody).toBe('string');
     expect(capturedBody.length).toBeGreaterThan(0);
+  });
+
+  it('uploads a bounded QA session with real coordinates and secrets removed', async () => {
+    let capturedHeaders: any = null;
+    let capturedBody = '';
+    global.fetch = jest.fn(async (_url, opts: any) => {
+      capturedHeaders = opts.headers;
+      capturedBody = opts.body;
+      return { ok: true, status: 200, json: async () => ({ ok: true }) } as any;
+    });
+    const result = await telemetryUploader.uploadQaSession({
+      sessionId: 'qa-upload-safe',
+      startedAt: 1,
+      jsonl: JSON.stringify({
+        session_id: 'qa-upload-safe',
+        coordinateSource: 'real',
+        fields: { lat: -45.0312, lng: 168.6626, accuracyM: 8, accessToken: 'private' },
+      }),
+    });
+    expect(result.ok).toBe(true);
+    expect(capturedHeaders['X-Cairn-Activity-Mode']).toBe('qa_activity');
+    expect(capturedHeaders['X-API-Key']).toBe('test-key-123');
+    expect(capturedBody).not.toContain('168.6626');
+    expect(capturedBody).not.toContain('private');
+    expect(capturedBody).toContain('accuracyM');
   });
 
   it('refuses upload when telemetryUploadEnabled is false', async () => {

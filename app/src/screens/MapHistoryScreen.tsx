@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { CommonActions, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useSessionStore, loadTrackPoints } from '../store/useSessionStore';
@@ -255,11 +255,13 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
                   id="track-gap-line-layer"
                   style={{
                     lineColor: Colors.textMuted,
-                    // v(post-O2): 3 → 5 to match solid segments' new 7px
-                    // (keep dashed slightly narrower so gap segments still
-                    // read as "less certain" without shrinking to invisible).
-                    lineWidth: 5,
+                    // Keep dash screen density legible across the fitted
+                    // overview and close inspection. A constant 5px width
+                    // made the relative dash pattern merge into a heavy,
+                    // ambiguous connector at low zoom.
+                    lineWidth: ['interpolate', ['linear'], ['zoom'], 8, 2, 12, 3.25, 16, 5],
                     lineDasharray: [2, 1.5],
+                    lineOpacity: 0.84,
                     lineCap: 'round',
                     lineJoin: 'round',
                   }}
@@ -848,6 +850,8 @@ export function MapHistoryScreen() {
   const renameSession = useSessionStore(s => s.renameSession);
   const [renameEditing, setRenameEditing] = useState(false);
   const [renameText, setRenameText] = useState('');
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [invalidatedSessionId, setInvalidatedSessionId] = useState<string | null>(null);
   const allMarkers = useMarkerStore(s => s.markers);
   const markers = allMarkers.filter(m => m.regionCode === region.code);
   const deleteMarker = useMarkerStore(s => s.deleteMarker);
@@ -860,7 +864,7 @@ export function MapHistoryScreen() {
   const retainedSelectedSession = selectedSessionId
     ? detailSessionSnapshots.current.get(selectedSessionId) ?? null
     : null;
-  const selectedSession = retainedSelectedSession
+  const selectedSession = selectedSessionId === invalidatedSessionId ? null : retainedSelectedSession
     ? {
         ...retainedSelectedSession,
         remoteId: liveSelectedSession?.remoteId ?? retainedSelectedSession.remoteId,
@@ -868,6 +872,61 @@ export function MapHistoryScreen() {
       }
     : liveSelectedSession;
   const selectedMarker = markers.find(m => m.id === selectedMarkerId) ?? null;
+
+  const returnToActivities = useCallback(() => {
+    // Activity Detail is a post-save leaf, not a historical stack owner.
+    // Always replace it with the canonical Trails/Activities stack. A plain
+    // goBack could return to Hike/Home, while a later Trails Back could expose
+    // the retained Detail again (the O37 navigation loop).
+    nav.dispatch(CommonActions.reset({
+      index: 1,
+      routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'activities' } }],
+    }));
+  }, [nav]);
+
+  const commitActivityRename = useCallback(async () => {
+    const id = selectedSessionId;
+    const trimmed = renameText.trim();
+    if (!id || id === invalidatedSessionId || !trimmed || renameSaving) return;
+    setRenameSaving(true);
+    const result = await renameSession(id, trimmed);
+    setRenameSaving(false);
+    if (result.ok) {
+      setRenameEditing(false);
+      return;
+    }
+    const message = result.reason === 'syncing'
+      ? 'This Activity is syncing. Try renaming again when sync completes.'
+      : result.reason === 'pending-missing'
+        ? 'The pending Activity save could not be found. Rename was not applied.'
+        : result.reason === 'not-found'
+          ? 'This Activity no longer exists. Rename was not applied.'
+          : 'Rename could not be saved. Check your connection and try again.';
+    Alert.alert('Rename failed', message);
+  }, [invalidatedSessionId, renameSaving, renameSession, renameText, selectedSessionId]);
+
+  const deleteSelectedActivity = useCallback(async () => {
+    const id = selectedSessionId;
+    if (!id || id === invalidatedSessionId) return;
+    // Invalidate this mounted projection before the first await. It can no
+    // longer rename, create a Route, or re-delete while persistence runs.
+    setInvalidatedSessionId(id);
+    setRenameEditing(false);
+    setDeleteConfirm(false);
+    detailSessionSnapshots.current.delete(id);
+    detailTrackSnapshots.current.delete(id);
+    try {
+      await deleteSession(id);
+      setSelectedSessionId(null);
+      nav.dispatch(CommonActions.reset({
+        index: 1,
+        routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'activities' } }],
+      }));
+    } catch {
+      setInvalidatedSessionId(null);
+      Alert.alert('Delete failed', 'The Activity could not be deleted. Try again.');
+    }
+  }, [deleteSession, invalidatedSessionId, nav, selectedSessionId]);
 
   // Load track points on demand when session is selected.
   //
@@ -1242,7 +1301,7 @@ export function MapHistoryScreen() {
           <BackButton
             variant="inline"
             onPress={targetSessionId
-              ? () => nav.navigate('Routes', { initialTab: 'activities' })
+              ? returnToActivities
               : undefined}
           />
           {/* User decision 2026-08-16: Trails index view (no targetSessionId)
@@ -1409,21 +1468,15 @@ export function MapHistoryScreen() {
                   onChangeText={setRenameText}
                   autoFocus
                   maxLength={60}
-                  onSubmitEditing={() => {
-                    const t = renameText.trim();
-                    if (t) renameSession(selectedSession.id, t);
-                    setRenameEditing(false);
-                  }}
+                  onSubmitEditing={() => { void commitActivityRename(); }}
+                  editable={!renameSaving}
                   returnKeyType="done"
                   placeholder="Hike name"
                   placeholderTextColor={visualTheme.muted}
                 />
                 <TouchableOpacity
-                  onPress={() => {
-                    const t = renameText.trim();
-                    if (t) renameSession(selectedSession.id, t);
-                    setRenameEditing(false);
-                  }}
+                  onPress={() => { void commitActivityRename(); }}
+                  disabled={renameSaving}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Save new name"
                 >
@@ -1509,8 +1562,7 @@ export function MapHistoryScreen() {
               style={[styles.actionPillDanger, { flex: 1, backgroundColor: visualTheme.surface, borderColor: visualTheme.destructive }, deleteConfirm && { backgroundColor: visualTheme.destructive, borderColor: visualTheme.destructive }]}
               onPress={() => {
                 if (!deleteConfirm) { setDeleteConfirm(true); return; }
-                deleteSession(selectedSession.id);
-                nav.goBack();
+                void deleteSelectedActivity();
               }}
               accessibilityRole="button"
               accessibilityLabel="Delete hike"

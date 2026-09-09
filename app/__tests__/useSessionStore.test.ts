@@ -26,6 +26,11 @@ jest.mock('../src/services/apiService', () => ({
 jest.mock('../src/services/sessionService', () => ({
   deleteRemoteSession: jest.fn(async () => {}),
   deleteRemoteSessionByClientId: jest.fn(async () => true),
+  renameRemoteSession: jest.fn(async (_id: number, name: string) => ({ ok: true, name })),
+}));
+jest.mock('../src/services/pendingSyncStore', () => ({
+  renamePendingActivity: jest.fn(async () => true),
+  removePending: jest.fn(async () => undefined),
 }));
 jest.mock('../src/services/crashLogger', () => ({
   crashLogger: { breadcrumb: jest.fn(), captureException: jest.fn() },
@@ -235,5 +240,48 @@ describe('useSessionStore — per-user isolation', () => {
       expect.arrayContaining([expect.objectContaining({ id: 'old-pending', syncState: 'pending' })]),
     );
     expect(storage['cairn_trackpoints_userA_old-pending']).toBeDefined();
+  });
+
+  it('renames a synced Activity only after the server accepts it', async () => {
+    setupAsyncStorageMock();
+    const service = require('../src/services/sessionService');
+    const { useSessionStore } = require('../src/store/useSessionStore');
+    await useSessionStore.getState().hydrate('userA');
+    await useSessionStore.getState().addSession({
+      id: 'local-a', clientActivityId: 'local-a', remoteId: 42, syncState: 'synced',
+      activityMode: 'hiking', regionCode: 'nz', startedAt: 1, endedAt: 2,
+      durationS: 1, distanceM: 30, elevationGainM: 0, trackPoints: [], markerIds: [], name: 'Before',
+    });
+
+    service.renameRemoteSession.mockResolvedValueOnce({ ok: false, reason: 'unavailable' });
+    await expect(useSessionStore.getState().renameSession('local-a', 'False success')).resolves.toEqual({
+      ok: false, reason: 'unavailable',
+    });
+    expect(useSessionStore.getState().sessions[0].name).toBe('Before');
+
+    service.renameRemoteSession.mockResolvedValueOnce({ ok: true, name: 'After' });
+    await expect(useSessionStore.getState().renameSession('local-a', 'After')).resolves.toEqual({ ok: true });
+    expect(useSessionStore.getState().sessions[0].name).toBe('After');
+    expect(service.renameRemoteSession).toHaveBeenCalledWith(42, 'After');
+  });
+
+  it('renames pending Activity outbox before changing its local projection', async () => {
+    setupAsyncStorageMock();
+    const pending = require('../src/services/pendingSyncStore');
+    const { useSessionStore } = require('../src/store/useSessionStore');
+    await useSessionStore.getState().hydrate('userA');
+    await useSessionStore.getState().addSession({
+      id: 'local-pending', clientActivityId: 'local-pending', syncState: 'pending',
+      activityMode: 'running', regionCode: 'nz', startedAt: 1, endedAt: 2,
+      durationS: 1, distanceM: 30, elevationGainM: 0, trackPoints: [], markerIds: [], name: 'Before',
+    });
+    pending.renamePendingActivity.mockResolvedValueOnce(false);
+    await expect(useSessionStore.getState().renameSession('local-pending', 'Nope')).resolves.toEqual({
+      ok: false, reason: 'pending-missing',
+    });
+    expect(useSessionStore.getState().sessions[0].name).toBe('Before');
+    pending.renamePendingActivity.mockResolvedValueOnce(true);
+    await expect(useSessionStore.getState().renameSession('local-pending', 'Queued')).resolves.toEqual({ ok: true });
+    expect(useSessionStore.getState().sessions[0].name).toBe('Queued');
   });
 });

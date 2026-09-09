@@ -21,8 +21,10 @@ import { debugLogger } from './debugLogger';
 import { networkMonitor } from './networkMonitor';
 import { useSettingsStore } from '../store/useSettingsStore';
 import type { SessionMetadata, DeviceInfo } from '../types/debugLog';
+import { getToken } from './tokenStore';
+import { sanitizeTelemetryJsonlForUpload } from './telemetryPrivacy';
 
-type UploadResult =
+export type UploadResult =
   | { ok: true; sessionId: string; bytes: number }
   | { ok: false; sessionId: string; error: string; retryable: boolean };
 
@@ -40,6 +42,9 @@ class TelemetryUploader {
     this.networkUnsub = networkMonitor.onChange((state) => {
       if (state.state === 'online' && (!this.requireWifi() || state.type === 'wifi')) {
         this.retryAll().catch(() => {});
+        void import('../features/activitySimulator/simulatorLog')
+          .then(module => module.retryPendingQaTelemetryUploads())
+          .catch(() => {});
       }
     });
     // Foreground trigger: when user returns to the app, flush any pending
@@ -50,6 +55,9 @@ class TelemetryUploader {
           networkMonitor.isOnline() &&
           (!this.requireWifi() || networkMonitor.isWifi())) {
         this.retryAll().catch(() => {});
+        void import('../features/activitySimulator/simulatorLog')
+          .then(module => module.retryPendingQaTelemetryUploads())
+          .catch(() => {});
       }
     });
     // Also retry on init in case the app starts up with sessions waiting
@@ -57,6 +65,9 @@ class TelemetryUploader {
     setTimeout(() => {
       if (networkMonitor.isOnline() && (!this.requireWifi() || networkMonitor.isWifi())) {
         this.retryAll().catch(() => {});
+        void import('../features/activitySimulator/simulatorLog')
+          .then(module => module.retryPendingQaTelemetryUploads())
+          .catch(() => {});
       }
     }, 5_000); // small delay so settings hydration completes first
   }
@@ -109,10 +120,12 @@ class TelemetryUploader {
         await debugLogger.flush();
       }
 
-      const jsonl = await debugLogger.readSessionContent(sessionId);
-      if (!jsonl) {
+      const localJsonl = await debugLogger.readSessionContent(sessionId);
+      if (!localJsonl) {
         return { ok: false, sessionId, error: 'Session file not found', retryable: false };
       }
+      const jsonl = sanitizeTelemetryJsonlForUpload(localJsonl);
+      if (!jsonl) return { ok: false, sessionId, error: 'No safe events to upload', retryable: false };
 
       // Read metadata to enrich payload
       const metas = await debugLogger.listSessions();
@@ -124,14 +137,9 @@ class TelemetryUploader {
       // populate the metadata columns even though the body is JSONL.
       // Backend routes/telemetry.js reads X-Cairn-* headers when content-type is x-ndjson.
       const deviceInfo = this.getDeviceInfo();
-      // Sprint 6 round-24 R24: include X-API-Key when configured. Pre-fix,
-      // client had `telemetryApiKey` in settings but never sent it — server
-      // requireApiKey was a no-op so uploads worked but were unauthenticated.
-      // With this header, the coordinated Sprint that enables server-side
-      // enforcement won't 401 users whose settings hold the key. Safe to
-      // ship independently: server currently ignores the header, so this
-      // change is a no-op on today's backend but ready for the coordinated
-      // enable.
+      // Send either configured operations authentication, the signed-in app
+      // credential below, or both. The repository backend accepts uploads
+      // through either path and reserves operations credentials for reads.
       const uploadHeaders: Record<string, string> = {
         'Content-Type': 'application/x-ndjson',
         'X-Cairn-Device-Model': deviceInfo.model ?? '',
@@ -146,6 +154,8 @@ class TelemetryUploader {
       if (settings.telemetryApiKey) {
         uploadHeaders['X-API-Key'] = settings.telemetryApiKey;
       }
+      const token = await getToken();
+      if (token) uploadHeaders.Authorization = `Bearer ${token}`;
       const resp = await fetch(url, {
         method: 'POST',
         headers: uploadHeaders,
@@ -193,6 +203,77 @@ class TelemetryUploader {
         ok: false,
         sessionId,
         error: message,
+        retryable: true,
+      };
+    } finally {
+      this.uploadInProgress.delete(sessionId);
+    }
+  }
+
+  /** Upload a bounded live Internal-QA snapshot to the existing endpoint. */
+  async uploadQaSession(input: {
+    sessionId: string;
+    jsonl: string;
+    startedAt: number;
+    endedAt?: number | null;
+  }): Promise<UploadResult> {
+    const { sessionId } = input;
+    if (this.uploadInProgress.has(sessionId)) {
+      return { ok: false, sessionId, error: 'Upload already in progress', retryable: false };
+    }
+    const settings = useSettingsStore.getState();
+    if (!settings.telemetryUploadEnabled) {
+      return { ok: false, sessionId, error: 'Internal QA upload is disabled', retryable: false };
+    }
+    const backendUrl = this.getBackendUrl();
+    if (!backendUrl) return { ok: false, sessionId, error: 'No backend URL configured', retryable: true };
+    if (settings.telemetryWifiOnly && !networkMonitor.isWifi()) {
+      return { ok: false, sessionId, error: 'WiFi-only mode: waiting for WiFi', retryable: true };
+    }
+    if (!networkMonitor.isOnline()) return { ok: false, sessionId, error: 'Offline', retryable: true };
+    const jsonl = sanitizeTelemetryJsonlForUpload(input.jsonl);
+    if (!jsonl) return { ok: false, sessionId, error: 'No safe events to upload', retryable: false };
+    if (jsonl.length > 512 * 1024) {
+      return { ok: false, sessionId, error: 'QA payload exceeds 512 KiB', retryable: false };
+    }
+    this.uploadInProgress.add(sessionId);
+    try {
+      const deviceInfo = this.getDeviceInfo();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/x-ndjson',
+        'X-Cairn-Device-Model': deviceInfo.model ?? '',
+        'X-Cairn-Device-Os': deviceInfo.os ?? '',
+        'X-Cairn-Os-Version': deviceInfo.os_version ?? '',
+        'X-Cairn-App-Version': deviceInfo.app_version ?? '',
+        'X-Cairn-Build-Number': deviceInfo.build_number ?? '',
+        'X-Cairn-Activity-Mode': 'qa_activity',
+        'X-Cairn-Started-At': String(input.startedAt),
+        'X-Cairn-Ended-At': input.endedAt ? String(input.endedAt) : '',
+      };
+      if (settings.telemetryApiKey) headers['X-API-Key'] = settings.telemetryApiKey;
+      const token = await getToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(`${backendUrl.replace(/\/$/, '')}/api/telemetry/sessions`, {
+        method: 'POST',
+        headers,
+        body: jsonl,
+      });
+      if (!response.ok) {
+        const message = await response.text().catch(() => 'unknown');
+        return {
+          ok: false,
+          sessionId,
+          error: `HTTP ${response.status}: ${message}`,
+          retryable: response.status >= 500 || response.status === 0 || response.status === 408 || response.status === 429,
+        };
+      }
+      const result = await response.json().catch(() => ({}));
+      return { ok: true, sessionId, bytes: result.bytes ?? jsonl.length };
+    } catch (error) {
+      return {
+        ok: false,
+        sessionId,
+        error: error instanceof Error ? error.message : String(error),
         retryable: true,
       };
     } finally {

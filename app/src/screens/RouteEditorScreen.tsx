@@ -551,6 +551,17 @@ export function RouteEditorScreen() {
     }
     setSaving(true);
     try {
+      const liveSourceSession = fromSessionId
+        ? useSessionStore.getState().sessions.find(item => item.id === fromSessionId)
+        : null;
+      if (fromSessionId && !liveSourceSession) {
+        Alert.alert('Activity unavailable', 'This Activity was deleted, so it cannot create a new Route.');
+        nav.dispatch(CommonActions.reset({
+          index: 1,
+          routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'activities' } }],
+        }));
+        return;
+      }
       const draft = useRouteEditStore.getState().committedDraft;
       const targetId = routeId; // existing route id; null for save-as-route
       // Decide which polyline to persist.
@@ -611,6 +622,12 @@ export function RouteEditorScreen() {
           elevationGainM: elevationGainM > 0 ? elevationGainM : (session?.elevationGainM ?? 0),
           // Sprint 69 STORY-00535: persist visibility tier picked in the UI.
           permission,
+        }, {
+          clientActivityId: liveSourceSession?.clientActivityId
+            ?? (liveSourceSession && !/^\d+$/.test(liveSourceSession.id) ? liveSourceSession.id : undefined),
+          serverActivityId: liveSourceSession?.remoteId
+            ?? liveSourceSession?.serverActivityId
+            ?? (liveSourceSession && /^\d+$/.test(liveSourceSession.id) ? Number(liveSourceSession.id) : undefined),
         });
         if (!createdId) {
           Alert.alert('Save failed', 'Could not save route — check your connection.', [{ text: 'OK' }]);
@@ -650,7 +667,9 @@ export function RouteEditorScreen() {
       // signal when the failure is permanent (rate limited, name conflict).
       const raw = String(e?.message ?? '').toLowerCase();
       let body: string;
-      if (raw.includes('rate') && raw.includes('limit')) {
+      if (e?.code === 'SOURCE_ACTIVITY_NOT_FOUND') {
+        body = 'This Activity was deleted or has not finished syncing, so it cannot create a Route.';
+      } else if (raw.includes('rate') && raw.includes('limit')) {
         body = 'You are saving very quickly. Wait a moment and try again.';
       } else if (raw.includes('name') && (raw.includes('taken') || raw.includes('duplicate'))) {
         body = 'A route with this name already exists. Try a different name.';
@@ -665,7 +684,7 @@ export function RouteEditorScreen() {
     } finally {
       setSaving(false);
     }
-  }, [saving, name, routeId, existingRoute, sessionTrackPoints, session, addRoute, updateRoute, nav]);
+  }, [saving, name, routeId, fromSessionId, existingRoute, sessionTrackPoints, session, addRoute, updateRoute, nav]);
 
   const handleDelete = useCallback(() => {
     if (!routeId) return;

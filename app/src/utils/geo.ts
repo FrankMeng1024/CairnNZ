@@ -65,9 +65,14 @@ export function formatDistance(
  * Format duration in seconds to mm:ss or h:mm:ss.
  */
 export function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
+  // Activity duration can briefly be fractional while a provider tick is
+  // being reduced. Display is whole elapsed seconds everywhere; allowing the
+  // remainder through String() exposes floating-point tails such as
+  // `01:30.679000000000002` in the live metric strip.
+  const totalSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
   if (h > 0) {
     return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }

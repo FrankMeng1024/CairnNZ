@@ -15,7 +15,7 @@ import {
 import { Colors, Spacing, FontSize, Radius, Shadow } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
 import { getCurrentRegion } from '../config/regions';
-import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
+import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle, themeToStandardPreset, buildStandardConfig, isMapboxTokenConfigured } from '../config/mapbox';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
@@ -27,6 +27,9 @@ import { MarkerPin } from './MarkerPin';
 import type { Marker } from '../store/useMarkerStore';
 import { registerSimulatorMapCenterGetter } from '../features/activitySimulator/simulatorMapBridge';
 import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
+import { appendSimulatorLog } from '../features/activitySimulator/simulatorLog';
+import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
+import { useIsFocused } from '@react-navigation/native';
 
 // ── Mapbox conditional import ────────────────────────────────────────────
 // @rnmapbox/maps components are native-only — on web they may be undefined.
@@ -74,6 +77,7 @@ type HikingMapProps = {
   // with the extracted concept asset (assets/map/marker-start.png).
   // Passing `null` disables it (used pre-tracking on H0/R0).
   trackStartVariant?: 'hike' | 'run' | null;
+  activityVariant?: 'hike' | 'run';
   // When true, skip the camera fly-in animation. Used when resuming
   // an in-progress hike — the user already knows where they are, the
   // 1-second zoom-in feels slow.
@@ -89,17 +93,26 @@ type HikingMapProps = {
   // when the cameraRef itself is private to HikingMap.
   /** Fixed provider is Simulator; never use this merely for generic Debug Mode. */
   simulatorEnabled?: boolean;
+  /** Simulator setup affordances may be visible before a start is authoritative. */
+  simulatorControlsEnabled?: boolean;
+  /** Fixed target only while choosing an origin, destination, or reacquisition. */
+  simulatorCenterPickerVisible?: boolean;
   recenterImperativeRef?: React.MutableRefObject<(() => void) | null>;
 };
 
 export function HikingMap({
   markers, trackPoints, onMarkerPress, routeStart, userPos,
-  instantCamera, followUser = true, onUserGesture, recenterImperativeRef, simulatorEnabled,
-  trackStartVariant = null,
+  instantCamera, followUser = true, onUserGesture, recenterImperativeRef,
+  simulatorEnabled, simulatorControlsEnabled = simulatorEnabled,
+  simulatorCenterPickerVisible = false,
+  trackStartVariant = null, activityVariant = 'hike',
 }: HikingMapProps) {
+  const isFocused = useIsFocused();
+  const telemetryScreenPrefix = activityVariant === 'run' ? 'run' : 'hike';
   const region = getCurrentRegion();
   // O18 MAP-01: react to user's saved map layer preference (outdoors / satellite).
   const mapLayer = useSettingsStore((s) => s.mapLayer);
+  const debugMode = useSettingsStore((s) => s.debugMode);
   const theme = useVisualTheme();
   const mapTheme = useMapTheme();
   const hikeLightPreset = themeToStandardPreset(mapTheme);
@@ -115,6 +128,9 @@ export function HikingMap({
   // is broken. This state drives a "Loading map…" overlay that hides
   // itself as soon as the native side reports the map is fully rendered.
   const [mapFirstRender, setMapFirstRender] = useState(false);
+  const [mapEpoch, setMapEpoch] = useState(0);
+  const mapMountIdRef = useRef(`${telemetryScreenPrefix}-map-${Date.now().toString(36)}-0`);
+  const hasFocusedRef = useRef(false);
   // R114/O24 (2026-08-12) Hiking Loading Map fix: onDidFinishRenderingMapFully
   // alone is unreliable — matches Memory v361 lesson (v357 telemetry showed
   // that event never fires in a normal session). Add onDidFinishLoadingMap
@@ -123,9 +139,73 @@ export function HikingMap({
   // an 8s wall-clock fallback so the overlay never gets stuck permanently.
   useEffect(() => {
     if (mapFirstRender) return;
-    const t = setTimeout(() => setMapFirstRender(true), 8000);
+    const t = setTimeout(() => {
+      setMapFirstRender(true);
+      if (activitySimulatorBuildCapable) {
+        useActivitySimulatorStore.getState().setMapDiagnostics({
+          screen: telemetryScreenPrefix,
+          mounted: Boolean(MapView),
+          mapReady: false,
+          loadState: 'timed-out',
+          lastEvent: 'readiness-timeout',
+        });
+        appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_map_readiness_timeout`, {
+          mountId: mapMountIdRef.current,
+        }, { coordinateSource: 'none' });
+      }
+    }, 8000);
     return () => clearTimeout(t);
-  }, [mapFirstRender]);
+  }, [mapFirstRender, mapEpoch]);
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    const nextEpoch = hasFocusedRef.current ? mapEpoch + 1 : mapEpoch;
+    const mountId = `${telemetryScreenPrefix}-map-${Date.now().toString(36)}-${nextEpoch}`;
+    mapMountIdRef.current = mountId;
+    if (hasFocusedRef.current) setMapEpoch(nextEpoch);
+    hasFocusedRef.current = true;
+    setMapFirstRender(false);
+    firstRealLocationSeenRef.current = false;
+    initialCameraAppliedRef.current = false;
+    if (!activitySimulatorBuildCapable) return undefined;
+    useActivitySimulatorStore.getState().setMapDiagnostics({
+      mountId,
+      screen: telemetryScreenPrefix,
+      mounted: Boolean(MapView),
+      styleLoaded: false,
+      mapReady: false,
+      loadState: MapView ? 'loading' : 'error',
+      lastEvent: MapView ? 'mounted' : 'native-map-unavailable',
+    });
+    appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_map_mounted`, {
+      mountId,
+      nativeMapAvailable: Boolean(MapView),
+      cameraRefAvailable: Boolean(cameraRef.current),
+      cameraInitialTarget: instantCamera && userPos ? 'accepted-location' : 'mapbox-default',
+      cameraAnimationMode: instantCamera ? 'none' : 'flyTo',
+      cameraAnimationDurationMs: instantCamera ? 0 : 600,
+      realUserLocationMounted: !simulatorEnabled,
+      mapboxTokenConfigured: isMapboxTokenConfigured(),
+    }, { coordinateSource: 'none' });
+    appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_map_style_load_started`, { mountId }, { coordinateSource: 'none' });
+    return () => {
+      const state = useActivitySimulatorStore.getState();
+      if (state.mapDiagnostics.screen === telemetryScreenPrefix) {
+        state.setMapDiagnostics({ mounted: false, loadState: 'unmounted', lastEvent: 'unmounted' });
+      }
+      appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_map_unmounted`, { mountId }, { coordinateSource: 'none' });
+    };
+  // Focus is the screen-entry boundary. Mapbox receives a fresh native key,
+  // while durable Activity/provider state remains in its independent store.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused]);
+  useEffect(() => {
+    if (!activitySimulatorBuildCapable) return;
+    useActivitySimulatorStore.getState().setMapDiagnostics({
+      screen: telemetryScreenPrefix,
+      cameraTarget: userPos ? { lat: userPos.lat, lng: userPos.lng } : null,
+      displayedPosition: userPos ? { lat: userPos.lat, lng: userPos.lng } : null,
+    });
+  }, [userPos?.lat, userPos?.lng]);
   useEffect(() => {
     let cancelled = false;
     let unsub: (() => void) | undefined;
@@ -227,6 +307,21 @@ export function HikingMap({
     };
   }, [trackPoints]);
 
+  const traceTailTimestamp = trackPoints[trackPoints.length - 1]?.t ?? null;
+  useEffect(() => {
+    if (!activitySimulatorBuildCapable || traceTailTimestamp === null) return;
+    appendSimulatorLog('MAP_STATE', 'activity_trace_state_received', {
+      screen: telemetryScreenPrefix,
+      pointCount: trackPoints.length,
+      sequenceTimestamp: Math.floor(traceTailTimestamp),
+      reactObservedWallTimestamp: Date.now(),
+      sampleAgeMs: simulatorEnabled ? 0 : Math.max(0, Date.now() - traceTailTimestamp),
+    }, {
+      clientActivityId: useTrackingStore.getState().sessionId,
+      coordinateSource: simulatorEnabled ? 'simulator' : 'real',
+    });
+  }, [traceTailTimestamp, trackPoints.length, simulatorEnabled, telemetryScreenPrefix]);
+
   // Imperative camera ref — used to forcefully snap the camera to the
   // user's position on resume, bypassing the followUserLocation
   // auto-fly-to-puck animation that runs even when defaultSettings is
@@ -234,8 +329,49 @@ export function HikingMap({
   const cameraRef = useRef<any>(null);
   // The bounded bridge exposes only map center selection to the QA panel.
   const mapViewRef = useRef<any>(null);
+  const flyToStateRef = useRef<{ startedAt: number; timeout: ReturnType<typeof setTimeout> | null } | null>(null);
+  const firstRealLocationSeenRef = useRef(false);
+  const initialCameraAppliedRef = useRef(false);
+
+  useEffect(() => () => {
+    if (flyToStateRef.current?.timeout) clearTimeout(flyToStateRef.current.timeout);
+    if (flyToStateRef.current) {
+      appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_camera_fly_to_interrupted`, {
+        reason: 'map-unmounted',
+      }, { coordinateSource: 'none' });
+      flyToStateRef.current = null;
+    }
+  }, []);
+
+  const handleRealUserLocationUpdate = (location: any) => {
+    if (!activitySimulatorBuildCapable) return;
+    appendSimulatorLog('LOCATION', 'real_location_sample_observed', {
+      accuracyM: location?.coords?.accuracy ?? null,
+      altitudeAvailable: Number.isFinite(location?.coords?.altitude),
+      speedMps: location?.coords?.speed ?? null,
+      sequenceTimestamp: location?.timestamp ?? null,
+    }, { coordinateSource: 'real' });
+    if (firstRealLocationSeenRef.current) return;
+    firstRealLocationSeenRef.current = true;
+    if (instantCamera || simulatorEnabled || !followUser || flyToStateRef.current) return;
+    const startedAt = Date.now();
+    appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_camera_fly_to_started`, {
+      trigger: 'first-real-user-location',
+      animationDurationMs: 600,
+      initialTarget: 'mapbox-default',
+    }, { coordinateSource: 'none' });
+    const timeout = setTimeout(() => {
+      if (flyToStateRef.current?.startedAt !== startedAt) return;
+      appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_camera_fly_to_interrupted`, {
+        reason: 'no-map-idle-after-animation-window',
+      }, { coordinateSource: 'none' });
+      flyToStateRef.current = null;
+    }, 1_600);
+    flyToStateRef.current = { startedAt, timeout };
+  };
 
   useEffect(() => {
+    if (!debugMode) return undefined;
     const getter = async () => {
       try {
         const m = mapViewRef.current;
@@ -250,7 +386,7 @@ export function HikingMap({
       }
     };
     return registerSimulatorMapCenterGetter(getter);
-  }, []);
+  }, [debugMode]);
 
   // v119: expose an imperative recenter() to the parent so the recenter
   // button (rendered outside HikingMap) can flyTo the user's location
@@ -259,34 +395,58 @@ export function HikingMap({
   useEffect(() => {
     if (!recenterImperativeRef) return;
     recenterImperativeRef.current = () => {
-      const cur = useTrackingStore.getState().lastCoordinate;
-      if (!cur || !cameraRef.current) return;
+      // Simulator fixes intentionally do not populate the real-GPS selector
+      // before every camera action. Recenter on the position already chosen
+      // by the screen for the active provider; preserve the old store lookup
+      // for normal GPS.
+      const cur = simulatorEnabled ? userPos : useTrackingStore.getState().lastCoordinate;
+      appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_camera_recenter_tapped`, {
+        providerSource: simulatorEnabled ? 'simulator' : 'real',
+        hasTarget: Boolean(cur),
+        cameraRefAvailable: Boolean(cameraRef.current),
+      }, { coordinateSource: 'none' });
+      if (!cur || !cameraRef.current) {
+        appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_camera_recenter_rejected`, {
+          rejectionReason: !cur ? 'no-accepted-target' : 'camera-ref-unavailable',
+        }, { coordinateSource: 'none' });
+        return;
+      }
       cameraRef.current.setCamera({
         centerCoordinate: [cur.lng, cur.lat],
         zoomLevel: 15,
         animationDuration: 600,
         animationMode: 'flyTo',
       });
+      appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_camera_recenter_started`, {
+        animationDurationMs: 600,
+      }, { coordinateSource: simulatorEnabled ? 'simulator' : 'real' });
     };
     return () => {
       if (recenterImperativeRef) recenterImperativeRef.current = null;
     };
-  }, [recenterImperativeRef]);
+  }, [recenterImperativeRef, simulatorEnabled, userPos?.lat, userPos?.lng]);
 
-  // When in instant mode (resume / re-entry with a known location),
-  // skip Mapbox's followUserLocation entirely. Manually set the camera
-  // to the user's position with animation off, then update on every
-  // userPos change to track. For first-launch new hike, fall through
-  // to followUserLocation with a fly-in.
+  // When in instant mode (resume or the first accepted Simulator fix), skip
+  // Mapbox's real-UserLocation follow. Apply the known position once for this
+  // map mount; later samples move the puck/trace and explicit Recenter owns
+  // camera travel. For an ordinary fresh entry, fall through to the original
+  // native UserLocation fly-in.
   useEffect(() => {
-    if (!instantCamera || !userPos || !cameraRef.current) return;
+    if (!instantCamera || !userPos || !cameraRef.current || initialCameraAppliedRef.current) return;
+    initialCameraAppliedRef.current = true;
     cameraRef.current.setCamera({
       centerCoordinate: [userPos.lng, userPos.lat],
       zoomLevel: 15,
       animationDuration: 0,
       animationMode: 'none',
     });
-  }, [instantCamera, userPos?.lat, userPos?.lng]);
+    appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_camera_initial_target_applied`, {
+      mountId: mapMountIdRef.current,
+      animationDurationMs: 0,
+      animationMode: 'none',
+      providerSource: simulatorEnabled ? 'simulator' : 'real',
+    }, { coordinateSource: simulatorEnabled ? 'simulator' : 'real' });
+  }, [instantCamera, userPos?.lat, userPos?.lng, mapEpoch]);
 
   // During the welcome fly-in, gestures must be disabled so that an
   // accidental tap (e.g. user reaching for the Stop button before the
@@ -303,7 +463,68 @@ export function HikingMap({
     // 600ms fly-in duration + 100ms safety buffer
     const t = setTimeout(() => setGesturesEnabled(true), 700);
     return () => clearTimeout(t);
-  }, [instantCamera]);
+  }, [instantCamera, mapEpoch]);
+
+  const markStyleLoaded = () => {
+    setMapFirstRender(true);
+    if (!activitySimulatorBuildCapable) return;
+    useActivitySimulatorStore.getState().setMapDiagnostics({
+      mountId: mapMountIdRef.current,
+      screen: telemetryScreenPrefix, mounted: true, styleLoaded: true, loadState: 'style-loaded', lastEvent: 'style-loaded',
+    });
+    appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_map_style_loaded`, {
+      mountId: mapMountIdRef.current,
+      cameraRefAvailable: Boolean(cameraRef.current),
+      mapboxTokenConfigured: isMapboxTokenConfigured(),
+    }, { coordinateSource: 'none' });
+  };
+  const markMapReady = (eventName: string) => {
+    if (!mapFirstRender) setMapFirstRender(true);
+    if (!activitySimulatorBuildCapable) return;
+    useActivitySimulatorStore.getState().setMapDiagnostics({
+      mountId: mapMountIdRef.current,
+      screen: telemetryScreenPrefix, mounted: true, styleLoaded: true, mapReady: true, loadState: 'ready', lastEvent: eventName,
+    });
+    appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_map_${eventName}`, {
+      mountId: mapMountIdRef.current,
+      cameraRefAvailable: Boolean(cameraRef.current),
+      mapReadyDerived: true,
+    }, { coordinateSource: 'none' });
+  };
+  const markMapIdle = () => {
+    setMapFirstRender(true);
+    if (!activitySimulatorBuildCapable) return;
+    useActivitySimulatorStore.getState().setMapDiagnostics({
+      mountId: mapMountIdRef.current,
+      screen: telemetryScreenPrefix, mounted: true, styleLoaded: true, mapReady: true, loadState: 'ready', lastEvent: 'map-idle',
+    });
+    appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_map_idle`, {
+      mountId: mapMountIdRef.current,
+      cameraRefAvailable: Boolean(cameraRef.current),
+      mapReadyDerived: true,
+    }, { coordinateSource: 'none' });
+    if (flyToStateRef.current) {
+      if (flyToStateRef.current.timeout) clearTimeout(flyToStateRef.current.timeout);
+      appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_camera_fly_to_completed`, {
+        completionSignal: 'native-map-idle',
+        elapsedMs: Date.now() - flyToStateRef.current.startedAt,
+      }, { coordinateSource: 'none' });
+      flyToStateRef.current = null;
+    }
+  };
+  const markMapError = (event: unknown) => {
+    if (!activitySimulatorBuildCapable) return;
+    useActivitySimulatorStore.getState().setMapDiagnostics({
+      mountId: mapMountIdRef.current,
+      screen: telemetryScreenPrefix, mounted: true, lastEvent: 'loading-error',
+    });
+    appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_map_loading_error`, {
+      mountId: mapMountIdRef.current,
+      error: (() => { try { return JSON.stringify(event).slice(0, 500); } catch { return String(event).slice(0, 180); } })(),
+      nonTerminal: true,
+      mapboxTokenConfigured: isMapboxTokenConfigured(),
+    });
+  };
 
   // Fallback when Mapbox not available
   if (!MapView) {
@@ -338,6 +559,7 @@ export function HikingMap({
   return (
     <View style={mapStyles.mapBg}>
       <MapView
+        key={`hike-map-${mapEpoch}`}
         ref={mapViewRef}
         style={StyleSheet.absoluteFillObject}
         {...(resolvedMapStyle.kind === 'url'
@@ -364,32 +586,54 @@ export function HikingMap({
         // Mapbox fires onCameraChanged for every camera move including
         // programmatic ones; we only react to gestures.
         onCameraChanged={(state: any) => {
+          if (simulatorControlsEnabled && simulatorCenterPickerVisible && state?.gestures?.isGestureActive) {
+            const center = state?.properties?.center
+              ?? state?.properties?.centerCoordinate
+              ?? state?.centerCoordinate;
+            if (Array.isArray(center) && center.length >= 2) {
+              useActivitySimulatorStore.getState().setMapSelection({
+                lat: Number(center[1]),
+                lng: Number(center[0]),
+              });
+            }
+          }
           if (state?.gestures?.isGestureActive && followUser) {
+            if (flyToStateRef.current) {
+              if (flyToStateRef.current.timeout) clearTimeout(flyToStateRef.current.timeout);
+              appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_camera_fly_to_interrupted`, {
+                reason: 'user-gesture',
+              }, { coordinateSource: 'none' });
+              flyToStateRef.current = null;
+            }
             onUserGesture?.();
           }
         }}
         onLongPress={(event: any) => {
-          if (!simulatorEnabled) return;
+          if (!simulatorControlsEnabled || !simulatorCenterPickerVisible) return;
           const coordinates = event?.geometry?.coordinates ?? event?.features?.[0]?.geometry?.coordinates;
           if (Array.isArray(coordinates) && coordinates.length >= 2) {
-            useActivitySimulatorStore.getState().setMapSelection({
+            const selected = {
               lat: Number(coordinates[1]),
               lng: Number(coordinates[0]),
-            });
+            };
+            useActivitySimulatorStore.getState().setMapSelection(selected);
+            appendSimulatorLog('SIM_INPUT', 'map_point_selected', selected, { coordinateSource: 'simulator' });
           }
         }}
         // R114/O24 (2026-08-12): primary trigger — fires when style +
         // first tile batch loaded (basemap visible). More reliable than
         // onDidFinishRenderingMapFully across Mapbox SDK versions.
-        onDidFinishLoadingMap={() => {
-          if (!mapFirstRender) setMapFirstRender(true);
+        onDidFinishLoadingStyle={markStyleLoaded}
+        onWillStartLoadingMap={() => {
+          appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_map_style_load_started`, { mountId: mapMountIdRef.current }, { coordinateSource: 'none' });
         }}
+        onDidFinishLoadingMap={() => markMapReady('loaded')}
         // R114/O22 Bug 4: backup event — fires once when Mapbox has
         // rendered all tiles in the current viewport at their native LOD.
         // Kept as defensive fallback (some SDK builds only fire this one).
-        onDidFinishRenderingMapFully={() => {
-          if (!mapFirstRender) setMapFirstRender(true);
-        }}
+        onDidFinishRenderingMapFully={() => markMapReady('rendered_fully')}
+        onMapIdle={markMapIdle}
+        onMapLoadingError={markMapError}
       >
         {/* R21-v3 v2 (2026-08-30): Standard style lightPreset — day/dusk/night
             follows useMapTheme. Satellite layer skips the import (Standard
@@ -433,7 +677,11 @@ export function HikingMap({
             />
           </ShapeSource>
         ) : (
-          <UserLocationComponent visible={true} renderMode="normal" />
+          <UserLocationComponent
+            visible={true}
+            renderMode="normal"
+            onUpdate={activitySimulatorBuildCapable ? handleRealUserLocationUpdate : undefined}
+          />
         )}
 
         {/* Track polyline — solid segments (good signal) */}
@@ -448,7 +696,7 @@ export function HikingMap({
                 // (#5D7C46) read as too olive/light against the paper
                 // background. Kept a single color (no gradient) to match
                 // the concept exactly.
-                lineColor: '#3F5D37',
+                lineColor: activityVariant === 'run' ? '#7A9830' : '#3F5D37',
                 lineWidth: 5,
                 lineCap: 'round',
                 lineJoin: 'round',
@@ -609,8 +857,8 @@ export function HikingMap({
           // touch on this view is consumed and never reaches MapView.
         />
       )}
-      {/* Simulator-only map-center target used by “Use map center”. */}
-      {simulatorEnabled && (
+      {/* Simulator target only during origin/destination/reacquisition selection. */}
+      {simulatorControlsEnabled && simulatorCenterPickerVisible && (
         <View pointerEvents="none" style={mapStyles.debugCenterCircle} />
       )}
     </View>

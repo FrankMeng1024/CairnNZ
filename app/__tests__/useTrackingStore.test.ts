@@ -82,6 +82,7 @@ jest.mock('../src/services/hikeTrackWriter', () => ({
   renameToCompleted: jest.fn(async () => {}),
   discardActiveHike: jest.fn(async () => {}),
   readActiveHikeTail: jest.fn(async () => []),
+  truncateActiveHikeTrack: jest.fn(async () => {}),
 }));
 jest.mock('../src/services/pendingSyncStore', () => ({
   savePending: jest.fn(async () => undefined),
@@ -196,6 +197,52 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
     expect(points[1].segmentId).not.toBe(points[0].segmentId);
     expect(useTrackingStore.getState().distanceM).toBe(0);
     expect(useTrackingStore.getState().durationS).toBe(0);
+  });
+
+  it('reacquires from the last accepted anchor even after a recent rejected fix', async () => {
+    await useTrackingStore.getState().addTrackPoint({ lat: -41, lng: 174, accuracy: 5 }, 1_000);
+    const rejected = await useTrackingStore.getState().addTrackPoint(
+      { lat: -41, lng: 174, accuracy: 60 },
+      590_000,
+    );
+    const reacquired = await useTrackingStore.getState().addTrackPoint(
+      { lat: -41.01, lng: 174, accuracy: 5 },
+      601_000,
+    );
+
+    expect(rejected).toMatchObject({ accepted: false, reason: 'poor-accuracy' });
+    expect(reacquired).toMatchObject({ accepted: true, reason: 'accepted-new-segment' });
+    expect(useTrackingStore.getState().trackPoints).toHaveLength(2);
+    expect(useTrackingStore.getState().distanceM).toBe(0);
+  });
+
+  it('repeats real-style loss and recovery without connector distance or Memory traversal', async () => {
+    const fixes = [
+      { lat: -41, t: 1_000 },
+      { lat: -41.0001, t: 11_000 },
+      { lat: -41.01, t: 601_000 },
+      { lat: -41.0101, t: 611_000 },
+      { lat: -41.02, t: 1_301_000 },
+      { lat: -41.0201, t: 1_311_000 },
+    ];
+    for (const fix of fixes) {
+      const result = await useTrackingStore.getState().addTrackPoint({
+        lat: fix.lat,
+        lng: 174,
+        accuracy: 5,
+        speed: 1,
+      }, fix.t);
+      expect(result.accepted).toBe(true);
+    }
+
+    const state = useTrackingStore.getState();
+    expect(new Set(state.trackPoints.map((item: any) => item.segmentId))).toHaveProperty('size', 3);
+    expect(state.distanceM).toBeGreaterThan(30);
+    expect(state.distanceM).toBeLessThan(40);
+    const memoryCalls = require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence.mock.calls
+      .map((call: any[]) => call[0])
+      .filter((item: any) => item.source === 'activity');
+    expect(memoryCalls.slice(-fixes.length).map((item: any) => item.lat)).toEqual(fixes.map(item => item.lat));
   });
 
   it('still accepts fixes when timestamp is undefined (legacy callers)', async () => {
@@ -344,18 +391,39 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
     expect(decision).toMatchObject({ accepted: false, reason: 'provider-source-mismatch' });
   });
 
+  it.each(['hiking', 'running'] as const)(
+    '%s starts at the selected distant virtual origin with no real-device connector',
+    async activityMode => {
+      useTrackingStore.setState({ activityMode });
+      const shanghai = await useTrackingStore.getState().addTrackPoint(
+        sample({ lat: 31.2304, lng: 121.4737, source: 'foreground' }),
+        1_000,
+      );
+      const queenstown = await useTrackingStore.getState().addTrackPoint(
+        sample({ lat: -45.0312, lng: 168.6626 }),
+        1_001,
+      );
+      expect(shanghai).toMatchObject({ accepted: false, reason: 'provider-source-mismatch' });
+      expect(queenstown).toMatchObject({ accepted: true });
+      expect(useTrackingStore.getState()).toMatchObject({ distanceM: 0, durationS: 0 });
+      expect(useTrackingStore.getState().trackPoints).toEqual([
+        expect.objectContaining({ lat: -45.0312, lng: 168.6626, segmentStartReason: 'start' }),
+      ]);
+    },
+  );
+
   it('fences stale Simulator callbacks from a Real Activity', async () => {
     useTrackingStore.setState({ locationProviderSource: 'real' });
     const decision = await useTrackingStore.getState().addTrackPoint(sample(), 1_000);
     expect(decision).toMatchObject({ accepted: false, reason: 'provider-source-mismatch' });
   });
 
-  it('derives return distance and elevation from accepted samples', async () => {
+  it('derives distance and elevation from accepted samples without using GPS as the timer', async () => {
     await useTrackingStore.getState().addTrackPoint(sample({ alt: 10 }), 1_000);
     await useTrackingStore.getState().addTrackPoint(sample({ lat: 0.00001, alt: 11 }), 2_000);
     await useTrackingStore.getState().addTrackPoint(sample({ lat: 0, alt: 10 }), 3_000);
     expect(useTrackingStore.getState()).toMatchObject({
-      durationS: 2,
+      durationS: 0,
       elevationGainM: 1,
     });
     expect(useTrackingStore.getState().distanceM).toBeGreaterThan(2);
@@ -373,6 +441,79 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
       .not.toBe(useTrackingStore.getState().trackPoints[0].segmentId);
   });
 
+  it('supports unbounded explicit reacquisitions with zero gap distance', async () => {
+    const fixes = [
+      { lat: -45.0312, lng: 168.6626, segmentId: 'segment-1' },
+      { lat: 35.6762, lng: 139.6503, segmentId: 'segment-2', segmentStartReason: 'gps-reacquired' },
+      { lat: 69.6492, lng: 18.9553, segmentId: 'segment-3', segmentStartReason: 'gps-reacquired' },
+      { lat: 64.1466, lng: -21.9426, segmentId: 'segment-4', segmentStartReason: 'gps-reacquired' },
+    ];
+    for (let index = 0; index < fixes.length; index += 1) {
+      const decision = await useTrackingStore.getState().addTrackPoint(
+        sample(fixes[index]),
+        1_000 + index,
+      );
+      expect(decision.accepted).toBe(true);
+    }
+    const state = useTrackingStore.getState();
+    expect(state.trackPoints.map((point: any) => point.segmentId)).toEqual([
+      'segment-1', 'segment-2', 'segment-3', 'segment-4',
+    ]);
+    expect(state).toMatchObject({ distanceM: 0, durationS: 0, elevationGainM: 0 });
+  });
+
+  it('rolls back only committed Simulator route evidence and recalculates canonical metrics', async () => {
+    const { destinationPoint } = require('../src/features/activitySimulator/geodesy');
+    const origin = { lat: -45.0312, lng: 168.6626 };
+    const points: any[] = [{ ...origin, t: 1_000, alt: 100, segmentId: 'simulator-segment' }];
+    for (let index = 1; index <= 8; index += 1) {
+      points.push({
+        ...destinationPoint(points[index - 1], 90, 10),
+        t: 1_000 + index * 10_000,
+        alt: 100 + index,
+        segmentId: 'simulator-segment',
+      });
+    }
+    useTrackingStore.setState({
+      trackPoints: points,
+      trackPointsSmoothed: points,
+      trackPointsRaw: [...points, { ...points[8], t: points[8].t + 1, accuracy: 99 }],
+      distanceM: 80,
+      durationS: 80,
+      elevationGainM: 8,
+      lastCoordinate: points[8],
+      lastCoordinateTime: points[8].t,
+      lastFixTimestamp: points[8].t,
+    });
+    const simulatorStore = require('../src/features/activitySimulator/useActivitySimulatorStore').useActivitySimulatorStore;
+    simulatorStore.setState({
+      enabled: true,
+      startConfigured: true,
+      signal: 'normal',
+      current: points[8],
+      altitudeM: points[8].alt,
+      virtualTimestampMs: points[8].t,
+    });
+
+    const memoryCalls = require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence.mock.calls.length;
+    const result = await useTrackingStore.getState().rollbackSimulatorTail(50);
+    expect(result).toMatchObject({ ok: true, removedPointCount: 5 });
+    expect(result.actualDistanceM).toBeCloseTo(50, 1);
+    expect(useTrackingStore.getState()).toMatchObject({ durationS: 80, elevationGainM: 3 });
+    expect(useTrackingStore.getState().distanceM).toBeCloseTo(30, 5);
+    expect(useTrackingStore.getState().trackPoints).toHaveLength(4);
+    expect(simulatorStore.getState().current).toMatchObject({
+      lat: useTrackingStore.getState().trackPoints[3].lat,
+      lng: useTrackingStore.getState().trackPoints[3].lng,
+    });
+    expect(require('../src/services/hikeTrackWriter').truncateActiveHikeTrack).toHaveBeenCalledWith(
+      'simulator-activity',
+      expect.arrayContaining([expect.objectContaining({ src: 'sim' })]),
+    );
+    expect(require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence.mock.calls.length)
+      .toBe(memoryCalls);
+  });
+
   it('does not record samples while the real Activity lifecycle is paused', async () => {
     useTrackingStore.setState({ status: 'paused' });
     const decision = await useTrackingStore.getState().addTrackPoint(sample(), 1_000);
@@ -380,7 +521,7 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
     expect(useTrackingStore.getState().trackPoints).toHaveLength(0);
   });
 
-  it('derives accelerated stationary duration only from canonical heartbeats', async () => {
+  it('does not derive accelerated stationary duration from canonical heartbeats', async () => {
     const decisions = [];
     for (let virtualSecond = 0; virtualSecond <= 60; virtualSecond += 10) {
       decisions.push(await useTrackingStore.getState().addTrackPoint(
@@ -390,7 +531,7 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
     }
     expect(decisions.some(decision => decision.reason === 'stationary-suppressed')).toBe(true);
     expect(useTrackingStore.getState().trackPoints).toHaveLength(3);
-    expect(useTrackingStore.getState().durationS).toBe(60);
+    expect(useTrackingStore.getState().durationS).toBe(0);
     expect(useTrackingStore.getState().distanceM).toBe(0);
   });
 
@@ -423,9 +564,10 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
       expect(decision.accepted).toBe(true);
     }
     const state = useTrackingStore.getState();
-    expect(state.durationS).toBe(600);
+    // Lifecycle time is tested independently; geometry still proves that a
+    // realistic 5 km/h source was not falsified by the 10x replay cadence.
+    expect(state.durationS).toBe(0);
     expect(state.distanceM).toBeCloseTo(833.33, 0);
-    expect((state.durationS / (state.distanceM / 1_000)) / 60).toBeCloseTo(12, 1);
   });
 
   it('derives a 10× Run pace from realistic 10 km/h evidence, not 100 km/h', async () => {
@@ -441,9 +583,32 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
       expect(decision.accepted).toBe(true);
     }
     const state = useTrackingStore.getState();
-    expect(state.durationS).toBe(600);
+    expect(state.durationS).toBe(0);
     expect(state.distanceM).toBeCloseTo(1_666.67, 0);
-    expect((state.durationS / (state.distanceM / 1_000)) / 60).toBeCloseTo(6, 1);
+  });
+
+  it.each([
+    ['Hike 5 km/h 1×', 'hiking', 5, 1, 13.89],
+    ['Hike 5 km/h 10×', 'hiking', 5, 10, 138.89],
+    ['Run 10 km/h 10×', 'running', 10, 10, 277.78],
+  ] as const)('%s accepts every ten-second movement sample', async (_label, mode, speedKmh, timeScale, expectedDistanceM) => {
+    const { destinationPoint } = require('../src/features/activitySimulator/geodesy');
+    useTrackingStore.setState({ activityMode: mode });
+    let position = { lat: -45.0312, lng: 168.6626 };
+    const decisions = [];
+    for (let wallSecond = 0; wallSecond <= 10; wallSecond += 1) {
+      if (wallSecond > 0) {
+        position = destinationPoint(position, 90, (speedKmh / 3.6) * timeScale);
+      }
+      decisions.push(await useTrackingStore.getState().addTrackPoint(
+        sample({ ...position, speed: speedKmh / 3.6 }),
+        1_000 + wallSecond * timeScale * 1_000,
+      ));
+    }
+    expect(decisions.every(decision => decision.accepted)).toBe(true);
+    expect(decisions.map(decision => decision.reason)).not.toContain('non-monotonic-timestamp');
+    expect(useTrackingStore.getState()).toMatchObject({ durationS: 0 });
+    expect(useTrackingStore.getState().distanceM).toBeCloseTo(expectedDistanceM, 0);
   });
 });
 
@@ -457,6 +622,28 @@ describe('useTrackingStore — P0 operation guards', () => {
 
   afterEach(async () => {
     await useTrackingStore.getState().discardCurrentSession();
+    jest.useRealTimers();
+  });
+
+  it('advances lifecycle time without GPS and freezes only for explicit Pause', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-09T08:00:00.000Z'));
+
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    expect(useTrackingStore.getState().trackPoints).toHaveLength(0);
+    await jest.advanceTimersByTimeAsync(10_500);
+    expect(useTrackingStore.getState().durationS).toBe(10);
+
+    await useTrackingStore.getState().pauseTracking();
+    const pausedDuration = useTrackingStore.getState().durationS;
+    await jest.advanceTimersByTimeAsync(20_000);
+    expect(useTrackingStore.getState().durationS).toBe(pausedDuration);
+
+    await expect(useTrackingStore.getState().resumeTracking()).resolves.toBe(true);
+    await jest.advanceTimersByTimeAsync(5_500);
+    expect(useTrackingStore.getState().durationS).toBeGreaterThanOrEqual(pausedDuration + 5);
+    expect(useTrackingStore.getState().durationS).toBeLessThanOrEqual(pausedDuration + 6);
+    expect(useTrackingStore.getState().trackPoints).toHaveLength(0);
   });
 
   it('locks synchronously during a real start and rolls back a failed location dependency', async () => {

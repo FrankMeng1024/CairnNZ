@@ -23,6 +23,17 @@ interface TrackPointLike {
   segment_start_reason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
 }
 
+function integerEpoch(value: number): number {
+  return Number.isFinite(value) ? Math.floor(value) : value;
+}
+
+/** Normalize both newly captured and already-persisted pending payloads. */
+export function normalizeActivityPointTimestamps<T extends { t?: number }>(points: T[]): T[] {
+  return points.map(point => point.t == null
+    ? point
+    : { ...point, t: integerEpoch(point.t) });
+}
+
 interface SessionPayload {
   type: 'hiking' | 'running';
   start_time: string;   // ISO date string
@@ -178,9 +189,10 @@ export async function appendPoints(
   points: TrackPointLike[],
 ): Promise<boolean> {
   if (points.length === 0) return true;
+  const normalizedPoints = normalizeActivityPointTimestamps(points);
   const opId = uuidv4();
   const path = `/api/sessions/${remoteId}/append-points`;
-  const body = { points, client_op_id: opId };
+  const body = { points: normalizedPoints, client_op_id: opId };
   try {
     const res = await authenticatedFetch(path, {
       method: 'PATCH',
@@ -190,10 +202,10 @@ export async function appendPoints(
     // 4xx (other than 401) are bad payloads — don't retry. 5xx + 401
     // and network errors are retryable.
     if (res.status >= 400 && res.status < 500 && res.status !== 401) return false;
-    await enqueue(makeOp('session_append', path, 'PATCH', { points }, opId));
+    await enqueue(makeOp('session_append', path, 'PATCH', { points: normalizedPoints }, opId));
     return false;
   } catch {
-    await enqueue(makeOp('session_append', path, 'PATCH', { points }, opId));
+    await enqueue(makeOp('session_append', path, 'PATCH', { points: normalizedPoints }, opId));
     return false;
   }
 }
@@ -231,6 +243,30 @@ export async function fetchSessionDetail(remoteId: number): Promise<RemoteSessio
     return data?.session ?? null;
   } catch {
     return null;
+  }
+}
+
+export type RenameRemoteSessionResult =
+  | { ok: true; name: string }
+  | { ok: false; reason: 'not-found' | 'rejected' | 'unavailable' };
+
+/** Rename a completed server Activity without optimistic false success. */
+export async function renameRemoteSession(
+  remoteId: number,
+  name: string,
+): Promise<RenameRemoteSessionResult> {
+  try {
+    const response = await authenticatedFetch(`/api/sessions/${remoteId}/name`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    });
+    if (response.status === 404 || response.status === 409) return { ok: false, reason: 'not-found' };
+    if (!response.ok) return { ok: false, reason: 'rejected' };
+    const body = await response.json();
+    const remoteName = typeof body?.session?.name === 'string' ? body.session.name : name;
+    return { ok: true, name: remoteName };
+  } catch {
+    return { ok: false, reason: 'unavailable' };
   }
 }
 
@@ -273,12 +309,30 @@ interface SaveHikeAtomicResult {
   idempotent_replay?: boolean;
 }
 
+export function normalizeActivitySavePayloadTimestamps(
+  payload: SaveHikeAtomicPayload,
+): SaveHikeAtomicPayload {
+  return {
+    ...payload,
+    route_points: normalizeActivityPointTimestamps(payload.route_points),
+    route_points_raw: normalizeActivityPointTimestamps(payload.route_points_raw),
+    memory_points: payload.memory_points.map(point => ({
+      ...point,
+      ts: integerEpoch(point.ts),
+    })),
+  };
+}
+
 export async function saveHikeAtomic(
   remoteId: number,
   payload: SaveHikeAtomicPayload,
   idempotencyKey: string,
   clientActivityId: string,
 ): Promise<SaveHikeAtomicResult> {
+  // Pending payloads created by O39 can contain Core Location's fractional
+  // milliseconds. Normalize again on every replay so they recover without a
+  // backend relaxation or migration.
+  payload = normalizeActivitySavePayloadTimestamps(payload);
   const path = `/api/sessions/${remoteId}/save`;
   // O18 SAF-07 (2026-07-29): user reported "network request failed" on
   // save + direct upload. Log attempt to aliyun BEFORE call so we can

@@ -29,16 +29,15 @@ describe('Activity P0 source contract', () => {
   it('guards start and finish at the shared store boundary', () => {
     expect(store).toContain("if (beforeStart.status !== 'idle' || beforeStart.isFinishing) return false;");
     expect(store).toContain("if (stopEntry.status === 'idle' || stopEntry.isFinishing) return false;");
-    expect(store).toContain("set({ isFinishing: true });");
+    expect(store).toContain('set({ ...(frozenLifecycle ?? {}), isFinishing: true });');
   });
 
   it('keeps built-in Mapbox attribution and logo enabled on active activity maps', () => {
     const hikingMap = read('screens/HikingMap.tsx');
     expect(hikingMap).toMatch(/logoEnabled\s+attributionEnabled/);
-    expect(running.match(/logoEnabled/g)).toHaveLength(2);
-    expect(running.match(/attributionEnabled/g)).toHaveLength(2);
+    expect(hiking).toContain('<HikingMap');
+    expect(running).toContain('<HikingMap');
     expect(hikingMap).not.toContain('logoEnabled={false}');
-    expect(running).not.toContain('attributionEnabled={false}');
+    expect(hikingMap).not.toContain('attributionEnabled={false}');
   });
 });
-

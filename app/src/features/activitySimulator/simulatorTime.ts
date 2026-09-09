@@ -13,10 +13,12 @@ export const SIMULATOR_MAX_VIRTUAL_ACTIVITY_MS = 12 * 60 * 60_000;
 export const SIMULATOR_FUTURE_SAFETY_MARGIN_MS = 60_000;
 
 export function simulatorActivityStartTimestamp(
-  timeScale: SimulatorTimeScale,
+  _timeScale: SimulatorTimeScale,
   wallClockTimestamp = Date.now(),
 ): number {
-  if (timeScale === 1) return wallClockTimestamp;
+  // Every Simulator Activity reserves the same bounded historical window.
+  // Runtime controls may change 1x -> 120x after Start; without this reserve,
+  // acceleration would either stall at wall time or manufacture future dates.
   return wallClockTimestamp
     - SIMULATOR_MAX_VIRTUAL_ACTIVITY_MS
     - SIMULATOR_FUTURE_SAFETY_MARGIN_MS;
@@ -41,13 +43,17 @@ export function advanceSimulatorClock(args: {
   if (args.timeScale === 1) {
     const virtualTimestampMs = Math.max(
       args.previousVirtualTimestampMs,
-      args.wallClockTimestampMs,
+      Math.min(
+        args.wallClockTimestampMs,
+        args.previousVirtualTimestampMs + Math.max(0, args.wallElapsedMs),
+      ),
     );
     return {
       virtualTimestampMs,
-      // Movement follows actual elapsed wall time; a delayed Start/recovery
-      // anchor may catch its epoch timestamp up without creating displacement.
-      appliedVirtualElapsedMs: Math.max(0, args.wallElapsedMs),
+      // Movement follows actual elapsed wall time on the same historical
+      // provider timeline. Recovery alignment is explicit and never creates
+      // displacement as a side effect of catching up an epoch.
+      appliedVirtualElapsedMs: virtualTimestampMs - args.previousVirtualTimestampMs,
       effectiveVirtualElapsedMs: Math.max(0, virtualTimestampMs - args.activityStartedAtMs),
       limitReached: false,
       maximumVirtualTimestampMs: args.wallClockTimestampMs,
@@ -79,9 +85,6 @@ export function activityTimestampForSource(
 ): number {
   if (source === 'real') return Math.max(minimumTimestamp, fallbackWallClockTimestamp);
   const state = useActivitySimulatorStore.getState();
-  if (state.timeScale === 1) {
-    return Math.max(minimumTimestamp, fallbackWallClockTimestamp);
-  }
   const virtualTimestamp = state.virtualTimestampMs > 0
     ? state.virtualTimestampMs
     : minimumTimestamp || fallbackWallClockTimestamp;

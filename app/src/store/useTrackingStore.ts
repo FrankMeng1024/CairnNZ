@@ -53,6 +53,7 @@ import {
   persistBackgroundContext,
 } from '../services/backgroundLocationTask';
 import {
+  calculateLifecycleDurationMs,
   calculateActivityStats,
   MAX_ACCEPTABLE_HORIZONTAL_ACCURACY_M,
   MAX_CREDITABLE_ACTIVE_INTERVAL_MS,
@@ -80,16 +81,22 @@ import {
   endSimulatorProvider,
   isSimulatorProviderBound,
   pauseSimulatorProvider,
+  pauseSimulatorProviderForCorrection,
   prepareSimulatorProvider,
+  reacquireSimulatorProviderAt,
+  restoreSimulatorProviderTail,
   selectedActivityLocationSource,
 } from '../features/activitySimulator/activityLocationProvider';
 import { appendSimulatorLog } from '../features/activitySimulator/simulatorLog';
 import {
+  activityFreshnessNow,
   activityTimestampForSource,
   simulatorActivityStartTimestamp,
 } from '../features/activitySimulator/simulatorTime';
 import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
 import type { ActivityLocationSource } from '../features/activitySimulator/types';
+import { planSimulatorRollback } from '../features/activitySimulator/simulatorActivityCorrection';
+import { validateCoordinate } from '../features/activitySimulator/geodesy';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
@@ -99,6 +106,7 @@ let dynamicSamplingInterval: ReturnType<typeof setInterval> | null = null;
 let incrementalFlushInterval: ReturnType<typeof setInterval> | null = null;
 // Sprint 72 STORY-00555 — hiking token refresh interval
 let tokenRefreshInterval: ReturnType<typeof setInterval> | null = null;
+let activityLifecycleInterval: ReturnType<typeof setInterval> | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
 let lastSamplingIntervalMs = 3000;
 let backgroundTaskActive = false;
@@ -217,6 +225,10 @@ interface TrackingState {
   locationProviderSource: ActivityLocationSource;
   startedAt: number | null;
   durationS: number;
+  /** Lifecycle time frozen before the currently open tracking interval. */
+  activeDurationAccumulatedMs: number;
+  /** Provider-clock start of the open tracking interval; null while paused. */
+  activeDurationStartedAtMs: number | null;
   distanceM: number;
   elevationGainM: number;
   trackPoints: TrackPoint[];
@@ -239,8 +251,8 @@ interface TrackingState {
   pausePins: Coordinate[];     // locations where user paused (rendered as flag pins)
   locationAvailable: boolean;  // false on web/simulator
   lastCoordinate: Coordinate | null;
-  lastCoordinateTime: number | null;  // unix ms of last GPS fix
-  lastFixTimestamp: number | null;    // GPS-fix timestamp (for dedupe)
+  lastCoordinateTime: number | null;  // unix ms of last accepted Activity coordinate
+  lastFixTimestamp: number | null;    // latest canonical sample timestamp (for dedupe)
   // O1 batch 40: altitudeHistory removed — written but 0 external readers
 
   /** v116: why the most recent stopTracking() ended.
@@ -320,6 +332,18 @@ interface TrackingState {
   discardCurrentSession: () => Promise<void>;
   /** Internal QA-only known-continuity break; Resume owns the new segment. */
   simulateRecordingInterruption: () => Promise<boolean>;
+  /** Internal QA-only explicit Lost reacquisition; starts a zero-distance segment. */
+  reacquireSimulatorAt: (
+    coordinate: Coordinate,
+    nextSignal?: Exclude<import('../features/activitySimulator/types').SimulatorSignal, 'lost'>,
+  ) => Promise<boolean>;
+  /** Internal QA-only correction of accepted Simulator Activity evidence. */
+  rollbackSimulatorTail: (distanceM: number) => Promise<{
+    ok: boolean;
+    actualDistanceM: number;
+    removedPointCount: number;
+    reason?: string;
+  }>;
 }
 
 const initialState = {
@@ -337,6 +361,8 @@ const initialState = {
   locationProviderSource: 'real' as ActivityLocationSource,
   startedAt: null,
   durationS: 0,
+  activeDurationAccumulatedMs: 0,
+  activeDurationStartedAtMs: null,
   distanceM: 0,
   elevationGainM: 0,
   trackPoints: [],
@@ -386,7 +412,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       return false;
     }
     const locationProviderSource = selectedActivityLocationSource();
+    appendSimulatorLog('PROVIDER', 'activity_provider_selected', {
+      requestedSource: locationProviderSource,
+      startConfigured: useActivitySimulatorStore.getState().startConfigured,
+      activityMode: mode,
+    }, { userId, coordinateSource: 'none' });
     if (locationProviderSource === 'simulator' && !await prepareSimulatorProvider(userId)) {
+      appendSimulatorLog('ACTIVITY_STATE', 'activity_start_rejected', {
+        rejectionReason: 'simulator-start-not-configured',
+        requestedSource: locationProviderSource,
+      }, { userId, coordinateSource: 'none' });
       set({ ...initialState, activityMode: mode, startError: 'location-unavailable' });
       return false;
     }
@@ -420,8 +455,15 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       trackPointsRaw: [],
       distanceM: 0,
       durationS: 0,
+      activeDurationAccumulatedMs: 0,
+      activeDurationStartedAtMs: null,
       elevationGainM: 0,
     });
+    appendSimulatorLog('ACTIVITY_STATE', 'activity_start_requested', {
+      activityMode: mode,
+      providerSource: locationProviderSource,
+      ownerGenerationSuffix: ownerGeneration.slice(-8),
+    }, { userId, clientActivityId: localSessionId, coordinateSource: 'none' });
 
     // Reset module-level state from any previous session
     lastSamplingIntervalMs = 3000;
@@ -465,6 +507,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         activityMode: mode,
         startedAt,
         lastMeaningfulAt: startedAt,
+        activeDurationMs: 0,
+        activeSinceMs: null,
         liveOwnerGeneration: ownerGeneration,
         currentSegmentId: initialSegmentId,
         nextSegmentStartReason: 'start',
@@ -501,6 +545,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           activityMode: existing.type,
           startedAt: Number.isFinite(existingStartedAt) ? existingStartedAt : Date.now(),
           lastMeaningfulAt: Date.now(),
+          activeDurationMs: 0,
+          activeSinceMs: null,
           liveOwnerGeneration: existingOwnerGeneration,
           currentSegmentId: existingSegmentId,
           nextSegmentStartReason: 'process-recovery' as const,
@@ -633,8 +679,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       try { appStateSubscription.remove(); } catch { /* no-op */ }
       appStateSubscription = null;
     }
-    // Active duration is credited by accepted same-segment samples in
-    // addTrackPoint. A wall timer would fabricate time during GPS loss.
+    stopActivityLifecycleTimer();
 
     try {
       // Native permission education belongs only to the real provider. The
@@ -748,8 +793,44 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         if (!isCurrentLocationSourceActive()) throw new Error('foreground-location-source-failed');
       }
 
+      if (locationProviderSource === 'simulator') {
+        appendSimulatorLog('PROVIDER', 'simulator_provider_locked', {
+          providerSource: 'simulator',
+          realForegroundActive: Boolean(locationSubscription),
+          realBackgroundActive: backgroundTaskActive,
+          firstAcceptedPointPending: get().trackPoints.length === 0,
+          segmentId: initialSegmentId,
+          ownerGenerationSuffix: ownerGeneration.slice(-8),
+        }, {
+          userId,
+          clientActivityId: localSessionId,
+          coordinateSource: 'none',
+        });
+      }
+
       // TRACKING is entered only after a real recording source is active.
-      set({ status: 'tracking', locationAvailable: true, startError: null });
+      const lifecycleStartedAt = activityTimestampForSource(
+        locationProviderSource,
+        Date.now(),
+        startedAt,
+      );
+      set({
+        status: 'tracking',
+        locationAvailable: true,
+        startError: null,
+        activeDurationAccumulatedMs: 0,
+        activeDurationStartedAtMs: lifecycleStartedAt,
+      });
+      await updateUnfinishedActivity(userId, localSessionId, {
+        activeDurationMs: 0,
+        activeSinceMs: lifecycleStartedAt,
+      });
+      startActivityLifecycleTimer(localSessionId);
+      appendSimulatorLog('ACTIVITY_STATE', 'activity_tracking_started', {
+        activityMode: mode,
+        providerSource: locationProviderSource,
+        currentSegmentId: initialSegmentId,
+      }, { userId, clientActivityId: localSessionId, coordinateSource: 'none' });
 
       // Subscribe AppState ONCE to flip sources foreground ↔ background.
       // Single-source guarantee eliminates the duplicate-fix logging bug.
@@ -836,6 +917,17 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                   if (!Loc) return;
                   const fix = await Loc.getCurrentPositionAsync({ accuracy: Loc.Accuracy.Balanced });
                   crashLogger.breadcrumb('k7:wake_kick_ok');
+                  appendSimulatorLog('LOCATION', 'real_activity_location_callback', {
+                    sampleSource: 'foreground-wake-current',
+                    sequenceTimestamp: Math.floor(fix.timestamp),
+                    callbackWallTimestamp: Date.now(),
+                    accuracyM: fix.coords.accuracy ?? null,
+                    speedMps: fix.coords.speed ?? null,
+                  }, {
+                    userId,
+                    clientActivityId: wakeOwnerSessionId,
+                    coordinateSource: 'real',
+                  });
                   // Feed the fresh fix through the same path a watcher
                   // update would take — this updates lastCoordinate, the
                   // clean track, distance accumulation, etc.
@@ -899,7 +991,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // protects against firing during foreground-only windows.
       drainInterval = setInterval(() => {
         if (get().status !== 'tracking') return;
-        if (!backgroundTaskActive) return;
+        // A TaskManager callback can finish just after the foreground switch
+        // stops the background source. Its points are already journaled and
+        // owner-fenced; drain that historical tail even while the foreground
+        // watcher is now active instead of stranding it until another lock.
         const drained = drainBackgroundLocations();
         for (const c of drained) {
           get().addTrackPoint(
@@ -1073,6 +1168,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // Roll back every resource created during initialization. A failed
       // start must be retryable and must not leave timers, writers or
       // subscriptions masquerading as an active session.
+      stopActivityLifecycleTimer();
       try { appStateSubscription?.remove(); } catch { /* no-op */ }
       appStateSubscription = null;
       try { locationSubscription?.remove(); } catch { /* no-op */ }
@@ -1107,6 +1203,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         await endSimulatorProvider('start-failed').catch(() => {});
         simulatorSourceActive = false;
       }
+      appendSimulatorLog('ERROR', 'activity_start_failed', {
+        providerSource: locationProviderSource,
+        rejectionReason: String(err instanceof Error ? err.message : err).slice(0, 160),
+      }, { userId, clientActivityId: localSessionId, coordinateSource: 'none' });
       set({ ...initialState, activityMode: mode, startError: 'initialization-failed' });
       return false;
     }
@@ -1119,9 +1219,43 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     if (!finishOwnerUserId || String(useAppStore.getState().user?.id ?? '') !== finishOwnerUserId) {
       return false;
     }
+    const saveTimelineStartedAt = Date.now();
+    const recordSavePhase = (phase: string, phaseStartedAt: number, details: Record<string, unknown> = {}) => {
+      appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_save_phase_timing', {
+        phase,
+        durationMs: Date.now() - phaseStartedAt,
+        totalDurationMs: Date.now() - saveTimelineStartedAt,
+        ...details,
+      }, {
+        userId: finishOwnerUserId,
+        clientActivityId: stopEntry.sessionId,
+        coordinateSource: 'none',
+      });
+    };
     // Synchronous shared-boundary lock: repeated UI taps, auto-pause and
     // another caller all converge on one stop/save pipeline.
-    set({ isFinishing: true });
+    const frozenLifecycle = stopEntry.status === 'tracking'
+      ? lifecycleDurationPatch(stopEntry)
+      : null;
+    stopActivityLifecycleTimer();
+    set({ ...(frozenLifecycle ?? {}), isFinishing: true });
+    if (frozenLifecycle && stopEntry.sessionId) {
+      // Finish is already an acceptance fence. Persist the frozen lifecycle
+      // clock before any network/review await so a crash cannot resurrect it
+      // as an indefinitely running Activity.
+      await updateUnfinishedActivity(finishOwnerUserId, stopEntry.sessionId, {
+        activeDurationMs: frozenLifecycle.activeDurationAccumulatedMs,
+        activeSinceMs: null,
+      }).catch(() => false);
+    }
+    appendSimulatorLog('ACTIVITY_STATE', 'activity_finish_requested', {
+      providerSource: stopEntry.locationProviderSource,
+      activityMode: stopEntry.activityMode,
+    }, {
+      userId: finishOwnerUserId,
+      clientActivityId: stopEntry.sessionId,
+      coordinateSource: 'none',
+    });
     // Freeze every producer before doing eligibility, network, or review work.
     // The background context shares a serialization boundary with headless
     // append, so this await proves all commits before the fence are complete
@@ -1153,6 +1287,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // Finish froze new ingestion. Each such fix reaches disk and store state
     // before the completion snapshot below is calculated.
     await pointIngestTail.catch(() => {});
+    recordSavePhase('finish_reconciliation', saveTimelineStartedAt, {
+      acceptedPointCount: get().trackPoints.length,
+      rawPointCount: get().trackPointsRaw.length,
+    });
 
     // v118 too-short pre-check (BEFORE any cleanup): if the session has
     // < 2 trackPoints, surface a "too short" sheet but DON'T tear down
@@ -1248,6 +1386,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
     const s = get();
     const finalStats = calculateActivityStats(s.trackPoints);
+    const finalDurationS = Math.max(0, Math.floor(s.durationS));
     const ownerUserId = finishOwnerUserId;
     let cleanupAfterRename = false;
     let durableSaveCommitted = false;
@@ -1351,6 +1490,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // v402: default to smoothed/raw for both memory + addSession. If
       // snapTrack succeeds we overwrite these with the snapped stream.
       let snappedTrackPoints: TrackPoint[] | null = null;
+      const matchingStartedAt = Date.now();
       try {
         // v354 fix: use Kalman-smoothed track for memory (same source
         // as the live HikingScreen polyline). Pre-v354 memory used
@@ -1375,8 +1515,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         const sourceSegments = segmentTrace(memorySource).segments;
         if (mapboxToken && sourceSegments.some(segment => segment.length >= 2)) {
           const snappedSegments: TrackPoint[][] = [];
-          let everySegmentSafe = true;
-          for (const segment of sourceSegments) {
+          for (const [segmentIndex, segment] of sourceSegments.entries()) {
             if (segment.length < 2) {
               snappedSegments.push(segment);
               continue;
@@ -1385,13 +1524,29 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               // Gaps are a truth boundary. Each real segment is matched
               // independently; the missing connector is never sent to the
               // routing service and can therefore never become road geometry.
+              appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_map_matching_started', {
+                segmentIndex,
+                segmentCount: sourceSegments.length,
+                rawPointCount: segment.length,
+              }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
               const snapRes = await snapTrack(
-                segment.map(p => ({ lat: p.lat, lng: p.lng, t: p.t })),
+                segment.map(p => ({
+                  lat: p.lat,
+                  lng: p.lng,
+                  t: p.t,
+                  alt: p.alt,
+                  accuracy: p.accuracy,
+                  speed: p.speed,
+                })),
                 { mapboxToken },
               );
               if (!snapRes.ok || snapRes.points.length < 2) {
-                everySegmentSafe = false;
                 snappedSegments.push(segment);
+                appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_map_matching_raw_fallback', {
+                  segmentIndex,
+                  rawPointCount: segment.length,
+                  reason: snapRes.ok ? 'too-few-result-points' : snapRes.reason,
+                }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
                 continue;
               }
               const first = segment[0];
@@ -1400,21 +1555,42 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               snappedSegments.push(snapRes.points.map((point, index) => ({
                 lat: point.lat,
                 lng: point.lng,
+                alt: point.alt,
                 t: first.t + Math.round(((last.t - first.t) * index) / Math.max(1, n - 1)),
                 segmentId: first.segmentId,
                 ...(index === 0 && first.segmentStartReason
                   ? { segmentStartReason: first.segmentStartReason }
                   : {}),
               })));
+              appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_map_matching_completed', {
+                segmentIndex,
+                rawPointCount: segment.length,
+                matchedPointCount: snapRes.points.length,
+                stats: snapRes.stats,
+              }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
             } catch (snapErr) {
-              everySegmentSafe = false;
               snappedSegments.push(segment);
               crashLogger.breadcrumb(`activity:segment_snap_failed ${String(snapErr).slice(0, 80)}`);
+              appendSimulatorLog('ERROR', 'activity_map_matching_failed', {
+                segmentIndex,
+                errorCode: String(snapErr).slice(0, 100),
+              }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
             }
           }
+          // Every output segment is independently truthful: a successful
+          // match contributes derived presentation geometry, while that
+          // segment's own failure contributes its accepted raw fallback.
+          // One failed segment must not discard successful matches from the
+          // others, and flattening retains segmentId boundaries so no gap is
+          // ever presented or measured as walked geometry.
           hikeSource = snappedSegments.flat();
-          if (everySegmentSafe) snappedTrackPoints = hikeSource;
+          snappedTrackPoints = hikeSource;
         }
+        const memoryReconciliationStartedAt = Date.now();
+        recordSavePhase('map_matching', matchingStartedAt, {
+          matched: snappedTrackPoints !== null,
+          segmentCount: sourceSegments.length,
+        });
         // Finish is only a completeness pass. Memory authority is the real
         // accepted GPS evidence, never road-matched presentation geometry.
         // Central spatial dedupe makes this safe after incremental writes or
@@ -1429,6 +1605,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           });
           if (result.committed && !result.deduplicated) memoryNewCells += 1;
         }
+        recordSavePhase('memory_reconciliation', memoryReconciliationStartedAt, {
+          inputPointCount: s.trackPoints.length,
+          newEvidenceCount: memoryNewCells,
+        });
         crashLogger.breadcrumb(`activity:memory_reconciled pts=${s.trackPoints.length} new=${memoryNewCells}`);
       } catch (e) {
         // The Activity journal is the crash-recoverable intent for accepted
@@ -1453,6 +1633,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       //
       // v411 老路径 (pushMemoryNow + finalizeSession) **不再调用**,
       // v412 之后只走这一个 code path。
+      const payloadStartedAt = Date.now();
       const v412Route3 = (snappedTrackPoints ?? (s.trackPointsSmoothed.length >= 2 ? s.trackPointsSmoothed : s.trackPoints))
         .map(p => toServerPoint(p));
       const v412RouteRaw = (s.trackPointsRaw.length > 0 ? s.trackPointsRaw : s.trackPoints)
@@ -1466,12 +1647,22 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const v412Payload = {
         end_time: new Date(endedAt).toISOString(),
         distance_m: finalStats.distanceM,
-        duration_s: finalStats.activeDurationS,
+        duration_s: finalDurationS,
         name: finalName,
         route_points: v412Route3,
         route_points_raw: v412RouteRaw,
         memory_points: memoryUnsynced,
       };
+      recordSavePhase('payload_serialization', payloadStartedAt, {
+        displayPointCount: v412Route3.length,
+        rawPointCount: v412RouteRaw.length,
+        memoryPointCount: memoryUnsynced.length,
+      });
+      appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_save_started', {
+        rawPointCount: v412RouteRaw.length,
+        displayPointCount: v412Route3.length,
+        segmentCount: segmentTrace(s.trackPoints).segments.length,
+      }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
       // O8 checkpoint 2: payload built. 下一步 uuidv4 曾在其他 RN app 里
       // 被报 throw (crypto.getRandomValues 不可用),先记一笔。
       try {
@@ -1499,6 +1690,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       let v412Success = false;
       // Local product data is authoritative until verified server handoff.
       // Commit the immutable payload + summary + lifecycle before networking.
+      const durableCommitStartedAt = Date.now();
       try {
         const { savePending } = require('../services/pendingSyncStore');
         await savePending({
@@ -1514,7 +1706,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             startedAt: s.startedAt,
             endedAt,
             distanceM: finalStats.distanceM,
-            durationS: finalStats.activeDurationS,
+            durationS: finalDurationS,
             elevationGainM: finalStats.elevationGainM,
             name: finalName,
             markerIds: s.markerIds,
@@ -1531,7 +1723,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           regionCode: region.code,
           startedAt: s.startedAt,
           endedAt,
-          durationS: finalStats.activeDurationS,
+          durationS: finalDurationS,
           distanceM: finalStats.distanceM,
           elevationGainM: finalStats.elevationGainM,
           trackPoints: snappedTrackPoints ?? s.trackPoints,
@@ -1552,6 +1744,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           locationProviderSource: s.locationProviderSource,
         });
         durableSaveCommitted = true;
+        recordSavePhase('local_durable_completion', durableCommitStartedAt, {
+          syncState: 'pending',
+        });
       } catch (commitError) {
         crashLogger.breadcrumb(`activity:local_commit_failed ${String(commitError).slice(0, 80)}`);
       }
@@ -1574,9 +1769,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       }
 
       if (remoteId) {
+        const serverRequestStartedAt = Date.now();
+        let serverResponseReceived = false;
+        let serverAckPersistenceStartedAt = serverRequestStartedAt;
         try {
           // v412 M5: wall-clock 20s timeout, 防切后台 setTimeout 暂停
-          const startedAt = Date.now();
           // R114/O22 STORY-73017: publish save progress steps so UI can
           // render "Uploading points… (12s)" etc instead of a mystery spinner.
           set({ savingHikeStep: 'Uploading your hike…' });
@@ -1584,7 +1781,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             let done = false;
             const timer = setInterval(() => {
               if (done) return;
-              const elapsed = Date.now() - startedAt;
+              const elapsed = Date.now() - serverRequestStartedAt;
               if (elapsed > 20000) {
                 clearInterval(timer);
                 done = true;
@@ -1600,6 +1797,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             saveHikeAtomic(remoteId, v412Payload, idempotencyKey, s.sessionId!)
               .then((r) => { if (!done) { done = true; clearInterval(timer); resolve(r); } })
               .catch((e) => { if (!done) { done = true; clearInterval(timer); reject(e); } });
+          });
+          serverResponseReceived = true;
+          serverAckPersistenceStartedAt = Date.now();
+          recordSavePhase('server_save_request', serverRequestStartedAt, {
+            acknowledged: true,
           });
           set({ savingHikeStep: 'Finalising…' });
           v412Success = true;
@@ -1630,6 +1832,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           );
           if (!sessionMarked || !registryMarked) throw new Error('activity_ack_persistence_failed');
           serverSaveAcknowledged = true;
+          recordSavePhase('server_ack_persistence', serverAckPersistenceStartedAt, {
+            acknowledged: true,
+          });
           cleanupAfterRename = true;
           const { removePending } = require('../services/pendingSyncStore');
           try {
@@ -1641,6 +1846,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           }
         } catch (v412Err: any) {
           v412Success = false;
+          recordSavePhase(
+            serverResponseReceived ? 'server_ack_persistence' : 'server_save_request',
+            serverResponseReceived ? serverAckPersistenceStartedAt : serverRequestStartedAt,
+            { acknowledged: false },
+          );
           // O1 batch 28.2: 更细粒度 log,便于诊断 Bug 6 假 pending sync。
           // 记录 status + body error message preview + payload size 判断
           // 是网络挂 / 服务器 400/500 / idempotency 冲突。
@@ -1916,10 +2126,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // Alert never fired. Now: read the current value + carry it through.
     // R5B2 companion: also carry saveLostPayload so Retry can re-attempt.
     if (s.locationProviderSource === 'simulator') {
+      appendSimulatorLog('ACTIVITY_COMPLETION', serverSaveAcknowledged
+        ? 'activity_save_acknowledged'
+        : 'activity_save_pending', {
+        stopReason,
+        syncState: serverSaveAcknowledged ? 'synced' : 'pending',
+      }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
       appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_completion_finished', {
         stopReason,
         distanceM: finalStats.distanceM,
-        durationS: finalStats.activeDurationS,
+        durationS: finalDurationS,
         elevationGainM: finalStats.elevationGainM,
         syncState: serverSaveAcknowledged ? 'synced' : 'pending',
       }, { userId: ownerUserId, clientActivityId: s.sessionId });
@@ -1945,7 +2161,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
     // Freeze acceptance synchronously before any native/storage await. A GPS
     // callback already queued after the user's Pause tap must see `paused`.
-    set({ status: 'paused' });
+    const frozenLifecycle = lifecycleDurationPatch(pauseOwner);
+    stopActivityLifecycleTimer();
+    set({ ...frozenLifecycle, status: 'paused' });
+    appendSimulatorLog('ACTIVITY_STATE', 'activity_paused', {
+      providerSource: pauseOwner.locationProviderSource,
+    }, {
+      userId: pauseOwner.ownerUserId,
+      clientActivityId: pauseOwner.sessionId,
+      coordinateSource: 'none',
+    });
     deactivateForegroundSource();
     deactivateBackgroundSource();
     // Drop already-delivered native samples from the prior ownership window.
@@ -1979,6 +2204,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // Any fix already inside validate/commit before status became paused is
     // included durably, while callbacks arriving afterward are rejected.
     await pointIngestTail.catch(() => {});
+    await updateUnfinishedActivity(String(pauseOwner.ownerUserId ?? ''), String(pauseOwner.sessionId ?? ''), {
+      activeDurationMs: frozenLifecycle.activeDurationAccumulatedMs,
+      activeSinceMs: null,
+    }).catch(() => false);
   },
 
   resumeTracking: async () => {
@@ -2033,6 +2262,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         liveOwnerGeneration: resumedOwnerGeneration,
         currentSegmentId: resumeSegmentId,
         nextSegmentStartReason: rebuildingAfterProcessDeath ? 'process-recovery' : 'resume',
+        activeDurationMs: resumeState.activeDurationAccumulatedMs,
+        activeSinceMs: null,
       });
       if (!registryPrepared) throw new Error('resume_registry_missing');
       const { updateHikeMeta } = require('../services/hikeTrackWriter');
@@ -2091,7 +2322,38 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       set({ status: 'paused', locationAvailable: false, startError: 'initialization-failed' });
       return false;
     }
-    set({ status: 'tracking', locationAvailable: true, startError: null });
+    const lifecycleStartedAt = activityTimestampForSource(
+      resumeSource,
+      Date.now(),
+      resumeGenerationStartedAt,
+    );
+    const lifecycleRegistered = await updateUnfinishedActivity(ownerUserId, resumeState.sessionId, {
+      activeDurationMs: get().activeDurationAccumulatedMs,
+      activeSinceMs: lifecycleStartedAt,
+    }).catch(() => false);
+    if (!lifecycleRegistered) {
+      deactivateForegroundSource();
+      deactivateBackgroundSource();
+      await persistBackgroundContext(null, false).catch(() => false);
+      set({ status: 'paused', locationAvailable: false, startError: 'initialization-failed' });
+      return false;
+    }
+    set({
+      status: 'tracking',
+      locationAvailable: true,
+      startError: null,
+      activeDurationStartedAtMs: lifecycleStartedAt,
+    });
+    startActivityLifecycleTimer(resumeState.sessionId);
+    appendSimulatorLog('ACTIVITY_STATE', 'activity_resumed', {
+      providerSource: resumeSource,
+      segmentId: resumeSegmentId,
+      recovery: rebuildingAfterProcessDeath,
+    }, {
+      userId: ownerUserId,
+      clientActivityId: resumeState.sessionId,
+      coordinateSource: 'none',
+    });
 
     // The next accepted point proves the first valid interval after Resume.
 
@@ -2119,7 +2381,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       });
 
       drainInterval = setInterval(() => {
-        if (get().status !== 'tracking' || !backgroundTaskActive) return;
+        if (get().status !== 'tracking') return;
         for (const coordinate of drainBackgroundLocations()) {
           get().addTrackPoint({
             lat: coordinate.latitude,
@@ -2188,12 +2450,37 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     pointIngestTail = new Promise<void>((resolve) => { releaseIngest = resolve; });
     await previousIngest.catch(() => {});
     try {
+      const ingestStartedAt = Date.now();
       const before = get();
-      const reject = (reason: string): ActivityLocationAcceptance => ({
-        accepted: false,
-        reason,
-        segmentId: before.currentSegmentId,
-      });
+      // Legacy/manual callers without a native timestamp can land twice in
+      // one millisecond. Preserve strict ordering without weakening explicit
+      // native timestamp dedupe.
+      const sampleTimestamp = timestamp == null
+        ? Math.max(Math.floor(ingestStartedAt), (before.lastFixTimestamp ?? 0) + 1)
+        : Math.floor(timestamp);
+      const owned = coord as ActivityCoordinate;
+      const coordinateSource = owned.source === 'simulator' ? 'simulator' as const : 'real' as const;
+      const reject = (reason: string): ActivityLocationAcceptance => {
+        appendSimulatorLog('LOCATION', 'location_sample_rejected', {
+          sampleSource: owned.source ?? 'foreground',
+          accuracyM: owned.accuracy ?? null,
+          rejectionReason: reason,
+          sequenceTimestamp: sampleTimestamp,
+          sampleTimestamp,
+          sampleAgeMs: Math.max(0, Date.now() - sampleTimestamp),
+          decisionLatencyMs: Date.now() - ingestStartedAt,
+          ownerGenerationSuffix: before.liveOwnerGeneration?.slice(-8) ?? null,
+        }, {
+          userId: before.ownerUserId,
+          clientActivityId: before.sessionId,
+          coordinateSource,
+        });
+        return {
+          accepted: false,
+          reason,
+          segmentId: before.currentSegmentId,
+        };
+      };
       if (
         before.status !== 'tracking'
         || before.isFinishing
@@ -2203,7 +2490,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         || String(useAppStore.getState().user?.id ?? '') !== before.ownerUserId
       ) return reject('inactive-or-unowned');
 
-      const owned = coord as ActivityCoordinate;
       if (owned.clientActivityId && owned.clientActivityId !== before.sessionId) {
         return reject('stale-client-activity');
       }
@@ -2213,7 +2499,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const isSimulatorSample = owned.source === 'simulator';
       if (
         (before.locationProviderSource === 'simulator') !== isSimulatorSample
-      ) return reject('provider-source-mismatch');
+      ) {
+        if (before.locationProviderSource === 'simulator' && !isSimulatorSample) {
+          appendSimulatorLog('PROVIDER', 'real_callback_rejected_for_simulator_activity', {
+            rejectionReason: 'provider-source-mismatch',
+            sampleSource: owned.source ?? 'foreground',
+            ownerGenerationSuffix: before.liveOwnerGeneration.slice(-8),
+          }, { userId: before.ownerUserId, clientActivityId: before.sessionId, coordinateSource: 'real' });
+        }
+        return reject('provider-source-mismatch');
+      }
       if (
         !Number.isFinite(coord.lat) || coord.lat < -90 || coord.lat > 90
         || !Number.isFinite(coord.lng) || coord.lng < -180 || coord.lng > 180
@@ -2237,7 +2532,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         }
         const acc = coord.accuracy ?? null;
         const speed = coord.speed ?? null;
-        const t = timestamp ?? Date.now();
+        const t = sampleTimestamp;
         if (s.liveOwnerAcceptAfterMs !== null && t < s.liveOwnerAcceptAfterMs) {
           acceptance.reason = 'before-owner-generation';
           return s;
@@ -2253,7 +2548,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           if (dtS > 0) {
             const distM = haversineM(s.lastCoordinate, coord);
             const impliedSpeed = distM / dtS;
-            if (impliedSpeed > TELEPORT_SPEED_MPS && distM > 30) {
+            if (impliedSpeed > TELEPORT_SPEED_MPS && distM > 30 && owned.segmentStartReason !== 'gps-reacquired') {
               const previousPoint = s.trackPoints.length > 0
                 ? s.trackPoints[s.trackPoints.length - 1] as SegmentedTrackPoint
                 : null;
@@ -2275,6 +2570,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           ? s.trackPoints[s.trackPoints.length - 1] as SegmentedTrackPoint
           : null;
         const durableBackgroundSegment = owned.source === 'background' ? owned.segmentId : undefined;
+        const explicitSimulatorReacquisitionSegment = owned.source === 'simulator'
+          && owned.segmentStartReason === 'gps-reacquired'
+          ? owned.segmentId
+          : undefined;
         const classifiedGap = durableBackgroundSegment
           ? !!tail && durableBackgroundSegment !== tail.segmentId
           : shouldStartNewSegment({
@@ -2282,7 +2581,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               next: { ...coord, t },
               mode: s.activityMode,
             });
-        const segmentId = durableBackgroundSegment ?? (classifiedGap
+        const segmentId = durableBackgroundSegment ?? explicitSimulatorReacquisitionSegment ?? (classifiedGap
           ? newSegmentId(s.sessionId ?? 'activity', t)
           : (owned.segmentId || s.currentSegmentId || newSegmentId(s.sessionId ?? 'activity', t)));
         const segmentStartReason = owned.segmentStartReason ?? s.pendingSegmentStartReason
@@ -2300,7 +2599,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           return {
             ...s,
             trackPointsRaw: [...s.trackPointsRaw, rawPoint],
-            lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
+            lastFixTimestamp: t,
           };
         }
         if (
@@ -2313,8 +2612,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             ...s,
             trackPointsRaw: [...s.trackPointsRaw, rawPoint],
             overSpeedActive: true,
-            lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
-            lastCoordinateTime: t,
+            lastFixTimestamp: t,
           };
         }
 
@@ -2337,8 +2635,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             return {
               ...s,
               trackPointsRaw: [...s.trackPointsRaw, rawPoint],
-              lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
-              lastCoordinateTime: t,
+              lastFixTimestamp: t,
             };
           }
           acceptedCoord = {
@@ -2368,8 +2665,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           return {
             ...s,
             trackPointsRaw: [...s.trackPointsRaw, rawPoint],
-            lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
-            lastCoordinateTime: t,
+            lastFixTimestamp: t,
           };
         }
 
@@ -2413,10 +2709,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           const delta = acceptedCoord.alt - prevAlt;
           return s.elevationGainM + (delta > 0 ? delta : 0);
         })();
-        const addedActiveDurationS = tail && tail.segmentId === segmentId
-          ? Math.max(0, t - tail.t) / 1000
-          : 0;
-
         acceptance.point = cleanPoint;
         acceptance.reason = acceptance.reason ?? (classifiedGap ? 'accepted-new-segment' : 'accepted');
         acceptance.transition = {
@@ -2425,9 +2717,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           trackPointsRaw: [...s.trackPointsRaw, rawPoint],
           lastCoordinate: acceptedCoord,
           lastCoordinateTime: t,
-          lastFixTimestamp: timestamp ?? s.lastFixTimestamp,
+          lastFixTimestamp: t,
           distanceM: s.distanceM + addedDistance,
-          durationS: s.durationS + addedActiveDurationS,
           elevationGainM,
           currentSegmentId: segmentId,
           pendingSegmentStartReason: null,
@@ -2442,6 +2733,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const accepted = acceptance.point;
       const acceptedTransition = acceptance.transition;
       try {
+        const journalStartedAt = Date.now();
         if (owned.source !== 'background') {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { appendHikePoint } = require('../services/hikeTrackWriter');
@@ -2461,6 +2753,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             segmentStartReason: accepted.segmentStartReason,
           });
         }
+        const journalCommittedAt = Date.now();
         const current = get();
         if (
           (current.status !== 'tracking' && current.status !== 'paused')
@@ -2481,6 +2774,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           }
           return next;
         });
+        const storePublishedAt = Date.now();
 
         const userId = before.ownerUserId;
         if (userId) {
@@ -2515,35 +2809,73 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           source: 'activity',
           ownerUserId: before.ownerUserId,
         });
-        if (isSimulatorSample) {
-          const latest = get();
-          appendSimulatorLog('ACTIVITY_POINT', 'activity_point_committed', {
+        const latest = get();
+        appendSimulatorLog('ACTIVITY_POINT', 'activity_point_committed', {
+          sampleSource: owned.source ?? 'foreground',
+          segmentId: accepted.segmentId,
+          segmentStartReason: accepted.segmentStartReason ?? null,
+          pointCount: latest.trackPoints.length,
+          ownerGenerationSuffix: before.liveOwnerGeneration.slice(-8),
+        }, {
+          userId: before.ownerUserId,
+          clientActivityId: before.sessionId,
+          virtualTimestamp: isSimulatorSample ? accepted.t : null,
+          coordinateSource,
+        });
+        if (isSimulatorSample && before.trackPoints.length === 0) {
+          appendSimulatorLog('ACTIVITY_POINT', 'simulator_first_point_committed', {
             segmentId: accepted.segmentId,
-            segmentStartReason: accepted.segmentStartReason ?? null,
             pointCount: latest.trackPoints.length,
+            journalCommitted: true,
+            lat: accepted.lat,
+            lng: accepted.lng,
           }, {
             userId: before.ownerUserId,
             clientActivityId: before.sessionId,
             virtualTimestamp: accepted.t,
-          });
-          appendSimulatorLog('ACTIVITY_METRICS', 'activity_metrics_derived', {
-            distanceM: latest.distanceM,
-            durationS: latest.durationS,
-            elevationGainM: latest.elevationGainM,
-          }, {
-            userId: before.ownerUserId,
-            clientActivityId: before.sessionId,
-            virtualTimestamp: accepted.t,
-          });
-          appendSimulatorLog('MEMORY_EVIDENCE', 'activity_memory_evidence_committed', {
-            committed: memoryResult.committed,
-            deduplicated: memoryResult.deduplicated,
-          }, {
-            userId: before.ownerUserId,
-            clientActivityId: before.sessionId,
-            virtualTimestamp: accepted.t,
+            coordinateSource: 'simulator',
           });
         }
+        appendSimulatorLog('ACTIVITY_METRICS', 'activity_metrics_derived', {
+          distanceM: latest.distanceM,
+          durationS: latest.durationS,
+          elevationGainM: latest.elevationGainM,
+        }, {
+          userId: before.ownerUserId,
+          clientActivityId: before.sessionId,
+          virtualTimestamp: isSimulatorSample ? accepted.t : null,
+          coordinateSource,
+        });
+        appendSimulatorLog('MEMORY_EVIDENCE', 'activity_memory_evidence_committed', {
+          committed: memoryResult.committed,
+          deduplicated: memoryResult.deduplicated,
+        }, {
+          userId: before.ownerUserId,
+          clientActivityId: before.sessionId,
+          virtualTimestamp: isSimulatorSample ? accepted.t : null,
+          coordinateSource,
+        });
+        appendSimulatorLog('LOCATION', 'location_sample_accepted', {
+          sampleSource: owned.source ?? 'foreground',
+          accuracyM: accepted.accuracy ?? null,
+          acceptanceReason: acceptance.reason ?? 'accepted',
+          segmentId: accepted.segmentId,
+          pointCount: get().trackPoints.length,
+          memoryCommitted: memoryResult.committed,
+          memoryDeduplicated: memoryResult.deduplicated,
+          sequenceTimestamp: accepted.t,
+          sampleTimestamp: accepted.t,
+          sampleAgeAtPublicationMs: Math.max(0, storePublishedAt - accepted.t),
+          ingestQueueLatencyMs: Math.max(0, journalStartedAt - ingestStartedAt),
+          journalCommitLatencyMs: Math.max(0, journalCommittedAt - journalStartedAt),
+          storePublicationLatencyMs: Math.max(0, storePublishedAt - journalCommittedAt),
+          ownerGenerationSuffix: before.liveOwnerGeneration.slice(-8),
+        }, {
+          userId: before.ownerUserId,
+          clientActivityId: before.sessionId,
+          virtualTimestamp: isSimulatorSample ? accepted.t : null,
+          coordinateSource,
+        });
         return {
           accepted: true,
           reason: acceptance.reason ?? 'accepted',
@@ -2560,6 +2892,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           && current.sessionId === before.sessionId
           && current.liveOwnerGeneration === before.liveOwnerGeneration
         ) {
+          const frozenLifecycle = current.status === 'tracking'
+            ? lifecycleDurationPatch(current)
+            : null;
+          stopActivityLifecycleTimer();
           deactivateForegroundSource();
           deactivateBackgroundSource();
           if (before.locationProviderSource === 'simulator') {
@@ -2567,7 +2903,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             simulatorSourceActive = false;
           }
           await persistBackgroundContext(null, false).catch(() => {});
-          set({ status: 'paused', startError: 'initialization-failed' });
+          set({ ...(frozenLifecycle ?? {}), status: 'paused', startError: 'initialization-failed' });
+          if (frozenLifecycle) {
+            await updateUnfinishedActivity(before.ownerUserId, before.sessionId, {
+              activeDurationMs: frozenLifecycle.activeDurationAccumulatedMs,
+              activeSinceMs: null,
+            }).catch(() => false);
+          }
           Alert.alert(
             'Recording paused',
             'CairnNZ could not safely store the latest GPS sample. Your earlier recorded Activity is still preserved.',
@@ -2656,6 +2998,210 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     } catch { /* silent — corrupt blob = drop */ }
   },
 
+  reacquireSimulatorAt: async (coordinate, nextSignal = 'normal') => {
+    const activity = get();
+    const validated = validateCoordinate(coordinate.lat, coordinate.lng);
+    if (
+      !validated.ok
+      || activity.status !== 'tracking'
+      || activity.isFinishing
+      || activity.locationProviderSource !== 'simulator'
+      || !activity.sessionId
+      || !activity.ownerUserId
+      || !activity.liveOwnerGeneration
+      || !['lost', 'frozen'].includes(useActivitySimulatorStore.getState().signal)
+    ) {
+      appendSimulatorLog('GPS_GAP', 'simulator_manual_reacquisition_rejected', {
+        rejectionReason: !validated.ok ? validated.reason : 'invalid-activity-state',
+      }, { userId: activity.ownerUserId, clientActivityId: activity.sessionId, coordinateSource: 'none' });
+      return false;
+    }
+    try {
+      await pauseSimulatorProviderForCorrection();
+      await pointIngestTail.catch(() => {});
+      const previousVirtualTimestamp = useActivitySimulatorStore.getState().virtualTimestampMs;
+      const at = Number.isFinite(previousVirtualTimestamp) && previousVirtualTimestamp > 0
+        ? previousVirtualTimestamp + 1
+        : Date.now();
+      const segmentId = newSegmentId(activity.sessionId, at);
+      await updateUnfinishedActivity(activity.ownerUserId, activity.sessionId, {
+        lastMeaningfulAt: activity.lastFixTimestamp ?? activity.startedAt ?? at,
+        currentSegmentId: segmentId,
+        nextSegmentStartReason: 'gps-reacquired',
+      });
+      set({ currentSegmentId: segmentId, pendingSegmentStartReason: 'gps-reacquired' });
+      appendSimulatorLog('GPS_GAP', 'simulator_manual_reacquisition_requested', {
+        previousSegmentId: activity.currentSegmentId,
+        segmentId,
+        gapDistanceCreditedM: 0,
+      }, { userId: activity.ownerUserId, clientActivityId: activity.sessionId, coordinateSource: 'simulator' });
+      await reacquireSimulatorProviderAt(validated.coordinate, segmentId, nextSignal);
+      const tail = get().trackPoints[get().trackPoints.length - 1] as SegmentedTrackPoint | undefined;
+      const accepted = tail?.segmentId === segmentId;
+      appendSimulatorLog('GPS_SEGMENT', accepted
+        ? 'simulator_manual_reacquisition_committed'
+        : 'simulator_manual_reacquisition_not_committed', {
+        segmentId,
+        accepted,
+        segmentCount: segmentTrace(get().trackPoints).segments.length,
+        gapCount: segmentTrace(get().trackPoints).gaps.length,
+        gapDistanceCreditedM: 0,
+      }, { userId: activity.ownerUserId, clientActivityId: activity.sessionId, coordinateSource: 'simulator' });
+      // The durable segment transition is committed even when the first Poor
+      // fix is rejected by the normal accuracy gate. The engine retains the
+      // segment-start marker until a later credible fix is accepted.
+      return true;
+    } catch (error) {
+      const unchangedTail = get().trackPoints[get().trackPoints.length - 1] as SegmentedTrackPoint | undefined;
+      if (unchangedTail) restoreSimulatorProviderTail({
+        coordinate: unchangedTail,
+        altitudeM: unchangedTail.alt ?? useActivitySimulatorStore.getState().altitudeM,
+        virtualTimestampMs: unchangedTail.t,
+        segmentId: unchangedTail.segmentId,
+      });
+      appendSimulatorLog('ERROR', 'simulator_manual_reacquisition_failed', {
+        errorCode: String(error).slice(0, 120),
+      }, { userId: activity.ownerUserId, clientActivityId: activity.sessionId, coordinateSource: 'none' });
+      return false;
+    }
+  },
+
+  rollbackSimulatorTail: async (requestedDistanceM) => {
+    const activity = get();
+    const fail = (reason: string) => ({ ok: false, actualDistanceM: 0, removedPointCount: 0, reason });
+    if (
+      activity.status !== 'tracking'
+      || activity.isFinishing
+      || activity.locationProviderSource !== 'simulator'
+      || !activity.sessionId
+      || !activity.ownerUserId
+    ) return fail('invalid-activity-state');
+    const preliminaryPlan = planSimulatorRollback(activity.trackPoints, requestedDistanceM);
+    if (!preliminaryPlan || preliminaryPlan.keptPoints.length === 0) return fail('insufficient-accepted-route');
+    appendSimulatorLog('ACTIVITY_STATE', 'simulator_rollback_requested', {
+      requestedDistanceM,
+      acceptedPointCount: activity.trackPoints.length,
+    }, { userId: activity.ownerUserId, clientActivityId: activity.sessionId, coordinateSource: 'none' });
+    try {
+      await pauseSimulatorProviderForCorrection();
+      await pointIngestTail.catch(() => {});
+      const frozen = get();
+      const plan = planSimulatorRollback(frozen.trackPoints, requestedDistanceM);
+      if (!plan || plan.keptPoints.length === 0) {
+        const unchangedTail = frozen.trackPoints[frozen.trackPoints.length - 1] as SegmentedTrackPoint | undefined;
+        if (unchangedTail) restoreSimulatorProviderTail({
+          coordinate: unchangedTail,
+          altitudeM: unchangedTail.alt ?? useActivitySimulatorStore.getState().altitudeM,
+          virtualTimestampMs: unchangedTail.t,
+          segmentId: unchangedTail.segmentId,
+        });
+        return fail('insufficient-accepted-route');
+      }
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { truncateActiveHikeTrack, readActiveHikeTail } = require('../services/hikeTrackWriter');
+      const retained = plan.keptPoints as SegmentedTrackPoint[];
+      const retainedJournal = retained.map((point) => ({
+        t: point.t,
+        lat: point.lat,
+        lng: point.lng,
+        acc: point.accuracy ?? undefined,
+        alt: point.alt ?? undefined,
+        speed: point.speed ?? undefined,
+        src: 'sim' as const,
+        conf: 1,
+        clientActivityId: activity.sessionId!,
+        ownerGeneration: activity.liveOwnerGeneration!,
+        segmentId: point.segmentId,
+        segmentStartReason: point.segmentStartReason,
+      }));
+      try {
+        await truncateActiveHikeTrack(activity.sessionId, retainedJournal);
+      } catch (journalError) {
+        // The write-ahead cap may already have made the shorter prefix the
+        // durable authority even if the snapshot swap itself failed. Do not
+        // restore a longer in-memory tail in that case; prove the exact prefix
+        // and roll forward to the corrected state.
+        const recovered = await readActiveHikeTail(activity.sessionId);
+        const correctionCommitted = recovered.length === retainedJournal.length
+          && recovered.every((point: { t: number }, index: number) => point.t === retainedJournal[index].t);
+        if (!correctionCommitted) throw journalError;
+        appendSimulatorLog('ERROR', 'simulator_rollback_snapshot_swap_degraded', {
+          errorCode: String(journalError).slice(0, 120),
+          durablePrefixProven: true,
+          retainedPointCount: retainedJournal.length,
+        }, { userId: activity.ownerUserId, clientActivityId: activity.sessionId, coordinateSource: 'none' });
+      }
+      const tail = retained[retained.length - 1];
+      const stats = calculateActivityStats(retained);
+      const raw = frozen.trackPointsRaw.filter(point => point.t <= tail.t);
+      lastFlushedIdx = Math.min(lastFlushedIdx, retained.length);
+      kalmanLat = null;
+      kalmanLng = null;
+      set({
+        trackPoints: retained,
+        trackPointsSmoothed: frozen.trackPointsSmoothed.slice(0, retained.length),
+        trackPointsRaw: raw,
+        distanceM: stats.distanceM,
+        elevationGainM: stats.elevationGainM,
+        lastCoordinate: tail,
+        lastCoordinateTime: tail.t,
+        lastFixTimestamp: tail.t,
+        currentSegmentId: tail.segmentId,
+        pendingSegmentStartReason: null,
+      });
+      restoreSimulatorProviderTail({
+        coordinate: { lat: tail.lat, lng: tail.lng },
+        altitudeM: tail.alt ?? useActivitySimulatorStore.getState().altitudeM,
+        virtualTimestampMs: tail.t,
+        segmentId: tail.segmentId,
+      });
+      try {
+        await updateUnfinishedActivity(activity.ownerUserId, activity.sessionId, {
+          lastMeaningfulAt: tail.t,
+          currentSegmentId: tail.segmentId,
+          nextSegmentStartReason: undefined,
+        });
+      } catch (registryError) {
+        // The crash-safe Activity journal already contains the corrected tail
+        // and recovery derives route/segment truth from it. Keep the committed
+        // correction and expose the advisory-registry failure for QA.
+        appendSimulatorLog('ERROR', 'simulator_rollback_registry_update_failed', {
+          errorCode: String(registryError).slice(0, 120),
+        }, { userId: activity.ownerUserId, clientActivityId: activity.sessionId, coordinateSource: 'none' });
+      }
+      appendSimulatorLog('ACTIVITY_STATE', 'simulator_rollback_completed', {
+        requestedDistanceM,
+        actualDistanceM: plan.actualDistanceM,
+        removedPointCount: plan.removedPoints.length,
+        retainedPointCount: retained.length,
+        distanceM: stats.distanceM,
+        durationS: get().durationS,
+        durationAuthority: 'activity-lifecycle',
+        elevationGainM: stats.elevationGainM,
+        memoryRolledBack: false,
+        cairnsRolledBack: false,
+        finalSaveAuthoritative: true,
+      }, { userId: activity.ownerUserId, clientActivityId: activity.sessionId, coordinateSource: 'simulator' });
+      return {
+        ok: true,
+        actualDistanceM: plan.actualDistanceM,
+        removedPointCount: plan.removedPoints.length,
+      };
+    } catch (error) {
+      const unchangedTail = get().trackPoints[get().trackPoints.length - 1] as SegmentedTrackPoint | undefined;
+      if (unchangedTail) restoreSimulatorProviderTail({
+        coordinate: unchangedTail,
+        altitudeM: unchangedTail.alt ?? useActivitySimulatorStore.getState().altitudeM,
+        virtualTimestampMs: unchangedTail.t,
+        segmentId: unchangedTail.segmentId,
+      });
+      appendSimulatorLog('ERROR', 'simulator_rollback_failed', {
+        errorCode: String(error).slice(0, 120),
+      }, { userId: activity.ownerUserId, clientActivityId: activity.sessionId, coordinateSource: 'none' });
+      return fail(String(error).slice(0, 120));
+    }
+  },
+
   simulateRecordingInterruption: async () => {
     const activity = get();
     if (
@@ -2668,7 +3214,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
     // Freeze the same owner before tearing down producers. Resume will rotate
     // generation and allocate the mandatory process-recovery segment.
-    set({ status: 'paused', pendingSegmentStartReason: 'process-recovery' });
+    const frozenLifecycle = lifecycleDurationPatch(activity);
+    stopActivityLifecycleTimer();
+    set({ ...frozenLifecycle, status: 'paused', pendingSegmentStartReason: 'process-recovery' });
     try { appStateSubscription?.remove(); } catch { /* no-op */ }
     appStateSubscription = null;
     deactivateForegroundSource();
@@ -2695,6 +3243,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
     await updateUnfinishedActivity(activity.ownerUserId, activity.sessionId, {
       nextSegmentStartReason: 'process-recovery',
+      activeDurationMs: frozenLifecycle.activeDurationAccumulatedMs,
+      activeSinceMs: null,
     });
     set({
       lastCoordinate: null,
@@ -2715,6 +3265,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   suspendForUserSwitch: async () => {
     const activity = get();
     if (activity.status === 'idle' || !activity.sessionId) {
+      stopActivityLifecycleTimer();
       deactivateForegroundSource();
       deactivateBackgroundSource();
       drainBackgroundLocations();
@@ -2722,6 +3273,17 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       if (!idleFence) throw new Error('activity_logout_background_fence_failed');
       set({ saveLostSessionId: null, saveLostPayload: null });
       return;
+    }
+    const frozenLifecycle = activity.status === 'tracking'
+      ? lifecycleDurationPatch(activity)
+      : null;
+    stopActivityLifecycleTimer();
+    if (frozenLifecycle) {
+      set(frozenLifecycle);
+      await updateUnfinishedActivity(String(activity.ownerUserId ?? ''), activity.sessionId, {
+        activeDurationMs: frozenLifecycle.activeDurationAccumulatedMs,
+        activeSinceMs: null,
+      }).catch(() => false);
     }
     const clientActivityId = activity.sessionId;
     if (activity.locationProviderSource === 'simulator') {
@@ -2791,7 +3353,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   discardCurrentSession: async () => {
     const discardEntry = get();
     if (discardEntry.status === 'idle' || !discardEntry.sessionId || discardEntry.isFinishing) return;
-    set({ isFinishing: true });
+    const frozenLifecycle = discardEntry.status === 'tracking'
+      ? lifecycleDurationPatch(discardEntry)
+      : null;
+    stopActivityLifecycleTimer();
+    set({ ...(frozenLifecycle ?? {}), isFinishing: true });
     if (discardEntry.locationProviderSource === 'simulator') {
       pauseSimulatorProvider();
       simulatorSourceActive = false;
@@ -2889,6 +3455,64 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   },
 }));
 
+// ── Activity lifecycle clock ───────────────────────────────────────────────
+
+function stopActivityLifecycleTimer(): void {
+  if (!activityLifecycleInterval) return;
+  clearInterval(activityLifecycleInterval);
+  activityLifecycleInterval = null;
+}
+
+function lifecycleDurationPatch(
+  state: Pick<TrackingState,
+    | 'locationProviderSource'
+    | 'activeDurationAccumulatedMs'
+    | 'activeDurationStartedAtMs'>,
+  wallClockTimestamp = Date.now(),
+): Pick<TrackingState,
+  | 'durationS'
+  | 'activeDurationAccumulatedMs'
+  | 'activeDurationStartedAtMs'> {
+  const nowMs = activityFreshnessNow(state.locationProviderSource, wallClockTimestamp);
+  const elapsedMs = calculateLifecycleDurationMs({
+    accumulatedMs: state.activeDurationAccumulatedMs,
+    activeSinceMs: state.activeDurationStartedAtMs,
+    nowMs,
+  });
+  return {
+    durationS: Math.floor(elapsedMs / 1000),
+    activeDurationAccumulatedMs: elapsedMs,
+    activeDurationStartedAtMs: null,
+  };
+}
+
+function startActivityLifecycleTimer(clientActivityId: string): void {
+  stopActivityLifecycleTimer();
+  const tick = () => {
+    const state = useTrackingStore.getState();
+    if (
+      state.status !== 'tracking'
+      || state.isFinishing
+      || state.sessionId !== clientActivityId
+      || state.activeDurationStartedAtMs === null
+    ) {
+      stopActivityLifecycleTimer();
+      return;
+    }
+    const nowMs = activityFreshnessNow(state.locationProviderSource);
+    const durationS = Math.floor(calculateLifecycleDurationMs({
+      accumulatedMs: state.activeDurationAccumulatedMs,
+      activeSinceMs: state.activeDurationStartedAtMs,
+      nowMs,
+    }) / 1000);
+    if (durationS !== state.durationS) useTrackingStore.setState({ durationS });
+  };
+  tick();
+  // Recompute from the provider clock instead of incrementing a counter, so
+  // JS timer suspension in background cannot lose Activity time.
+  activityLifecycleInterval = setInterval(tick, 250);
+}
+
 // ── Source activation helpers (single-source guarantee) ────────────────────
 
 /**
@@ -2955,6 +3579,17 @@ async function activateForegroundSource(): Promise<void> {
       },
       (position) => {
         const ts = position.timestamp || Date.now();
+        appendSimulatorLog('LOCATION', 'real_activity_location_callback', {
+          sampleSource: 'foreground',
+          sequenceTimestamp: Math.floor(ts),
+          callbackWallTimestamp: Date.now(),
+          accuracyM: position.coords.accuracy ?? null,
+          speedMps: position.coords.speed ?? null,
+        }, {
+          userId: ownerAtActivation.ownerUserId,
+          clientActivityId: ownerAtActivation.sessionId,
+          coordinateSource: 'real',
+        });
         debugLogger.log({
           ts,
           event: 'gps_fix',
@@ -2988,10 +3623,35 @@ async function activateForegroundSource(): Promise<void> {
       },
       (error) => {
         debugLogger.logError(error, 'watchPositionAsync:foreground');
+        appendSimulatorLog('ERROR', 'real_activity_location_source_error', {
+          sampleSource: 'foreground',
+          errorCode: String(error).slice(0, 160),
+        }, {
+          userId: ownerAtActivation.ownerUserId,
+          clientActivityId: ownerAtActivation.sessionId,
+          coordinateSource: 'real',
+        });
       },
     );
+    appendSimulatorLog('PROVIDER', 'real_activity_location_source_activated', {
+      sampleSource: 'foreground',
+      requestedIntervalMs: lastSamplingIntervalMs,
+      requestedDistanceM: 5,
+    }, {
+      userId: ownerAtActivation.ownerUserId,
+      clientActivityId: ownerAtActivation.sessionId,
+      coordinateSource: 'real',
+    });
   } catch (err) {
     debugLogger.logError(err, 'activateForegroundSource');
+    appendSimulatorLog('ERROR', 'real_activity_location_source_error', {
+      sampleSource: 'foreground-activation',
+      errorCode: String(err).slice(0, 160),
+    }, {
+      userId: ownerAtActivation.ownerUserId,
+      clientActivityId: ownerAtActivation.sessionId,
+      coordinateSource: 'real',
+    });
   }
 }
 
@@ -3064,9 +3724,26 @@ async function activateBackgroundSource(): Promise<void> {
     });
     backgroundTaskActive = true;
     crashLogger.breadcrumb('k10:bg_activate_ok');
+    appendSimulatorLog('PROVIDER', 'real_activity_location_source_activated', {
+      sampleSource: 'background',
+      requestedIntervalMs: lastSamplingIntervalMs,
+      requestedDistanceM: 5,
+    }, {
+      userId: state.ownerUserId,
+      clientActivityId: state.sessionId,
+      coordinateSource: 'real',
+    });
   } catch (err: any) {
     crashLogger.breadcrumb(`k10:bg_activate_err ${String(err?.message || err).slice(0, 80)}`);
     debugLogger.logError(err, 'activateBackgroundSource');
+    appendSimulatorLog('ERROR', 'real_activity_location_source_error', {
+      sampleSource: 'background-activation',
+      errorCode: String(err?.message || err).slice(0, 160),
+    }, {
+      userId: state.ownerUserId,
+      clientActivityId: state.sessionId,
+      coordinateSource: 'real',
+    });
   }
 }
 

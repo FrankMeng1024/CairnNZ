@@ -13,6 +13,10 @@ export interface UnfinishedActivityRecord {
   activityMode: ActivityMode;
   startedAt: number;
   lastMeaningfulAt: number;
+  /** Frozen lifecycle time accumulated before the current tracking interval. */
+  activeDurationMs?: number;
+  /** Provider-clock start of the open tracking interval; null while paused. */
+  activeSinceMs?: number | null;
   liveOwnerGeneration: string;
   currentSegmentId: string;
   nextSegmentStartReason?: SegmentStartReason;

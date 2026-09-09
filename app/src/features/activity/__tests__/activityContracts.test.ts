@@ -1,6 +1,7 @@
 import {
   MAX_CREDITABLE_ACTIVE_INTERVAL_MS,
   calculateActivityStats,
+  calculateLifecycleDurationMs,
   saveEligibility,
   segmentTrace,
   shouldStartNewSegment,
@@ -29,6 +30,19 @@ describe('Free Activity save authority', () => {
 });
 
 describe('segmented Activity truth', () => {
+  test('lifecycle time advances through GPS silence and freezes only when paused', () => {
+    expect(calculateLifecycleDurationMs({
+      accumulatedMs: 15_000,
+      activeSinceMs: 100_000,
+      nowMs: 710_000,
+    })).toBe(625_000);
+    expect(calculateLifecycleDurationMs({
+      accumulatedMs: 625_000,
+      activeSinceMs: null,
+      nowMs: 9_999_999,
+    })).toBe(625_000);
+  });
+
   test('process recovery always starts a gap, even after one second', () => {
     const previous = point(-41, 174, 1_000);
     expect(shouldStartNewSegment({
@@ -89,7 +103,7 @@ describe('segmented Activity truth', () => {
   });
 
   test('foreground/background/server use one canonical segmented point shape', () => {
-    expect(toServerPoint(point(-41, 174, 10_000, 'seg-1', {
+    expect(toServerPoint(point(-41, 174, 10_000.875, 'seg-1', {
       alt: 123,
       accuracy: 7,
       segmentStartReason: 'gps-reacquired',

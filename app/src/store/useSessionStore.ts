@@ -13,7 +13,7 @@
 import { create } from 'zustand';
 import { storage } from './storage';
 import type { Coordinate } from '../utils/geo';
-import { deleteRemoteSession, deleteRemoteSessionByClientId } from '../services/sessionService';
+import { deleteRemoteSession, deleteRemoteSessionByClientId, renameRemoteSession } from '../services/sessionService';
 import { tombstoneActivity } from '../features/activity/activityRegistry';
 import { crashLogger } from '../services/crashLogger';
 
@@ -90,8 +90,11 @@ interface SessionState {
   currentUserId: string;            // 'guest' before login, real userId after
   addSession: (session: TrackingSession, ownerUserId?: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
-  /** O18 HIST-03: rename a completed hike. Persists via storage.setItem. */
-  renameSession: (id: string, name: string) => void;
+  /** Rename only after the server or pending outbox accepts the mutation. */
+  renameSession: (id: string, name: string) => Promise<{
+    ok: boolean;
+    reason?: 'not-found' | 'syncing' | 'pending-missing' | 'rejected' | 'unavailable' | 'invalid';
+  }>;
   clearSessions: () => void;       // called on logout to remove prior user's data
   getSessions: () => TrackingSession[];
   // O1 batch 40: getSessionsByRegion, markSyncing removed — 0 external callers
@@ -179,24 +182,59 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     await run;
   },
 
-  // O18 HIST-03: rename a saved hike. Persists the summary list to storage.
-  // Trims empty names to keep display fallbacks working; caller can gate on
-  // trimmed length before invoking.
-  renameSession: (id, name) => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const userId = get().currentUserId;
-    set((state) => {
-      const next = state.sessions.map((s) => s.id === id ? { ...s, name: trimmed } : s);
-      // Persist summaries (no trackPoints, matches hydrate's read shape).
+  renameSession: async (id, name) => {
+    const trimmed = name.trim().slice(0, 100);
+    if (!trimmed) return { ok: false, reason: 'invalid' };
+    const userId = String(get().currentUserId ?? '');
+    const session = get().sessions.find(item => item.id === id);
+    if (!session || !userId || userId === 'guest') return { ok: false, reason: 'not-found' };
+
+    const failRename = (reason: 'not-found' | 'syncing' | 'pending-missing' | 'rejected' | 'unavailable' | 'invalid') => {
       try {
-        const summaries = next.map(({ trackPoints, ...rest }) => rest);
-        storage.setItem(sessionsKey(userId), JSON.stringify(summaries));
-      } catch (err) {
-        crashLogger.breadcrumb(`session:rename:persist_failed ${String(err).slice(0, 60)}`);
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../features/activitySimulator/simulatorLog').appendSimulatorLog('ERROR', 'activity_rename_failed', {
+          reason,
+          syncState: session.syncState ?? 'synced',
+        }, { userId, clientActivityId: session.clientActivityId ?? session.id, coordinateSource: 'none' });
+      } catch { /* QA diagnostics cannot affect rename */ }
+      return { ok: false as const, reason };
+    };
+    if (session.syncState === 'syncing') return failRename('syncing');
+    if (session.syncState === 'pending' || session.syncState === 'sync_error') {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { renamePendingActivity } = require('../services/pendingSyncStore');
+      const pendingRenamed = await renamePendingActivity(session.clientActivityId ?? session.id, userId, trimmed);
+      if (!pendingRenamed) return failRename('pending-missing');
+    } else {
+      const remoteId = session.remoteId ?? session.serverActivityId ?? (/^\d+$/.test(session.id) ? Number(session.id) : null);
+      if (!remoteId) return failRename('not-found');
+      const remote = await renameRemoteSession(remoteId, trimmed);
+      if (!remote.ok) return failRename(remote.reason);
+    }
+
+    const run = sessionWriteTail.then(async () => {
+      const live = get();
+      if (live.currentUserId !== userId || !live.sessions.some(item => item.id === id)) {
+        throw new Error('session_rename_stale');
       }
-      return { sessions: next };
+      const next = live.sessions.map(item => item.id === id ? { ...item, name: trimmed } : item);
+      const summaries = next.map(({ trackPoints: _, ...rest }) => rest);
+      await storage.setItem(sessionsKey(userId), JSON.stringify(summaries), { strict: true });
+      if (get().currentUserId === userId) set({ sessions: next });
     });
+    sessionWriteTail = run.catch(() => {});
+    try {
+      await run;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../features/activitySimulator/simulatorLog').appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_rename_succeeded', {
+          syncState: session.syncState ?? 'synced',
+        }, { userId, clientActivityId: session.clientActivityId ?? session.id, coordinateSource: 'none' });
+      } catch { /* QA diagnostics cannot affect rename */ }
+      return { ok: true };
+    } catch {
+      return failRename('unavailable');
+    }
   },
 
   clearSessions: () => {
@@ -244,6 +282,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         ? await deleteRemoteSession(session.remoteId)
         : false);
       crashLogger.breadcrumb(`session:delete:remote ok=${ok} target=${session.remoteId ?? clientActivityId}`);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../features/activitySimulator/simulatorLog').appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_deleted', {
+          remoteDeleteAcknowledged: ok,
+        }, { userId, clientActivityId, coordinateSource: 'none' });
+      } catch { /* QA diagnostics cannot affect deletion */ }
     } else {
       crashLogger.breadcrumb(`session:delete:local-only id=${id}`);
     }

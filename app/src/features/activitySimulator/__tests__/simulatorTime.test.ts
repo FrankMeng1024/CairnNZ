@@ -33,7 +33,7 @@ describe('Activity Simulator bounded historical clock', () => {
     });
   });
 
-  test('1× keeps the real wall-clock epoch and behavior', () => {
+  test('1× also reserves history so a later live acceleration remains server-safe', () => {
     const startedAt = simulatorActivityStartTimestamp(1, wallStart);
     const advanced = advanceSimulatorClock({
       activityStartedAtMs: startedAt,
@@ -42,13 +42,13 @@ describe('Activity Simulator bounded historical clock', () => {
       wallClockTimestampMs: wallStart + 1_000,
       timeScale: 1,
     });
-    expect(startedAt).toBe(wallStart);
-    expect(advanced.virtualTimestampMs).toBe(wallStart + 1_000);
+    expect(startedAt).toBe(wallStart - SIMULATOR_MAX_VIRTUAL_ACTIVITY_MS - SIMULATOR_FUTURE_SAFETY_MARGIN_MS);
+    expect(advanced.virtualTimestampMs).toBe(startedAt + 1_000);
     expect(advanced.appliedVirtualElapsedMs).toBe(1_000);
     expect(advanced.limitReached).toBe(false);
   });
 
-  test.each([2, 5, 10, 30] as SimulatorTimeScale[])(
+  test.each([2, 5, 10, 30, 60, 120] as SimulatorTimeScale[])(
     '%d× advances virtual evidence at the configured scale without future timestamps',
     timeScale => {
       const startedAt = simulatorActivityStartTimestamp(timeScale, wallStart);
@@ -96,6 +96,27 @@ describe('Activity Simulator bounded historical clock', () => {
       .toBe(startedAt + 600_000);
     expect(activityTimestampForSource('real', wallStart + 60_000, startedAt))
       .toBe(wallStart + 60_000);
+  });
+
+  test('switching from 1× to 30× advances only subsequent virtual time', () => {
+    const startedAt = simulatorActivityStartTimestamp(1, wallStart);
+    const oneX = advanceSimulatorClock({
+      activityStartedAtMs: startedAt,
+      previousVirtualTimestampMs: startedAt,
+      wallElapsedMs: 1_000,
+      wallClockTimestampMs: wallStart + 1_000,
+      timeScale: 1,
+    });
+    const thirtyX = advanceSimulatorClock({
+      activityStartedAtMs: startedAt,
+      previousVirtualTimestampMs: oneX.virtualTimestampMs,
+      wallElapsedMs: 1_000,
+      wallClockTimestampMs: wallStart + 2_000,
+      timeScale: 30,
+    });
+    expect(oneX.appliedVirtualElapsedMs).toBe(1_000);
+    expect(thirtyX.appliedVirtualElapsedMs).toBe(30_000);
+    expect(thirtyX.virtualTimestampMs).toBeLessThan(wallStart + 2_000);
   });
 
   test('a subsequent Real Activity never inherits Simulator virtual time', () => {

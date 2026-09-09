@@ -18,7 +18,7 @@ import {
 import { haptic } from '../services/hapticService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { useNavigation, CommonActions, useIsFocused } from '@react-navigation/native';
+import { useNavigation, CommonActions, useFocusEffect, useIsFocused } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppStore } from '../store/useAppStore';
@@ -52,9 +52,18 @@ import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { ActivitySimulatorPanel } from '../features/activitySimulator/ActivitySimulatorPanel';
-import { selectedActivityLocationSource } from '../features/activitySimulator/activityLocationProvider';
-import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
+import {
+  initializeFreshSimulatorSetupForActivityEntry,
+  useActivitySimulatorStore,
+} from '../features/activitySimulator/useActivitySimulatorStore';
 import { activityFreshnessNow } from '../features/activitySimulator/simulatorTime';
+import { appendSimulatorLog } from '../features/activitySimulator/simulatorLog';
+import { useSimulatorKeepAwake } from '../features/activitySimulator/useSimulatorKeepAwake';
+import {
+  resolveHikeCameraContract,
+  resolveSimulatorControlsVisible,
+  resolveSimulatorMapState,
+} from '../features/activitySimulator/simulatorMapState';
 import {
   deriveActivityOperationalState,
   isActivitySessionVisible,
@@ -75,17 +84,51 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type UIState = 'map' | 'detail';
 
 export function HikingScreen() {
+  const simulatorOwnerUserId = useAppStore((s) => s.user?.id ?? null);
+  const simulatorHydratedUserId = useActivitySimulatorStore((s) => s.hydratedUserId);
   const debugMode = useSettingsStore((s) => s.debugMode);
   const simulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
+  const simulatorStartConfigured = useActivitySimulatorStore((s) => s.startConfigured);
   const simulatorPosition = useActivitySimulatorStore((s) => s.current);
+  const simulatorSignal = useActivitySimulatorStore((s) => s.signal);
   const simulatorVirtualTimestamp = useActivitySimulatorStore((s) => s.virtualTimestampMs);
+  const simulatorPickerMode = useActivitySimulatorStore((s) => s.pickerMode);
+  const status = useTrackingStore(s => s.status);
   const locationProviderSource = useTrackingStore((s) => s.locationProviderSource);
-  const showSimulator = activitySimulatorBuildCapable
-    && debugMode
-    && (simulatorEnabled || locationProviderSource === 'simulator');
+  useSimulatorKeepAwake(
+    activitySimulatorBuildCapable
+      && debugMode
+      && locationProviderSource === 'simulator'
+      && status !== 'idle',
+  );
+  const showSimulator = resolveSimulatorControlsVisible(
+    activitySimulatorBuildCapable,
+    debugMode,
+    simulatorEnabled,
+    locationProviderSource,
+    status,
+  );
 
   const nav = useNavigation<Nav>();
   const isFocused = useIsFocused();
+  useFocusEffect(
+    React.useCallback(() => {
+      if (
+        !activitySimulatorBuildCapable
+        || !debugMode
+        || !simulatorEnabled
+        || !simulatorOwnerUserId
+        || simulatorHydratedUserId !== String(simulatorOwnerUserId)
+      ) return undefined;
+      void initializeFreshSimulatorSetupForActivityEntry(String(simulatorOwnerUserId)).then(result => {
+        appendSimulatorLog('SIM_SESSION', 'simulator_fresh_setup_entry', {
+          screen: 'hike',
+          result,
+        }, { coordinateSource: 'none' });
+      });
+      return undefined;
+    }, [debugMode, simulatorEnabled, simulatorHydratedUserId, simulatorOwnerUserId]),
+  );
   // O12: uiMode/isExpert removed — was dead double-switch (only 'brg' placeholder used it)
   const insets = useSafeAreaInsets();
   // R21 (2026-08-17 user "确保hike界面根据系统主题色 切换 白天和黑夜"):
@@ -98,22 +141,43 @@ export function HikingScreen() {
   const hikeChipText = hikeTheme.foreground;
 
   // Real tracking store
-  const status = useTrackingStore(s => s.status);
   const isFinishing = useTrackingStore(s => s.isFinishing);
   const startError = useTrackingStore(s => s.startError);
   const durationS = useTrackingStore(s => s.durationS);
+  const activityStartedAt = useTrackingStore(s => s.startedAt);
   const distanceM = useTrackingStore(s => s.distanceM);
   const elevationGainM = useTrackingStore(s => s.elevationGainM);
   const locationAvailable = useTrackingStore(s => s.locationAvailable);
   const lastCoordinate = useTrackingStore(s => s.lastCoordinate);
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    appendSimulatorLog('SCREEN', 'hike_opened', {
+      debugMode,
+      simulatorEnabled,
+      trackingStatus: status,
+      providerSource: locationProviderSource,
+    }, { coordinateSource: 'none' });
+    return () => appendSimulatorLog('SCREEN', 'hike_closed', {}, { coordinateSource: 'none' });
+  }, [isFocused]);
+  // Camera display is independent from Simulator Activity authority. Before
+  // Set Start, retain the normal real-GPS map path; during a Simulator
+  // Activity, display the last canonically accepted fix (not an unaccepted
+  // engine-only position).
+  const {
+    simulatorLocationAuthoritative,
+    displayPosition: mapDisplayPosition,
+  } = resolveSimulatorMapState({
+    controlsVisible: showSimulator,
+    startConfigured: simulatorStartConfigured,
+    trackingStatus: status,
+    providerSource: locationProviderSource,
+    virtualPosition: simulatorPosition,
+    acceptedPosition: lastCoordinate,
+  });
   const sessionId = useTrackingStore(s => s.sessionId);
   const trackPoints = useTrackingStore(s => s.trackPoints);
-  // v78: prefer smoothed track for live polyline render. Same Kalman
-  // pass that MapHistoryScreen uses post-hoc, but applied live here so
-  // Hike screen shows the same clean line the user will see in
-  // Activities — not a sawtooth raw GPS jitter. Falls back to raw if
-  // smoothed is empty (very early in the session).
-  const trackPointsSmoothed = useTrackingStore(s => s.trackPointsSmoothed);
+  // Retained for completion/detail parity. The live line below uses the
+  // accepted canonical points so its endpoint never trails Activity truth.
   const startTracking = useTrackingStore(s => s.startTracking);
   const stopTracking = useTrackingStore(s => s.stopTracking);
   // v120: pause + resume hooks for the Stop button. Tapping Stop pauses
@@ -501,7 +565,7 @@ export function HikingScreen() {
     let cancelled = false;
     (async () => {
       try {
-        if (selectedActivityLocationSource() === 'simulator') {
+        if (simulatorLocationAuthoritative) {
           if (!cancelled) setHasLocationPermission(true);
           return;
         }
@@ -549,13 +613,19 @@ export function HikingScreen() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [simulatorLocationAuthoritative]);
 
   const operationalState = deriveActivityOperationalState({
     trackingStatus: status,
     isFinishing,
     hasRecovery: unfinished !== null,
     hasStartError: startError !== null,
+  });
+  const activitySessionVisible = isActivitySessionVisible(operationalState);
+  const hikeCameraContract = resolveHikeCameraContract({
+    activityVisible: activitySessionVisible,
+    simulatorLocationAuthoritative,
+    displayPosition: mapDisplayPosition,
   });
 
   const handleStartHike = async () => {
@@ -721,9 +791,21 @@ export function HikingScreen() {
   const freshnessNow = locationProviderSource === 'simulator'
     ? simulatorVirtualTimestamp
     : activityFreshnessNow(locationProviderSource);
-  const signalLostFor = (lastTrackT != null) ? Math.max(0, freshnessNow - lastTrackT) : 0;
-  const signalLost = lastTrackT != null && signalLostFor > SIGNAL_GAP_MS;
+  const freshnessReference = lastTrackT ?? activityStartedAt;
+  const signalLostFor = freshnessReference != null ? Math.max(0, freshnessNow - freshnessReference) : 0;
+  const signalLost = isTracking && freshnessReference != null && signalLostFor > SIGNAL_GAP_MS;
   const signalLostMin = Math.floor(signalLostFor / 60_000);
+  const gpsFixHealthy = isTracking && locationAvailable && lastTrackT !== null && !signalLost;
+  const simulatorGpsActive = isTracking && locationProviderSource === 'simulator';
+  const gpsStatusLabel = simulatorGpsActive
+    ? ({ normal: '正常', poor: '较差', lost: '丢失', frozen: '卡住' } as const)[simulatorSignal]
+    : 'GPS';
+  const gpsStatusColor = simulatorGpsActive
+    ? simulatorSignal === 'normal' ? Colors.primary
+      : simulatorSignal === 'poor' ? Colors.severityWarning
+        : simulatorSignal === 'lost' ? Colors.danger
+          : Colors.info
+    : gpsFixHealthy ? Colors.primary : Colors.severityWarning;
 
   const [showRoutePicker, setShowRoutePicker] = useState(false);
   const routePickerSlide = useRef(new Animated.Value(300)).current;
@@ -813,7 +895,7 @@ export function HikingScreen() {
   // hasLocationPermission stays false (dot stays amber).
   useEffect(() => {
     if (!isFocused) return;
-    if (selectedActivityLocationSource() === 'simulator') {
+    if (simulatorLocationAuthoritative) {
       setHasLocationPermission(true);
       setPermissionDeniedVisible(false);
       return;
@@ -832,21 +914,46 @@ export function HikingScreen() {
       } catch { /* non-fatal */ }
     })();
     return () => { cancelled = true; };
-  }, [isFocused]);
+  }, [isFocused, simulatorLocationAuthoritative]);
 
   // ── Phase 1: Route Selection ─────────────────────────────────────────────
-  if (!isActivitySessionVisible(operationalState)) {
+  // One native Mapbox owner spans pre-start and Tracking. Activity/provider
+  // transitions update layers and camera data; they never replace a map that
+  // has already loaded on the device.
+  const activeRoute = selectedRoute ? routes.find(r => r.id === selectedRoute) : null;
+  const routePolyline = activeRoute?.points ?? [];
+  const hikeMapSurface = (
+    <HikingMap
+      key="hike-map-surface"
+      markers={activitySessionVisible ? markers : []}
+      trackPoints={activitySessionVisible
+        ? trackPoints.map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentId: tp.segmentId }))
+        : []}
+      onMarkerPress={(id) => {
+        if (!activitySessionVisible) return;
+        setSelectedMarkerId(id);
+        setUi('detail');
+      }}
+      routeStart={activitySessionVisible && routePolyline.length > 0
+        ? { lat: routePolyline[0].lat, lng: routePolyline[0].lng }
+        : null}
+      userPos={hikeCameraContract.userPosition}
+      simulatorEnabled={hikeCameraContract.simulatorEnabled}
+      simulatorControlsEnabled={showSimulator}
+      simulatorCenterPickerVisible={showSimulator && (status === 'idle' || simulatorPickerMode !== null)}
+      trackStartVariant={activitySessionVisible && isTrackingOrPaused ? 'hike' : null}
+      instantCamera={hikeCameraContract.instantCamera}
+      followUser={activitySessionVisible ? followUser : true}
+      onUserGesture={activitySessionVisible ? () => setFollowUser(false) : undefined}
+      recenterImperativeRef={activitySessionVisible ? recenterImperativeRef : undefined}
+    />
+  );
+
+  if (!activitySessionVisible) {
     return (
       <>
       <View style={[styles.container, { backgroundColor: hikeTheme.background }]}>
-        <HikingMap
-          markers={[]}
-          trackPoints={[]}
-          onMarkerPress={() => {}}
-          userPos={showSimulator ? simulatorPosition : lastCoordinate}
-          simulatorEnabled={showSimulator}
-          instantCamera={showSimulator}
-        />
+        {hikeMapSurface}
 
         {/* Top overlay: concept-locked stats strip (4 items in one row).
             Values are live even before tracking starts (all zero) so the
@@ -1000,50 +1107,20 @@ export function HikingScreen() {
             </Animated.View>
           </Animated.View>
         )}
+        {showSimulator ? <ActivitySimulatorPanel /> : null}
         {/* v412 4-eye fix (Critical #3): recoveryModalNode 已提到最外层 Fragment, 见函数结尾. */}
       </View>
       {recoveryModalNode}
-      {showSimulator ? <ActivitySimulatorPanel /> : null}
       </>
     );
   }
 
   // ── Phase 2: Tracking ────────────────────────────────────────────────────
 
-  // Get selected route points for polyline display
-  const activeRoute = selectedRoute ? routes.find(r => r.id === selectedRoute) : null;
-  const routePolyline = activeRoute?.points ?? [];
-
   return (
     <>
     <View style={[styles.container, { backgroundColor: hikeTheme.background }]}>
-      <HikingMap
-        markers={markers}
-        trackPoints={(trackPointsSmoothed.length >= 2 ? trackPointsSmoothed : trackPoints).map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentId: tp.segmentId }))}
-        onMarkerPress={(id) => { setSelectedMarkerId(id); setUi('detail'); }}
-        routeStart={routePolyline.length > 0
-          ? { lat: routePolyline[0].lat, lng: routePolyline[0].lng }
-          : null}
-        userPos={showSimulator ? simulatorPosition : (lastCoordinate ? { lat: lastCoordinate.lat, lng: lastCoordinate.lng } : null)}
-        simulatorEnabled={showSimulator}
-        // 2026-08-17 concept H1: blue dot at track start once we
-        // have at least one recorded GPS point. The blue variant
-        // matches the hiking screen's palette in the concept sheet.
-        trackStartVariant={isTrackingOrPaused ? 'hike' : null}
-        // Skip the globe → location fly-in whenever we already know
-        // where the user is. This covers all the cases where the user
-        // expects the map to "just be there":
-        //   - Resume tracking (isTracking + trackPoints already exist)
-        //   - Re-entering Hiking from Home Last-row after a recent
-        //     hike (lastCoordinate seeded by GPS prime effect)
-        //   - Returning from another screen mid-hike
-        // Only first-launch with no GPS fix yet gets the fly-in.
-        instantCamera={lastCoordinate != null}
-        // v118: pass through followUser + gesture release callback.
-        followUser={followUser}
-        onUserGesture={() => setFollowUser(false)}
-        recenterImperativeRef={recenterImperativeRef}
-      />
+      {hikeMapSurface}
 
       {/* Top overlay: back + GPS chip + concept stats strip. Concept H1/H2
           places 4 stats (km / time / elev / GPS) as a single row on the
@@ -1076,8 +1153,8 @@ export function HikingScreen() {
           <Text style={[styles.statsStripTime, hikeIsDark ? { color: hikeChipText } : null]}>{durationDisplay}</Text>
           <Text style={[styles.statsStripElev, hikeIsDark ? { color: hikeChipText } : null]}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
           <View style={styles.statsStripGpsWrap}>
-            <View style={[styles.statsStripGpsDot, { backgroundColor: locationAvailable ? Colors.primary : Colors.severityWarning }]} />
-            <Text style={[styles.statsStripGpsText, hikeIsDark ? { color: hikeChipText } : null]}>GPS</Text>
+            <View style={[styles.statsStripGpsDot, { backgroundColor: gpsStatusColor }]} />
+            <Text style={[styles.statsStripGpsText, hikeIsDark ? { color: hikeChipText } : null]}>{gpsStatusLabel}</Text>
           </View>
         </View>
 
@@ -1413,10 +1490,10 @@ export function HikingScreen() {
         featureName="Hiking"
         onDismiss={() => setPermissionDeniedVisible(false)}
       />
+      {showSimulator ? <ActivitySimulatorPanel /> : null}
       {/* v412: 未完成 hike 恢复弹窗 — 挂在 Fragment 顶层, 见下方 */}
     </View>
     {recoveryModalNode}
-    {showSimulator ? <ActivitySimulatorPanel /> : null}
     </>
   );
 }

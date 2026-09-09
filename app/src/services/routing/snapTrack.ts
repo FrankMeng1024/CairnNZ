@@ -101,6 +101,14 @@ interface SnapTrackStats {
   chunksOk: number;
   /** Number of chunks that fell back to raw (failure / low conf). */
   chunksFallback: number;
+  /** Chunks rejected because derived geometry was less truthful than raw. */
+  qualityFallbacks: number;
+  /** Lowest accepted Mapbox confidence seen in this run. */
+  minConfidence: number | null;
+  /** Worst accepted chunk p95 raw-to-matched deviation. */
+  maxP95DeviationM: number;
+  /** Worst accepted chunk endpoint displacement. */
+  maxEndpointDeviationM: number;
   /** Number of GOOD runs (Mapbox-eligible). */
   goodRuns: number;
   /** Number of LOST runs (raw-only, never sent to Mapbox). */
@@ -151,6 +159,102 @@ function hav(a: { lat: number; lng: number }, b: { lat: number; lng: number }): 
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * EARTH_R * Math.asin(Math.sqrt(h));
+}
+
+function pathLength(points: Array<{ lat: number; lng: number }>): number {
+  let total = 0;
+  for (let index = 1; index < points.length; index += 1) total += hav(points[index - 1], points[index]);
+  return total;
+}
+
+function pointToSegmentMeters(
+  point: { lat: number; lng: number },
+  start: { lat: number; lng: number },
+  end: { lat: number; lng: number },
+): number {
+  const metresPerDegree = 111_320;
+  const cosLat = Math.cos(point.lat * Math.PI / 180);
+  const ax = (start.lng - point.lng) * metresPerDegree * cosLat;
+  const ay = (start.lat - point.lat) * metresPerDegree;
+  const bx = (end.lng - point.lng) * metresPerDegree * cosLat;
+  const by = (end.lat - point.lat) * metresPerDegree;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared <= 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSquared));
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+
+function pointToPathMeters(
+  point: { lat: number; lng: number },
+  path: Array<{ lat: number; lng: number }>,
+): number {
+  let best = Infinity;
+  for (let index = 1; index < path.length; index += 1) {
+    best = Math.min(best, pointToSegmentMeters(point, path[index - 1], path[index]));
+  }
+  return best;
+}
+
+function percentile95(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = values.slice().sort((a, b) => a - b);
+  return sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)];
+}
+
+export interface MatchedGeometryQuality {
+  accepted: boolean;
+  reason: 'accepted' | 'raw_deviation' | 'endpoint_displacement' | 'length_distortion';
+  p95DeviationM: number;
+  maxDeviationM: number;
+  endpointDeviationM: number;
+  rawLengthM: number;
+  matchedLengthM: number;
+  lengthRatio: number;
+  deviationEnvelopeM: number;
+}
+
+/**
+ * Bounded truthfulness gate for derived geometry. Accuracy determines the
+ * allowed correction envelope; raw accepted points remain the authority.
+ */
+export function evaluateMatchedGeometryQuality(
+  raw: RawPoint[],
+  matched: Array<{ lat: number; lng: number }>,
+): MatchedGeometryQuality {
+  const deviations = raw.map(point => pointToPathMeters(point, matched));
+  const usableAccuracy = raw
+    .map(point => point.accuracy)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0);
+  const accuracyP95 = usableAccuracy.length > 0 ? percentile95(usableAccuracy) : 10;
+  const deviationEnvelopeM = Math.max(15, accuracyP95 * 2);
+  const p95DeviationM = percentile95(deviations);
+  const maxDeviationM = deviations.length > 0 ? Math.max(...deviations) : 0;
+  const endpointDeviationM = Math.max(
+    hav(raw[0], matched[0]),
+    hav(raw[raw.length - 1], matched[matched.length - 1]),
+  );
+  const rawLengthM = pathLength(raw);
+  const matchedLengthM = pathLength(matched);
+  const lengthRatio = rawLengthM > 1 ? matchedLengthM / rawLengthM : 1;
+  const reason = p95DeviationM > deviationEnvelopeM
+    ? 'raw_deviation'
+    : endpointDeviationM > Math.max(20, deviationEnvelopeM)
+      ? 'endpoint_displacement'
+      : lengthRatio < 0.67 || lengthRatio > 1.5
+        ? 'length_distortion'
+        : 'accepted';
+  return {
+    accepted: reason === 'accepted',
+    reason,
+    p95DeviationM,
+    maxDeviationM,
+    endpointDeviationM,
+    rawLengthM,
+    matchedLengthM,
+    lengthRatio,
+    deviationEnvelopeM,
+  };
 }
 
 // ============================================================================
@@ -282,10 +386,13 @@ interface MatchOk {
   ok: true;
   points: SnappedPoint[];
   confidence: number;
+  quality: MatchedGeometryQuality;
 }
 interface MatchFail {
   ok: false;
   reason: string;
+  confidence?: number;
+  quality?: MatchedGeometryQuality;
 }
 type MatchResult = MatchOk | MatchFail;
 
@@ -348,10 +455,16 @@ async function callMapbox(
     }
     const geom = m.geometry?.coordinates ?? [];
     if (geom.length < 2) return { ok: false, reason: 'short_match' };
+    const matchedPoints = geom.map(([lng, lat]) => ({ lng, lat }));
+    const quality = evaluateMatchedGeometryQuality(chunk, matchedPoints);
+    if (!quality.accepted) {
+      return { ok: false, reason: `quality_${quality.reason}`, confidence: conf, quality };
+    }
     return {
       ok: true,
       confidence: conf,
-      points: geom.map(([lng, lat]) => ({ lng, lat })),
+      points: matchedPoints,
+      quality,
     };
   } catch (e: any) {
     return { ok: false, reason: e?.name === 'AbortError' ? 'aborted' : 'network' };
@@ -433,10 +546,18 @@ async function snapGoodRun(
       const r = await callMapbox(sub, token, perCallTimeoutMs, signal);
       if (r.ok) {
         stats.chunksOk += 1;
+        stats.minConfidence = stats.minConfidence === null ? r.confidence : Math.min(stats.minConfidence, r.confidence);
+        stats.maxP95DeviationM = Math.max(stats.maxP95DeviationM, r.quality.p95DeviationM);
+        stats.maxEndpointDeviationM = Math.max(stats.maxEndpointDeviationM, r.quality.endpointDeviationM);
         const withAlt = attachAltFromRaw(r.points, sub);
         return { start: s, end: e, snap: withAlt };
       }
       stats.chunksFallback += 1;
+      if (r.quality) {
+        stats.qualityFallbacks += 1;
+        stats.maxP95DeviationM = Math.max(stats.maxP95DeviationM, r.quality.p95DeviationM);
+        stats.maxEndpointDeviationM = Math.max(stats.maxEndpointDeviationM, r.quality.endpointDeviationM);
+      }
       return { start: s, end: e, snap: null };
     },
     signal,
@@ -504,6 +625,10 @@ export async function snapTrack(
     apiCalls: 0,
     chunksOk: 0,
     chunksFallback: 0,
+    qualityFallbacks: 0,
+    minConfidence: null,
+    maxP95DeviationM: 0,
+    maxEndpointDeviationM: 0,
     goodRuns: 0,
     lostRuns: 0,
     seamBridges: 0,

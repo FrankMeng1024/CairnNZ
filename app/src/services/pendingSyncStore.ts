@@ -409,6 +409,25 @@ export async function updateRemoteId(localId: string, remoteId: number | null): 
   breadcrumb(`pendingSync:updateRemoteId localId=${localId} remoteId=${remoteId ?? 'null'}`);
 }
 
+/** Update the authoritative pending save snapshot before changing UI state. */
+export async function renamePendingActivity(
+  localId: string,
+  expectedUserId: string,
+  name: string,
+): Promise<boolean> {
+  try {
+    await mutatePending(localId, (hike) => {
+      if (hike.userId !== expectedUserId) throw new Error('pending_activity_owner_mismatch');
+      hike.payload = { ...hike.payload, name };
+      if (hike.summary) hike.summary = { ...hike.summary, name };
+    });
+    breadcrumb(`pendingSync:rename localId=${localId}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * R96 修补 A.5 (B1 review): 原子重置 pending 为"未开始 remote"状态。
  * 用在 SESSION_NOT_FOUND_RESYNC 场景:remoteId 是死指针,需要清 null

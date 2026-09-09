@@ -14,7 +14,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated, Easing, ScrollView,
-  Platform, Image, TextInput, KeyboardAvoidingView, Keyboard,
+  Platform, TextInput, KeyboardAvoidingView, Keyboard,
 } from 'react-native';
 import { haptic } from '../services/hapticService';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,23 +22,21 @@ import { useNavigation, useFocusEffect, useIsFocused, CommonActions } from '@rea
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useTrackingStore } from '../store/useTrackingStore';
+import { useAppStore } from '../store/useAppStore';
 import { useRouteStore } from '../store/useRouteStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { getCurrentRegion } from '../config/regions';
-import { getPrimaryMapStyle, getMapStyleForLayer, getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { formatDuration } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { useAppearance } from '../hooks/useAppearance';
-import { useMapTheme } from '../hooks/useMapTheme';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { PulseDot } from '../components/PulseDot';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
 import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
-import { StateSurface } from '../components/StateSurface';
 import { crashLogger } from '../services/crashLogger';
 import {
   deriveActivityOperationalState,
@@ -56,10 +54,15 @@ import { useActivitySaveLossRecovery } from '../features/activity/useActivitySav
 import { useSettingsStore } from '../store/useSettingsStore';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { ActivitySimulatorPanel } from '../features/activitySimulator/ActivitySimulatorPanel';
-import { selectedActivityLocationSource } from '../features/activitySimulator/activityLocationProvider';
-import { registerSimulatorMapCenterGetter } from '../features/activitySimulator/simulatorMapBridge';
-import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
+import {
+  initializeFreshSimulatorSetupForActivityEntry,
+  useActivitySimulatorStore,
+} from '../features/activitySimulator/useActivitySimulatorStore';
 import { activityFreshnessNow } from '../features/activitySimulator/simulatorTime';
+import { appendSimulatorLog } from '../features/activitySimulator/simulatorLog';
+import { useSimulatorKeepAwake } from '../features/activitySimulator/useSimulatorKeepAwake';
+import { resolveSimulatorControlsVisible, resolveSimulatorMapState } from '../features/activitySimulator/simulatorMapState';
+import { HikingMap } from './HikingMap';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -86,40 +89,6 @@ const RunConcept = {
   cardSurface: 'rgba(249,246,243,0.94)',
   hairline: 'rgba(20,42,30,0.10)',
 } as const;
-
-// ── Mapbox conditional import ────────────────────────────────────────────
-// Lazily loaded once per app session — same pattern as HikingScreen.
-// On web Mapbox modules are absent; falls back to a static placeholder.
-let MapView: any = null;
-let CameraComponent: any = null;
-// Sleep-run 2026-08-16 patch: re-import ShapeSource + LineLayer so the R1
-// tracking screen can render the live polyline again (concept R1-tracking.png).
-// O1 batch 34 removed these when R1 was reduced to a compass-only card.
-let ShapeSource: any = null;
-let LineLayer: any = null;
-let CircleLayer: any = null;
-let UserLocationComponent: any = null;
-// 2026-08-17 concept R1: green start-dot marker at trackPoints[0].
-// PointAnnotation is the same Mapbox primitive HikingMap uses; imported
-// here so we can render the extracted concept asset without pulling in
-// the whole HikingMap component.
-let PointAnnotationComponent: any = null;
-let StyleImport: any = null;
-if (Platform.OS !== 'web') {
-  try {
-    const Mapbox = require('@rnmapbox/maps');
-    MapView = Mapbox.MapView;
-    CameraComponent = Mapbox.Camera;
-    ShapeSource = Mapbox.ShapeSource;
-    LineLayer = Mapbox.LineLayer;
-    CircleLayer = Mapbox.CircleLayer;
-    UserLocationComponent = Mapbox.UserLocation;
-    PointAnnotationComponent = Mapbox.PointAnnotation;
-    StyleImport = Mapbox.StyleImport;
-  } catch {
-    // @rnmapbox/maps not installed in this build (Expo Go) — fallback used.
-  }
-}
 
 // Sleep-run 2026-08-16 rev-2: local PulsingDot component removed with
 // the lock overlay it belonged to. The shared PulseDot component in the
@@ -148,6 +117,8 @@ function StatItem({ value, label, title }: { value: string; label: string; title
 
 // ── Main ────────────────────────────────────────────────────────────────────
 export function RunningScreen() {
+  const simulatorOwnerUserId = useAppStore((s) => s.user?.id ?? null);
+  const simulatorHydratedUserId = useActivitySimulatorStore((s) => s.hydratedUserId);
   const nav = useNavigation<Nav>();
   const isFocused = useIsFocused();
   const routes = useRouteStore(s => s.routes);
@@ -158,15 +129,32 @@ export function RunningScreen() {
   // R21 (2026-08-18): dark theme parity with Hiking. Run tray + top pills
   // + Recenter FAB honour Settings Appearance so day/night reads the same.
   const { isDark: runIsDark } = useAppearance();
-  const runMapTheme = useMapTheme();
-  const runResolvedMapStyle = getMapStyleForTheme('outdoors', runMapTheme);
-  const runLightPreset = themeToStandardPreset(runMapTheme);
   const runTheme = useVisualTheme();
   const debugMode = useSettingsStore(state => state.debugMode);
   const simulatorEnabled = useActivitySimulatorStore(state => state.enabled);
+  const simulatorStartConfigured = useActivitySimulatorStore(state => state.startConfigured);
   const simulatorPosition = useActivitySimulatorStore(state => state.current);
   const simulatorSignal = useActivitySimulatorStore(state => state.signal);
   const simulatorVirtualTimestamp = useActivitySimulatorStore(state => state.virtualTimestampMs);
+  const simulatorPickerMode = useActivitySimulatorStore(state => state.pickerMode);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (
+        !activitySimulatorBuildCapable
+        || !debugMode
+        || !simulatorEnabled
+        || !simulatorOwnerUserId
+        || simulatorHydratedUserId !== String(simulatorOwnerUserId)
+      ) return undefined;
+      void initializeFreshSimulatorSetupForActivityEntry(String(simulatorOwnerUserId)).then(result => {
+        appendSimulatorLog('SIM_SESSION', 'simulator_fresh_setup_entry', {
+          screen: 'run',
+          result,
+        }, { coordinateSource: 'none' });
+      });
+      return undefined;
+    }, [debugMode, simulatorEnabled, simulatorHydratedUserId, simulatorOwnerUserId]),
+  );
   // R21 (2026-08-18 user "点击 向右侧展开"): tracking action tray is
   // collapsed by default. Tap the Navigation anchor (bottom-left) to
   // expand → Pause / Cairn / Finish slides out to the right.
@@ -214,15 +202,37 @@ export function RunningScreen() {
   // Real tracking store
   const status = useTrackingStore(s => s.status);
   const locationProviderSource = useTrackingStore(s => s.locationProviderSource);
-  const showSimulator = activitySimulatorBuildCapable
-    && debugMode
-    && (simulatorEnabled || locationProviderSource === 'simulator');
+  useSimulatorKeepAwake(
+    activitySimulatorBuildCapable
+      && debugMode
+      && locationProviderSource === 'simulator'
+      && status !== 'idle',
+  );
+  const showSimulator = resolveSimulatorControlsVisible(
+    activitySimulatorBuildCapable,
+    debugMode,
+    simulatorEnabled,
+    locationProviderSource,
+    status,
+  );
   const isFinishing = useTrackingStore(s => s.isFinishing);
   const startError = useTrackingStore(s => s.startError);
   const durationS = useTrackingStore(s => s.durationS);
+  const activityStartedAt = useTrackingStore(s => s.startedAt);
   const distanceM = useTrackingStore(s => s.distanceM);
   const locationAvailable = useTrackingStore(s => s.locationAvailable);
   const lastCoordinate = useTrackingStore(s => s.lastCoordinate);
+  const {
+    simulatorLocationAuthoritative,
+    displayPosition: mapDisplayPosition,
+  } = resolveSimulatorMapState({
+    controlsVisible: showSimulator,
+    startConfigured: simulatorStartConfigured,
+    trackingStatus: status,
+    providerSource: locationProviderSource,
+    virtualPosition: simulatorPosition,
+    acceptedPosition: lastCoordinate,
+  });
   const sessionId = useTrackingStore(s => s.sessionId);
   const linkMarker = useTrackingStore(s => s.linkMarker);
   const setActivityMode = useTrackingStore(s => s.setActivityMode);
@@ -256,6 +266,17 @@ export function RunningScreen() {
   });
   useActivitySaveLossRecovery('running');
 
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    appendSimulatorLog('SCREEN', 'run_opened', {
+      debugMode,
+      simulatorEnabled,
+      trackingStatus: status,
+      providerSource: locationProviderSource,
+    }, { coordinateSource: 'none' });
+    return () => appendSimulatorLog('SCREEN', 'run_closed', {}, { coordinateSource: 'none' });
+  }, [isFocused]);
+
   useEffect(() => { loadRoutes(); }, []);
 
   // The writer stores both modes under one global unfinished-Activity rule.
@@ -271,7 +292,6 @@ export function RunningScreen() {
       return () => { cancelled = true; };
     }, [status]),
   );
-
   // Request foreground location permission on mount so the pre-start map's
   // UserLocation dot can render. If denied, dot is hidden but map still shows.
   //
@@ -287,7 +307,7 @@ export function RunningScreen() {
     let cancelled = false;
     (async () => {
       try {
-        if (selectedActivityLocationSource() === 'simulator') {
+        if (simulatorLocationAuthoritative) {
           if (!cancelled) {
             setForegroundGranted(true);
             setPermissionBlocked(false);
@@ -348,7 +368,7 @@ export function RunningScreen() {
       } catch { /* permission unavailable — dot stays hidden */ }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [simulatorLocationAuthoritative]);
 
   const openRoutePicker = () => {
     setShowRoutePicker(true);
@@ -372,90 +392,10 @@ export function RunningScreen() {
 
   // Animated values
   const startBtnScale = useRef(new Animated.Value(1)).current;
-  // Sleep-run 2026-08-16 rev-2: controlsFade removed. The R2 action tray
-  // is now always visible during 'running' state (no lock overlay).
-  // v122: full mirror of HikingScreen's instantCamera pattern. cameraRef
-  // is the imperative handle used by the useEffect below to setCamera
-  // synchronously on every userPos change when in instant mode (skip the
-  // flyTo animation; we already know where the user is).
-  const cameraRef = useRef<any>(null);
-  const mapViewRef = useRef<any>(null);
-  useEffect(() => registerSimulatorMapCenterGetter(async () => {
-    try {
-      const raw = mapViewRef.current?.getCenter?.();
-      const center = raw && typeof raw.then === 'function' ? await raw : raw;
-      if (Array.isArray(center) && center.length >= 2) {
-        return { lat: Number(center[1]), lng: Number(center[0]) };
-      }
-      if (center && Number.isFinite(center.lat) && Number.isFinite(center.lng)) {
-        return { lat: Number(center.lat), lng: Number(center.lng) };
-      }
-    } catch { /* map not ready */ }
-    return null;
-  }), []);
-  useEffect(() => {
-    if (!showSimulator || !runFollowUser || !cameraRef.current) return;
-    cameraRef.current.setCamera?.({
-      centerCoordinate: [simulatorPosition.lng, simulatorPosition.lat],
-      zoomLevel: runState === 'running' ? 16 : 15,
-      animationDuration: 250,
-      animationMode: 'easeTo',
-    });
-  }, [showSimulator, runFollowUser, runState, simulatorPosition.lat, simulatorPosition.lng]);
-  // v123 fix #2: use followUserLocation+flyTo every entry, ignoring
-  // whether lastCoordinate is already known. User wants the same fly-in
-  // experience on every Running open (so their entry is consistent),
-  // not the Hiking pattern of "fly-in once, then instant on subsequent
-  // resumes". instantCamera is intentionally always false here.
-  const instantCamera = false;
-
-  // v123 diag: log mount + key state so we can see in telemetry exactly
-  // what RunningScreen sees on first vs second open. The user's complaint
-  // ("第一次没动画 第二次没动画也不一致") is impossible to debug from a
-  // screenshot alone — the timing of lastCoordinate vs Camera mount is
-  // the variable.
-  useEffect(() => {
-    crashLogger.breadcrumb(
-      `runscreen:mount runState=${runState} lastCoord=${lastCoordinate ? `(${lastCoordinate.lat.toFixed(5)},${lastCoordinate.lng.toFixed(5)})` : 'null'} instant=${instantCamera} fg=${foregroundGranted}`
-    );
-  }, []);
-  useEffect(() => {
-    crashLogger.breadcrumb(
-      `runscreen:lastCoord-change has=${lastCoordinate != null} instant=${instantCamera}`
-    );
-  }, [lastCoordinate?.lat, lastCoordinate?.lng]);
-
-  // v123: with instantCamera=false the imperative setCamera useEffect
-  // is no longer needed — followUserLocation handles positioning via
-  // its built-in flyTo each entry.
-
-  // v127: simplified back to the Hiking pattern. gesturesEnabled is
-  // disabled for the first 700ms after mount only. Mapbox handles the
-  // fly-in via followUserLocation + animationMode='flyTo'. This is the
-  // exact same lifecycle Hiking uses; the v126 useFocusEffect + mapEpoch
-  // remount tricks made 2nd-entry behaviour different from Hiking
-  // instead of identical. Subsequent entries reuse the MapView and
-  // skip the fly-in — same as Hiking, which is what the user wanted.
-  const [gesturesEnabled, setGesturesEnabled] = useState(false);
-  // v128b: full MapView remount per focus. RunningScreen actually stays
-  // alive between exits (RootNavigator stack keeps it cached), so the
-  // Mapbox MapView reuses its previous camera state and the second
-  // entry starts mid-zoom instead of from the globe. Bumping mapEpoch
-  // on every focus forces a fresh `key` → MapView unmounts + remounts
-  // → Mapbox replays the fly-in.
-  const [mapEpoch, setMapEpoch] = useState(0);
-  const [mapLoadState, setMapLoadState] = useState<'loading' | 'ready' | 'unavailable'>(
-    MapView ? 'loading' : 'unavailable',
-  );
-  useFocusEffect(
-    React.useCallback(() => {
-      setMapEpoch(e => e + 1);
-      setMapLoadState(MapView ? 'loading' : 'unavailable');
-      setGesturesEnabled(false);
-      const t = setTimeout(() => setGesturesEnabled(true), 700);
-      return () => clearTimeout(t);
-    }, []),
-  );
+  useFocusEffect(React.useCallback(() => {
+    setRunFollowUser(true);
+    return undefined;
+  }, []));
 
   // Sleep-run 2026-08-16 rev-2: controlsFade effect removed with the
   // lock/unlocked concept — the action tray is always visible now.
@@ -605,6 +545,14 @@ export function RunningScreen() {
         permission: 'personal',
         sessionId: sessionId ?? undefined,
       });
+      appendSimulatorLog('ACTIVITY_STATE', 'run_quick_cairn_location_selected', {
+        locationSource: locationProviderSource === 'simulator' ? 'last-canonically-accepted-simulator' : 'last-canonically-accepted-real',
+        acceptedFixTimestamp: useTrackingStore.getState().lastCoordinateTime,
+      }, {
+        clientActivityId: sessionId,
+        coordinateSource: locationProviderSource === 'simulator' ? 'simulator' : 'real',
+        virtualTimestamp: locationProviderSource === 'simulator' ? simulatorVirtualTimestamp : null,
+      });
       if (sessionId) linkMarker(marker.id);
       setPlantToast('Cairn planted');
       setTimeout(() => setPlantToast(null), 1500);
@@ -629,9 +577,21 @@ export function RunningScreen() {
   const freshnessNow = locationProviderSource === 'simulator'
     ? simulatorVirtualTimestamp
     : activityFreshnessNow(locationProviderSource);
-  const signalLostFor = (lastTrackT != null) ? Math.max(0, freshnessNow - lastTrackT) : 0;
-  const signalLost = lastTrackT != null && signalLostFor > RUN_SIGNAL_GAP_MS;
+  const freshnessReference = lastTrackT ?? activityStartedAt;
+  const signalLostFor = freshnessReference != null ? Math.max(0, freshnessNow - freshnessReference) : 0;
+  const signalLost = status === 'tracking' && freshnessReference != null && signalLostFor > RUN_SIGNAL_GAP_MS;
   const signalLostMin = Math.floor(signalLostFor / 60_000);
+  const gpsFixHealthy = status === 'tracking' && locationAvailable && lastTrackT !== null && !signalLost;
+  const simulatorGpsActive = status === 'tracking' && locationProviderSource === 'simulator';
+  const gpsStatusLabel = simulatorGpsActive
+    ? ({ normal: '正常', poor: '较差', lost: '丢失', frozen: '卡住' } as const)[simulatorSignal]
+    : gpsFixHealthy ? 'GPS' : 'Waiting';
+  const gpsStatusColor = simulatorGpsActive
+    ? simulatorSignal === 'normal' ? runTheme.iconActive
+      : simulatorSignal === 'poor' ? Colors.severityWarning
+        : simulatorSignal === 'lost' ? Colors.danger
+          : Colors.info
+    : gpsFixHealthy ? runTheme.iconActive : runTheme.iconInactive;
   // Pace: min/km (or min/mi if imperial) — seconds per meter → minutes per unit
   // 2026-08-17 concept R0: pace reads as `5'52"/km` with the unit inline
   // (tiny). paceDisplay itself returns just the numeric portion; the
@@ -648,151 +608,32 @@ export function RunningScreen() {
     return `${paceMin}'${String(paceSec).padStart(2, '0')}"`;
   })();
 
-  // Sleep-run 2026-08-16 patch: R1 polyline GeoJSON. Rebuilt inline from
-  // trackPoints (no store subscription change — same array we already read
-  // for signal-lost detection above). Only rendered if trackPoints has >= 2
-  // coordinates; MapView is safe even if this returns an empty FeatureColl.
-  const trackLineGeoJSON = React.useMemo(() => {
-    if (!trackPoints || trackPoints.length < 2) {
-      return { type: 'FeatureCollection', features: [] } as any;
-    }
-    const segments: Array<Array<[number, number]>> = [];
-    let current: Array<[number, number]> = [];
-    trackPoints.forEach((point, index) => {
-      const previous = trackPoints[index - 1];
-      if (previous && previous.segmentId && point.segmentId && previous.segmentId !== point.segmentId) {
-        if (current.length >= 2) segments.push(current);
-        current = [];
-      }
-      current.push([point.lng, point.lat]);
-    });
-    if (current.length >= 2) segments.push(current);
-    return {
-      type: 'FeatureCollection',
-      features: segments.map(coordinates => ({
-        type: 'Feature',
-        geometry: { type: 'LineString', coordinates },
-        properties: {},
-      })),
-    } as any;
-  }, [trackPoints]);
+  // One native Mapbox owner spans pre-start and Tracking. Activity/provider
+  // transitions update layers and camera targets; they never replace the map.
+  const runMapSurface = (
+    <View key="run-map-surface" style={StyleSheet.absoluteFillObject}>
+      <HikingMap
+        markers={[]}
+        trackPoints={trackPoints}
+        onMarkerPress={() => {}}
+        userPos={mapDisplayPosition}
+        trackStartVariant={isActivitySessionVisible(operationalState) ? 'run' : null}
+        activityVariant="run"
+        instantCamera={simulatorLocationAuthoritative}
+        followUser={runFollowUser}
+        onUserGesture={() => setRunFollowUser(false)}
+        simulatorEnabled={simulatorLocationAuthoritative}
+        simulatorControlsEnabled={showSimulator}
+        simulatorCenterPickerVisible={showSimulator && (status === 'idle' || simulatorPickerMode !== null)}
+      />
+    </View>
+  );
 
   // ── Pre-start ─────────────────────────────────────────────────────────────
   if (!isActivitySessionVisible(operationalState)) {
     return (
       <View style={{ flex: 1, backgroundColor: runTheme.background }}>
-        {/* Real Mapbox basemap (or fallback if Mapbox unavailable) */}
-        {MapView ? (
-          <MapView
-            key={`map-${mapEpoch}`}
-            ref={mapViewRef}
-            style={StyleSheet.absoluteFillObject}
-            {...(runResolvedMapStyle.kind === 'url'
-              ? { styleURL: runResolvedMapStyle.url }
-              : { styleJSON: runResolvedMapStyle.json })}
-            logoEnabled
-            attributionEnabled
-            logoPosition={{ top: 152, left: 8 }}
-            attributionPosition={{ top: 152, right: 8 }}
-            scaleBarEnabled={false}
-            compassEnabled={false}
-            onDidFinishLoadingMap={() => setMapLoadState('ready')}
-            onDidFinishRenderingMapFully={() => setMapLoadState('ready')}
-            onDidFailLoadingMap={() => setMapLoadState('unavailable')}
-            // v124 fix #2: disable gestures during the fly-in so an
-            // accidental touch doesn't cancel the camera mid-animation
-            // (which is what made the Running fly-in land mid-zoom
-            // instead of starting at the full globe like Hiking does).
-            scrollEnabled={gesturesEnabled}
-            zoomEnabled={gesturesEnabled}
-            rotateEnabled={gesturesEnabled}
-            pitchEnabled={gesturesEnabled}
-            onLongPress={(event: any) => {
-              if (!showSimulator) return;
-              const coordinates = event?.geometry?.coordinates ?? event?.features?.[0]?.geometry?.coordinates;
-              if (Array.isArray(coordinates) && coordinates.length >= 2) {
-                useActivitySimulatorStore.getState().setMapSelection({
-                  lat: Number(coordinates[1]),
-                  lng: Number(coordinates[0]),
-                });
-              }
-            }}
-          >
-            {/* R21-v3 v2 (2026-08-30): Standard style lightPreset — day/dusk/night. */}
-            {StyleImport ? (
-              <StyleImport
-                key={runLightPreset}
-                id="basemap"
-                existing
-                config={buildStandardConfig(runMapTheme) as any}
-              />
-            ) : null}
-            {/* v122 fix #2: full mirror of HikingScreen — Camera always
-                mounts. instantCamera mode (lastCoordinate known) uses
-                defaultSettings + animationMode='none' AND the imperative
-                setCamera useEffect above. Cold mode (no GPS yet) uses
-                followUserLocation+flyTo, same as HikingScreen first
-                entry. The previous version (only mount when lastCoord
-                known) caused the inconsistent "stuck globe → instant"
-                divergence between first/second open. */}
-            {CameraComponent && (
-              <CameraComponent
-                ref={cameraRef}
-                followUserLocation={!showSimulator && !instantCamera && foregroundGranted}
-                followZoomLevel={15}
-                followPitch={0}
-                animationDuration={instantCamera ? 0 : 600}
-                animationMode={instantCamera ? 'none' : 'flyTo'}
-                // v127 fix #2: drop the Auckland-zoom2 default. Hiking
-                // doesn't set defaultSettings either when not in instant
-                // mode — it lets Mapbox start from its own default
-                // (zoom 0, [0,0]) and fly to the user. Forcing
-                // Auckland-zoom-2 made Running fly horizontally across
-                // the globe to the user's actual GPS, instead of zooming
-                // in straight from the full-globe view.
-                defaultSettings={showSimulator
-                  ? { centerCoordinate: [simulatorPosition.lng, simulatorPosition.lat], zoomLevel: 15 }
-                  : instantCamera && lastCoordinate
-                  ? { centerCoordinate: [lastCoordinate.lng, lastCoordinate.lat], zoomLevel: 15 }
-                  : undefined}
-              />
-            )}
-            {showSimulator && ShapeSource && CircleLayer ? (
-              <ShapeSource
-                id="run-simulator-puck"
-                shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: [simulatorPosition.lng, simulatorPosition.lat] }, properties: {} } as any}
-              >
-                <CircleLayer id="run-simulator-puck-halo" style={{ circleRadius: 14, circleColor: '#1E88E5', circleOpacity: 0.25 }} />
-                <CircleLayer id="run-simulator-puck-dot" style={{ circleRadius: 7, circleColor: '#1E88E5', circleStrokeWidth: 2, circleStrokeColor: '#ffffff' }} />
-              </ShapeSource>
-            ) : UserLocationComponent && foregroundGranted ? (
-              <UserLocationComponent visible androidRenderMode="normal" />
-            ) : null}
-          </MapView>
-        ) : (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: runTheme.background }}>
-            <View style={{ alignItems: 'center', gap: Spacing.sm, width: '78%', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg, borderRadius: Radius.cardLg, borderWidth: 1, borderColor: runTheme.border, backgroundColor: runTheme.surface }}>
-              <Icon name="Map" size={38} color={runTheme.iconInactive} />
-              <Text style={{ fontSize: FontSize.h3, fontWeight: '700', color: runTheme.foreground }}>
-                Map unavailable
-              </Text>
-              <Text style={{ fontSize: FontSize.caption, lineHeight: 18, color: runTheme.foregroundSecondary, textAlign: 'center' }}>
-                Live map appears when GPS is enabled
-              </Text>
-            </View>
-          </View>
-        )}
-        {MapView && mapLoadState !== 'ready' ? (
-          <View style={runStyles.mapStateOverlay} pointerEvents="none">
-            <StateSurface
-              variant={mapLoadState === 'loading' ? 'loading' : 'unavailable'}
-              title={mapLoadState === 'loading' ? 'Loading map…' : 'Map unavailable'}
-              body={mapLoadState === 'unavailable' ? 'Your run can still be recovered safely. Try the map again when your connection returns.' : undefined}
-              material="embedded"
-              alignment="center"
-            />
-          </View>
-        ) : null}
+        {runMapSurface}
 
         {/* Top overlay: back + GPS chip */}
         <SafeAreaView style={preStyles.topOverlay} edges={['top']} pointerEvents="box-none">
@@ -1021,140 +862,8 @@ export function RunningScreen() {
   //     the save-name sheet which drives the transition to R4.
   return (
     <View style={[runStyles.container, { backgroundColor: runTheme.background }]}>
-      <View style={[runStyles.bg, { backgroundColor: runTheme.background }]}>
-          {/* R1 basemap + tracking polyline. Concept R1-tracking.png shows
-              a full terrain map behind the top stats bar with the run's
-              green trail drawn on top. Store subscriptions unchanged —
-              geometry rebuilt from the same trackPoints already read for
-              signal-lost detection. */}
-          {MapView && (
-            <View style={StyleSheet.absoluteFillObject} pointerEvents={showSimulator ? 'auto' : 'none'}>
-              <MapView
-                ref={mapViewRef}
-                style={StyleSheet.absoluteFillObject}
-                {...(runResolvedMapStyle.kind === 'url'
-                  ? { styleURL: runResolvedMapStyle.url }
-                  : { styleJSON: runResolvedMapStyle.json })}
-                logoEnabled
-                attributionEnabled
-                logoPosition={{ top: 152, left: 8 }}
-                attributionPosition={{ top: 152, right: 8 }}
-                scaleBarEnabled={false}
-                compassEnabled={false}
-                onDidFinishLoadingMap={() => setMapLoadState('ready')}
-                onDidFinishRenderingMapFully={() => setMapLoadState('ready')}
-                onDidFailLoadingMap={() => setMapLoadState('unavailable')}
-                scrollEnabled={showSimulator}
-                zoomEnabled={showSimulator}
-                rotateEnabled={showSimulator}
-                pitchEnabled={false}
-                onLongPress={(event: any) => {
-                  if (!showSimulator) return;
-                  const coordinates = event?.geometry?.coordinates ?? event?.features?.[0]?.geometry?.coordinates;
-                  if (Array.isArray(coordinates) && coordinates.length >= 2) {
-                    useActivitySimulatorStore.getState().setMapSelection({
-                      lat: Number(coordinates[1]),
-                      lng: Number(coordinates[0]),
-                    });
-                  }
-                }}
-              >
-                {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
-                {StyleImport ? (
-                  <StyleImport
-                    key={runLightPreset}
-                    id="basemap"
-                    existing
-                    config={buildStandardConfig(runMapTheme) as any}
-                  />
-                ) : null}
-                {CameraComponent && (
-                  <CameraComponent
-                    followUserLocation={!showSimulator && foregroundGranted}
-                    followZoomLevel={16}
-                    followPitch={0}
-                    animationDuration={600}
-                    animationMode="flyTo"
-                    defaultSettings={showSimulator
-                      ? { centerCoordinate: [simulatorPosition.lng, simulatorPosition.lat], zoomLevel: 16 }
-                      : lastCoordinate
-                      ? { centerCoordinate: [lastCoordinate.lng, lastCoordinate.lat], zoomLevel: 16 }
-                      : undefined}
-                  />
-                )}
-                {ShapeSource && LineLayer && trackLineGeoJSON.features.length > 0 && (
-                  <ShapeSource id="run-track-line" shape={trackLineGeoJSON}>
-                    <LineLayer
-                      id="run-track-line-layer"
-                      style={{
-                        // 2026-08-17 concept R1: run polyline reads
-                        // as olive/yellow-green (#7A9830), sampled
-                        // from the mid section of the concept trail.
-                        // Distinct from Hike's darker forest green
-                        // (#3F5D37) so first-time users can tell the
-                        // two activities apart on the shared history
-                        // map without a legend.
-                        lineColor: '#7A9830',
-                        lineWidth: 5,
-                        lineCap: 'round',
-                        lineJoin: 'round',
-                      }}
-                    />
-                  </ShapeSource>
-                )}
-                {showSimulator && ShapeSource && CircleLayer ? (
-                  <ShapeSource
-                    id="run-active-simulator-puck"
-                    shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: [simulatorPosition.lng, simulatorPosition.lat] }, properties: {} } as any}
-                  >
-                    <CircleLayer id="run-active-simulator-puck-halo" style={{ circleRadius: 14, circleColor: '#1E88E5', circleOpacity: 0.25 }} />
-                    <CircleLayer id="run-active-simulator-puck-dot" style={{ circleRadius: 7, circleColor: '#1E88E5', circleStrokeWidth: 2, circleStrokeColor: '#ffffff' }} />
-                  </ShapeSource>
-                ) : UserLocationComponent && foregroundGranted ? (
-                  <UserLocationComponent visible androidRenderMode="normal" />
-                ) : null}
-                {/* 2026-08-17 concept R1: green start-dot marker at
-                    trackPoints[0]. Renders as soon as we have at least
-                    one recorded fix so the trailhead is visible even
-                    on the first stride. Uses the extracted concept
-                    asset (assets/map/marker-start.png). */}
-                {PointAnnotationComponent && trackPoints.length > 0 && (
-                  <PointAnnotationComponent
-                    id="run-track-start"
-                    coordinate={[trackPoints[0].lng, trackPoints[0].lat]}
-                  >
-                    <Image
-                      source={require('../../assets/map/marker-start.png')}
-                      style={{ width: 26, height: 26 }}
-                      resizeMode="contain"
-                    />
-                  </PointAnnotationComponent>
-                )}
-              </MapView>
-            </View>
-          )}
-          {!MapView && (
-            <View style={runStyles.mapFallback} pointerEvents="none">
-              <View style={[runStyles.mapFallbackCard, { backgroundColor: runTheme.surface, borderColor: runTheme.border }]}>
-                <View style={[runStyles.mapFallbackIcon, { backgroundColor: runTheme.surfaceElevated }]}>
-                  <Icon name="Map" size={26} color={runTheme.iconActive} strokeWidth={1.8} />
-                </View>
-                <Text style={[runStyles.mapFallbackTitle, { color: runTheme.foreground }]}>Tracking your run</Text>
-                <Text style={[runStyles.mapFallbackText, { color: runTheme.foregroundSecondary }]}>Your live route appears here when location is available.</Text>
-              </View>
-            </View>
-          )}
-          {MapView && mapLoadState !== 'ready' ? (
-            <View style={runStyles.mapStateOverlay} pointerEvents="none">
-              <StateSurface
-                variant={mapLoadState === 'loading' ? 'loading' : 'unavailable'}
-                title={mapLoadState === 'loading' ? 'Loading map…' : 'Map unavailable'}
-                body={mapLoadState === 'unavailable' ? 'Recording remains available while the map recovers.' : undefined}
-                material="embedded"
-                alignment="center"
-              />
-            </View>
-          ) : null}
+      {runMapSurface}
+      <View style={[runStyles.bg, { backgroundColor: 'transparent' }]}>
           {/* R21 (2026-08-18 user "上方 下方 按钮 等等都和hike是一样的"):
               R2 top row now mirrors Hike — Back left, signal-lost pill
               on the right (only visible when tracking + lost). Kept the
@@ -1189,10 +898,10 @@ export function RunningScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                 <PulseDot
                   size={8}
-                  color={locationAvailable ? runTheme.iconActive : runTheme.iconInactive}
-                  pulsing={locationAvailable}
+                  color={gpsStatusColor}
+                  pulsing={simulatorGpsActive ? simulatorSignal === 'normal' || simulatorSignal === 'poor' : gpsFixHealthy}
                 />
-                <Text style={[runStyles.statValue, { color: runTheme.foreground, fontSize: 14 }]}>{locationAvailable ? 'GPS' : 'Offline'}</Text>
+                <Text style={[runStyles.statValue, { color: runTheme.foreground, fontSize: 14 }]}>{gpsStatusLabel}</Text>
                 </View>
               </View>
             </View>

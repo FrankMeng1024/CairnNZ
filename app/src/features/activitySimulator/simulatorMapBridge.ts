@@ -3,8 +3,9 @@ import type { SimulatorCoordinate } from './types';
 type CenterGetter = () => Promise<SimulatorCoordinate | null>;
 let getter: CenterGetter | null = null;
 
-export function registerSimulatorMapCenterGetter(next: CenterGetter): void {
+export function registerSimulatorMapCenterGetter(next: CenterGetter): () => void {
   getter = next;
+  return () => unregisterSimulatorMapCenterGetter(next);
 }
 
 export function unregisterSimulatorMapCenterGetter(expected: CenterGetter): void {
