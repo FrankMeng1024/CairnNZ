@@ -174,3 +174,25 @@ test('Activity-derived Route creation is serialized against source deletion', ()
   assert.ok(guardedCreate.indexOf('SELECT id FROM sessions') < guardedCreate.indexOf('const [result] = await insert(conn)'));
   assert.match(guardedCreate, /finalized_at IS NOT NULL/);
 });
+
+test('Activity Save acknowledges committed source rows before derived Memory attribution', () => {
+  const sessions = read('src/routes/sessions.js');
+  const save = sessions.slice(sessions.indexOf("router.patch('/:id/save'"), sessions.indexOf("router.delete('/client/:clientActivityId'"));
+  assert.ok(save.indexOf('await conn.commit();') < save.indexOf('scheduleMemoryAttribution('));
+  assert.doesNotMatch(save, /await attributeMemoryPoints/);
+
+  const memory = read('src/routes/memory.js');
+  const upload = memory.slice(memory.indexOf("router.post('/points'"), memory.indexOf("router.get('/points'"));
+  assert.match(upload, /scheduleMemoryAttribution\(pool, userId/);
+  assert.doesNotMatch(upload, /await attributeMemoryPoints/);
+});
+
+test('supported Memory reset transaction clears points and derived regions only', () => {
+  const memory = read('src/routes/memory.js');
+  const wipe = memory.slice(memory.indexOf("router.delete('/points'"));
+  assert.match(wipe, /beginTransaction/);
+  assert.match(wipe, /DELETE FROM unlocked_regions WHERE user_id = \?/);
+  assert.match(wipe, /DELETE FROM memory_points WHERE user_id = \?/);
+  assert.match(wipe, /conn\.commit/);
+  assert.doesNotMatch(wipe, /DELETE FROM (sessions|markers|routes|users)/);
+});

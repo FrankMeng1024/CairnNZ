@@ -1,10 +1,8 @@
 /**
  * attributeMemoryPoints — v439
  *
- * Upsert unlocked_regions for a batch of memory_points that have already
- * been INSERT-ed to memory_points table. Called from BOTH:
- *   - sessions.js /save (batch, transaction)
- *   - memory.js POST /points (single, transaction)
+ * Upsert unlocked_regions for memory_points that have already committed.
+ * Activity durability never waits for this derived spatial projection.
  *
  * Idempotent: recomputes point_count from source. Client retries won't
  * double-count.
@@ -13,6 +11,7 @@
  */
 
 const CURRENT_REGIONS_VERSION = 1;
+const scheduledByUser = new Map();
 
 /**
  * Attribute memory_points inserted for `userId` between `tsStart` and `tsEnd`
@@ -113,4 +112,104 @@ async function attributeMemoryPoints(conn, userId, tsStart, tsEnd) {
   return { cities: cityUpsertCount, countries: countryUpsertCount };
 }
 
-module.exports = { attributeMemoryPoints, CURRENT_REGIONS_VERSION };
+function startAttributionDrain(normalizedUserId, state) {
+  setImmediate(async () => {
+    while (
+      scheduledByUser.get(normalizedUserId) === state
+      && (state.resetPending || state.pendingStart !== null)
+    ) {
+      if (state.resetPending) {
+        state.resetPending = false;
+        try {
+          await state.conn.query('DELETE FROM unlocked_regions WHERE user_id = ?', [normalizedUserId]);
+          console.log(`[attribute] RESET user=${normalizedUserId}`);
+        } catch (error) {
+          console.error(`[attribute] RESET_ERR user=${normalizedUserId} err=${error.message}`);
+        }
+        continue;
+      }
+      const rangeStart = state.pendingStart;
+      const rangeEnd = state.pendingEnd;
+      state.pendingStart = null;
+      state.pendingEnd = null;
+      try {
+        await attributeMemoryPoints(state.conn, normalizedUserId, rangeStart, rangeEnd);
+      } catch (error) {
+        console.error(`[attribute] ASYNC_ERR user=${normalizedUserId} range=${rangeStart}..${rangeEnd} err=${error.message}`);
+      }
+    }
+    if (scheduledByUser.get(normalizedUserId) === state) {
+      scheduledByUser.delete(normalizedUserId);
+    }
+  });
+}
+
+/**
+ * Coalesce and serialize expensive spatial attribution per user. Callers must
+ * schedule only after the source memory_points transaction has committed.
+ * The queue is process-local by design: attribution is idempotent, and a
+ * failed process can be repaired by the existing backfill without putting the
+ * Activity save acknowledgement or Memory source rows at risk.
+ */
+function scheduleMemoryAttribution(conn, userId, tsStart, tsEnd) {
+  const normalizedUserId = Number(userId);
+  const normalizedStart = Number(tsStart);
+  const normalizedEnd = Number(tsEnd);
+  if (
+    !Number.isInteger(normalizedUserId)
+    || normalizedUserId <= 0
+    || !Number.isFinite(normalizedStart)
+    || !Number.isFinite(normalizedEnd)
+  ) return false;
+
+  const start = Math.min(normalizedStart, normalizedEnd);
+  const end = Math.max(normalizedStart, normalizedEnd);
+  const current = scheduledByUser.get(normalizedUserId);
+  if (current) {
+    current.pendingStart = current.pendingStart === null
+      ? start
+      : Math.min(current.pendingStart, start);
+    current.pendingEnd = current.pendingEnd === null
+      ? end
+      : Math.max(current.pendingEnd, end);
+    return true;
+  }
+
+  const state = {
+    conn,
+    pendingStart: start,
+    pendingEnd: end,
+    resetPending: false,
+  };
+  scheduledByUser.set(normalizedUserId, state);
+  startAttributionDrain(normalizedUserId, state);
+  return true;
+}
+
+/**
+ * Fence a Memory reset against attribution already running in this process.
+ * Old pending ranges are discarded; once an in-flight scan exits, the reset
+ * is repeated before any newly uploaded post-reset evidence is attributed.
+ */
+function scheduleMemoryProjectionReset(conn, userId) {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  const current = scheduledByUser.get(normalizedUserId);
+  if (current) {
+    current.pendingStart = null;
+    current.pendingEnd = null;
+    current.resetPending = true;
+    return true;
+  }
+  const state = { conn, pendingStart: null, pendingEnd: null, resetPending: true };
+  scheduledByUser.set(normalizedUserId, state);
+  startAttributionDrain(normalizedUserId, state);
+  return true;
+}
+
+module.exports = {
+  attributeMemoryPoints,
+  scheduleMemoryAttribution,
+  scheduleMemoryProjectionReset,
+  CURRENT_REGIONS_VERSION,
+};

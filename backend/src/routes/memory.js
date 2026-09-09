@@ -22,6 +22,7 @@ const { ipKeyGenerator } = require('express-rate-limit');
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { deterministicCid } = require('../lib/deterministicCid');
+const { scheduleMemoryAttribution, scheduleMemoryProjectionReset } = require('../lib/attributeMemoryPoints');
 const { validateBody } = require('../middleware/validate');
 const schemas = require('../middleware/schemas');
 
@@ -119,20 +120,10 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
       'INSERT INTO memory_points (user_id, lat, lng, ts, client_id) VALUES ? ON DUPLICATE KEY UPDATE client_id = VALUES(client_id)',
       [rows]
     );
-    // v439: attribute newly inserted points to unlocked_regions.
-    // Runs after the INSERT so ST_Contains sees the fresh points.
-    // Uses the pool (single-connection semantics ok for attribution).
-    try {
-      const { attributeMemoryPoints } = require('../lib/attributeMemoryPoints');
-      const tsList = rows.map((r) => r[3]); // rows[i] = [user_id, lat, lng, ts, client_id]
-      const minTs = Math.min(...tsList);
-      const maxTs = Math.max(...tsList);
-      await attributeMemoryPoints(pool, userId, minTs, maxTs);
-    } catch (attrErr) {
-      console.error(`[memory/points] ATTR_ERR user=${userId} err=${attrErr.message}`);
-      // Do NOT throw — memory_points already inserted. Attribution can be
-      // recomputed later via backfill if it fails here.
-    }
+    // memory_points is already committed. Region attribution is a derived,
+    // idempotent projection and must not block the source upload response.
+    const tsList = rows.map((r) => r[3]); // rows[i] = [user_id, lat, lng, ts, client_id]
+    scheduleMemoryAttribution(pool, userId, Math.min(...tsList), Math.max(...tsList));
     // Confirm storage by selecting back the cids we just inserted.
     const validEcho = echo.filter((e) => e !== null);
     const cidList = validEcho.map((e) => e.cid);
@@ -234,15 +225,29 @@ const wipeLimiter = rateLimit({
  */
 router.delete('/points', authenticate, wipeLimiter, async (req, res) => {
   const userId = req.user.userId;
+  const conn = await pool.getConnection();
   try {
-    const [result] = await pool.query(
+    await conn.beginTransaction();
+    const [regionsResult] = await conn.query(
+      'DELETE FROM unlocked_regions WHERE user_id = ?',
+      [userId]
+    );
+    const [result] = await conn.query(
       'DELETE FROM memory_points WHERE user_id = ?',
       [userId]
     );
-    return res.json({ deleted: result.affectedRows ?? 0 });
+    await conn.commit();
+    scheduleMemoryProjectionReset(pool, userId);
+    return res.json({
+      deleted: result.affectedRows ?? 0,
+      unlocked_regions_deleted: regionsResult.affectedRows ?? 0,
+    });
   } catch (err) {
+    try { await conn.rollback(); } catch { /* ignore */ }
     console.error('[memory/points:delete]', err.message);
     return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
   }
 });
 
