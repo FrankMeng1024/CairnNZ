@@ -27,6 +27,7 @@ const crypto = require('crypto');
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { sanitizeQaJsonl } = require('../utils/qaTelemetryPrivacy');
+const { mergeQaTelemetryJsonl } = require('../utils/qaTelemetryMerge');
 
 const router = express.Router();
 
@@ -169,7 +170,7 @@ router.post('/sessions', uploadLimiter, requireUploadAuth, async (req, res) => {
     }
   }
 
-  const rawSizeBytes = Buffer.byteLength(rawJsonl, 'utf8');
+  let rawSizeBytes = Buffer.byteLength(rawJsonl, 'utf8');
   if (rawSizeBytes > MAX_BODY_BYTES) {
     return res.status(413).json({ error: `Payload too large (${rawSizeBytes} > ${MAX_BODY_BYTES} bytes).` });
   }
@@ -177,6 +178,19 @@ router.post('/sessions', uploadLimiter, requireUploadAuth, async (req, res) => {
   const durationMs = startedAt && endedAt ? endedAt - startedAt : null;
 
   try {
+    if (activityMode === 'qa_activity') {
+      // A live Activity sends bounded rolling snapshots. Preserve their union
+      // so the final upload cannot replace early provider/outlier evidence
+      // with only the tail of a long walk. The merge itself remains bounded.
+      const [priorRows] = await pool.execute(
+        'SELECT raw_jsonl FROM telemetry_sessions WHERE session_id = ? LIMIT 1',
+        [sessionId],
+      );
+      const merged = mergeQaTelemetryJsonl(priorRows[0]?.raw_jsonl || '', rawJsonl);
+      rawJsonl = merged.jsonl;
+      eventsCount = merged.eventsCount;
+      rawSizeBytes = Buffer.byteLength(rawJsonl, 'utf8');
+    }
     // UPSERT — same session_id can be re-uploaded (e.g. retry).
     // ALL fields update on conflict, since later upload may have richer metadata.
     await pool.execute(

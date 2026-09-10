@@ -95,6 +95,10 @@ const sessionAppendPoints = Joi.object({
       alt: alt,
       t: Joi.number().integer().min(0).required(),
       acc: Joi.number().min(0).allow(null),
+      v_acc: Joi.number().min(0).allow(null),
+      speed_mps: Joi.number().allow(null),
+      course_deg: Joi.number().min(-1).max(360).allow(null),
+      raw_ordinal: Joi.number().integer().min(0),
       segment_id: Joi.string().min(1).max(80),
       segment_start_reason: Joi.string().valid('start', 'resume', 'process-recovery', 'gps-reacquired', 'legacy').allow(null),
     })
@@ -107,6 +111,10 @@ const pointObj = Joi.object({
   alt: alt,
   t: Joi.number().integer().min(0),
   acc: Joi.number().min(0).allow(null),
+  v_acc: Joi.number().min(0).allow(null),
+  speed_mps: Joi.number().allow(null),
+  course_deg: Joi.number().min(-1).max(360).allow(null),
+  raw_ordinal: Joi.number().integer().min(0),
   segment_id: Joi.string().min(1).max(80),
   segment_start_reason: Joi.string().valid('start', 'resume', 'process-recovery', 'gps-reacquired', 'legacy').allow(null),
 });
