@@ -13,7 +13,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, Animated, Easing, Image,
+  Alert, Animated, Easing, Linking,
 } from 'react-native';
 import { haptic } from '../services/hapticService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,7 +28,7 @@ import { useRouteStore } from '../store/useRouteStore';
 import { getCurrentRegion } from '../config/regions';
 import { formatDuration, haversineM } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
-import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
+import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { StopSummarySheet } from './StopSummarySheet';
 // R114 (2026-08-07): legacy screens/MarkerDetailSheet retired — replaced by
@@ -39,13 +39,8 @@ import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import { useMemorySubscriptionsStore } from '../features/memory/store/useMemorySubscriptionsStore';
 import { useMarkLikeStore } from '../features/marks/store/useMarkLikeStore';
 import { useFriendStore } from '../store/useFriendStore';
-import { CompassNeedle } from './CompassNeedle';
-import { BackButton } from '../components/BackButton';
-import { PulseDot } from '../components/PulseDot';
-import { PressBtn } from '../components/PressBtn';
 import { HikingMap } from './HikingMap';
 import { TooShortSheet } from '../components/TooShortSheet';
-import { useAppearance } from '../hooks/useAppearance';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
 import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
@@ -76,6 +71,14 @@ import {
   discardRecoverableActivity,
   type RecoverableActivity,
 } from '../features/activity/activityRecovery';
+import {
+  ActivityControlDock,
+  ActivityRecenterButton,
+  ActivityStartDock,
+  ActivityTopChrome,
+  type ActivityNoticePresentation,
+  type ActivityStatusTone,
+} from '../components/activity/ActivityRecordingChrome';
 
 
 // ── Main HikingScreen ──────────────────────────────────────────────────────
@@ -134,11 +137,7 @@ export function HikingScreen() {
   // R21 (2026-08-17 user "确保hike界面根据系统主题色 切换 白天和黑夜"):
   // read Appearance. When isDark, gpsChip/actions/stats surface swap to
   // deep slate. Mapbox styleURL also switches via HikingMap → dark-v11.
-  const { isDark: hikeIsDark } = useAppearance();
   const hikeTheme = useVisualTheme();
-  const hikeChipBg = hikeTheme.mapOverlay;
-  const hikeChipBorder = hikeTheme.border;
-  const hikeChipText = hikeTheme.foreground;
 
   // Real tracking store
   const isFinishing = useTrackingStore(s => s.isFinishing);
@@ -149,6 +148,8 @@ export function HikingScreen() {
   const elevationGainM = useTrackingStore(s => s.elevationGainM);
   const locationAvailable = useTrackingStore(s => s.locationAvailable);
   const lastCoordinate = useTrackingStore(s => s.lastCoordinate);
+  const backgroundLocationPermission = useTrackingStore(s => s.backgroundLocationPermission);
+  const refreshBackgroundLocationPermission = useTrackingStore(s => s.refreshBackgroundLocationPermission);
   useEffect(() => {
     if (!isFocused) return undefined;
     appendSimulatorLog('SCREEN', 'hike_opened', {
@@ -174,10 +175,17 @@ export function HikingScreen() {
     virtualPosition: simulatorPosition,
     acceptedPosition: lastCoordinate,
   });
+  useEffect(() => {
+    if (!isFocused || status !== 'idle' || simulatorLocationAuthoritative) return;
+    void refreshBackgroundLocationPermission();
+  }, [isFocused, refreshBackgroundLocationPermission, simulatorLocationAuthoritative, status]);
   const sessionId = useTrackingStore(s => s.sessionId);
   const trackPoints = useTrackingStore(s => s.trackPoints);
-  // Retained for completion/detail parity. The live line below uses the
-  // accepted canonical points so its endpoint never trails Activity truth.
+  const trackPointsSmoothed = useTrackingStore(s => s.trackPointsSmoothed);
+  const liveTrackPoints = locationProviderSource === 'real' ? trackPointsSmoothed : trackPoints;
+  // Completion still uses canonical truth. The real live line uses only its
+  // bounded causal presentation twin (same points/segments/timestamps, ≤6m
+  // tail offset); Simulator keeps exact canonical parity.
   const startTracking = useTrackingStore(s => s.startTracking);
   const stopTracking = useTrackingStore(s => s.stopTracking);
   // v120: pause + resume hooks for the Stop button. Tapping Stop pauses
@@ -283,65 +291,6 @@ export function HikingScreen() {
   // pathway and always shows the confirmation sheet before any teardown.
   const [showTooShortConfirm, setShowTooShortConfirm] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
-
-  // Live compass: heading in degrees from north, updated by
-  // watchHeadingAsync. compassEnabled toggles the sensor on/off so
-  // the user can "close the lid" to save battery if they don't want
-  // a live needle. Permission is shared with location, already
-  // granted by the time the user is in tracking mode.
-  // Default: closed (lid icon visible) — most users don't need
-  // continuous orientation, and the sensor + low-pass filter cost
-  // a small amount of battery. Tap to open.
-  const [heading, setHeading] = useState<number | null>(null);
-  const [compassEnabled, setCompassEnabled] = useState(false);
-
-  // H2 concept: middle-of-screen tap during tracking expands a bottom
-  // action tray with 3 large circular buttons — Pause / Cairn / Done.
-  // 2026-08-16 UI overhaul: this is now the SOLE entry point for
-  // pause/stop actions (legacy inline trackingBar controls removed).
-  // Lock state was dropped in the same overhaul — the tray collapses
-  // to a chevron by default, which already prevents pocket-taps.
-  const [actionsExpanded, setActionsExpanded] = useState(false);
-  useEffect(() => {
-    if (!compassEnabled) {
-      setHeading(null);
-      return;
-    }
-    let sub: { remove: () => void } | null = null;
-    let cancelled = false;
-    (async () => {
-      try {
-        const perm = await Location.getForegroundPermissionsAsync();
-        if (!perm.granted) return;
-        sub = await Location.watchHeadingAsync(({ trueHeading, magHeading }) => {
-          if (cancelled) return;
-          // Prefer trueHeading (geographic north) when available;
-          // fall back to magHeading (magnetic north) — close enough
-          // for a hiker's mental model. -1 means unavailable.
-          const h = trueHeading >= 0 ? trueHeading : magHeading;
-          if (h < 0) return;
-          // Low-pass filter: 70% old + 30% new, so the needle settles
-          // smoothly instead of jittering ±5° every frame on devices
-          // with imperfect magnetometer calibration.
-          setHeading(prev => {
-            if (prev == null) return h;
-            // Handle the 360→0 wrap (shortest angular distance)
-            let delta = h - prev;
-            if (delta > 180) delta -= 360;
-            if (delta < -180) delta += 360;
-            return (prev + delta * 0.3 + 360) % 360;
-          });
-        });
-      } catch {
-        // Compass unavailable — leave heading null, UI shows static
-        // compass icon as a fallback.
-      }
-    })();
-    return () => {
-      cancelled = true;
-      sub?.remove();
-    };
-  }, [compassEnabled]);
 
   const routes = useRouteStore(s => s.routes);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
@@ -644,30 +593,11 @@ export function HikingScreen() {
     }
   };
 
-  // R21 (2026-08-17 user "进入前 3 秒展开, 之后自动收起"): when the tracking
-  // phase first mounts, open the action tray so the user sees what buttons
-  // exist (Pause / Cairn / Done). Auto-collapse after 3 seconds so it doesn't
-  // hog map real-estate. Runs only on the phase transition into tracking, not
-  // every render.
-  useEffect(() => {
-    if (operationalState !== 'tracking') return;
-    setActionsExpanded(true);
-    const t = setTimeout(() => setActionsExpanded(false), 3000);
-    return () => clearTimeout(t);
-  }, [operationalState]);
-
   // v118: too-short modal replaced the v116 system Alert. The session is
   // now preserved by stopTracking's pre-check (see useTrackingStore), so
   // tapping "Got it" leaves the user back on the still-running tracking
   // view with all stats intact. Tapping "End anyway" calls
   // discardCurrentSession() which does the full teardown.
-
-  // Spring press scales
-  const trackBtnScale = useRef(new Animated.Value(1)).current;
-  const springIn = (val: Animated.Value) =>
-    Animated.spring(val, { toValue: 0.95, useNativeDriver: true, tension: 300, friction: 10 }).start();
-  const springOut = (val: Animated.Value) =>
-    Animated.spring(val, { toValue: 1, useNativeDriver: true, tension: 300, friction: 8 }).start();
 
   const selectedMarker = markers.find(m => m.id === selectedMarkerId) ?? null;
 
@@ -743,9 +673,18 @@ export function HikingScreen() {
   // and long-hikers get the "you just crossed 1 km" signal.
   const lapStepM = dist.imperial ? 1609.344 : 1000;
   const lastLapCountRef = useRef(0);
+  const lapSessionIdRef = useRef<string | null>(null);
   const lapToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [lapToast, setLapToast] = useState<string | null>(null);
   useEffect(() => {
+    // A recovered/rehydrated Activity may enter the screen with kilometres
+    // already recorded. Establish its current lap boundary silently instead
+    // of replaying historical milestones as a fresh "1–5 km" toast.
+    if (lapSessionIdRef.current !== sessionId) {
+      lapSessionIdRef.current = sessionId;
+      lastLapCountRef.current = Math.floor(distanceM / lapStepM);
+      return;
+    }
     if (!isTracking) {
       lastLapCountRef.current = Math.floor(distanceM / lapStepM);
       return;
@@ -777,7 +716,7 @@ export function HikingScreen() {
         if (lapToastTimerRef.current) clearTimeout(lapToastTimerRef.current);
       };
     }
-  }, [distanceM, isTracking, lapStepM, dist.imperial]);
+  }, [distanceM, isTracking, lapStepM, dist.imperial, sessionId]);
   const distDisplay = dist.format(distanceM, 1);
   const durationDisplay = formatDuration(durationS);
 
@@ -798,14 +737,53 @@ export function HikingScreen() {
   const gpsFixHealthy = isTracking && locationAvailable && lastTrackT !== null && !signalLost;
   const simulatorGpsActive = isTracking && locationProviderSource === 'simulator';
   const gpsStatusLabel = simulatorGpsActive
-    ? ({ normal: '正常', poor: '较差', lost: '丢失', frozen: '卡住' } as const)[simulatorSignal]
-    : 'GPS';
-  const gpsStatusColor = simulatorGpsActive
-    ? simulatorSignal === 'normal' ? Colors.primary
-      : simulatorSignal === 'poor' ? Colors.severityWarning
-        : simulatorSignal === 'lost' ? Colors.danger
-          : Colors.info
-    : gpsFixHealthy ? Colors.primary : Colors.severityWarning;
+    ? `SIM · ${{ normal: 'Good', poor: 'Poor', lost: 'Lost', frozen: 'Frozen' }[simulatorSignal]}`
+    : status === 'paused'
+      ? 'GPS held'
+      : signalLost
+        ? 'Signal lost'
+        : gpsFixHealthy
+          ? 'GPS good'
+          : hasLocationPermission === false
+            ? 'Location off'
+            : 'Finding GPS';
+  const gpsStatusTone: ActivityStatusTone = simulatorGpsActive
+    ? simulatorSignal === 'normal' ? 'healthy'
+      : simulatorSignal === 'poor' ? 'warning'
+        : simulatorSignal === 'lost' ? 'danger'
+          : 'info'
+    : status === 'paused' ? 'muted'
+      : signalLost ? 'danger'
+        : gpsFixHealthy ? 'healthy'
+          : hasLocationPermission === false ? 'danger'
+            : 'warning';
+  const backgroundTrackingWarning = locationProviderSource === 'real'
+    && backgroundLocationPermission === 'foreground-only'
+    ? 'Background location is off — keep CairnNZ open'
+    : null;
+  const hikeNotices: ActivityNoticePresentation[] = [];
+  if (signalLost) {
+    hikeNotices.push({
+      label: signalLostMin >= 1 ? `No accepted GPS for ${signalLostMin} min` : 'GPS signal lost',
+      tone: 'danger',
+      icon: 'CloudOff',
+    });
+  } else if (isTracking && lastCoordinate?.accuracy != null && lastCoordinate.accuracy > 15) {
+    hikeNotices.push({
+      label: `GPS accuracy ±${Math.round(lastCoordinate.accuracy)} m`,
+      tone: 'warning',
+      icon: 'Navigation',
+    });
+  }
+  if (isTracking && overSpeedActive) {
+    hikeNotices.push({
+      label: 'Moving too fast for a hike — route evidence is being checked',
+      tone: 'warning',
+      icon: 'TriangleAlert',
+    });
+  } else if (isTracking && lapToast) {
+    hikeNotices.push({ label: `${lapToast} explored`, tone: 'healthy', icon: 'Milestone' });
+  }
 
   const [showRoutePicker, setShowRoutePicker] = useState(false);
   const routePickerSlide = useRef(new Animated.Value(300)).current;
@@ -927,7 +905,7 @@ export function HikingScreen() {
       key="hike-map-surface"
       markers={activitySessionVisible ? markers : []}
       trackPoints={activitySessionVisible
-        ? trackPoints.map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentId: tp.segmentId }))
+        ? liveTrackPoints.map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentId: tp.segmentId }))
         : []}
       onMarkerPress={(id) => {
         if (!activitySessionVisible) return;
@@ -949,111 +927,111 @@ export function HikingScreen() {
     />
   );
 
+  const handlePauseResumeHike = () => {
+    haptic.impact('light');
+    if (status === 'paused') void resumeTracking();
+    else void pauseTracking();
+  };
+
+  const handleFinishHike = async () => {
+    haptic.impact('medium');
+    const current = useTrackingStore.getState();
+    if (!current.startedAt) {
+      await stopTracking();
+      return;
+    }
+    await pauseTracking();
+    const frozen = useTrackingStore.getState();
+    if (!saveEligibility(frozen.trackPoints, frozen.distanceM).eligible) {
+      setShowTooShortConfirm(true);
+      return;
+    }
+    setStopSummary({
+      distanceM: frozen.distanceM,
+      durationS: frozen.durationS,
+      elevationGainM: frozen.elevationGainM,
+      activityMode: frozen.activityMode,
+      trackPoints: frozen.trackPoints.map(point => ({ lat: point.lat, lng: point.lng })),
+      startedAt: frozen.startedAt!,
+    });
+  };
+
   if (!activitySessionVisible) {
     return (
       <>
       <View style={[styles.container, { backgroundColor: hikeTheme.background }]}>
         {hikeMapSurface}
 
-        {/* Top overlay: concept-locked stats strip (4 items in one row).
-            Values are live even before tracking starts (all zero) so the
-            layout stays stable when the user taps Start. Back button is
-            preserved as a floating chip anchored to the safe-area inset. */}
-        <View style={[styles.topOverlay, { paddingTop: insets.top + Spacing.lg }]} pointerEvents="box-none">
-          <View style={styles.topRow}>
-            <BackButton variant="inline" onPress={() => nav.goBack()} />
-          </View>
-          <View style={[styles.statsStrip, hikeIsDark ? { backgroundColor: hikeTheme.mapOverlay, borderColor: hikeTheme.border } : null]} pointerEvents="none">
-            <Text style={[styles.statsStripKm, hikeIsDark ? { color: hikeChipText } : null]}>{distDisplay} {dist.unit}</Text>
-            <Text style={[styles.statsStripTime, hikeIsDark ? { color: hikeChipText } : null]}>{durationDisplay}</Text>
-            <Text style={[styles.statsStripElev, hikeIsDark ? { color: hikeChipText } : null]}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
-            <View style={styles.statsStripGpsWrap}>
-              <View style={[styles.statsStripGpsDot, { backgroundColor: hasLocationPermission === false ? Colors.severityWarning : Colors.primary }]} />
-              <Text style={[styles.statsStripGpsText, hikeIsDark ? { color: hikeChipText } : null]}>GPS</Text>
-            </View>
-          </View>
-        </View>
+        <ActivityTopChrome
+          mode="hike"
+          phase={operationalState === 'starting' ? 'starting' : 'ready'}
+          safeTop={insets.top}
+          gpsLabel={simulatorLocationAuthoritative
+            ? 'SIM ready'
+            : hasLocationPermission === false
+              ? 'Location off'
+              : hasLocationPermission === true
+                ? 'GPS ready'
+                : 'Checking GPS'}
+          gpsTone={simulatorLocationAuthoritative || hasLocationPermission === true
+            ? 'healthy'
+            : hasLocationPermission === false ? 'danger' : 'warning'}
+          onBack={() => nav.goBack()}
+        />
 
-        {/* R114/O22 STORY-73009 (H3): inline permission banner removed.
-            2026-08-17 R21: chip at top-right already signals GPS state.
-            Matches Running R0 which relies on chip alone. */}
-
-        {/* Bottom: FREE HIKE pill card + Route row + solid green Start button.
-            Concept-locked from H0-start.png. Card + row background is
-            Paper 94% opacity so the map still peeks through. */}
-        <View style={[styles.bottomOverlay, { paddingBottom: insets.bottom + Spacing.base }]} pointerEvents="box-none">
-          <View style={styles.bottomPanel}>
-            {/* FREE HIKE pill card — 2026-08-17 concept H0: adds a
-                small fern-leaf glyph on the left. The leaf reinforces
-                the "Explore freely" story before the user commits to
-                a saved route, and mirrors the fern used on the
-                complete screen. */}
-            <TouchableOpacity style={[styles.freeHikePill, hikeIsDark ? { backgroundColor: hikeTheme.surfaceElevated, borderColor: hikeTheme.border } : null]} onPress={openRoutePicker} activeOpacity={0.9}>
-              <Image
-                source={require('../../assets/hiking/fern-leaf.png')}
-                style={styles.freeHikeGlyph}
-                resizeMode="contain"
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.freeHikeEyebrow, hikeIsDark ? { color: hikeTheme.foreground } : null]}>
-                  {selectedRoute ? 'ROUTE' : 'FREE HIKE'}
-                </Text>
-                <Text style={[styles.freeHikeSub, hikeIsDark ? { color: hikeTheme.foregroundSecondary } : null]} numberOfLines={1}>
-                  {selectedRoute ? selectedRouteName : 'Explore freely'}
-                </Text>
-              </View>
-              <Icon name="ChevronUp" size={18} color={hikeIsDark ? hikeTheme.iconInactive : Colors.textSecondary} strokeWidth={2.5} />
-            </TouchableOpacity>
-
-            {/* Start Hiking — solid pill button. R21 (2026-08-18) dark: use
-                deep-slate fill + cream text so it stops looking like a
-                bright button pasted on a dark map. */}
-            <Animated.View style={[{ height: 52 }, { transform: [{ scale: trackBtnScale }] }]}>
-              <TouchableOpacity
-                style={[styles.startHikeBtn, hikeIsDark ? { backgroundColor: hikeTheme.primary, borderColor: hikeTheme.border, borderWidth: 1 } : null]}
-                onPress={handleStartHike}
-                disabled={operationalState === 'starting'}
-                activeOpacity={1}
-                onPressIn={() => springIn(trackBtnScale)}
-                onPressOut={() => springOut(trackBtnScale)}
-              >
-                <Text style={[styles.startHikeBtnText, hikeIsDark ? { color: hikeTheme.onPrimary } : null]}>
-                  {operationalState === 'starting' ? 'Starting…' : 'Start Hiking'}
-                </Text>
-              </TouchableOpacity>
-            </Animated.View>
-            {startError ? (
-              <Text style={[styles.startFailureText, { color: hikeTheme.destructive }]} accessibilityRole="alert">
-                {startError === 'permission-denied'
-                  ? 'Location permission is needed to start.'
-                  : 'Couldn’t start GPS. Check your location settings and try again.'}
-              </Text>
-            ) : null}
-          </View>
-        </View>
+        <ActivityStartDock
+          mode="hike"
+          safeBottom={insets.bottom}
+          routeName={selectedRouteName}
+          routeDescription={selectedRoute ? 'Follow a saved route' : 'Explore freely without a planned route'}
+          readinessLabel={simulatorLocationAuthoritative
+            ? 'Simulator origin ready'
+            : hasLocationPermission === false
+              ? 'Location permission is needed before recording'
+              : hasLocationPermission === true
+                ? 'Location ready · route truth is recorded from accepted GPS'
+                : 'Checking location readiness'}
+          readinessTone={simulatorLocationAuthoritative || hasLocationPermission === true
+            ? 'healthy'
+            : hasLocationPermission === false ? 'danger' : 'warning'}
+          backgroundWarning={backgroundTrackingWarning}
+          onChooseRoute={openRoutePicker}
+          onStart={handleStartHike}
+          onOpenSettings={backgroundTrackingWarning ? () => { void Linking.openSettings(); } : undefined}
+          starting={operationalState === 'starting'}
+          startError={startError === 'permission-denied'
+            ? 'Location permission is needed to start.'
+            : startError
+              ? 'Couldn’t start GPS. Check location settings and try again.'
+              : null}
+        />
 
         {/* Route picker sheet — non-fullscreen, slides up from bottom */}
         {showRoutePicker && (
-          <Animated.View style={[styles.routePickerBackdrop, { opacity: routePickerOpacity }]}>
+          <Animated.View style={[styles.routePickerBackdrop, { backgroundColor: hikeTheme.scrim, opacity: routePickerOpacity }]}>
             <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closeRoutePicker} activeOpacity={1} />
-            <Animated.View style={[styles.routePickerSheet, hikeIsDark ? { backgroundColor: hikeTheme.surfaceElevated, borderTopColor: hikeTheme.border } : null, { transform: [{ translateY: routePickerSlide }] }]}>
-              <View style={[styles.routePickerHandle, hikeIsDark ? { backgroundColor: "rgba(220,230,240,0.30)" } : null]} />
-              <Text style={[styles.routePickerTitle, hikeIsDark ? { color: "#F0EEE6" } : null]}>Choose a route</Text>
+            <Animated.View style={[styles.routePickerSheet, { backgroundColor: hikeTheme.sheetSurface, borderTopColor: hikeTheme.border, transform: [{ translateY: routePickerSlide }] }]}>
+              <View style={[styles.routePickerHandle, { backgroundColor: hikeTheme.borderStrong }]} />
+              <Text style={[styles.routePickerTitle, { color: hikeTheme.foreground }]}>Choose a route</Text>
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }} contentContainerStyle={{ gap: Spacing.sm }}>
                 {/* Free Hiking */}
                 <TouchableOpacity
-                  style={[styles.routePickerRow, hikeIsDark ? { backgroundColor: "rgba(240,238,230,0.08)", borderColor: "rgba(220,230,240,0.14)" } : null, selectedRoute === null && (hikeIsDark ? { backgroundColor: "rgba(240,238,230,0.20)", borderColor: "rgba(220,230,240,0.35)" } : styles.routePickerRowSelected)]}
+                  style={[
+                    styles.routePickerRow,
+                    { backgroundColor: hikeTheme.surface, borderColor: hikeTheme.border },
+                    selectedRoute === null && { backgroundColor: hikeTheme.recordSelected, borderColor: hikeTheme.primary },
+                  ]}
                   onPress={() => pickRoute(null)}
                   activeOpacity={0.8}
                 >
-                  <View style={[styles.routePickerBadge, { backgroundColor: Colors.primaryLight }]}>
-                    <Icon name="Target" size={16} color={Colors.primary} strokeWidth={2} />
+                  <View style={[styles.routePickerBadge, { backgroundColor: hikeTheme.surfaceElevated }]}>
+                    <Icon name="Target" size={16} color={hikeTheme.iconActive} strokeWidth={2} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.routePickerName, hikeIsDark ? { color: "#F0EEE6" } : null]}>Free Hike</Text>
-                    <Text style={[styles.routePickerMeta, hikeIsDark ? { color: "rgba(240,238,230,0.68)" } : null]}>No route · explore freely</Text>
+                    <Text style={[styles.routePickerName, { color: hikeTheme.foreground }]}>Free Hike</Text>
+                    <Text style={[styles.routePickerMeta, { color: hikeTheme.foregroundSecondary }]}>No route · explore freely</Text>
                   </View>
-                  {selectedRoute === null && <Icon name="Check" size={16} color={Colors.primary} strokeWidth={2.5} />}
+                  {selectedRoute === null && <Icon name="Check" size={16} color={hikeTheme.iconActive} strokeWidth={2.5} />}
                 </TouchableOpacity>
 
                 {/* Saved routes — show start-point distance from the
@@ -1078,20 +1056,20 @@ export function HikingScreen() {
                       key={r.id}
                       style={[
                         styles.routePickerRow,
-                        hikeIsDark ? { backgroundColor: 'rgba(240,238,230,0.08)', borderColor: 'rgba(220,230,240,0.14)' } : null,
-                        selectedRoute === r.id && (hikeIsDark ? { backgroundColor: 'rgba(240,238,230,0.20)', borderColor: 'rgba(220,230,240,0.35)' } : styles.routePickerRowSelected),
+                        { backgroundColor: hikeTheme.surface, borderColor: hikeTheme.border },
+                        selectedRoute === r.id && { backgroundColor: hikeTheme.recordSelected, borderColor: hikeTheme.primary },
                         tooFar && { opacity: 0.45 },
                       ]}
                       onPress={tooFar ? undefined : () => pickRoute(r.id)}
                       disabled={tooFar}
                       activeOpacity={0.8}
                     >
-                      <View style={[styles.routePickerBadge, { backgroundColor: Colors.primaryLight }]}>
-                        <Icon name="Route" size={16} color={Colors.primary} strokeWidth={2} />
+                      <View style={[styles.routePickerBadge, { backgroundColor: hikeTheme.surfaceElevated }]}>
+                        <Icon name="Route" size={16} color={hikeTheme.iconActive} strokeWidth={2} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.routePickerName, hikeIsDark ? { color: "#F0EEE6" } : null]}>{r.name}</Text>
-                        <Text style={[styles.routePickerMeta, hikeIsDark ? { color: "rgba(240,238,230,0.68)" } : null]}>
+                        <Text style={[styles.routePickerName, { color: hikeTheme.foreground }]}>{r.name}</Text>
+                        <Text style={[styles.routePickerMeta, { color: hikeTheme.foregroundSecondary }]}>
                           {dist.format(r.distanceM, 1)} {dist.unit}
                           {r.elevationGainM > 0 ? ` · ↑${dist.formatElevation(r.elevationGainM)}${dist.elevUnit}` : ''}
                           {r.runCount > 0 ? ` · ${r.runCount}× done` : ''}
@@ -1099,7 +1077,7 @@ export function HikingScreen() {
                           {tooFar ? ' · too far' : ''}
                         </Text>
                       </View>
-                      {selectedRoute === r.id && <Icon name="Check" size={16} color={Colors.primary} strokeWidth={2.5} />}
+                      {selectedRoute === r.id && <Icon name="Check" size={16} color={hikeTheme.iconActive} strokeWidth={2.5} />}
                     </TouchableOpacity>
                   );
                 })}
@@ -1122,268 +1100,50 @@ export function HikingScreen() {
     <View style={[styles.container, { backgroundColor: hikeTheme.background }]}>
       {hikeMapSurface}
 
-      {/* Top overlay: back + GPS chip + concept stats strip. Concept H1/H2
-          places 4 stats (km / time / elev / GPS) as a single row on the
-          Paper surface just below the safe-area top. Existing stats bar
-          (tracking) is kept below so pause/stop buttons still have their
-          host row, but its visual weight is reduced. */}
-      <View style={[styles.topOverlay, { paddingTop: insets.top + Spacing.lg }]} pointerEvents="box-none">
-        <View style={styles.topRow}>
-          <BackButton variant="inline" onPress={() => nav.goBack()} />
-          {/* R21 v6 (2026-08-18 user "GPS因为下面已经有了 新的一行 不需要上面的"):
-              top GPS chip removed — the stats card's GPS dot is the
-              canonical status affordance. Keeping only Back at the top. */}
-          {/* R21 (2026-08-18 user "signal lost 放右上角 也就是和back一行的右边"):
-              signal-lost pill moved into the top-row so it never overlaps
-              with the stats card. Kept invisible during normal operation. */}
-          <View style={{ flex: 1 }} />
-          {isTracking && signalLost && (
-            <View style={styles.signalLostPill}>
-              <View style={styles.signalLostDot} />
-              <Text style={styles.signalLostText}>
-                {signalLostMin >= 1 ? `Signal lost · ${signalLostMin} min` : 'Signal lost'}
-              </Text>
-            </View>
-          )}
-        </View>
+      <ActivityTopChrome
+        mode="hike"
+        phase={operationalState === 'finishing'
+          ? 'finishing'
+          : operationalState === 'paused' ? 'paused' : 'tracking'}
+        safeTop={insets.top}
+        gpsLabel={gpsStatusLabel}
+        gpsTone={gpsStatusTone}
+        onBack={() => nav.goBack()}
+        primaryMetric={{ label: 'ACTIVE TIME', value: durationDisplay }}
+        secondaryMetrics={[
+          { label: 'DISTANCE', value: distDisplay, unit: dist.unit },
+          { label: 'ELEVATION', value: `↑${dist.formatElevation(elevationGainM)}`, unit: dist.elevUnit },
+        ]}
+        notices={hikeNotices}
+      />
 
-        {/* Concept stats strip — always visible while on Hiking. */}
-        <View style={[styles.statsStrip, hikeIsDark ? { backgroundColor: hikeTheme.mapOverlay, borderColor: hikeTheme.border } : null]} pointerEvents="none">
-          <Text style={[styles.statsStripKm, hikeIsDark ? { color: hikeChipText } : null]}>{distDisplay} {dist.unit}</Text>
-          <Text style={[styles.statsStripTime, hikeIsDark ? { color: hikeChipText } : null]}>{durationDisplay}</Text>
-          <Text style={[styles.statsStripElev, hikeIsDark ? { color: hikeChipText } : null]}>{`\u2191 ${dist.formatElevation(elevationGainM)}${dist.elevUnit}`}</Text>
-          <View style={styles.statsStripGpsWrap}>
-            <View style={[styles.statsStripGpsDot, { backgroundColor: gpsStatusColor }]} />
-            <Text style={[styles.statsStripGpsText, hikeIsDark ? { color: hikeChipText } : null]}>{gpsStatusLabel}</Text>
-          </View>
-        </View>
+      <ActivityControlDock
+        mode="hike"
+        phase={operationalState === 'finishing'
+          ? 'finishing'
+          : status === 'paused' ? 'paused' : 'tracking'}
+        safeBottom={insets.bottom}
+        backgroundWarning={backgroundTrackingWarning}
+        onPauseResume={handlePauseResumeHike}
+        onCairn={() => {
+          haptic.selection();
+          nav.navigate('Plant');
+        }}
+        onFinish={() => { void handleFinishHike(); }}
+      />
 
-        {/* R114/O22 STORY-73012 (K2): overspeed banner. Second row below
-            the top chips (per user spec: "顶部第二行 banner, numberOfLines=1").
-            Shown when active hike detects sustained speed > 15 km/h — user
-            is likely in a vehicle. The offending points are already dropped
-            from the clean track by the store's OVERSPEED gate; this banner
-            makes the drop visible. Auto-clears when a real hiking-speed
-            fix arrives. */}
-        {isTracking && overSpeedActive && (
-          <View style={styles.overSpeedBanner}>
-            <Icon name="TriangleAlert" size={12} color={Colors.severityWarning} strokeWidth={2.5} />
-            <Text style={styles.overSpeedBannerText} numberOfLines={1}>
-              Moving too fast for a hike — pausing recording
-            </Text>
-          </View>
-        )}
-
-        {/* v78 #1: Signal-lost pill was moved to top-row (2026-08-18 R21).
-            It now lives in the same row as the Back button, right-aligned. */}
-        {/* O18 HIKE-07: transient lap toast — appears for 2s each time
-            the user crosses a 1 km / 1 mi boundary during tracking. */}
-        {isTracking && lapToast && (
-          <View style={styles.lapToast}>
-            <Icon name="Milestone" size={12} color="#fff" strokeWidth={2.5} />
-            <Text style={styles.lapToastText}>{lapToast}</Text>
-          </View>
-        )}
-        {/* O18 HIKE-02: GPS accuracy chip — visible while tracking whenever
-            accuracy is worse than 15m so users know the fix quality without
-            waiting for signal-loss threshold. */}
-        {isTracking && !signalLost && lastCoordinate?.accuracy != null && lastCoordinate.accuracy > 15 && (
-          <View style={styles.accuracyPill}>
-            <Icon name="Navigation" size={11} color={Colors.textSecondary} strokeWidth={2.2} />
-            <Text style={styles.accuracyText}>
-              GPS ±{Math.round(lastCoordinate.accuracy)}m
-            </Text>
-          </View>
-        )}
-
-        {/* 2026-08-16 UI overhaul: legacy trackingBar removed. Its
-            distance/time/elev readouts duplicated the top statsStrip,
-            and its inline Pause/Resume/Stop buttons are now surfaced
-            via the H2 chevron tray (Pause / Cairn / Done). Route-switch
-            control moved into H2 flow as well (accessible via long-press
-            or dedicated tray future entry — for now, route switching
-            happens pre-Start via the picker). */}
-      </View>
-
-      {/* Bottom controls. Two-column layout when tracking:
-          [Compass]  [Place Flag]
-          When pre-tracking, only the route picker + Start button are
-          visible (no compass, no flag). */}
-      <View style={[styles.bottomOverlay, { paddingBottom: insets.bottom + 8 }]} pointerEvents="box-none">
-        {operationalState === 'ready' ? (
-          // Pre-tracking: full-width Start button.
-          <View style={styles.bottomRow}>
-            <Animated.View style={[{ flex: 1, height: 60 }, { transform: [{ scale: trackBtnScale }] }]}>
-              <TouchableOpacity
-                style={styles.trackBtn}
-                onPress={handleStartHike}
-                activeOpacity={1}
-                onPressIn={() => springIn(trackBtnScale)}
-                onPressOut={() => springOut(trackBtnScale)}
-              >
-                <Icon name="Play" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
-                <Text style={styles.trackBtnText}>Start Hiking</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
-        ) : (
-          // R21 (2026-08-18 user "把指南针去掉"): compass FAB removed.
-          // Only Recenter remains, and only when the user has drifted off
-          // the follow position — otherwise the bottom row is empty so
-          // the map breathes. Actions (Pause/Cairn/Finish) moved to a
-          // vertical tray anchored to the right edge (see below).
-          !followUser ? (
-            <View style={styles.controlRow}>
-              <View style={{ flex: 1 }} />
-              <View style={styles.controlSlot}>
-                <TouchableOpacity
-                  style={[styles.fabPale, hikeIsDark ? { backgroundColor: hikeTheme.surfaceElevated, borderColor: hikeTheme.border } : null]}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Recenter map on current location"
-                  onPress={() => {
-                    haptic.selection();
-                    recenterImperativeRef.current?.();
-                    setTimeout(() => setFollowUser(true), 700);
-                  }}
-                >
-                  <Icon name="Target" size={20} color={hikeIsDark ? '#F0EEE6' : Colors.primary} strokeWidth={2} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : null
-        )}
-      </View>
-
-      {/* H2 concept: expandable action tray during tracking.
-          Chevron handle sits just above the bottom FAB row; tapping it
-          expands 3 large circular buttons — Pause / Cairn / Done.
-          This is now the SOLE entry point for pause/stop (2026-08-16 UI
-          overhaul removed the legacy inline trackingBar controls).
-          Renders while tracking or paused (not gated by lock — Lock
-          state was removed as part of the same overhaul). */}
-      {/* R21 (2026-08-18 user "在左下角 原指南针位置 向右侧横向弹出
-          即 箭头> Pause Cairn Finish"): anchor sits at bottom-left where
-          the old compass FAB was, tap → row expands to the right:
-          [Nav ▶] [Pause] [Cairn] [Finish]. Recenter (bottom-right) is
-          handled separately and only appears when the user has drifted. */}
-      {isTrackingOrPaused && (
-        <View
-          style={[styles.trayAnchorLayer, { paddingBottom: insets.bottom + 8 }]}
-          pointerEvents="box-none"
-        >
-          <View style={styles.trayAnchorRow} pointerEvents="auto">
-            <TouchableOpacity
-              style={[styles.trayAnchor, hikeIsDark ? { backgroundColor: hikeTheme.surfaceElevated, borderColor: hikeTheme.border } : null]}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={actionsExpanded ? 'Hide quick actions' : 'Show quick actions'}
-              onPress={() => {
-                haptic.selection();
-                setActionsExpanded(v => !v);
-              }}
-            >
-              <Icon
-                name={actionsExpanded ? 'ChevronLeft' : 'ChevronRight'}
-                size={22}
-                color={hikeIsDark ? '#F0EEE6' : Colors.primary}
-                strokeWidth={2.2}
-              />
-            </TouchableOpacity>
-            {actionsExpanded && (
-              <View style={styles.trayRow}>
-                <View style={styles.trayItem}>
-                  <TouchableOpacity
-                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: hikeTheme.surface, borderColor: hikeTheme.border } : null]}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel={status === 'paused' ? 'Resume hike' : 'Pause hike'}
-                    onPress={async () => {
-                      haptic.impact('light');
-                      if (status === 'paused') resumeTracking();
-                      else pauseTracking();
-                      setActionsExpanded(false);
-                    }}
-                  >
-                    <Icon
-                      name={status === 'paused' ? 'Play' : 'Pause'}
-                      size={22}
-                      color={hikeIsDark ? '#F0EEE6' : Colors.primary}
-                      strokeWidth={2.2}
-                    />
-                  </TouchableOpacity>
-                  <Text style={[styles.trayFabLabel, hikeIsDark ? { color: '#F0EEE6' } : null]}>
-                    {status === 'paused' ? 'Resume' : 'Pause'}
-                  </Text>
-                </View>
-                <View style={styles.trayItem}>
-                  <TouchableOpacity
-                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: hikeTheme.surface, borderColor: hikeTheme.border } : null]}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel="Leave a Cairn"
-                    onPress={() => {
-                      haptic.selection();
-                      setActionsExpanded(false);
-                      nav.navigate('Plant');
-                    }}
-                  >
-                    <Icon name="Flag" size={24} color={hikeTheme.iconActive} strokeWidth={1.9} />
-                  </TouchableOpacity>
-                  <Text style={[styles.trayFabLabel, hikeIsDark ? { color: '#F0EEE6' } : null]}>Cairn</Text>
-                </View>
-                <View style={styles.trayItem}>
-                  <TouchableOpacity
-                    style={[styles.trayFab, hikeIsDark ? { backgroundColor: hikeTheme.surface, borderColor: hikeTheme.border } : null]}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel="Finish hike"
-                    onPress={async () => {
-                      haptic.impact('medium');
-                      const ts = useTrackingStore.getState();
-                      setActionsExpanded(false);
-                      if (!ts.startedAt) {
-                        await stopTracking();
-                        return;
-                      }
-                      await pauseTracking();
-                      const frozen = useTrackingStore.getState();
-                      // The shared eligibility authority runs only after the
-                      // final in-flight accepted point has committed.
-                      const isTooShort = !saveEligibility(
-                        frozen.trackPoints,
-                        frozen.distanceM,
-                      ).eligible;
-                      if (isTooShort) {
-                        setShowTooShortConfirm(true);
-                        return;
-                      }
-                      setStopSummary({
-                        distanceM: frozen.distanceM,
-                        durationS: frozen.durationS,
-                        elevationGainM: frozen.elevationGainM,
-                        activityMode: frozen.activityMode,
-                        trackPoints: frozen.trackPoints.map(p => ({ lat: p.lat, lng: p.lng })),
-                        startedAt: frozen.startedAt!,
-                      });
-                    }}
-                  >
-                    <Icon name="Flag" size={22} color={hikeIsDark ? '#F0EEE6' : Colors.primary} strokeWidth={2.2} />
-                  </TouchableOpacity>
-                  <Text style={[styles.trayFabLabel, hikeIsDark ? { color: '#F0EEE6' } : null]}>Finish</Text>
-                </View>
-              </View>
-            )}
-          </View>
-        </View>
-      )}
-
-      {/* 2026-08-16 UI overhaul: H2 lock overlay removed.
-          Rationale: Lock added a UI gate that solved a pocket-tap edge
-          case but confused first-time users (no visible affordance to
-          unlock, 800ms long-press was undiscoverable). The new H2 tray
-          is collapsed by default (chevron only), which already prevents
-          accidental Pause/Cairn/Done taps during a hike. */}
+      {!followUser ? (
+        <ActivityRecenterButton
+          mode="hike"
+          safeBottom={insets.bottom}
+          raised={Boolean(backgroundTrackingWarning)}
+          onPress={() => {
+            haptic.selection();
+            recenterImperativeRef.current?.();
+            setTimeout(() => setFollowUser(true), 700);
+          }}
+        />
+      ) : null}
 
       {/* Marker Detail Sheet */}
       {/* R114 (2026-08-07): swapped legacy screens/MarkerDetailSheet for
@@ -1750,6 +1510,8 @@ const styles = StyleSheet.create({
   // Route picker sheet
   routePickerBackdrop: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 80,
+    elevation: 80,
     // Dim backdrop so the route picker reads as a modal layer instead
     // of a floating panel. Matches the rest of the app's bottom-sheet
     // language (MarkerDetailSheet, StopSummarySheet, etc).
@@ -1765,7 +1527,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.base, paddingTop: Spacing.sm, paddingBottom: Spacing.xxl,
     gap: Spacing.sm,
     borderTopWidth: 1, borderTopColor: 'rgba(20,42,30,0.08)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 82,
   },
   routePickerHandle: {
     width: 40, height: 4, borderRadius: 2,

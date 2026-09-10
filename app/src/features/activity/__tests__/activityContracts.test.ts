@@ -2,6 +2,7 @@ import {
   MAX_CREDITABLE_ACTIVE_INTERVAL_MS,
   calculateActivityStats,
   calculateLifecycleDurationMs,
+  isCredibleMotionSample,
   saveEligibility,
   segmentTrace,
   shouldStartNewSegment,
@@ -30,6 +31,30 @@ describe('Free Activity save authority', () => {
 });
 
 describe('segmented Activity truth', () => {
+  test('moderate-accuracy walking can prove coherent movement without waiting 15 metres', () => {
+    expect(isCredibleMotionSample({
+      mode: 'hiking',
+      lastAccepted: point(-41, 174, 1_000),
+      previousRaw: point(-41, 174, 1_000, 'a', { accuracy: 14, speed: 1.1 }),
+      current: point(-41.00004, 174, 5_000, 'a', { accuracy: 14, speed: 1.2 }),
+    })).toBe(true);
+  });
+
+  test('stationary drift and a lone optimistic speed remain suppressed', () => {
+    expect(isCredibleMotionSample({
+      mode: 'hiking',
+      lastAccepted: point(-41, 174, 1_000),
+      previousRaw: point(-41, 174, 1_000, 'a', { accuracy: 14, speed: 0.1 }),
+      current: point(-41.00003, 174, 5_000, 'a', { accuracy: 14, speed: 0.2 }),
+    })).toBe(false);
+    expect(isCredibleMotionSample({
+      mode: 'hiking',
+      lastAccepted: point(-41, 174, 1_000),
+      previousRaw: null,
+      current: point(-41.00004, 174, 5_000, 'a', { accuracy: 14, speed: 1.2 }),
+    })).toBe(false);
+  });
+
   test('lifecycle time advances through GPS silence and freezes only when paused', () => {
     expect(calculateLifecycleDurationMs({
       accumulatedMs: 15_000,

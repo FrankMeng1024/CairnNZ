@@ -19,6 +19,10 @@ interface TrackPointLike {
   t?: number;
   timestamp?: string;
   acc?: number | null;
+  v_acc?: number | null;
+  speed_mps?: number | null;
+  course_deg?: number | null;
+  raw_ordinal?: number;
   segment_id?: string;
   segment_start_reason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
 }
@@ -291,10 +295,12 @@ interface SaveHikeAtomicPayload {
   name: string;
   route_points: Array<{
     lat: number; lng: number; t: number; alt?: number | null; acc?: number | null;
+    v_acc?: number | null; speed_mps?: number | null; course_deg?: number | null; raw_ordinal?: number;
     segment_id?: string; segment_start_reason?: string;
   }>;
   route_points_raw: Array<{
     lat: number; lng: number; t: number; alt?: number | null; acc?: number | null;
+    v_acc?: number | null; speed_mps?: number | null; course_deg?: number | null; raw_ordinal?: number;
     segment_id?: string; segment_start_reason?: string;
   }>;
   memory_points: Array<{ lat: number; lng: number; ts: number; cid?: string }>;

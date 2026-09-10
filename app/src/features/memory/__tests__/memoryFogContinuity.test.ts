@@ -45,4 +45,17 @@ describe('Memory evidence rendering continuity', () => {
     expect(isStillFogged(shape!, 0.01, 0.005)).toBe(true);
     expect(isStillFogged(shape!, 0.01, 0)).toBe(false);
   });
+
+  test('display smoothing remains clipped to the original accepted footprint', () => {
+    const shape = buildFogShape([
+      { lat: 0, lng: 0, ts: 1 },
+      { lat: 0, lng: 0.0002, ts: 2 },
+    ]);
+    expect(shape).not.toBeNull();
+    // Evidence centres remain visible, while a location beyond the configured
+    // 30 m footprint cannot be invented by the presentation smoother.
+    expect(isStillFogged(shape!, 0, 0)).toBe(false);
+    expect(isStillFogged(shape!, 0.0002, 0)).toBe(false);
+    expect(isStillFogged(shape!, 0, 0.0003)).toBe(true);
+  });
 });

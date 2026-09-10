@@ -7,7 +7,8 @@
  *
  * Algorithm (validated by spike on session 46 + 1780-pt synth):
  *   1. Tag each raw point as GOOD or LOST.
- *      LOST = `speed === -1` (GPS doppler unavailable) OR `accuracy > 20m`.
+ *      LOST = `accuracy > 20m`. A negative native speed means “unknown”,
+ *      not “GPS lost”, and remains eligible under the accuracy/quality gates.
  *   2. Split into runs of contiguous GOOD or LOST points.
  *   3. For each GOOD run: chunk at 80 with overlap 10. Per-chunk Mapbox
  *      /matching call with `tidy=true` and per-coord radiuses (clamp accuracy
@@ -52,7 +53,7 @@
  *   - lat / lng (required)
  *   - alt (optional, preserved through the pipeline)
  *   - accuracy (optional, used to size per-coord radius and to mark LOST)
- *   - speed (optional, -1 means GPS lost; marks LOST)
+ *   - speed (optional, -1 means native speed is unavailable)
  *   - t (optional, not used in this pipeline)
  */
 export interface RawPoint {
@@ -64,7 +65,7 @@ export interface RawPoint {
   t?: number;
 }
 
-interface SnappedPoint {
+export interface SnappedPoint {
   lat: number;
   lng: number;
   alt?: number | null;
@@ -94,7 +95,7 @@ type SnapTrackReason =
   | 'timed_out'
   | 'all_chunks_failed';
 
-interface SnapTrackStats {
+export interface SnapTrackStats {
   /** Number of Mapbox /matching API calls actually fired. */
   apiCalls: number;
   /** Number of chunks that succeeded with conf >= confMin. */
@@ -115,6 +116,24 @@ interface SnapTrackStats {
   lostRuns: number;
   /** Number of times a seam-bridge was inserted to close a > 30m chunk gap. */
   seamBridges: number;
+  /** Privacy-safe evidence for each external request; never includes token or coordinates. */
+  requestResults: Array<{
+    inputPointCount: number;
+    headTimestamp: number | null;
+    tailTimestamp: number | null;
+    timestampsIncluded: boolean;
+    minimumRadiusM: number;
+    maximumRadiusM: number;
+    durationMs: number;
+    result: string;
+    httpStatus: number | null;
+    responseCode: string | null;
+    subMatchingCount: number | null;
+    tracepointCount: number | null;
+    nullTracepointCount: number | null;
+    confidence: number | null;
+    qualityReason: string | null;
+  }>;
   /** Wall-clock time for the whole pipeline (ms). */
   durationMs: number;
 }
@@ -204,7 +223,7 @@ function percentile95(values: number[]): number {
 
 export interface MatchedGeometryQuality {
   accepted: boolean;
-  reason: 'accepted' | 'raw_deviation' | 'endpoint_displacement' | 'length_distortion';
+  reason: 'accepted' | 'raw_deviation' | 'max_raw_deviation' | 'endpoint_displacement' | 'length_distortion';
   p95DeviationM: number;
   maxDeviationM: number;
   endpointDeviationM: number;
@@ -237,13 +256,16 @@ export function evaluateMatchedGeometryQuality(
   const rawLengthM = pathLength(raw);
   const matchedLengthM = pathLength(matched);
   const lengthRatio = rawLengthM > 1 ? matchedLengthM / rawLengthM : 1;
+  const maxDeviationEnvelopeM = Math.max(35, deviationEnvelopeM * 1.5);
   const reason = p95DeviationM > deviationEnvelopeM
     ? 'raw_deviation'
-    : endpointDeviationM > Math.max(20, deviationEnvelopeM)
-      ? 'endpoint_displacement'
-      : lengthRatio < 0.67 || lengthRatio > 1.5
-        ? 'length_distortion'
-        : 'accepted';
+    : maxDeviationM > maxDeviationEnvelopeM
+      ? 'max_raw_deviation'
+      : endpointDeviationM > Math.max(20, deviationEnvelopeM)
+        ? 'endpoint_displacement'
+        : lengthRatio < 0.67 || lengthRatio > 1.5
+          ? 'length_distortion'
+          : 'accepted';
   return {
     accepted: reason === 'accepted',
     reason,
@@ -262,9 +284,74 @@ export function evaluateMatchedGeometryQuality(
 // ============================================================================
 
 function isLost(p: RawPoint): boolean {
-  if (p.speed === -1) return true;
   if (p.accuracy != null && p.accuracy > ACC_LOST_M) return true;
   return false;
+}
+
+/**
+ * Keep the full accepted start/end evidence while allowing Mapbox to own the
+ * middle. Near-coincident derived endpoints are replaced; bounded offsets keep
+ * the Mapbox endpoint and add a short canonical connector so legitimate head
+ * or tail movement is never erased.
+ */
+export function preserveTrustedRouteEndpoints(
+  raw: RawPoint[],
+  matched: SnappedPoint[],
+  replaceWithinM = DEDUPE_M,
+): SnappedPoint[] {
+  if (raw.length < 2 || matched.length < 2) return matched.slice();
+  const coverage = analyzeTrustedEndpointCoverage(raw, matched);
+  if (!coverage.eligibleForAnchoring) return matched.slice();
+  const first = { lat: raw[0].lat, lng: raw[0].lng, alt: raw[0].alt };
+  const lastRaw = raw[raw.length - 1];
+  const last = { lat: lastRaw.lat, lng: lastRaw.lng, alt: lastRaw.alt };
+  const out = matched.slice();
+  if (hav(first, out[0]) <= replaceWithinM) out[0] = first;
+  else out.unshift(first);
+  if (hav(last, out[out.length - 1]) <= replaceWithinM) out[out.length - 1] = last;
+  else out.push(last);
+  return out;
+}
+
+export interface TrustedEndpointCoverage {
+  headDisplacementM: number;
+  tailDisplacementM: number;
+  anchoringEnvelopeM: number;
+  eligibleForAnchoring: boolean;
+}
+
+/**
+ * A canonical head/tail may replace or extend a nearby derived endpoint, but
+ * a large uncovered endpoint is evidence of a bad match—not permission to
+ * manufacture a long straight stub. The caller falls that segment back raw.
+ */
+export function analyzeTrustedEndpointCoverage(
+  raw: RawPoint[],
+  matched: SnappedPoint[],
+): TrustedEndpointCoverage {
+  if (raw.length < 2 || matched.length < 2) {
+    return {
+      headDisplacementM: Infinity,
+      tailDisplacementM: Infinity,
+      anchoringEnvelopeM: 0,
+      eligibleForAnchoring: false,
+    };
+  }
+  const usableAccuracy = raw
+    .map(point => point.accuracy)
+    .filter((value): value is number => value != null && Number.isFinite(value) && value >= 0);
+  const accuracyP95 = usableAccuracy.length > 0 ? percentile95(usableAccuracy) : 10;
+  const anchoringEnvelopeM = Math.min(20, Math.max(8, accuracyP95 * 1.25));
+  const headDisplacementM = hav(raw[0], matched[0]);
+  const tailDisplacementM = hav(raw[raw.length - 1], matched[matched.length - 1]);
+  return {
+    headDisplacementM,
+    tailDisplacementM,
+    anchoringEnvelopeM,
+    eligibleForAnchoring:
+      headDisplacementM <= anchoringEnvelopeM
+      && tailDisplacementM <= anchoringEnvelopeM,
+  };
 }
 
 interface Run {
@@ -387,12 +474,22 @@ interface MatchOk {
   points: SnappedPoint[];
   confidence: number;
   quality: MatchedGeometryQuality;
+  httpStatus: number;
+  responseCode: string;
+  subMatchingCount: number;
+  tracepointCount: number | null;
+  nullTracepointCount: number | null;
 }
 interface MatchFail {
   ok: false;
   reason: string;
   confidence?: number;
   quality?: MatchedGeometryQuality;
+  httpStatus?: number;
+  responseCode?: string;
+  subMatchingCount?: number;
+  tracepointCount?: number | null;
+  nullTracepointCount?: number | null;
 }
 type MatchResult = MatchOk | MatchFail;
 
@@ -412,11 +509,17 @@ async function callMapbox(
       return Math.round(Math.max(ACC_RADIUS_MIN, Math.min(ACC_RADIUS_MAX, acc)));
     })
     .join(';');
+  const timestampValues = chunk.map(point => (
+    point.t != null && Number.isFinite(point.t) ? Math.floor(point.t / 1_000) : null
+  ));
+  const timestampsIncluded = timestampValues.every((value): value is number => value !== null)
+    && timestampValues.every((value, index) => index === 0 || value > (timestampValues[index - 1] as number));
+  const timestampQuery = timestampsIncluded ? '&timestamps=' + timestampValues.join(';') : '';
   const url =
     `${MAPBOX_ENDPOINT}/${coords}?` +
     `geometries=geojson&overview=full&tidy=true` +
     `&access_token=${encodeURIComponent(token)}` +
-    `&radiuses=${radiuses}`;
+    `&radiuses=${radiuses}${timestampQuery}`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), perCallTimeoutMs);
@@ -436,7 +539,7 @@ async function callMapbox(
   try {
     const res = await fetch(url, { method: 'GET', signal: controller.signal });
     if (res.status >= 400) {
-      return { ok: false, reason: `http_${res.status}` };
+      return { ok: false, reason: `http_${res.status}`, httpStatus: res.status };
     }
     const body = (await res.json()) as {
       code?: string;
@@ -444,27 +547,55 @@ async function callMapbox(
         confidence?: number;
         geometry?: { coordinates: Array<[number, number]> };
       }>;
+      tracepoints?: Array<unknown | null>;
     };
     if (body.code !== 'Ok' || !body.matchings || body.matchings.length === 0) {
-      return { ok: false, reason: body.code ?? 'no_match' };
+      return {
+        ok: false,
+        reason: body.code ?? 'no_match',
+        httpStatus: res.status,
+        responseCode: body.code ?? 'missing-code',
+        subMatchingCount: body.matchings?.length ?? 0,
+        tracepointCount: body.tracepoints?.length ?? 0,
+        nullTracepointCount: body.tracepoints?.filter(point => point === null).length ?? 0,
+      };
+    }
+    const tracepointCount = body.tracepoints?.length ?? null;
+    const nullTracepointCount = body.tracepoints?.filter(point => point === null).length ?? null;
+    const diagnostics = {
+      httpStatus: res.status,
+      responseCode: body.code ?? 'missing-code',
+      subMatchingCount: body.matchings.length,
+      tracepointCount,
+      nullTracepointCount,
+    };
+    // Multiple submatchings or null tracepoints mean Mapbox did not prove one
+    // continuous covering geometry for this canonical chunk. Falling back is
+    // safer than joining derived islands with an invented connector.
+    if (body.matchings.length !== 1) {
+      return { ok: false, reason: 'multiple_submatchings', ...diagnostics };
+    }
+    if (nullTracepointCount != null && nullTracepointCount > 0) {
+      return { ok: false, reason: 'partial_tracepoint_coverage', ...diagnostics };
     }
     const m = body.matchings[0];
     const conf = m.confidence ?? 0;
     if (conf < CONF_FALLBACK) {
-      return { ok: false, reason: `low_conf_${conf.toFixed(2)}` };
+      return { ok: false, reason: `low_conf_${conf.toFixed(2)}`, confidence: conf, ...diagnostics };
     }
     const geom = m.geometry?.coordinates ?? [];
-    if (geom.length < 2) return { ok: false, reason: 'short_match' };
+    if (geom.length < 2) return { ok: false, reason: 'short_match', confidence: conf, ...diagnostics };
     const matchedPoints = geom.map(([lng, lat]) => ({ lng, lat }));
     const quality = evaluateMatchedGeometryQuality(chunk, matchedPoints);
     if (!quality.accepted) {
-      return { ok: false, reason: `quality_${quality.reason}`, confidence: conf, quality };
+      return { ok: false, reason: `quality_${quality.reason}`, confidence: conf, quality, ...diagnostics };
     }
     return {
       ok: true,
       confidence: conf,
       points: matchedPoints,
       quality,
+      ...diagnostics,
     };
   } catch (e: any) {
     return { ok: false, reason: e?.name === 'AbortError' ? 'aborted' : 'network' };
@@ -543,7 +674,34 @@ async function snapGoodRun(
       const [s, e] = chunkBounds[idx];
       const sub = runRaw.slice(s, e);
       stats.apiCalls += 1;
+      const requestStartedAt = Date.now();
       const r = await callMapbox(sub, token, perCallTimeoutMs, signal);
+      const radiuses = sub.map(point => Math.round(Math.max(
+        ACC_RADIUS_MIN,
+        Math.min(ACC_RADIUS_MAX, typeof point.accuracy === 'number' ? point.accuracy : 15),
+      )));
+      const timestamps = sub.map(point => (
+        point.t != null && Number.isFinite(point.t) ? Math.floor(point.t / 1_000) : null
+      ));
+      const timestampsIncluded = timestamps.every((value): value is number => value !== null)
+        && timestamps.every((value, index) => index === 0 || value > (timestamps[index - 1] as number));
+      stats.requestResults.push({
+        inputPointCount: sub.length,
+        headTimestamp: sub[0]?.t ?? null,
+        tailTimestamp: sub[sub.length - 1]?.t ?? null,
+        timestampsIncluded,
+        minimumRadiusM: Math.min(...radiuses),
+        maximumRadiusM: Math.max(...radiuses),
+        durationMs: Date.now() - requestStartedAt,
+        result: r.ok ? 'accepted' : r.reason,
+        httpStatus: r.httpStatus ?? null,
+        responseCode: r.responseCode ?? null,
+        subMatchingCount: r.subMatchingCount ?? null,
+        tracepointCount: r.tracepointCount ?? null,
+        nullTracepointCount: r.nullTracepointCount ?? null,
+        confidence: r.ok ? r.confidence : (r.confidence ?? null),
+        qualityReason: r.quality?.reason ?? null,
+      });
       if (r.ok) {
         stats.chunksOk += 1;
         stats.minConfidence = stats.minConfidence === null ? r.confidence : Math.min(stats.minConfidence, r.confidence);
@@ -632,6 +790,7 @@ export async function snapTrack(
     goodRuns: 0,
     lostRuns: 0,
     seamBridges: 0,
+    requestResults: [],
     durationMs: 0,
   };
   const finishStats = () => {

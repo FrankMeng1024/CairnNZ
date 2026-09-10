@@ -72,6 +72,7 @@ jest.mock('../src/services/backgroundLocationTask', () => ({
   BACKGROUND_LOCATION_TASK: 'cairn-bg',
   registerBackgroundTask: jest.fn(async () => true),
   drainBackgroundLocations: jest.fn(() => []),
+  settleBackgroundLocationWrites: jest.fn(async () => undefined),
   persistBackgroundContext: jest.fn(async () => true),
 }));
 jest.mock('../src/services/hikeTrackWriter', () => ({
@@ -199,6 +200,29 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
     expect(useTrackingStore.getState().durationS).toBe(0);
   });
 
+  it('confirms a shorter callback-loss relocation into a new zero-connector segment', async () => {
+    const north = (metres: number) => -41 + metres / 111_320;
+    await useTrackingStore.getState().addTrackPoint({ lat: north(0), lng: 174, accuracy: 4 }, 1_000);
+    await useTrackingStore.getState().addTrackPoint({ lat: north(8), lng: 174, accuracy: 4 }, 5_000);
+    const quarantined = await useTrackingStore.getState().addTrackPoint(
+      { lat: north(300), lng: 174, accuracy: 6 },
+      35_000,
+    );
+    expect(quarantined).toMatchObject({ accepted: false, reason: 'physical-continuity-quarantine' });
+    const confirmed = await useTrackingStore.getState().addTrackPoint(
+      { lat: north(306), lng: 174, accuracy: 5 },
+      39_000,
+    );
+
+    expect(confirmed).toMatchObject({ accepted: true, reason: 'accepted-new-segment' });
+    const state = useTrackingStore.getState();
+    expect(state.trackPoints).toHaveLength(4);
+    expect(state.trackPoints[2].segmentId).not.toBe(state.trackPoints[1].segmentId);
+    expect(state.trackPoints[3].segmentId).toBe(state.trackPoints[2].segmentId);
+    expect(state.distanceM).toBeGreaterThan(12);
+    expect(state.distanceM).toBeLessThan(16);
+  });
+
   it('reacquires from the last accepted anchor even after a recent rejected fix', async () => {
     await useTrackingStore.getState().addTrackPoint({ lat: -41, lng: 174, accuracy: 5 }, 1_000);
     const rejected = await useTrackingStore.getState().addTrackPoint(
@@ -210,7 +234,7 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
       601_000,
     );
 
-    expect(rejected).toMatchObject({ accepted: false, reason: 'poor-accuracy' });
+    expect(rejected).toMatchObject({ accepted: false, reason: 'poor-horizontal-accuracy' });
     expect(reacquired).toMatchObject({ accepted: true, reason: 'accepted-new-segment' });
     expect(useTrackingStore.getState().trackPoints).toHaveLength(2);
     expect(useTrackingStore.getState().distanceM).toBe(0);
@@ -694,7 +718,7 @@ describe('useTrackingStore — P0 operation guards', () => {
 
   it.each(['foreground', 'background'] as const)('rejects a delayed %s callback after Finish establishes the synchronous fence', async (source) => {
     const { persistBackgroundContext } = require('../src/services/backgroundLocationTask');
-    let releaseFence: (value: boolean) => void = () => {};
+    let releaseFence: ((value: boolean) => void) | undefined;
     persistBackgroundContext.mockImplementationOnce(
       () => new Promise<boolean>(resolve => { releaseFence = resolve; }),
     );
@@ -721,7 +745,14 @@ describe('useTrackingStore — P0 operation guards', () => {
       ownerGeneration: 'finish-fence-generation',
     }, 2_000);
     expect(useTrackingStore.getState().trackPoints).toHaveLength(0);
-    releaseFence(true);
+    // stopTracking establishes the in-memory fence synchronously, then awaits
+    // an earlier lifecycle write before reaching the durable native fence.
+    // Wait for that mocked promise to exist instead of racing microtask order.
+    for (let tick = 0; tick < 20 && !releaseFence; tick += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(releaseFence).toBeDefined();
+    releaseFence?.(true);
     await expect(finishing).resolves.toBe(false);
   });
 

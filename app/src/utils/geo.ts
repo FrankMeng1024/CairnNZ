@@ -19,6 +19,14 @@ export interface Coordinate {
    *  Android devices or for the very first fix — null means "skip the
    *  gate, accept the point" (over-record beats data-loss). */
   speed?: number | null;
+  /** Vertical uncertainty is independent from horizontal accuracy. A point may
+   * be safe for route geometry while its altitude is unusable for gain. */
+  verticalAccuracy?: number | null;
+  /** Native course in degrees. Retained locally for forensic reconstruction;
+   * uploaded decision telemetry records only relative heading deltas. */
+  course?: number | null;
+  /** Monotonic per-Activity raw callback ordinal for cross-layer diagnostics. */
+  rawOrdinal?: number;
 }
 
 const EARTH_RADIUS_M = 6_371_000;

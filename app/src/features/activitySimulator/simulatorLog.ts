@@ -59,9 +59,12 @@ export interface SimulatorLogEvent {
 const MAX_EVENTS_PER_SESSION = 2_000;
 const MAX_BYTES_PER_SESSION = 512 * 1024;
 const MAX_SESSIONS = 5;
-const AUTO_UPLOAD_INTERVAL_MS = 20_000;
+// Real Activities may run for hours. Upload a complete bounded snapshot every
+// two minutes and reserve enough attempts for a ten-hour diagnostic session;
+// lifecycle/error transitions still request an immediate durable local flush.
+const AUTO_UPLOAD_INTERVAL_MS = 120_000;
 const MAX_CONSECUTIVE_UPLOAD_FAILURES = 5;
-const MAX_AUTO_UPLOADS_PER_SESSION = 120;
+const MAX_AUTO_UPLOADS_PER_SESSION = 300;
 const QA_LOCAL_RETENTION_MS = 24 * 60 * 60 * 1_000;
 const INDEX_KEY = (userId: string) => `@cairn:activity_simulator_logs:index:v1:${userId}`;
 const LOG_KEY = (userId: string, sessionId: string) =>
@@ -131,10 +134,32 @@ const CRITICAL_EVENT_NAMES = new Set([
   'simulator_first_point_committed',
   'real_callback_rejected_for_simulator_activity',
   'real_activity_location_source_activated',
-  'real_activity_location_callback',
-  'location_sample_accepted',
-  'location_sample_rejected',
-  'activity_trace_state_received',
+  'real_activity_background_registration_attempted',
+  'real_activity_background_registration_result',
+  'real_activity_background_task_started',
+  'real_activity_background_task_stopped',
+  'real_activity_background_callback_checkpoint',
+  'real_activity_background_journal_result',
+  'real_activity_background_drain',
+  'real_activity_foreground_takeover',
+  'background_location_authorization_refreshed',
+  'real_activity_background_source_unavailable',
+  'activity_candidate_transition_v1',
+  'activity_journal_commit_v2',
+  'activity_background_authority_v2',
+  'activity_background_batch_v2',
+  'activity_segment_decision_v2',
+  'activity_match_preflight_v2',
+  'activity_match_segment_v2',
+  'activity_final_geometry_v2',
+  'activity_telemetry_health_v2',
+  'real_gps_filter_rejected',
+  'candidate_created',
+  'candidate_confirmed',
+  'candidate_rejected',
+  'candidate_timeout',
+  'activity_recording_gap_opened',
+  'elevation_gain_credited',
   'speed_preset_set',
   'custom_speed_set',
   'time_scale_set',
@@ -162,6 +187,7 @@ const CRITICAL_EVENT_NAMES = new Set([
   'activity_map_matching_completed',
   'activity_map_matching_raw_fallback',
   'activity_map_matching_failed',
+  'activity_map_matching_unavailable',
   'activity_deleted',
   'activity_rename_succeeded',
   'activity_rename_failed',
@@ -190,7 +216,10 @@ const SAMPLED_EVENT_NAMES = new Set([
 ]);
 
 function isCriticalEvent(event: SimulatorLogEvent): boolean {
-  return event.category === 'ERROR' || CRITICAL_EVENT_NAMES.has(event.eventName);
+  return event.category === 'ERROR'
+    || CRITICAL_EVENT_NAMES.has(event.eventName)
+    || (event.eventName === 'activity_filter_decision_v2' && event.fields.decision !== 'ACCEPT')
+    || (event.eventName === 'activity_elevation_decision_v1' && Number(event.fields.creditedDeltaM) > 0);
 }
 
 interface QaUploadState {
@@ -279,7 +308,10 @@ export function serializeQaEventsForUpload(events: SimulatorLogEvent[]): string 
 }
 
 function bounded(events: SimulatorLogEvent[]): SimulatorLogEvent[] {
-  const protectedEvents = events.filter(isCriticalEvent).slice(-256);
+  // Reserve lifecycle/decision evidence independently from the routine ring.
+  // This is intentionally bounded: high-volume callbacks are coalesced below,
+  // while the transitions needed to diagnose a failed walk survive churn.
+  const protectedEvents = events.filter(isCriticalEvent).slice(-384);
   let result = events.length > MAX_EVENTS_PER_SESSION
     ? events.slice(events.length - MAX_EVENTS_PER_SESSION)
     : events;
@@ -303,6 +335,36 @@ function bounded(events: SimulatorLogEvent[]): SimulatorLogEvent[] {
 
 export function boundSimulatorLogEvents(events: SimulatorLogEvent[]): SimulatorLogEvent[] {
   return bounded(events);
+}
+
+/** Privacy-safe self-audit used by the terminal/periodic health watermark. */
+export async function getQaTelemetryHealth(
+  userId: string,
+  qaSessionId: string,
+): Promise<{
+  retainedEventCount: number;
+  retainedBytes: number;
+  retainedCriticalCount: number;
+  retainedObservationCount: number;
+  retainedDecisionCount: number;
+  uploadCount: number;
+  consecutiveUploadFailures: number;
+  lastUploadAt: number | null;
+}> {
+  const key = LOG_KEY(userId, qaSessionId);
+  const pending = appendTails.get(key);
+  if (pending) await pending.catch(() => undefined);
+  const events = bounded(await loadSession(userId, qaSessionId));
+  return {
+    retainedEventCount: events.length,
+    retainedBytes: serializeQaEventsForUpload(events).length,
+    retainedCriticalCount: events.filter(isCriticalEvent).length,
+    retainedObservationCount: events.filter(event => event.eventName === 'activity_observation_received_v2').length,
+    retainedDecisionCount: events.filter(event => event.eventName === 'activity_filter_decision_v2').length,
+    uploadCount: uploadCounts.get(qaSessionId) ?? 0,
+    consecutiveUploadFailures: uploadFailures.get(qaSessionId) ?? 0,
+    lastUploadAt: lastUploadAt.get(qaSessionId) ?? null,
+  };
 }
 
 function scheduleFlush(): void {
@@ -460,12 +522,22 @@ export function appendSimulatorLog(
       ? 5_000
       : eventName === 'real_location_sample_observed'
         || eventName === 'real_activity_location_callback'
+        || eventName === 'location_sample_accepted'
+        || eventName === 'activity_point_committed'
+        || eventName === 'activity_metrics_derived'
+        || eventName === 'activity_memory_evidence_committed'
+        || eventName === 'activity_journal_commit_v2'
+        || eventName === 'activity_store_publish_v2'
+        || eventName === 'elevation_decision_checkpoint'
+        || eventName === 'elevation_quality_checkpoint'
+        || eventName === 'activity_trace_map_source_update_requested'
         || eventName === 'activity_trace_state_received' ? 10_000 : 0;
     if (coalesceWindowMs > 0) {
       const previousIndex = events.findLastIndex(previous =>
         previous.eventName === eventName
         && previous.clientActivityIdSuffix === event.clientActivityIdSuffix
         && String(previous.fields.mountId ?? '') === String(event.fields.mountId ?? '')
+        && String(previous.fields.phase ?? '') === String(event.fields.phase ?? '')
         && event.timestamp - previous.timestamp <= coalesceWindowMs,
       );
       if (previousIndex >= 0) {
@@ -498,7 +570,9 @@ export function appendSimulatorLog(
     memory.set(key, bounded([...nextEvents, event]));
     dirty.add(key);
     dirtyOwners.set(key, { userId, sessionId: qaSessionId });
-    if (category === 'ERROR' || category === 'GPS_REJECT') void flushSimulatorLogs(userId);
+    if (category === 'ERROR' || category === 'GPS_REJECT' || isCriticalEvent(event)) {
+      void flushSimulatorLogs(userId);
+    }
     else scheduleFlush();
   });
   appendTails.set(key, nextAppend);

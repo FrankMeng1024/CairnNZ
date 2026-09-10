@@ -5,7 +5,13 @@
 // Set token before requiring SUT (env-read at module-load is safer)
 process.env.EXPO_PUBLIC_MAPBOX_TOKEN = 'test-token';
 
-import { evaluateMatchedGeometryQuality, snapTrack, type RawPoint } from '../snapTrack';
+import {
+  analyzeTrustedEndpointCoverage,
+  evaluateMatchedGeometryQuality,
+  preserveTrustedRouteEndpoints,
+  snapTrack,
+  type RawPoint,
+} from '../snapTrack';
 
 const realFetch = global.fetch;
 let fetchMock: jest.Mock;
@@ -124,6 +130,32 @@ describe('snapTrack — happy path (single GOOD run)', () => {
 });
 
 describe('snapTrack — derived geometry truthfulness', () => {
+  test('preserves trustworthy raw head and tail around a bounded derived middle', () => {
+    const raw = lineNorth(5);
+    const endpointInset = 5 / 111_320;
+    const matched = raw.map((point, index) => ({
+      lat: index === 0
+        ? point.lat + endpointInset
+        : index === raw.length - 1 ? point.lat - endpointInset : point.lat,
+      lng: point.lng,
+    }));
+    const anchored = preserveTrustedRouteEndpoints(raw, matched);
+    expect(anchored[0]).toMatchObject({ lat: raw[0].lat, lng: raw[0].lng });
+    expect(anchored[anchored.length - 1]).toMatchObject({
+      lat: raw[raw.length - 1].lat,
+      lng: raw[raw.length - 1].lng,
+    });
+  });
+
+  test('does not manufacture long endpoint stubs for an uncovered match', () => {
+    const raw = lineNorth(5).map(point => ({ ...point, accuracy: 5 }));
+    const matched = raw.slice(1, -1).map(point => ({ lat: point.lat, lng: point.lng }));
+    expect(analyzeTrustedEndpointCoverage(raw, matched)).toMatchObject({
+      eligibleForAnchoring: false,
+    });
+    expect(preserveTrustedRouteEndpoints(raw, matched)).toEqual(matched);
+  });
+
   test('accepts a correction inside the raw accuracy envelope', () => {
     const raw = lineNorth(12).map(point => ({ ...point, accuracy: 5 }));
     const matched = raw.map(point => ({
@@ -158,15 +190,16 @@ describe('snapTrack — derived geometry truthfulness', () => {
 // === LOST run handling =====================================================
 
 describe('snapTrack — LOST run handling', () => {
-  test('all-LOST run is densified raw, never sent to Mapbox', async () => {
-    const lost: RawPoint[] = lineNorth(10).map((p) => ({ ...p, speed: -1 }));
-    const r = await snapTrack(lost, { mapboxToken: 'x' });
-    expect(fetchMock).not.toHaveBeenCalled();
+  test('unknown native speed remains eligible when accuracy is trustworthy', async () => {
+    const unknownSpeed: RawPoint[] = lineNorth(10).map((p) => ({ ...p, speed: -1 }));
+    fetchMock.mockResolvedValue(fakeOkResponse(10, 0.9));
+    const r = await snapTrack(unknownSpeed, { mapboxToken: 'x' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.stats.lostRuns).toBe(1);
-    expect(r.stats.goodRuns).toBe(0);
-    expect(r.stats.apiCalls).toBe(0);
+    expect(r.stats.lostRuns).toBe(0);
+    expect(r.stats.goodRuns).toBe(1);
+    expect(r.stats.apiCalls).toBe(1);
   });
 
   test('mixed run: good + lost segments → only good sent to Mapbox', async () => {
@@ -174,10 +207,10 @@ describe('snapTrack — LOST run handling', () => {
     const good = lineNorth(5).map((p) => ({ ...p, speed: 1 }));
     const lostBase = lineNorth(5);
     // shift lost segment so concat makes sense
-    const lost = lostBase.map((p, i) => ({
+    const lost = lostBase.map((p) => ({
       ...p,
       lat: p.lat + 200 / 111_320,
-      speed: -1,
+      accuracy: 50,
     }));
     fetchMock.mockResolvedValue(fakeOkResponse(5, 0.9));
     const r = await snapTrack([...good, ...lost], { mapboxToken: 'x' });

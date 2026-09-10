@@ -1,5 +1,6 @@
 import { haversineM } from '../../utils/geo';
 import type { ActivityMode, TrackPoint } from '../../store/useSessionStore';
+import { calculateQualityElevationGain } from './elevationQuality';
 
 export type SegmentStartReason =
   | 'start'
@@ -68,6 +69,66 @@ export const MAX_CREDITABLE_ACTIVE_INTERVAL_MS = 120_000;
 /** Shared horizontal-quality boundary for accepted Activity/passive evidence. */
 export const MAX_ACCEPTABLE_HORIZONTAL_ACCURACY_M = 25;
 
+const MIN_CREDIBLE_MOTION_SPEED_MPS = 0.55;
+const MIN_CREDIBLE_MOTION_STEP_M = 2.5;
+const MAX_CREDIBLE_MOTION_SAMPLE_INTERVAL_MS = 15_000;
+
+/**
+ * Moderate-accuracy fixes normally remain behind the indoor-drift gate. A
+ * moving user may pass it only when Core Location and the immediately prior
+ * native sample agree that movement is coherent. This keeps the canonical
+ * route responsive without turning arbitrary raw noise into Activity truth.
+ */
+export function isCredibleMotionSample(args: {
+  mode: ActivityMode;
+  lastAccepted: Pick<TrackPoint, 'lat' | 'lng'>;
+  previousRaw: Pick<TrackPoint, 'lat' | 'lng' | 't' | 'accuracy' | 'speed'> | null;
+  current: Pick<TrackPoint, 'lat' | 'lng' | 't' | 'accuracy' | 'speed'>;
+}): boolean {
+  const { mode, lastAccepted, previousRaw, current } = args;
+  if (!previousRaw) return false;
+  const speed = current.speed;
+  const previousSpeed = previousRaw.speed;
+  const accuracy = current.accuracy;
+  const previousAccuracy = previousRaw.accuracy;
+  if (
+    speed == null
+    || previousSpeed == null
+    || speed < MIN_CREDIBLE_MOTION_SPEED_MPS
+    || previousSpeed < MIN_CREDIBLE_MOTION_SPEED_MPS * 0.6
+    || speed > MODE_MAX_SPEED_MPS[mode]
+    || accuracy == null
+    || previousAccuracy == null
+    || accuracy > 20
+    || previousAccuracy > 20
+  ) return false;
+
+  const dtMs = current.t - previousRaw.t;
+  if (dtMs <= 0 || dtMs > MAX_CREDIBLE_MOTION_SAMPLE_INTERVAL_MS) return false;
+  const dtS = dtMs / 1000;
+  const nativeStepM = haversineM(previousRaw, current);
+  const expectedStepM = speed * dtS;
+  const minimumStepM = Math.max(
+    MIN_CREDIBLE_MOTION_STEP_M,
+    Math.min(6, expectedStepM * 0.35),
+  );
+  if (nativeStepM < minimumStepM) return false;
+
+  // Progress must move away from the current accepted anchor rather than
+  // orbiting it as stationary GPS drift commonly does.
+  const previousProgressM = haversineM(lastAccepted, previousRaw);
+  const currentProgressM = haversineM(lastAccepted, current);
+  if (currentProgressM < previousProgressM + 1) return false;
+
+  // Do not let a noisy speed value excuse a physically implausible sample.
+  const uncertaintyM = Math.max(accuracy, previousAccuracy, 5);
+  const maximumStepM = Math.max(
+    MODE_MAX_SPEED_MPS[mode] * dtS + uncertaintyM,
+    expectedStepM * 2 + uncertaintyM,
+  );
+  return nativeStepM <= maximumStepM;
+}
+
 export function newSegmentId(clientActivityId: string, at = Date.now()): string {
   return `${clientActivityId}:${at}:${Math.random().toString(16).slice(2, 10)}`;
 }
@@ -133,7 +194,7 @@ export function segmentTrace(points: ReadonlyArray<TrackPoint>): SegmentedTrace 
 
 export function calculateActivityStats(points: ReadonlyArray<TrackPoint>): ActivityStats {
   let distanceM = 0;
-  let elevationGainM = 0;
+  let legacyElevationGainM = 0;
   let activeDurationMs = 0;
   const normalized = points.map((point) => ({
     ...(point as SegmentedTrackPoint),
@@ -153,10 +214,17 @@ export function calculateActivityStats(points: ReadonlyArray<TrackPoint>): Activ
     // by different segment IDs before stats are calculated.
     activeDurationMs += dtMs;
     if (previous.alt != null && next.alt != null && next.alt > previous.alt) {
-      elevationGainM += next.alt - previous.alt;
+      legacyElevationGainM += next.alt - previous.alt;
     }
   }
 
+  // Recovered/Simulator/legacy points may predate verticalAccuracy. Preserve
+  // their historical behavior. A real native stream that supplies vertical
+  // uncertainty uses the independent quality model instead.
+  const hasVerticalQualityEvidence = normalized.some(point => point.verticalAccuracy != null);
+  const elevationGainM = hasVerticalQualityEvidence
+    ? calculateQualityElevationGain(normalized)
+    : legacyElevationGainM;
   return { distanceM, elevationGainM, activeDurationS: Math.floor(activeDurationMs / 1000) };
 }
 
@@ -166,6 +234,10 @@ export function toServerPoint(point: TrackPoint): {
   t: number;
   alt?: number;
   acc?: number;
+  v_acc?: number;
+  speed_mps?: number;
+  course_deg?: number;
+  raw_ordinal?: number;
   segment_id?: string;
   segment_start_reason?: SegmentStartReason;
 } {
@@ -179,6 +251,10 @@ export function toServerPoint(point: TrackPoint): {
     t: Math.floor(point.t),
     ...(point.alt != null ? { alt: point.alt } : {}),
     ...(point.accuracy != null ? { acc: point.accuracy } : {}),
+    ...(point.verticalAccuracy != null ? { v_acc: point.verticalAccuracy } : {}),
+    ...(point.speed != null ? { speed_mps: point.speed } : {}),
+    ...(point.course != null ? { course_deg: point.course } : {}),
+    ...(point.rawOrdinal != null ? { raw_ordinal: point.rawOrdinal } : {}),
     ...(segmented.segmentId ? { segment_id: segmented.segmentId } : {}),
     ...(segmented.segmentStartReason ? { segment_start_reason: segmented.segmentStartReason } : {}),
   };

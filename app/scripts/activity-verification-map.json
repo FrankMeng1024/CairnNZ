@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "name": "continuity",
+      "minimumGate": "gps",
+      "category": "INCIDENT_REGRESSION",
+      "tests": ["src/features/activity/__tests__/realGpsContinuity.test.ts"]
+    },
+    {
+      "name": "background",
+      "minimumGate": "gps",
+      "category": "PRODUCT_CONTRACT",
+      "tests": [
+        "src/features/activity/__tests__/backgroundAuthorization.test.ts",
+        "src/services/__tests__/backgroundLocationTaskOwnership.test.ts"
+      ]
+    },
+    {
+      "name": "gap",
+      "minimumGate": "gps",
+      "category": "PRODUCT_CONTRACT",
+      "tests": ["src/features/activity/__tests__/activityContracts.test.ts"]
+    },
+    {
+      "name": "elevation",
+      "minimumGate": "gps",
+      "category": "INCIDENT_REGRESSION",
+      "tests": ["src/features/activity/__tests__/elevationQuality.test.ts"]
+    },
+    {
+      "name": "matching",
+      "minimumGate": "gps",
+      "category": "PRODUCT_CONTRACT",
+      "tests": [
+        "src/services/routing/__tests__/snapTrack.test.ts",
+        "src/config/__tests__/mapboxTokenAuthority.test.ts"
+      ]
+    },
+    {
+      "name": "telemetry",
+      "minimumGate": "gps",
+      "category": "INCIDENT_REGRESSION",
+      "tests": [
+        "src/features/activitySimulator/__tests__/simulatorContracts.test.ts",
+        "src/features/activitySimulator/__tests__/simulatorLogConcurrency.test.ts"
+      ]
+    },
+    {
+      "name": "integration",
+      "minimumGate": "gps",
+      "category": "CHARACTERIZATION",
+      "tests": [
+        "__tests__/useTrackingStore.test.ts",
+        "src/features/activity/__tests__/freeActivityIntegrationContracts.test.ts"
+      ]
+    },
+    {
+      "name": "memory-gap",
+      "minimumGate": "gps",
+      "category": "PRODUCT_CONTRACT",
+      "tests": ["src/features/memory/__tests__/memoryFogContinuity.test.ts"]
+    },
+    {
+      "name": "server",
+      "minimumGate": "gps",
+      "category": "PRODUCT_CONTRACT",
+      "backendTests": [
+        "src/routes/__tests__/freeActivityContracts.test.js",
+        "src/routes/__tests__/telemetryContracts.test.js",
+        "src/utils/__tests__/qaTelemetryMerge.test.js",
+        "src/utils/__tests__/qaTelemetryPrivacy.test.js"
+      ]
+    },
+    {
+      "name": "journal-recovery",
+      "minimumGate": "core",
+      "category": "PRODUCT_CONTRACT",
+      "tests": [
+        "src/features/activity/__tests__/activityOperationalState.test.ts",
+        "src/features/activity/__tests__/activityRecoveryMemory.test.ts",
+        "src/features/activity/__tests__/activityRegistry.test.ts",
+        "src/services/__tests__/hikeTrackWriter.final.test.ts"
+      ]
+    },
+    {
+      "name": "memory",
+      "minimumGate": "core",
+      "category": "PRODUCT_CONTRACT",
+      "tests": [
+        "src/features/memory/__tests__/memoryAuthorityInitialization.test.ts",
+        "src/features/memory/__tests__/memoryDurabilityBoundary.test.ts",
+        "src/features/memory/__tests__/memoryEvidenceAuthority.test.ts",
+        "src/features/memory/__tests__/memorySettingsContract.test.ts",
+        "src/features/memory/__tests__/memorySyncReconcile.test.ts"
+      ]
+    },
+    {
+      "name": "offline-sync",
+      "minimumGate": "core",
+      "category": "PRODUCT_CONTRACT",
+      "tests": [
+        "__tests__/S4-phase-sync.test.ts",
+        "__tests__/v409-offlineQueue.test.ts",
+        "src/services/__tests__/offlineCommittedEntity.test.ts",
+        "src/services/__tests__/pendingSyncStore.test.ts",
+        "src/services/__tests__/sessionTimestampNormalization.test.ts",
+        "src/services/__tests__/syncDaemonOwnershipCleanup.test.ts"
+      ]
+    },
+    {
+      "name": "simulator-shared",
+      "minimumGate": "core",
+      "category": "PRODUCT_CONTRACT",
+      "tests": [
+        "src/features/activitySimulator/__tests__/engine.test.ts",
+        "src/features/activitySimulator/__tests__/simulatorActivityCorrection.test.ts",
+        "src/features/activitySimulator/__tests__/store.test.ts"
+      ]
+    },
+    {
+      "name": "presentation",
+      "minimumGate": "presentation",
+      "category": "CHARACTERIZATION",
+      "tests": [
+        "src/screens/__tests__/activityP0Contract.test.ts",
+        "src/screens/__tests__/activityRecordingUiContracts.test.ts"
+      ]
+    }
+  ],
+  "impactRules": [
+    { "pattern": "^app/(package(-lock)?\\.json|app\\.(json|config\\.)|eas\\.json)", "gate": "full" },
+    { "pattern": "^app/src/store/useTrackingStore\\.ts$", "gate": "core" },
+    { "pattern": "^app/src/features/activity/(activityRegistry|activityOperationalState|activityRecovery)", "gate": "core" },
+    { "pattern": "^app/src/features/memory/", "gate": "core" },
+    { "pattern": "^app/src/services/(hikeTrackWriter|pendingSyncStore|syncDaemon|offline)", "gate": "core" },
+    { "pattern": "^app/src/features/activitySimulator/(activityLocationProvider|activitySimulatorEngine|useActivitySimulatorStore)", "gate": "core" },
+    { "pattern": "^backend/src/(models/Session|routes/(sessions|memory|routes)|middleware/schemas)", "gate": "core" },
+    { "pattern": "^app/src/features/activity/(realGpsContinuity|elevationQuality|backgroundAuthorization|activityContracts)", "gate": "gps" },
+    { "pattern": "^app/src/services/backgroundLocationTask\\.ts$", "gate": "gps" },
+    { "pattern": "^app/src/services/routing/", "gate": "gps" },
+    { "pattern": "^app/src/config/mapbox\\.ts$", "gate": "gps" },
+    { "pattern": "^app/src/features/activitySimulator/simulatorLog\\.ts$", "gate": "gps" },
+    { "pattern": "^backend/src/(routes/telemetry|utils/qaTelemetry)", "gate": "gps" },
+    { "pattern": "^app/(src|__tests__)/.*(activity|Activity|Tracking|tracking|background|Background|memory|Memory|snapTrack|elevation).*\\.test\\.[jt]sx?$", "gate": "gps" },
+    { "pattern": "^backend/src/.*(freeActivity|telemetry|qaTelemetry).*test\\.js$", "gate": "gps" },
+    { "pattern": "^app/src/(screens/(Hiking|Running)|components/activity/)", "gate": "presentation" },
+    { "pattern": "^app/src/features/activitySimulator/ActivitySimulatorPanel\\.tsx$", "gate": "presentation" }
+  ]
+}

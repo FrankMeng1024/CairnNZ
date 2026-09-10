@@ -320,7 +320,32 @@ export function HikingMap({
       clientActivityId: useTrackingStore.getState().sessionId,
       coordinateSource: simulatorEnabled ? 'simulator' : 'real',
     });
-  }, [traceTailTimestamp, trackPoints.length, simulatorEnabled, telemetryScreenPrefix]);
+    // React Native/Mapbox does not expose a per-ShapeSource paint callback.
+    // This checkpoint is therefore explicitly the source-update request, not a
+    // claim that the GPU has painted; it bounds the app-side render latency.
+    appendSimulatorLog('MAP_STATE', 'activity_trace_map_source_update_requested', {
+      screen: telemetryScreenPrefix,
+      pointCount: trackPoints.length,
+      sequenceTimestamp: Math.floor(traceTailTimestamp),
+      mapSourceRequestWallTimestamp: Date.now(),
+      sampleAgeMs: simulatorEnabled ? 0 : Math.max(0, Date.now() - traceTailTimestamp),
+    }, {
+      clientActivityId: useTrackingStore.getState().sessionId,
+      coordinateSource: simulatorEnabled ? 'simulator' : 'real',
+    });
+    appendSimulatorLog('MAP_STATE', 'activity_live_trace_update_v2', {
+      screen: telemetryScreenPrefix,
+      canonicalVersion: trackPoints.length,
+      routePointCount: trackPoints.length,
+      segmentCount: solidGeoJSON.features.length,
+      sequenceTimestamp: Math.floor(traceTailTimestamp),
+      sourceAssignmentWallTimestamp: Date.now(),
+      tailAgeMs: simulatorEnabled ? 0 : Math.max(0, Date.now() - traceTailTimestamp),
+    }, {
+      clientActivityId: useTrackingStore.getState().sessionId,
+      coordinateSource: simulatorEnabled ? 'simulator' : 'real',
+    });
+  }, [traceTailTimestamp, trackPoints.length, simulatorEnabled, telemetryScreenPrefix, solidGeoJSON.features.length]);
 
   // Imperative camera ref — used to forcefully snap the camera to the
   // user's position on resume, bypassing the followUserLocation
@@ -537,7 +562,7 @@ export function HikingMap({
               Map unavailable
             </Text>
             <Text style={{ fontSize: FontSize.caption, lineHeight: 18, color: theme.foregroundSecondary, textAlign: 'center' }}>
-              Live map appears when GPS is enabled
+              GPS recording can continue while the map is unavailable
             </Text>
           </View>
         </View>
@@ -567,8 +592,8 @@ export function HikingMap({
           : { styleJSON: resolvedMapStyle.json })}
         logoEnabled
         attributionEnabled
-        logoPosition={{ top: 152, left: 8 }}
-        attributionPosition={{ top: 152, right: 8 }}
+        logoPosition={{ top: trackStartVariant ? 214 : 116, left: 8 }}
+        attributionPosition={{ top: trackStartVariant ? 214 : 116, right: 8 }}
         // Mapbox's built-in compass is hidden — we draw our own as a
         // bottom-left chip so it sits in a predictable spot relative to
         // Place Flag (right). showCompass is also
@@ -688,16 +713,25 @@ export function HikingMap({
         {solidGeoJSON.features.length > 0 && (
           <ShapeSource id="track-line" shape={solidGeoJSON}>
             <LineLayer
+              id="track-line-casing"
+              style={{
+                lineColor: theme.surfaceElevated,
+                lineOpacity: 0.86,
+                lineWidth: 8,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+            <LineLayer
               id="track-line-layer"
               style={{
-                // 2026-08-17 concept H1: track polyline reads as a
-                // dark forest green (#3F5D37) on the topo map. Sampled
-                // from the concept sheet — the previous Colors.primary
-                // (#5D7C46) read as too olive/light against the paper
-                // background. Kept a single color (no gradient) to match
-                // the concept exactly.
-                lineColor: activityVariant === 'run' ? '#7A9830' : '#3F5D37',
-                lineWidth: 5,
+                // Activity identity is semantic and stable across Mapbox
+                // styles: Hike follows the active CairnNZ forest theme;
+                // Run uses the existing movement-blue token. A restrained
+                // material casing keeps both traces legible over trails,
+                // minor roads, satellite imagery, sunset and night maps.
+                lineColor: activityVariant === 'run' ? Colors.running : theme.primary,
+                lineWidth: 4.5,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
@@ -837,7 +871,7 @@ export function HikingMap({
           <View style={mapStyles.offlineCard}>
             <Text style={mapStyles.offlineTitle}>No connection</Text>
             <Text style={mapStyles.offlineBody}>
-              The map can't load without internet. Your hike is still being tracked — the map will fill in when you're back online.
+              The map can't load without internet. Your activity is still being tracked — the map will fill in when you're back online.
             </Text>
           </View>
         </View>

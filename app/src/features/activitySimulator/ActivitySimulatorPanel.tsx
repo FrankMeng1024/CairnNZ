@@ -609,7 +609,7 @@ export function ActivitySimulatorPanel() {
         accessibilityRole="button"
         accessibilityLabel={`打开模拟行走，当前 ${timeScale} 倍，GPS ${signal}`}
       >
-        <Text style={[styles.collapsedTitle, { color: theme.foreground }]}>SIM · {timeScale}×</Text>
+        <Text style={[styles.collapsedTitle, { color: theme.foreground }]}>SIM · Replay {timeScale}×</Text>
       </TouchableOpacity>
       {status === 'tracking' ? joystick : null}
     </View>;
@@ -623,8 +623,8 @@ export function ActivitySimulatorPanel() {
     <View style={[styles.expanded, styles.expandedRuntime, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]} testID="activity-simulator-expanded">
       <View style={styles.headerRow}>
         <View>
-          <Text style={[styles.title, { color: theme.foreground }]}>模拟行走</Text>
-          <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{speedKmh.toFixed(1)} km/h · {timeScale}× · {gpsLabels[signal]}</Text>
+          <Text style={[styles.title, { color: theme.foreground }]}>Simulator walk</Text>
+          <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Movement {speedKmh.toFixed(1)} km/h · Replay {timeScale}× · GPS {gpsLabels[signal]}</Text>
         </View>
         <TouchableOpacity onPress={() => actions.setExpanded(false)} style={styles.collapseButton}>
           <Text style={[styles.collapseText, { color: theme.foreground }]}>收起</Text>
@@ -632,13 +632,14 @@ export function ActivitySimulatorPanel() {
       </View>
       <ScrollView testID="activity-simulator-settings-scroll" style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" nestedScrollEnabled>
         {lastFailure ? <View style={styles.failureBanner}><Text style={styles.failureText}>{lastFailure}</Text></View> : null}
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>移动速度 · {speedKmh.toFixed(1)} km/h</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Movement speed · {speedKmh.toFixed(1)} km/h</Text>
         <View style={styles.buttonRowWrap} testID="activity-simulator-speed-controls">
           {(['slow', 'walk', 'brisk', 'run', 'custom'] as SimulatorSpeedPreset[]).map(preset => <TinyButton key={preset} label={speedLabels[preset]} active={speedPreset === preset || (preset === 'walk' && speedPreset === 'hike')} onPress={() => setSpeed(preset)} />)}
         </View>
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>时间倍率</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Replay time acceleration</Text>
+        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>Speeds up QA time; physical movement speed stays unchanged.</Text>
         <View style={styles.buttonRowWrap} testID="activity-simulator-time-scale-controls">
-          {([1, 5, 10, 30, 60, 120] as SimulatorTimeScale[]).map(scale => <TinyButton key={scale} label={String(scale) + '×'} active={timeScale === scale} onPress={() => setTimeScale(scale)} />)}
+          {([1, 2, 5, 10, 30, 60, 120] as SimulatorTimeScale[]).map(scale => <TinyButton key={scale} label={String(scale) + '×'} active={timeScale === scale} onPress={() => setTimeScale(scale)} />)}
         </View>
         <Text style={[styles.sectionTitle, { color: theme.foreground }]}>GPS 状态</Text>
         <View style={styles.buttonRowWrap}>
@@ -671,7 +672,6 @@ export function ActivitySimulatorPanel() {
           <View style={styles.inputActionRow}>
             <TextInput value={speedDraft} onChangeText={setSpeedDraft} style={styles.smallInput} keyboardType="decimal-pad" />
             <TinyButton label="自定义 km/h" onPress={setCustomSpeed} />
-            <TinyButton label="2×" active={timeScale === 2} onPress={() => setTimeScale(2)} />
           </View>
           <View style={styles.inputActionRow}>
             <TextInput value={accuracyDraft} onChangeText={setAccuracyDraft} style={styles.smallInput} keyboardType="decimal-pad" />
@@ -710,7 +710,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     right: 12,
-    bottom: 108,
+    bottom: 288,
     zIndex: 240,
     borderWidth: 1,
     borderRadius: Radius.cardLg,
@@ -731,7 +731,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 10,
     zIndex: 230,
-    minWidth: 48,
+    minWidth: 112,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
@@ -741,7 +741,7 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
   collapsedIdle: { bottom: 165 },
-  collapsedActive: { bottom: 100 },
+  collapsedActive: { bottom: 154 },
   collapsedNeedsStart: { minWidth: 94 },
   collapsedTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1 },
   collapsedSetup: { color: Colors.danger, fontSize: 8, lineHeight: 10, fontWeight: '900', letterSpacing: 0.4 },
@@ -793,7 +793,7 @@ const styles = StyleSheet.create({
   selectionText: { fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] },
   movementControls: { gap: 6 },
   valueText: { fontSize: 14, fontWeight: '800' },
-  joystickDock: { position: 'absolute', right: 10, bottom: 112, zIndex: 235, width: 124, paddingTop: 5, paddingBottom: 7, borderWidth: 1, borderRadius: Radius.cardLg, alignItems: 'center', ...Shadow.card },
+  joystickDock: { position: 'absolute', right: 10, bottom: 166, zIndex: 235, width: 124, paddingTop: 5, paddingBottom: 7, borderWidth: 1, borderRadius: Radius.cardLg, alignItems: 'center', ...Shadow.card },
   joystickLabel: { fontSize: 9, lineHeight: 12, fontWeight: '900', letterSpacing: 0.8, marginBottom: 3 },
   joystick: { width: JOYSTICK_SIZE, height: JOYSTICK_SIZE, borderRadius: JOYSTICK_SIZE / 2, backgroundColor: 'rgba(62,95,58,0.10)', borderWidth: 2, borderStyle: 'dashed', borderColor: '#668063', alignItems: 'center', justifyContent: 'center' },
   deadZone: { position: 'absolute', width: JOYSTICK_TRAVEL * 2 * SIMULATOR_JOYSTICK_DEAD_ZONE + JOYSTICK_KNOB, height: JOYSTICK_TRAVEL * 2 * SIMULATOR_JOYSTICK_DEAD_ZONE + JOYSTICK_KNOB, borderRadius: 99, borderWidth: 1, borderColor: 'rgba(62,95,58,0.28)' },

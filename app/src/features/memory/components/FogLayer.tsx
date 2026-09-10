@@ -21,7 +21,9 @@ import { log } from '../../../services/appLog';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import bufferTurf from '@turf/buffer';
 import differenceTurf from '@turf/difference';
-import { polygon, multiPoint, featureCollection } from '@turf/helpers';
+import intersectTurf from '@turf/intersect';
+import polygonSmoothTurf from '@turf/polygon-smooth';
+import { polygon, multiPoint, featureCollection } from '@turf/turf';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
 
 interface Props {
@@ -51,6 +53,27 @@ const CORRIDOR_WIDTH_M = 30;
 // this budget, deterministic sampling retains the geographic evidence without
 // ever constructing a connector between sampled rows.
 const MAX_EVIDENCE_POINTS = 2000;
+
+/**
+ * Presentation-only smoothing for the edge of already-proven footprints.
+ *
+ * Chaikin smoothing removes the small scallops produced by overlapping point
+ * buffers. Intersecting that result back with the original buffered evidence
+ * is the critical truth gate: display geometry may become quieter, but it can
+ * never reveal a square metre that was outside an accepted evidence footprint.
+ */
+export function smoothMemoryDisplayEvidence(
+  evidence: Feature<Polygon | MultiPolygon>,
+): Feature<Polygon | MultiPolygon> {
+  try {
+    const smoothed = polygonSmoothTurf(evidence, { iterations: 1 }).features[0];
+    if (!smoothed?.geometry) return evidence;
+    const clipped = intersectTurf(featureCollection([evidence, smoothed]));
+    return clipped?.geometry ? clipped : evidence;
+  } catch {
+    return evidence;
+  }
+}
 /**
  * Build the fog GeoJSON from persisted Memory evidence footprints.
  *
@@ -88,7 +111,9 @@ export function buildFogShape(
       units: 'meters',
       steps: 16,
     });
-    if (buffered?.geometry) evidence = buffered as Feature<Polygon | MultiPolygon>;
+    if (buffered?.geometry) {
+      evidence = smoothMemoryDisplayEvidence(buffered as Feature<Polygon | MultiPolygon>);
+    }
   } catch (error: any) {
     log('fog.buffer_failed', {
       evidence_n: coordinates.length,

@@ -14,10 +14,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated, Easing, ScrollView,
-  Platform, TextInput, KeyboardAvoidingView, Keyboard,
+  Platform, TextInput, KeyboardAvoidingView, Keyboard, Linking,
 } from 'react-native';
 import { haptic } from '../services/hapticService';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect, useIsFocused, CommonActions } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -30,10 +30,7 @@ import { formatDuration } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
-import { BackButton } from '../components/BackButton';
-import { useAppearance } from '../hooks/useAppearance';
 import { useVisualTheme } from '../hooks/useVisualTheme';
-import { PulseDot } from '../components/PulseDot';
 import { TooShortSheet } from '../components/TooShortSheet';
 import { PermissionDeniedModal } from '../components/PermissionDeniedModal';
 import { UnfinishedRecoveryModal } from '../components/UnfinishedRecoveryModal';
@@ -63,10 +60,16 @@ import { appendSimulatorLog } from '../features/activitySimulator/simulatorLog';
 import { useSimulatorKeepAwake } from '../features/activitySimulator/useSimulatorKeepAwake';
 import { resolveSimulatorControlsVisible, resolveSimulatorMapState } from '../features/activitySimulator/simulatorMapState';
 import { HikingMap } from './HikingMap';
+import {
+  ActivityControlDock,
+  ActivityRecenterButton,
+  ActivityStartDock,
+  ActivityTopChrome,
+  type ActivityNoticePresentation,
+  type ActivityStatusTone,
+} from '../components/activity/ActivityRecordingChrome';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-
-type RunState = 'pre' | 'running';
 
 // ── Concept tokens (sleep-run 2026-08-15) ────────────────────────────────
 // Concept was locked to forest green for BOTH R0 button and R1 polyline
@@ -94,41 +97,19 @@ const RunConcept = {
 // the lock overlay it belonged to. The shared PulseDot component in the
 // stats bar continues to signal GPS status.
 
-// ── Stat item ────────────────────────────────────────────────────────────────
-// 2026-08-17 concept R0/R1: stats bar reads as one horizontal row with
-// the unit hugging the value ("4.12 km", "01:20:15", "5'52"/km"). The
-// previous vertical stack (value on top, "elapsed" beneath) was replaced
-// so the row matches the concept sheet exactly. Label is rendered inline,
-// slightly smaller and muted, with a hair of horizontal padding so it
-// doesn't crowd the digits.
-function StatItem({ value, label, title }: { value: string; label: string; title: string }) {
-  const theme = useVisualTheme();
-  return (
-    <View style={runStyles.statItem}>
-      <Text style={[runStyles.statLabel, { color: theme.muted }]}>{title}</Text>
-      <Text style={[runStyles.statValue, { color: theme.foreground }]} numberOfLines={1}>
-        {value}
-        {label ? <Text style={[runStyles.statUnit, { color: theme.foregroundSecondary }]}> {label}</Text> : null}
-      </Text>
-    </View>
-  );
-}
-
-
 // ── Main ────────────────────────────────────────────────────────────────────
 export function RunningScreen() {
+  const insets = useSafeAreaInsets();
   const simulatorOwnerUserId = useAppStore((s) => s.user?.id ?? null);
   const simulatorHydratedUserId = useActivitySimulatorStore((s) => s.hydratedUserId);
   const nav = useNavigation<Nav>();
   const isFocused = useIsFocused();
   const routes = useRouteStore(s => s.routes);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
-  const [runState, setRunState] = useState<RunState>('pre');
   const [unfinishedRun, setUnfinishedRun] = useState<RecoverableActivity | null>(null);
   const [unfinishedResolutionRequested, setUnfinishedResolutionRequested] = useState(false);
   // R21 (2026-08-18): dark theme parity with Hiking. Run tray + top pills
   // + Recenter FAB honour Settings Appearance so day/night reads the same.
-  const { isDark: runIsDark } = useAppearance();
   const runTheme = useVisualTheme();
   const debugMode = useSettingsStore(state => state.debugMode);
   const simulatorEnabled = useActivitySimulatorStore(state => state.enabled);
@@ -155,10 +136,6 @@ export function RunningScreen() {
       return undefined;
     }, [debugMode, simulatorEnabled, simulatorHydratedUserId, simulatorOwnerUserId]),
   );
-  // R21 (2026-08-18 user "点击 向右侧展开"): tracking action tray is
-  // collapsed by default. Tap the Navigation anchor (bottom-left) to
-  // expand → Pause / Cairn / Finish slides out to the right.
-  const [runActionsExpanded, setRunActionsExpanded] = useState(false);
   // R21 (2026-08-18 user "finish如果too short现在没任何提示"): local guard
   // — Finish button surfaces TooShortSheet directly instead of racing
   // with stopTracking's lastStopReason pathway.
@@ -166,6 +143,7 @@ export function RunningScreen() {
   // R21 (2026-08-18): follow-camera state so Recenter FAB is only shown
   // when the user has dragged the map off-position.
   const [runFollowUser, setRunFollowUser] = useState(true);
+  const runRecenterImperativeRef = useRef<(() => void) | null>(null);
   // O18 ONB-04: shared permission-denied modal state.
   const [permissionDeniedVisible, setPermissionDeniedVisible] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
@@ -222,6 +200,8 @@ export function RunningScreen() {
   const distanceM = useTrackingStore(s => s.distanceM);
   const locationAvailable = useTrackingStore(s => s.locationAvailable);
   const lastCoordinate = useTrackingStore(s => s.lastCoordinate);
+  const backgroundLocationPermission = useTrackingStore(s => s.backgroundLocationPermission);
+  const refreshBackgroundLocationPermission = useTrackingStore(s => s.refreshBackgroundLocationPermission);
   const {
     simulatorLocationAuthoritative,
     displayPosition: mapDisplayPosition,
@@ -233,6 +213,10 @@ export function RunningScreen() {
     virtualPosition: simulatorPosition,
     acceptedPosition: lastCoordinate,
   });
+  useEffect(() => {
+    if (!isFocused || status !== 'idle' || simulatorLocationAuthoritative) return;
+    void refreshBackgroundLocationPermission();
+  }, [isFocused, refreshBackgroundLocationPermission, simulatorLocationAuthoritative, status]);
   const sessionId = useTrackingStore(s => s.sessionId);
   const linkMarker = useTrackingStore(s => s.linkMarker);
   const setActivityMode = useTrackingStore(s => s.setActivityMode);
@@ -246,6 +230,8 @@ export function RunningScreen() {
   const resumeTracking = useTrackingStore(s => s.resumeTracking);
   // O18 RUN-02: signal-lost detection (parity with Hiking §566).
   const trackPoints = useTrackingStore(s => s.trackPoints);
+  const trackPointsSmoothed = useTrackingStore(s => s.trackPointsSmoothed);
+  const liveTrackPoints = locationProviderSource === 'real' ? trackPointsSmoothed : trackPoints;
   // v116/v118: too-short modal hooks. v118 changed Alert → TooShortSheet
   // and the session is now preserved on too-short stops.
   const lastStopReason = useTrackingStore(s => s.lastStopReason);
@@ -390,8 +376,6 @@ export function RunningScreen() {
 
   const selectedRouteName = routes.find(r => r.id === selectedRoute)?.name ?? 'Free Run';
 
-  // Animated values
-  const startBtnScale = useRef(new Animated.Value(1)).current;
   useFocusEffect(React.useCallback(() => {
     setRunFollowUser(true);
     return undefined;
@@ -405,11 +389,6 @@ export function RunningScreen() {
   // the modal and tracking continues. The TooShortSheet element is
   // rendered at the bottom of this component.
 
-  const onStartPressIn = () =>
-    Animated.spring(startBtnScale, { toValue: 0.96, useNativeDriver: true, tension: 300, friction: 10 }).start();
-  const onStartPressOut = () =>
-    Animated.spring(startBtnScale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 8 }).start();
-
   // Sleep-run 2026-08-16 rev-2: double-tap unlock gesture removed.
   // The R1 tracking screen no longer has a lock overlay to unlock; the
   // R2 action tray (Pause / Cairn / Done) is always visible.
@@ -420,6 +399,13 @@ export function RunningScreen() {
     // was already manually paused, cancelling the sheet must leave it paused.
     finishPausedBySheet.current = useTrackingStore.getState().status === 'tracking';
     if (finishPausedBySheet.current) await pauseTracking();
+    const frozen = useTrackingStore.getState();
+    // Evaluate completion only after the pause fence has durably committed
+    // every accepted point. A too-short run remains recoverable and can resume.
+    if (!saveEligibility(frozen.trackPoints, frozen.distanceM).eligible) {
+      setShowTooShortConfirmRun(true);
+      return;
+    }
     setShowSaveSheet(true);
     Animated.parallel([
       Animated.timing(saveSheetSlide, { toValue: 0, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
@@ -447,9 +433,7 @@ export function RunningScreen() {
     }
     setActivityMode('running');
     const started = await startTracking();
-    if (started) {
-      setRunState('running');
-    } else {
+    if (!started) {
       const authoritative = await findRecoverableActivity('running');
       if (authoritative) {
         setUnfinishedRun(authoritative);
@@ -584,14 +568,51 @@ export function RunningScreen() {
   const gpsFixHealthy = status === 'tracking' && locationAvailable && lastTrackT !== null && !signalLost;
   const simulatorGpsActive = status === 'tracking' && locationProviderSource === 'simulator';
   const gpsStatusLabel = simulatorGpsActive
-    ? ({ normal: '正常', poor: '较差', lost: '丢失', frozen: '卡住' } as const)[simulatorSignal]
-    : gpsFixHealthy ? 'GPS' : 'Waiting';
-  const gpsStatusColor = simulatorGpsActive
-    ? simulatorSignal === 'normal' ? runTheme.iconActive
-      : simulatorSignal === 'poor' ? Colors.severityWarning
-        : simulatorSignal === 'lost' ? Colors.danger
-          : Colors.info
-    : gpsFixHealthy ? runTheme.iconActive : runTheme.iconInactive;
+    ? `SIM · ${{ normal: 'Good', poor: 'Poor', lost: 'Lost', frozen: 'Frozen' }[simulatorSignal]}`
+    : status === 'paused'
+      ? 'GPS held'
+      : signalLost
+        ? 'Signal lost'
+        : gpsFixHealthy
+          ? 'GPS good'
+          : permissionBlocked
+            ? 'Location off'
+            : 'Finding GPS';
+  const gpsStatusTone: ActivityStatusTone = simulatorGpsActive
+    ? simulatorSignal === 'normal' ? 'healthy'
+      : simulatorSignal === 'poor' ? 'warning'
+        : simulatorSignal === 'lost' ? 'danger'
+          : 'info'
+    : status === 'paused' ? 'muted'
+      : signalLost ? 'danger'
+        : gpsFixHealthy ? 'healthy'
+          : permissionBlocked ? 'danger'
+            : 'warning';
+  const backgroundTrackingWarning = locationProviderSource === 'real'
+    && backgroundLocationPermission === 'foreground-only'
+    ? 'Background location is off — keep CairnNZ open'
+    : null;
+  const runNotices: ActivityNoticePresentation[] = [];
+  if (signalLost) {
+    runNotices.push({
+      label: signalLostMin >= 1 ? `No accepted GPS for ${signalLostMin} min` : 'GPS signal lost',
+      tone: 'danger',
+      icon: 'CloudOff',
+    });
+  } else if (status === 'tracking' && lastCoordinate?.accuracy != null && lastCoordinate.accuracy > 15) {
+    runNotices.push({
+      label: `GPS accuracy ±${Math.round(lastCoordinate.accuracy)} m`,
+      tone: 'warning',
+      icon: 'Navigation',
+    });
+  }
+  if (plantToast) {
+    runNotices.push({
+      label: plantToast,
+      tone: plantToast === 'Cairn planted' ? 'healthy' : 'warning',
+      icon: plantToast === 'Cairn planted' ? 'Flag' : 'TriangleAlert',
+    });
+  }
   // Pace: min/km (or min/mi if imperial) — seconds per meter → minutes per unit
   // 2026-08-17 concept R0: pace reads as `5'52"/km` with the unit inline
   // (tiny). paceDisplay itself returns just the numeric portion; the
@@ -614,7 +635,7 @@ export function RunningScreen() {
     <View key="run-map-surface" style={StyleSheet.absoluteFillObject}>
       <HikingMap
         markers={[]}
-        trackPoints={trackPoints}
+        trackPoints={liveTrackPoints}
         onMarkerPress={() => {}}
         userPos={mapDisplayPosition}
         trackStartVariant={isActivitySessionVisible(operationalState) ? 'run' : null}
@@ -622,6 +643,7 @@ export function RunningScreen() {
         instantCamera={simulatorLocationAuthoritative}
         followUser={runFollowUser}
         onUserGesture={() => setRunFollowUser(false)}
+        recenterImperativeRef={runRecenterImperativeRef}
         simulatorEnabled={simulatorLocationAuthoritative}
         simulatorControlsEnabled={showSimulator}
         simulatorCenterPickerVisible={showSimulator && (status === 'idle' || simulatorPickerMode !== null)}
@@ -635,111 +657,58 @@ export function RunningScreen() {
       <View style={{ flex: 1, backgroundColor: runTheme.background }}>
         {runMapSurface}
 
-        {/* Top overlay: back + GPS chip */}
-        <SafeAreaView style={preStyles.topOverlay} edges={['top']} pointerEvents="box-none">
-          <View style={preStyles.topRow}>
-            <BackButton variant="inline" onPress={() => {
-              if (nav.canGoBack()) nav.goBack();
-              else nav.navigate('Home' as never);
-            }} />
-            {/* R114/O22 STORY-73018 UX fix: when permission is denied AND
-                the OS won't let us re-prompt (canAskAgain=false), turn the
-                "Enable GPS" chip into a tappable Settings deep-link so the
-                user has a path forward instead of a dead-end. Non-blocked
-                state (permission granted, or not yet asked) keeps the
-                static chip. */}
-            {permissionBlocked ? (
-              <TouchableOpacity
-                style={preStyles.gpsChip}
-                onPress={() => { try { require('react-native').Linking.openSettings(); } catch { /* silent */ } }}
-                accessibilityRole="button"
-                accessibilityLabel="Open device Settings to enable location"
-              >
-                <View style={[preStyles.gpsDot, { backgroundColor: Colors.severityWarning }]} />
-                <Text style={preStyles.gpsText}>Enable in Settings</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={preStyles.gpsChip}>
-                <View style={[preStyles.gpsDot, { backgroundColor: Colors.severityWarning }]} />
-                <Text style={preStyles.gpsText}>Enable GPS</Text>
-              </View>
-            )}
-          </View>
-          {/* 2026-08-16 Round 6: R0 stats strip per concept row-03/04 col 1.
-              4-item row (km / time / pace / GPS dot) shown pre-start too so
-              layout is symmetric with Hiking H0 statsStrip. Zeros gracefully
-              before user hits Start. */}
-          <View style={[preStyles.statsStrip, { backgroundColor: runTheme.mapOverlay, borderColor: runTheme.border }]} pointerEvents="none">
-            <Text style={[preStyles.statsStripKm, runIsDark ? { color: runTheme.foreground } : null]}>0.00 {dist.unit}</Text>
-            <Text style={[preStyles.statsStripTime, runIsDark ? { color: runTheme.foreground } : null]}>00:00</Text>
-            <Text style={[preStyles.statsStripPace, runIsDark ? { color: runTheme.foreground } : null]}>{`--'--"/${dist.unit}`}</Text>
-            <View style={preStyles.statsStripGpsWrap}>
-              <View style={[preStyles.statsStripGpsDot, { backgroundColor: permissionBlocked ? Colors.severityWarning : RunConcept.forest }]} />
-              <Text style={[preStyles.statsStripGpsText, runIsDark ? { color: runTheme.foreground } : null]}>GPS</Text>
-            </View>
-          </View>
-        </SafeAreaView>
+        <ActivityTopChrome
+          mode="run"
+          phase={operationalState === 'starting' ? 'starting' : 'ready'}
+          safeTop={insets.top}
+          gpsLabel={simulatorLocationAuthoritative
+            ? 'SIM ready'
+            : permissionBlocked
+              ? 'Location off'
+              : foregroundGranted
+                ? 'GPS ready'
+                : 'Checking GPS'}
+          gpsTone={simulatorLocationAuthoritative || foregroundGranted
+            ? 'healthy'
+            : permissionBlocked ? 'danger' : 'warning'}
+          onBack={() => {
+            if (nav.canGoBack()) nav.goBack();
+            else nav.navigate('Home' as never);
+          }}
+        />
 
-        {/* Bottom: FREE RUN card + Route row + green Start Running (R0 concept) */}
-        <SafeAreaView style={preStyles.bottomOverlay} edges={['bottom']} pointerEvents="box-none">
-          <View style={[preStyles.bottomPanel, { backgroundColor: runTheme.mapOverlay, borderColor: runTheme.border, shadowColor: runTheme.shadow }]}>
-            {/* FREE RUN card — 2026-08-17 concept R0: compass/target
-                glyph on the left, eyebrow + sub in the middle, chevron
-                on the right. Compass matches the "Run anywhere" story
-                and echoes the R0 map orientation cue. */}
-            <TouchableOpacity style={[preStyles.freeRunCard, runIsDark ? { backgroundColor: runTheme.surfaceElevated, borderColor: runTheme.border } : null]} onPress={openRoutePicker} activeOpacity={0.9}>
-              <View style={preStyles.freeRunGlyph}>
-                <Icon name="Target" size={22} color={runIsDark ? runTheme.iconActive : RunConcept.textPrimary} strokeWidth={2} />
-              </View>
-              <View style={preStyles.freeRunTextGroup}>
-                <Text style={[preStyles.freeRunEyebrow, runIsDark ? { color: runTheme.foreground } : null]}>FREE RUN</Text>
-                <Text style={[preStyles.freeRunSub, runIsDark ? { color: runTheme.foregroundSecondary } : null]}>Run anywhere</Text>
-              </View>
-              <Icon name="ChevronUp" size={20} color={runIsDark ? runTheme.iconInactive : RunConcept.textMuted} strokeWidth={2} />
-            </TouchableOpacity>
-
-            {/* Route row — separate line per concept */}
-            <TouchableOpacity style={[preStyles.routeRow, runIsDark ? { backgroundColor: runTheme.surface, borderColor: runTheme.border } : null]} onPress={openRoutePicker} activeOpacity={0.9}>
-              <Text style={[preStyles.routeRowText, runIsDark ? { color: runTheme.foreground } : null]}>Route: {selectedRoute ? selectedRouteName : 'None'}</Text>
-              <Icon name="ChevronRight" size={18} color={runIsDark ? runTheme.iconInactive : RunConcept.textMuted} strokeWidth={2} />
-            </TouchableOpacity>
-
-            {/* Start Running — full-width forest-green pill */}
-            <Animated.View style={{ transform: [{ scale: startBtnScale }] }}>
-              <TouchableOpacity
-                activeOpacity={0.92}
-                onPress={handleStart}
-                disabled={operationalState === 'starting'}
-                onPressIn={onStartPressIn}
-                onPressOut={onStartPressOut}
-                style={[preStyles.startBtn, runIsDark ? { backgroundColor: runTheme.primary } : null]}
-              >
-                <Text style={[preStyles.startBtnText, runIsDark ? { color: runTheme.onPrimary } : null]}>
-                  {operationalState === 'starting' ? 'Starting…' : 'Start Running'}
-                </Text>
-              </TouchableOpacity>
-            </Animated.View>
-            {startError ? (
-              <Text style={[preStyles.startFailureText, { color: runTheme.destructive }]} accessibilityRole="alert">
-                {startError === 'permission-denied'
-                  ? 'Location permission is needed to start.'
-                  : 'Couldn’t start GPS. Check your location settings and try again.'}
-              </Text>
-            ) : null}
-            {/* 2026-08-17 concept R0: tiny lock hint below Start Running.
-                Reassures the user that the phone screen auto-locks so they
-                can stash the device in a pocket without worrying about
-                accidental input during the run. */}
-            <View style={preStyles.lockHintRow}>
-              <Icon name="Lock" size={11} color={runIsDark ? runTheme.muted : Colors.textMuted} strokeWidth={2} />
-              <Text style={[preStyles.lockHint, runIsDark ? { color: runTheme.muted } : null]}>Screen locks automatically</Text>
-            </View>
-          </View>
-        </SafeAreaView>
+        <ActivityStartDock
+          mode="run"
+          safeBottom={insets.bottom}
+          routeName={selectedRouteName}
+          routeDescription={selectedRoute ? 'Follow a saved route' : 'Run freely without a planned route'}
+          readinessLabel={simulatorLocationAuthoritative
+            ? 'Simulator origin ready'
+            : permissionBlocked
+              ? 'Location permission is needed before recording'
+              : foregroundGranted
+                ? 'Location ready · pace starts after credible movement'
+                : 'Checking location readiness'}
+          readinessTone={simulatorLocationAuthoritative || foregroundGranted
+            ? 'healthy'
+            : permissionBlocked ? 'danger' : 'warning'}
+          backgroundWarning={backgroundTrackingWarning}
+          onChooseRoute={openRoutePicker}
+          onStart={handleStart}
+          onOpenSettings={(backgroundTrackingWarning || permissionBlocked)
+            ? () => { void Linking.openSettings(); }
+            : undefined}
+          starting={operationalState === 'starting'}
+          startError={startError === 'permission-denied'
+            ? 'Location permission is needed to start.'
+            : startError
+              ? 'Couldn’t start GPS. Check location settings and try again.'
+              : null}
+        />
 
         {/* Route picker sheet */}
         {showRoutePicker && (
-          <Animated.View style={[preStyles.routePickerBackdrop, { opacity: routePickerOpacity }]}>
+          <Animated.View style={[preStyles.routePickerBackdrop, { backgroundColor: runTheme.scrim, opacity: routePickerOpacity }]}>
             <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closeRoutePicker} activeOpacity={1} />
             <Animated.View style={[preStyles.routePickerSheet, { backgroundColor: runTheme.surfaceElevated, borderTopColor: runTheme.border, transform: [{ translateY: routePickerSlide }] }]}>
               <View style={[preStyles.routePickerHandle, { backgroundColor: runTheme.border }]} />
@@ -803,7 +772,7 @@ export function RunningScreen() {
             if (!activity) return;
             try {
               const restored = await restoreRecoverableActivity(activity);
-              if (restored) setRunState('running');
+              if (!restored) crashLogger.breadcrumb('running:recovery_not_restored');
             } catch (error) {
               crashLogger.breadcrumb(`running:recovery_failed ${String(error).slice(0, 80)}`);
             } finally {
@@ -863,158 +832,58 @@ export function RunningScreen() {
   return (
     <View style={[runStyles.container, { backgroundColor: runTheme.background }]}>
       {runMapSurface}
-      <View style={[runStyles.bg, { backgroundColor: 'transparent' }]}>
-          {/* R21 (2026-08-18 user "上方 下方 按钮 等等都和hike是一样的"):
-              R2 top row now mirrors Hike — Back left, signal-lost pill
-              on the right (only visible when tracking + lost). Kept the
-              stats bar below. */}
-          <SafeAreaView edges={['top']} pointerEvents="box-none">
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.base, paddingTop: Spacing.md, gap: Spacing.sm }}>
-              <BackButton variant="inline" onPress={() => {
-                if (nav.canGoBack()) nav.goBack();
-                else nav.navigate('Home' as never);
-              }} />
-              <View style={{ flex: 1 }} />
-              {status === 'tracking' && signalLost && (
-                <View style={runStyles.signalLostPill}>
-                  <View style={runStyles.signalLostDot} />
-                  <Text style={runStyles.signalLostText}>
-                    {signalLostMin >= 1 ? `Signal lost · ${signalLostMin} min` : 'Signal lost'}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </SafeAreaView>
-          {/* Stats bar — 2026-08-17 concept R0/R1: distance / duration
-              / pace / GPS pill. Label strings match the concept ("km",
-              blank for duration since HH:MM:SS reads on its own,
-              "/km" suffix baked into paceDisplay). */}
-          <View style={[runStyles.statsBar, { backgroundColor: runTheme.mapOverlay, borderColor: runTheme.border, shadowColor: runTheme.shadow }]}>
-              <StatItem title="DISTANCE" value={distDisplay} label={dist.unit} />
-              <StatItem title="TIME" value={durationDisplay} label="" />
-              <StatItem title="PACE" value={paceDisplay} label={paceDisplay === '--' ? '' : paceUnit} />
-              <View style={runStyles.statItem}>
-                <Text style={[runStyles.statLabel, { color: runTheme.muted }]}>SIGNAL</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <PulseDot
-                  size={8}
-                  color={gpsStatusColor}
-                  pulsing={simulatorGpsActive ? simulatorSignal === 'normal' || simulatorSignal === 'poor' : gpsFixHealthy}
-                />
-                <Text style={[runStyles.statValue, { color: runTheme.foreground, fontSize: 14 }]}>{gpsStatusLabel}</Text>
-                </View>
-              </View>
-            </View>
+      <ActivityTopChrome
+        mode="run"
+        phase={operationalState === 'finishing'
+          ? 'finishing'
+          : operationalState === 'paused' ? 'paused' : 'tracking'}
+        safeTop={insets.top}
+        gpsLabel={gpsStatusLabel}
+        gpsTone={gpsStatusTone}
+        onBack={() => {
+          if (nav.canGoBack()) nav.goBack();
+          else nav.navigate('Home' as never);
+        }}
+        primaryMetric={{ label: 'LIVE PACE', value: paceDisplay, unit: paceDisplay === '--' ? undefined : paceUnit }}
+        secondaryMetrics={[
+          { label: 'DISTANCE', value: distDisplay, unit: dist.unit },
+          { label: 'ACTIVE TIME', value: durationDisplay },
+        ]}
+        notices={runNotices}
+      />
 
-          {/* Sleep-run 2026-08-16 rev-2: compass ring + dark lock overlay
-              removed. R1 is now a clean map-first view — the polyline and
-              stats bar carry the whole R1 experience. */}
+      <ActivityControlDock
+        mode="run"
+        phase={operationalState === 'finishing'
+          ? 'finishing'
+          : status === 'paused' ? 'paused' : 'tracking'}
+        safeBottom={insets.bottom}
+        backgroundWarning={backgroundTrackingWarning}
+        cairnDisabled={!locationAvailable}
+        onPauseResume={() => {
+          haptic.impact('light');
+          if (status === 'paused') void resumeTracking();
+          else void pauseTracking();
+        }}
+        onCairn={() => { void handlePlantCairn(); }}
+        onFinish={() => {
+          haptic.impact('medium');
+          void openSaveSheet();
+        }}
+      />
 
-          {/* R21 (2026-08-18 user "run同步 也是一样"): R2 action tray now
-              mirrors Hiking — collapsible anchor at bottom-left (old
-              compass FAB position). Tap Navigation → Pause / Cairn /
-              Finish slides out to the right. Same behaviour paused or
-              running. Recenter FAB lives bottom-right and only appears
-              when the user has dragged the map off follow. */}
-          <View style={runStyles.trayAnchorLayer} pointerEvents="box-none">
-            <SafeAreaView edges={['bottom']} pointerEvents="box-none">
-              <View style={runStyles.trayAnchorRow} pointerEvents="auto">
-                <TouchableOpacity
-                  style={[runStyles.trayAnchor, runIsDark ? { backgroundColor: runTheme.surfaceElevated, borderColor: runTheme.border } : null]}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel={runActionsExpanded ? 'Hide quick actions' : 'Show quick actions'}
-                  onPress={() => {
-                    haptic.selection();
-                    setRunActionsExpanded(v => !v);
-                  }}
-                >
-                  <Icon
-                    name={runActionsExpanded ? 'ChevronLeft' : 'ChevronRight'}
-                    size={22}
-                    color={runIsDark ? '#F0EEE6' : RunConcept.textPrimary}
-                    strokeWidth={2.2}
-                  />
-                </TouchableOpacity>
-                {runActionsExpanded && (
-                  <View style={runStyles.trayRow}>
-                    <View style={runStyles.trayItem}>
-                      <TouchableOpacity
-                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: runTheme.surface, borderColor: runTheme.border } : null]}
-                        activeOpacity={0.85}
-                        onPress={() => {
-                          haptic.impact('light');
-                          if (status === 'paused') resumeTracking();
-                          else pauseTracking();
-                          setRunActionsExpanded(false);
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={status === 'paused' ? 'Resume run' : 'Pause run'}
-                      >
-                        <Icon
-                          name={status === 'paused' ? 'Play' : 'Pause'}
-                          size={22} color={runIsDark ? '#F0EEE6' : RunConcept.textPrimary} strokeWidth={2.2}
-                        />
-                      </TouchableOpacity>
-                      <Text style={[runStyles.trayFabLabel, runIsDark ? { color: '#F0EEE6' } : null]}>
-                        {status === 'paused' ? 'Resume' : 'Pause'}
-                      </Text>
-                    </View>
-                    <View style={runStyles.trayItem}>
-                      <TouchableOpacity
-                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: runTheme.surface, borderColor: runTheme.border } : null]}
-                        activeOpacity={0.85}
-                        onPress={() => {
-                          setRunActionsExpanded(false);
-                          handlePlantCairn();
-                        }}
-                        disabled={!locationAvailable}
-                        accessibilityRole="button"
-                        accessibilityLabel="Leave a Cairn"
-                      >
-                        <Icon name="Flag" size={24} color={runTheme.iconActive} strokeWidth={1.9} />
-                      </TouchableOpacity>
-                      <Text style={[runStyles.trayFabLabel, runIsDark ? { color: '#F0EEE6' } : null]}>Cairn</Text>
-                    </View>
-                    <View style={runStyles.trayItem}>
-                      <TouchableOpacity
-                        style={[runStyles.trayFab, runIsDark ? { backgroundColor: runTheme.surface, borderColor: runTheme.border } : null]}
-                        activeOpacity={0.85}
-                        onPress={async () => {
-                          haptic.impact('medium');
-                          setRunActionsExpanded(false);
-                          await pauseTracking();
-                          const frozen = useTrackingStore.getState();
-                          // The same authority used by Finish and recovery is
-                          // evaluated only after the GPS fence is durable.
-                          const isTooShort = !saveEligibility(
-                            frozen.trackPoints,
-                            frozen.distanceM,
-                          ).eligible;
-                          if (isTooShort) {
-                            setShowTooShortConfirmRun(true);
-                            return;
-                          }
-                          openSaveSheet();
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Finish run"
-                      >
-                        <Icon name="Flag" size={22} color={runIsDark ? '#F0EEE6' : RunConcept.textPrimary} strokeWidth={2.2} />
-                      </TouchableOpacity>
-                      <Text style={[runStyles.trayFabLabel, runIsDark ? { color: '#F0EEE6' } : null]}>Finish</Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-              {plantToast && (
-                <View style={runStyles.plantToast}>
-                  <Text style={runStyles.plantToastText}>{plantToast}</Text>
-                </View>
-              )}
-            </SafeAreaView>
-          </View>
-      </View>
+      {!runFollowUser ? (
+        <ActivityRecenterButton
+          mode="run"
+          safeBottom={insets.bottom}
+          raised={Boolean(backgroundTrackingWarning)}
+          onPress={() => {
+            haptic.selection();
+            runRecenterImperativeRef.current?.();
+            setTimeout(() => setRunFollowUser(true), 700);
+          }}
+        />
+      ) : null}
 
       {/* Save-name sheet — lightweight local sheet (name input + Save +
           Cancel). Opens on Done tap; Save triggers handleStop(name) which
@@ -1098,7 +967,6 @@ export function RunningScreen() {
           // Drop the SaveSheet name — this run is gone, and there is no
           // false completion state for a discarded Activity.
           setPendingName('');
-          setRunState('pre');
         }}
       />
       {/* O18 ONB-04: permission-denied modal for Running. */}
@@ -1202,6 +1070,8 @@ const preStyles = StyleSheet.create({
 
   routePickerBackdrop: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 80,
+    elevation: 80,
     justifyContent: 'flex-end',
   },
   routePickerSheet: {
@@ -1209,7 +1079,7 @@ const preStyles = StyleSheet.create({
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingHorizontal: Spacing.base, paddingTop: Spacing.sm, paddingBottom: Spacing.xxl,
     gap: Spacing.sm,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 82,
   },
   routePickerHandle: {
     width: 36, height: 4, borderRadius: 2,
@@ -1482,6 +1352,8 @@ const runStyles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.28)',
     justifyContent: 'flex-end',
+    zIndex: 200,
+    elevation: 200,
   },
   saveSheet: {
     backgroundColor: RunConcept.paper,
@@ -1491,7 +1363,7 @@ const runStyles = StyleSheet.create({
     gap: Spacing.md,
     borderTopWidth: 1,
     shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.14, shadowRadius: 22, elevation: 14,
+    shadowOpacity: 0.14, shadowRadius: 22, elevation: 202,
   },
   saveSheetHandle: {
     width: 36, height: 4, borderRadius: 2,

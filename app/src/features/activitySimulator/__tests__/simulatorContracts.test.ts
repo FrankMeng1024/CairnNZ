@@ -51,7 +51,7 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(tracking).toContain("return reject('stale-client-activity')");
     expect(tracking).toContain("return reject('stale-owner-generation')");
     expect(tracking).toContain("return reject('provider-source-mismatch')");
-    expect(tracking).toContain("src: owned.source === 'simulator'");
+    expect(tracking).toContain("point.source === 'simulator' ? 'sim'");
     expect(tracking.indexOf("locationProviderSource === 'simulator'"))
       .toBeLessThan(tracking.indexOf("'simulator_provider_locked'"));
     expect(tracking).toContain("'real_callback_rejected_for_simulator_activity'");
@@ -159,9 +159,11 @@ describe('Activity Simulator integration and safety contracts', () => {
 
   test('map matching is derived independently per real segment with truthful raw fallback', () => {
     const tracking = read('src/store/useTrackingStore.ts');
-    expect(tracking).toContain('const sourceSegments = segmentTrace(memorySource).segments');
-    expect(tracking).toContain('snappedSegments.push(segment)');
+    expect(tracking).toContain('const sourceSegments = segmentTrace(s.trackPoints).segments');
+    expect(tracking).toContain('const snappedSegments: TrackPoint[][] = sourceSegments.map(segment => segment)');
     expect(tracking).toContain('snappedTrackPoints = hikeSource');
+    expect(tracking).toContain('preserveTrustedRouteEndpoints(canonicalInput, snapRes.points)');
+    expect(tracking).toContain('evaluateMatchedGeometryQuality(canonicalInput, anchored)');
     expect(tracking).not.toContain('if (everySegmentSafe) snappedTrackPoints');
     expect(tracking.indexOf('activity_map_matching_started'))
       .toBeLessThan(tracking.indexOf('const v412Route3'));
@@ -182,8 +184,9 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(engine).not.toContain('calculateActivityStats');
     expect(tracking).toContain('simulatorActivityStartTimestamp(');
     expect(tracking).toContain('const endedAt = activityTimestampForSource(');
-    expect(panel).toContain('([1, 5, 10, 30, 60, 120] as SimulatorTimeScale[]).map');
-    expect(panel).toContain('时间倍率');
+    expect(panel).toContain('([1, 2, 5, 10, 30, 60, 120] as SimulatorTimeScale[]).map');
+    expect(panel).toContain('Replay time acceleration');
+    expect(panel).toContain('physical movement speed stays unchanged');
   });
 
   test('recovery fences and live freshness use the provider timeline without changing Real GPS', () => {
@@ -271,9 +274,14 @@ describe('Activity Simulator integration and safety contracts', () => {
       password: 'secret',
       rawEmail: 'qa@example.test',
       coordinate: { lat: -45, lng: 168 },
+      matcherCredentialAuthority: 'native-mapbox-singleton',
       safeCode: 'ok',
     });
-    expect(fields).toEqual({ coordinate: { lat: -45, lng: 168 }, safeCode: 'ok' });
+    expect(fields).toEqual({
+      coordinate: { lat: -45, lng: 168 },
+      matcherCredentialAuthority: 'native-mapbox-singleton',
+      safeCode: 'ok',
+    });
     const event = (index: number): SimulatorLogEvent => ({
       session_id: 'qa-a',
       qaSessionId: 'qa-a',
@@ -332,10 +340,15 @@ describe('Activity Simulator integration and safety contracts', () => {
       'activity_sync_acknowledged',
       'simulator_activity_server_acknowledged',
       'real_activity_location_source_activated',
-      'real_activity_location_callback',
-      'location_sample_accepted',
-      'location_sample_rejected',
-      'activity_trace_state_received',
+      'activity_background_authority_v2',
+      'activity_journal_commit_v2',
+      'activity_background_batch_v2',
+      'activity_candidate_transition_v1',
+      'activity_segment_decision_v2',
+      'activity_match_preflight_v2',
+      'activity_match_segment_v2',
+      'activity_final_geometry_v2',
+      'activity_telemetry_health_v2',
     ];
     const critical = criticalNames.map((eventName, index) => ({
       ...event(index),
@@ -349,8 +362,8 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(withNoise.map(item => item.eventName)).toEqual(expect.arrayContaining(criticalNames));
 
     const realPipelineWithIdleNoise = boundSimulatorLogEvents([
-      { ...event(0), eventName: 'real_activity_location_callback', coordinateSource: 'real' },
-      { ...event(1), eventName: 'activity_trace_state_received', coordinateSource: 'real' },
+      { ...event(0), eventName: 'activity_background_authority_v2', coordinateSource: 'real' },
+      { ...event(1), eventName: 'activity_match_segment_v2', coordinateSource: 'real' },
       ...Array.from({ length: SIMULATOR_LOG_LIMITS.maxEventsPerSession + 200 }, (_, index) => ({
         ...event(index + 2),
         eventName: 'hike_map_idle',
@@ -358,9 +371,48 @@ describe('Activity Simulator integration and safety contracts', () => {
       })),
     ]);
     expect(realPipelineWithIdleNoise.map(item => item.eventName)).toEqual(expect.arrayContaining([
-      'real_activity_location_callback',
-      'activity_trace_state_received',
+      'activity_background_authority_v2',
+      'activity_match_segment_v2',
     ]));
+
+    const diagnosticChain = [
+      { ...event(1), eventName: 'activity_tracking_started', category: 'ACTIVITY_STATE' as const },
+      { ...event(2), eventName: 'activity_filter_decision_v2', category: 'GPS_REJECT' as const, fields: { decision: 'QUARANTINE' } },
+      { ...event(3), eventName: 'activity_candidate_transition_v1', category: 'GPS_REJECT' as const },
+      { ...event(4), eventName: 'app_backgrounded', category: 'APP' as const },
+      { ...event(5), eventName: 'activity_background_authority_v2', category: 'PROVIDER' as const },
+      { ...event(6), eventName: 'real_activity_background_task_started', category: 'PROVIDER' as const },
+      { ...event(7), eventName: 'real_activity_background_callback_checkpoint', category: 'PROVIDER' as const },
+      { ...event(8), eventName: 'activity_journal_commit_v2', category: 'ACTIVITY_POINT' as const, fields: { phase: 'result', committed: true } },
+      { ...event(9), eventName: 'real_activity_background_journal_result', category: 'PROVIDER' as const },
+      { ...event(10), eventName: 'activity_background_batch_v2', category: 'PROVIDER' as const },
+      { ...event(11), eventName: 'activity_segment_decision_v2', category: 'GPS_SEGMENT' as const },
+      { ...event(12), eventName: 'app_foregrounded', category: 'APP' as const },
+      { ...event(13), eventName: 'activity_elevation_decision_v1', category: 'ACTIVITY_METRICS' as const, fields: { creditedDeltaM: 4 } },
+      { ...event(14), eventName: 'activity_match_preflight_v2', category: 'ACTIVITY_COMPLETION' as const },
+      { ...event(15), eventName: 'activity_match_segment_v2', category: 'ACTIVITY_COMPLETION' as const },
+      { ...event(16), eventName: 'activity_map_matching_raw_fallback', category: 'ACTIVITY_COMPLETION' as const },
+      { ...event(17), eventName: 'activity_save_started', category: 'ACTIVITY_COMPLETION' as const },
+      { ...event(18), eventName: 'activity_completion_finished', category: 'ACTIVITY_COMPLETION' as const },
+      { ...event(19), eventName: 'activity_telemetry_health_v2', category: 'SYNC_STATE' as const },
+    ];
+    const longRealActivity = boundSimulatorLogEvents([
+      ...diagnosticChain,
+      ...Array.from({ length: SIMULATOR_LOG_LIMITS.maxEventsPerSession + 500 }, (_, index) => ({
+        ...event(index + 100),
+        eventName: 'activity_filter_decision_v2',
+        category: 'GPS_ACCEPT' as const,
+        coordinateSource: 'real' as const,
+        fields: { decision: 'ACCEPT', rawOrdinal: index },
+      })),
+    ]);
+    expect(longRealActivity.map(item => item.eventName)).toEqual(expect.arrayContaining(
+      diagnosticChain.map(item => item.eventName),
+    ));
+    expect(longRealActivity).toContainEqual(expect.objectContaining({
+      eventName: 'activity_filter_decision_v2',
+      category: 'GPS_REJECT',
+    }));
 
     const criticalOnly = boundSimulatorLogEvents(Array.from({ length: 128 }, (_, index) => {
       const item = event(index);
@@ -459,7 +511,7 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(panel).toContain('从这里开始');
     expect(panel).toContain('自动前往');
     expect(panel).toContain('activity-simulator-speed-controls');
-    expect(panel).toContain('时间倍率');
+    expect(panel).toContain('Replay time acceleration');
     expect(panel).toContain('地形');
     expect(panel).toContain('GPS 状态');
     expect(panel).toContain('设置虚拟位置');
@@ -500,13 +552,13 @@ describe('Activity Simulator integration and safety contracts', () => {
     const panel = read('src/features/activitySimulator/ActivitySimulatorPanel.tsx');
     const hike = read('src/screens/HikingScreen.tsx');
     const run = read('src/screens/RunningScreen.tsx');
-    expect(panel).toContain('([1, 5, 10, 30, 60, 120] as SimulatorTimeScale[])');
-    expect(panel).toContain("SIM · {timeScale}×");
+    expect(panel).toContain('([1, 2, 5, 10, 30, 60, 120] as SimulatorTimeScale[])');
+    expect(panel).toContain('SIM · Replay {timeScale}×');
     expect(panel).toContain("normal: '正常', poor: '较差', lost: '丢失', frozen: '卡住'");
     expect(hike).toContain("locationProviderSource === 'simulator'");
-    expect(hike).toContain("simulatorSignal === 'poor' ? Colors.severityWarning");
-    expect(run).toContain("simulatorSignal === 'lost' ? Colors.danger");
-    expect(run).toContain(": gpsFixHealthy ? runTheme.iconActive : runTheme.iconInactive");
+    expect(hike).toContain("simulatorSignal === 'poor' ? 'warning'");
+    expect(run).toContain("simulatorSignal === 'lost' ? 'danger'");
+    expect(run).toContain("gpsFixHealthy ? 'healthy'");
   });
 
   test('Hike recenter and Run follow use the provider-selected accepted display position', () => {

@@ -84,9 +84,27 @@ describe('Free Activity integration contracts', () => {
     expect(ingest).not.toMatch(/durationS:\s*s\.durationS\s*\+/);
   });
 
-  test('rejected fixes advance only raw-fix dedupe time, never the accepted continuity anchor', () => {
+  test('Finish commits locally before a bounded immediate server acknowledgement wait', () => {
     const source = read('src/store/useTrackingStore.ts');
-    for (const reason of ['poor-accuracy', 'hiking-overspeed', 'stationary-suppressed', 'indoor-drift-suppressed']) {
+    const durable = source.indexOf("recordSavePhase('local_durable_completion'");
+    const server = source.indexOf('IMMEDIATE_SERVER_SAVE_BUDGET_MS', durable);
+    expect(durable).toBeGreaterThan(0);
+    expect(server).toBeGreaterThan(durable);
+    expect(source).toContain('const IMMEDIATE_SERVER_SAVE_BUDGET_MS = 4_000');
+    expect(source).not.toContain('v412 wall-clock timeout 20s');
+  });
+
+  test('rejected real fixes advance only the raw reducer watermark, never the accepted continuity anchor', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    for (const reason of ['poor-accuracy', 'stationary-suppressed', 'indoor-drift-suppressed']) {
+      const start = source.indexOf(`acceptance.reason = '${reason}'`);
+      const end = source.indexOf('\n        }', start);
+      const branch = source.slice(start, end);
+      expect(start).toBeGreaterThan(0);
+      expect(branch).toContain('lastFixTimestamp: isSimulatorSample ? t : s.lastFixTimestamp');
+      expect(branch).not.toContain('lastCoordinateTime: t');
+    }
+    for (const reason of ['hiking-overspeed']) {
       const start = source.indexOf(`acceptance.reason = '${reason}'`);
       const end = source.indexOf('\n        }', start);
       const branch = source.slice(start, end);
@@ -94,6 +112,9 @@ describe('Free Activity integration contracts', () => {
       expect(branch).toContain('lastFixTimestamp: t');
       expect(branch).not.toContain('lastCoordinateTime: t');
     }
+    // The real-GPS reducer owns its raw-observation watermark. This source-level
+    // guard is intentionally limited to the store invariant above; reducer
+    // watermark behavior is covered behaviorally by realGpsContinuity.test.ts.
   });
 
   test('late journaled background points drain after a foreground handoff', () => {
@@ -107,12 +128,60 @@ describe('Free Activity integration contracts', () => {
     expect(drain).toContain('drainBackgroundLocations()');
   });
 
-  test('live Hike and Run traces render the canonical accepted array tail', () => {
+  test('real background ownership refreshes native authorization and never trusts a hardcoded grant', () => {
+    const tracking = read('src/store/useTrackingStore.ts');
+    const authorization = read('src/features/activity/backgroundAuthorization.ts');
+    expect(tracking).toContain('await refreshRealBackgroundAuthorization(!hasSeenBackgroundEducation)');
+    expect(tracking).toContain('const granted = await refreshRealBackgroundAuthorization(false)');
+    expect(tracking).toContain('refreshBackgroundLocationPermission: async () =>');
+    expect(authorization).toContain('await provider.getBackgroundPermissionsAsync()');
+    expect(authorization).toContain("current.granted || !options.requestIfEligible || !current.canAskAgain");
+    expect(authorization).not.toMatch(/granted:\s*true\s*[,}]/);
+  });
+
+  test('foreground recovery stops any native-owned background stream before starting its watcher', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    const foreground = source.slice(
+      source.indexOf('async function activateForegroundSource'),
+      source.indexOf('function deactivateForegroundSource'),
+    );
+    const handoff = source.slice(
+      source.indexOf('async function stopRealBackgroundSourceForHandoff'),
+      source.indexOf('async function transitionToForegroundSource'),
+    );
+    expect(foreground.indexOf('await stopRealBackgroundSourceForHandoff()')).toBeLessThan(
+      foreground.indexOf('Location.watchPositionAsync'),
+    );
+    expect(handoff).toContain('Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)');
+    expect(handoff).toContain('await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)');
+  });
+
+  test('known background unavailability opens a new truth segment instead of a connector', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    const unavailable = source.slice(
+      source.indexOf('async function markRecordingContinuityUnavailable'),
+      source.indexOf('async function drainCommittedBackgroundLocations'),
+    );
+    expect(unavailable).toContain("pendingSegmentStartReason: 'gps-reacquired'");
+    expect(unavailable).toContain('lastCoordinate: null');
+    expect(source).toContain("markRecordingContinuityUnavailable('background-provider-unavailable')");
+  });
+
+  test('Finish uses one matched-or-canonical geometry contract for local and server detail', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    expect(source).toContain('const finalDisplayTrackPoints = snappedTrackPoints ?? s.trackPoints');
+    expect(source).toContain('const v412Route3 = finalDisplayTrackPoints.map');
+    expect(source).toContain('trackPoints: finalDisplayTrackPoints');
+    expect(source).not.toContain('snappedTrackPoints ?? (s.trackPointsSmoothed');
+  });
+
+  test('live Hike and Run traces render the bounded causal accepted-route presentation', () => {
     const hike = read('src/screens/HikingScreen.tsx');
     const run = read('src/screens/RunningScreen.tsx');
-    expect(hike).toContain('? trackPoints.map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentId: tp.segmentId }))');
-    expect(hike).not.toContain('? trackPointsSmoothed.map');
-    expect(run).toContain('trackPoints={trackPoints}');
+    expect(hike).toContain("const liveTrackPoints = locationProviderSource === 'real' ? trackPointsSmoothed : trackPoints");
+    expect(hike).toContain('? liveTrackPoints.map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentId: tp.segmentId }))');
+    expect(run).toContain("const liveTrackPoints = locationProviderSource === 'real' ? trackPointsSmoothed : trackPoints");
+    expect(run).toContain('trackPoints={liveTrackPoints}');
   });
 
   test('real GPS health is accepted-fix freshness, not provider activation alone', () => {

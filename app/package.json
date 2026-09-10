@@ -9,6 +9,10 @@
     "web": "expo start --web",
     "test": "jest --watchAll=false",
     "test:watch": "jest",
+    "verify:changed": "node scripts/verify-activity.mjs",
+    "verify:activity:gps": "node scripts/verify-activity.mjs --gate=gps",
+    "verify:activity:core": "node scripts/verify-activity.mjs --gate=core",
+    "verify:full": "node scripts/verify-activity.mjs --gate=full",
     "eas-build-pre-install": "if [ \"$EAS_BUILD_PLATFORM\" = \"ios\" ]; then echo '=== R103: downloading Metal Toolchain (Xcode 26 on-demand component) ==='; xcodebuild -downloadComponent MetalToolchain; xcodebuild -showComponent metalToolchain; echo '=== Metal Toolchain download done ==='; fi"
   },
   "jest": {

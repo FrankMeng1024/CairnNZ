@@ -58,6 +58,24 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     },
   });
 
+  const pointAt = (
+    timestamp: number,
+    latitude: number,
+    longitude: number,
+    accuracy = 5,
+  ) => ({
+    timestamp,
+    coords: {
+      latitude,
+      longitude,
+      altitude: 5,
+      accuracy,
+      altitudeAccuracy: 5,
+      speed: 1,
+      heading: 0,
+    },
+  });
+
   it('rejects pre-generation and out-of-order native samples', async () => {
     const task = require('../backgroundLocationTask');
     await task.persistBackgroundContext('activity-a', true, {
@@ -140,5 +158,36 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     const accepted = appendBackgroundHikePoints.mock.calls[0][0];
     expect(new Set(accepted.map((item: any) => item.segmentId))).toHaveProperty('size', 3);
     expect(accepted.filter((item: any) => item.segmentStartReason === 'gps-reacquired')).toHaveLength(2);
+  });
+
+  it('journals a corroborated quarantined turn before its confirming fix', async () => {
+    const task = require('../backgroundLocationTask');
+    await task.persistBackgroundContext('activity-a', true, {
+      clientActivityId: 'activity-a',
+      userId: 'user-a',
+      ownerGeneration: 'generation-1',
+      segmentId: 'segment-1',
+      activityMode: 'hiking',
+      acceptAfterMs: 1_000,
+    });
+    const north10 = 10 / 111_320;
+    const east25 = 25 / (111_320 * Math.cos(41 * Math.PI / 180));
+    const east35 = 35 / (111_320 * Math.cos(41 * Math.PI / 180));
+    await handler({
+      data: { locations: [
+        pointAt(1_000, -41, 174),
+        pointAt(5_000, -41 + north10, 174),
+        pointAt(9_000, -41 + north10 * 2, 174),
+        pointAt(13_000, -41 + north10 * 2, 174 + east25, 12),
+        pointAt(17_000, -41 + north10 * 2, 174 + east35, 8),
+      ] },
+      error: null,
+    });
+
+    const accepted = appendBackgroundHikePoints.mock.calls[0][0];
+    expect(accepted.map((item: any) => item.t)).toEqual([1_000, 5_000, 9_000, 13_000, 17_000]);
+    expect(accepted[3]).toMatchObject({ canonicalDecision: 'ACCEPT' });
+    expect(task.drainBackgroundLocations().map((item: any) => item.timestamp))
+      .toEqual([1_000, 5_000, 9_000, 13_000, 17_000]);
   });
 });

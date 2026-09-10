@@ -42,6 +42,9 @@ export interface HikePoint {
   acc?: number | null;
   alt?: number | null;
   speed?: number | null;
+  vAcc?: number | null;
+  course?: number | null;
+  rawOrdinal?: number;
   src?: 'fg' | 'bg' | 'slc' | 'sim';
   conf?: number; // 1=high (GPS), 0.5=low (cell/WiFi), 0=gap fill only
   clientActivityId: string;

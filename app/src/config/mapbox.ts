@@ -13,6 +13,44 @@ export function isMapboxTokenConfigured(): boolean {
   return MAPBOX_TOKEN.startsWith('pk.') && MAPBOX_TOKEN.length >= 40;
 }
 
+function isUsablePublicToken(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().startsWith('pk.') && value.trim().length >= 40;
+}
+
+/**
+ * One token authority for JavaScript Mapbox APIs. EAS/Expo configuration wins;
+ * Native platforms that actually export `getAccessToken` may otherwise reuse
+ * the token held by the @rnmapbox singleton. rnmapbox 10.3.1 iOS does not
+ * export that method, so EAS/Expo environment remains its sole JS authority.
+ * The value is never logged.
+ */
+export async function resolveMapboxPublicToken(
+  nativeModule?: { getAccessToken?: () => Promise<string> },
+): Promise<string> {
+  return (await resolveMapboxPublicTokenAuthority(nativeModule)).token;
+}
+
+export type MapboxPublicTokenSource = 'expo-environment' | 'native-mapbox-singleton' | 'unavailable';
+
+/** Resolve token plus a non-sensitive authority label for matching telemetry. */
+export async function resolveMapboxPublicTokenAuthority(
+  nativeModule?: { getAccessToken?: () => Promise<string> },
+): Promise<{ token: string; source: MapboxPublicTokenSource }> {
+  if (isUsablePublicToken(MAPBOX_TOKEN)) {
+    return { token: MAPBOX_TOKEN.trim(), source: 'expo-environment' };
+  }
+  if (Platform.OS === 'web' && !nativeModule) return { token: '', source: 'unavailable' };
+  try {
+    const Mapbox = nativeModule ?? require('@rnmapbox/maps').default;
+    const token = await Mapbox?.getAccessToken?.();
+    return isUsablePublicToken(token)
+      ? { token: token.trim(), source: 'native-mapbox-singleton' }
+      : { token: '', source: 'unavailable' };
+  } catch {
+    return { token: '', source: 'unavailable' };
+  }
+}
+
 export function initMapbox() {
   if (Platform.OS === 'web') {
     // On web, set token directly on mapbox-gl (async import to avoid SSR issues)
