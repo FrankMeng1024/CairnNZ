@@ -327,7 +327,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // O48 (2026-09-11): Stationary V2 traversal/position separation, bounded
 // cumulative Candidate evidence, one-source continuous Activity route, calm
 // location health, and conservative per-subsection hybrid Final matching.
-export const OTA_VERSION = 'O48';
+// O49 (2026-09-11): ordered four-second Final matcher evidence, explicit
+// tracepoint-owned temporal islands, conservative hybrid/seam validation, and
+// a narrow sudden-stop Candidate timeout guard for missing speed uncertainty.
+// O50 (2026-09-11): user-grade pedestrian Final reconstruction with composite
+// corridor evidence, observed road-side offsets, bounded crossing/off-network
+// cleanup, walking-Directions fallback, and whole-Activity seam/visual gates.
+export const OTA_VERSION = 'O50';
 
 
 type OtaState =

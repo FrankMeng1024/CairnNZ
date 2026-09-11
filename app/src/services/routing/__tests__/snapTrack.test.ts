@@ -7,8 +7,11 @@ process.env.EXPO_PUBLIC_MAPBOX_TOKEN = 'test-token';
 
 import {
   analyzeTrustedEndpointCoverage,
+  evaluateIslandSeamQuality,
   evaluateMatchedGeometryQuality,
+  evaluateWholeRouteQuality,
   preserveTrustedRouteEndpoints,
+  resampleMatcherEvidence,
   snapTrack,
   type RawPoint,
 } from '../snapTrack';
@@ -56,6 +59,7 @@ function fakeOkResponse(n: number, confidence = 0.9): any {
     json: async () => ({
       code: 'Ok',
       matchings: [{ confidence, geometry: { coordinates: coords } }],
+      tracepoints: coords.map(location => ({ matchings_index: 0, location })),
     }),
   };
 }
@@ -68,7 +72,11 @@ function fakeEchoResponse(url: string, confidence = 0.9): any {
   });
   return {
     status: 200,
-    json: async () => ({ code: 'Ok', matchings: [{ confidence, geometry: { coordinates: coords } }] }),
+    json: async () => ({
+      code: 'Ok',
+      matchings: [{ confidence, geometry: { coordinates: coords } }],
+      tracepoints: coords.map(location => ({ matchings_index: 0, location })),
+    }),
   };
 }
 
@@ -127,6 +135,150 @@ describe('snapTrack — happy path (single GOOD run)', () => {
     expect(r.stats.apiCalls).toBe(3);
     expect(r.stats.chunksOk).toBe(3);
   });
+});
+
+describe('snapTrack — O49 ordered resampling and provenance', () => {
+  test('one-second straight evidence becomes approximately four-second evidence with tidy=false', async () => {
+    const raw = lineNorth(13, -36.8, 174.7, 60).map((point, index) => ({
+      ...point,
+      t: 1_000 + index * 1_000,
+    }));
+    expect(resampleMatcherEvidence(raw).map(point => point.sourceIndex)).toEqual([0, 4, 8, 12]);
+    fetchMock.mockImplementation((url: string) => Promise.resolve(fakeEchoResponse(url, 0.98)));
+    const result = await snapTrack(raw, { mapboxToken: 'x' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const requestUrl = String(fetchMock.mock.calls[0][0]);
+    expect(requestUrl).toContain('tidy=false');
+    expect(requestUrl).toContain('timestamps=');
+    expect(result.stats).toMatchObject({ canonicalPointCount: 13, resampledPointCount: 4 });
+    expect(result.stats.requestResults[0]).toMatchObject({
+      sourceIndexMap: [0, 4, 8, 12],
+      matcherTidy: false,
+      profile: 'walking',
+    });
+  });
+
+  test('U-turn and repeated-pass reversal observations survive temporal resampling', () => {
+    const eastings = [0, 2, 4, 6, 4, 2, 0, 2, 4, 6];
+    const raw = eastings.map((eastM, index) => ({
+      lat: -36.8,
+      lng: 174.7 + eastM / (111_320 * Math.cos(-36.8 * Math.PI / 180)),
+      accuracy: 5,
+      t: 1_000 + index * 1_000,
+    }));
+    const submitted = resampleMatcherEvidence(raw);
+    const kept = submitted.map(point => point.sourceIndex);
+    expect(kept).toEqual(expect.arrayContaining([2, 3, 4, 5, 6, 7]));
+    expect(submitted.filter(point => point.mandatoryReasons.includes('reversal')).length).toBeGreaterThanOrEqual(4);
+  });
+
+  test('two independently supported islands retain exact canonical fallback between them', async () => {
+    const raw = lineNorth(25, -36.8, 174.7, 120).map((point, index) => ({
+      ...point,
+      t: 1_000 + index * 1_000,
+    }));
+    fetchMock.mockImplementation((url: string) => {
+      const encoded = new URL(url).pathname.split('/').at(-1) ?? '';
+      const submitted = encoded.split(';').map((entry) => {
+        const [lng, lat] = entry.split(',').map(Number);
+        return { lng, lat };
+      });
+      const shifted = (point: { lat: number; lng: number }): [number, number] => [
+        point.lng + 2 / (111_320 * Math.cos(point.lat * Math.PI / 180)),
+        point.lat,
+      ];
+      return Promise.resolve({
+        status: 200,
+        json: async () => ({
+          code: 'Ok',
+          matchings: [
+            { confidence: 0.97, geometry: { coordinates: submitted.slice(0, 3).map(shifted) } },
+            { confidence: 0.96, geometry: { coordinates: submitted.slice(4).map(shifted) } },
+          ],
+          tracepoints: submitted.map((point, index) => (
+            index <= 2 ? { matchings_index: 0, location: shifted(point) }
+              : index >= 4 ? { matchings_index: 1, location: shifted(point) } : null
+          )),
+        }),
+      });
+    });
+    const result = await snapTrack(raw, { mapboxToken: 'x' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.matchedIslandCount).toBe(2);
+    expect(result.stats.canonicalFallbackDistanceM).toBeGreaterThan(0);
+    expect(result.stats.wholeRouteValidation.accepted).toBe(true);
+    const middle = result.points.find(point => point.t === raw[12].t);
+    expect(middle).toMatchObject({ lat: raw[12].lat, lng: raw[12].lng });
+  });
+
+  test('a topology island shorter than ten metres remains canonical', async () => {
+    const raw = lineNorth(3, -36.8, 174.7, 8).map((point, index) => ({
+      ...point,
+      t: 1_000 + index * 5_000,
+    }));
+    fetchMock.mockImplementation((url: string) => Promise.resolve(fakeEchoResponse(url, 0.99)));
+    const result = await snapTrack(raw, { mapboxToken: 'x' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats).toMatchObject({ matchedIslandCount: 0, chunksOk: 0, chunksFallback: 1 });
+    expect(result.points).toEqual(raw.map(point => ({ lat: point.lat, lng: point.lng, alt: point.alt, t: point.t })));
+  });
+});
+
+describe('snapTrack — O49 seam and whole-route gates', () => {
+  const local = (northM: number, eastM: number): RawPoint => ({
+    lat: metresLat(northM),
+    lng: metresLng(eastM),
+    accuracy: 5,
+  });
+  function metresLat(northM: number): number { return northM / 111_320; }
+  function metresLng(eastM: number): number { return eastM / 111_320; }
+
+  test('clean canonical→matched and matched→canonical boundaries pass', () => {
+    const canonical = [local(0, 0), local(0, 5), local(0, 10), local(0, 15), local(0, 20)];
+    const matched = canonical.slice(1, 4).map(point => ({ lat: point.lat, lng: point.lng }));
+    expect(evaluateIslandSeamQuality(canonical, 1, 3, matched)).toMatchObject({ accepted: true });
+  });
+
+  test('opposing bearing at an authority boundary is rejected instead of bridged', () => {
+    const canonical = [local(0, 0), local(0, 5), local(0, 10), local(0, 15), local(0, 20)];
+    const matched = [local(0, 5), local(0, 0), local(0, 15)];
+    expect(evaluateIslandSeamQuality(canonical, 1, 3, matched)).toMatchObject({
+      accepted: false,
+      reason: 'entry_heading',
+    });
+  });
+
+  test('a real 90-degree crossing and U-turn are not treated as seam defects', () => {
+    const crossing = [local(0, 0), local(0, 5), local(0, 10), local(5, 10), local(10, 10)];
+    expect(evaluateIslandSeamQuality(crossing, 2, 4, crossing.slice(2))).toMatchObject({ accepted: true });
+    const uTurn = [local(0, 0), local(0, 5), local(0, 10), local(0, 5), local(0, 0)];
+    expect(evaluateIslandSeamQuality(uTurn, 2, 4, uTurn.slice(2))).toMatchObject({ accepted: true });
+  });
+
+  test('whole-route validation rejects an assembly jump and extra duplicate edge', () => {
+    const canonical = [local(0, 0), local(0, 5), local(0, 10), local(0, 15)];
+    const jumped = [canonical[0], local(80, 5), canonical[2], canonical[3]];
+    expect(evaluateWholeRouteQuality(canonical, jumped).accepted).toBe(false);
+    expect(evaluateWholeRouteQuality(canonical, [canonical[0], canonical[1], canonical[1], canonical[2], canonical[3]]))
+      .toMatchObject({ accepted: false, reason: 'duplicate_edge' });
+  });
+
+  test('10,000 one-second observations keep matcher evidence and request count bounded', async () => {
+    const raw = lineNorth(10_000, -36.8, 174.7, 10_000).map((point, index) => ({
+      ...point,
+      t: 1_000 + index * 1_000,
+    }));
+    fetchMock.mockImplementation((url: string) => Promise.resolve(fakeEchoResponse(url, 0.99)));
+    const result = await snapTrack(raw, { mapboxToken: 'x', concurrency: 4 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.resampledPointCount).toBeLessThanOrEqual(2_502);
+    expect(result.stats.apiCalls).toBeLessThanOrEqual(33);
+    expect(result.stats.wholeRouteValidation.accepted).toBe(true);
+  }, 20_000);
 });
 
 describe('snapTrack — derived geometry truthfulness', () => {
@@ -195,7 +347,11 @@ describe('snapTrack — derived geometry truthfulness', () => {
     ]));
     fetchMock.mockResolvedValue({
       status: 200,
-      json: async () => ({ code: 'Ok', matchings: [{ confidence: 0.95, geometry: { coordinates: shifted } }] }),
+      json: async () => ({
+        code: 'Ok',
+        matchings: [{ confidence: 0.95, geometry: { coordinates: shifted } }],
+        tracepoints: shifted.map(location => ({ matchings_index: 0, location })),
+      }),
     });
 
     const result = await snapTrack(raw, { mapboxToken: 'x' });
@@ -213,7 +369,11 @@ describe('snapTrack — derived geometry truthfulness', () => {
     ]));
     fetchMock.mockResolvedValue({
       status: 200,
-      json: async () => ({ code: 'Ok', matchings: [{ confidence: 0.99, geometry: { coordinates: externalRoad } }] }),
+      json: async () => ({
+        code: 'Ok',
+        matchings: [{ confidence: 0.99, geometry: { coordinates: externalRoad } }],
+        tracepoints: externalRoad.map(location => ({ matchings_index: 0, location })),
+      }),
     });
     const result = await snapTrack(raw, { mapboxToken: 'x' });
     expect(result.ok).toBe(true);
@@ -242,7 +402,9 @@ describe('snapTrack — derived geometry truthfulness', () => {
   test('partial Mapbox coverage becomes matched islands plus exact canonical fallback', async () => {
     const raw = lineNorth(10, -36.8, 174.7, 45).map((point, index) => ({
       ...point,
-      t: 1_000 + index * 1_000,
+      // Keep all observations in this response-shape fixture. Dedicated O49
+      // tests below cover four-second resampling itself.
+      t: 1_000 + index * 5_000,
     }));
     const east2m = (point: RawPoint): [number, number] => [
       point.lng + 2 / (111_320 * Math.cos(point.lat * Math.PI / 180)),
@@ -256,10 +418,10 @@ describe('snapTrack — derived geometry truthfulness', () => {
           { confidence: 0.95, geometry: { coordinates: raw.slice(0, 3).map(east2m) } },
           { confidence: 0.91, geometry: { coordinates: raw.slice(6).map(east2m) } },
         ],
-        tracepoints: raw.map((_point, index) => (
+        tracepoints: raw.map((point, index) => (
           index <= 2
-            ? { matchings_index: 0 }
-            : index >= 6 ? { matchings_index: 1 } : null
+            ? { matchings_index: 0, location: east2m(point) }
+            : index >= 6 ? { matchings_index: 1, location: east2m(point) } : null
         )),
       }),
     });
@@ -297,12 +459,12 @@ describe('snapTrack — derived geometry truthfulness', () => {
           geometry: { coordinates: [raw[0], raw[1], raw[4], raw[5]].map(point => [point.lng, point.lat]) },
         }],
         tracepoints: [
-          { matchings_index: 0 },
-          { matchings_index: 0 },
+          { matchings_index: 0, location: [raw[0].lng, raw[0].lat] },
+          { matchings_index: 0, location: [raw[1].lng, raw[1].lat] },
           null,
           null,
-          { matchings_index: 0 },
-          { matchings_index: 0 },
+          { matchings_index: 0, location: [raw[4].lng, raw[4].lat] },
+          { matchings_index: 0, location: [raw[5].lng, raw[5].lat] },
         ],
       }),
     });
@@ -311,6 +473,38 @@ describe('snapTrack — derived geometry truthfulness', () => {
     if (!result.ok) return;
     expect(result.stats).toMatchObject({ chunksOk: 0, chunksFallback: 1, seamBridges: 0 });
     expect(result.points).toEqual(raw.map(point => ({ lat: point.lat, lng: point.lng, alt: point.alt })));
+  });
+
+  test('one Mapbox matching is split into independent temporal islands around null support', async () => {
+    const raw = lineNorth(9, -36.8, 174.7, 48).map((point, index) => ({
+      ...point,
+      t: 1_000 + index * 5_000,
+    }));
+    const location = (point: RawPoint): [number, number] => [point.lng, point.lat];
+    fetchMock.mockResolvedValue({
+      status: 200,
+      json: async () => ({
+        code: 'Ok',
+        matchings: [{
+          confidence: 0.98,
+          geometry: { coordinates: [...raw.slice(0, 3), ...raw.slice(6)].map(location) },
+        }],
+        tracepoints: raw.map((point, index) => (
+          index <= 2 || index >= 6
+            ? { matchings_index: 0, location: location(point) }
+            : null
+        )),
+      }),
+    });
+    const result = await snapTrack(raw, { mapboxToken: 'x' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.matchedIslandCount).toBe(2);
+    expect(result.stats.requestResults[0].acceptedIslandCount).toBe(2);
+    expect(result.points.find(point => point.t === raw[4].t)).toMatchObject({
+      lat: raw[4].lat,
+      lng: raw[4].lng,
+    });
   });
 
   test('A→B→A→B remains three ordered passes across chunk boundaries', async () => {
@@ -335,7 +529,8 @@ describe('snapTrack — derived geometry truthfulness', () => {
     )).filter(direction => direction !== 0);
     const directionRuns = directions.filter((direction, index) => index === 0 || direction !== directions[index - 1]);
     expect(directionRuns).toEqual([1, -1, 1]);
-    expect(result.stats).toMatchObject({ chunksOk: 3, chunksFallback: 0, seamBridges: 0 });
+    expect(result.stats).toMatchObject({ chunksOk: 1, chunksFallback: 0, seamBridges: 0 });
+    expect(result.stats.resampledPointCount).toBeLessThan(raw.length);
   });
 });
 
@@ -407,6 +602,25 @@ describe('snapTrack — failure modes degrade gracefully', () => {
     if (!r.ok) return;
     expect(r.stats.chunksFallback).toBe(1);
     expect(r.stats.chunksOk).toBe(0);
+  });
+
+  test('geometry without tracepoint provenance cannot own a whole chunk', async () => {
+    const raw = lineNorth(5);
+    fetchMock.mockResolvedValue({
+      status: 200,
+      json: async () => ({
+        code: 'Ok',
+        matchings: [{
+          confidence: 0.99,
+          geometry: { coordinates: raw.map(point => [point.lng, point.lat]) },
+        }],
+      }),
+    });
+    const result = await snapTrack(raw, { mapboxToken: 'x' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats).toMatchObject({ matchedIslandCount: 0, chunksOk: 0, chunksFallback: 1 });
+    expect(result.points).toEqual(raw.map(point => ({ lat: point.lat, lng: point.lng, alt: point.alt })));
   });
 
   test('HTTP 401 → chunk fallback raw', async () => {

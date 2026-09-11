@@ -286,6 +286,90 @@ describe('real GPS physical continuity', () => {
     expect(timedOut.candidateEvent?.type).toBe('candidate_timeout');
   });
 
+  test('SNAP_STOP_V: missing speedAccuracy cannot create a lone edge after stationary timeout', () => {
+    let state = createRealGpsContinuityState();
+    for (const point of [
+      observation(0, 0, 1_000, { accuracy: 14.246, speed: 1.18 }),
+      observation(0, 2, 3_000, { accuracy: 14.246, speed: 0.96 }),
+      observation(0, 3.2, 5_000, { accuracy: 14.246, speed: 0.479 }),
+    ]) state = ingest(state, point).state;
+    const anchor = state.traversalAnchor!;
+    const pending = evaluateRealGpsObservation(
+      state,
+      observation(0.3, 3.7, 8_000, { accuracy: 14.246, speed: 0.088, speedAccuracy: null }),
+      'hiking',
+      8_000,
+    );
+    expect(pending).toMatchObject({ kind: 'QUARANTINE', reason: 'possible-stationary-jitter' });
+    const timeoutFix = observation(-2.2, 7.8, 14_000, {
+      accuracy: 14.246,
+      speed: 0.85,
+      speedAccuracy: null,
+    });
+    const resolved = evaluateRealGpsObservation(pending.state, timeoutFix, 'hiking', timeoutFix.t);
+    expect(resolved.candidateEvent?.type).toBe('candidate_timeout');
+    expect(resolved.kind).not.toBe('ACCEPT');
+    expect(resolved.state.traversalAnchor?.observationId).toBe(anchor.observationId);
+    expect(resolved.confirmedCandidates ?? []).toHaveLength(0);
+  });
+
+  test('SNAP_STOP_V: two coherent fixes resume promptly after the guarded timeout', () => {
+    let state = createRealGpsContinuityState();
+    for (const point of [
+      observation(0, 0, 1_000, { accuracy: 14.246, speed: 1.18 }),
+      observation(0, 2, 3_000, { accuracy: 14.246, speed: 0.96 }),
+      observation(0, 3.2, 5_000, { accuracy: 14.246, speed: 0.479 }),
+    ]) state = ingest(state, point).state;
+    const pending = evaluateRealGpsObservation(
+      state,
+      observation(0.3, 3.7, 8_000, { accuracy: 14.246, speed: 0.088, speedAccuracy: null }),
+      'hiking',
+      8_000,
+    );
+    const firstDeparture = observation(-2.2, 7.8, 14_000, {
+      accuracy: 14.246,
+      speed: 0.85,
+      speedAccuracy: null,
+    });
+    const held = evaluateRealGpsObservation(pending.state, firstDeparture, 'hiking', firstDeparture.t);
+    expect(held.kind).toBe('QUARANTINE');
+    const secondDeparture = observation(-3.1, 10.1, 16_000, {
+      accuracy: 14.246,
+      speed: 0.93,
+      speedAccuracy: null,
+    });
+    const resumed = evaluateRealGpsObservation(held.state, secondDeparture, 'hiking', secondDeparture.t);
+    expect(resumed).toMatchObject({
+      kind: 'ACCEPT',
+      reason: 'candidate-new-direction-confirmed',
+      candidateEvent: { type: 'candidate_confirmed' },
+    });
+    expect(resumed.confirmedCandidates).toContainEqual(firstDeparture);
+  });
+
+  test('measured reliable speed can establish genuine motion at the same timeout boundary', () => {
+    let state = createRealGpsContinuityState();
+    state = ingest(state, observation(0, 0, 1_000, { accuracy: 5, speed: 1 })).state;
+    const pending = evaluateRealGpsObservation(
+      state,
+      observation(0, 1, 2_000, { accuracy: 5, speed: 0.05, speedAccuracy: 0.2 }),
+      'hiking',
+      2_000,
+    );
+    expect(pending.kind).toBe('QUARANTINE');
+    const realDeparture = observation(0, 8, 8_000, {
+      accuracy: 5,
+      speed: 1.1,
+      speedAccuracy: 0.2,
+    });
+    const resolved = evaluateRealGpsObservation(pending.state, realDeparture, 'hiking', realDeparture.t);
+    expect(resolved).toMatchObject({
+      kind: 'ACCEPT',
+      reason: 'candidate-timeout',
+      candidateEvent: { type: 'candidate_timeout' },
+    });
+  });
+
   test('bounded live smoothing stays close and resets at a segment boundary', () => {
     let state = createRealGpsContinuityState();
     const first = observation(0, 0, 1_000, { accuracy: 6 });

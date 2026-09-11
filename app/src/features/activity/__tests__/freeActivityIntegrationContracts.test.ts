@@ -191,7 +191,20 @@ describe('Free Activity integration contracts', () => {
     expect(source).toContain('const finalDisplayTrackPoints = snappedTrackPoints ?? s.trackPoints');
     expect(source).toContain('const v412Route3 = finalDisplayTrackPoints.map');
     expect(source).toContain('trackPoints: finalDisplayTrackPoints');
+    expect(source).toContain("algorithmVersion: 'pedestrian-final-v1'");
+    expect(source).toContain('!snapRes.stats.displayRefined');
+    expect(source).toContain('snapRes.stats.canonicalFallbackDistanceM');
+    expect(source).toContain("endpointDecision: 'atomic-canonical-boundary'");
     expect(source).not.toContain('snappedTrackPoints ?? (s.trackPointsSmoothed');
+  });
+
+  test('Final matching remains segment-local and Memory remains canonical', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    expect(source).toContain('const sourceSegments = segmentTrace(s.trackPoints).segments');
+    expect(source).toContain('const snapRes = await reconstructPedestrianFinalRoute(canonicalInput');
+    expect(source).toContain('for (const point of s.trackPoints)');
+    expect(source).toContain("source: 'reconciliation'");
+    expect(source).not.toContain('for (const point of finalDisplayTrackPoints)');
   });
 
   test('live Hike and Run traces render the bounded causal accepted-route presentation', () => {

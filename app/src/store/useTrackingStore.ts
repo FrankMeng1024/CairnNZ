@@ -51,8 +51,8 @@ import {
   analyzeTrustedEndpointCoverage,
   evaluateMatchedGeometryQuality,
   preserveTrustedRouteEndpoints,
-  snapTrack,
 } from '../services/routing/snapTrack';
+import { reconstructPedestrianFinalRoute } from '../services/routing/pedestrianFinalRoute';
 import {
   BACKGROUND_LOCATION_TASK,
   registerBackgroundTask,
@@ -2044,16 +2044,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         // Matching is a bounded presentation refinement. A slightly larger
         // four-second envelope lets the longest useful segment run first while
         // preserving fast durable Save and canonical fallback on every failure.
-        const matchingDeadlineMs = matchingStartedAt + 4_000;
+        const matchingDeadlineMs = matchingStartedAt + 10_000;
         appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_preflight_v2', {
-          algorithmVersion: 'segment-walking-v3-hybrid',
+          algorithmVersion: 'pedestrian-final-v1',
           matcherCredentialAuthority: mapboxAuthority.source,
           matcherAvailable: Boolean(mapboxToken),
           segmentCount: sourceSegments.length,
           eligibleSegmentCount: sourceSegments.filter(segment => segment.length >= 2).length,
-          totalBudgetMs: 4_000,
+          totalBudgetMs: 10_000,
         }, { userId: ownerUserId, clientActivityId: s.sessionId, qaSessionId: realActivityQaSessionId, coordinateSource: 'none' });
-        if (mapboxToken && sourceSegments.some(segment => segment.length >= 2)) {
+        if (sourceSegments.some(segment => segment.length >= 2)) {
           const snappedSegments: TrackPoint[][] = sourceSegments.map(segment => segment);
           const prioritizedSegments = sourceSegments
             .map((segment, segmentIndex) => ({ segment, segmentIndex }))
@@ -2071,7 +2071,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 reason: 'finish-budget-exhausted',
               }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
               appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_segment_v2', {
-                algorithmVersion: 'segment-walking-v3-hybrid',
+                algorithmVersion: 'pedestrian-final-v1',
                 segmentIndex,
                 priority,
                 pointCount: segment.length,
@@ -2103,22 +2103,22 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                   accuracy: p.accuracy,
                   speed: p.speed,
                 }));
-              const snapRes = await snapTrack(canonicalInput, {
+              const snapRes = await reconstructPedestrianFinalRoute(canonicalInput, {
                 mapboxToken,
                 totalTimeoutMs: remainingBudgetMs,
-                perCallTimeoutMs: Math.min(1_600, remainingBudgetMs),
+                perCallTimeoutMs: Math.min(2_600, remainingBudgetMs),
               });
-              if (!snapRes.ok || snapRes.points.length < 2 || snapRes.stats.chunksOk === 0) {
-                const fallbackReason = snapRes.ok
-                  ? (snapRes.points.length < 2 ? 'too-few-result-points' : 'no-derived-chunks')
-                  : snapRes.reason;
+              if (!snapRes.ok || snapRes.points.length < 2 || !snapRes.stats.displayRefined) {
+                const fallbackReason = 'reason' in snapRes
+                  ? snapRes.reason
+                  : (snapRes.points.length < 2 ? 'too-few-result-points' : 'no-derived-islands');
                 appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_map_matching_raw_fallback', {
                   segmentIndex,
                   rawPointCount: segment.length,
                   reason: fallbackReason,
                 }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
                 appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_segment_v2', {
-                  algorithmVersion: 'segment-walking-v3-hybrid',
+                  algorithmVersion: 'pedestrian-final-v1',
                   segmentIndex,
                   priority,
                   pointCount: segment.length,
@@ -2126,7 +2126,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                   tailTimestamp: segment[segment.length - 1]?.t ?? null,
                   decision: 'raw-fallback',
                   fallbackReason,
-                  requestCount: snapRes.stats.apiCalls,
+                  requestCount: snapRes.stats.mapMatchingRequestCount + snapRes.stats.directionsRequestCount,
                   requestResults: snapRes.stats.requestResults,
                   durationMs: Date.now() - segmentMatchStartedAt,
                 }, { userId: ownerUserId, clientActivityId: s.sessionId, qaSessionId: realActivityQaSessionId, coordinateSource: 'none' });
@@ -2136,7 +2136,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               const unanchoredQuality = evaluateMatchedGeometryQuality(canonicalInput, snapRes.points);
               if (!endpointCoverage.eligibleForAnchoring) {
                 appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_segment_v2', {
-                  algorithmVersion: 'segment-walking-v3-hybrid',
+                  algorithmVersion: 'pedestrian-final-v1',
                   segmentIndex,
                   priority,
                   pointCount: segment.length,
@@ -2144,7 +2144,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                   fallbackReason: 'endpoint-coverage-outside-envelope',
                   endpointCoverage,
                   quality: unanchoredQuality,
-                  requestCount: snapRes.stats.apiCalls,
+                  requestCount: snapRes.stats.mapMatchingRequestCount + snapRes.stats.directionsRequestCount,
                   requestResults: snapRes.stats.requestResults,
                   durationMs: Date.now() - segmentMatchStartedAt,
                 }, { userId: ownerUserId, clientActivityId: s.sessionId, qaSessionId: realActivityQaSessionId, coordinateSource: 'none' });
@@ -2160,7 +2160,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                   quality: finalQuality,
                 }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
                 appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_segment_v2', {
-                  algorithmVersion: 'segment-walking-v3-hybrid',
+                  algorithmVersion: 'pedestrian-final-v1',
                   segmentIndex,
                   priority,
                   pointCount: segment.length,
@@ -2168,7 +2168,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                   fallbackReason: `final-quality-${finalQuality.reason}`,
                   endpointCoverage,
                   quality: finalQuality,
-                  requestCount: snapRes.stats.apiCalls,
+                  requestCount: snapRes.stats.mapMatchingRequestCount + snapRes.stats.directionsRequestCount,
                   requestResults: snapRes.stats.requestResults,
                   durationMs: Date.now() - segmentMatchStartedAt,
                 }, { userId: ownerUserId, clientActivityId: s.sessionId, qaSessionId: realActivityQaSessionId, coordinateSource: 'none' });
@@ -2187,7 +2187,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                   ? { segmentStartReason: first.segmentStartReason }
                   : {}),
               }));
-              hybridSnapUsed = hybridSnapUsed || snapRes.stats.chunksFallback > 0;
+              hybridSnapUsed = hybridSnapUsed || snapRes.stats.canonicalDerivedSectionCount > 0;
               matchedSegmentCount += 1;
               appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_map_matching_completed', {
                 segmentIndex,
@@ -2200,20 +2200,28 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 stats: snapRes.stats,
               }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
               appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_segment_v2', {
-                algorithmVersion: 'segment-walking-v3-hybrid',
+                algorithmVersion: 'pedestrian-final-v1',
                 segmentIndex,
                 priority,
                 pointCount: segment.length,
                 matchedPointCount: anchored.length,
-                decision: snapRes.stats.chunksFallback > 0 ? 'hybrid' : 'matched',
-                matchedSubsectionCount: snapRes.stats.chunksOk,
-                canonicalFallbackSubsectionCount: snapRes.stats.chunksFallback + snapRes.stats.lostRuns,
-                endpointDecision: 'bounded-canonical-anchor',
+                decision: snapRes.stats.canonicalFallbackDistanceM > 0.5 ? 'hybrid' : 'matched',
+                matchedSubsectionCount: snapRes.stats.matchedIslandCount,
+                canonicalFallbackSubsectionCount: snapRes.stats.canonicalDerivedSectionCount,
+                matchedDistanceM: snapRes.stats.acceptedMatchedDistanceM,
+                canonicalFallbackDistanceM: snapRes.stats.canonicalFallbackDistanceM,
+                seamRejectedSubsectionCount: snapRes.stats.sections.filter(section => section.seam && !section.seam.accepted).length,
+                seamShrunkSubsectionCount: 0,
+                wholeRouteValidation: snapRes.stats.wholeRouteValidation,
+                finalGeometryFingerprint: snapRes.stats.finalGeometryFingerprint,
+                endpointDecision: 'atomic-canonical-boundary',
                 endpointCoverage,
                 quality: finalQuality,
-                requestCount: snapRes.stats.apiCalls,
+                requestCount: snapRes.stats.mapMatchingRequestCount + snapRes.stats.directionsRequestCount,
                 requestResults: snapRes.stats.requestResults,
-                confidence: snapRes.stats.minConfidence,
+                confidence: snapRes.stats.sections.length > 0
+                  ? Math.min(...snapRes.stats.sections.map(section => section.confidence))
+                  : null,
                 durationMs: Date.now() - segmentMatchStartedAt,
               }, { userId: ownerUserId, clientActivityId: s.sessionId, qaSessionId: realActivityQaSessionId, coordinateSource: 'none' });
             } catch (snapErr) {
@@ -2223,7 +2231,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 errorCode: String(snapErr).slice(0, 100),
               }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
               appendSimulatorLog('ERROR', 'activity_match_segment_v2', {
-                algorithmVersion: 'segment-walking-v3-hybrid',
+                algorithmVersion: 'pedestrian-final-v1',
                 segmentIndex,
                 priority,
                 pointCount: segment.length,
@@ -2308,7 +2316,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             ? 'hybrid-matched-canonical'
             : 'matched')
           : 'canonical',
-        algorithmVersion: snappedTrackPoints ? 'segment-walking-v3-hybrid' : 'canonical-fallback-v1',
+        algorithmVersion: snappedTrackPoints ? 'pedestrian-final-v1' : 'canonical-fallback-v1',
         canonicalPointCount: s.trackPoints.length,
         displayPointCount: finalDisplayTrackPoints.length,
         canonicalSegmentCount: segmentTrace(s.trackPoints).segments.length,

@@ -556,6 +556,15 @@ function hasReliableReportedSpeed(point: RealGpsObservation): boolean {
     || point.speedAccuracy <= 0.8;
 }
 
+function hasMeasuredReliableReportedSpeed(point: RealGpsObservation): boolean {
+  return point.speed != null
+    && Number.isFinite(point.speed)
+    && point.speed >= 0
+    && point.speedAccuracy != null
+    && Number.isFinite(point.speedAccuracy)
+    && point.speedAccuracy <= 0.8;
+}
+
 function reportedStationary(point: RealGpsObservation): boolean {
   return hasReliableReportedSpeed(point) && Number(point.speed) < REPORTED_STATIONARY_SPEED_MPS;
 }
@@ -616,6 +625,7 @@ function classifyWithoutPending(
   nowMs: number,
   acceptedReason: MotionDecision['reason'] = 'coherent-motion',
   allowLateralQuarantine = true,
+  stationaryTimeoutGuard = false,
 ): MotionDecision {
   const diagnostics = diagnosticsFor(state, current);
   if (!state.lastTrusted) {
@@ -716,7 +726,9 @@ function classifyWithoutPending(
     };
   }
 
-  const reportedMoving = hasReliableReportedSpeed(current)
+  const reportedMoving = (stationaryTimeoutGuard
+      ? hasMeasuredReliableReportedSpeed(current)
+      : hasReliableReportedSpeed(current))
     && Number(current.speed) >= REPORTED_STATIONARY_SPEED_MPS;
   const positionEdgeClearlyMoving = (
     (diagnostics.dtFromTrustedMs ?? 0) > 0
@@ -725,11 +737,12 @@ function classifyWithoutPending(
     && (diagnostics.lowerBoundSpeedMps ?? 0) >= 0.25
     && (diagnostics.impliedSpeedMps ?? 0) <= MODE_MAX_SPEED_MPS[mode] + 1
   );
+  const cumulativeWindowSupportsMotion = showsCumulativeProgress(windowFeatures)
+    && windowFeatures.medianStepSpeedMps >= 0.35
+    && windowFeatures.stepSpeedMadMps / Math.max(0.25, windowFeatures.medianStepSpeedMps) <= 0.75;
   if (
     (reportedMoving || positionEdgeClearlyMoving || (
-      showsCumulativeProgress(windowFeatures)
-      && windowFeatures.medianStepSpeedMps >= 0.35
-      && windowFeatures.stepSpeedMadMps / Math.max(0.25, windowFeatures.medianStepSpeedMps) <= 0.75
+      !stationaryTimeoutGuard && cumulativeWindowSupportsMotion
     ))
     && (diagnostics.displacementFromTrustedM ?? 0) >= 0.75
     && (diagnostics.impliedSpeedMps ?? 0) <= MODE_MAX_SPEED_MPS[mode] + 1
@@ -778,7 +791,20 @@ export function evaluateRealGpsObservation(
   const delayMs = Math.max(0, current.t - pending.observation.t);
   if (!base || delayMs > realGpsCandidateMaxAgeMs(pending)) {
     const cleared = { ...observedState, pending: null, motionState: 'uncertain' as const };
-    const next = classifyWithoutPending(cleared, current, mode, nowMs, 'candidate-timeout');
+    // O49 real `snap` incident: after a stationary-jitter Candidate expires,
+    // an otherwise unsupported scalar speed must not create one final V edge.
+    // A measured speed uncertainty, accuracy-adjusted position progression or
+    // subsequent coherent fixes can still establish motion. Ordinary moving
+    // classification outside this exact timeout boundary is unchanged.
+    const next = classifyWithoutPending(
+      cleared,
+      current,
+      mode,
+      nowMs,
+      'candidate-timeout',
+      true,
+      pending.reason === 'possible-stationary-jitter',
+    );
     return {
       ...next,
       candidateEvent: {
