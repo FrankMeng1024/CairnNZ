@@ -28,6 +28,10 @@ import { getHomeBackground, getWeatherReviewBackground } from '../utils/homeBack
 import { debugLogger } from '../services/debugLogger';
 import { telemetryUploader } from '../services/telemetryUploader';
 import type { SessionMetadata } from '../types/debugLog';
+import {
+  ALMOST_DONE_CLONE_V1_ROUTE,
+} from '../features/activity/almostDoneCloneV1';
+import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 
 export function DebugScreen() {
   const nav = useNavigation();
@@ -35,6 +39,7 @@ export function DebugScreen() {
   const {
     debugMode, telemetryUploadEnabled, telemetryWifiOnly,
     telemetryBackendUrl, telemetryApiKey, debugAnnotationFabVisible,
+    activityGpsDistanceFilterM,
     updateSetting,
   } = settings;
 
@@ -252,6 +257,53 @@ export function DebugScreen() {
               </View>
             </View>
           </View>
+
+          <View style={styles.section} testID="activity-location-cadence-experiment">
+            <Text style={styles.sectionHeader}>ACTIVITY GPS A/B</Text>
+            <View style={styles.statusBox}>
+              <Text style={styles.statusLine}>
+                Next real Hike/Run: {activityGpsDistanceFilterM === 1 ? '1 m experiment' : '5 m baseline'}
+              </Text>
+              <Text style={styles.fieldHint}>
+                Foreground Expo distance filter only. Canonical filtering and Mapbox remain unchanged.
+              </Text>
+              <View style={styles.timeButtonRow}>
+                {([5, 1] as const).map(distanceM => {
+                  const active = activityGpsDistanceFilterM === distanceM;
+                  return (
+                    <TouchableOpacity
+                      key={distanceM}
+                      testID={`activity-gps-distance-${distanceM}m`}
+                      onPress={() => updateSetting('activityGpsDistanceFilterM', distanceM)}
+                      style={[styles.timeButton, active && styles.timeButtonActive]}
+                    >
+                      <Text style={[styles.timeButtonText, active && styles.timeButtonTextActive]}>
+                        {distanceM} m {distanceM === 5 ? 'baseline' : 'experiment'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+
+          {activitySimulatorBuildCapable ? <View style={styles.section} testID="qa-snap-review">
+            <Text style={styles.sectionHeader}>QA SNAP REVIEW</Text>
+            <View style={styles.statusBox}>
+              <Text style={styles.statusLine}>almost done clone v1</Text>
+              <Text style={styles.fieldHint}>
+                Review-only Activity Detail. It reads the immutable pending evidence and never enters Activity, Memory, sync, stats, gameplay, or social stores.
+              </Text>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                testID="open-almost-done-clone-v1"
+                onPress={() => (nav as any).navigate('MapHistory', { qaReviewClone: ALMOST_DONE_CLONE_V1_ROUTE })}
+              >
+                <Icon name="Route" size={16} color={Colors.primary} strokeWidth={2} />
+                <Text style={styles.actionBtnText}>Open review clone</Text>
+              </TouchableOpacity>
+            </View>
+          </View> : null}
 
           {/* Telemetry */}
           <View style={styles.section}>

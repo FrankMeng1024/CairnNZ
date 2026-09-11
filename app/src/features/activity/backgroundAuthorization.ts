@@ -20,6 +20,8 @@ export interface BackgroundAuthorizationResult {
   granted: boolean;
   canAskAgain: boolean;
   requestAttempted: boolean;
+  requestResult: 'not-attempted' | 'granted' | 'denied';
+  settingsRequired: boolean;
 }
 
 function normalize(
@@ -32,6 +34,11 @@ function normalize(
     granted,
     canAskAgain: response.canAskAgain !== false,
     requestAttempted,
+    requestResult: requestAttempted ? (granted ? 'granted' : 'denied') : 'not-attempted',
+    // An iOS Allow Once grant can make the immediate Always request return
+    // denied without a useful second prompt. After an attempted failure,
+    // Settings is the truthful next route for this Activity flow.
+    settingsRequired: !granted && (response.canAskAgain === false || requestAttempted),
   };
 }
 

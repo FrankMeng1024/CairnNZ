@@ -17,13 +17,22 @@ const mockLocation = {
   startLocationUpdatesAsync: jest.fn(async () => {}),
   stopLocationUpdatesAsync: jest.fn(async () => {}),
 };
+const mockSecureStore = {
+  getItemAsync: jest.fn(async () => null),
+  setItemAsync: jest.fn(async () => undefined),
+};
+let mockAppStateChangeListener: ((state: string) => void) | null = null;
 
 jest.mock('expo-location', () => ({ __esModule: true, ...mockLocation, default: mockLocation }));
+jest.mock('expo-secure-store', () => ({ __esModule: true, ...mockSecureStore, default: mockSecureStore }));
 
 jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   AppState: {
-    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+    addEventListener: jest.fn((_event: string, listener: (state: string) => void) => {
+      mockAppStateChangeListener = listener;
+      return { remove: jest.fn() };
+    }),
     currentState: 'active',
   },
 }));
@@ -184,19 +193,28 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
   });
 
   it('accepts new fixes with different timestamps', async () => {
-    await useTrackingStore.getState().addTrackPoint({ lat: 1, lng: 2 }, 1000);
-    await useTrackingStore.getState().addTrackPoint({ lat: 1.0001, lng: 2.0001 }, 2000);
-    await useTrackingStore.getState().addTrackPoint({ lat: 1.0002, lng: 2.0002 }, 3000);
+    // Use physically plausible one-second walking evidence. Timestamp dedupe
+    // must not rely on impossible ~16 m/s jumps being accepted canonical truth.
+    await useTrackingStore.getState().addTrackPoint({ lat: 1, lng: 2, speed: 1 }, 1000);
+    await useTrackingStore.getState().addTrackPoint({ lat: 1.000006, lng: 2.000006, speed: 1 }, 2000);
+    await useTrackingStore.getState().addTrackPoint({ lat: 1.000012, lng: 2.000012, speed: 1 }, 3000);
     expect(useTrackingStore.getState().trackPoints).toHaveLength(3);
   });
 
   it('retains a valid fix after long GPS loss as a new segment, without a fake connector', async () => {
     await useTrackingStore.getState().addTrackPoint({ lat: -41, lng: 174, accuracy: 5 }, 1_000);
-    await useTrackingStore.getState().addTrackPoint({ lat: -41.01, lng: 174, accuracy: 5 }, 601_000);
+    const pending = await useTrackingStore.getState().addTrackPoint(
+      { lat: -41.01, lng: 174, accuracy: 5 },
+      601_000,
+    );
+    expect(pending).toMatchObject({ accepted: false, reason: 'physical-continuity-quarantine' });
+    await useTrackingStore.getState().addTrackPoint({ lat: -41.01005, lng: 174, accuracy: 5 }, 605_000);
     const points = useTrackingStore.getState().trackPoints;
-    expect(points).toHaveLength(2);
+    expect(points).toHaveLength(3);
     expect(points[1].segmentId).not.toBe(points[0].segmentId);
-    expect(useTrackingStore.getState().distanceM).toBe(0);
+    expect(points[2].segmentId).toBe(points[1].segmentId);
+    expect(useTrackingStore.getState().distanceM).toBeGreaterThan(4);
+    expect(useTrackingStore.getState().distanceM).toBeLessThan(7);
     expect(useTrackingStore.getState().durationS).toBe(0);
   });
 
@@ -229,15 +247,21 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
       { lat: -41, lng: 174, accuracy: 60 },
       590_000,
     );
-    const reacquired = await useTrackingStore.getState().addTrackPoint(
+    const pending = await useTrackingStore.getState().addTrackPoint(
       { lat: -41.01, lng: 174, accuracy: 5 },
       601_000,
     );
+    const reacquired = await useTrackingStore.getState().addTrackPoint(
+      { lat: -41.01005, lng: 174, accuracy: 5 },
+      605_000,
+    );
 
     expect(rejected).toMatchObject({ accepted: false, reason: 'poor-horizontal-accuracy' });
+    expect(pending).toMatchObject({ accepted: false, reason: 'physical-continuity-quarantine' });
     expect(reacquired).toMatchObject({ accepted: true, reason: 'accepted-new-segment' });
-    expect(useTrackingStore.getState().trackPoints).toHaveLength(2);
-    expect(useTrackingStore.getState().distanceM).toBe(0);
+    expect(useTrackingStore.getState().trackPoints).toHaveLength(3);
+    expect(useTrackingStore.getState().distanceM).toBeGreaterThan(4);
+    expect(useTrackingStore.getState().distanceM).toBeLessThan(7);
   });
 
   it('repeats real-style loss and recovery without connector distance or Memory traversal', async () => {
@@ -249,6 +273,7 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
       { lat: -41.02, t: 1_301_000 },
       { lat: -41.0201, t: 1_311_000 },
     ];
+    const acceptances = [];
     for (const fix of fixes) {
       const result = await useTrackingStore.getState().addTrackPoint({
         lat: fix.lat,
@@ -256,8 +281,14 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
         accuracy: 5,
         speed: 1,
       }, fix.t);
-      expect(result.accepted).toBe(true);
+      acceptances.push(result.accepted);
     }
+
+    // The first observation after each long source loss is deliberately held
+    // until the next ordered fix corroborates it. Confirmation promotes that
+    // held point, so canonical chronology remains complete without trusting a
+    // one-fix relocation.
+    expect(acceptances).toEqual([true, true, false, true, false, true]);
 
     const state = useTrackingStore.getState();
     expect(new Set(state.trackPoints.map((item: any) => item.segmentId))).toHaveProperty('size', 3);
@@ -269,10 +300,66 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
     expect(memoryCalls.slice(-fixes.length).map((item: any) => item.lat)).toEqual(fixes.map(item => item.lat));
   });
 
-  it('still accepts fixes when timestamp is undefined (legacy callers)', async () => {
+  it('STATIONARY_GPS_JITTER_SPAGHETTI: raw jitter stays out of canonical route, distance, display and Memory', async () => {
+    const metresEast = (metres: number) => metres / 111_320;
+    const memory = require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence;
+    const memoryCallsBefore = memory.mock.calls.length;
+    const feed = [
+      { north: 0, east: 0, t: 1_000, speed: 1.1 },
+      { north: 0, east: 5, t: 5_000, speed: 1.1 },
+      { north: 0, east: 10, t: 9_000, speed: 1.1 },
+      { north: 7, east: 15, t: 11_000, speed: 0.08 },
+      { north: -4, east: 7, t: 13_000, speed: 0.04 },
+      { north: 6, east: 12, t: 15_000, speed: 0.12 },
+      { north: -5, east: 14, t: 17_000, speed: 0.03 },
+      { north: 3, east: 5, t: 19_000, speed: 0.09 },
+      { north: -6, east: 9, t: 21_000, speed: 0.05 },
+    ];
+    const decisions = [];
+    for (const fix of feed) {
+      decisions.push(await useTrackingStore.getState().addTrackPoint({
+        lat: fix.north / 111_320,
+        lng: metresEast(fix.east),
+        accuracy: 7,
+        speed: fix.speed,
+        source: 'foreground',
+      }, fix.t));
+    }
+
+    const state = useTrackingStore.getState();
+    expect(state.trackPointsRaw).toHaveLength(feed.length);
+    expect(state.trackPoints).toHaveLength(3);
+    expect(state.trackPointsSmoothed).toHaveLength(3);
+    expect(state.distanceM).toBeGreaterThan(9);
+    expect(state.distanceM).toBeLessThan(11);
+    expect(decisions.slice(3).every(decision => decision.accepted === false)).toBe(true);
+    expect(memory.mock.calls.length - memoryCallsBefore).toBe(3);
+  });
+
+  it('FALSE_REPORTED_SPEED_BACKTRACK: the store cannot veto movement accepted by the motion authority', async () => {
+    const metresEast = (metres: number) => metres / 111_320;
+    const route = [0, 1.2, 2.4, 3.6, 2.4, 1.2, 0];
+    const decisions = [];
+    for (const [index, east] of route.entries()) {
+      decisions.push(await useTrackingStore.getState().addTrackPoint({
+        lat: 0,
+        lng: metresEast(east),
+        accuracy: 4,
+        speed: index < 4 ? 1.1 : 0.09,
+        source: 'foreground',
+      }, 1_000 + index * 1_000));
+    }
+    expect(decisions.every(decision => decision.accepted)).toBe(true);
+    expect(useTrackingStore.getState().trackPoints).toHaveLength(route.length);
+    expect(useTrackingStore.getState().distanceM).toBeGreaterThan(6.5);
+  });
+
+  it('retains but does not fabricate a transition when legacy callers omit ordering timestamps', async () => {
     await useTrackingStore.getState().addTrackPoint({ lat: 1, lng: 2 });
     await useTrackingStore.getState().addTrackPoint({ lat: 1.0001, lng: 2.0001 });
-    expect(useTrackingStore.getState().trackPoints).toHaveLength(2);
+    const state = useTrackingStore.getState();
+    expect(state.trackPointsRaw).toHaveLength(2);
+    expect(state.trackPoints).toHaveLength(1);
   });
 
   it('parallel replay produces exactly the same accepted trace as one source', async () => {
@@ -388,6 +475,8 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAppStateChangeListener = null;
+    require('react-native').AppState.currentState = 'active';
     require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({ user: { id: 'tracking-test-user' } });
     seedSimulatorActivity();
   });
@@ -639,7 +728,14 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
 describe('useTrackingStore — P0 operation guards', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAppStateChangeListener = null;
+    require('react-native').AppState.currentState = 'active';
     mockLocation.requestForegroundPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'denied', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'denied', canAskAgain: true } as any);
+    mockSecureStore.getItemAsync.mockResolvedValue(null);
+    require('../src/services/batteryMonitor').batteryMonitor.getCurrentLevel.mockReturnValue(null);
+    require('../src/services/batteryMonitor').batteryMonitor.getIsCharging.mockReturnValue(false);
     require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({ user: { id: 'tracking-test-user' } });
     useTrackingStore.setState(useTrackingStore.getInitialState(), true);
   });
@@ -668,6 +764,49 @@ describe('useTrackingStore — P0 operation guards', () => {
     expect(useTrackingStore.getState().durationS).toBeGreaterThanOrEqual(pausedDuration + 5);
     expect(useTrackingStore.getState().durationS).toBeLessThanOrEqual(pausedDuration + 6);
     expect(useTrackingStore.getState().trackPoints).toHaveLength(0);
+  });
+
+  it('BACKGROUND_PERMISSION_EDUCATION_SUPPRESSION: education history cannot suppress an eligible native request', async () => {
+    mockSecureStore.getItemAsync.mockResolvedValue('1' as any);
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    expect(mockLocation.requestBackgroundPermissionsAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('IOS_NOOP_INTERVAL_PROVIDER_RESTART: Android timing change preserves watcher identity on iOS', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-11T00:00:00.000Z'));
+    const battery = require('../src/services/batteryMonitor').batteryMonitor;
+    battery.getCurrentLevel.mockReturnValue(null);
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    const callsAfterStart = mockLocation.watchPositionAsync.mock.calls.length;
+    battery.getCurrentLevel.mockReturnValue(0.1);
+    await jest.advanceTimersByTimeAsync(10_100);
+    expect(mockLocation.watchPositionAsync).toHaveBeenCalledTimes(callsAfterStart);
+  });
+
+  it('TRANSIENT_INACTIVE_FALSE_GAP: inactive neither restarts provider nor opens a segment', async () => {
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    const callsAfterStart = mockLocation.watchPositionAsync.mock.calls.length;
+    expect(mockAppStateChangeListener).not.toBeNull();
+    require('react-native').AppState.currentState = 'inactive';
+    mockAppStateChangeListener?.('inactive');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mockLocation.watchPositionAsync).toHaveBeenCalledTimes(callsAfterStart);
+    expect(useTrackingStore.getState()).toMatchObject({
+      status: 'tracking',
+      pendingSegmentStartReason: 'start',
+      locationAvailable: true,
+    });
+  });
+
+  it('FOREGROUND_TAKEOVER_OWNERSHIP: repeated active events do not recreate an owned watcher', async () => {
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    const callsAfterStart = mockLocation.watchPositionAsync.mock.calls.length;
+    expect(mockAppStateChangeListener).not.toBeNull();
+    for (let index = 0; index < 5; index += 1) mockAppStateChangeListener?.('active');
+    for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    expect(mockLocation.watchPositionAsync).toHaveBeenCalledTimes(callsAfterStart);
   });
 
   it('locks synchronously during a real start and rolls back a failed location dependency', async () => {

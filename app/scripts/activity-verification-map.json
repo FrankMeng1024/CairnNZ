@@ -8,11 +8,19 @@
       "tests": ["src/features/activity/__tests__/realGpsContinuity.test.ts"]
     },
     {
+      "name": "location-cadence",
+      "minimumGate": "gps",
+      "category": "CHARACTERIZATION",
+      "tests": ["src/features/activity/__tests__/locationCadenceExperiment.test.ts"]
+    },
+    {
       "name": "background",
       "minimumGate": "gps",
       "category": "PRODUCT_CONTRACT",
       "tests": [
         "src/features/activity/__tests__/backgroundAuthorization.test.ts",
+        "src/features/activity/__tests__/activityLocationLifecycle.test.ts",
+        "src/features/activity/__tests__/activityLocationHealth.test.ts",
         "src/services/__tests__/backgroundLocationTaskOwnership.test.ts"
       ]
     },
@@ -123,6 +131,7 @@
       "minimumGate": "presentation",
       "category": "CHARACTERIZATION",
       "tests": [
+        "src/features/activity/__tests__/confirmedRoutePresentation.test.ts",
         "src/screens/__tests__/activityP0Contract.test.ts",
         "src/screens/__tests__/activityRecordingUiContracts.test.ts"
       ]
@@ -136,7 +145,9 @@
     { "pattern": "^app/src/services/(hikeTrackWriter|pendingSyncStore|syncDaemon|offline)", "gate": "core" },
     { "pattern": "^app/src/features/activitySimulator/(activityLocationProvider|activitySimulatorEngine|useActivitySimulatorStore)", "gate": "core" },
     { "pattern": "^backend/src/(models/Session|routes/(sessions|memory|routes)|middleware/schemas)", "gate": "core" },
-    { "pattern": "^app/src/features/activity/(realGpsContinuity|elevationQuality|backgroundAuthorization|activityContracts)", "gate": "gps" },
+    { "pattern": "^app/src/features/activity/(realGpsContinuity|elevationQuality|backgroundAuthorization|activityLocationLifecycle|activityLocationHealth|activityContracts)", "gate": "gps" },
+    { "pattern": "^app/src/features/activity/locationCadenceExperiment", "gate": "gps" },
+    { "pattern": "^app/src/features/activity/confirmedRoutePresentation", "gate": "presentation" },
     { "pattern": "^app/src/services/backgroundLocationTask\\.ts$", "gate": "gps" },
     { "pattern": "^app/src/services/routing/", "gate": "gps" },
     { "pattern": "^app/src/config/mapbox\\.ts$", "gate": "gps" },

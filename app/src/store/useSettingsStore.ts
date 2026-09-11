@@ -19,6 +19,7 @@ import { create } from 'zustand';
 import { storage } from './storage';
 import { debugLogger } from '../services/debugLogger';
 import { migrateLegacyAppearancePreference, type ScenicAppearancePref } from '../utils/scenicTime';
+import type { ForegroundDistanceFilterM } from '../features/activity/locationCadenceExperiment';
 
 export type UnitsPref = 'metric' | 'imperial';
 // O18 HIST-09: user-selectable date format. Default 'dmy' (DD/MM/YYYY, NZ/UK style).
@@ -61,6 +62,8 @@ interface Settings {
   telemetryWifiOnly: boolean;            // only upload over WiFi (avoid cellular)
   telemetryBackendUrl: string;           // override backend URL (empty = use EXPO_PUBLIC_BACKEND_URL)
   telemetryApiKey: string;               // X-API-Key for telemetry endpoint
+  /** Internal Debug A/B override; normal real foreground tracking uses the proven 1 m candidate. */
+  activityGpsDistanceFilterM: ForegroundDistanceFilterM;
 }
 
 const STORAGE_KEY = 'cairn_settings';
@@ -92,6 +95,7 @@ const DEFAULTS: Settings = {
   telemetryWifiOnly: false,
   telemetryBackendUrl: '',
   telemetryApiKey: '',
+  activityGpsDistanceFilterM: 5,
 };
 
 interface SettingsState extends Settings {
@@ -210,6 +214,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             delete migrated.offRouteThresholdM;
           }
         }
+        if (
+          'activityGpsDistanceFilterM' in migrated
+          && migrated.activityGpsDistanceFilterM !== 1
+          && migrated.activityGpsDistanceFilterM !== 5
+        ) {
+          delete migrated.activityGpsDistanceFilterM;
+        }
         const stringFields = ['telemetryBackendUrl', 'telemetryApiKey'] as const;
         for (const k of stringFields) {
           if (k in migrated && typeof migrated[k] !== 'string') {
@@ -259,5 +270,6 @@ function pick(state: SettingsState): Settings {
     telemetryWifiOnly: state.telemetryWifiOnly,
     telemetryBackendUrl: state.telemetryBackendUrl,
     telemetryApiKey: state.telemetryApiKey,
+    activityGpsDistanceFilterM: state.activityGpsDistanceFilterM,
   };
 }

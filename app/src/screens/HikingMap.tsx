@@ -10,7 +10,8 @@
  */
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, Platform, ActivityIndicator, Image,
+  View, Text, StyleSheet, Platform, ActivityIndicator, Image, AppState,
+  AccessibilityInfo, Easing,
 } from 'react-native';
 import { Colors, Spacing, FontSize, Radius, Shadow } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
@@ -29,6 +30,16 @@ import { registerSimulatorMapCenterGetter } from '../features/activitySimulator/
 import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
 import { appendSimulatorLog } from '../features/activitySimulator/simulatorLog';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
+import {
+  createMapboxCadenceState,
+  observeMapboxLocation,
+} from '../features/activity/locationCadenceExperiment';
+import {
+  buildConfirmedRouteSegments,
+  continuousRouteAnimationDurationMs,
+  isAppendOnlyRouteUpdate,
+  planContinuousRouteTarget,
+} from '../features/activity/confirmedRoutePresentation';
 import { useIsFocused } from '@react-navigation/native';
 
 // ── Mapbox conditional import ────────────────────────────────────────────
@@ -42,6 +53,9 @@ let LineLayer: any = null;
 let ShapeSource: any = null;
 let CircleLayer: any = null;
 let StyleImport: any = null;
+let AnimatedShapeSource: any = null;
+let AnimatedCoordinatesArrayClass: any = null;
+let AnimatedShapeClass: any = null;
 if (Platform.OS !== 'web') {
   try {
     const Mapbox = require('@rnmapbox/maps');
@@ -53,9 +67,183 @@ if (Platform.OS !== 'web') {
     ShapeSource = Mapbox.ShapeSource;
     CircleLayer = Mapbox.CircleLayer;
     StyleImport = Mapbox.StyleImport;
+    AnimatedShapeSource = Mapbox.Animated?.ShapeSource;
+    AnimatedCoordinatesArrayClass = Mapbox.AnimatedCoordinatesArray;
+    AnimatedShapeClass = Mapbox.AnimatedShape;
   } catch {
     // Mapbox native not available
   }
+}
+
+function createContinuousRouteNodes(coordinatesValue: [number, number][]) {
+  const coordinates = new AnimatedCoordinatesArrayClass(coordinatesValue);
+  const shape = new AnimatedShapeClass({
+    type: 'Feature',
+    properties: {},
+    geometry: { type: 'LineString', coordinates },
+  });
+  return { coordinates, shape };
+}
+
+function ContinuousConfirmedRoute({
+  coordinates,
+  lineColor,
+  casingColor,
+  reduceMotion,
+  animateInitial,
+  targetTimestamp,
+  telemetryScreen,
+}: {
+  coordinates: [number, number][];
+  lineColor: string;
+  casingColor: string;
+  reduceMotion: boolean;
+  animateInitial: boolean;
+  targetTimestamp: number | null;
+  telemetryScreen: string;
+}) {
+  const initialStableCount = animateInitial && coordinates.length === 2 ? 1 : coordinates.length;
+  const stableCountRef = useRef(initialStableCount);
+  const previousTargetRef = useRef<[number, number][]>(
+    animateInitial && coordinates.length === 2 ? [coordinates[0]] : coordinates.slice(),
+  );
+  const previousTargetTimestampRef = useRef<number | null>(
+    animateInitial && coordinates.length === 2 ? coordinates.length > 0 ? targetTimestamp : null : targetTimestamp,
+  );
+  const initialCoordinates = animateInitial && coordinates.length === 2
+    ? [coordinates[0], coordinates[0]] as [number, number][]
+    : coordinates.slice();
+  const [nodes, setNodes] = useState(() => createContinuousRouteNodes(initialCoordinates));
+  const runningAnimationRef = useRef<any>(null);
+  const runningAnimationMetaRef = useRef<{ targetCount: number; startedAt: number } | null>(null);
+  const emitPresentationCheckpoint = (
+    event: string,
+    fields: Record<string, number | string | boolean | null>,
+  ) => {
+    if (!activitySimulatorBuildCapable) return;
+    const owner = useTrackingStore.getState();
+    appendSimulatorLog('MAP_STATE', event, {
+      screen: telemetryScreen,
+      sequenceTimestamp: targetTimestamp,
+      ...fields,
+    }, {
+      userId: owner.ownerUserId,
+      clientActivityId: owner.sessionId,
+      coordinateSource: 'none',
+    });
+  };
+
+  useEffect(() => () => {
+    const meta = runningAnimationMetaRef.current;
+    try { runningAnimationRef.current?.stop?.(); } catch { /* presentation only */ }
+    if (meta) {
+      emitPresentationCheckpoint('activity_continuous_route_animation_interrupted', {
+        reason: 'unmount-or-segment-change',
+        targetPointCount: meta.targetCount,
+        elapsedMs: Math.max(0, Date.now() - meta.startedAt),
+      });
+    }
+    runningAnimationRef.current = null;
+    runningAnimationMetaRef.current = null;
+    // This callback intentionally captures only the mount's diagnostic
+    // identity. It never observes or writes animation-frame coordinates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (coordinates.length < 2) return;
+    const previousTarget = previousTargetRef.current;
+    const routeWasReplaced = !isAppendOnlyRouteUpdate(previousTarget, coordinates);
+    const plan = planContinuousRouteTarget(coordinates, stableCountRef.current);
+    if (routeWasReplaced || reduceMotion) {
+      const priorMeta = runningAnimationMetaRef.current;
+      try { runningAnimationRef.current?.stop?.(); } catch { /* presentation only */ }
+      if (priorMeta) {
+        emitPresentationCheckpoint('activity_continuous_route_animation_interrupted', {
+          reason: reduceMotion ? 'reduce-motion' : 'route-replaced',
+          targetPointCount: priorMeta.targetCount,
+          elapsedMs: Math.max(0, Date.now() - priorMeta.startedAt),
+        });
+      }
+      runningAnimationRef.current = null;
+      runningAnimationMetaRef.current = null;
+      stableCountRef.current = coordinates.length;
+      previousTargetRef.current = coordinates.slice();
+      previousTargetTimestampRef.current = targetTimestamp;
+      setNodes(createContinuousRouteNodes(coordinates.slice()));
+      return;
+    }
+    if (plan.boundedResetRequired) {
+      // A pathological callback burst must not grow presentation state with
+      // Activity length. Canonical truth is already safe; catch the visual
+      // head up to a bounded recent tail and continue.
+      try { runningAnimationRef.current?.stop?.(); } catch { /* presentation only */ }
+      emitPresentationCheckpoint('activity_continuous_route_animation_reset', {
+        reason: 'bounded-tail-cap',
+        targetPointCount: coordinates.length,
+        stablePointCount: plan.stableCount,
+      });
+      runningAnimationRef.current = null;
+      runningAnimationMetaRef.current = null;
+      stableCountRef.current = plan.stableCount;
+      previousTargetRef.current = coordinates.slice();
+      previousTargetTimestampRef.current = targetTimestamp;
+      setNodes(createContinuousRouteNodes(coordinates.slice()));
+      return;
+    }
+    if (coordinates.length <= previousTarget.length) return;
+    const targetCount = coordinates.length;
+    const startedAt = Date.now();
+    const priorMeta = runningAnimationMetaRef.current;
+    if (priorMeta) {
+      try { runningAnimationRef.current?.stop?.(); } catch { /* presentation only */ }
+      emitPresentationCheckpoint('activity_continuous_route_animation_interrupted', {
+        reason: 'new-confirmed-target',
+        targetPointCount: priorMeta.targetCount,
+        elapsedMs: Math.max(0, startedAt - priorMeta.startedAt),
+      });
+    }
+    const timestampDeltaMs = targetTimestamp != null && previousTargetTimestampRef.current != null
+      ? targetTimestamp - previousTargetTimestampRef.current
+      : null;
+    const durationMs = continuousRouteAnimationDurationMs(timestampDeltaMs);
+    const animation = nodes.coordinates.timing({
+      toValue: plan.fullTargetCoordinates,
+      duration: durationMs,
+      easing: Easing.linear,
+    });
+    previousTargetRef.current = coordinates.slice();
+    previousTargetTimestampRef.current = targetTimestamp;
+    runningAnimationRef.current = animation;
+    runningAnimationMetaRef.current = { targetCount, startedAt };
+    emitPresentationCheckpoint('activity_continuous_route_animation_target', {
+      targetPointCount: targetCount,
+      stablePointCount: stableCountRef.current,
+      mutablePointCount: plan.mutableCount,
+      durationMs,
+    });
+    animation.start(({ finished }: { finished?: boolean } = {}) => {
+      if (!finished || previousTargetRef.current.length !== targetCount) return;
+      stableCountRef.current = targetCount;
+      runningAnimationRef.current = null;
+      runningAnimationMetaRef.current = null;
+      emitPresentationCheckpoint('activity_continuous_route_animation_completed', {
+        targetPointCount: targetCount,
+        elapsedMs: Math.max(0, Date.now() - startedAt),
+      });
+    });
+  }, [coordinates, nodes, reduceMotion, targetTimestamp, telemetryScreen]);
+
+  return (
+    <AnimatedShapeSource id="track-confirmed-continuous" shape={nodes.shape}>
+      <LineLayer id="track-confirmed-continuous-casing" style={{ lineColor: casingColor, lineOpacity: 0.86, lineWidth: 8, lineCap: 'round', lineJoin: 'round' }} />
+      <LineLayer id="track-confirmed-continuous-layer" style={{ lineColor, lineWidth: 4.5, lineCap: 'round', lineJoin: 'round' }} />
+    </AnimatedShapeSource>
+  );
+}
+
+function optionalFiniteNumber(value: unknown): number | null {
+  return value != null && Number.isFinite(Number(value)) ? Number(value) : null;
 }
 
 type HikingMapProps = {
@@ -116,6 +304,23 @@ export function HikingMap({
   const theme = useVisualTheme();
   const mapTheme = useMapTheme();
   const hikeLightPreset = themeToStandardPreset(mapTheme);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [mapAppState, setMapAppState] = useState(AppState.currentState);
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', setMapAppState);
+    return () => subscription.remove();
+  }, []);
 
   // R114/O22 (2026-08-08) Bug 4: watch network state. When offline, Mapbox
   // tiles fail to fetch → map renders black/white. Overlay a friendly
@@ -166,6 +371,7 @@ export function HikingMap({
     setMapFirstRender(false);
     firstRealLocationSeenRef.current = false;
     initialCameraAppliedRef.current = false;
+    mapboxCadenceRef.current = createMapboxCadenceState();
     if (!activitySimulatorBuildCapable) return undefined;
     useActivitySimulatorStore.getState().setMapDiagnostics({
       mountId,
@@ -307,6 +513,43 @@ export function HikingMap({
     };
   }, [trackPoints]);
 
+  const confirmedRouteSegments = useMemo(
+    () => buildConfirmedRouteSegments(trackPoints, GAP_THRESHOLD_MS, GAP_DIST_THRESHOLD_M),
+    [trackPoints],
+  );
+  const activeConfirmedSegment = confirmedRouteSegments[confirmedRouteSegments.length - 1] ?? null;
+  const trackingStatus = useTrackingStore(s => s.status);
+  const animateConfirmedHead = Boolean(
+    !simulatorEnabled
+    && !reduceMotion
+    && isFocused
+    && mapAppState === 'active'
+    && trackingStatus === 'tracking'
+    && activeConfirmedSegment
+    && activeConfirmedSegment.coordinates.length >= 2
+    && AnimatedShapeSource
+    && AnimatedCoordinatesArrayClass
+    && AnimatedShapeClass,
+  );
+  const staticSolidGeoJSON = useMemo(() => {
+    if (!animateConfirmedHead) return solidGeoJSON;
+    return {
+      type: 'FeatureCollection' as const,
+      features: confirmedRouteSegments.slice(0, -1)
+        .filter(segment => segment.coordinates.length >= 2)
+        .map(segment => ({
+          type: 'Feature' as const,
+          geometry: { type: 'LineString' as const, coordinates: segment.coordinates },
+          properties: {},
+        })),
+    };
+  }, [animateConfirmedHead, confirmedRouteSegments, solidGeoJSON]);
+  const activityTraceColor = activityVariant === 'run' ? Colors.running : theme.primary;
+  const activeTailTimestamp = trackPoints[trackPoints.length - 1]?.t ?? null;
+  const animateInitialConfirmedEdge = trackingStatus === 'tracking'
+    && activeTailTimestamp != null
+    && Math.max(0, Date.now() - activeTailTimestamp) <= 3_000;
+
   const traceTailTimestamp = trackPoints[trackPoints.length - 1]?.t ?? null;
   useEffect(() => {
     if (!activitySimulatorBuildCapable || traceTailTimestamp === null) return;
@@ -357,6 +600,7 @@ export function HikingMap({
   const flyToStateRef = useRef<{ startedAt: number; timeout: ReturnType<typeof setTimeout> | null } | null>(null);
   const firstRealLocationSeenRef = useRef(false);
   const initialCameraAppliedRef = useRef(false);
+  const mapboxCadenceRef = useRef(createMapboxCadenceState());
 
   useEffect(() => () => {
     if (flyToStateRef.current?.timeout) clearTimeout(flyToStateRef.current.timeout);
@@ -370,12 +614,54 @@ export function HikingMap({
 
   const handleRealUserLocationUpdate = (location: any) => {
     if (!activitySimulatorBuildCapable) return;
-    appendSimulatorLog('LOCATION', 'real_location_sample_observed', {
-      accuracyM: location?.coords?.accuracy ?? null,
-      altitudeAvailable: Number.isFinite(location?.coords?.altitude),
-      speedMps: location?.coords?.speed ?? null,
-      sequenceTimestamp: location?.timestamp ?? null,
-    }, { coordinateSource: 'real' });
+    const coords = location?.coords;
+    const tracking = useTrackingStore.getState();
+    const latestRaw = tracking.trackPointsRaw[tracking.trackPointsRaw.length - 1] ?? null;
+    const callbackWallTimestamp = Date.now();
+    const monotonicTimestampMs = typeof globalThis.performance?.now === 'function'
+      ? globalThis.performance.now()
+      : callbackWallTimestamp;
+    const observed = observeMapboxLocation(
+      mapboxCadenceRef.current,
+      {
+        lat: Number(coords?.latitude),
+        lng: Number(coords?.longitude),
+        timestamp: optionalFiniteNumber(location?.timestamp),
+        horizontalAccuracyM: optionalFiniteNumber(coords?.accuracy),
+        speedMps: optionalFiniteNumber(coords?.speed),
+        courseDeg: optionalFiniteNumber(coords?.course),
+      },
+      {
+        callbackWallTimestamp,
+        monotonicTimestampMs,
+        appState: AppState.currentState,
+        latestCairnRaw: latestRaw ? { lat: latestRaw.lat, lng: latestRaw.lng } : null,
+        latestCanonical: tracking.lastCoordinate,
+      },
+    );
+    mapboxCadenceRef.current = observed.state;
+    if (!observed.locationChanged || !observed.fields) return;
+    const commonFields = {
+      ...observed.fields,
+      screen: telemetryScreenPrefix,
+      mapMountId: mapMountIdRef.current,
+    };
+    appendSimulatorLog('LOCATION', 'rnmapbox_location_source', commonFields, {
+      clientActivityId: tracking.sessionId,
+      coordinateSource: 'real',
+    });
+    // UserLocation calls setState before invoking onUpdate. Without forking
+    // RNMapbox this is the closest non-invasive target-assignment checkpoint;
+    // it is deliberately not described as a rendered/GPU position.
+    appendSimulatorLog('MAP_STATE', 'map_user_location_target', {
+      ...commonFields,
+      targetAssignmentMonotonicTimestampMs: monotonicTimestampMs,
+      targetAssignmentPhase: 'user-location-set-state-requested',
+      animationDurationMs: 1_000,
+    }, {
+      clientActivityId: tracking.sessionId,
+      coordinateSource: 'real',
+    });
     if (firstRealLocationSeenRef.current) return;
     firstRealLocationSeenRef.current = true;
     if (instantCamera || simulatorEnabled || !followUser || flyToStateRef.current) return;
@@ -710,8 +996,8 @@ export function HikingMap({
         )}
 
         {/* Track polyline — solid segments (good signal) */}
-        {solidGeoJSON.features.length > 0 && (
-          <ShapeSource id="track-line" shape={solidGeoJSON}>
+        {staticSolidGeoJSON.features.length > 0 && (
+          <ShapeSource id="track-line" shape={staticSolidGeoJSON}>
             <LineLayer
               id="track-line-casing"
               style={{
@@ -730,7 +1016,7 @@ export function HikingMap({
                 // Run uses the existing movement-blue token. A restrained
                 // material casing keeps both traces legible over trails,
                 // minor roads, satellite imagery, sunset and night maps.
-                lineColor: activityVariant === 'run' ? Colors.running : theme.primary,
+                lineColor: activityTraceColor,
                 lineWidth: 4.5,
                 lineCap: 'round',
                 lineJoin: 'round',
@@ -738,6 +1024,18 @@ export function HikingMap({
             />
           </ShapeSource>
         )}
+        {animateConfirmedHead && activeConfirmedSegment ? (
+          <ContinuousConfirmedRoute
+            key={activeConfirmedSegment.key}
+            coordinates={activeConfirmedSegment.coordinates}
+            lineColor={activityTraceColor}
+            casingColor={theme.surfaceElevated}
+            reduceMotion={reduceMotion}
+            animateInitial={animateInitialConfirmedEdge}
+            targetTimestamp={activeTailTimestamp}
+            telemetryScreen={telemetryScreenPrefix}
+          />
+        ) : null}
 
         {/* v78 #1: Track polyline — dashed gap segments (signal lost > 30s).
             Muted color + dashed pattern signals "we couldn't track here"

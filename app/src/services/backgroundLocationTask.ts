@@ -26,8 +26,9 @@ import { newSegmentId, shouldStartNewSegment, type SegmentedTrackPoint } from '.
 import { haversineM } from '../utils/geo';
 import {
   acceptRealGpsObservation,
-  createRealGpsContinuityState,
   evaluateRealGpsObservation,
+  REAL_GPS_CONTINUITY_VERSION,
+  restoreRealGpsContinuityState,
   type RealGpsContinuityState,
   type RealGpsObservation,
 } from '../features/activity/realGpsContinuity';
@@ -147,6 +148,8 @@ export type LocationCoords = {
   altitudeAccuracy: number | null;
   speed: number | null;
   heading: number | null;
+  speedAccuracy?: number | null;
+  courseAccuracy?: number | null;
   timestamp: number;
   clientActivityId?: string;
   ownerGeneration?: string;
@@ -155,7 +158,7 @@ export type LocationCoords = {
   rawOrdinal?: number;
   /** Prevent the foreground drain from filtering a durably classified point twice. */
   continuityPreclassified?: boolean;
-  canonicalDecision?: 'ACCEPT' | 'REJECT' | 'QUARANTINE';
+  canonicalDecision?: 'ACCEPT' | 'REJECT' | 'QUARANTINE' | 'REFINE';
   decisionReason?: string;
   continuityStateAfter?: RealGpsContinuityState;
 };
@@ -192,7 +195,7 @@ function emitHeadlessMotionDecision(
     decision.kind === 'ACCEPT' ? 'GPS_ACCEPT' : 'GPS_REJECT',
     'activity_filter_decision_v2',
     {
-      filterVersion: 1,
+      filterVersion: REAL_GPS_CONTINUITY_VERSION,
       rawOrdinal,
       sampleSource: 'background',
       sampleTimestamp: observation.t,
@@ -202,13 +205,25 @@ function emitHeadlessMotionDecision(
       reportedSpeedMps: observation.speed != null && observation.speed >= 0
         ? roundedDiagnostic(observation.speed)
         : null,
+      speedAccuracyMps: roundedDiagnostic(observation.speedAccuracy),
       reportedCourseValid: observation.course != null && observation.course >= 0,
+      courseAccuracyDeg: roundedDiagnostic(observation.courseAccuracy),
       dtFromTrustedMs: decision.diagnostics.dtFromTrustedMs,
       displacementFromTrustedM: roundedDiagnostic(decision.diagnostics.displacementFromTrustedM),
       impliedSpeedMps: roundedDiagnostic(decision.diagnostics.impliedSpeedMps),
       accuracyAdjustedSpeedMps: roundedDiagnostic(decision.diagnostics.lowerBoundSpeedMps),
       trajectoryInnovationM: roundedDiagnostic(decision.diagnostics.predictionInnovationM),
       headingDeltaDeg: roundedDiagnostic(decision.diagnostics.headingDeltaDeg),
+      motionState: decision.diagnostics.motionStateAfter,
+      motionStateBefore: decision.diagnostics.motionStateBefore,
+      windowCount: decision.diagnostics.windowCount,
+      windowDurationMs: decision.diagnostics.windowDurationMs,
+      cumulativeProgressM: roundedDiagnostic(decision.diagnostics.cumulativeProgressM),
+      netProgressM: roundedDiagnostic(decision.diagnostics.netProgressM),
+      progressRatio: roundedDiagnostic(decision.diagnostics.progressRatio),
+      clusterRadiusM: roundedDiagnostic(decision.diagnostics.clusterRadiusM),
+      directionVariabilityDeg: roundedDiagnostic(decision.diagnostics.directionVariabilityDeg),
+      reportedSpeedContradiction: decision.diagnostics.reportedSpeedContradiction,
       decision: decision.kind,
       decisionReason: decision.reason,
       candidateId: decision.candidateEvent?.candidateId ?? decision.state.pending?.id ?? null,
@@ -236,7 +251,7 @@ function emitHeadlessMotionDecision(
     candidateRawOrdinal: decision.candidateEvent.candidateRawOrdinal ?? null,
     corroboratingRawOrdinal: rawOrdinal,
     ageMs: decision.candidateEvent.delayMs,
-    fixCount: decision.state.pending?.evidenceCount ?? 2,
+    fixCount: decision.candidateEvent.evidenceCount ?? decision.state.pending?.evidenceCount ?? 2,
     detourExcessM: roundedDiagnostic(decision.candidateEvent.detourExcessM),
     reversalDeg: roundedDiagnostic(decision.candidateEvent.reversalDeg),
   }, {
@@ -298,10 +313,7 @@ async function appendDirectlyToHikeTrack(
     let activeSegmentId = previous?.segmentId ?? context.segmentId;
     let rawOrdinal = Math.max(0, Number(context.rawOrdinal) || 0);
     let latestObservedTimestamp = previous?.t ?? context.acceptAfterMs - 1;
-    let continuity = context.continuityState?.version === 1
-      ? context.continuityState
-      : createRealGpsContinuityState(
-          tail.slice(-2).map((point: any, index: number) => ({
+    const restoredTail = tail.slice(-2).map((point: any, index: number) => ({
             lat: point.lat,
             lng: point.lng,
             t: point.t,
@@ -314,8 +326,8 @@ async function appendDirectlyToHikeTrack(
             observationId: 'headless-restored-' + index + '-' + point.t,
             rawOrdinal: point.rawOrdinal,
             segmentId: point.segmentId ?? activeSegmentId,
-          })),
-        );
+          }));
+    let continuity = restoreRealGpsContinuityState(context.continuityState, restoredTail);
     const accepted: any[] = [];
     const classified: any[] = [];
     const observedOrdinals: number[] = [];
@@ -337,6 +349,8 @@ async function appendDirectlyToHikeTrack(
         altitude: event.alt ?? null,
         speed: event.speed ?? null,
         course: event.course ?? null,
+        speedAccuracy: event.speedAccuracy ?? null,
+        courseAccuracy: event.courseAccuracy ?? null,
         source: 'background',
         observationId: context.clientActivityId.slice(-8) + ':' + rawOrdinal,
         rawOrdinal,
@@ -354,6 +368,8 @@ async function appendDirectlyToHikeTrack(
           ? roundedDiagnostic(observation.speed)
           : null,
         reportedCourseValid: observation.course != null && observation.course >= 0,
+        speedAccuracyMps: roundedDiagnostic(observation.speedAccuracy),
+        courseAccuracyDeg: roundedDiagnostic(observation.courseAccuracy),
         // Headless TaskManager tests and constrained native wakes may not have
         // a hydrated React Native AppState module. Provider evidence must still
         // reach the journal; lifecycle visibility is diagnostic, not authority.
@@ -382,12 +398,12 @@ async function appendDirectlyToHikeTrack(
         });
         continue;
       }
-      const canonicalObservations = decision.confirmedCandidate
-        ? [decision.confirmedCandidate, observation]
-        : [observation];
-      if (decision.confirmedCandidate) {
+      const promotedCandidates = decision.confirmedCandidates
+        ?? (decision.confirmedCandidate ? [decision.confirmedCandidate] : []);
+      const canonicalObservations = [...promotedCandidates, observation];
+      for (const promotedCandidate of promotedCandidates) {
         const existingPending = classified.findIndex(
-          item => item.observationId === decision.confirmedCandidate?.observationId,
+          item => item.observationId === promotedCandidate.observationId,
         );
         if (existingPending >= 0) classified.splice(existingPending, 1);
       }
@@ -403,6 +419,8 @@ async function appendDirectlyToHikeTrack(
               vAcc: canonicalObservation.verticalAccuracy ?? null,
               speed: canonicalObservation.speed ?? null,
               course: canonicalObservation.course ?? null,
+              speedAccuracy: canonicalObservation.speedAccuracy ?? null,
+              courseAccuracy: canonicalObservation.courseAccuracy ?? null,
               src: 'bg',
               conf: 1,
             };
@@ -649,7 +667,9 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
       accuracyM: coords.accuracy,
       verticalAccuracyM: coords.altitudeAccuracy,
       speedMps: coords.speed,
+      speedAccuracyMps: coords.speedAccuracy ?? null,
       courseValid: coords.heading != null && coords.heading >= 0,
+      courseAccuracyDeg: coords.courseAccuracy ?? null,
       nativeBatchSize: locations.length,
       nativeBatchSequence,
       nativeBatchIndex,
@@ -669,6 +689,8 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
       vAcc: coords.altitudeAccuracy,
       speed: coords.speed,
       course: coords.heading,
+      speedAccuracy: coords.speedAccuracy ?? null,
+      courseAccuracy: coords.courseAccuracy ?? null,
       src: 'bg',
       conf: 1,
     });
@@ -710,6 +732,8 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
         altitudeAccuracy: point.vAcc ?? null,
         speed: point.speed ?? null,
         heading: point.course ?? null,
+        speedAccuracy: point.speedAccuracy ?? null,
+        courseAccuracy: point.courseAccuracy ?? null,
         timestamp: point.t,
         clientActivityId: point.clientActivityId,
         ownerGeneration: point.ownerGeneration,

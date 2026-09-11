@@ -363,6 +363,20 @@ export async function listPending(): Promise<PendingHike[]> {
   });
 }
 
+/**
+ * Read one pending Activity without promoting a legacy envelope, creating a
+ * directory, updating retry metadata, or otherwise changing sync authority.
+ * Internal review tooling uses this when the source pending payload is
+ * immutable evidence rather than work for the sync daemon.
+ */
+export async function readPendingReadonly(localId: string): Promise<PendingHike | null> {
+  if (!localId) return null;
+  const fs = await getFs();
+  if (!fs) throw new Error('pending_activity_storage_unavailable');
+  const best = await readBest(fs, basePathFor(fs, localId));
+  return best?.hike ?? null;
+}
+
 export async function removePending(localId: string, expectedUserId: string): Promise<void> {
   if (!expectedUserId || expectedUserId === 'guest') throw new Error('pending_activity_owner_required');
   await withMutation(async () => {

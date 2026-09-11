@@ -131,12 +131,31 @@ describe('Free Activity integration contracts', () => {
   test('real background ownership refreshes native authorization and never trusts a hardcoded grant', () => {
     const tracking = read('src/store/useTrackingStore.ts');
     const authorization = read('src/features/activity/backgroundAuthorization.ts');
-    expect(tracking).toContain('await refreshRealBackgroundAuthorization(!hasSeenBackgroundEducation)');
-    expect(tracking).toContain('const granted = await refreshRealBackgroundAuthorization(false)');
+    expect(tracking).toContain('await refreshRealBackgroundAuthorization(true, {');
+    expect(tracking).not.toContain('refreshRealBackgroundAuthorization(!hasSeenBackgroundEducation)');
+    expect(tracking).toContain('const authorization = await refreshRealBackgroundAuthorization(false)');
+    expect(tracking).toContain('const granted = authorization.granted');
     expect(tracking).toContain('refreshBackgroundLocationPermission: async () =>');
     expect(authorization).toContain('await provider.getBackgroundPermissionsAsync()');
     expect(authorization).toContain("current.granted || !options.requestIfEligible || !current.canAskAgain");
     expect(authorization).not.toMatch(/granted:\s*true\s*[,}]/);
+  });
+
+  test('real lifecycle treats inactive as transient and coalesces by owner state', () => {
+    const tracking = read('src/store/useTrackingStore.ts');
+    const lifecycle = read('src/features/activity/activityLocationLifecycle.ts');
+    expect(tracking).toContain('enqueueRealLocationLifecycleTransition(nextState)');
+    expect(lifecycle).toContain("appState === 'inactive'");
+    expect(lifecycle).toContain("action: 'hold-transient-inactive'");
+    expect(lifecycle).toContain("action: 'keep-current-owner'");
+    expect(tracking).not.toContain("markRecordingContinuityUnavailable('inactive'");
+  });
+
+  test('iOS nominal sampling changes do not restart an unchanged foreground watcher', () => {
+    const tracking = read('src/store/useTrackingStore.ts');
+    expect(tracking).toContain('shouldRestartForegroundForNominalIntervalChange(Platform.OS)');
+    expect(tracking).toContain("reason: 'android-only-time-interval-change'");
+    expect(tracking).toContain('foregroundWatcherRestarted: false');
   });
 
   test('foreground recovery stops any native-owned background stream before starting its watcher', () => {
@@ -184,11 +203,37 @@ describe('Free Activity integration contracts', () => {
     expect(run).toContain('trackPoints={liveTrackPoints}');
   });
 
-  test('real GPS health is accepted-fix freshness, not provider activation alone', () => {
+  test('one-source confirmed route animation is presentation-only and cancels outside active foreground tracking', () => {
+    const map = read('src/screens/HikingMap.tsx');
+    // Native animation behavior cannot be certified by Jest. This structural
+    // guard protects the integration boundary while pure segmentation and
+    // bounded-tail outcomes are tested behaviorally.
+    expect(map).toContain('new AnimatedCoordinatesArrayClass(coordinatesValue)');
+    expect(map).toContain('planContinuousRouteTarget(coordinates, stableCountRef.current)');
+    expect(map).toContain('id="track-confirmed-continuous"');
+    expect(map).not.toContain('id="track-confirmed-head"');
+    expect(map).not.toContain('id="track-confirmed-body"');
+    expect(map).toContain("mapAppState === 'active'");
+    expect(map).toContain("trackingStatus === 'tracking'");
+    expect(map).toContain('&& !reduceMotion');
+    expect(map).toContain("coordinateSource: 'none'");
+    expect(map).not.toContain('useTrackingStore.setState({ animated');
+  });
+
+  test('real GPS UI wires source freshness separately from canonical-route freshness', () => {
     const hike = read('src/screens/HikingScreen.tsx');
     const run = read('src/screens/RunningScreen.tsx');
-    expect(hike).toContain('const gpsFixHealthy = isTracking && locationAvailable && lastTrackT !== null && !signalLost');
-    expect(run).toContain("const gpsFixHealthy = status === 'tracking' && locationAvailable && lastTrackT !== null && !signalLost");
+    for (const source of [hike, run]) {
+      // Structural guard: the pure health behavior is covered in
+      // activityLocationHealth.test; this verifies both screens actually
+      // supply the independent provider and canonical clocks to it.
+      expect(source).toContain('deriveActivityLocationHealth({');
+      expect(source).toContain('latestSourceTimestamp: latestSourceLocationTime');
+      expect(source).toContain('latestCanonicalTimestamp: lastTrackT');
+      expect(source).toContain("userFacingIssue === 'sustained-route-unreliable'");
+      expect(source).not.toContain("? 'Checking route'");
+      expect(source).not.toContain('GPS accuracy ±');
+    }
   });
 
   test('wake-up one-shot GPS callback is fenced to its captured Activity owner', () => {

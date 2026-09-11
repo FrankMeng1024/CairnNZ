@@ -40,6 +40,7 @@ import {
   isActivitySessionVisible,
 } from '../features/activity/activityOperationalState';
 import { saveEligibility } from '../features/activity/activityContracts';
+import { deriveActivityLocationHealth } from '../features/activity/activityLocationHealth';
 import {
   findRecoverableActivity,
   restoreRecoverableActivity,
@@ -196,10 +197,14 @@ export function RunningScreen() {
   const isFinishing = useTrackingStore(s => s.isFinishing);
   const startError = useTrackingStore(s => s.startError);
   const durationS = useTrackingStore(s => s.durationS);
-  const activityStartedAt = useTrackingStore(s => s.startedAt);
   const distanceM = useTrackingStore(s => s.distanceM);
   const locationAvailable = useTrackingStore(s => s.locationAvailable);
   const lastCoordinate = useTrackingStore(s => s.lastCoordinate);
+  const latestSourceLocationTime = useTrackingStore(s => s.latestSourceLocationTime);
+  const realMotionState = useTrackingStore(s => s.realMotionState);
+  const realCandidatePending = useTrackingStore(s => s.realCandidatePending);
+  const realCanonicalDecisionReason = useTrackingStore(s => s.realCanonicalDecisionReason);
+  const pendingSegmentStartReason = useTrackingStore(s => s.pendingSegmentStartReason);
   const backgroundLocationPermission = useTrackingStore(s => s.backgroundLocationPermission);
   const refreshBackgroundLocationPermission = useTrackingStore(s => s.refreshBackgroundLocationPermission);
   const {
@@ -554,18 +559,29 @@ export function RunningScreen() {
   // Format display values
   const distDisplay = locationAvailable ? dist.format(distanceM, 2) : '--';
   const durationDisplay = formatDuration(durationS);
-  // O18 RUN-02: signal-lost chip (parity with HikingScreen). Fires at 2 min
-  // of no accepted GPS fix during active tracking.
-  const RUN_SIGNAL_GAP_MS = 120_000;
   const lastTrackT = trackPoints.length > 0 ? trackPoints[trackPoints.length - 1].t : null;
   const freshnessNow = locationProviderSource === 'simulator'
     ? simulatorVirtualTimestamp
     : activityFreshnessNow(locationProviderSource);
-  const freshnessReference = lastTrackT ?? activityStartedAt;
-  const signalLostFor = freshnessReference != null ? Math.max(0, freshnessNow - freshnessReference) : 0;
-  const signalLost = status === 'tracking' && freshnessReference != null && signalLostFor > RUN_SIGNAL_GAP_MS;
+  const realLocationHealth = deriveActivityLocationHealth({
+    nowMs: freshnessNow,
+    sourceActive: status === 'tracking' && locationAvailable,
+    latestSourceTimestamp: latestSourceLocationTime,
+    latestCanonicalTimestamp: lastTrackT,
+    pendingCandidate: realCandidatePending,
+    latestCanonicalDecisionReason: realCanonicalDecisionReason,
+    continuityGapOpen: pendingSegmentStartReason === 'gps-reacquired',
+    motionState: realMotionState,
+  });
+  const signalLost = status === 'tracking' && locationProviderSource === 'real'
+    && realLocationHealth.userFacingIssue === 'source-unavailable';
+  const canonicalDegraded = status === 'tracking' && locationProviderSource === 'real'
+    && realLocationHealth.userFacingIssue === 'sustained-route-unreliable';
+  const signalLostFor = signalLost ? realLocationHealth.sourceAgeMs ?? 0 : 0;
   const signalLostMin = Math.floor(signalLostFor / 60_000);
-  const gpsFixHealthy = status === 'tracking' && locationAvailable && lastTrackT !== null && !signalLost;
+  const gpsFixHealthy = status === 'tracking' && locationAvailable && lastTrackT !== null
+    && realLocationHealth.sourceHealth === 'fresh'
+    && !signalLost && !canonicalDegraded;
   const simulatorGpsActive = status === 'tracking' && locationProviderSource === 'simulator';
   const gpsStatusLabel = simulatorGpsActive
     ? `SIM · ${{ normal: 'Good', poor: 'Poor', lost: 'Lost', frozen: 'Frozen' }[simulatorSignal]}`
@@ -573,6 +589,8 @@ export function RunningScreen() {
       ? 'GPS held'
       : signalLost
         ? 'Signal lost'
+        : canonicalDegraded
+          ? 'Location issue'
         : gpsFixHealthy
           ? 'GPS good'
           : permissionBlocked
@@ -585,6 +603,7 @@ export function RunningScreen() {
           : 'info'
     : status === 'paused' ? 'muted'
       : signalLost ? 'danger'
+        : canonicalDegraded ? 'warning'
         : gpsFixHealthy ? 'healthy'
           : permissionBlocked ? 'danger'
             : 'warning';
@@ -599,9 +618,9 @@ export function RunningScreen() {
       tone: 'danger',
       icon: 'CloudOff',
     });
-  } else if (status === 'tracking' && lastCoordinate?.accuracy != null && lastCoordinate.accuracy > 15) {
+  } else if (canonicalDegraded) {
     runNotices.push({
-      label: `GPS accuracy ±${Math.round(lastCoordinate.accuracy)} m`,
+      label: 'Location is too uncertain to record reliably',
       tone: 'warning',
       icon: 'Navigation',
     });

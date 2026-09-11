@@ -88,7 +88,10 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     });
     readActiveHikeTail.mockResolvedValue([{ t: 2_500, lat: -41, lng: 174, segmentId: 'segment-2' }]);
 
-    await handler({ data: { locations: [point(1_500), point(2_400), point(3_000)] }, error: null });
+    await handler({
+      data: { locations: [point(1_500), point(2_400), point(3_000, -40.99998)] },
+      error: null,
+    });
 
     expect(appendBackgroundHikePoints).toHaveBeenCalledTimes(1);
     expect(appendBackgroundHikePoints.mock.calls[0][0]).toEqual([

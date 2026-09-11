@@ -1,28 +1,28 @@
 /**
- * snapTrack.ts — Activity-length GPS → road-snap pipeline (v6.4).
+ * snapTrack.ts — Activity-length GPS → road-snap pipeline (v7 hybrid).
  *
  * Single shared module used by:
  *   - Activity SAVE (turn raw GPS into a clean polyline at save time)
  *   - Brush edit Preview (snap a brush stroke through the same code)
  *
- * Algorithm (validated by spike on session 46 + 1780-pt synth):
+ * Algorithm (sequence-preserving hybrid):
  *   1. Tag each raw point as GOOD or LOST.
  *      LOST = `accuracy > 20m`. A negative native speed means “unknown”,
  *      not “GPS lost”, and remains eligible under the accuracy/quality gates.
  *   2. Split into runs of contiguous GOOD or LOST points.
- *   3. For each GOOD run: chunk at 80 with overlap 10. Per-chunk Mapbox
+ *   3. For each GOOD run: chunk at 80 with one canonical boundary point. Per-chunk Mapbox
  *      /matching call with `tidy=true` and per-coord radiuses (clamp accuracy
  *      to [10, 40]m). Up to 4 chunks fetched in parallel.
  *   4. On chunk success: take Mapbox geometry. Re-attach alt from raw via
  *      nearest-neighbor.
- *   5. On chunk failure (NoSegment / NoMatch / network / conf<0.3): fall back
- *      to that chunk's raw points, densified to ≤ 20m steps.
- *   6. Stitch chunks within a run: walk forward in chunk N+1 to find the snap
- *      point closest to chunk N's last point. If gap > 30m, bridge with
- *      densified line (raw fallback for that join).
- *   7. LOST runs: never sent to Mapbox. Densified raw at ≤ 20m.
- *   8. Cross-run splice: if gap > 20m at boundary, bridge with densified line.
- *   9. Final dedupe at 3m + window-3 smoother to clean raw-fallback wobble.
+ *   5. On chunk failure (NoSegment / NoMatch / network / quality): preserve
+ *      that chunk's canonical coordinates exactly.
+ *   6. Every accepted chunk is anchored to its canonical start/end. Adjacent
+ *      chunks share that exact temporal boundary; nearest geography can never
+ *      jump to another pass over the same road.
+ *   7. LOST runs are canonical fallback and are never sent to Mapbox.
+ *   8. No global dedupe, union, shortcut, fake connector or smoothing pass is
+ *      allowed across matched/fallback subsection boundaries.
  *
  * Robustness contract:
  *   - On TOTAL failure (entire pipeline can't finish OR exceeds totalTimeoutMs)
@@ -31,8 +31,8 @@
  *   - The pipeline NEVER throws to caller. All errors are swallowed and
  *     converted to `ok: false`.
  *   - Raw input is never mutated.
- *   - alt values from raw are preserved on the output (nearest-neighbor copy
- *     for snap segments, linear-interp for densified bridges).
+ *   - alt values from raw are preserved on matched output by nearest-neighbor
+ *     copy; canonical fallback coordinates and altitude remain exact.
  *
  * What this is NOT:
  *   - Not a true HMM map-matcher; we delegate to Mapbox /matching.
@@ -69,6 +69,9 @@ export interface SnappedPoint {
   lat: number;
   lng: number;
   alt?: number | null;
+  /** Canonical fallback keeps exact time; matched vertices receive monotonic
+   * subsection-local interpolation for display chronology only. */
+  t?: number;
 }
 
 interface SnapTrackOptions {
@@ -114,7 +117,7 @@ export interface SnapTrackStats {
   goodRuns: number;
   /** Number of LOST runs (raw-only, never sent to Mapbox). */
   lostRuns: number;
-  /** Number of times a seam-bridge was inserted to close a > 30m chunk gap. */
+  /** Legacy diagnostic retained for telemetry compatibility; v7 never inserts bridges. */
   seamBridges: number;
   /** Privacy-safe evidence for each external request; never includes token or coordinates. */
   requestResults: Array<{
@@ -147,15 +150,12 @@ type SnapTrackResult =
 // ============================================================================
 
 const CHUNK_SIZE = 80;            // raw points per Mapbox call (cap is 100)
-const CHUNK_OVERLAP = 10;         // raw-point overlap between consecutive chunks
+const CHUNK_OVERLAP = 1;          // exact canonical boundary; preserves repeated-pass order
 const ACC_LOST_M = 20;            // accuracy worse than this => GPS lost
 const ACC_RADIUS_MIN = 10;        // per-coord radius min (Mapbox API allows 1..50)
 const ACC_RADIUS_MAX = 40;        // per-coord radius max (50 = upper bound)
 const CONF_FALLBACK = 0.3;        // Mapbox match confidence < this => raw fallback
-const SEAM_BRIDGE_THRESH_M = 30;  // chunk join gap > this => insert bridge
-const RUN_BRIDGE_THRESH_M = 20;   // run-to-run gap > this => insert bridge
-const DENSIFY_STEP_M = 20;        // bridge / raw-fallback densification step
-const DEDUPE_M = 3;               // final-pass minimum spacing
+const ENDPOINT_REPLACE_M = 3;     // replace a near-derived endpoint with canonical truth
 const DEFAULT_TOTAL_TIMEOUT_MS = 60_000;
 const DEFAULT_PER_CALL_TIMEOUT_MS = 8_000;
 const DEFAULT_CONCURRENCY = 4;
@@ -221,9 +221,19 @@ function percentile95(values: number[]): number {
   return sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)];
 }
 
+function percentile50(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
 export interface MatchedGeometryQuality {
   accepted: boolean;
   reason: 'accepted' | 'raw_deviation' | 'max_raw_deviation' | 'endpoint_displacement' | 'length_distortion';
+  p50DeviationM: number;
   p95DeviationM: number;
   maxDeviationM: number;
   endpointDeviationM: number;
@@ -246,7 +256,10 @@ export function evaluateMatchedGeometryQuality(
     .map(point => point.accuracy)
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0);
   const accuracyP95 = usableAccuracy.length > 0 ? percentile95(usableAccuracy) : 10;
-  const deviationEnvelopeM = Math.max(15, accuracyP95 * 2);
+  // Accuracy widens the matcher search, but cannot authorize stealing an
+  // internal path onto a nearby external road.
+  const deviationEnvelopeM = Math.min(15, Math.max(8, accuracyP95 * 1.25));
+  const p50DeviationM = percentile50(deviations);
   const p95DeviationM = percentile95(deviations);
   const maxDeviationM = deviations.length > 0 ? Math.max(...deviations) : 0;
   const endpointDeviationM = Math.max(
@@ -256,7 +269,7 @@ export function evaluateMatchedGeometryQuality(
   const rawLengthM = pathLength(raw);
   const matchedLengthM = pathLength(matched);
   const lengthRatio = rawLengthM > 1 ? matchedLengthM / rawLengthM : 1;
-  const maxDeviationEnvelopeM = Math.max(35, deviationEnvelopeM * 1.5);
+  const maxDeviationEnvelopeM = Math.min(30, Math.max(18, deviationEnvelopeM * 1.5));
   const reason = p95DeviationM > deviationEnvelopeM
     ? 'raw_deviation'
     : maxDeviationM > maxDeviationEnvelopeM
@@ -269,6 +282,7 @@ export function evaluateMatchedGeometryQuality(
   return {
     accepted: reason === 'accepted',
     reason,
+    p50DeviationM,
     p95DeviationM,
     maxDeviationM,
     endpointDeviationM,
@@ -297,14 +311,14 @@ function isLost(p: RawPoint): boolean {
 export function preserveTrustedRouteEndpoints(
   raw: RawPoint[],
   matched: SnappedPoint[],
-  replaceWithinM = DEDUPE_M,
+  replaceWithinM = ENDPOINT_REPLACE_M,
 ): SnappedPoint[] {
   if (raw.length < 2 || matched.length < 2) return matched.slice();
   const coverage = analyzeTrustedEndpointCoverage(raw, matched);
   if (!coverage.eligibleForAnchoring) return matched.slice();
-  const first = { lat: raw[0].lat, lng: raw[0].lng, alt: raw[0].alt };
+  const first = canonicalPoint(raw[0]);
   const lastRaw = raw[raw.length - 1];
-  const last = { lat: lastRaw.lat, lng: lastRaw.lng, alt: lastRaw.alt };
+  const last = canonicalPoint(lastRaw);
   const out = matched.slice();
   if (hav(first, out[0]) <= replaceWithinM) out[0] = first;
   else out.unshift(first);
@@ -378,72 +392,6 @@ function tagRuns(raw: RawPoint[]): Run[] {
 }
 
 // ============================================================================
-// Densify / dedupe / smoother (preserves alt linearly)
-// ============================================================================
-
-/** Returns interp points strictly BETWEEN a and b (excludes a, includes b). */
-function densifyBetween(a: SnappedPoint, b: SnappedPoint, step: number): SnappedPoint[] {
-  const d = hav(a, b);
-  if (d <= step) return [b];
-  const n = Math.ceil(d / step);
-  const out: SnappedPoint[] = [];
-  for (let k = 1; k <= n; k++) {
-    const f = k / n;
-    const out_pt: SnappedPoint = {
-      lat: a.lat + (b.lat - a.lat) * f,
-      lng: a.lng + (b.lng - a.lng) * f,
-    };
-    if (a.alt != null && b.alt != null) {
-      out_pt.alt = a.alt + (b.alt - a.alt) * f;
-    } else if (a.alt != null || b.alt != null) {
-      // Partial knowledge → null (don't fabricate alt)
-      out_pt.alt = null;
-    }
-    out.push(out_pt);
-  }
-  return out;
-}
-
-function densifyPath(pts: SnappedPoint[], step: number): SnappedPoint[] {
-  if (pts.length < 2) return pts.slice();
-  const out: SnappedPoint[] = [pts[0]];
-  for (let i = 1; i < pts.length; i++) {
-    out.push(...densifyBetween(pts[i - 1], pts[i], step));
-  }
-  return out;
-}
-
-function dedupeWithin(pts: SnappedPoint[], minM: number): SnappedPoint[] {
-  if (pts.length === 0) return [];
-  const out: SnappedPoint[] = [pts[0]];
-  for (let i = 1; i < pts.length; i++) {
-    const prev = out[out.length - 1];
-    if (hav(prev, pts[i]) > minM) {
-      out.push(pts[i]);
-    } else if (prev.alt == null && pts[i].alt != null) {
-      // Preserve alt info even when dropping a near-duplicate point.
-      out[out.length - 1] = { ...prev, alt: pts[i].alt };
-    }
-  }
-  return out;
-}
-
-function smoothWindow3(pts: SnappedPoint[]): SnappedPoint[] {
-  if (pts.length < 3) return pts.slice();
-  const out: SnappedPoint[] = [pts[0]];
-  for (let i = 1; i < pts.length - 1; i++) {
-    out.push({
-      lat: (pts[i - 1].lat + pts[i].lat + pts[i + 1].lat) / 3,
-      lng: (pts[i - 1].lng + pts[i].lng + pts[i + 1].lng) / 3,
-      // alt smoothing kept simple: take middle's alt (no-op for missing).
-      alt: pts[i].alt,
-    });
-  }
-  out.push(pts[pts.length - 1]);
-  return out;
-}
-
-// ============================================================================
 // Alt re-attachment (Mapbox snap geometry has no alt; raw does)
 // ============================================================================
 
@@ -465,6 +413,35 @@ function attachAltFromRaw(snap: SnappedPoint[], raw: RawPoint[]): SnappedPoint[]
   });
 }
 
+function canonicalPoint(point: RawPoint): SnappedPoint {
+  return {
+    lat: point.lat,
+    lng: point.lng,
+    alt: point.alt,
+    ...(point.t != null && Number.isFinite(point.t) ? { t: point.t } : {}),
+  };
+}
+
+function attachSubsectionTime(snap: SnappedPoint[], raw: RawPoint[]): SnappedPoint[] {
+  const startT = raw[0]?.t;
+  const endT = raw[raw.length - 1]?.t;
+  if (
+    snap.length === 0
+    || startT == null
+    || endT == null
+    || !Number.isFinite(startT)
+    || !Number.isFinite(endT)
+    || endT < startT
+  ) return snap;
+  const totalM = pathLength(snap);
+  let progressedM = 0;
+  return snap.map((point, index) => {
+    if (index > 0) progressedM += hav(snap[index - 1], point);
+    const fraction = totalM > 0 ? progressedM / totalM : index / Math.max(1, snap.length - 1);
+    return { ...point, t: Math.round(startT + (endT - startT) * fraction) };
+  });
+}
+
 // ============================================================================
 // Mapbox /matching call (per chunk)
 // ============================================================================
@@ -473,7 +450,10 @@ interface MatchOk {
   ok: true;
   points: SnappedPoint[];
   confidence: number;
-  quality: MatchedGeometryQuality;
+  qualities: MatchedGeometryQuality[];
+  fallbackObservationCount: number;
+  rejectedSubmatchCount: number;
+  qualityRejectedSubmatchCount: number;
   httpStatus: number;
   responseCode: string;
   subMatchingCount: number;
@@ -547,7 +527,7 @@ async function callMapbox(
         confidence?: number;
         geometry?: { coordinates: Array<[number, number]> };
       }>;
-      tracepoints?: Array<unknown | null>;
+      tracepoints?: Array<{ matchings_index?: number } | null>;
     };
     if (body.code !== 'Ok' || !body.matchings || body.matchings.length === 0) {
       return {
@@ -569,32 +549,122 @@ async function callMapbox(
       tracepointCount,
       nullTracepointCount,
     };
-    // Multiple submatchings or null tracepoints mean Mapbox did not prove one
-    // continuous covering geometry for this canonical chunk. Falling back is
-    // safer than joining derived islands with an invented connector.
-    if (body.matchings.length !== 1) {
-      return { ok: false, reason: 'multiple_submatchings', ...diagnostics };
+    if (body.tracepoints && body.tracepoints.length !== chunk.length) {
+      return { ok: false, reason: 'tracepoint_count_mismatch', ...diagnostics };
     }
-    if (nullTracepointCount != null && nullTracepointCount > 0) {
-      return { ok: false, reason: 'partial_tracepoint_coverage', ...diagnostics };
+
+    // A response may contain several ordered matching islands separated by
+    // null tracepoints. A matching is usable only when its source observations
+    // form one contiguous temporal span. Everything between those spans stays
+    // exact canonical fallback; no derived or nearest-neighbour connector is
+    // ever inserted.
+    const indexSpans = body.matchings.map((_matching, matchingIndex) => {
+      if (!body.tracepoints) {
+        return body.matchings!.length === 1
+          ? Array.from({ length: chunk.length }, (_unused, index) => index)
+          : [];
+      }
+      return body.tracepoints.flatMap((tracepoint, index) => (
+        tracepoint?.matchings_index === matchingIndex ? [index] : []
+      ));
+    });
+    const accepted: Array<{
+      start: number;
+      end: number;
+      points: SnappedPoint[];
+      confidence: number;
+      quality: MatchedGeometryQuality;
+    }> = [];
+    let rejectedSubmatchCount = 0;
+    let qualityRejectedSubmatchCount = 0;
+    let rejectedQuality: MatchedGeometryQuality | undefined;
+    let rejectedConfidence: number | undefined;
+    for (const [matchingIndex, matching] of body.matchings.entries()) {
+      const indices = indexSpans[matchingIndex];
+      const contiguous = indices.length >= 2
+        && indices.every((value, index) => index === 0 || value === indices[index - 1] + 1);
+      const confidence = matching.confidence ?? 0;
+      const geometry = matching.geometry?.coordinates ?? [];
+      if (!contiguous || confidence < CONF_FALLBACK || geometry.length < 2) {
+        rejectedSubmatchCount += 1;
+        rejectedConfidence = rejectedConfidence == null
+          ? confidence
+          : Math.min(rejectedConfidence, confidence);
+        continue;
+      }
+      const start = indices[0];
+      const end = indices[indices.length - 1];
+      const rawSubsection = chunk.slice(start, end + 1);
+      const matchedPoints = geometry.map(([lng, lat]) => ({ lng, lat }));
+      const quality = evaluateMatchedGeometryQuality(rawSubsection, matchedPoints);
+      const endpointCoverage = analyzeTrustedEndpointCoverage(rawSubsection, matchedPoints);
+      if (!quality.accepted || !endpointCoverage.eligibleForAnchoring) {
+        rejectedSubmatchCount += 1;
+        qualityRejectedSubmatchCount += 1;
+        rejectedQuality = quality;
+        rejectedConfidence = rejectedConfidence == null
+          ? confidence
+          : Math.min(rejectedConfidence, confidence);
+        continue;
+      }
+      accepted.push({
+        start,
+        end,
+        points: preserveTrustedRouteEndpoints(
+          rawSubsection,
+          attachSubsectionTime(attachAltFromRaw(matchedPoints, rawSubsection), rawSubsection),
+        ),
+        confidence,
+        quality,
+      });
     }
-    const m = body.matchings[0];
-    const conf = m.confidence ?? 0;
-    if (conf < CONF_FALLBACK) {
-      return { ok: false, reason: `low_conf_${conf.toFixed(2)}`, confidence: conf, ...diagnostics };
+    if (accepted.length === 0) {
+      const reason = rejectedQuality
+        ? `quality_${rejectedQuality.reason}`
+        : nullTracepointCount != null && nullTracepointCount > 0
+          ? 'partial_tracepoint_coverage'
+          : body.matchings.length > 1
+            ? 'multiple_submatchings'
+            : `low_or_unusable_match_${(rejectedConfidence ?? 0).toFixed(2)}`;
+      return {
+        ok: false,
+        reason,
+        confidence: rejectedConfidence,
+        quality: rejectedQuality,
+        ...diagnostics,
+      };
     }
-    const geom = m.geometry?.coordinates ?? [];
-    if (geom.length < 2) return { ok: false, reason: 'short_match', confidence: conf, ...diagnostics };
-    const matchedPoints = geom.map(([lng, lat]) => ({ lng, lat }));
-    const quality = evaluateMatchedGeometryQuality(chunk, matchedPoints);
-    if (!quality.accepted) {
-      return { ok: false, reason: `quality_${quality.reason}`, confidence: conf, quality, ...diagnostics };
+    accepted.sort((a, b) => a.start - b.start);
+    const points: SnappedPoint[] = [];
+    const append = (piece: SnappedPoint[]) => {
+      if (piece.length === 0) return;
+      if (points.length > 0 && hav(points[points.length - 1], piece[0]) <= 0.5) {
+        points.push(...piece.slice(1));
+      } else {
+        points.push(...piece);
+      }
+    };
+    let cursor = 0;
+    let matchedObservationCount = 0;
+    for (const subsection of accepted) {
+      if (subsection.start > cursor) {
+        append(chunk.slice(cursor, subsection.start + 1).map(canonicalPoint));
+      }
+      append(subsection.points);
+      cursor = subsection.end;
+      matchedObservationCount += subsection.end - subsection.start + 1;
+    }
+    if (cursor < chunk.length - 1) {
+      append(chunk.slice(cursor).map(canonicalPoint));
     }
     return {
       ok: true,
-      confidence: conf,
-      points: matchedPoints,
-      quality,
+      confidence: Math.min(...accepted.map(subsection => subsection.confidence)),
+      points,
+      qualities: accepted.map(subsection => subsection.quality),
+      fallbackObservationCount: Math.max(0, chunk.length - matchedObservationCount),
+      rejectedSubmatchCount,
+      qualityRejectedSubmatchCount,
       ...diagnostics,
     };
   } catch (e: any) {
@@ -656,7 +726,7 @@ async function snapGoodRun(
   stats: SnapTrackStats,
   signal?: AbortSignal,
 ): Promise<SnappedPoint[]> {
-  if (runRaw.length < 2) return runRaw.map((p) => ({ lat: p.lat, lng: p.lng, alt: p.alt }));
+  if (runRaw.length < 2) return runRaw.map(canonicalPoint);
 
   const chunkBounds: Array<[number, number]> = [];
   let i = 0;
@@ -693,22 +763,29 @@ async function snapGoodRun(
         minimumRadiusM: Math.min(...radiuses),
         maximumRadiusM: Math.max(...radiuses),
         durationMs: Date.now() - requestStartedAt,
-        result: r.ok ? 'accepted' : r.reason,
+        result: r.ok
+          ? (r.fallbackObservationCount > 0 || r.rejectedSubmatchCount > 0 ? 'accepted_hybrid' : 'accepted')
+          : r.reason,
         httpStatus: r.httpStatus ?? null,
         responseCode: r.responseCode ?? null,
         subMatchingCount: r.subMatchingCount ?? null,
         tracepointCount: r.tracepointCount ?? null,
         nullTracepointCount: r.nullTracepointCount ?? null,
         confidence: r.ok ? r.confidence : (r.confidence ?? null),
-        qualityReason: r.quality?.reason ?? null,
+        qualityReason: r.ok ? 'accepted' : (r.quality?.reason ?? null),
       });
       if (r.ok) {
         stats.chunksOk += 1;
+        if (r.fallbackObservationCount > 0 || r.rejectedSubmatchCount > 0) {
+          stats.chunksFallback += 1;
+        }
+        stats.qualityFallbacks += r.qualityRejectedSubmatchCount;
         stats.minConfidence = stats.minConfidence === null ? r.confidence : Math.min(stats.minConfidence, r.confidence);
-        stats.maxP95DeviationM = Math.max(stats.maxP95DeviationM, r.quality.p95DeviationM);
-        stats.maxEndpointDeviationM = Math.max(stats.maxEndpointDeviationM, r.quality.endpointDeviationM);
-        const withAlt = attachAltFromRaw(r.points, sub);
-        return { start: s, end: e, snap: withAlt };
+        for (const quality of r.qualities) {
+          stats.maxP95DeviationM = Math.max(stats.maxP95DeviationM, quality.p95DeviationM);
+          stats.maxEndpointDeviationM = Math.max(stats.maxEndpointDeviationM, quality.endpointDeviationM);
+        }
+        return { start: s, end: e, snap: r.points };
       }
       stats.chunksFallback += 1;
       if (r.quality) {
@@ -726,12 +803,10 @@ async function snapGoodRun(
   for (const oc of outcomes) {
     let piece: SnappedPoint[];
     if (oc.snap === null) {
-      // Raw fallback for this chunk → densify so internal jumps are bounded
+      // Canonical fallback remains byte-for-byte coordinate faithful. Final
+      // presentation must not silently smooth an internal/unmapped path.
       const rawSlice = runRaw.slice(oc.start, oc.end);
-      piece = densifyPath(
-        rawSlice.map((p) => ({ lat: p.lat, lng: p.lng, alt: p.alt })),
-        DENSIFY_STEP_M,
-      );
+      piece = rawSlice.map(canonicalPoint);
     } else {
       piece = oc.snap;
     }
@@ -740,22 +815,11 @@ async function snapGoodRun(
       out.push(...piece);
       continue;
     }
-    const last = out[out.length - 1];
-    let bestI = 0;
-    let bestD = hav(last, piece[0]);
-    const scanN = Math.min(piece.length, CHUNK_OVERLAP * 3);
-    for (let j = 1; j < scanN; j++) {
-      const d = hav(last, piece[j]);
-      if (d < bestD) {
-        bestD = d;
-        bestI = j;
-      }
-    }
-    if (bestD > SEAM_BRIDGE_THRESH_M) {
-      stats.seamBridges += 1;
-      out.push(...densifyBetween(last, piece[bestI], DENSIFY_STEP_M));
-    }
-    out.push(...piece.slice(bestI + 1));
+    // CHUNK_OVERLAP=1 and endpoint anchoring make this the same canonical
+    // instant. Drop only that one temporal duplicate. Spatial nearest-neighbour
+    // stitching is forbidden because repeated passes share coordinates.
+    if (hav(out[out.length - 1], piece[0]) <= 0.5) out.push(...piece.slice(1));
+    else out.push(...piece);
   }
   return out;
 }
@@ -854,26 +918,14 @@ export async function snapTrack(
         );
       } else {
         stats.lostRuns += 1;
-        // LOST run: never call Mapbox; densify raw at <= 20m
-        piece = densifyPath(
-          runRaw.map((p) => ({ lat: p.lat, lng: p.lng, alt: p.alt })),
-          DENSIFY_STEP_M,
-        );
+        // LOST run: never call Mapbox and never prettify the fallback.
+        piece = runRaw.map(canonicalPoint);
       }
       if (piece.length === 0) continue;
-      if (final.length > 0) {
-        const lastF = final[final.length - 1];
-        const gap = hav(lastF, piece[0]);
-        if (gap > RUN_BRIDGE_THRESH_M) {
-          final.push(...densifyBetween(lastF, piece[0], DENSIFY_STEP_M));
-        }
-      }
-      // Avoid duplicating piece[0] when it's effectively the last final point
-      const startIdx =
-        final.length > 0 && hav(final[final.length - 1], piece[0]) <= DEDUPE_M
-          ? 1
-          : 0;
-      for (let k = startIdx; k < piece.length; k++) final.push(piece[k]);
+      // Runs are adjacent portions of the same caller-provided canonical
+      // segment. Preserve every point and its temporal order; explicit Activity
+      // gaps are split by the caller before this function is invoked.
+      for (const point of piece) final.push(point);
     }
 
     // Total failure: every chunk fell back AND no LOST-only runs salvaged
@@ -882,13 +934,13 @@ export async function snapTrack(
       stats.chunksOk === 0 &&
       stats.chunksFallback > 0
     ) {
-      // Every Mapbox call failed; we still have a densified-raw output, but
+      // Every Mapbox call failed; we still have an exact canonical output, but
       // the caller should know the snap step contributed nothing.
-      // Per contract, this is still ok=true with the raw-densified result —
+      // Per contract, this is still ok=true with the canonical result —
       // the caller fallbacks at a higher level. Mark stats so caller can
       // decide.
       // We keep it as ok=true because the output is still usable
-      // (raw-densified is strictly better than the input for rendering).
+      // (canonical fallback remains the truthful rendering authority).
     }
 
     if (final.length < 2) {
@@ -896,10 +948,8 @@ export async function snapTrack(
       return { ok: false, reason: 'all_chunks_failed', stats };
     }
 
-    const dd = dedupeWithin(final, DEDUPE_M);
-    const sm = smoothWindow3(dd);
     finishStats();
-    return { ok: true, points: sm, stats };
+    return { ok: true, points: final, stats };
   } catch (e: any) {
     finishStats();
     return {

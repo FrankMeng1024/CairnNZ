@@ -19,6 +19,10 @@ export interface Coordinate {
    *  Android devices or for the very first fix — null means "skip the
    *  gate, accept the point" (over-record beats data-loss). */
   speed?: number | null;
+  /** Provider uncertainty for scalar speed/course when exposed by the native
+   * shell. Expo Location currently omits these on some platforms. */
+  speedAccuracy?: number | null;
+  courseAccuracy?: number | null;
   /** Vertical uncertainty is independent from horizontal accuracy. A point may
    * be safe for route geometry while its altitude is unusable for gain. */
   verticalAccuracy?: number | null;

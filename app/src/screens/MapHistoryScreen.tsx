@@ -37,6 +37,11 @@ import type { Marker } from '../store/useMarkerStore';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { segmentTrace } from '../features/activity/activityContracts';
+import {
+  ALMOST_DONE_CLONE_V1_ID,
+  loadOrBuildAlmostDoneCloneV1,
+  type AlmostDoneCloneV1,
+} from '../features/activity/almostDoneCloneV1';
 
 // ── Conditional Mapbox import ─────────────────────────────────────────────
 // Native: render the track on top of a real Mapbox map. Web / Expo Go:
@@ -774,7 +779,10 @@ export function MapHistoryScreen() {
   const visualTheme = useVisualTheme();
   const nav = useNavigation<Nav>();
   const route = useRoute<any>();
-  const targetSessionId = route.params?.sessionId as string | undefined;
+  const targetQaReviewClone = route.params?.qaReviewClone as 'almost-done-v1' | undefined;
+  const targetSessionId = targetQaReviewClone
+    ? ALMOST_DONE_CLONE_V1_ID
+    : route.params?.sessionId as string | undefined;
   const targetRouteId = (route.params as { routeId?: string } | undefined)?.routeId;
   // 2026-08-16 Round 13: Route Detail (concept T5) — look up route object
   // by targetRouteId. Renders a full-screen route detail view with Edit Route
@@ -783,6 +791,9 @@ export function MapHistoryScreen() {
   const selectedRoute = targetRouteId ? allRoutes.find(r => r.id === targetRouteId) : null;
   // O12: settings-aware distance format for detail modal + stat displays.
   const dist = useDistance();
+  const debugMode = useSettingsStore(s => s.debugMode);
+  const [qaReviewClone, setQaReviewClone] = useState<AlmostDoneCloneV1 | null>(null);
+  const [qaReviewError, setQaReviewError] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   // A Detail screen owns its projection for the lifetime of this mount. Sync
   // may delete handed-off local files while the screen is open; retaining the
@@ -805,9 +816,11 @@ export function MapHistoryScreen() {
   const region = getCurrentRegion();
   const allSessions = useSessionStore(s => s.sessions);
   // If a specific sessionId was passed, only show that one
-  const sessions = targetSessionId
-    ? allSessions.filter(s => s.id === targetSessionId)
-    : allSessions;
+  const sessions = targetQaReviewClone
+    ? (qaReviewClone ? [qaReviewClone.session] : [])
+    : targetSessionId
+      ? allSessions.filter(s => s.id === targetSessionId)
+      : allSessions;
 
   // O18 HIST-01/02: apply search + type + period filters, then sort.
   const filteredSessions = React.useMemo(() => {
@@ -948,6 +961,25 @@ export function MapHistoryScreen() {
   // decide whether to show too-short or the polyline.
   const [loadedTrackPoints, setLoadedTrackPoints] = useState<import('../store/useSessionStore').TrackPoint[] | null>(null);
   useEffect(() => {
+    if (!targetQaReviewClone) return undefined;
+    let cancelled = false;
+    const ownerUserId = useSessionStore.getState().currentUserId;
+    setQaReviewError(null);
+    void loadOrBuildAlmostDoneCloneV1(ownerUserId, debugMode).then(clone => {
+      if (cancelled) return;
+      setQaReviewClone(clone);
+      detailSessionSnapshots.current.set(clone.session.id, clone.session);
+      detailTrackSnapshots.current.set(clone.session.id, clone.session.trackPoints);
+      setLoadedTrackPoints(clone.session.trackPoints);
+    }).catch(error => {
+      if (cancelled) return;
+      setQaReviewError(String(error?.message ?? error));
+      setLoadedTrackPoints([]);
+    });
+    return () => { cancelled = true; };
+  }, [debugMode, targetQaReviewClone]);
+  useEffect(() => {
+    if (targetQaReviewClone) return undefined;
     if (!selectedSessionId) { setLoadedTrackPoints(null); return; }
     const session = useSessionStore.getState().sessions.find(s => s.id === selectedSessionId) ?? null;
     if (session && !detailSessionSnapshots.current.has(selectedSessionId)) {
@@ -1030,6 +1062,10 @@ export function MapHistoryScreen() {
       cancelled = true;
       if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
     };
+  // Route params are mount-lifetime authority for this Detail. Retain the
+  // established selectedSessionId-only loader contract so a SessionStore
+  // refresh cannot restart or replace a mounted trace snapshot.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSessionId]);
 
   // Merge loaded track points into the selected session for display.
@@ -1039,6 +1075,7 @@ export function MapHistoryScreen() {
   const sessionForDisplay = selectedSession
     ? { ...selectedSession, trackPoints: loadedTrackPoints ?? [] }
     : null;
+  const isQaReviewClone = selectedSession?.id === ALMOST_DONE_CLONE_V1_ID;
 
   // v75: full GPS quality pipeline applied at render time so historical
   // hikes (recorded before v74a's live filters existed) get the same
@@ -1177,6 +1214,7 @@ export function MapHistoryScreen() {
   // from actual trail can push markers outside a 50m envelope.
   const NEARBY_FLAG_RADIUS_M = 80;
   const routeFlags: Marker[] = (() => {
+    if (isQaReviewClone) return [];
     if (!sessionForDisplay || sessionForDisplay.trackPoints.length === 0) return [];
     return markers.filter(m => {
       if (m.originActivityClientId) {
@@ -1383,6 +1421,7 @@ export function MapHistoryScreen() {
               </View>
             ) : (
               <TouchableOpacity
+                disabled={isQaReviewClone}
                 onPress={() => {
                   setRenameText(selectedRoute.name || 'Route');
                   setRenameEditing(true);
@@ -1505,11 +1544,17 @@ export function MapHistoryScreen() {
                   <Text style={[styles.detailTitle, { color: visualTheme.foreground }]} numberOfLines={1}>
                     {selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike')}
                   </Text>
-                  <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} />
+                  {!isQaReviewClone ? <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} /> : null}
                 </View>
               </TouchableOpacity>
             )}
           </View>
+          {isQaReviewClone ? (
+            <View style={styles.detailMetaRow} testID="qa-snap-review-clone-label">
+              <Icon name="Eye" size={13} color={visualTheme.iconActive} strokeWidth={2} />
+              <Text style={[styles.detailMetaText, { color: visualTheme.primary, fontWeight: '700' }]}>QA / SNAP REVIEW CLONE · NO PRODUCT EFFECTS</Text>
+            </View>
+          ) : null}
           <View style={styles.singleSessionStats}>
             <View style={styles.singleStat}>
               <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{dist.format(selectedSession.distanceM, 1)}</Text>
@@ -1557,7 +1602,12 @@ export function MapHistoryScreen() {
               </Text>
             </View>
           ) : null}
-          <View style={styles.actionRow}>
+          {isQaReviewClone ? (
+            <View style={[styles.detailMetaRow, { marginTop: Spacing.sm }]}>
+              <Icon name="Lock" size={13} color={visualTheme.iconInactive} strokeWidth={2} />
+              <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Read-only · rename, delete, Save as Route, sync, Memory and stats are disabled</Text>
+            </View>
+          ) : <View style={styles.actionRow}>
             <TouchableOpacity
               style={[styles.actionPillDanger, { flex: 1, backgroundColor: visualTheme.surface, borderColor: visualTheme.destructive }, deleteConfirm && { backgroundColor: visualTheme.destructive, borderColor: visualTheme.destructive }]}
               onPress={() => {
@@ -1616,7 +1666,7 @@ export function MapHistoryScreen() {
               <Icon name="Route" size={IconSize.sm} color="#fff" strokeWidth={2} />
               <Text style={styles.actionPillPrimaryText}>Save as Route</Text>
             </TouchableOpacity>
-          </View>
+          </View>}
         </View>
       ) : (
       <View style={styles.listPanel}>
@@ -1715,7 +1765,13 @@ export function MapHistoryScreen() {
           </View>
         )}
 
-        {tab === 'routes' ? (
+        {qaReviewError ? (
+          <View style={styles.emptyState} testID="qa-snap-review-error">
+            <Icon name="TriangleAlert" size={40} color={Colors.danger} strokeWidth={1.5} />
+            <Text style={styles.emptyTitle}>Review clone unavailable</Text>
+            <Text style={styles.emptySubtitle}>{qaReviewError}</Text>
+          </View>
+        ) : tab === 'routes' ? (
           <ScrollView showsVerticalScrollIndicator={false}>
             {filteredSessions.length === 0 ? (
               sessions.length === 0 ? (

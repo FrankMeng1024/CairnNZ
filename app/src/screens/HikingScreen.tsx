@@ -64,6 +64,7 @@ import {
   isActivitySessionVisible,
 } from '../features/activity/activityOperationalState';
 import { saveEligibility } from '../features/activity/activityContracts';
+import { deriveActivityLocationHealth } from '../features/activity/activityLocationHealth';
 import {
   findRecoverableActivity,
   restoreRecoverableActivity,
@@ -143,11 +144,15 @@ export function HikingScreen() {
   const isFinishing = useTrackingStore(s => s.isFinishing);
   const startError = useTrackingStore(s => s.startError);
   const durationS = useTrackingStore(s => s.durationS);
-  const activityStartedAt = useTrackingStore(s => s.startedAt);
   const distanceM = useTrackingStore(s => s.distanceM);
   const elevationGainM = useTrackingStore(s => s.elevationGainM);
   const locationAvailable = useTrackingStore(s => s.locationAvailable);
   const lastCoordinate = useTrackingStore(s => s.lastCoordinate);
+  const latestSourceLocationTime = useTrackingStore(s => s.latestSourceLocationTime);
+  const realMotionState = useTrackingStore(s => s.realMotionState);
+  const realCandidatePending = useTrackingStore(s => s.realCandidatePending);
+  const realCanonicalDecisionReason = useTrackingStore(s => s.realCanonicalDecisionReason);
+  const pendingSegmentStartReason = useTrackingStore(s => s.pendingSegmentStartReason);
   const backgroundLocationPermission = useTrackingStore(s => s.backgroundLocationPermission);
   const refreshBackgroundLocationPermission = useTrackingStore(s => s.refreshBackgroundLocationPermission);
   useEffect(() => {
@@ -720,21 +725,29 @@ export function HikingScreen() {
   const distDisplay = dist.format(distanceM, 1);
   const durationDisplay = formatDuration(durationS);
 
-  // v79 #1 fix: Signal-lost detection. Bumped 30s → 120s to match the
-  // tightened polyline gap threshold. At 30s the pill triggered for
-  // every red light / dynamic-sampling stationary tick, which was
-  // noise. 120s is "haven't seen GPS in 2+ minutes" — actually
-  // actionable info.
-  const SIGNAL_GAP_MS = 120_000;
   const lastTrackT = trackPoints.length > 0 ? trackPoints[trackPoints.length - 1].t : null;
   const freshnessNow = locationProviderSource === 'simulator'
     ? simulatorVirtualTimestamp
     : activityFreshnessNow(locationProviderSource);
-  const freshnessReference = lastTrackT ?? activityStartedAt;
-  const signalLostFor = freshnessReference != null ? Math.max(0, freshnessNow - freshnessReference) : 0;
-  const signalLost = isTracking && freshnessReference != null && signalLostFor > SIGNAL_GAP_MS;
+  const realLocationHealth = deriveActivityLocationHealth({
+    nowMs: freshnessNow,
+    sourceActive: isTracking && locationAvailable,
+    latestSourceTimestamp: latestSourceLocationTime,
+    latestCanonicalTimestamp: lastTrackT,
+    pendingCandidate: realCandidatePending,
+    latestCanonicalDecisionReason: realCanonicalDecisionReason,
+    continuityGapOpen: pendingSegmentStartReason === 'gps-reacquired',
+    motionState: realMotionState,
+  });
+  const signalLost = isTracking && locationProviderSource === 'real'
+    && realLocationHealth.userFacingIssue === 'source-unavailable';
+  const canonicalDegraded = isTracking && locationProviderSource === 'real'
+    && realLocationHealth.userFacingIssue === 'sustained-route-unreliable';
+  const signalLostFor = signalLost ? realLocationHealth.sourceAgeMs ?? 0 : 0;
   const signalLostMin = Math.floor(signalLostFor / 60_000);
-  const gpsFixHealthy = isTracking && locationAvailable && lastTrackT !== null && !signalLost;
+  const gpsFixHealthy = isTracking && locationAvailable && lastTrackT !== null
+    && realLocationHealth.sourceHealth === 'fresh'
+    && !signalLost && !canonicalDegraded;
   const simulatorGpsActive = isTracking && locationProviderSource === 'simulator';
   const gpsStatusLabel = simulatorGpsActive
     ? `SIM · ${{ normal: 'Good', poor: 'Poor', lost: 'Lost', frozen: 'Frozen' }[simulatorSignal]}`
@@ -742,6 +755,8 @@ export function HikingScreen() {
       ? 'GPS held'
       : signalLost
         ? 'Signal lost'
+        : canonicalDegraded
+          ? 'Location issue'
         : gpsFixHealthy
           ? 'GPS good'
           : hasLocationPermission === false
@@ -754,6 +769,7 @@ export function HikingScreen() {
           : 'info'
     : status === 'paused' ? 'muted'
       : signalLost ? 'danger'
+        : canonicalDegraded ? 'warning'
         : gpsFixHealthy ? 'healthy'
           : hasLocationPermission === false ? 'danger'
             : 'warning';
@@ -768,9 +784,9 @@ export function HikingScreen() {
       tone: 'danger',
       icon: 'CloudOff',
     });
-  } else if (isTracking && lastCoordinate?.accuracy != null && lastCoordinate.accuracy > 15) {
+  } else if (canonicalDegraded) {
     hikeNotices.push({
-      label: `GPS accuracy ±${Math.round(lastCoordinate.accuracy)} m`,
+      label: 'Location is too uncertain to record reliably',
       tone: 'warning',
       icon: 'Navigation',
     });

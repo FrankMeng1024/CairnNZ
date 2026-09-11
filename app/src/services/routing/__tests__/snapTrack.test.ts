@@ -123,13 +123,32 @@ describe('snapTrack — happy path (single GOOD run)', () => {
     const r = await snapTrack(lineNorth(200), { mapboxToken: 'x' });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    // chunkBounds for 200 pts at chunk=80 overlap=10 → [0,80] [70,150] [140,200] = 3 chunks
+    // One shared canonical boundary keeps temporal order unambiguous.
     expect(r.stats.apiCalls).toBe(3);
     expect(r.stats.chunksOk).toBe(3);
   });
 });
 
 describe('snapTrack — derived geometry truthfulness', () => {
+  test('preserves ordered out-and-back topology over repeated physical geometry', async () => {
+    const step = 20 / 111_320;
+    const raw: RawPoint[] = [0, 1, 2, 1, 0].map((north, index) => ({
+      lat: -36.8 + north * step,
+      lng: 174.7,
+      accuracy: 5,
+      speed: 1,
+      t: 1_000 + index * 10_000,
+    }));
+    fetchMock.mockImplementation((url: string) => Promise.resolve(fakeEchoResponse(url, 0.95)));
+    const result = await snapTrack(raw, { mapboxToken: 'x' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(Math.abs(result.points[0].lat - raw[0].lat)).toBeLessThan(1e-7);
+    expect(Math.abs(result.points[result.points.length - 1].lat - raw[raw.length - 1].lat)).toBeLessThan(1e-7);
+    expect(Math.max(...result.points.map(point => point.lat))).toBeGreaterThan(raw[0].lat + step * 1.5);
+    expect(result.stats.chunksOk).toBe(1);
+  });
+
   test('preserves trustworthy raw head and tail around a bounded derived middle', () => {
     const raw = lineNorth(5);
     const endpointInset = 5 / 111_320;
@@ -184,6 +203,139 @@ describe('snapTrack — derived geometry truthfulness', () => {
     if (!result.ok) return;
     expect(result.stats).toMatchObject({ chunksOk: 0, chunksFallback: 1, qualityFallbacks: 1 });
     expect(result.stats.maxP95DeviationM).toBeGreaterThan(15);
+  });
+
+  test('moderate reported accuracy cannot steal an internal path 16m onto an external road', async () => {
+    const raw = lineNorth(20).map(point => ({ ...point, accuracy: 14.25 }));
+    const externalRoad = raw.map(point => ([
+      point.lng + 16 / (111_320 * Math.cos(point.lat * Math.PI / 180)),
+      point.lat,
+    ]));
+    fetchMock.mockResolvedValue({
+      status: 200,
+      json: async () => ({ code: 'Ok', matchings: [{ confidence: 0.99, geometry: { coordinates: externalRoad } }] }),
+    });
+    const result = await snapTrack(raw, { mapboxToken: 'x' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats).toMatchObject({ chunksOk: 0, chunksFallback: 1, qualityFallbacks: 1 });
+    expect(result.points).toEqual(raw.map(point => ({ lat: point.lat, lng: point.lng, alt: point.alt })));
+  });
+
+  test('mixed matched/fallback chunks keep their shared temporal boundary', async () => {
+    const raw = lineNorth(120, -36.8, 174.7, 240);
+    let call = 0;
+    fetchMock.mockImplementation((url: string) => {
+      call += 1;
+      return Promise.resolve(call === 1
+        ? fakeEchoResponse(url, 0.95)
+        : { status: 200, json: async () => ({ code: 'NoSegment' }) });
+    });
+    const result = await snapTrack(raw, { mapboxToken: 'x', concurrency: 1 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats).toMatchObject({ chunksOk: 1, chunksFallback: 1, seamBridges: 0 });
+    expect(result.points).toHaveLength(raw.length);
+    expect(result.points[80]).toMatchObject({ lat: raw[80].lat, lng: raw[80].lng });
+  });
+
+  test('partial Mapbox coverage becomes matched islands plus exact canonical fallback', async () => {
+    const raw = lineNorth(10, -36.8, 174.7, 45).map((point, index) => ({
+      ...point,
+      t: 1_000 + index * 1_000,
+    }));
+    const east2m = (point: RawPoint): [number, number] => [
+      point.lng + 2 / (111_320 * Math.cos(point.lat * Math.PI / 180)),
+      point.lat,
+    ];
+    fetchMock.mockResolvedValue({
+      status: 200,
+      json: async () => ({
+        code: 'Ok',
+        matchings: [
+          { confidence: 0.95, geometry: { coordinates: raw.slice(0, 3).map(east2m) } },
+          { confidence: 0.91, geometry: { coordinates: raw.slice(6).map(east2m) } },
+        ],
+        tracepoints: raw.map((_point, index) => (
+          index <= 2
+            ? { matchings_index: 0 }
+            : index >= 6 ? { matchings_index: 1 } : null
+        )),
+      }),
+    });
+    const result = await snapTrack(raw, { mapboxToken: 'x' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats).toMatchObject({
+      chunksOk: 1,
+      chunksFallback: 1,
+      seamBridges: 0,
+      minConfidence: 0.91,
+    });
+    expect(result.stats.requestResults[0].result).toBe('accepted_hybrid');
+    expect(result.points).toHaveLength(raw.length);
+    // The uncovered middle is byte-for-byte geographic fallback.
+    expect(result.points.slice(3, 7)).toEqual(raw.slice(3, 7).map(point => ({
+      lat: point.lat,
+      lng: point.lng,
+      alt: point.alt,
+      t: point.t,
+    })));
+    expect(result.points.map(point => point.t)).toEqual(
+      [...result.points].map(point => point.t).sort((a, b) => Number(a) - Number(b)),
+    );
+  });
+
+  test('does not use a matching geometry that bridges across null tracepoints', async () => {
+    const raw = lineNorth(6, -36.8, 174.7, 30);
+    fetchMock.mockResolvedValue({
+      status: 200,
+      json: async () => ({
+        code: 'Ok',
+        matchings: [{
+          confidence: 0.99,
+          geometry: { coordinates: [raw[0], raw[1], raw[4], raw[5]].map(point => [point.lng, point.lat]) },
+        }],
+        tracepoints: [
+          { matchings_index: 0 },
+          { matchings_index: 0 },
+          null,
+          null,
+          { matchings_index: 0 },
+          { matchings_index: 0 },
+        ],
+      }),
+    });
+    const result = await snapTrack(raw, { mapboxToken: 'x' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats).toMatchObject({ chunksOk: 0, chunksFallback: 1, seamBridges: 0 });
+    expect(result.points).toEqual(raw.map(point => ({ lat: point.lat, lng: point.lng, alt: point.alt })));
+  });
+
+  test('A→B→A→B remains three ordered passes across chunk boundaries', async () => {
+    const metres = [
+      ...Array.from({ length: 61 }, (_, index) => index),
+      ...Array.from({ length: 60 }, (_, index) => 59 - index),
+      ...Array.from({ length: 60 }, (_, index) => index + 1),
+    ];
+    const raw: RawPoint[] = metres.map((eastM, index) => ({
+      lat: -36.8,
+      lng: 174.7 + eastM / (111_320 * Math.cos(-36.8 * Math.PI / 180)),
+      accuracy: 5,
+      speed: 1,
+      t: 1_000 + index * 1_000,
+    }));
+    fetchMock.mockImplementation((url: string) => Promise.resolve(fakeEchoResponse(url, 0.99)));
+    const result = await snapTrack(raw, { mapboxToken: 'x' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const directions = result.points.slice(1).map((point, index) => (
+      Math.sign(point.lng - result.points[index].lng)
+    )).filter(direction => direction !== 0);
+    const directionRuns = directions.filter((direction, index) => index === 0 || direction !== directions[index - 1]);
+    expect(directionRuns).toEqual([1, -1, 1]);
+    expect(result.stats).toMatchObject({ chunksOk: 3, chunksFallback: 0, seamBridges: 0 });
   });
 });
 
@@ -244,7 +396,7 @@ describe('snapTrack — failure modes degrade gracefully', () => {
     if (!r.ok) return;
     expect(r.stats.chunksOk).toBe(0);
     expect(r.stats.chunksFallback).toBe(1);
-    // Output is the raw line, densified — non-empty
+    // Output is the exact canonical fallback — non-empty.
     expect(r.points.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -288,7 +440,7 @@ describe('snapTrack — alt preservation', () => {
     expect(allHaveAlt).toBe(true);
   });
 
-  test('LOST run alt preserved via densification', async () => {
+  test('LOST run alt is preserved by exact canonical fallback', async () => {
     const lost: RawPoint[] = lineNorth(5).map((p, i) => ({
       ...p,
       speed: -1,
@@ -358,8 +510,8 @@ describe('snapTrack — bounded behaviour', () => {
 
 // === Cross-run splice ======================================================
 
-describe('snapTrack — cross-run splice does not leave flying lines', () => {
-  test('GOOD-LOST-GOOD: no gap > 50m in output', async () => {
+describe('snapTrack — cross-run splice remains canonical', () => {
+  test('GOOD-LOST-GOOD never inserts an invented connector', async () => {
     fetchMock.mockResolvedValue(fakeOkResponse(5, 0.95));
     // 5 good, 5 lost (offset 100m east), 5 good (offset 200m east)
     const seg1 = lineNorth(5).map((p) => ({ ...p, speed: 1 }));
@@ -376,22 +528,8 @@ describe('snapTrack — cross-run splice does not leave flying lines', () => {
     const r = await snapTrack([...seg1, ...seg2, ...seg3], { mapboxToken: 'x' });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    // No consecutive output gap > 50m — bridges should fill
-    const haversineM = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
-      const R = 6371000;
-      const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-      const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-      const lat1 = (a.lat * Math.PI) / 180;
-      const lat2 = (b.lat * Math.PI) / 180;
-      const h =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-      return 2 * R * Math.asin(Math.sqrt(h));
-    };
-    let maxGap = 0;
-    for (let i = 1; i < r.points.length; i++) {
-      maxGap = Math.max(maxGap, haversineM(r.points[i - 1], r.points[i]));
-    }
-    expect(maxGap).toBeLessThanOrEqual(50);
+    expect(r.stats.seamBridges).toBe(0);
+    expect(r.points).toHaveLength(seg1.length + seg2.length + seg3.length);
+    expect(r.points[seg1.length]).toMatchObject({ lat: seg2[0].lat, lng: seg2[0].lng });
   });
 });

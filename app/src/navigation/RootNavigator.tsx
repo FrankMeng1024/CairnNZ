@@ -62,7 +62,7 @@ export type RootStackParamList = {
   Home: undefined;
   Hiking: { recoverClientActivityId?: string } | undefined;
   Running: { recoverClientActivityId?: string } | undefined;
-  MapHistory: { sessionId?: string; routeId?: string } | undefined;
+  MapHistory: { sessionId?: string; routeId?: string; qaReviewClone?: 'almost-done-v1' } | undefined;
   Routes: { initialTab?: 'routes' | 'activities' | 'flags' } | undefined;
   RouteEditor: { routeId?: string; fromSessionId?: string } | undefined;
   Plant: undefined;
