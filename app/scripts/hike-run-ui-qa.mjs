@@ -62,6 +62,7 @@ const setScenario = async (mode, scenario) => {
     const tracking = globalThis.__cairnStores.useTrackingStore;
     const now = Date.now();
     const stale = nextScenario === 'degraded';
+    const long = nextScenario === 'long';
     const segmentId = `qa-${nextMode}-segment`;
     const base = nextMode === 'hike'
       ? { lat: -45.0312, lng: 168.6626 }
@@ -87,9 +88,9 @@ const setScenario = async (mode, scenario) => {
       activityMode: nextMode === 'hike' ? 'hiking' : 'running',
       locationProviderSource: 'real',
       startedAt: isReady ? null : now - 2_715_000,
-      durationS: isReady ? 0 : 2715,
-      distanceM: isReady ? 0 : nextMode === 'hike' ? 5240 : 8120,
-      elevationGainM: isReady ? 0 : nextMode === 'hike' ? 286 : 74,
+      durationS: isReady ? 0 : long ? 67329 : 2715,
+      distanceM: isReady ? 0 : long ? nextMode === 'hike' ? 42860 : 42195 : nextMode === 'hike' ? 5240 : 8120,
+      elevationGainM: isReady ? 0 : long ? nextMode === 'hike' ? 3840 : 612 : nextMode === 'hike' ? 286 : 74,
       trackPoints: isReady ? [] : points,
       trackPointsSmoothed: isReady ? [] : points,
       trackPointsRaw: isReady ? [] : points,
@@ -101,6 +102,11 @@ const setScenario = async (mode, scenario) => {
       },
       lastCoordinateTime: isReady ? now : points[points.length - 1].t,
       lastFixTimestamp: isReady ? now : points[points.length - 1].t,
+      latestSourceLocationTime: isReady ? now : stale ? now - 240_000 : now,
+      realMotionState: stale ? 'uncertain' : 'moving',
+      realCandidatePending: false,
+      realCanonicalDecisionReason: stale ? 'accuracy-reject' : 'moving-evidence',
+      pendingSegmentStartReason: stale ? 'gps-reacquired' : null,
       overSpeedActive: false,
     });
   }, { nextMode: mode, nextScenario: scenario });
@@ -168,7 +174,9 @@ const exerciseRecordingControls = async () => {
   await page.getByRole('button', { name: 'Pause hike' }).click();
   await page.getByRole('button', { name: 'Resume hike' }).click();
   await page.getByRole('button', { name: 'Finish hike' }).click();
-  await page.getByText('Hike Complete', { exact: true }).waitFor();
+  await page.getByText('Finish hike', { exact: true }).waitFor();
+  await settle(400);
+  await page.screenshot({ path: path.join(outputDir, 'hike-finish-intent-day-390x844.png'), fullPage: false });
   await page.getByRole('button', { name: 'Close and keep tracking' }).click();
   await page.waitForFunction(() => globalThis.__cairnStores.useTrackingStore.getState().status === 'tracking');
 
@@ -197,7 +205,11 @@ const exerciseRecordingControls = async () => {
   await page.getByRole('button', { name: 'Pause run' }).click();
   await page.getByRole('button', { name: 'Resume run' }).click();
   await page.getByRole('button', { name: 'Finish run' }).click();
-  await page.getByText('Name this run', { exact: true }).waitFor();
+  await page.getByText('Finish run', { exact: true }).waitFor();
+  await page.locator('input').last().blur();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await settle(400);
+  await page.screenshot({ path: path.join(outputDir, 'run-finish-intent-day-390x844.png'), fullPage: false });
   await page.getByRole('button', { name: 'Cancel and keep running' }).click();
   await page.waitForFunction(() => globalThis.__cairnStores.useTrackingStore.getState().status === 'tracking');
 
@@ -233,11 +245,14 @@ await page.waitForFunction(() => globalThis.__cairnStores?.getCurrentRoute?.() =
 const matrix = [
   ['hike', 'prestart'],
   ['hike', 'tracking'],
+  ['hike', 'long'],
   ['hike', 'paused'],
   ['hike', 'degraded'],
   ['run', 'prestart'],
   ['run', 'tracking'],
+  ['run', 'long'],
   ['run', 'paused'],
+  ['run', 'degraded'],
 ];
 const results = [];
 for (const theme of ['day', 'sunset', 'night']) {
@@ -283,7 +298,7 @@ fs.writeFileSync(path.join(outputDir, 'results.json'), JSON.stringify({ results,
 
 console.log(JSON.stringify({
   outputDir,
-  screenshots: results.length,
+  screenshots: results.length + 2,
   layoutChecks: results.length,
   interactions,
   runtimeErrors: [...new Set(runtimeErrors)],

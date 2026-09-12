@@ -64,6 +64,15 @@ let persistenceState: 'detached' | 'hydrating' | 'writable' | 'blocked' = 'detac
  * this and bail out, so concurrent user switches can't corrupt state.
  */
 let generation = 0;
+let persistenceMetrics = { writes: 0, bytes: 0, totalWriteMs: 0, maxWriteMs: 0 };
+
+export function resetMemoryPersistenceMetrics(): void {
+  persistenceMetrics = { writes: 0, bytes: 0, totalWriteMs: 0, maxWriteMs: 0 };
+}
+
+export function getMemoryPersistenceMetrics(): typeof persistenceMetrics {
+  return { ...persistenceMetrics };
+}
 
 // O1: removed bytesToBase64/base64ToBytes — 0 callers, `void` suppression
 // confirmed dead code. If future needed, standard btoa/atob is inline-cheap.
@@ -162,9 +171,9 @@ function clearTimers(): void {
 }
 
 /**
- * Flush a snapshot to disk. The caller (scheduleFlush) snapshots the
- * store at schedule TIME, not at flush execution time, so a user switch
- * mid-debounce cannot serialize the wrong content.
+ * Flush a snapshot to disk. Callers take the snapshot only when a durable
+ * write actually runs; ordinary mutations therefore do not copy/serialize
+ * the full Memory history.
  *
  * N5 fix (v0.2.6.3): previously read useMemoryStore.getState() at flush
  * time. If the new user's clearAll fired between schedule and flush,
@@ -174,34 +183,39 @@ function clearTimers(): void {
 async function flush(userId: string, snapshot: { points: VisitedPoint[]; initialRevealDone: boolean }): Promise<void> {
   if (!userId) return;
   const payload = serialize(snapshot.points, snapshot.initialRevealDone);
+  const serialized = JSON.stringify(payload);
+  const startedAt = Date.now();
   // Memory evidence is a committed product record, not a best-effort cache.
   // Propagate quota / disk errors so recordMemoryEvidence cannot report a
   // durable commit when AsyncStorage rejected the write.
-  await storage.setItem(storageKey(userId), JSON.stringify(payload), { strict: true });
+  await storage.setItem(storageKey(userId), serialized, { strict: true });
+  const elapsedMs = Math.max(0, Date.now() - startedAt);
+  persistenceMetrics.writes += 1;
+  persistenceMetrics.bytes += serialized.length;
+  persistenceMetrics.totalWriteMs += elapsedMs;
+  persistenceMetrics.maxWriteMs = Math.max(persistenceMetrics.maxWriteMs, elapsedMs);
 }
 
 /**
- * O3 fix (v0.2.6.3): scheduleFlush now updates BOTH timers' snapshots
- * on each call. Previously the maxWaitTimer was only armed once per
- * burst and held the FIRST snapshot in closure → after MAX_WAIT_MS of
- * continuous walking, it flushed stale 15-second-old data. Now we
- * keep `latestSnapshot` at module scope and the maxWaitTimer reads
- * from that on fire.
+ * Both timers read the current owned store only when a write actually fires.
+ * This keeps the max-wait snapshot current without copying full Memory on
+ * every 1 m mutation.
  */
-let latestSnapshot: { points: VisitedPoint[]; initialRevealDone: boolean } | null = null;
 let latestSnapshotUserId: string | null = null;
 
 function scheduleFlush(): void {
   const userIdAtSchedule = currentUserId;
   if (!userIdAtSchedule || persistenceState !== 'writable') return;
-  const state = useMemoryStore.getState();
-  // Update the latest snapshot on EVERY call. Both timers read this
-  // when they fire — so the maxWaitTimer always uses the freshest data.
-  latestSnapshot = {
-    points: state.points.slice(),
-    initialRevealDone: state.initialRevealDone,
-  };
   latestSnapshotUserId = userIdAtSchedule;
+
+  const flushLatestOwnedSnapshot = () => {
+    if (latestSnapshotUserId !== userIdAtSchedule || currentUserId !== userIdAtSchedule) return;
+    const state = useMemoryStore.getState();
+    void flush(userIdAtSchedule, {
+      points: state.points.slice(),
+      initialRevealDone: state.initialRevealDone,
+    }).catch(() => {});
+  };
 
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = setTimeout(() => {
@@ -210,9 +224,7 @@ function scheduleFlush(): void {
       clearTimeout(maxWaitTimer);
       maxWaitTimer = null;
     }
-    if (latestSnapshot && latestSnapshotUserId === userIdAtSchedule) {
-      void flush(userIdAtSchedule, latestSnapshot).catch(() => {});
-    }
+    flushLatestOwnedSnapshot();
   }, DEBOUNCE_MS);
 
   if (!maxWaitTimer) {
@@ -222,9 +234,7 @@ function scheduleFlush(): void {
         clearTimeout(flushTimer);
         flushTimer = null;
       }
-      if (latestSnapshot && latestSnapshotUserId === userIdAtSchedule) {
-        void flush(userIdAtSchedule, latestSnapshot).catch(() => {});
-      }
+      flushLatestOwnedSnapshot();
     }, MAX_WAIT_MS);
   }
 }
@@ -331,7 +341,12 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
   await markMemoryHydrateSuccess();
   if (myGeneration !== generation) return;
   persistenceState = 'writable';
-  unsubscribe = useMemoryStore.subscribe(() => scheduleFlush());
+  unsubscribe = useMemoryStore.subscribe((next, previous) => {
+    // Sync counters/status are UI state, not durable exploration mutations.
+    // Do not re-arm a full Memory snapshot for those unrelated updates.
+    if (next.points === previous.points && next.initialRevealDone === previous.initialRevealDone) return;
+    scheduleFlush();
+  });
 }
 
 /**

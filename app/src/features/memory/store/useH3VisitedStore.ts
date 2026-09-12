@@ -211,9 +211,11 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
       // The render-relevant data (cellID presence) didn't change.
       return;
     }
-    const next = new Map(cells);
-    next.set(cellID, { first: safeTs, last: safeTs, count: 1 });
-    set({ cells: next, cellVersion: get().cellVersion + 1 });
+    // `cells` is an internal derived cache; render invalidation is explicitly
+    // owned by cellVersion. Avoid cloning the entire world map for each newly
+    // explored cell.
+    cells.set(cellID, { first: safeTs, last: safeTs, count: 1 });
+    set({ cells, cellVersion: get().cellVersion + 1 });
   },
 
   bulkImport: (points) => {

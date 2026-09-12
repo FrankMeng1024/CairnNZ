@@ -333,7 +333,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // O50 (2026-09-11): user-grade pedestrian Final reconstruction with composite
 // corridor evidence, observed road-side offsets, bounded crossing/off-network
 // cleanup, walking-Directions fallback, and whole-Activity seam/visual gates.
-export const OTA_VERSION = 'O50';
+// O51 (2026-09-12): Hike/Run Product-DNA visual alignment — shared Cairn mode
+// pictograms and customer-facing GPS language, exploration-first Hike metric
+// priority, coherent Finish intent, and expanded Activity visual-state QA.
+// O52 (2026-09-12): one-metre foreground/background precision intent, one
+// Activity location authority, append-only durability, and bounded hot paths.
+export const OTA_VERSION = 'O52';
 
 
 type OtaState =

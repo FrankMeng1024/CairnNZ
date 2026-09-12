@@ -2,30 +2,20 @@
  * StopSummarySheet — bottom sheet shown when user taps Done while tracking.
  *
  * Extracted from HikingScreen.tsx (O1 batch 21 refactor).
- * Shows completion summary, hero image, stats row, name input, and two CTAs.
+ * Shows the finish intent, trace summary, optional name, and final CTA.
  *
- * 2026-08-16 UI overhaul (H4 redesign): layout follows
- * docs/ui-redesign/sleep-run-2026-08-15/frames/H4-complete.png:
- *   - hero image uses aspectRatio (16/10) so it never crops on narrow phones
- *   - primary CTA "View Activity" → save + nav to MapHistory detail
- *   - secondary CTA "Done" → save + go Home
- *   - Discard replaced by a header X close (safety: no one-tap data loss)
- *
- * API additions (additive, non-breaking):
- *     Falls back to onConfirm if the caller doesn't wire it (both save;
- *     only nav destination differs, decided in HikingScreen).
- *   - onDiscard retained for backward compat but no longer surfaced in UI
- *     (may be removed after full downstream migration).
+ * The close action keeps tracking; the final CTA delegates persistence and
+ * Activity Detail navigation to the parent. The legacy onDiscard prop remains
+ * in the contract but is intentionally not surfaced as a one-tap action.
  */
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Image,
+  View, Text, StyleSheet, TouchableOpacity,
   TextInput, Animated, Easing, KeyboardAvoidingView, Platform, Keyboard,
-  ActivityIndicator, Share,
+  ActivityIndicator,
 } from 'react-native';
 import Svg, { Polyline as SvgPolyline } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon } from '../components/Icon';
 import { useDistance } from '../utils/distanceFormat';
 import { formatDate } from '../utils/dateFormat';
 import { useVisualTheme } from '../hooks/useVisualTheme';
@@ -43,9 +33,6 @@ type Props = {
   summary: StopSummary;
   onCancel: () => void;
   onConfirm: (name: string) => void;
-  /** 2026-08-16 (H4 redesign): optional variant — save + go Home.
-   *  If omitted, the "Done" CTA falls back to onConfirm (same save
-   *  path; HikingScreen decides where to navigate). */
   /** Legacy Discard hook — no longer surfaced in the UI as of the H4
    *  redesign. Kept in the prop shape so existing callers compile; may
    *  be dropped in a follow-up once all downstream call sites are
@@ -184,7 +171,7 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
   };
 
   const isRun = summary.activityMode === 'running';
-  const heading = isRun ? 'Run Complete' : 'Hike Complete';
+  const heading = isRun ? 'Finish run' : 'Finish hike';
   const label = isRun ? 'Run' : 'Hike';
   // O18 HIST-09: default name uses user-preferred date format.
   const defaultName = `${label} — ${formatDate(summary.startedAt)}`;
@@ -206,20 +193,6 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
   const sheetBg = completeIsDark ? completeTheme.surfaceElevated : PAPER_BG;
   const titleInk = completeIsDark ? completeTheme.foreground : TITLE_INK;
   const mutedInk = completeIsDark ? completeTheme.foregroundSecondary : MUTED_INK;
-
-  // Sleep-run 2026-08-16 (H4 concept): "Share this activity" action lives in
-  // the header. Uses React Native's built-in Share API — iOS system share
-  // sheet, no new dependency. Silent-fail on cancel (user dismissed sheet).
-  const shareSummary = async () => {
-    if (saving) return;
-    try {
-      const verb = isRun ? 'ran' : 'hiked';
-      const message = `I just ${verb} ${distanceVal} ${distanceLbl} in ${timeVal} — tracked with CairnNZ.`;
-      await Share.share({ message });
-    } catch {
-      // User cancelled or share unavailable — no-op.
-    }
-  };
 
   return (
     <Animated.View style={[stopSheetStyles.scrim, { opacity }]} pointerEvents="auto">
@@ -255,22 +228,6 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
                 <Text style={[stopSheetStyles.closeX, { color: titleInk }, saving && { opacity: 0.4 }]}>✕</Text>
               </TouchableOpacity>
             </View>
-          </View>
-
-          {/* Hero image — 2026-08-17 concept H4/R4. Two extracted crops
-              live side by side: the hike variant shows the cairn stack
-              at a lush valley trail-head; the run variant swaps in a
-              green teardrop pin on top of the same cairn stack, matching
-              the concept sheet's per-activity flourish. aspectRatio 16/10
-              keeps the composition centered across all target viewports. */}
-          <View style={stopSheetStyles.heroWrap}>
-            <Image
-              source={isRun
-                ? require('../../assets/running/complete-hero.png')
-                : require('../../assets/hiking/complete-hero.png')}
-              style={stopSheetStyles.hero}
-              resizeMode="cover"
-            />
           </View>
 
           {/* Three-stat row: value on top (30pt weight 900), label beneath
@@ -312,21 +269,6 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
             </View>
           )}
 
-          {/* "Great hike!" / "Great run!" positive-feedback card (concept H4/R4). */}
-          <View style={[stopSheetStyles.feedbackCard, completeIsDark ? { backgroundColor: 'rgba(240,238,230,0.06)', borderColor: 'rgba(220,230,240,0.14)' } : null]}>
-            <View style={stopSheetStyles.feedbackIcon}>
-              <Icon name="Leaf" size={22} color={CTA_GREEN} strokeWidth={2} />
-            </View>
-            <View style={stopSheetStyles.feedbackText}>
-              <Text style={[stopSheetStyles.feedbackTitle, { color: titleInk }]}>
-                {isRun ? 'Great run!' : 'Great hike!'}
-              </Text>
-              <Text style={[stopSheetStyles.feedbackSubtitle, { color: mutedInk }]}>
-                Another piece of your world explored.
-              </Text>
-            </View>
-          </View>
-
           {/* Name input — R21 (2026-08-18 user "下方text位置 用户不知道是
               写hike的名字的 要让用户知道"): explicit label above the field
               plus a friendlier placeholder so users know this names the
@@ -362,7 +304,7 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
             activeOpacity={0.85}
             disabled={saving}
             accessibilityRole="button"
-            accessibilityLabel="Save hike and view activity"
+            accessibilityLabel={`Finish ${label.toLowerCase()} and view activity`}
           >
             {saving ? (
               <>
@@ -372,7 +314,7 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
                 </Text>
               </>
             ) : (
-              <Text style={stopSheetStyles.saveText}>View Activity</Text>
+              <Text style={stopSheetStyles.saveText}>Finish &amp; view activity</Text>
             )}
           </TouchableOpacity>
         </Animated.View>
@@ -421,9 +363,6 @@ const stopSheetStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  iconBtn: {
-    padding: 6,
-  },
   closeHit: {
     padding: 6,
     marginRight: -6,
@@ -440,49 +379,6 @@ const stopSheetStyles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#EFEAE0',
     overflow: 'hidden',
-  },
-  feedbackCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: '#EFEAE0',
-  },
-  feedbackIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#E0DACB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  feedbackText: {
-    flex: 1,
-    gap: 2,
-  },
-  feedbackTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: TITLE_INK,
-    letterSpacing: -0.2,
-  },
-  feedbackSubtitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: MUTED_INK,
-  },
-  heroWrap: {
-    alignSelf: 'stretch',
-    aspectRatio: 16 / 10,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: HAIRLINE,
-  },
-  hero: {
-    width: '100%',
-    height: '100%',
   },
   title: {
     fontSize: 24,
@@ -547,17 +443,6 @@ const stopSheetStyles = StyleSheet.create({
     color: PAPER_BG,
     fontSize: 17,
     fontWeight: '700',
-    textAlign: 'center',
-  },
-  doneHit: {
-    alignSelf: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-  },
-  doneText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: CTA_GREEN,
     textAlign: 'center',
   },
 });

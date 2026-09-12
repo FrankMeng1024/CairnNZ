@@ -1,9 +1,12 @@
 import {
   buildConfirmedRouteSegments,
+  createIncrementalRoutePresentation,
   continuousRouteAnimationDurationMs,
   isAppendOnlyRouteUpdate,
   MAX_CONTINUOUS_ROUTE_MUTABLE_POINTS,
+  MAX_LIVE_ROUTE_HEAD_POINTS,
   planContinuousRouteTarget,
+  updateIncrementalRoutePresentation,
 } from '../confirmedRoutePresentation';
 
 const point = (eastM: number, t: number, segmentId = 'a') => ({
@@ -59,5 +62,41 @@ describe('confirmed route presentation', () => {
     expect(continuousRouteAnimationDurationMs(100)).toBe(180);
     expect(continuousRouteAnimationDurationMs(1_000)).toBe(720);
     expect(continuousRouteAnimationDurationMs(2_000)).toBe(850);
+  });
+
+  it('keeps a static body and bounded changing head without a seam', () => {
+    const points = Array.from({ length: MAX_LIVE_ROUTE_HEAD_POINTS + 10 }, (_, index) => point(index, index * 1_000));
+    let state = createIncrementalRoutePresentation();
+    for (let count = 1; count <= points.length; count += 1) {
+      state = updateIncrementalRoutePresentation(state, points.slice(0, count));
+    }
+    expect(state.staticChunks).toHaveLength(1);
+    expect(state.activeHead!.coordinates.length).toBe(11);
+    expect(state.staticChunks[0].coordinates.at(-1)).toEqual(state.activeHead!.coordinates[0]);
+    expect(state.latestUpdatePayloadBytes).toBeLessThanOrEqual(MAX_LIVE_ROUTE_HEAD_POINTS * 16);
+  });
+
+  it('preserves explicit gaps, U-turns and repeated traversal incrementally', () => {
+    const points = [
+      point(0, 1_000, 'a'), point(10, 2_000, 'a'), point(0, 3_000, 'a'),
+      point(0, 4_000, 'b'), point(10, 5_000, 'b'), point(0, 6_000, 'b'),
+    ];
+    const state = updateIncrementalRoutePresentation(createIncrementalRoutePresentation(), points);
+    expect(state.staticChunks.map(chunk => chunk.coordinates.length)).toEqual([3]);
+    expect(state.activeHead?.coordinates.length).toBe(3);
+    expect(state.staticChunks[0].coordinates[0]).toEqual(state.staticChunks[0].coordinates[2]);
+    expect(state.activeHead!.coordinates[0]).toEqual(state.activeHead!.coordinates[2]);
+  });
+
+  it.each([1_800, 7_200, 18_000])('bounds per-update route payload for %i accepted points', (count) => {
+    const points = Array.from({ length: count }, (_, index) => point(index, index * 1_000));
+    let state = createIncrementalRoutePresentation();
+    const growing: ReturnType<typeof point>[] = [];
+    for (const nextPoint of points) {
+      growing.push(nextPoint);
+      state = updateIncrementalRoutePresentation(state, growing);
+      expect(state.latestUpdatePayloadBytes).toBeLessThanOrEqual((MAX_LIVE_ROUTE_HEAD_POINTS + 2) * 16);
+    }
+    expect(state.staticChunks.length).toBeLessThanOrEqual(Math.ceil(count / (MAX_LIVE_ROUTE_HEAD_POINTS - 1)));
   });
 });

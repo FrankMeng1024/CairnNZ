@@ -142,7 +142,7 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(store).toContain('boundActivityClientId');
     expect(store).toContain('waypoints.slice(0, MAX_SIMULATOR_AUTOPILOT_POINTS)');
     expect(recovery).toContain("const locationProviderSource = meta.location_source ?? registered?.locationProviderSource ?? 'real'");
-    expect(recovery).toContain("point.src === 'sim'");
+    expect(recovery).toContain('source: point.source');
   });
 
   test('Finish, Detail and sync retain the normal product path', () => {
@@ -345,8 +345,6 @@ describe('Activity Simulator integration and safety contracts', () => {
       'activity_sampling_metadata_updated_v1',
       'background_location_authorization_refreshed',
       'activity_background_authority_v2',
-      'activity_journal_commit_v2',
-      'activity_background_batch_v2',
       'activity_candidate_transition_v1',
       'activity_segment_decision_v2',
       'activity_match_preflight_v2',
@@ -410,13 +408,17 @@ describe('Activity Simulator integration and safety contracts', () => {
         fields: { decision: 'ACCEPT', rawOrdinal: index },
       })),
     ]);
+    const transitionAndErrorEvidence = diagnosticChain.filter(item => ![
+      'activity_filter_decision_v2',
+      'real_activity_background_callback_checkpoint',
+      'activity_journal_commit_v2',
+      'real_activity_background_journal_result',
+      'activity_background_batch_v2',
+      'activity_elevation_decision_v1',
+    ].includes(item.eventName));
     expect(longRealActivity.map(item => item.eventName)).toEqual(expect.arrayContaining(
-      diagnosticChain.map(item => item.eventName),
+      transitionAndErrorEvidence.map(item => item.eventName),
     ));
-    expect(longRealActivity).toContainEqual(expect.objectContaining({
-      eventName: 'activity_filter_decision_v2',
-      category: 'GPS_REJECT',
-    }));
 
     const criticalOnly = boundSimulatorLogEvents(Array.from({ length: 128 }, (_, index) => {
       const item = event(index);

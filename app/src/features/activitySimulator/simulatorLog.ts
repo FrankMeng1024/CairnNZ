@@ -59,10 +59,10 @@ export interface SimulatorLogEvent {
 const MAX_EVENTS_PER_SESSION = 2_000;
 const MAX_BYTES_PER_SESSION = 512 * 1024;
 const MAX_SESSIONS = 5;
-// Real Activities may run for hours. Upload a complete bounded snapshot every
-// two minutes and reserve enough attempts for a ten-hour diagnostic session;
+// Real Activities may run for hours. Upload bounded deltas every two minutes;
 // lifecycle/error transitions still request an immediate durable local flush.
 const AUTO_UPLOAD_INTERVAL_MS = 120_000;
+const DURABLE_FLUSH_INTERVAL_MS = 30_000;
 const MAX_CONSECUTIVE_UPLOAD_FAILURES = 5;
 const MAX_AUTO_UPLOADS_PER_SESSION = 300;
 const QA_LOCAL_RETENTION_MS = 24 * 60 * 60 * 1_000;
@@ -142,28 +142,24 @@ const CRITICAL_EVENT_NAMES = new Set([
   'real_activity_background_registration_result',
   'real_activity_background_task_started',
   'real_activity_background_task_stopped',
-  'real_activity_background_callback_checkpoint',
-  'real_activity_background_journal_result',
+  // Ordinary callback/journal batches are coalesced. Only provider lifecycle,
+  // transitions and errors justify an immediate full durable flush.
   'real_activity_background_drain',
   'real_activity_foreground_takeover',
   'background_location_authorization_refreshed',
   'real_activity_background_source_unavailable',
   'activity_candidate_transition_v1',
-  'activity_journal_commit_v2',
   'activity_background_authority_v2',
-  'activity_background_batch_v2',
   'activity_segment_decision_v2',
   'activity_match_preflight_v2',
   'activity_match_segment_v2',
   'activity_final_geometry_v2',
   'activity_telemetry_health_v2',
-  'real_gps_filter_rejected',
   'candidate_created',
   'candidate_confirmed',
   'candidate_rejected',
   'candidate_timeout',
   'activity_recording_gap_opened',
-  'elevation_gain_credited',
   'speed_preset_set',
   'custom_speed_set',
   'time_scale_set',
@@ -221,9 +217,7 @@ const SAMPLED_EVENT_NAMES = new Set([
 
 function isCriticalEvent(event: SimulatorLogEvent): boolean {
   return event.category === 'ERROR'
-    || CRITICAL_EVENT_NAMES.has(event.eventName)
-    || (event.eventName === 'activity_filter_decision_v2' && event.fields.decision !== 'ACCEPT')
-    || (event.eventName === 'activity_elevation_decision_v1' && Number(event.fields.creditedDeltaM) > 0);
+    || CRITICAL_EVENT_NAMES.has(event.eventName);
 }
 
 interface QaUploadState {
@@ -231,6 +225,8 @@ interface QaUploadState {
   consecutiveFailures: number;
   lastUploadAt: number;
   expiresAt: number;
+  uploadedThroughIdentity: string | null;
+  uploadedThroughTimestamp: number;
 }
 
 async function loadQaUploadState(userId: string, qaSessionId: string, startedAt: number): Promise<QaUploadState> {
@@ -242,6 +238,10 @@ async function loadQaUploadState(userId: string, qaSessionId: string, startedAt:
       consecutiveFailures: Math.max(0, Math.floor(Number(parsed.consecutiveFailures) || 0)),
       lastUploadAt: Math.max(0, Number(parsed.lastUploadAt) || 0),
       expiresAt: startedAt + QA_LOCAL_RETENTION_MS,
+      uploadedThroughIdentity: typeof parsed.uploadedThroughIdentity === 'string'
+        ? parsed.uploadedThroughIdentity
+        : null,
+      uploadedThroughTimestamp: Math.max(0, Number(parsed.uploadedThroughTimestamp) || 0),
     };
     uploadCounts.set(qaSessionId, result.uploadCount);
     uploadFailures.set(qaSessionId, result.consecutiveFailures);
@@ -253,6 +253,8 @@ async function loadQaUploadState(userId: string, qaSessionId: string, startedAt:
       consecutiveFailures: 0,
       lastUploadAt: 0,
       expiresAt: startedAt + QA_LOCAL_RETENTION_MS,
+      uploadedThroughIdentity: null,
+      uploadedThroughTimestamp: 0,
     };
   }
 }
@@ -354,20 +356,72 @@ export async function getQaTelemetryHealth(
   uploadCount: number;
   consecutiveUploadFailures: number;
   lastUploadAt: number | null;
+  rawForegroundCallbackCount: number;
+  rawBackgroundCallbackCount: number;
+  callbackDeltaP50Ms: number | null;
+  callbackDeltaP95Ms: number | null;
+  callbackDeltaMaxMs: number | null;
+  spatialDeltaP50M: number | null;
+  spatialDeltaP95M: number | null;
+  canonicalAcceptCount: number;
+  candidateCount: number;
+  rejectCount: number;
+  stationarySuppressCount: number;
 }> {
   const key = LOG_KEY(userId, qaSessionId);
   const pending = appendTails.get(key);
   if (pending) await pending.catch(() => undefined);
   const events = bounded(await loadSession(userId, qaSessionId));
+  const observations = events.filter(event => event.eventName === 'activity_observation_received_v2');
+  const rawCallbacks = events.filter(event => event.eventName === 'real_activity_location_callback');
+  const decisions = events.filter(event => event.eventName === 'activity_filter_decision_v2');
+  const repeatCount = (event: SimulatorLogEvent) => Math.max(1, Number(event.fields.repeatCount) || 1);
+  const numericSamples = (event: SimulatorLogEvent, arrayField: string, scalarField: string): number[] => {
+    const array = event.fields[arrayField];
+    if (Array.isArray(array)) return array.map(Number).filter(Number.isFinite);
+    const scalarValue = event.fields[scalarField];
+    const scalar = Number(scalarValue);
+    return scalarValue != null && Number.isFinite(scalar) ? [scalar] : [];
+  };
+  const callbackDeltas = observations.flatMap(event => numericSamples(event, 'intervalSamplesMs', 'dtFromPreviousRawMs'));
+  const spatialDeltas = observations.flatMap(event => numericSamples(event, 'spatialDeltaSamplesM', 'displacementFromPreviousRawM'));
+  const percentile = (values: number[], value: number): number | null => {
+    if (values.length === 0) return null;
+    const sorted = values.slice().sort((a, b) => a - b);
+    return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * value) - 1))];
+  };
   return {
     retainedEventCount: events.length,
     retainedBytes: serializeQaEventsForUpload(events).length,
     retainedCriticalCount: events.filter(isCriticalEvent).length,
-    retainedObservationCount: events.filter(event => event.eventName === 'activity_observation_received_v2').length,
-    retainedDecisionCount: events.filter(event => event.eventName === 'activity_filter_decision_v2').length,
+    retainedObservationCount: observations.reduce((total, event) => total + repeatCount(event), 0),
+    retainedDecisionCount: decisions.reduce((total, event) => total + repeatCount(event), 0),
     uploadCount: uploadCounts.get(qaSessionId) ?? 0,
     consecutiveUploadFailures: uploadFailures.get(qaSessionId) ?? 0,
     lastUploadAt: lastUploadAt.get(qaSessionId) ?? null,
+    rawForegroundCallbackCount: rawCallbacks
+      .filter(event => event.fields.sampleSource === 'foreground')
+      .reduce((total, event) => total + repeatCount(event), 0),
+    rawBackgroundCallbackCount: rawCallbacks
+      .filter(event => event.fields.sampleSource === 'background')
+      .reduce((total, event) => total + repeatCount(event), 0),
+    callbackDeltaP50Ms: percentile(callbackDeltas, 0.5),
+    callbackDeltaP95Ms: percentile(callbackDeltas, 0.95),
+    callbackDeltaMaxMs: callbackDeltas.length > 0 ? Math.max(...callbackDeltas) : null,
+    spatialDeltaP50M: percentile(spatialDeltas, 0.5),
+    spatialDeltaP95M: percentile(spatialDeltas, 0.95),
+    canonicalAcceptCount: decisions
+      .filter(event => event.fields.decision === 'ACCEPT')
+      .reduce((total, event) => total + repeatCount(event), 0),
+    candidateCount: decisions
+      .filter(event => event.fields.decision === 'QUARANTINE')
+      .reduce((total, event) => total + repeatCount(event), 0),
+    rejectCount: decisions
+      .filter(event => event.fields.decision === 'REJECT')
+      .reduce((total, event) => total + repeatCount(event), 0),
+    stationarySuppressCount: decisions
+      .filter(event => String(event.fields.decisionReason ?? '').includes('stationary'))
+      .reduce((total, event) => total + repeatCount(event), 0),
   };
 }
 
@@ -376,7 +430,20 @@ function scheduleFlush(): void {
   flushTimer = setTimeout(() => {
     flushTimer = null;
     void flushSimulatorLogs();
-  }, 1_500);
+  }, DURABLE_FLUSH_INTERVAL_MS);
+}
+
+function uploadIdentity(event: SimulatorLogEvent): string {
+  return [
+    event.timestamp,
+    event.eventName,
+    event.clientActivityIdSuffix,
+    event.sampleSequence,
+    event.fields.rawOrdinal,
+    event.fields.phase,
+    event.fields.segmentIndex,
+    event.fields.reason,
+  ].map(value => String(value ?? '')).join('|');
 }
 
 async function loadSession(userId: string, sessionId: string): Promise<SimulatorLogEvent[]> {
@@ -526,6 +593,8 @@ export function appendSimulatorLog(
       ? 5_000
       : eventName === 'real_location_sample_observed'
         || eventName === 'real_activity_location_callback'
+        || eventName === 'activity_observation_received_v2'
+        || eventName === 'activity_filter_decision_v2'
         || eventName === 'location_sample_accepted'
         || eventName === 'activity_point_committed'
         || eventName === 'activity_metrics_derived'
@@ -535,15 +604,33 @@ export function appendSimulatorLog(
         || eventName === 'elevation_decision_checkpoint'
         || eventName === 'elevation_quality_checkpoint'
         || eventName === 'activity_trace_map_source_update_requested'
-        || eventName === 'activity_trace_state_received' ? 10_000 : 0;
+        || eventName === 'activity_trace_state_received'
+        || eventName === 'activity_live_trace_update_v2'
+        || eventName === 'real_activity_background_callback_checkpoint'
+        || eventName === 'real_activity_background_journal_result'
+        || eventName === 'activity_background_batch_v2' ? 10_000 : 0;
     if (coalesceWindowMs > 0) {
-      const previousIndex = events.findLastIndex(previous =>
-        previous.eventName === eventName
-        && previous.clientActivityIdSuffix === event.clientActivityIdSuffix
-        && String(previous.fields.mountId ?? '') === String(event.fields.mountId ?? '')
-        && String(previous.fields.phase ?? '') === String(event.fields.phase ?? '')
-        && event.timestamp - previous.timestamp <= coalesceWindowMs,
-      );
+      // Ten seconds of one-metre telemetry is always near the tail. Bound the
+      // lookup so QA work cannot grow with retained session history.
+      let previousIndex = -1;
+      const oldestCandidate = Math.max(0, events.length - 256);
+      for (let index = events.length - 1; index >= oldestCandidate; index -= 1) {
+        const previous = events[index];
+        if (
+          previous.eventName === eventName
+          && previous.clientActivityIdSuffix === event.clientActivityIdSuffix
+          && String(previous.fields.mountId ?? '') === String(event.fields.mountId ?? '')
+          && String(previous.fields.phase ?? '') === String(event.fields.phase ?? '')
+          && String(previous.fields.decision ?? '') === String(event.fields.decision ?? '')
+          && String(previous.fields.decisionReason ?? previous.fields.rejectionReason ?? '')
+            === String(event.fields.decisionReason ?? event.fields.rejectionReason ?? '')
+          && String(previous.fields.sampleSource ?? '') === String(event.fields.sampleSource ?? '')
+          && event.timestamp - previous.timestamp <= coalesceWindowMs
+        ) {
+          previousIndex = index;
+          break;
+        }
+      }
       if (previousIndex >= 0) {
         const previous = events[previousIndex];
         const currentSequenceTimestamp = Number(event.fields.sequenceTimestamp);
@@ -555,6 +642,22 @@ export function appendSimulatorLog(
         const previousIntervals = Array.isArray(previous.fields.intervalSamplesMs)
           ? previous.fields.intervalSamplesMs.filter(value => Number.isFinite(Number(value))).map(Number)
           : [];
+        const previousSpatialSamples = Array.isArray(previous.fields.spatialDeltaSamplesM)
+          ? previous.fields.spatialDeltaSamplesM.filter(value => Number.isFinite(Number(value))).map(Number)
+          : [];
+        const previousSpatialValue = previous.fields.displacementFromPreviousRawM;
+        const currentSpatialValue = event.fields.displacementFromPreviousRawM;
+        const previousSpatialDelta = Number(previousSpatialValue);
+        const currentSpatialDelta = Number(currentSpatialValue);
+        const seededIntervals = previousIntervals.length > 0
+          ? previousIntervals
+          : previous.fields.dtFromPreviousRawMs != null
+            && Number.isFinite(Number(previous.fields.dtFromPreviousRawMs))
+            ? [Number(previous.fields.dtFromPreviousRawMs)]
+            : [];
+        const seededSpatialSamples = previousSpatialSamples.length > 0
+          ? previousSpatialSamples
+          : previousSpatialValue != null && Number.isFinite(previousSpatialDelta) ? [previousSpatialDelta] : [];
         event.fields = {
           ...event.fields,
           firstObservedAt: previous.fields.firstObservedAt ?? previous.timestamp,
@@ -566,15 +669,24 @@ export function appendSimulatorLog(
               : {}),
           ...(intervalMs === null
             ? {}
-            : { intervalSamplesMs: [...previousIntervals, intervalMs].slice(-24) }),
+            : { intervalSamplesMs: [...seededIntervals, intervalMs].slice(-24) }),
+          ...(currentSpatialValue != null && Number.isFinite(currentSpatialDelta)
+            ? { spatialDeltaSamplesM: [...seededSpatialSamples, currentSpatialDelta].slice(-24) }
+            : seededSpatialSamples.length > 0 ? { spatialDeltaSamplesM: seededSpatialSamples } : {}),
         };
-        nextEvents = [...events.slice(0, previousIndex), ...events.slice(previousIndex + 1)];
+        events.splice(previousIndex, 1);
+        nextEvents = events;
       }
     }
-    memory.set(key, bounded([...nextEvents, event]));
+    nextEvents.push(event);
+    if (nextEvents.length > MAX_EVENTS_PER_SESSION) {
+      const removable = nextEvents.findIndex(candidate => !isCriticalEvent(candidate));
+      nextEvents.splice(removable >= 0 ? removable : 0, 1);
+    }
+    memory.set(key, nextEvents);
     dirty.add(key);
     dirtyOwners.set(key, { userId, sessionId: qaSessionId });
-    if (category === 'ERROR' || category === 'GPS_REJECT' || isCriticalEvent(event)) {
+    if (category === 'ERROR' || isCriticalEvent(event)) {
       void flushSimulatorLogs(userId);
     }
     else scheduleFlush();
@@ -647,6 +759,19 @@ export async function uploadQaTelemetrySession(
       || uploadState.consecutiveFailures >= MAX_CONSECUTIVE_UPLOAD_FAILURES
       || uploadState.uploadCount >= MAX_AUTO_UPLOADS_PER_SESSION
     ) return false;
+    // Timestamp is the durable delta cursor. It remains stable when a recent
+    // coalesced event replaces its previous in-memory representation. The
+    // identity cursor is retained only to migrate sessions written by O51.
+    const uploadedCursorIndex = uploadState.uploadedThroughTimestamp <= 0 && uploadState.uploadedThroughIdentity
+      ? events.findIndex(event => uploadIdentity(event) === uploadState.uploadedThroughIdentity)
+      : -1;
+    const uploadEvents = uploadState.uploadedThroughTimestamp > 0
+      ? events.filter(event => event.timestamp > uploadState.uploadedThroughTimestamp)
+      : uploadedCursorIndex >= 0
+        ? events.slice(uploadedCursorIndex + 1)
+        : events;
+    if (uploadEvents.length === 0) return true;
+    const uploadJsonl = serializeQaEventsForUpload(uploadEvents);
     uploadState.uploadCount += 1;
     uploadState.lastUploadAt = Date.now();
     await saveQaUploadState(userId, qaSessionId, uploadState);
@@ -656,17 +781,20 @@ export async function uploadQaTelemetrySession(
     const { telemetryUploader } = require('../../services/telemetryUploader');
     const result = await telemetryUploader.uploadQaSession({
       sessionId: qaSessionId,
-      jsonl: serializeQaEventsForUpload(events),
+      jsonl: uploadJsonl,
       startedAt: events[0]?.timestamp ?? Date.now(),
       endedAt: useActivitySimulatorStore.getState().qaSessionEndedAt,
     });
     if (result.ok) {
       uploadState.consecutiveFailures = 0;
+      uploadState.uploadedThroughIdentity = uploadIdentity(uploadEvents[uploadEvents.length - 1]);
+      uploadState.uploadedThroughTimestamp = uploadEvents[uploadEvents.length - 1].timestamp;
       await saveQaUploadState(userId, qaSessionId, uploadState);
       if (uploadState.uploadCount === 1 || uploadState.uploadCount % 5 === 0) {
         appendSimulatorLog('SYNC_STATE', 'qa_upload_checkpoint', {
           uploadCount: uploadState.uploadCount,
           localEventCount: events.length,
+          deltaEventCount: uploadEvents.length,
           uploadedBytes: result.bytes,
           bounded: events.length >= MAX_EVENTS_PER_SESSION
             || serializeQaEventsForUpload(events).length >= MAX_BYTES_PER_SESSION - 1024,
@@ -784,6 +912,7 @@ export const SIMULATOR_LOG_LIMITS = {
   maxBytesPerSession: MAX_BYTES_PER_SESSION,
   maxSessions: MAX_SESSIONS,
   autoUploadIntervalMs: AUTO_UPLOAD_INTERVAL_MS,
+  durableFlushIntervalMs: DURABLE_FLUSH_INTERVAL_MS,
   maxConsecutiveUploadFailures: MAX_CONSECUTIVE_UPLOAD_FAILURES,
   maxAutoUploadsPerSession: MAX_AUTO_UPLOADS_PER_SESSION,
   localRetentionMs: QA_LOCAL_RETENTION_MS,

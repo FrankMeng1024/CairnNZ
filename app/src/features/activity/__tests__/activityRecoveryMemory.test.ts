@@ -40,6 +40,7 @@ jest.mock('../../memory/services/recordMemoryEvidence', () => ({
     mockOrder.push('memory');
     return { committed: true, deduplicated: false };
   }),
+  flushRecordedMemoryEvidence: jest.fn(async () => { mockOrder.push('memory-flush'); }),
 }));
 jest.mock('../../../services/pendingSyncStore', () => ({
   removePending: jest.fn(async () => { mockOrder.push('pending-delete'); }),
@@ -84,7 +85,7 @@ describe('Activity journal as crash-recoverable Memory intent', () => {
       ownerUserId: 'account-a',
       source: 'reconciliation',
     }));
-    expect(mockOrder).toEqual(['fence', 'memory', 'tombstone', 'pending-delete', 'journal-delete']);
+    expect(mockOrder).toEqual(['fence', 'memory', 'memory-flush', 'tombstone', 'pending-delete', 'journal-delete']);
   });
 
   test('Memory persistence failure preserves the recoverable Activity journal', async () => {

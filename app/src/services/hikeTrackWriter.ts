@@ -2,19 +2,22 @@
  * hikeTrackWriter — v409 独立 hike 磁盘落盘服务
  *
  * Purpose:
- *   - every accepted GPS callback awaits one verified journal replacement
+ *   - every accepted GPS callback awaits one append-only journal commit
  *   - stopTracking 时 rename 到 completed/ 目录
  *   - hydrate 时可读 tail 恢复未完成 hike
  *
  * Design decisions (see docs/review/free-activity-final):
- *   - verified two-snapshot replacement because Expo FileSystem has no append
- *   - Crash safety: recovery selects the most complete valid active/next/bak snapshot
+ *   - Expo FileSystem FileHandle appends without rereading/replacing history
+ *   - Crash safety: checksummed records stop at a partial/corrupt tail; legacy
+ *     active/next/bak snapshots remain readable for one-time recovery
  *   - 与 debugLogger 完全解耦(独立目录 cairn-hike-tracks/, 独立 gate)
  *   - every accepted point commits immediately; there is no long-lived buffer
  *
- * JSONL schema per line (~85 bytes):
- *   { "t": 1720260000000, "lat": -36.848461, "lng": 174.763336,
- *     "acc": 8.5, "alt": 42.3, "src": "fg|bg|slc|sim", "conf": 1 }
+ * JSONL v2 schema per line:
+ *   { "v": 2, "p": { "t": 1720260000000, "lat": -36.848461,
+ *     "lng": 174.763336, "acc": 8.5, "src": "fg|bg|slc|sim", ... },
+ *     "c": "fnv1a32" }
+ * Existing plain-JSONL records remain readable through the recovery adapter.
  *
  * File layout:
  *   {docDir}/cairn-hike-tracks/
@@ -22,7 +25,8 @@
  *     ├── completed/{sid}.jsonl
  *     └── meta/{sid}.json  ({ started_at, remote_id, activity_mode, last_ts, total_points, uploaded })
  *
- * Web fallback: getFs() returns null on web → append becomes no-op.
+ * Web/test fallback uses a localStorage-backed append model; native uses a
+ * FileHandle opened at EOF so normal commits never reread historical points.
  * Native TaskManager background path (backgroundLocationTask.ts:74) reuses this
  * same file layout via appendDirectlyToHikeTrack().
  */
@@ -51,6 +55,73 @@ export interface HikePoint {
   ownerGeneration: string;
   segmentId: string;
   segmentStartReason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
+}
+
+/**
+ * Canonical recovery shape. Storage abbreviations end here; reducers and
+ * classifiers must never branch on `acc` versus `accuracy` (RI-1).
+ */
+export interface CanonicalJournalPoint {
+  t: number;
+  lat: number;
+  lng: number;
+  alt: number | null;
+  accuracy: number | null;
+  verticalAccuracy: number | null;
+  speed: number | null;
+  course: number | null;
+  rawOrdinal?: number;
+  source: 'foreground' | 'background' | 'significant-change' | 'simulator';
+  clientActivityId: string;
+  ownerGeneration: string;
+  segmentId: string;
+  segmentStartReason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
+}
+
+export interface JournalEfficiencyMetrics {
+  /** Checksummed point records committed, including records in native batches. */
+  appendCount: number;
+  /** Physical EOF write operations; background batches can contain many records. */
+  appendOperationCount: number;
+  logicalBytes: number;
+  actualAppendBytes: number;
+  checkpointCount: number;
+  checkpointBytes: number;
+  totalCommitMs: number;
+  maxCommitMs: number;
+}
+
+const emptyJournalMetrics = (): JournalEfficiencyMetrics => ({
+  appendCount: 0,
+  appendOperationCount: 0,
+  logicalBytes: 0,
+  actualAppendBytes: 0,
+  checkpointCount: 0,
+  checkpointBytes: 0,
+  totalCommitMs: 0,
+  maxCommitMs: 0,
+});
+let journalMetrics = emptyJournalMetrics();
+
+export function resetJournalEfficiencyMetrics(): void {
+  journalMetrics = emptyJournalMetrics();
+}
+
+export function getJournalEfficiencyMetrics(): JournalEfficiencyMetrics {
+  return { ...journalMetrics };
+}
+
+/** Deterministic complexity model used by the 30 min / 2 h / 5 h gate. */
+export function estimateJournalWriteWork(pointCount: number, recordBytes: number): {
+  appendOnlyBytes: number;
+  legacySnapshotBytes: number;
+} {
+  const count = Math.max(0, Math.floor(pointCount));
+  const bytes = Math.max(0, Math.floor(recordBytes));
+  return {
+    appendOnlyBytes: count * bytes,
+    legacySnapshotBytes: bytes * count * (count + 1) / 2,
+  };
 }
 
 export interface HikeMeta {
@@ -130,6 +201,9 @@ async function getFs(): Promise<any | null> {
           window.localStorage.setItem(listKey, JSON.stringify(list));
         }
       },
+      async appendAsStringAsync(path: string, content: string) {
+        await this.writeAsStringAsync(path, (window.localStorage.getItem(path) ?? '') + content);
+      },
       async readAsStringAsync(path: string): Promise<string> {
         const raw = window.localStorage.getItem(path);
         if (raw === null) throw new Error('File not found: ' + path);
@@ -195,6 +269,98 @@ function isSaneStoredCoordinate(point: any): boolean {
     && point.lng <= 180;
 }
 
+type JournalEnvelope = { v: 2; p: HikePoint; c: string };
+
+function checksum(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+function encodeJournalPoint(point: HikePoint): string {
+  const payload = JSON.stringify(point);
+  return JSON.stringify({ v: 2, p: point, c: checksum(payload) } satisfies JournalEnvelope);
+}
+
+function decodeJournalLine(line: string): HikePoint | null {
+  try {
+    const parsed = JSON.parse(line);
+    if (parsed?.v === 2) {
+      if (!parsed.p || typeof parsed.c !== 'string') return null;
+      if (checksum(JSON.stringify(parsed.p)) !== parsed.c) return null;
+      return isSaneStoredCoordinate(parsed.p) ? parsed.p : null;
+    }
+    // Existing unfinished Activities used plain JSONL. Keep the migration
+    // read-only and idempotent; all new records use the checksummed envelope.
+    return isSaneStoredCoordinate(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function toStoredPoint(point: HikePoint | CanonicalJournalPoint): HikePoint {
+  if ('accuracy' in point || 'source' in point) {
+    const canonical = point as CanonicalJournalPoint;
+    return {
+      t: canonical.t,
+      lat: canonical.lat,
+      lng: canonical.lng,
+      acc: canonical.accuracy,
+      alt: canonical.alt,
+      speed: canonical.speed,
+      vAcc: canonical.verticalAccuracy,
+      course: canonical.course,
+      rawOrdinal: canonical.rawOrdinal,
+      src: canonical.source === 'simulator'
+        ? 'sim'
+        : canonical.source === 'background'
+          ? 'bg'
+          : canonical.source === 'significant-change' ? 'slc' : 'fg',
+      conf: 1,
+      clientActivityId: canonical.clientActivityId,
+      ownerGeneration: canonical.ownerGeneration,
+      segmentId: canonical.segmentId,
+      segmentStartReason: canonical.segmentStartReason,
+    };
+  }
+  return point as HikePoint;
+}
+
+/** The only persisted/raw -> reducer/classifier adapter. */
+export function toCanonicalJournalPoint(point: HikePoint, sessionId: string): CanonicalJournalPoint {
+  return {
+    t: point.t,
+    lat: point.lat,
+    lng: point.lng,
+    alt: point.alt ?? null,
+    accuracy: point.acc ?? null,
+    verticalAccuracy: point.vAcc ?? null,
+    speed: point.speed ?? null,
+    course: point.course ?? null,
+    rawOrdinal: point.rawOrdinal,
+    source: point.src === 'sim'
+      ? 'simulator'
+      : point.src === 'bg' ? 'background' : point.src === 'slc' ? 'significant-change' : 'foreground',
+    clientActivityId: typeof point.clientActivityId === 'string' ? point.clientActivityId : sessionId,
+    ownerGeneration: typeof point.ownerGeneration === 'string' ? point.ownerGeneration : 'legacy',
+    segmentId: typeof point.segmentId === 'string' ? point.segmentId : 'legacy-0',
+    ...(typeof point.segmentStartReason === 'string'
+      ? { segmentStartReason: point.segmentStartReason }
+      : {}),
+  };
+}
+
+function utf8Bytes(value: string): Uint8Array {
+  // Hermes does not guarantee a global TextEncoder on every supported build.
+  const encoded = unescape(encodeURIComponent(value));
+  const bytes = new Uint8Array(encoded.length);
+  for (let index = 0; index < encoded.length; index += 1) bytes[index] = encoded.charCodeAt(index);
+  return bytes;
+}
+
 async function readBestSnapshot(fs: any, basePath: string): Promise<string> {
   let maximumLines: number | null = null;
   try {
@@ -213,8 +379,8 @@ async function readBestSnapshot(fs: any, basePath: string): Promise<string> {
       for (const line of value.split('\n')) {
         if (!line.trim()) continue;
         try {
-          const point = JSON.parse(line);
-          if (!isSaneStoredCoordinate(point)) break;
+          const point = decodeJournalLine(line);
+          if (!point) break;
           valid.push(line);
         } catch { break; }
       }
@@ -229,29 +395,155 @@ async function readBestSnapshot(fs: any, basePath: string): Promise<string> {
   return best;
 }
 
+async function completePendingTruncation(fs: any, basePath: string): Promise<void> {
+  let pending = false;
+  try {
+    pending = (await fs.getInfoAsync(truncationPath(basePath))).exists;
+  } catch { /* no pending correction */ }
+  if (!pending) return;
+  const replacement = await readBestSnapshot(fs, basePath);
+  const nextPath = `${basePath}.next`;
+  const backupPath = `${basePath}.bak`;
+  await fs.writeAsStringAsync(nextPath, replacement);
+  if (await fs.readAsStringAsync(nextPath) !== replacement) {
+    throw new Error('activity_journal_repair_verification_failed');
+  }
+  try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
+  try {
+    if ((await fs.getInfoAsync(basePath)).exists) {
+      await fs.moveAsync({ from: basePath, to: backupPath });
+    }
+  } catch { /* marker still bounds every candidate on retry */ }
+  await fs.moveAsync({ from: nextPath, to: basePath });
+  try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
+  await fs.deleteAsync(truncationPath(basePath), { idempotent: true });
+  journalMetrics.checkpointCount += 1;
+  journalMetrics.checkpointBytes += utf8Bytes(replacement).length;
+}
+
+function decodeUtf8Bytes(bytes: Uint8Array): string {
+  let encoded = '';
+  for (let index = 0; index < bytes.length; index += 1) encoded += String.fromCharCode(bytes[index]);
+  // Journal records contain numeric coordinates and bounded ASCII ids. A
+  // suffix can begin midway through an unrelated legacy UTF-8 sequence;
+  // callers discard that first partial line.
+  return encoded;
+}
+
+async function readJournalSuffix(
+  fs: any,
+  basePath: string,
+  maximumBytes: number,
+): Promise<{ value: string; beginsMidFile: boolean }> {
+  if (typeof fs.appendAsStringAsync === 'function') {
+    try {
+      const value = await fs.readAsStringAsync(basePath);
+      return { value, beginsMidFile: false };
+    } catch {
+      return { value: '', beginsMidFile: false };
+    }
+  }
+  try {
+    const modern = await import('expo-file-system');
+    const handle = new modern.File(basePath).open();
+    try {
+      const size = handle.size ?? 0;
+      if (size <= 0) return { value: '', beginsMidFile: false };
+      const offset = Math.max(0, size - maximumBytes);
+      handle.offset = offset;
+      return {
+        value: decodeUtf8Bytes(handle.readBytes(size - offset)),
+        beginsMidFile: offset > 0,
+      };
+    } finally {
+      handle.close();
+    }
+  } catch {
+    return { value: '', beginsMidFile: false };
+  }
+}
+
+/** O(last-record) detection for both torn writes and checksum corruption. */
+async function hasInvalidTail(fs: any, basePath: string): Promise<boolean> {
+  const { value } = await readJournalSuffix(fs, basePath, 8 * 1024);
+  if (!value) return false;
+  if (!value.endsWith('\n')) return true;
+  const lines = value.split('\n');
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (!lines[index].trim()) continue;
+    return decodeJournalLine(lines[index]) === null;
+  }
+  return false;
+}
+
+async function replaceSnapshotWithPrefixUnlocked(
+  fs: any,
+  basePath: string,
+  replacement: string,
+  maximumLines: number,
+): Promise<void> {
+  const nextPath = `${basePath}.next`;
+  const backupPath = `${basePath}.bak`;
+  // This cap is committed first. If iOS kills the process during the swap,
+  // recovery bounds every old/new candidate to the corrected Activity tail.
+  await fs.writeAsStringAsync(truncationPath(basePath), JSON.stringify({ maximumLines }));
+  await fs.writeAsStringAsync(nextPath, replacement);
+  const verified = await fs.readAsStringAsync(nextPath);
+  if (verified !== replacement) throw new Error('activity_journal_truncation_verification_failed');
+  try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
+  try {
+    const current = await fs.getInfoAsync(basePath);
+    if (current.exists) await fs.moveAsync({ from: basePath, to: backupPath });
+  } catch { /* active may already have moved before a process interruption */ }
+  await fs.moveAsync({ from: nextPath, to: basePath });
+  try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
+  await fs.deleteAsync(truncationPath(basePath), { idempotent: true });
+  journalMetrics.checkpointCount += 1;
+  journalMetrics.checkpointBytes += utf8Bytes(replacement).length;
+}
+
 /**
- * expo-file-system has no append primitive. This two-snapshot transaction
- * keeps the previous complete journal until the replacement has been written
- * and verified. Recovery accepts active, .next, or .bak after a process death
- * and selects the snapshot containing the most complete valid prefix.
+ * Append-only WAL commit. Native FileHandle writes at EOF, so per-fix work is
+ * proportional to the new record rather than total Activity history. A torn
+ * last write has no newline or checksum-valid envelope and is ignored on
+ * recovery; a later append first repairs that bounded tail once.
  */
 async function appendSnapshot(fs: any, basePath: string, lines: string): Promise<void> {
   const run = durableWriteTail.then(async () => {
-    const existing = await readBestSnapshot(fs, basePath);
-    const nextPath = `${basePath}.next`;
-    const backupPath = `${basePath}.bak`;
-    const replacement = existing + lines;
-    await fs.writeAsStringAsync(nextPath, replacement);
-    const verified = await fs.readAsStringAsync(nextPath);
-    if (verified !== replacement) throw new Error('activity_journal_verification_failed');
-    try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
-    try {
-      const current = await fs.getInfoAsync(basePath);
-      if (current.exists) await fs.moveAsync({ from: basePath, to: backupPath });
-    } catch { /* active may already be in .bak after a prior interrupted commit */ }
-    await fs.moveAsync({ from: nextPath, to: basePath });
-    try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
-    try { await fs.deleteAsync(truncationPath(basePath), { idempotent: true }); } catch {}
+    const commitStartedAt = Date.now();
+    // A crash-interrupted QA correction is rare, but it must be completed
+    // before append or its durable prefix cap would hide the new record.
+    await completePendingTruncation(fs, basePath);
+    // A killed process can leave a checksum-incomplete final record. Repair
+    // that one exceptional tail before appending so later healthy records do
+    // not become unreachable behind it. This is the only O(n) recovery path;
+    // ordinary commits inspect one byte and append one record.
+    if (await hasInvalidTail(fs, basePath)) {
+      const validPrefix = await readBestSnapshot(fs, basePath);
+      const validLineCount = validPrefix ? validPrefix.trimEnd().split('\n').length : 0;
+      await replaceSnapshotWithPrefixUnlocked(fs, basePath, validPrefix, validLineCount);
+    }
+    const bytes = utf8Bytes(lines);
+    if (typeof fs.appendAsStringAsync === 'function') {
+      await fs.appendAsStringAsync(basePath, lines);
+    } else {
+      const modern = await import('expo-file-system');
+      const file = new modern.File(basePath);
+      const handle = file.open();
+      try {
+        handle.offset = handle.size ?? 0;
+        handle.writeBytes(bytes);
+      } finally {
+        handle.close();
+      }
+    }
+    const elapsedMs = Math.max(0, Date.now() - commitStartedAt);
+    journalMetrics.appendCount += lines.split('\n').filter(line => line.length > 0).length;
+    journalMetrics.appendOperationCount += 1;
+    journalMetrics.logicalBytes += bytes.length;
+    journalMetrics.actualAppendBytes += bytes.length;
+    journalMetrics.totalCommitMs += elapsedMs;
+    journalMetrics.maxCommitMs = Math.max(journalMetrics.maxCommitMs, elapsedMs);
   });
   durableWriteTail = run.catch(() => {});
   await run;
@@ -259,22 +551,7 @@ async function appendSnapshot(fs: any, basePath: string, lines: string): Promise
 
 async function replaceSnapshotWithPrefix(fs: any, basePath: string, replacement: string, maximumLines: number): Promise<void> {
   const run = durableWriteTail.then(async () => {
-    const nextPath = `${basePath}.next`;
-    const backupPath = `${basePath}.bak`;
-    // This cap is committed first. If iOS kills the process during the swap,
-    // recovery bounds every old/new candidate to the corrected Activity tail.
-    await fs.writeAsStringAsync(truncationPath(basePath), JSON.stringify({ maximumLines }));
-    await fs.writeAsStringAsync(nextPath, replacement);
-    const verified = await fs.readAsStringAsync(nextPath);
-    if (verified !== replacement) throw new Error('activity_journal_truncation_verification_failed');
-    try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
-    try {
-      const current = await fs.getInfoAsync(basePath);
-      if (current.exists) await fs.moveAsync({ from: basePath, to: backupPath });
-    } catch { /* active may already have moved before a process interruption */ }
-    await fs.moveAsync({ from: nextPath, to: basePath });
-    try { await fs.deleteAsync(backupPath, { idempotent: true }); } catch {}
-    await fs.deleteAsync(truncationPath(basePath), { idempotent: true });
+    await replaceSnapshotWithPrefixUnlocked(fs, basePath, replacement, maximumLines);
   });
   durableWriteTail = run.catch(() => {});
   await run;
@@ -350,7 +627,7 @@ export async function resumeHikeTrack(sessionId: string): Promise<{ resumed: boo
 }
 
 /**
- * Append one GPS point and return only after its verified journal replacement.
+ * Append one GPS point and return only after its WAL record commit.
  *
  * NOTE: Only appends if there is an active state (startHikeTrack called).
  * If state is null (e.g. background task fired before session start), the
@@ -363,19 +640,14 @@ export function appendHikePoint(point: HikePoint): Promise<void> {
   state.totalPoints++;
   // A foreground point is not accepted by the Activity store until this
   // promise resolves. Flush every accepted point so process death cannot
-  // routinely lose a timer-sized tail. The serialized snapshot writer keeps
-  // concurrent foreground/background commits from overwriting each other.
+  // routinely lose a timer-sized tail. The shared append chain keeps
+  // foreground/background commits ordered.
   return flushBuffer();
 }
 
-// O1 R1: mutex — flushBuffer has multiple callers (point, stop, AppState,
-// stopTracking, background AppState). 无 mutex 时并发 flush 会 truncate
-// 已经写入的数据 (concurrent read-existing 拿旧 file,write 用旧+空 覆盖)。
-// O6 fix: 老的 mutex 是 "check-then-set-null" pattern, 会有 race: A 完成
-// null-reset 之后, B 和 C 恰在同一 microtask tick 唤醒,但如果 B 的
-// IIFE 首个 await 之前又来了新点, C 看到 buffer 有内容再启一个 IIFE →
-// 两个 IIFE 并发写文件 truncate。改成 chain-serialization: 每次调用把
-// 自己接到上一个的 tail, 保证不管多少个 caller 都串行执行。
+// Foreground point, lifecycle and Finish callers can flush concurrently.
+// This chain serializes buffer handoff; the WAL append chain also serializes
+// foreground and headless-background writers at the file boundary.
 let flushChainTail: Promise<void> = Promise.resolve();
 
 async function flushBuffer(): Promise<void> {
@@ -390,7 +662,7 @@ async function flushBuffer(): Promise<void> {
     const fs = await getFs();
     if (!fs) return;
     const activePath = fs.documentDirectory + ACTIVE_DIR + s.sessionId + '.jsonl';
-    const lines = toWrite.map(p => JSON.stringify(p)).join('\n') + '\n';
+    const lines = toWrite.map(encodeJournalPoint).join('\n') + '\n';
     try {
       await appendSnapshot(fs, activePath, lines);
       // Update meta
@@ -494,35 +766,70 @@ export async function listActiveHikes(): Promise<HikeMeta[]> {
  * Read the tail of an active hike's JSONL file. Skips malformed lines.
  * Used for hydrate replay (Sprint 72 STORY-00551 real implementation).
  */
-export async function readActiveHikeTail(sessionId: string): Promise<HikePoint[]> {
+export async function readActiveHikeTail(
+  sessionId: string,
+  limit?: number,
+): Promise<CanonicalJournalPoint[]> {
   const fs = await getFs();
   if (!fs) return [];
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
   try {
     await durableWriteTail.catch(() => {});
-    const content = await readBestSnapshot(fs, activePath);
+    const boundedLimit = limit == null ? null : Math.max(0, Math.floor(limit));
+    if (boundedLimit === 0) return [];
+    let content: string;
+    let suffixBeginsMidFile = false;
+    let usedBoundedSuffix = false;
+    if (boundedLimit !== null && boundedLimit > 0) {
+      let correctionPending = false;
+      try {
+        correctionPending = (await fs.getInfoAsync(truncationPath(activePath))).exists;
+      } catch { /* full recovery below */ }
+      if (!correctionPending) {
+        const suffix = await readJournalSuffix(fs, activePath, Math.max(64 * 1024, boundedLimit * 2 * 1024));
+        content = suffix.value;
+        suffixBeginsMidFile = suffix.beginsMidFile;
+        usedBoundedSuffix = true;
+      } else {
+        content = await readBestSnapshot(fs, activePath);
+      }
+    } else {
+      content = await readBestSnapshot(fs, activePath);
+    }
     if (!content) return [];
-    const lines = content.split('\n');
-    const points: HikePoint[] = [];
+    let lines = content.split('\n');
+    // The bounded native suffix normally starts inside an older record. It is
+    // not corruption and must not enter the adapter.
+    if (suffixBeginsMidFile) lines = lines.slice(1);
+    if (boundedLimit !== null) lines = lines.filter(line => line.trim()).slice(-boundedLimit);
+    const points: CanonicalJournalPoint[] = [];
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
-        const p = JSON.parse(line);
+        const p = decodeJournalLine(line);
         // New canonical records are explicit. Valid legacy foreground rows
         // remain recoverable as one legacy segment. Debug/background rows in
         // the incompatible {ts,lon} schema are deliberately not reinterpreted.
-        if (!isSaneStoredCoordinate(p)) break;
+        if (!p) {
+          // A corrupt/checksum-invalid final record is exceptional. Recover
+          // its valid prefix once instead of returning a misleading tail.
+          if (usedBoundedSuffix) {
+            const recovered = await readBestSnapshot(fs, activePath);
+            const recoveredLines = recovered.split('\n').filter(item => item.trim());
+            return parseCanonicalJournalLines(
+              boundedLimit === null ? recoveredLines : recoveredLines.slice(-boundedLimit),
+              sessionId,
+              boundedLimit === null,
+            );
+          }
+          break;
+        }
         if (typeof p.clientActivityId === 'string' && p.clientActivityId !== sessionId) break;
         {
-          points.push({
-            ...p,
-            clientActivityId: typeof p.clientActivityId === 'string' ? p.clientActivityId : sessionId,
-            ownerGeneration: typeof p.ownerGeneration === 'string' ? p.ownerGeneration : 'legacy',
-            segmentId: typeof p.segmentId === 'string' ? p.segmentId : 'legacy-0',
-            ...(typeof p.segmentStartReason === 'string'
-              ? { segmentStartReason: p.segmentStartReason }
-              : points.length === 0 ? { segmentStartReason: 'legacy' as const } : {}),
-          });
+          const canonical = toCanonicalJournalPoint(p, sessionId);
+          points.push(boundedLimit === null && points.length === 0 && !canonical.segmentStartReason
+            ? { ...canonical, segmentStartReason: 'legacy' }
+            : canonical);
         }
       } catch { /* skip malformed */ }
     }
@@ -530,6 +837,24 @@ export async function readActiveHikeTail(sessionId: string): Promise<HikePoint[]
   } catch {
     return [];
   }
+}
+
+function parseCanonicalJournalLines(
+  lines: string[],
+  sessionId: string,
+  markLegacyOrigin: boolean,
+): CanonicalJournalPoint[] {
+  const points: CanonicalJournalPoint[] = [];
+  for (const line of lines) {
+    const stored = decodeJournalLine(line);
+    if (!stored) break;
+    if (typeof stored.clientActivityId === 'string' && stored.clientActivityId !== sessionId) break;
+    const canonical = toCanonicalJournalPoint(stored, sessionId);
+    points.push(markLegacyOrigin && points.length === 0 && !canonical.segmentStartReason
+      ? { ...canonical, segmentStartReason: 'legacy' }
+      : canonical);
+  }
+  return points;
 }
 
 /**
@@ -576,7 +901,10 @@ export async function flushNow(): Promise<void> {
  * the verified snapshot swap, so recovery can never select the longer
  * pre-correction `.bak` merely because it contains more valid lines.
  */
-export async function truncateActiveHikeTrack(sessionId: string, points: HikePoint[]): Promise<void> {
+export async function truncateActiveHikeTrack(
+  sessionId: string,
+  points: Array<HikePoint | CanonicalJournalPoint>,
+): Promise<void> {
   if (!state || state.sessionId !== sessionId) throw new Error('activity_journal_not_active');
   await flushBuffer();
   const fs = await getFs();
@@ -587,7 +915,7 @@ export async function truncateActiveHikeTrack(sessionId: string, points: HikePoi
   }
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
   const replacement = points.length > 0
-    ? `${points.map(point => JSON.stringify(point)).join('\n')}\n`
+    ? `${points.map(point => encodeJournalPoint(toStoredPoint(point))).join('\n')}\n`
     : '';
   await replaceSnapshotWithPrefix(fs, activePath, replacement, points.length);
   state.totalPoints = points.length;
@@ -702,7 +1030,7 @@ export async function appendBackgroundHikePoints(points: HikePoint[], expectedUs
     throw new Error('stale_background_owner_generation');
   }
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
-  const lines = points.map(point => JSON.stringify(point)).join('\n') + '\n';
+  const lines = points.map(encodeJournalPoint).join('\n') + '\n';
   await appendSnapshot(fs, activePath, lines);
   meta.total_points = (meta.total_points ?? 0) + points.length;
   meta.last_ts = points[points.length - 1].t;

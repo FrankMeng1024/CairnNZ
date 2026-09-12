@@ -12,8 +12,8 @@
  *
  * Pattern (mirrors memoryPersistence):
  *   - Debounced writes 3s (max-wait 15s) so unlock bursts don't thrash.
- *   - Snapshot at schedule time, not at flush time (avoids user-switch
- *     misroutes).
+ *   - Snapshot only when a write actually runs; generation/user fences avoid
+ *     cross-account writes without cloning the full map per new cell.
  *   - On hydrate: replaceCells(); subscribe; future setState triggers
  *     scheduleFlush().
  *
@@ -42,8 +42,16 @@ let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribe: (() => void) | null = null;
 let currentUserId: string | null = null;
 let generation = 0;
-let latestSnapshot: Map<string, VisitedCell> | null = null;
 let latestSnapshotUserId: string | null = null;
+let persistenceMetrics = { writes: 0, bytes: 0 };
+
+export function resetH3PersistenceMetrics(): void {
+  persistenceMetrics = { writes: 0, bytes: 0 };
+}
+
+export function getH3PersistenceMetrics(): typeof persistenceMetrics {
+  return { ...persistenceMetrics };
+}
 
 interface SerializedH3 {
   v: 1;
@@ -92,7 +100,10 @@ function clearTimers(): void {
 async function flush(userId: string, snapshot: Map<string, VisitedCell>): Promise<void> {
   if (!userId) return;
   try {
-    await storage.setItem(storageKey(userId), JSON.stringify(serialize(snapshot)));
+    const serialized = JSON.stringify(serialize(snapshot));
+    await storage.setItem(storageKey(userId), serialized);
+    persistenceMetrics.writes += 1;
+    persistenceMetrics.bytes += serialized.length;
   } catch {
     // Disk full / quota exceeded → silent drop. Next flush retries.
   }
@@ -101,9 +112,12 @@ async function flush(userId: string, snapshot: Map<string, VisitedCell>): Promis
 function scheduleFlush(): void {
   const userIdAtSchedule = currentUserId;
   if (!userIdAtSchedule) return;
-  const state = useH3VisitedStore.getState();
-  latestSnapshot = new Map(state.cells);
   latestSnapshotUserId = userIdAtSchedule;
+
+  const flushLatestOwnedSnapshot = () => {
+    if (latestSnapshotUserId !== userIdAtSchedule || currentUserId !== userIdAtSchedule) return;
+    void flush(userIdAtSchedule, new Map(useH3VisitedStore.getState().cells));
+  };
 
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = setTimeout(() => {
@@ -112,9 +126,7 @@ function scheduleFlush(): void {
       clearTimeout(maxWaitTimer);
       maxWaitTimer = null;
     }
-    if (latestSnapshot && latestSnapshotUserId === userIdAtSchedule) {
-      void flush(userIdAtSchedule, latestSnapshot);
-    }
+    flushLatestOwnedSnapshot();
   }, DEBOUNCE_MS);
 
   if (!maxWaitTimer) {
@@ -124,9 +136,7 @@ function scheduleFlush(): void {
         clearTimeout(flushTimer);
         flushTimer = null;
       }
-      if (latestSnapshot && latestSnapshotUserId === userIdAtSchedule) {
-        void flush(userIdAtSchedule, latestSnapshot);
-      }
+      flushLatestOwnedSnapshot();
     }, MAX_WAIT_MS);
   }
 }

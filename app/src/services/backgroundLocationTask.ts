@@ -308,26 +308,39 @@ async function appendDirectlyToHikeTrack(
     // It also works in TaskManager's constrained headless CommonJS runtime.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { appendBackgroundHikePoints, readActiveHikeTail } = require('./hikeTrackWriter');
-    const tail = await readActiveHikeTail(context.clientActivityId);
+    // Segment classification needs only the latest canonical evidence. Native
+    // recovery reads a bounded journal suffix, never the full Activity per
+    // background delivery batch.
+    const tail = await readActiveHikeTail(context.clientActivityId, 2);
+    // readActiveHikeTail is the journal adapter boundary: every downstream
+    // consumer sees canonical `accuracy`, never the stored `acc` spelling.
     let previous = (tail[tail.length - 1] ?? null) as SegmentedTrackPoint | null;
     let activeSegmentId = previous?.segmentId ?? context.segmentId;
-    let rawOrdinal = Math.max(0, Number(context.rawOrdinal) || 0);
+    let rawOrdinal = Math.max(
+      0,
+      Number(context.rawOrdinal) || 0,
+      Number(tail[tail.length - 1]?.rawOrdinal) || 0,
+    );
     let latestObservedTimestamp = previous?.t ?? context.acceptAfterMs - 1;
     const restoredTail = tail.slice(-2).map((point: any, index: number) => ({
             lat: point.lat,
             lng: point.lng,
             t: point.t,
-            accuracy: point.acc ?? point.accuracy ?? null,
-            verticalAccuracy: point.vAcc ?? point.verticalAccuracy ?? null,
+            accuracy: point.accuracy,
+            verticalAccuracy: point.verticalAccuracy,
             altitude: point.alt ?? null,
             speed: point.speed ?? null,
             course: point.course ?? null,
-            source: 'background' as const,
+            source: point.source,
             observationId: 'headless-restored-' + index + '-' + point.t,
             rawOrdinal: point.rawOrdinal,
             segmentId: point.segmentId ?? activeSegmentId,
           }));
     let continuity = restoreRealGpsContinuityState(context.continuityState, restoredTail);
+    let previousRawDiagnostic: Pick<RealGpsObservation, 'lat' | 'lng' | 't'> | null =
+      continuity.recentEligibleRaw[continuity.recentEligibleRaw.length - 1]
+      ?? continuity.lastTrusted
+      ?? null;
     const accepted: any[] = [];
     const classified: any[] = [];
     const observedOrdinals: number[] = [];
@@ -355,10 +368,20 @@ async function appendDirectlyToHikeTrack(
         observationId: context.clientActivityId.slice(-8) + ':' + rawOrdinal,
         rawOrdinal,
       };
+      const dtFromPreviousRawMs = previousRawDiagnostic
+        ? observation.t - previousRawDiagnostic.t
+        : null;
+      const displacementFromPreviousRawM = previousRawDiagnostic
+        ? haversineM(previousRawDiagnostic, observation)
+        : null;
+      previousRawDiagnostic = observation;
       appendSimulatorLog('LOCATION', 'activity_observation_received_v2', {
         rawOrdinal,
         sampleSource: 'background',
         sampleTimestamp: observation.t,
+        sequenceTimestamp: observation.t,
+        dtFromPreviousRawMs,
+        displacementFromPreviousRawM: roundedDiagnostic(displacementFromPreviousRawM),
         callbackDelayMs: Math.max(0, Date.now() - observation.t),
         horizontalAccuracyM: roundedDiagnostic(observation.accuracy),
         verticalAccuracyValid: observation.verticalAccuracy != null && observation.verticalAccuracy >= 0,

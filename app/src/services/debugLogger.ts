@@ -46,6 +46,44 @@ const MAX_BUFFER_SIZE = 1000;           // hard ceiling — drop oldest if excee
 const MAX_SESSIONS_KEPT = 10;
 const SESSION_DIR = 'cairn-logs/sessions/';
 const META_DIR = 'cairn-logs/meta/';
+const MAX_SESSION_BYTES = 50 * 1024 * 1024;
+
+function utf8Bytes(value: string): Uint8Array {
+  const encoded = unescape(encodeURIComponent(value));
+  const bytes = new Uint8Array(encoded.length);
+  for (let index = 0; index < encoded.length; index += 1) bytes[index] = encoded.charCodeAt(index);
+  return bytes;
+}
+
+/** Native O(append) diagnostic write; legacy fallback is test/web only. */
+async function appendSessionLines(fs: FsModule, path: string, lines: string): Promise<number> {
+  try {
+    const modern = await import('expo-file-system');
+    const file = new modern.File(path);
+    if (!file.exists) file.create({ intermediates: true });
+    const bytes = utf8Bytes(lines);
+    const initialSize = file.size;
+    if (initialSize > MAX_SESSION_BYTES) {
+      // Keep the newest bounded diagnostic window without rereading 50 MB.
+      file.write(bytes);
+      return bytes.length;
+    }
+    const handle = file.open();
+    try {
+      handle.offset = handle.size ?? 0;
+      handle.writeBytes(bytes);
+      return handle.size ?? (initialSize + bytes.length);
+    } finally {
+      handle.close();
+    }
+  } catch {
+    let existing = '';
+    const info = await fs.getInfoAsync(path);
+    if (info.exists) existing = await fs.readAsStringAsync(path);
+    await fs.writeAsStringAsync(path, existing + lines);
+    return existing.length + lines.length;
+  }
+}
 
 // Type helper: Omit on a discriminated union must distribute over each member.
 type DistributiveOmit<T, K extends keyof any> = T extends any ? Omit<T, K> : never;
@@ -192,13 +230,10 @@ class DebugLogger {
         await ensureDirExists(fs, path);
         try {
           const lines = buffer.map((e) => JSON.stringify(e)).join('\n') + '\n';
-          let existing = '';
-          const info = await fs.getInfoAsync(path);
-          if (info.exists) existing = await fs.readAsStringAsync(path);
-          await fs.writeAsStringAsync(path, existing + lines);
+          const resultingBytes = await appendSessionLines(fs, path, lines);
           if (sessionMeta) {
             sessionMeta.events_count += buffer.length;
-            sessionMeta.raw_size_bytes = existing.length + lines.length;
+            sessionMeta.raw_size_bytes = resultingBytes;
           }
         } catch {
           // best effort
@@ -352,18 +387,7 @@ class DebugLogger {
     await ensureDirExists(fs, path);
 
     try {
-      // Append. expo-file-system has writeAsStringAsync but no append API,
-      // so we read-modify-write. For perf, we cap session size at 50MB.
-      let existing = '';
-      const info = await fs.getInfoAsync(path);
-      if (info.exists) {
-        existing = await fs.readAsStringAsync(path);
-        if (existing.length > 50 * 1024 * 1024) {
-          // Session too large — drop tail to bound memory
-          existing = existing.slice(-30 * 1024 * 1024);
-        }
-      }
-      await fs.writeAsStringAsync(path, existing + lines);
+      const resultingBytes = await appendSessionLines(fs, path, lines);
 
       // Write succeeded — now drain the buffer (only the events we just persisted).
       // Use length comparison rather than identity in case the buffer was extended
@@ -373,7 +397,7 @@ class DebugLogger {
 
       if (this.sessionMeta) {
         this.sessionMeta.events_count += eventsToFlush.length;
-        this.sessionMeta.raw_size_bytes = existing.length + lines.length;
+        this.sessionMeta.raw_size_bytes = resultingBytes;
       }
     } catch (err) {
       // Write failed — buffer is still intact, will retry on next flush.

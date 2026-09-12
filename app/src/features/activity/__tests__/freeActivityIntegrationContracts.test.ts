@@ -117,15 +117,15 @@ describe('Free Activity integration contracts', () => {
     // watermark behavior is covered behaviorally by realGpsContinuity.test.ts.
   });
 
-  test('late journaled background points drain after a foreground handoff', () => {
+  test('late journaled background points drain at ownership fences without a polling timer', () => {
     const source = read('src/store/useTrackingStore.ts');
-    const drain = source.slice(
-      source.indexOf('drainInterval = setInterval'),
-      source.indexOf('// ── Dynamic sampling', source.indexOf('drainInterval = setInterval')),
+    const handoff = source.slice(
+      source.indexOf('async function transitionToForegroundSource'),
+      source.indexOf('async function activateBackgroundSource'),
     );
-    expect(drain).toContain("if (get().status !== 'tracking') return");
-    expect(drain).not.toContain('if (!backgroundTaskActive) return');
-    expect(drain).toContain('drainBackgroundLocations()');
+    expect(source).not.toContain('drainInterval');
+    expect(handoff).toContain('await drainCommittedBackgroundLocations()');
+    expect(source).toContain('await drainCommittedBackgroundLocations(true)');
   });
 
   test('real background ownership refreshes native authorization and never trusts a hardcoded grant', () => {
@@ -151,11 +151,12 @@ describe('Free Activity integration contracts', () => {
     expect(tracking).not.toContain("markRecordingContinuityUnavailable('inactive'");
   });
 
-  test('iOS nominal sampling changes do not restart an unchanged foreground watcher', () => {
+  test('foreground and background request one fixed precision policy without a sampling state machine', () => {
     const tracking = read('src/store/useTrackingStore.ts');
-    expect(tracking).toContain('shouldRestartForegroundForNominalIntervalChange(Platform.OS)');
-    expect(tracking).toContain("reason: 'android-only-time-interval-change'");
-    expect(tracking).toContain('foregroundWatcherRestarted: false');
+    expect(tracking.match(/accuracy: Location\.Accuracy\.BestForNavigation/g)).toHaveLength(2);
+    expect(tracking.match(/distanceInterval: realForegroundCadenceExperiment\.distanceFilterM/g)).toHaveLength(2);
+    expect(tracking).not.toContain('shouldRestartForegroundForNominalIntervalChange');
+    expect(tracking).not.toContain('samplingEvaluationInterval');
   });
 
   test('foreground recovery stops any native-owned background stream before starting its watcher', () => {
@@ -211,7 +212,8 @@ describe('Free Activity integration contracts', () => {
     const hike = read('src/screens/HikingScreen.tsx');
     const run = read('src/screens/RunningScreen.tsx');
     expect(hike).toContain("const liveTrackPoints = locationProviderSource === 'real' ? trackPointsSmoothed : trackPoints");
-    expect(hike).toContain('? liveTrackPoints.map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentId: tp.segmentId }))');
+    expect(hike).toContain('const liveMapTrackPoints = useMemo(');
+    expect(hike).toContain('trackPoints={activitySessionVisible ? liveMapTrackPoints : []}');
     expect(run).toContain("const liveTrackPoints = locationProviderSource === 'real' ? trackPointsSmoothed : trackPoints");
     expect(run).toContain('trackPoints={liveTrackPoints}');
   });
@@ -229,6 +231,11 @@ describe('Free Activity integration contracts', () => {
     expect(map).toContain("mapAppState === 'active'");
     expect(map).toContain("trackingStatus === 'tracking'");
     expect(map).toContain('&& !reduceMotion');
+    expect(map).toContain('Mapbox.CustomLocationProvider');
+    expect(map).toContain('<CustomLocationProviderComponent');
+    expect(map).toContain("trackingStatus === 'idle'");
+    expect(map).toContain("trackingStatus === 'paused'");
+    expect(map).toContain('followUserLocation={!instantCamera && followUser && realUserLocationActive}');
     expect(map).toContain("coordinateSource: 'none'");
     expect(map).not.toContain('useTrackingStore.setState({ animated');
   });
@@ -249,11 +256,15 @@ describe('Free Activity integration contracts', () => {
     }
   });
 
-  test('wake-up one-shot GPS callback is fenced to its captured Activity owner', () => {
+  test('foreground recovery reuses the one fenced watcher instead of opening a one-shot client', () => {
     const source = read('src/store/useTrackingStore.ts');
-    const wake = source.slice(source.indexOf('const wakeOwnerSessionId'), source.indexOf("k7:wake_kick_err"));
-    expect(wake).toContain('clientActivityId: wakeOwnerSessionId');
-    expect(wake).toContain('ownerGeneration: wakeOwnerGeneration');
+    const foreground = source.slice(
+      source.indexOf('async function activateForegroundSource'),
+      source.indexOf('function deactivateForegroundSource'),
+    );
+    expect(source).not.toContain('getCurrentPositionAsync');
+    expect(foreground).toContain('clientActivityId: ownerSessionId');
+    expect(foreground).toContain('ownerGeneration');
   });
 
   test('authoritative Start conflict replaces the speculative identity before recovery materialization', () => {
@@ -352,7 +363,8 @@ describe('Free Activity integration contracts', () => {
   test('Memory durable commit uses strict storage and captures account ownership before queueing', () => {
     const persistence = read('src/features/memory/services/memoryPersistence.ts');
     const evidence = read('src/features/memory/services/recordMemoryEvidence.ts');
-    expect(persistence).toContain("JSON.stringify(payload), { strict: true }");
+    expect(persistence).toContain('const serialized = JSON.stringify(payload)');
+    expect(persistence).toContain('storage.setItem(storageKey(userId), serialized, { strict: true })');
     expect(evidence.indexOf('const ownerUserId')).toBeLessThan(evidence.indexOf('const run = commitTail.then'));
     expect(evidence).toContain("throw new Error('memory_owner_changed')");
   });

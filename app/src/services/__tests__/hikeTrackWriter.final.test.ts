@@ -4,11 +4,15 @@ import {
   assertHikeTrackCleanupOwner,
   deleteAcknowledgedHikeTrackArtifacts,
   discardActiveHike,
+  estimateJournalWriteWork,
+  getJournalEfficiencyMetrics,
   listActiveHikes,
   readActiveHikeTail,
   startHikeTrack,
   truncateActiveHikeTrack,
+  resetJournalEfficiencyMetrics,
 } from '../hikeTrackWriter';
+import { shouldStartNewSegment } from '../../features/activity/activityContracts';
 
 const activityId = '99999999-9999-4999-8999-999999999999';
 const owner = 'owner-generation-a';
@@ -31,6 +35,7 @@ describe('crash-safe Activity journal', () => {
     localStorageMock.clear();
     blockedRemoval = null;
     blockedWrite = null;
+    resetJournalEfficiencyMetrics();
     await discardActiveHike(activityId);
   });
 
@@ -67,11 +72,55 @@ describe('crash-safe Activity journal', () => {
     expect(await readActiveHikeTail(activityId)).toEqual([
       expect.objectContaining({
         t: 2_000,
+        accuracy: 5,
         clientActivityId: activityId,
         ownerGeneration: owner,
         segmentId: 'segment-a',
       }),
     ]);
+    expect(getJournalEfficiencyMetrics()).toEqual(expect.objectContaining({
+      appendCount: 1,
+      checkpointCount: 0,
+    }));
+  });
+
+  test('run issue: persisted acc is normalized before the 121 s red-light segment decision', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'running',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    await appendHikePoint({
+      t: 1_000,
+      lat: -41,
+      lng: 174,
+      acc: 14.246,
+      src: 'bg',
+      clientActivityId: activityId,
+      ownerGeneration: owner,
+      segmentId: 'segment-a',
+    });
+    const [previous] = await readActiveHikeTail(activityId);
+    const next = {
+      t: 122_000,
+      lat: -41,
+      lng: 174 + 11.937 / (111_320 * Math.cos(-41 * Math.PI / 180)),
+      accuracy: 14.246,
+    };
+    expect(previous).toEqual(expect.objectContaining({ accuracy: 14.246, source: 'background' }));
+    expect(shouldStartNewSegment({ previous, next, mode: 'running' })).toBe(false);
+    expect(shouldStartNewSegment({ previous, next, mode: 'running', knownRecordingLoss: true })).toBe(true);
+  });
+
+  test.each([
+    ['30 min', 1_800],
+    ['2 h', 7_200],
+    ['5 h', 18_000],
+  ])('append work stays linear for a %s one-second equivalent', (_label, pointCount) => {
+    const work = estimateJournalWriteWork(pointCount, 220);
+    expect(work.appendOnlyBytes).toBe(pointCount * 220);
+    expect(work.legacySnapshotBytes / work.appendOnlyBytes).toBe((pointCount + 1) / 2);
   });
 
   test('stale background ownership cannot enter the current Activity journal', async () => {
@@ -173,6 +222,63 @@ describe('crash-safe Activity journal', () => {
 
     await appendHikePoint(point(6_000, -40.9997));
     expect((await readActiveHikeTail(activityId)).map(item => item.t)).toEqual([2_000, 3_000, 6_000]);
+  });
+
+  test('a torn final record is repaired once before later accepted evidence appends', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'hiking',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    const point = (t: number) => ({
+      t,
+      lat: -41,
+      lng: 174,
+      src: 'fg' as const,
+      clientActivityId: activityId,
+      ownerGeneration: owner,
+      segmentId: 'segment-a',
+    });
+    await appendHikePoint(point(2_000));
+    const file = `cairn-fs://cairn-hike-tracks/active/${activityId}.jsonl`;
+    localStorageMock.setItem(file, `${localStorageMock.getItem(file)}{"v":2`);
+
+    await appendHikePoint(point(3_000));
+
+    expect((await readActiveHikeTail(activityId)).map(item => item.t)).toEqual([2_000, 3_000]);
+    expect(getJournalEfficiencyMetrics().checkpointCount).toBe(1);
+  });
+
+  test('a checksum-invalid complete tail is repaired and bounded reads expose only canonical evidence', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'running',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    const point = (t: number) => ({
+      t,
+      lat: -41,
+      lng: 174,
+      acc: 14.246,
+      src: 'bg' as const,
+      clientActivityId: activityId,
+      ownerGeneration: owner,
+      segmentId: 'segment-a',
+    });
+    await appendHikePoint(point(2_000));
+    await appendHikePoint(point(3_000));
+    const file = `cairn-fs://cairn-hike-tracks/active/${activityId}.jsonl`;
+    localStorageMock.setItem(file, `${localStorageMock.getItem(file)}{"v":2,"p":{"t":4000,"lat":-41,"lng":174},"c":"bad00000"}\n`);
+
+    await appendHikePoint(point(5_000));
+
+    expect(await readActiveHikeTail(activityId, 2)).toEqual([
+      expect.objectContaining({ t: 3_000, accuracy: 14.246 }),
+      expect.objectContaining({ t: 5_000, accuracy: 14.246 }),
+    ]);
+    expect(getJournalEfficiencyMetrics().checkpointCount).toBe(1);
   });
 
   test('a process death during rollback cannot resurrect the removed journal tail', async () => {

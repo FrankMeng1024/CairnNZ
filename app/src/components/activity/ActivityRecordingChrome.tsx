@@ -6,6 +6,7 @@ import {
   View,
 } from 'react-native';
 import { Icon, type IconName } from '../Icon';
+import { CairnIcon, type CairnIconName } from '../CairnIcon';
 import { Colors, FontSize, RadiusRole, Shadow, Spacing } from '../tokens';
 import { useVisualTheme } from '../../hooks/useVisualTheme';
 
@@ -27,8 +28,8 @@ export interface ActivityNoticePresentation {
 
 function modePresentation(mode: ActivityRecordingMode, themePrimary: string) {
   return mode === 'run'
-    ? { label: 'Run', icon: 'Footprints' as const, color: Colors.running }
-    : { label: 'Hike', icon: 'Mountain' as const, color: themePrimary };
+    ? { label: 'Run', icon: 'running' as CairnIconName, color: Colors.running }
+    : { label: 'Hike', icon: 'hiking' as CairnIconName, color: themePrimary };
 }
 
 function phaseLabel(phase: ActivityRecordingPhase) {
@@ -105,7 +106,7 @@ export function ActivityTopChrome({
 
         <View style={styles.identity} pointerEvents="none">
           <View style={styles.identityTitleRow}>
-            <Icon name={modeMeta.icon} size={15} color={modeMeta.color} strokeWidth={2.2} />
+            <CairnIcon name={modeMeta.icon} size={16} color={modeMeta.color} />
             <Text style={[styles.identityTitle, { color: theme.foreground }]}>{modeMeta.label}</Text>
           </View>
           <Text
@@ -253,11 +254,11 @@ export function ActivityStartDock({
           accessibilityLabel={`Choose route. Current selection: ${routeName}`}
         >
           <View style={[styles.modeGlyph, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]}> 
-            <Icon name={modeMeta.icon} size={22} color={modeMeta.color} strokeWidth={2.1} />
+            <CairnIcon name={modeMeta.icon} size={23} color={modeMeta.color} />
           </View>
           <View style={styles.routeText}>
             <Text style={[styles.routeEyebrow, { color: modeMeta.color }]}>
-              {mode === 'run' ? 'RUN' : 'HIKE'}
+              ROUTE
             </Text>
             <Text style={[styles.routeName, { color: theme.foreground }]} numberOfLines={1}>
               {routeName}
@@ -376,7 +377,7 @@ export function ActivityControlDock({
             {finishing ? 'Completing activity' : paused ? 'Activity paused' : 'Recording activity'}
           </Text>
           <Text style={[styles.recordingStateHint, { color: theme.muted }]} numberOfLines={1}>
-            {finishing ? 'Securing your route' : paused ? 'Time and route are held' : 'GPS evidence is saved as you move'}
+            {finishing ? 'Securing your route' : paused ? 'Time and route are held' : 'Your path is saved as you move'}
           </Text>
         </View>
 
@@ -429,7 +430,7 @@ export function ActivityControlDock({
             accessibilityState={{ disabled: cairnDisabled || finishing }}
             accessibilityLabel={mode === 'run' ? 'Quick Cairn' : 'Plant a Cairn'}
           >
-            <Icon name="Flag" size={19} color={modeMeta.color} strokeWidth={2.1} />
+            <CairnIcon name="leaveCairn" size={19} color={modeMeta.color} />
             <Text style={[styles.secondaryControlText, { color: theme.foreground }]}> 
               {mode === 'run' ? 'Cairn' : 'Plant'}
             </Text>

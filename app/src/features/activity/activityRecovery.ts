@@ -23,7 +23,10 @@ import {
   tombstoneActivity,
   updateUnfinishedActivity,
 } from './activityRegistry';
-import { recordMemoryEvidence } from '../memory/services/recordMemoryEvidence';
+import {
+  flushRecordedMemoryEvidence,
+  recordMemoryEvidence,
+} from '../memory/services/recordMemoryEvidence';
 import { removePending } from '../../services/pendingSyncStore';
 import type { ActivityLocationSource } from '../activitySimulator/types';
 import { activityFreshnessNow, activityTimestampForSource } from '../activitySimulator/simulatorTime';
@@ -87,19 +90,19 @@ export async function ensureUnfinishedActivityRegistry(userId: string): Promise<
   });
 }
 
-function toTrackPoint(point: any, sessionId: string): SegmentedTrackPoint {
+function toTrackPoint(point: Awaited<ReturnType<typeof readActiveHikeTail>>[number]): SegmentedTrackPoint {
   return {
     lat: point.lat,
     lng: point.lng,
     alt: point.alt ?? null,
-    accuracy: point.acc ?? point.accuracy ?? null,
+    accuracy: point.accuracy,
+    verticalAccuracy: point.verticalAccuracy,
     speed: point.speed ?? null,
+    course: point.course,
     t: point.t,
     segmentId: point.segmentId ?? 'legacy-0',
     ...(point.segmentStartReason ? { segmentStartReason: point.segmentStartReason } : {}),
-    source: point.src === 'sim'
-      ? 'simulator'
-      : point.src === 'bg' ? 'background' : point.src === 'slc' ? 'significant-change' : 'foreground',
+    source: point.source,
   };
 }
 
@@ -125,7 +128,7 @@ export async function findRecoverableActivity(
 
   for (const meta of candidates) {
     const rawPoints = await readActiveHikeTail(meta.session_id);
-    const points = rawPoints.map(point => toTrackPoint(point, meta.session_id));
+    const points = rawPoints.map(toTrackPoint);
     const lastPointAt = points[points.length - 1]?.t ?? meta.last_ts ?? meta.started_at;
     const stats = calculateActivityStats(points);
     const locationProviderSource = meta.location_source ?? registered?.locationProviderSource ?? 'real';
@@ -200,7 +203,7 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
     }
   } catch { /* unavailable on Web/simulator; resume still owns foreground */ }
   const rawPoints = await readActiveHikeTail(activity.sessionId);
-  const points = rawPoints.map(point => toTrackPoint(point, activity.sessionId));
+  const points = rawPoints.map(toTrackPoint);
   const last = points[points.length - 1] ?? null;
   const stats = calculateActivityStats(points);
   const newOwnerGeneration = newSegmentId(`${activity.sessionId}-owner`);
@@ -232,6 +235,8 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
     } : null,
     lastCoordinateTime: last?.t ?? null,
     lastFixTimestamp: last?.t ?? null,
+    latestSourceLocationTime: last?.t ?? null,
+    latestSourceCoordinate: last ? { ...last, t: last.t } : null,
     liveOwnerGeneration: newOwnerGeneration,
     liveOwnerAcceptAfterMs: activityTimestampForSource(
       locationProviderSource,
@@ -271,8 +276,10 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
       atMs: point.t,
       source: 'reconciliation',
       ownerUserId: activity.userId,
+      durability: 'deferred',
     });
   }
+  if (points.length > 0) await flushRecordedMemoryEvidence();
   appendSimulatorLog('ACTIVITY_RECOVERY', 'activity_recovery_loaded', {
     providerSource: locationProviderSource,
     pointCount: points.length,
@@ -320,8 +327,10 @@ export async function discardRecoverableActivity(activity: RecoverableActivity):
       atMs: point.t,
       source: 'reconciliation',
       ownerUserId: activity.userId,
+      durability: 'deferred',
     });
   }
+  if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
   await tombstoneActivity({
     userId: activity.userId,
     clientActivityId: activity.clientActivityId,

@@ -614,13 +614,13 @@ export function RunningScreen() {
   const runNotices: ActivityNoticePresentation[] = [];
   if (signalLost) {
     runNotices.push({
-      label: signalLostMin >= 1 ? `No accepted GPS for ${signalLostMin} min` : 'GPS signal lost',
+      label: signalLostMin >= 1 ? `No location update for ${signalLostMin} min` : 'GPS signal lost',
       tone: 'danger',
       icon: 'CloudOff',
     });
   } else if (canonicalDegraded) {
     runNotices.push({
-      label: 'Location is too uncertain to record reliably',
+      label: 'Location signal is too weak to map reliably',
       tone: 'warning',
       icon: 'Navigation',
     });
@@ -706,7 +706,7 @@ export function RunningScreen() {
             : permissionBlocked
               ? 'Location permission is needed before recording'
               : foregroundGranted
-                ? 'Location ready · pace starts after credible movement'
+                ? 'Location ready · pace begins once your movement is clear'
                 : 'Checking location readiness'}
           readinessTone={simulatorLocationAuthoritative || foregroundGranted
             ? 'healthy'
@@ -871,27 +871,29 @@ export function RunningScreen() {
         notices={runNotices}
       />
 
-      <ActivityControlDock
-        mode="run"
-        phase={operationalState === 'finishing'
-          ? 'finishing'
-          : status === 'paused' ? 'paused' : 'tracking'}
-        safeBottom={insets.bottom}
-        backgroundWarning={backgroundTrackingWarning}
-        cairnDisabled={!locationAvailable}
-        onPauseResume={() => {
-          haptic.impact('light');
-          if (status === 'paused') void resumeTracking();
-          else void pauseTracking();
-        }}
-        onCairn={() => { void handlePlantCairn(); }}
-        onFinish={() => {
-          haptic.impact('medium');
-          void openSaveSheet();
-        }}
-      />
+      {!showSaveSheet ? (
+        <ActivityControlDock
+          mode="run"
+          phase={operationalState === 'finishing'
+            ? 'finishing'
+            : status === 'paused' ? 'paused' : 'tracking'}
+          safeBottom={insets.bottom}
+          backgroundWarning={backgroundTrackingWarning}
+          cairnDisabled={!locationAvailable}
+          onPauseResume={() => {
+            haptic.impact('light');
+            if (status === 'paused') void resumeTracking();
+            else void pauseTracking();
+          }}
+          onCairn={() => { void handlePlantCairn(); }}
+          onFinish={() => {
+            haptic.impact('medium');
+            void openSaveSheet();
+          }}
+        />
+      ) : null}
 
-      {!runFollowUser ? (
+      {!showSaveSheet && !runFollowUser ? (
         <ActivityRecenterButton
           mode="run"
           safeBottom={insets.bottom}
@@ -925,7 +927,8 @@ export function RunningScreen() {
               style={[runStyles.saveSheet, { backgroundColor: runTheme.surfaceElevated, borderTopColor: runTheme.border, transform: [{ translateY: saveSheetSlide }] }]}
             >
               <View style={[runStyles.saveSheetHandle, { backgroundColor: runTheme.border }]} />
-              <Text style={[runStyles.saveSheetTitle, { color: runTheme.foreground }]}>Name this run</Text>
+              <Text style={[runStyles.saveSheetTitle, { color: runTheme.foreground }]}>Finish run</Text>
+              <Text style={[runStyles.saveSheetLabel, { color: runTheme.foregroundSecondary }]}>Name this run (optional)</Text>
               <TextInput
                 style={[runStyles.saveSheetInput, { backgroundColor: runTheme.surface, borderColor: runTheme.border, color: runTheme.foreground }]}
                 placeholder="Morning Run"
@@ -950,10 +953,10 @@ export function RunningScreen() {
                   closeSaveSheet(() => { void handleStop(name); }, false);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Save this run"
+                accessibilityLabel="Finish run and view activity"
                 activeOpacity={0.9}
               >
-                <Text style={[runStyles.saveSheetBtnText, { color: runTheme.onPrimary }]}>Save</Text>
+                <Text style={[runStyles.saveSheetBtnText, { color: runTheme.onPrimary }]}>Finish &amp; view activity</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={runStyles.saveSheetCancel}
@@ -1393,6 +1396,7 @@ const runStyles = StyleSheet.create({
     fontSize: FontSize.h3, fontWeight: '800', color: RunConcept.textPrimary,
     letterSpacing: -0.2, textAlign: 'center',
   },
+  saveSheetLabel: { fontSize: FontSize.small, lineHeight: 16, fontWeight: '600' },
   saveSheetInput: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1, borderColor: RunConcept.hairline,

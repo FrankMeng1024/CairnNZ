@@ -10,8 +10,8 @@
  *   - Timestamp-based dedupe: addTrackPoint uses position.timestamp; if a fix with the
  *     same timestamp has already been recorded, we skip it. Fallback: same-timestamp
  *     fixes >5m apart are kept (GPS may reuse timestamps but real movement still wins).
- *   - dynamic sampling: every 60s checks battery + movement and updates future
- *     provider activation settings without churning an already-running native task
+ *   - one precision policy: BestForNavigation + 1 m evidence opportunity in
+ *     foreground and background; platform delivery cadence remains OS-owned
  *
  * Web/non-native fallback: recording start remains unavailable without a real
  * location source; QA may render controlled store states without starting GPS.
@@ -19,7 +19,7 @@
 import { create } from 'zustand';
 import { Alert, AppState, Platform, type AppStateStatus } from 'react-native';
 import {
-  haversineM, getSamplingInterval, classifyMovement,
+  haversineM,
   kalmanInit, kalmanUpdate, type KalmanState,
 } from '../utils/geo';
 import { getCurrentRegion } from '../config/regions';
@@ -88,7 +88,10 @@ import {
   tombstoneActivity,
   updateUnfinishedActivity,
 } from '../features/activity/activityRegistry';
-import { recordMemoryEvidence } from '../features/memory/services/recordMemoryEvidence';
+import {
+  flushRecordedMemoryEvidence,
+  recordMemoryEvidence,
+} from '../features/memory/services/recordMemoryEvidence';
 import {
   activateSimulatorProvider,
   endSimulatorProvider,
@@ -141,27 +144,24 @@ import {
 } from '../features/activity/locationCadenceExperiment';
 import {
   planRealLocationLifecycleTransition,
-  shouldRestartForegroundForNominalIntervalChange,
 } from '../features/activity/activityLocationLifecycle';
 import { deriveActivityLocationHealth } from '../features/activity/activityLocationHealth';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
 let locationSubscription: { remove: () => void } | null = null;
-let drainInterval: ReturnType<typeof setInterval> | null = null;
-let dynamicSamplingInterval: ReturnType<typeof setInterval> | null = null;
 let incrementalFlushInterval: ReturnType<typeof setInterval> | null = null;
 // Sprint 72 STORY-00555 — hiking token refresh interval
 let tokenRefreshInterval: ReturnType<typeof setInterval> | null = null;
 let realTelemetryHealthInterval: ReturnType<typeof setInterval> | null = null;
 let activityLifecycleInterval: ReturnType<typeof setInterval> | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
-let lastSamplingIntervalMs = 3000;
+const ACTIVITY_LOCATION_TIME_INTERVAL_MS = 1_000;
 let backgroundTaskActive = false;
 let simulatorSourceActive = false;
 let backgroundGrantedCached = false;
 let pointIngestTail: Promise<void> = Promise.resolve();
-let finishIngestCutoffMs: number | null = null;
+let acceptanceFenceCutoffMs: number | null = null;
 let realGpsContinuitySessionId: string | null = null;
 let realGpsContinuityState: RealGpsContinuityState = createRealGpsContinuityState();
 let realGpsRawOrdinal = 0;
@@ -174,6 +174,64 @@ let realForegroundCadenceExperiment: LocationCadenceExperiment = {
 };
 let previousRealRawDiagnostic: { lat: number; lng: number; t: number } | null = null;
 let latestRealCanonicalDecisionReason: string | null = null;
+type RealProviderKind = 'foreground' | 'background';
+let realProviderEfficiency = {
+  foreground: { activeSince: null as number | null, elapsedMs: 0, starts: 0, stops: 0 },
+  background: { activeSince: null as number | null, elapsedMs: 0, starts: 0, stops: 0 },
+  overlapSince: null as number | null,
+  overlapMs: 0,
+};
+
+function resetRealProviderEfficiency(): void {
+  realProviderEfficiency = {
+    foreground: { activeSince: null, elapsedMs: 0, starts: 0, stops: 0 },
+    background: { activeSince: null, elapsedMs: 0, starts: 0, stops: 0 },
+    overlapSince: null,
+    overlapMs: 0,
+  };
+}
+
+function markRealProviderStarted(kind: RealProviderKind): void {
+  const now = Date.now();
+  const entry = realProviderEfficiency[kind];
+  if (entry.activeSince !== null) return;
+  entry.activeSince = now;
+  entry.starts += 1;
+  const other = kind === 'foreground' ? realProviderEfficiency.background : realProviderEfficiency.foreground;
+  if (other.activeSince !== null && realProviderEfficiency.overlapSince === null) {
+    realProviderEfficiency.overlapSince = now;
+  }
+}
+
+function markRealProviderStopped(kind: RealProviderKind): void {
+  const now = Date.now();
+  const entry = realProviderEfficiency[kind];
+  if (entry.activeSince === null) return;
+  entry.elapsedMs += Math.max(0, now - entry.activeSince);
+  entry.activeSince = null;
+  entry.stops += 1;
+  if (realProviderEfficiency.overlapSince !== null) {
+    realProviderEfficiency.overlapMs += Math.max(0, now - realProviderEfficiency.overlapSince);
+    realProviderEfficiency.overlapSince = null;
+  }
+}
+
+function realProviderEfficiencySnapshot(now = Date.now()) {
+  const elapsed = (kind: RealProviderKind) => {
+    const entry = realProviderEfficiency[kind];
+    return entry.elapsedMs + (entry.activeSince === null ? 0 : Math.max(0, now - entry.activeSince));
+  };
+  return {
+    foregroundElapsedMs: elapsed('foreground'),
+    backgroundElapsedMs: elapsed('background'),
+    foregroundProviderStarts: realProviderEfficiency.foreground.starts,
+    foregroundProviderStops: realProviderEfficiency.foreground.stops,
+    backgroundProviderStarts: realProviderEfficiency.background.starts,
+    backgroundProviderStops: realProviderEfficiency.background.stops,
+    providerOverlapMs: realProviderEfficiency.overlapMs
+      + (realProviderEfficiency.overlapSince === null ? 0 : Math.max(0, now - realProviderEfficiency.overlapSince)),
+  };
+}
 const LEGACY_SAF01_STORAGE_KEY = 'cairn_saf01_payload';
 const saf01StorageKey = (userId: string) => `cairn_saf01_payload:${userId}`;
 // Index into trackPoints[] of the next un-flushed point. The periodic
@@ -313,6 +371,19 @@ function resetRealGpsDiagnosticState(clientActivityId: string | null): void {
   realElevationState = createElevationQualityState();
   previousRealRawDiagnostic = null;
   latestRealCanonicalDecisionReason = null;
+  resetRealProviderEfficiency();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/hikeTrackWriter').resetJournalEfficiencyMetrics();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../features/memory/services/recordMemoryEvidence').resetMemoryEvidenceMetrics();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../features/memory/services/memoryPersistence').resetMemoryPersistenceMetrics();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../features/memory/services/h3Persistence').resetH3PersistenceMetrics();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/memorySync').resetMemorySyncMetrics();
+  } catch { /* efficiency counters are diagnostic-only */ }
 }
 
 function selectRealForegroundCadenceExperiment(): LocationCadenceExperiment {
@@ -332,10 +403,11 @@ function emitLocationCadenceExperiment(
     phase,
     variant: realForegroundCadenceExperiment.variant,
     foregroundDistanceFilterM: realForegroundCadenceExperiment.distanceFilterM,
+    backgroundDistanceFilterM: realForegroundCadenceExperiment.distanceFilterM,
     desiredAccuracy: 'BestForNavigation',
     iosTimeIntervalApplied: false,
     canonicalAcceptanceChanged: false,
-    rnmapboxConfigurationChanged: false,
+    rnmapboxLocationAuthority: 'expo-custom-provider',
   }, {
     userId: owner.ownerUserId,
     clientActivityId: owner.sessionId,
@@ -518,6 +590,42 @@ async function emitRealTelemetryHealth(reason: string): Promise<void> {
     continuityGapOpen: state.pendingSegmentStartReason === 'gps-reacquired',
     motionState: state.realMotionState,
   });
+  let efficiency: Record<string, unknown> = {};
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const journal = require('../services/hikeTrackWriter').getJournalEfficiencyMetrics();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const evidence = require('../features/memory/services/recordMemoryEvidence').getMemoryEvidenceMetrics();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const memoryPersistence = require('../features/memory/services/memoryPersistence').getMemoryPersistenceMetrics();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const h3Persistence = require('../features/memory/services/h3Persistence').getH3PersistenceMetrics();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const memorySync = require('../services/memorySync').getMemorySyncMetrics();
+    efficiency = {
+      ...realProviderEfficiencySnapshot(nowMs),
+      journalAppendCount: journal.appendCount,
+      journalAppendOperationCount: journal.appendOperationCount,
+      journalLogicalBytes: journal.logicalBytes,
+      journalActualAppendBytes: journal.actualAppendBytes,
+      journalCheckpointCount: journal.checkpointCount,
+      journalCheckpointBytes: journal.checkpointBytes,
+      journalTotalCommitMs: journal.totalCommitMs,
+      journalMaxCommitMs: journal.maxCommitMs,
+      memoryEvidenceCalls: evidence.calls,
+      memoryEvidenceMutations: evidence.mutations,
+      memoryEvidenceDeduplicated: evidence.deduplicated,
+      memoryBatchFlushes: evidence.batchFlushes,
+      memoryPersistenceWrites: memoryPersistence.writes,
+      memoryPersistenceBytes: memoryPersistence.bytes,
+      h3PersistenceWrites: h3Persistence.writes,
+      h3PersistenceBytes: h3Persistence.bytes,
+      memoryNetworkSyncRequests: memorySync.pushRequests,
+      memoryNetworkSyncedPointAttempts: memorySync.pushedPoints,
+    };
+  } catch { /* counters must never affect Activity truth */ }
+  const segmentIds = new Set(state.trackPoints.map(point => point.segmentId ?? 'legacy-0'));
+  const gaps = state.trackPoints.filter(point => point.segmentStartReason === 'gps-reacquired');
   appendSimulatorLog('SYNC_STATE', 'activity_telemetry_health_v2', {
     reason,
     expectedRawOrdinalHighWatermark: realGpsRawOrdinal,
@@ -537,6 +645,10 @@ async function emitRealTelemetryHealth(reason: string): Promise<void> {
     latestCanonicalDecisionReason: latestRealCanonicalDecisionReason,
     backgroundTaskActive,
     appState: AppState.currentState,
+    segmentCount: segmentIds.size,
+    gapCount: gaps.length,
+    gapReasons: gaps.length > 0 ? ['gps-reacquired'] : [],
+    ...efficiency,
     ...health,
   }, {
     userId: state.ownerUserId,
@@ -641,7 +753,7 @@ export interface ActivityCoordinate extends Coordinate {
   segmentStartReason?: SegmentStartReason;
   source?: 'foreground' | 'background' | 'significant-change' | 'simulator';
   /** A headless point durably committed before Finish disabled the lease. */
-  committedBeforeFinish?: boolean;
+  committedBeforeFence?: boolean;
   /** Background TaskManager already durably committed this accepted point. */
   continuityPreclassified?: boolean;
   canonicalDecision?: 'ACCEPT' | 'REJECT' | 'QUARANTINE' | 'REFINE';
@@ -698,6 +810,8 @@ interface TrackingState {
   backgroundLocationPermission: BackgroundLocationPermissionState;
   /** Latest real provider evidence, accepted or not. Separate from route truth. */
   latestSourceLocationTime: number | null;
+  /** Narrow presentation feed for RNMapbox. It is never canonical truth. */
+  latestSourceCoordinate: (Coordinate & { t: number }) | null;
   /** Current bounded real-motion inference used by health/UI diagnostics. */
   realMotionState: RealGpsContinuityState['motionState'];
   realCandidatePending: boolean;
@@ -827,6 +941,7 @@ const initialState = {
   locationAvailable: false,
   backgroundLocationPermission: 'unknown' as BackgroundLocationPermissionState,
   latestSourceLocationTime: null as number | null,
+  latestSourceCoordinate: null as (Coordinate & { t: number }) | null,
   realMotionState: 'acquiring' as RealGpsContinuityState['motionState'],
   realCandidatePending: false,
   realCanonicalDecisionReason: null as string | null,
@@ -930,6 +1045,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       lastCoordinateTime: null,
       lastFixTimestamp: null,
       latestSourceLocationTime: null,
+      latestSourceCoordinate: null,
       realMotionState: 'acquiring',
       realCandidatePending: false,
       realCanonicalDecisionReason: null,
@@ -952,9 +1068,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
 
     // Reset module-level state from any previous session
-    lastSamplingIntervalMs = 3000;
     lastFlushedIdx = 0;
-    finishIngestCutoffMs = null;
+    acceptanceFenceCutoffMs = null;
     kalmanLat = null;
     kalmanLng = null;
 
@@ -1153,16 +1268,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // Defensive: clear any stale intervals before starting new ones.
     // Prevents leaks if startTracking is called twice without stopTracking
     // (crash recovery, double-tap, etc.) which would otherwise leave
-    // multiple drain loops + multiple sampling timers running, defeating
+    // multiple backup timers and provider transitions running, defeating
     // the single-source guarantee.
-    if (drainInterval) {
-      clearInterval(drainInterval);
-      drainInterval = null;
-    }
-    if (dynamicSamplingInterval) {
-      clearInterval(dynamicSamplingInterval);
-      dynamicSamplingInterval = null;
-    }
     if (incrementalFlushInterval) {
       clearInterval(incrementalFlushInterval);
       incrementalFlushInterval = null;
@@ -1349,30 +1456,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           void flushSimulatorLogs(lifecycleOwner.ownerUserId ?? undefined);
         }
         crashLogger.breadcrumb(`appstate:${nextState}`);
-        // Sprint 72 STORY-00553: immediate sampling re-eval on AppState change
-        // (don't wait for the 10s dynamicSamplingInterval tick).
-        try {
-          const speed = get().lastCoordinate ? estimateSpeed(get().trackPoints) : 0;
-          const movement = classifyMovement(speed);
-          const bl = batteryMonitor.getCurrentLevel();
-          const desired = getSamplingInterval(
-            movement,
-            bl !== null && bl < 0.2,
-            {
-              appState: nextState as 'active' | 'background' | 'inactive' | 'unknown',
-              batteryLevel: bl ?? undefined,
-              isCharging: batteryMonitor.getIsCharging(),
-            }
-          );
-          if (Math.abs(desired - lastSamplingIntervalMs) >= 500) {
-            const from = lastSamplingIntervalMs;
-            lastSamplingIntervalMs = desired;
-            const downgraded = desired > from;
-            crashLogger.breadcrumb(
-              `sampling:${downgraded ? 'downgrade' : 'restore'} from_ms=${from} to_ms=${desired} reason=appstate_change:${nextState}`
-            );
-          }
-        } catch { /* swallow */ }
         // Sprint 72 STORY-00554: also switch flush interval based on AppState.
         try {
           const restart = (globalThis as unknown as { __cairnRestartFlush?: (ms: number) => void }).__cairnRestartFlush;
@@ -1398,66 +1481,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               });
             }, 2000);
           }
-          // R114/O22 STORY-73015 (K7): after screen wake, if GPS has
-          // been silent >60s (signal was lost or watcher stalled during
-          // sleep), kick a one-shot getCurrentPositionAsync to force
-          // re-acquisition. Without this, the watcher can appear active
-          // but never deliver a fresh fix, and the user sees a "frozen"
-          // dot until they interact.
-          try {
-            const lastT = get().lastCoordinateTime;
-            const stale = lastT === null || Date.now() - lastT > 60_000;
-            if (stale && get().locationProviderSource === 'real') {
-              const wakeOwnerSessionId = get().sessionId;
-              const wakeOwnerGeneration = get().liveOwnerGeneration;
-              const wakeSegmentId = get().currentSegmentId;
-              if (!wakeOwnerSessionId || !wakeOwnerGeneration) return;
-              crashLogger.breadcrumb(`k7:wake_stale_gps last_ms_ago=${lastT === null ? 'null' : Date.now() - lastT}`);
-              (async () => {
-                try {
-                  const Loc = await getLocation();
-                  if (!Loc) return;
-                  const fix = await Loc.getCurrentPositionAsync({ accuracy: Loc.Accuracy.Balanced });
-                  crashLogger.breadcrumb('k7:wake_kick_ok');
-                  appendSimulatorLog('LOCATION', 'real_activity_location_callback', {
-                    sampleSource: 'foreground-wake-current',
-                    sequenceTimestamp: Math.floor(fix.timestamp),
-                    callbackWallTimestamp: Date.now(),
-                    accuracyM: fix.coords.accuracy ?? null,
-                    verticalAccuracyM: fix.coords.altitudeAccuracy ?? null,
-                    speedMps: fix.coords.speed ?? null,
-                    courseValid: fix.coords.heading != null && fix.coords.heading >= 0,
-                    appState: AppState.currentState,
-                  }, {
-                    userId,
-                    clientActivityId: wakeOwnerSessionId,
-                    coordinateSource: 'real',
-                  });
-                  // Feed the fresh fix through the same path a watcher
-                  // update would take — this updates lastCoordinate, the
-                  // clean track, distance accumulation, etc.
-                  get().addTrackPoint(
-                    {
-                      lat: fix.coords.latitude,
-                      lng: fix.coords.longitude,
-                      alt: fix.coords.altitude,
-                      accuracy: fix.coords.accuracy ?? null,
-                      speed: fix.coords.speed ?? null,
-                      verticalAccuracy: fix.coords.altitudeAccuracy ?? null,
-                      course: fix.coords.heading ?? null,
-                      clientActivityId: wakeOwnerSessionId,
-                      ownerGeneration: wakeOwnerGeneration,
-                      segmentId: wakeSegmentId ?? undefined,
-                      source: 'foreground',
-                    },
-                    fix.timestamp,
-                  );
-                } catch (err) {
-                  crashLogger.breadcrumb(`k7:wake_kick_err ${String(err).slice(0, 60)}`);
-                }
-              })();
-            }
-          } catch { /* silent — non-fatal */ }
         } else if (nextState === 'background' || nextState === 'inactive') {
           // R114/O22 STORY-73003 (K10) breadcrumb: entry to bg branch.
           crashLogger.breadcrumb(`k10:appstate_bg_branch state=${nextState}`);
@@ -1499,111 +1522,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           });
         }
       }
-
-      // ── Background drain loop (poll task queue every 1s) ──
-      // Drains buffered fixes from the background task into the store.
-      // The drain only runs while background source is active; status check
-      // protects against firing during foreground-only windows.
-      drainInterval = setInterval(() => {
-        if (get().status !== 'tracking') return;
-        // A TaskManager callback can finish just after the foreground switch
-        // stops the background source. Its points are already journaled and
-        // owner-fenced; drain that historical tail even while the foreground
-        // watcher is now active instead of stranding it until another lock.
-        const drained = drainBackgroundLocations().sort((a, b) => a.timestamp - b.timestamp);
-        for (const c of drained) {
-          get().addTrackPoint(
-            {
-              lat: c.latitude,
-              lng: c.longitude,
-              alt: c.altitude,
-              accuracy: c.accuracy ?? null,
-              speed: c.speed ?? null,
-              verticalAccuracy: c.altitudeAccuracy ?? null,
-              course: c.heading ?? null,
-              clientActivityId: c.clientActivityId,
-              ownerGeneration: c.ownerGeneration,
-              segmentId: c.segmentId,
-              segmentStartReason: c.segmentStartReason,
-              rawOrdinal: c.rawOrdinal,
-              continuityPreclassified: c.continuityPreclassified,
-              canonicalDecision: c.canonicalDecision,
-              decisionReason: c.decisionReason,
-              continuityStateAfter: c.continuityStateAfter,
-              source: 'background',
-            },
-            c.timestamp,
-          );
-        }
-      }, 1000);
-
-      // ── Dynamic sampling — restart background+foreground if interval should change ──
-      // v78 #4/#6: tighten reaction window from 60s to 10s. User starts
-      // running mid-hike → mode/UI should reflect it within ~30s of pace
-      // change instead of waiting up to a minute.
-      dynamicSamplingInterval = setInterval(async () => {
-        if (get().status !== 'tracking') return;
-        if (get().locationProviderSource === 'simulator') return;
-        const lastCoord = get().lastCoordinate;
-        const speed = lastCoord ? estimateSpeed(get().trackPoints) : 0;
-        const movement = classifyMovement(speed);
-        const batteryLevel = batteryMonitor.getCurrentLevel();
-        const batteryLow = batteryLevel !== null && batteryLevel < 0.2;
-        // Sprint 72 STORY-00553: pass AppState + battery ctx so background
-        // + low-battery + not-charging combos downgrade sampling. Foreground
-        // or charging or ≥50% battery still uses tight rates.
-        const currentAppState = AppState.currentState as 'active' | 'background' | 'inactive' | 'unknown';
-        const isCharging = batteryMonitor.getIsCharging();
-        const desiredMs = getSamplingInterval(movement, batteryLow, {
-          appState: currentAppState,
-          batteryLevel: batteryLevel ?? undefined,
-          isCharging,
-        });
-
-        // Emit a diagnostic breadcrumb on every eval so log-based inspection
-        // can prove which branch fired even without adjusting the interval.
-        crashLogger.breadcrumb(
-          `sampling:eval movement=${movement} app_state=${currentAppState} battery=${batteryLevel ?? 'na'} charging=${isCharging} interval_ms=${desiredMs}`
-        );
-
-        if (Math.abs(desiredMs - lastSamplingIntervalMs) >= 500) {
-          const from = lastSamplingIntervalMs;
-          lastSamplingIntervalMs = desiredMs;
-          const downgraded = desiredMs > from;
-          crashLogger.breadcrumb(
-            `sampling:${downgraded ? 'downgrade' : 'restore'} from_ms=${from} to_ms=${desiredMs} reason=${
-              downgraded ? 'background_low_battery' : 'foreground_or_charging'
-            }`
-          );
-
-          // Expo's nominal `timeInterval` changes native Android cadence only.
-          // On iOS this is metadata and must not create a watcher teardown gap.
-          if (
-            (currentAppState === 'active' || currentAppState === 'unknown')
-            && !shouldRestartForegroundForNominalIntervalChange(Platform.OS)
-          ) {
-            const owner = get();
-            appendSimulatorLog('PROVIDER', 'activity_sampling_metadata_updated_v1', {
-              platform: Platform.OS,
-              androidTimeIntervalMs: desiredMs,
-              iosTimeIntervalApplied: false,
-              foregroundWatcherRestarted: false,
-              reason: 'android-only-time-interval-change',
-            }, {
-              userId: owner.ownerUserId,
-              clientActivityId: owner.sessionId,
-              qaSessionId: realActivityQaSessionId,
-              coordinateSource: 'none',
-            });
-          } else if (currentAppState === 'background') {
-            if (backgroundTaskActive) {
-              enqueueActivation(async () => { await activateBackgroundSource(); });
-            }
-          } else if (currentAppState === 'active' || currentAppState === 'unknown') {
-            enqueueActivation(activateForegroundSource);
-          }
-        }
-      }, 10_000);
 
       // ── Incremental backup — every 120s, PATCH new points to the
       // server so a force-quit / OS-kill mid-session doesn't lose the
@@ -1655,12 +1573,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         const { startAutoPauseMonitor } = await import('../services/autoPauseMonitor');
         startAutoPauseMonitor({
           getStatus: () => get().status,
-          getPoints: () => get().trackPoints.map(p => ({
-            latitude: p.lat,
-            longitude: p.lng,
-            timestamp: p.t,
-            speed: p.speed ?? undefined,
-          })),
+          getPoints: recentAutoPausePoints,
           onSilentEnd: () => {
             // Fire-and-forget: ends session with no user prompt.
             void get().stopTracking();
@@ -1708,14 +1621,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       stopActivityLifecycleTimer();
       try { appStateSubscription?.remove(); } catch { /* no-op */ }
       appStateSubscription = null;
-      try { locationSubscription?.remove(); } catch { /* no-op */ }
-      locationSubscription = null;
+      deactivateRealForegroundSource();
       if (backgroundTaskActive && Location) {
         try { await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK); } catch { /* no-op */ }
       }
+      markRealProviderStopped('background');
       backgroundTaskActive = false;
-      if (drainInterval) { clearInterval(drainInterval); drainInterval = null; }
-      if (dynamicSamplingInterval) { clearInterval(dynamicSamplingInterval); dynamicSamplingInterval = null; }
       if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
       if (tokenRefreshInterval) { clearInterval(tokenRefreshInterval); tokenRefreshInterval = null; }
       stopRealTelemetryHealthTimer();
@@ -1775,7 +1686,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     const frozenLifecycle = stopEntry.status === 'tracking'
       ? lifecycleDurationPatch(stopEntry)
       : null;
-    finishIngestCutoffMs = Date.now();
+    acceptanceFenceCutoffMs = Date.now();
     stopActivityLifecycleTimer();
     set({ ...(frozenLifecycle ?? {}), isFinishing: true });
     if (frozenLifecycle && stopEntry.sessionId) {
@@ -1813,7 +1724,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
     const finishFenceDurable = await persistBackgroundContext(null, false);
     if (!finishFenceDurable) {
-      finishIngestCutoffMs = null;
+      acceptanceFenceCutoffMs = null;
       set({
         status: 'paused',
         isFinishing: false,
@@ -1833,7 +1744,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // Finish froze new ingestion. Each such fix reaches disk and store state
     // before the completion snapshot below is calculated.
     await pointIngestTail.catch(() => {});
-    finishIngestCutoffMs = null;
+    acceptanceFenceCutoffMs = null;
     recordSavePhase('finish_reconciliation', saveTimelineStartedAt, {
       acceptedPointCount: get().trackPoints.length,
       rawPointCount: get().trackPointsRaw.length,
@@ -1890,14 +1801,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       }
     }
 
-    if (drainInterval) {
-      clearInterval(drainInterval);
-      drainInterval = null;
-    }
-    if (dynamicSamplingInterval) {
-      clearInterval(dynamicSamplingInterval);
-      dynamicSamplingInterval = null;
-    }
     if (incrementalFlushInterval) {
       clearInterval(incrementalFlushInterval);
       incrementalFlushInterval = null;
@@ -2274,9 +2177,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             atMs: point.t,
             source: 'reconciliation',
             ownerUserId,
+            durability: 'deferred',
           });
           if (result.committed && !result.deduplicated) memoryNewCells += 1;
         }
+        if (s.trackPoints.length > 0) await flushRecordedMemoryEvidence();
         recordSavePhase('memory_reconciliation', memoryReconciliationStartedAt, {
           inputPointCount: s.trackPoints.length,
           newEvidenceCount: memoryNewCells,
@@ -2887,6 +2792,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // Freeze acceptance synchronously before any native/storage await. A GPS
     // callback already queued after the user's Pause tap must see `paused`.
     const frozenLifecycle = lifecycleDurationPatch(pauseOwner);
+    acceptanceFenceCutoffMs = Date.now();
     stopActivityLifecycleTimer();
     set({ ...frozenLifecycle, status: 'paused' });
     appendSimulatorLog('ACTIVITY_STATE', 'activity_paused', {
@@ -2901,11 +2807,17 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       stopRealTelemetryHealthTimer();
     }
     deactivateForegroundSource();
-    if (pauseOwner.locationProviderSource === 'real') await stopRealBackgroundSourceForHandoff();
-    else deactivateBackgroundSource();
-    // Drop already-delivered native samples from the prior ownership window.
-    // Resume rotates generation, so even a concurrent drain cannot adopt them.
-    drainBackgroundLocations();
+    if (pauseOwner.locationProviderSource === 'real') {
+      await stopRealBackgroundSourceForHandoff();
+      // Every headless sample that crossed the durable lease before Pause is
+      // journal authority. Project that fenced tail into the paused snapshot
+      // once; there is no 1 s polling timer and no point is silently dropped.
+      await drainCommittedBackgroundLocations(true);
+    } else {
+      deactivateBackgroundSource();
+      drainBackgroundLocations();
+    }
+    acceptanceFenceCutoffMs = null;
     // Invalidate the durable native callback context while paused. Any task
     // wake after this write cannot append samples to the parked Activity.
     const pauseFenceDurable = await persistBackgroundContext(null, false).catch(() => false);
@@ -3169,31 +3081,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         }
       });
 
-      drainInterval = setInterval(() => {
-        if (get().status !== 'tracking') return;
-        for (const coordinate of drainBackgroundLocations().sort((a, b) => a.timestamp - b.timestamp)) {
-          get().addTrackPoint({
-            lat: coordinate.latitude,
-            lng: coordinate.longitude,
-            alt: coordinate.altitude,
-            accuracy: coordinate.accuracy ?? null,
-            speed: coordinate.speed ?? null,
-            verticalAccuracy: coordinate.altitudeAccuracy ?? null,
-            course: coordinate.heading ?? null,
-            clientActivityId: coordinate.clientActivityId,
-            ownerGeneration: coordinate.ownerGeneration,
-            segmentId: coordinate.segmentId,
-            segmentStartReason: coordinate.segmentStartReason,
-            rawOrdinal: coordinate.rawOrdinal,
-            continuityPreclassified: coordinate.continuityPreclassified,
-            canonicalDecision: coordinate.canonicalDecision,
-            decisionReason: coordinate.decisionReason,
-            continuityStateAfter: coordinate.continuityStateAfter,
-            source: 'background',
-          }, coordinate.timestamp);
-        }
-      }, 1000);
-
       incrementalFlushInterval = setInterval(async () => {
         const current = get();
         if (current.status !== 'tracking' || !current.remoteSessionId) return;
@@ -3217,12 +3104,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         const { startAutoPauseMonitor } = await import('../services/autoPauseMonitor');
         startAutoPauseMonitor({
           getStatus: () => get().status,
-          getPoints: () => get().trackPoints.map(point => ({
-            latitude: point.lat,
-            longitude: point.lng,
-            timestamp: point.t,
-            speed: point.speed ?? undefined,
-          })),
+          getPoints: recentAutoPausePoints,
           onSilentEnd: () => { void get().stopTracking(); },
         });
       } catch { /* non-fatal */ }
@@ -3257,12 +3139,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const owned = coord as ActivityCoordinate;
       const coordinateSource = owned.source === 'simulator' ? 'simulator' as const : 'real' as const;
       const reconcilingCommittedBackground = Boolean(
-        before.status === 'tracking'
-        && before.isFinishing
+        (before.status === 'tracking' || before.status === 'paused')
         && owned.source === 'background'
-        && owned.committedBeforeFinish
-        && finishIngestCutoffMs !== null
-        && sampleTimestamp <= finishIngestCutoffMs,
+        && owned.committedBeforeFence
+        && acceptanceFenceCutoffMs !== null
+        && sampleTimestamp <= acceptanceFenceCutoffMs,
       );
       const inactiveForNormalIngest =
         before.status !== 'tracking'
@@ -3330,6 +3211,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       ) {
         return reject('non-monotonic-timestamp');
       }
+      if (!isSimulatorSample) {
+        // Puck/camera presentation consumes the owned raw Expo stream without
+        // waiting for reducer + WAL latency. Canonical route truth is still
+        // published only after the journal commit below.
+        set(state => state.sessionId === before.sessionId
+          && state.liveOwnerGeneration === before.liveOwnerGeneration
+          ? {
+              latestSourceLocationTime: sampleTimestamp,
+              latestSourceCoordinate: { ...coord, t: sampleTimestamp },
+            }
+          : state);
+      }
 
       let realObservation: RealGpsObservation | null = null;
       let realMotionDecision: MotionDecision | null = null;
@@ -3375,14 +3268,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             && state.liveOwnerGeneration === before.liveOwnerGeneration
               ? {
                   trackPointsRaw: [...state.trackPointsRaw, auditPoint],
-                  latestSourceLocationTime: sampleTimestamp,
                   realMotionState: owned.continuityStateAfter?.motionState ?? state.realMotionState,
                   realCandidatePending: Boolean(owned.continuityStateAfter?.pending),
                   realCanonicalDecisionReason: owned.decisionReason ?? 'background-preclassified-rejection',
                 }
               : state
           ));
-          await persistCurrentRealBackgroundContext().catch(() => false);
           return reject(owned.decisionReason ?? 'background-preclassified-rejection');
         }
       } else if (!isSimulatorSample) {
@@ -3472,14 +3363,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             && state.liveOwnerGeneration === before.liveOwnerGeneration
               ? {
                   trackPointsRaw: [...state.trackPointsRaw, auditPoint],
-                  latestSourceLocationTime: sampleTimestamp,
                   realMotionState: realMotionDecision?.state.motionState ?? state.realMotionState,
                   realCandidatePending: Boolean(realMotionDecision?.state.pending),
                   realCanonicalDecisionReason: realMotionDecision?.reason ?? state.realCanonicalDecisionReason,
                 }
               : state
           ));
-          await persistCurrentRealBackgroundContext().catch(() => false);
           return reject(
             realMotionDecision.kind === 'QUARANTINE'
               ? 'physical-continuity-quarantine'
@@ -3814,7 +3703,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           currentSegmentId: segmentId,
           pendingSegmentStartReason: null,
           overSpeedActive: false,
-          latestSourceLocationTime: t,
           realMotionState: owned.continuityStateAfter?.motionState
             ?? realMotionDecision?.state.motionState
             ?? s.realMotionState,
@@ -3952,25 +3840,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           });
         }
 
-        const userId = before.ownerUserId;
-        if (userId) {
-          await updateUnfinishedActivity(userId, before.sessionId, {
-            lastMeaningfulAt: accepted.t,
-            currentSegmentId: accepted.segmentId,
-            nextSegmentStartReason: undefined,
-          });
-          const latest = get();
-          if (
-            before.locationProviderSource === 'real'
-            && latest.status === 'tracking'
-            && !latest.isFinishing
-            && latest.ownerUserId === userId
-            && latest.sessionId === before.sessionId
-            && latest.liveOwnerGeneration === before.liveOwnerGeneration
-          ) {
-            await persistCurrentRealBackgroundContext();
-          }
-        }
+        // The append-only journal + its fixed-size meta are the crash authority
+        // for accepted point/time/segment state. Registry and background lease
+        // snapshots are refreshed at lifecycle transitions, not rewritten for
+        // every 1 m foreground observation.
         let memoryResult = { committed: false, deduplicated: true };
         for (const point of acceptedPoints) {
           const pointMemoryResult = await recordMemoryEvidence({
@@ -4453,8 +4326,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     pauseSimulatorProvider();
     simulatorSourceActive = false;
     drainBackgroundLocations();
-    if (drainInterval) { clearInterval(drainInterval); drainInterval = null; }
-    if (dynamicSamplingInterval) { clearInterval(dynamicSamplingInterval); dynamicSamplingInterval = null; }
     if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
     if (tokenRefreshInterval) { clearInterval(tokenRefreshInterval); tokenRefreshInterval = null; }
     stopRealTelemetryHealthTimer();
@@ -4529,14 +4400,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // isolation—not Activity discard.
     try { appStateSubscription?.remove(); } catch { /* no-op */ }
     appStateSubscription = null;
-    try { locationSubscription?.remove(); } catch { /* no-op */ }
-    locationSubscription = null;
+    deactivateRealForegroundSource();
     if (backgroundTaskActive && Location) {
       Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => {});
+      markRealProviderStopped('background');
       backgroundTaskActive = false;
     }
-    if (drainInterval) { clearInterval(drainInterval); drainInterval = null; }
-    if (dynamicSamplingInterval) { clearInterval(dynamicSamplingInterval); dynamicSamplingInterval = null; }
     if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
     if (tokenRefreshInterval) { clearInterval(tokenRefreshInterval); tokenRefreshInterval = null; }
     stopRealTelemetryHealthTimer();
@@ -4598,14 +4467,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // saved-session bookkeeping (no addSession, no name dialog).
     try { appStateSubscription?.remove(); } catch { /* no-op */ }
     appStateSubscription = null;
-    try { locationSubscription?.remove(); } catch { /* no-op */ }
-    locationSubscription = null;
+    deactivateRealForegroundSource();
     if (backgroundTaskActive && Location) {
       Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => {});
+      markRealProviderStopped('background');
       backgroundTaskActive = false;
     }
-    if (drainInterval) { clearInterval(drainInterval); drainInterval = null; }
-    if (dynamicSamplingInterval) { clearInterval(dynamicSamplingInterval); dynamicSamplingInterval = null; }
     if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
     if (tokenRefreshInterval) { clearInterval(tokenRefreshInterval); tokenRefreshInterval = null; }
     stopRealTelemetryHealthTimer();
@@ -4637,8 +4504,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           atMs: point.t,
           source: 'reconciliation',
           ownerUserId,
+          durability: 'deferred',
         });
       }
+      if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
     }
     // Persist cancellation before attempting any network or file cleanup.
     // A crash after this point cannot let stale queued work resurrect the
@@ -4759,6 +4628,18 @@ function startActivityLifecycleTimer(clientActivityId: string): void {
   activityLifecycleInterval = setInterval(tick, 250);
 }
 
+function recentAutoPausePoints(cutoffMs: number) {
+  const points = useTrackingStore.getState().trackPoints;
+  let first = points.length;
+  while (first > 0 && points[first - 1].t >= cutoffMs) first -= 1;
+  return points.slice(first).map(point => ({
+    latitude: point.lat,
+    longitude: point.lng,
+    timestamp: point.t,
+    speed: point.speed ?? undefined,
+  }));
+}
+
 // ── Source activation helpers (single-source guarantee) ────────────────────
 
 /**
@@ -4854,9 +4735,8 @@ async function activateForegroundSource(): Promise<void> {
   // provider itself before starting the foreground watcher so recovery can
   // never leave an OS-owned background stream running beside the new watcher.
   await stopRealBackgroundSourceForHandoff();
-  // Tear down any existing foreground sub first
-  try { locationSubscription?.remove(); } catch { /* no-op */ }
-  locationSubscription = null;
+  // Tear down any existing foreground sub first.
+  deactivateRealForegroundSource();
 
   try {
     locationSubscription = await Location.watchPositionAsync(
@@ -4865,7 +4745,7 @@ async function activateForegroundSource(): Promise<void> {
         // Expo's timeInterval is Android-only. The iOS-effective production
         // candidate is the measured 1 m distance filter; Internal Debug may
         // explicitly retain 5 m only as the preserved A/B baseline.
-        timeInterval: lastSamplingIntervalMs,
+        timeInterval: ACTIVITY_LOCATION_TIME_INTERVAL_MS,
         distanceInterval: realForegroundCadenceExperiment.distanceFilterM,
       },
       (position) => {
@@ -4938,9 +4818,10 @@ async function activateForegroundSource(): Promise<void> {
         });
       },
     );
+    markRealProviderStarted('foreground');
     appendSimulatorLog('PROVIDER', 'real_activity_location_source_activated', {
       sampleSource: 'foreground',
-      androidTimeIntervalMs: lastSamplingIntervalMs,
+      androidTimeIntervalMs: ACTIVITY_LOCATION_TIME_INTERVAL_MS,
       requestedDistanceM: realForegroundCadenceExperiment.distanceFilterM,
       cadenceVariant: realForegroundCadenceExperiment.variant,
       iosTimeIntervalApplied: false,
@@ -4968,6 +4849,7 @@ function deactivateForegroundSource(): void {
 
 function deactivateRealForegroundSource(): void {
   try { locationSubscription?.remove(); } catch { /* no-op */ }
+  if (locationSubscription) markRealProviderStopped('foreground');
   locationSubscription = null;
 }
 
@@ -5041,7 +4923,7 @@ async function markRecordingContinuityUnavailable(reason: string): Promise<void>
   });
 }
 
-async function drainCommittedBackgroundLocations(committedBeforeFinish = false): Promise<number> {
+async function drainCommittedBackgroundLocations(committedBeforeFence = false): Promise<number> {
   await settleBackgroundLocationWrites();
   const drained = drainBackgroundLocations().sort((a, b) => a.timestamp - b.timestamp);
   for (const coordinate of drained) {
@@ -5063,7 +4945,7 @@ async function drainCommittedBackgroundLocations(committedBeforeFinish = false):
       decisionReason: coordinate.decisionReason,
       continuityStateAfter: coordinate.continuityStateAfter,
       source: 'background',
-      committedBeforeFinish,
+      committedBeforeFence,
     }, coordinate.timestamp);
   }
   return drained.length;
@@ -5113,6 +4995,7 @@ async function stopRealBackgroundSourceForHandoff(): Promise<void> {
       coordinateSource: 'real',
     });
   }
+  markRealProviderStopped('background');
   backgroundTaskActive = false;
 }
 
@@ -5199,14 +5082,14 @@ async function activateBackgroundSource(): Promise<boolean> {
   // interval snapshot. Enables us to reconstruct on-device why background
   // recording didn't produce points.
   crashLogger.breadcrumb(
-    `k10:bg_activate_enter granted=${backgroundGrantedCached} interval_ms=${lastSamplingIntervalMs}`
+    `k10:bg_activate_enter granted=${backgroundGrantedCached} interval_ms=${ACTIVITY_LOCATION_TIME_INTERVAL_MS}`
   );
   try {
     appendSimulatorLog('PROVIDER', 'real_activity_background_registration_attempted', {
       permissionGranted: granted,
       cachedPermissionGranted: backgroundGrantedCached,
       appState: AppState.currentState,
-      androidTimeIntervalMs: lastSamplingIntervalMs,
+      androidTimeIntervalMs: ACTIVITY_LOCATION_TIME_INTERVAL_MS,
       iosTimeIntervalApplied: false,
       ownerGenerationSuffix: state.liveOwnerGeneration?.slice(-8) ?? null,
     }, {
@@ -5220,7 +5103,7 @@ async function activateBackgroundSource(): Promise<boolean> {
       permissionGranted: granted,
       cachedPermissionGranted: backgroundGrantedCached,
       appState: AppState.currentState,
-      androidTimeIntervalMs: lastSamplingIntervalMs,
+      androidTimeIntervalMs: ACTIVITY_LOCATION_TIME_INTERVAL_MS,
       iosTimeIntervalApplied: false,
       ownerGenerationSuffix: state.liveOwnerGeneration?.slice(-8) ?? null,
     }, {
@@ -5231,6 +5114,8 @@ async function activateBackgroundSource(): Promise<boolean> {
     });
     const taskRegistered = await registerBackgroundTask();
     if (!taskRegistered) throw new Error('background-task-registration-failed');
+    const contextPersisted = await persistCurrentRealBackgroundContext();
+    if (!contextPersisted) throw new Error('background-context-refresh-failed');
     const already = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
     // O43 leading, explicitly hypothesis-driven correction: repository evidence
     // shows repeated stop/start churn on lifecycle and sampling evaluations.
@@ -5239,8 +5124,8 @@ async function activateBackgroundSource(): Promise<boolean> {
     // OS delivery, or a later layer is the actual background failure.
     if (!already) await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
       accuracy: Location.Accuracy.BestForNavigation,
-      timeInterval: lastSamplingIntervalMs,
-      distanceInterval: 5,
+      timeInterval: ACTIVITY_LOCATION_TIME_INTERVAL_MS,
+      distanceInterval: realForegroundCadenceExperiment.distanceFilterM,
       showsBackgroundLocationIndicator: true,
       // R114/O22 STORY-73003 (K10) root cause hypothesis #2: default iOS
       // behavior pauses location updates whenever CoreLocation decides
@@ -5260,6 +5145,7 @@ async function activateBackgroundSource(): Promise<boolean> {
     const verifiedStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
     if (!verifiedStarted) throw new Error('background-task-start-not-observed');
     backgroundTaskActive = verifiedStarted;
+    if (verifiedStarted) markRealProviderStarted('background');
     crashLogger.breadcrumb('k10:bg_activate_ok');
     appendSimulatorLog('PROVIDER', 'real_activity_background_registration_result', {
       taskRegistered,
@@ -5276,9 +5162,9 @@ async function activateBackgroundSource(): Promise<boolean> {
     appendSimulatorLog('PROVIDER', 'real_activity_background_task_started', {
       nativeReused: already,
       nativeVerifiedStarted: verifiedStarted,
-      androidTimeIntervalMs: lastSamplingIntervalMs,
+      androidTimeIntervalMs: ACTIVITY_LOCATION_TIME_INTERVAL_MS,
       iosTimeIntervalApplied: false,
-      requestedDistanceM: 5,
+      requestedDistanceM: realForegroundCadenceExperiment.distanceFilterM,
     }, {
       userId: state.ownerUserId,
       clientActivityId: state.sessionId,
@@ -5301,9 +5187,9 @@ async function activateBackgroundSource(): Promise<boolean> {
     });
     appendSimulatorLog('PROVIDER', 'real_activity_location_source_activated', {
       sampleSource: 'background',
-      androidTimeIntervalMs: lastSamplingIntervalMs,
+      androidTimeIntervalMs: ACTIVITY_LOCATION_TIME_INTERVAL_MS,
       iosTimeIntervalApplied: false,
-      requestedDistanceM: 5,
+      requestedDistanceM: realForegroundCadenceExperiment.distanceFilterM,
     }, {
       userId: state.ownerUserId,
       clientActivityId: state.sessionId,
@@ -5345,6 +5231,7 @@ async function activateBackgroundSource(): Promise<boolean> {
       qaSessionId: realActivityQaSessionId,
       coordinateSource: 'none',
     });
+    markRealProviderStopped('background');
     backgroundTaskActive = false;
     return false;
   }
@@ -5358,6 +5245,7 @@ function deactivateRealBackgroundSource(): void {
   if (!Location) return;
   if (backgroundTaskActive) {
     Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => {});
+    markRealProviderStopped('background');
     backgroundTaskActive = false;
   }
 }
@@ -5369,20 +5257,3 @@ function isCurrentLocationSourceActive(): boolean {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-/**
- * Estimate current speed (m/s) from the last few track points.
- * Returns 0 if insufficient data.
- */
-function estimateSpeed(points: TrackPoint[]): number {
-  if (points.length < 2) return 0;
-  const recent = points.slice(-5);
-  let totalDist = 0;
-  let totalTimeMs = 0;
-  for (let i = 1; i < recent.length; i++) {
-    totalDist += haversineM(recent[i - 1], recent[i]);
-    totalTimeMs += recent[i].t - recent[i - 1].t;
-  }
-  if (totalTimeMs <= 0) return 0;
-  return (totalDist / totalTimeMs) * 1000; // m/s
-}

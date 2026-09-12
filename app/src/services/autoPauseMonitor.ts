@@ -9,15 +9,14 @@
  * recording the user's couch after they got home.
  *
  * Everything is time-driven off wall-clock, not GPS callback frequency —
- * so the detector still fires even when sampling is downgraded to 15s
- * in background+low-battery mode.
+ * so the detector still fires when iOS batches or delays background delivery.
  *
  * Constants exported so real-device tuning is a one-file change.
  */
 import { AppState } from 'react-native';
 import { crashLogger } from './crashLogger';
 
-const AUTO_PAUSE = {
+export const AUTO_PAUSE = {
   IDLE_SPEED_THRESHOLD_MS: 0.5,     // m/s — below this = "not moving"
   IDLE_RADIUS_M: 50,                // meters — total drift within window
   IDLE_WINDOW_MS: 15 * 60_000,      // must be idle for 15 min continuously
@@ -28,7 +27,7 @@ const AUTO_PAUSE = {
 
 interface AutoPauseHooks {
   getStatus: () => 'idle' | 'tracking' | 'paused' | string;
-  getPoints: () => Array<{ latitude: number; longitude: number; timestamp: number; speed?: number }>;
+  getPoints: (cutoffMs: number) => Array<{ latitude: number; longitude: number; timestamp: number; speed?: number }>;
   onSilentEnd: () => void;
 }
 
@@ -115,8 +114,8 @@ export function startAutoPauseMonitor(hooks: AutoPauseHooks): void {
         state.promptedAt = null;
         return;
       }
-      const points = hooks.getPoints();
       const now = Date.now();
+      const points = hooks.getPoints(now - AUTO_PAUSE.IDLE_WINDOW_MS);
       const idle = isIdle(points, AUTO_PAUSE.IDLE_WINDOW_MS, now);
       if (!idle) {
         if (state.idleSince != null) {
@@ -165,4 +164,3 @@ export function stopAutoPauseMonitor(): void {
 
 
 // O1 batch 36: __resetAutoPauseForTest and autoPauseUserContinued removed — 0 external callers.
-

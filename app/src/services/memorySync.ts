@@ -20,7 +20,8 @@
 import { authenticatedFetch } from './apiService';
 import { useMemoryStore, VisitedPoint } from '../features/memory/store/useMemoryStore';
 
-const PUSH_DEBOUNCE_MS = 5_000;
+const PUSH_DEBOUNCE_MS = 30_000;
+const PUSH_MAX_WAIT_MS = 60_000;
 const BACKOFF_MS = 15_000;
 const MAX_BATCH = 500;
 const HTTP_TIMEOUT_MS = 30_000;
@@ -40,6 +41,16 @@ let pushAbortController: AbortController | null = null;
 let pullAbortController: AbortController | null = null;
 /** Epoch token, bumped on every detach/reset. */
 let epoch = 0;
+let pendingBurstStartedAt: number | null = null;
+let syncMetrics = { pushRequests: 0, pushedPoints: 0 };
+
+export function resetMemorySyncMetrics(): void {
+  syncMetrics = { pushRequests: 0, pushedPoints: 0 };
+}
+
+export function getMemorySyncMetrics(): typeof syncMetrics {
+  return { ...syncMetrics };
+}
 
 /** O7 fix: persistent pull cursor so an aborted pull resumes from where it stopped. */
 let pullCursor: { afterTs: number; afterCid: string } = { afterTs: 0, afterCid: '' };
@@ -352,7 +363,10 @@ async function pushPendingPoints(): Promise<void> {
   const myUserId = activeUserId;
   const allPoints = useMemoryStore.getState().points;
   const pending = allPoints.filter((p) => !p.synced);
-  if (pending.length === 0) return;
+  if (pending.length === 0) {
+    pendingBurstStartedAt = null;
+    return;
+  }
 
   const batch = pending.slice(0, MAX_BATCH);
   pushRunning = true;
@@ -361,6 +375,8 @@ async function pushPendingPoints(): Promise<void> {
   useMemoryStore.getState().bumpInFlight(1);
   let serverError = false;
   try {
+    syncMetrics.pushRequests += 1;
+    syncMetrics.pushedPoints += batch.length;
     const res = await fetchWithTimeout('/api/memory/points', {
       method: 'POST',
       body: JSON.stringify({
@@ -374,6 +390,7 @@ async function pushPendingPoints(): Promise<void> {
       const echo: Array<EchoEntry | null> = Array.isArray(body?.points) ? body.points : [];
       useMemoryStore.getState().applyServerEchoForPushAligned(batch, echo);
       backoffUntil = 0;
+      pendingBurstStartedAt = pending.length > MAX_BATCH ? Date.now() : null;
       if (pending.length > MAX_BATCH) schedulePush(0);
     } else {
       serverError = true;
@@ -397,7 +414,12 @@ async function pushPendingPoints(): Promise<void> {
 
 function schedulePush(delayMs = PUSH_DEBOUNCE_MS): void {
   const now = Date.now();
-  const effectiveDelay = Math.max(delayMs, backoffUntil - now);
+  if (pendingBurstStartedAt === null) pendingBurstStartedAt = now;
+  const maxWaitRemaining = Math.max(0, pendingBurstStartedAt + PUSH_MAX_WAIT_MS - now);
+  const effectiveDelay = Math.max(
+    Math.min(Math.max(0, delayMs), maxWaitRemaining),
+    backoffUntil - now,
+  );
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     pushTimer = null;
@@ -409,8 +431,7 @@ export function attachMemorySync(userId: string): void {
   // v407 fix #1: idempotent attach — 若已 attach 到相同 userId 且 subscriber
   // 活着,跳过 detach+re-subscribe。避免 hydrate(pre-warm) + FGUM(Memory tab)
   // + AuthScreen 二次 hydrate 三处都调 attachMemorySync 时反复 detach
-  // abort in-flight push,memory_points 丢批次(下次 5s 后重推)。
-  // 用户场景: hike → save → 立刻点 Memory tab → memory 空(要等 5s 才补)。
+  // abort in-flight push,memory_points 丢批次(下个 bounded debounce 后重推)。
   if (activeUserId === userId && unsubscribe) {
     require('./appLog').log('memory_sync.attach_skip', { userId, reason: 'same-user-already-attached' });
     return;
@@ -452,6 +473,7 @@ export function detachMemorySync(): void {
   }
   activeUserId = null;
   backoffUntil = 0;
+  pendingBurstStartedAt = null;
   pushRunning = false;
   pullRunning = false;
   pullCursor = { afterTs: 0, afterCid: '' };
@@ -473,7 +495,7 @@ export async function pushMemoryNow(): Promise<void> {
  * asked to erase. Now we:
  *   1. bump `epoch` so any push/pull already running will discard its
  *      result at its next epoch check.
- *   2. clear `pushTimer` so the 5s-debounced push cannot fire between
+ *   2. clear `pushTimer` so the debounced push cannot fire between
  *      our epoch bump and the DELETE (Round-2 N2-C1: first fix only
  *      caught in-flight aborts, missed scheduled timer).
  *   3. abort the in-flight push + pull controllers immediately so their

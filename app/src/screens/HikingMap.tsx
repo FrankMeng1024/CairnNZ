@@ -35,10 +35,11 @@ import {
   observeMapboxLocation,
 } from '../features/activity/locationCadenceExperiment';
 import {
-  buildConfirmedRouteSegments,
+  createIncrementalRoutePresentation,
   continuousRouteAnimationDurationMs,
   isAppendOnlyRouteUpdate,
   planContinuousRouteTarget,
+  updateIncrementalRoutePresentation,
 } from '../features/activity/confirmedRoutePresentation';
 import { useIsFocused } from '@react-navigation/native';
 
@@ -49,6 +50,7 @@ let MapView: any = null;
 let CameraComponent: any = null;
 let PointAnnotation: any = null;
 let UserLocationComponent: any = null;
+let CustomLocationProviderComponent: any = null;
 let LineLayer: any = null;
 let ShapeSource: any = null;
 let CircleLayer: any = null;
@@ -63,6 +65,7 @@ if (Platform.OS !== 'web') {
     CameraComponent = Mapbox.Camera;
     PointAnnotation = Mapbox.PointAnnotation;
     UserLocationComponent = Mapbox.UserLocation;
+    CustomLocationProviderComponent = Mapbox.CustomLocationProvider;
     LineLayer = Mapbox.LineLayer;
     ShapeSource = Mapbox.ShapeSource;
     CircleLayer = Mapbox.CircleLayer;
@@ -242,6 +245,31 @@ function ContinuousConfirmedRoute({
   );
 }
 
+const StaticConfirmedRoute = React.memo(function StaticConfirmedRoute({
+  id,
+  coordinates,
+  lineColor,
+  casingColor,
+}: {
+  id: string;
+  coordinates: [number, number][];
+  lineColor: string;
+  casingColor: string;
+}) {
+  if (coordinates.length < 2) return null;
+  const shape = {
+    type: 'Feature' as const,
+    properties: {},
+    geometry: { type: 'LineString' as const, coordinates },
+  };
+  return (
+    <ShapeSource id={`${id}-source`} shape={shape}>
+      <LineLayer id={`${id}-casing`} style={{ lineColor: casingColor, lineOpacity: 0.86, lineWidth: 8, lineCap: 'round', lineJoin: 'round' }} />
+      <LineLayer id={`${id}-line`} style={{ lineColor, lineWidth: 4.5, lineCap: 'round', lineJoin: 'round' }} />
+    </ShapeSource>
+  );
+});
+
 function optionalFiniteNumber(value: unknown): number | null {
   return value != null && Number.isFinite(Number(value)) ? Number(value) : null;
 }
@@ -389,7 +417,10 @@ export function HikingMap({
       cameraInitialTarget: instantCamera && userPos ? 'accepted-location' : 'mapbox-default',
       cameraAnimationMode: instantCamera ? 'none' : 'flyTo',
       cameraAnimationDurationMs: instantCamera ? 0 : 600,
-      realUserLocationMounted: !simulatorEnabled,
+      realUserLocationMounted: realUserLocationActive,
+      realUserLocationAuthority: realCustomProviderActive
+        ? 'expo-custom-provider'
+        : idleNativeProviderActive ? 'mapbox-apple-idle' : 'none',
       mapboxTokenConfigured: isMapboxTokenConfigured(),
     }, { coordinateSource: 'none' });
     appendSimulatorLog('MAP_STATE', `${telemetryScreenPrefix}_map_style_load_started`, { mountId }, { coordinateSource: 'none' });
@@ -430,95 +461,69 @@ export function HikingMap({
     return () => { cancelled = true; if (unsub) unsub(); };
   }, []);
 
-  // v79 #1 fix: split the track into solid + gap segments by time AND
-  // distance. v78 used 30s alone, but real walking data showed 30-90s
-  // gaps with <10m distance (user standing at a light, slow walk
-  // through dense city, dynamic-sampling 0.1Hz when stationary). All
-  // those triggered false-positive dashed segments.
-  //
-  // Real signal-loss (verified on session 38 metro hike): 13-minute
-  // gap with kilometres of distance. So the rule is now both:
-  //   • dt > 120s (long enough to genuinely stop tracking)
-  //   • dist > 200m (user actually moved out of GPS reach)
-  // Stationary users + dynamic-sampling-driven slow ticks no longer
-  // false-trigger. Real underground/metro segments still draw dashed.
+  // Live route presentation mirrors canonical segment identity. Static body
+  // chunks retain stable object identity; only a bounded live head is rebuilt
+  // and sent to Mapbox for each accepted point.
   const GAP_THRESHOLD_MS = 120_000;
   const GAP_DIST_THRESHOLD_M = 200;
-  type Segment = { coords: [number, number][]; gap: boolean };
-
-  // 2026-07-20 perf: memoize segment computation + GeoJSON build.
-  // Runs O(N) over trackPoints; without memo this fires every render even
-  // when trackPoints reference is unchanged. `trackPoints` gets a new
-  // reference every 3s during a hike so the memo dep is intentional.
-  //
-  // R114/O22 STORY-73014 (K4): during LIVE hike, do NOT draw dashed gap
-  // segments. User spec: "hike realtime polyline gap 段完全不画" — a
-  // dashed line across signal-loss regions was misleading users who
-  // thought the app was tracking during the gap. Finished activities
-  // (MapHistoryScreen) still render dashes because there the user is
-  // reviewing a completed hike and the dash correctly conveys "we lost
-  // signal here". This file (HikingMap) is only mounted during live
-  // hikes, so we simply return an empty gapGeoJSON.
-  const { solidGeoJSON, gapGeoJSON } = useMemo(() => {
-    const segs: Segment[] = [];
-    if (trackPoints.length >= 2) {
-      let cur: Segment = { coords: [[trackPoints[0].lng, trackPoints[0].lat]], gap: false };
-      for (let i = 1; i < trackPoints.length; i++) {
-        const prev = trackPoints[i - 1];
-        const p = trackPoints[i];
-        const dt = (prev.t != null && p.t != null) ? (p.t - prev.t) : 0;
-        const distM = haversineM({ lat: prev.lat, lng: prev.lng }, { lat: p.lat, lng: p.lng });
-        const isSegmentBreak = Boolean(prev.segmentId && p.segmentId && prev.segmentId !== p.segmentId);
-        const isGap = !isSegmentBreak && dt > GAP_THRESHOLD_MS && distM > GAP_DIST_THRESHOLD_M;
-        if (isSegmentBreak) {
-          // Close the current segment, start a fresh one at the new
-          // point. No gap-dash rendering — just a clean break.
-          if (cur.coords.length >= 2) segs.push(cur);
-          cur = { coords: [[p.lng, p.lat]], gap: false };
-        } else if (isGap) {
-          // R114/O22 STORY-73014: break the polyline cleanly. Do NOT
-          // push a gap segment — during live hike we want zero visual
-          // connection across signal loss. Also emit a crashLogger
-          // breadcrumb so post-hoc debugging can see which fixes were
-          // treated as gaps.
-          if (cur.coords.length >= 2) segs.push(cur);
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const cl = require('../services/crashLogger');
-            (cl.crashLogger ?? cl.default)?.breadcrumb?.(
-              `k4:gap dt_ms=${dt} dist_m=${Math.round(distM)}`
-            );
-          } catch { /* silent */ }
-          cur = { coords: [[p.lng, p.lat]], gap: false };
-        } else {
-          cur.coords.push([p.lng, p.lat]);
-        }
-      }
-      if (cur.coords.length >= 2) segs.push(cur);
-    }
-    return {
-      solidGeoJSON: {
-        type: 'FeatureCollection' as const,
-        features: segs.filter(s => !s.gap).map(s => ({
-          type: 'Feature' as const,
-          geometry: { type: 'LineString' as const, coordinates: s.coords },
-          properties: {},
-        })),
-      },
-      // R114/O22 STORY-73014: always empty during live hike — see comment above.
-      gapGeoJSON: {
-        type: 'FeatureCollection' as const,
-        features: [] as Array<{ type: 'Feature'; geometry: { type: 'LineString'; coordinates: number[][] }; properties: Record<string, never> }>,
-      },
-    };
+  const routePresentationRef = useRef(createIncrementalRoutePresentation());
+  const routePresentation = useMemo(() => {
+    routePresentationRef.current = updateIncrementalRoutePresentation(
+      routePresentationRef.current,
+      trackPoints,
+      GAP_THRESHOLD_MS,
+      GAP_DIST_THRESHOLD_M,
+    );
+    return routePresentationRef.current;
   }, [trackPoints]);
-
-  const confirmedRouteSegments = useMemo(
-    () => buildConfirmedRouteSegments(trackPoints, GAP_THRESHOLD_MS, GAP_DIST_THRESHOLD_M),
-    [trackPoints],
-  );
-  const activeConfirmedSegment = confirmedRouteSegments[confirmedRouteSegments.length - 1] ?? null;
+  const activeConfirmedSegment = routePresentation.activeHead;
   const trackingStatus = useTrackingStore(s => s.status);
+  const trackingIsFinishing = useTrackingStore(s => s.isFinishing);
+  const latestSourceCoordinate = useTrackingStore(s => s.latestSourceCoordinate);
+  const activityCustomProviderMounted = Boolean(
+    !simulatorEnabled
+    && CustomLocationProviderComponent
+    && isFocused
+    && trackingStatus !== 'idle',
+  );
+  const realCustomProviderActive = Boolean(
+    activityCustomProviderMounted
+    && mapAppState === 'active'
+    && trackingStatus === 'tracking'
+    && !trackingIsFinishing,
+  );
+  // Before Start, Mapbox's Apple provider is the sole source. Once an
+  // Activity requests ownership, it is removed; the Expo stream feeds the
+  // installed CustomLocationProvider for puck + camera as presentation only.
+  const idleNativeProviderActive = Boolean(
+    !simulatorEnabled
+    && isFocused
+    && mapAppState === 'active'
+    && trackingStatus === 'idle'
+    && !trackingIsFinishing,
+  );
+  const realUserLocationActive = realCustomProviderActive || idleNativeProviderActive;
+  useEffect(() => {
+    const providerMode = realCustomProviderActive
+      ? 'cairn-custom'
+      : idleNativeProviderActive ? 'mapbox-apple-idle' : null;
+    if (!providerMode) return undefined;
+    const startedAt = Date.now();
+    appendSimulatorLog('PROVIDER', 'activity_presentation_provider_started_v1', {
+      providerMode,
+      canonicalAuthority: providerMode === 'cairn-custom' ? 'expo-activity-stream' : 'none-idle',
+      headingAuthority: providerMode === 'cairn-custom' ? 'expo-course' : 'mapbox-apple',
+      overlapExpected: false,
+      screen: telemetryScreenPrefix,
+    }, { coordinateSource: 'none' });
+    return () => {
+      appendSimulatorLog('PROVIDER', 'activity_presentation_provider_stopped_v1', {
+        providerMode,
+        activeDurationMs: Math.max(0, Date.now() - startedAt),
+        screen: telemetryScreenPrefix,
+      }, { coordinateSource: 'none' });
+    };
+  }, [realCustomProviderActive, idleNativeProviderActive, telemetryScreenPrefix]);
   const animateConfirmedHead = Boolean(
     !simulatorEnabled
     && !reduceMotion
@@ -531,19 +536,6 @@ export function HikingMap({
     && AnimatedCoordinatesArrayClass
     && AnimatedShapeClass,
   );
-  const staticSolidGeoJSON = useMemo(() => {
-    if (!animateConfirmedHead) return solidGeoJSON;
-    return {
-      type: 'FeatureCollection' as const,
-      features: confirmedRouteSegments.slice(0, -1)
-        .filter(segment => segment.coordinates.length >= 2)
-        .map(segment => ({
-          type: 'Feature' as const,
-          geometry: { type: 'LineString' as const, coordinates: segment.coordinates },
-          properties: {},
-        })),
-    };
-  }, [animateConfirmedHead, confirmedRouteSegments, solidGeoJSON]);
   const activityTraceColor = activityVariant === 'run' ? Colors.running : theme.primary;
   const activeTailTimestamp = trackPoints[trackPoints.length - 1]?.t ?? null;
   const animateInitialConfirmedEdge = trackingStatus === 'tracking'
@@ -580,7 +572,12 @@ export function HikingMap({
       screen: telemetryScreenPrefix,
       canonicalVersion: trackPoints.length,
       routePointCount: trackPoints.length,
-      segmentCount: solidGeoJSON.features.length,
+      segmentCount: routePresentation.staticChunks.length + (activeConfirmedSegment ? 1 : 0),
+      geometryBuildCount: routePresentation.geometryBuildCount,
+      sourceUpdateCount: routePresentation.sourceUpdateCount,
+      approximatePayloadBytes: routePresentation.latestUpdatePayloadBytes,
+      cumulativePayloadBytes: routePresentation.cumulativePayloadBytes,
+      routeProjectionRebuilt: routePresentation.rebuilt,
       sequenceTimestamp: Math.floor(traceTailTimestamp),
       sourceAssignmentWallTimestamp: Date.now(),
       tailAgeMs: simulatorEnabled ? 0 : Math.max(0, Date.now() - traceTailTimestamp),
@@ -588,7 +585,7 @@ export function HikingMap({
       clientActivityId: useTrackingStore.getState().sessionId,
       coordinateSource: simulatorEnabled ? 'simulator' : 'real',
     });
-  }, [traceTailTimestamp, trackPoints.length, simulatorEnabled, telemetryScreenPrefix, solidGeoJSON.features.length]);
+  }, [traceTailTimestamp, trackPoints.length, simulatorEnabled, telemetryScreenPrefix, routePresentation, activeConfirmedSegment]);
 
   // Imperative camera ref — used to forcefully snap the camera to the
   // user's position on resume, bypassing the followUserLocation
@@ -958,13 +955,26 @@ export function HikingMap({
             config={buildStandardConfig(mapTheme) as any}
           />
         ) : null}
+        {/* Keep the passive override mounted throughout an Activity so
+            RNMapbox cannot restore its Apple provider during Pause/background.
+            UserLocation and camera consumption remain active-foreground only. */}
+        {activityCustomProviderMounted ? (
+          <CustomLocationProviderComponent
+            coordinate={latestSourceCoordinate
+              ? [latestSourceCoordinate.lng, latestSourceCoordinate.lat]
+              : undefined}
+            heading={latestSourceCoordinate?.course != null && latestSourceCoordinate.course >= 0
+              ? latestSourceCoordinate.course
+              : undefined}
+          />
+        ) : null}
         <CameraComponent
           ref={cameraRef}
           // v118: followUser respects the new toggle state. While true,
           // Mapbox auto-recenters on every GPS fix (original behaviour).
           // While false, the user can pan/zoom freely until they tap the
           // recenter button.
-          followUserLocation={!simulatorEnabled && !instantCamera && followUser}
+          followUserLocation={!instantCamera && followUser && realUserLocationActive}
           followZoomLevel={15}
           followPitch={0}
           animationDuration={instantCamera ? 0 : 600}
@@ -973,9 +983,9 @@ export function HikingMap({
             ? { centerCoordinate: [userPos.lng, userPos.lat], zoomLevel: 15 }
             : undefined}
         />
-        {simulatorEnabled && userPos ? (
+        {(simulatorEnabled || (!realUserLocationActive && trackingStatus === 'paused')) && userPos ? (
           <ShapeSource
-            id="activity-simulator-puck"
+            id={simulatorEnabled ? 'activity-simulator-puck' : 'activity-paused-puck'}
             shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: [userPos.lng, userPos.lat] }, properties: {} } as any}
           >
             <CircleLayer
@@ -987,43 +997,24 @@ export function HikingMap({
               style={{ circleRadius: 7, circleColor: '#1E88E5', circleStrokeWidth: 2, circleStrokeColor: '#ffffff' }}
             />
           </ShapeSource>
-        ) : (
+        ) : realUserLocationActive ? (
           <UserLocationComponent
             visible={true}
             renderMode="normal"
             onUpdate={activitySimulatorBuildCapable ? handleRealUserLocationUpdate : undefined}
           />
-        )}
+        ) : null}
 
-        {/* Track polyline — solid segments (good signal) */}
-        {staticSolidGeoJSON.features.length > 0 && (
-          <ShapeSource id="track-line" shape={staticSolidGeoJSON}>
-            <LineLayer
-              id="track-line-casing"
-              style={{
-                lineColor: theme.surfaceElevated,
-                lineOpacity: 0.86,
-                lineWidth: 8,
-                lineCap: 'round',
-                lineJoin: 'round',
-              }}
-            />
-            <LineLayer
-              id="track-line-layer"
-              style={{
-                // Activity identity is semantic and stable across Mapbox
-                // styles: Hike follows the active CairnNZ forest theme;
-                // Run uses the existing movement-blue token. A restrained
-                // material casing keeps both traces legible over trails,
-                // minor roads, satellite imagery, sunset and night maps.
-                lineColor: activityTraceColor,
-                lineWidth: 4.5,
-                lineCap: 'round',
-                lineJoin: 'round',
-              }}
-            />
-          </ShapeSource>
-        )}
+        {/* Stable chunks never retransmit when only the live head changes. */}
+        {routePresentation.staticChunks.map((chunk, index) => (
+          <StaticConfirmedRoute
+            key={chunk.key}
+            id={`track-body-${index}`}
+            coordinates={chunk.coordinates}
+            lineColor={activityTraceColor}
+            casingColor={theme.surfaceElevated}
+          />
+        ))}
         {animateConfirmedHead && activeConfirmedSegment ? (
           <ContinuousConfirmedRoute
             key={activeConfirmedSegment.key}
@@ -1035,25 +1026,15 @@ export function HikingMap({
             targetTimestamp={activeTailTimestamp}
             telemetryScreen={telemetryScreenPrefix}
           />
+        ) : activeConfirmedSegment ? (
+          <StaticConfirmedRoute
+            key={activeConfirmedSegment.key}
+            id="track-active"
+            coordinates={activeConfirmedSegment.coordinates}
+            lineColor={activityTraceColor}
+            casingColor={theme.surfaceElevated}
+          />
         ) : null}
-
-        {/* v78 #1: Track polyline — dashed gap segments (signal lost > 30s).
-            Muted color + dashed pattern signals "we couldn't track here"
-            without breaking the visual continuity of the path. */}
-        {gapGeoJSON.features.length > 0 && (
-          <ShapeSource id="track-gap-line" shape={gapGeoJSON}>
-            <LineLayer
-              id="track-gap-line-layer"
-              style={{
-                lineColor: Colors.textMuted,
-                lineWidth: 3,
-                lineDasharray: [2, 1.5],
-                lineCap: 'round',
-                lineJoin: 'round',
-              }}
-            />
-          </ShapeSource>
-        )}
 
         {/* Approach line — dashed link from the user's current position
             to the start of a selected route. Only drawn when both

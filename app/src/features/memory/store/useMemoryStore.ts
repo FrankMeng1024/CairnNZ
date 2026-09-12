@@ -235,10 +235,14 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     }
     const newPoint: VisitedPoint = { lat, lng, ts, cid: uuidv4(), synced: false };
     const newPoints = [...points, newPoint];
-    const idx = get()._bucketIndex ? new Map(get()._bucketIndex!) : buildBucketIndex(points);
+    // The bucket index is internal and never a render selector. Mutate this
+    // derived index in place so a new explored increment does not clone every
+    // historical bucket; the public points array remains immutable.
+    const idx = idxRef;
     const k = bucketKey(lat, lng);
-    const arr = idx.get(k) ? [...idx.get(k)!, newPoint] : [newPoint];
-    idx.set(k, arr);
+    const arr = idx.get(k);
+    if (arr) arr.push(newPoint);
+    else idx.set(k, [newPoint]);
     // O1: recentUnlocks push removed — Skia burst overlay 死了不需要 feed
     set({
       points: newPoints,

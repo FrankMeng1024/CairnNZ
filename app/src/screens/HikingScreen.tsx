@@ -188,6 +188,15 @@ export function HikingScreen() {
   const trackPoints = useTrackingStore(s => s.trackPoints);
   const trackPointsSmoothed = useTrackingStore(s => s.trackPointsSmoothed);
   const liveTrackPoints = locationProviderSource === 'real' ? trackPointsSmoothed : trackPoints;
+  const liveMapTrackPoints = useMemo(
+    () => liveTrackPoints.map(point => ({
+      lat: point.lat,
+      lng: point.lng,
+      t: point.t,
+      segmentId: point.segmentId,
+    })),
+    [liveTrackPoints],
+  );
   // Completion still uses canonical truth. The real live line uses only its
   // bounded causal presentation twin (same points/segments/timestamps, ≤6m
   // tail offset); Simulator keeps exact canonical parity.
@@ -780,20 +789,20 @@ export function HikingScreen() {
   const hikeNotices: ActivityNoticePresentation[] = [];
   if (signalLost) {
     hikeNotices.push({
-      label: signalLostMin >= 1 ? `No accepted GPS for ${signalLostMin} min` : 'GPS signal lost',
+      label: signalLostMin >= 1 ? `No location update for ${signalLostMin} min` : 'GPS signal lost',
       tone: 'danger',
       icon: 'CloudOff',
     });
   } else if (canonicalDegraded) {
     hikeNotices.push({
-      label: 'Location is too uncertain to record reliably',
+      label: 'Location signal is too weak to map reliably',
       tone: 'warning',
       icon: 'Navigation',
     });
   }
   if (isTracking && overSpeedActive) {
     hikeNotices.push({
-      label: 'Moving too fast for a hike — route evidence is being checked',
+      label: 'Moving quickly for a hike — your path may be less precise',
       tone: 'warning',
       icon: 'TriangleAlert',
     });
@@ -920,9 +929,7 @@ export function HikingScreen() {
     <HikingMap
       key="hike-map-surface"
       markers={activitySessionVisible ? markers : []}
-      trackPoints={activitySessionVisible
-        ? liveTrackPoints.map(tp => ({ lat: tp.lat, lng: tp.lng, t: tp.t, segmentId: tp.segmentId }))
-        : []}
+      trackPoints={activitySessionVisible ? liveMapTrackPoints : []}
       onMarkerPress={(id) => {
         if (!activitySessionVisible) return;
         setSelectedMarkerId(id);
@@ -1005,7 +1012,7 @@ export function HikingScreen() {
             : hasLocationPermission === false
               ? 'Location permission is needed before recording'
               : hasLocationPermission === true
-                ? 'Location ready · route truth is recorded from accepted GPS'
+                ? 'Location ready · your path will be saved as you move'
                 : 'Checking location readiness'}
           readinessTone={simulatorLocationAuthoritative || hasLocationPermission === true
             ? 'healthy'
@@ -1125,30 +1132,32 @@ export function HikingScreen() {
         gpsLabel={gpsStatusLabel}
         gpsTone={gpsStatusTone}
         onBack={() => nav.goBack()}
-        primaryMetric={{ label: 'ACTIVE TIME', value: durationDisplay }}
+        primaryMetric={{ label: 'DISTANCE', value: distDisplay, unit: dist.unit }}
         secondaryMetrics={[
-          { label: 'DISTANCE', value: distDisplay, unit: dist.unit },
+          { label: 'ACTIVE TIME', value: durationDisplay },
           { label: 'ELEVATION', value: `↑${dist.formatElevation(elevationGainM)}`, unit: dist.elevUnit },
         ]}
         notices={hikeNotices}
       />
 
-      <ActivityControlDock
-        mode="hike"
-        phase={operationalState === 'finishing'
-          ? 'finishing'
-          : status === 'paused' ? 'paused' : 'tracking'}
-        safeBottom={insets.bottom}
-        backgroundWarning={backgroundTrackingWarning}
-        onPauseResume={handlePauseResumeHike}
-        onCairn={() => {
-          haptic.selection();
-          nav.navigate('Plant');
-        }}
-        onFinish={() => { void handleFinishHike(); }}
-      />
+      {!stopSummary ? (
+        <ActivityControlDock
+          mode="hike"
+          phase={operationalState === 'finishing'
+            ? 'finishing'
+            : status === 'paused' ? 'paused' : 'tracking'}
+          safeBottom={insets.bottom}
+          backgroundWarning={backgroundTrackingWarning}
+          onPauseResume={handlePauseResumeHike}
+          onCairn={() => {
+            haptic.selection();
+            nav.navigate('Plant');
+          }}
+          onFinish={() => { void handleFinishHike(); }}
+        />
+      ) : null}
 
-      {!followUser ? (
+      {!stopSummary && !followUser ? (
         <ActivityRecenterButton
           mode="hike"
           safeBottom={insets.bottom}
