@@ -15,6 +15,7 @@
  */
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const router = express.Router();
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
@@ -47,7 +48,7 @@ const VALID_TYPES = new Set(['like', 'report']);
 // Keyed by req.user.userId, NOT IP, so corporate-NAT users don't share a
 // bucket. Skip on idempotent replays so genuine retries aren't penalized.
 function userKey(prefix) {
-  return (req) => `${prefix}:${req.user?.userId || req.ip}`;
+  return (req) => `${prefix}:${req.user?.userId || ipKeyGenerator(req.ip)}`;
 }
 // O1 (2026-07-26): removed skipReplay helper — 逻辑上永远 no-op。
 // idempotency middleware (idempotency.js:67-73) 在 cache hit 时直接

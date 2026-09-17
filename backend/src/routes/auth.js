@@ -60,8 +60,8 @@ const authLimiter = rateLimit({
   //
   // Sprint 6 round-11 R11B5: IPv6-safe keyGenerator via ipKeyGenerator
   // for the IP portion.
-  keyGenerator: (req, res) => {
-    const ip = ipKeyGenerator(req, res);
+  keyGenerator: (req) => {
+    const ip = ipKeyGenerator(req.ip);
     const rawEmail = req.body && typeof req.body.email === 'string' ? req.body.email : '';
     const email = rawEmail.toLowerCase().trim().slice(0, 254);
     return email ? `auth:${ip}:${email}` : `auth:${ip}`;
@@ -74,14 +74,14 @@ const authLimiter = rateLimit({
 const oauthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 60,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => ipKeyGenerator(req, res),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   message: { error: 'Too many requests. Please try again shortly.' },
 });
 
 const resendLimiter = rateLimit({
   windowMs: 60 * 1000, max: 2,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => ipKeyGenerator(req, res),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   message: { error: 'Please wait before requesting another code.' },
 });
 
@@ -93,7 +93,7 @@ const resendLimiter = rateLimit({
 const resetRequestLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 10,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => ipKeyGenerator(req, res),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   handler: async (req, res) => {
     await new Promise(r => setTimeout(r, 250));
     return res.json({ message: 'If an account exists for this email, a code has been sent.' });
@@ -660,7 +660,7 @@ router.get('/me', authenticate, async (req, res) => {
 const refreshLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, max: 30,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => req.user?.userId ? `refresh:${req.user.userId}` : ipKeyGenerator(req, res),
+  keyGenerator: (req) => req.user?.userId ? `refresh:${req.user.userId}` : ipKeyGenerator(req.ip),
   message: { error: 'Too many refresh attempts. Please sign in again.' },
 });
 router.post('/refresh', authenticate, refreshLimiter, async (req, res) => {
@@ -691,7 +691,7 @@ router.post('/refresh', authenticate, refreshLimiter, async (req, res) => {
 const passwordChangeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 10,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => req.user?.userId ? `pwchange:${req.user.userId}` : ipKeyGenerator(req, res),
+  keyGenerator: (req) => req.user?.userId ? `pwchange:${req.user.userId}` : ipKeyGenerator(req.ip),
   // Sprint 6 R89 BUG-3: only count FAILED password changes. Pre-fix,
   // this limiter counted every request incl. successful ones. A legit
   // user (QA rig, kiosk, testflight cycling passwords) could hit 10
@@ -955,7 +955,7 @@ router.post('/password-reset/verify', authLimiter, validateBody(schemas.auth.pas
 const deleteAccountLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000, max: 3,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => req.user?.userId ? `deleteAcct:${req.user.userId}` : ipKeyGenerator(req, res),
+  keyGenerator: (req) => req.user?.userId ? `deleteAcct:${req.user.userId}` : ipKeyGenerator(req.ip),
   message: { error: 'Too many delete-account requests. Please try again tomorrow.' },
 });
 router.delete('/account', authenticate, deleteAccountLimiter, async (req, res) => {

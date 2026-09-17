@@ -12,8 +12,8 @@ test('feedback has a durable acknowledged and idempotent server contract', () =>
   const route = read('src/routes/account.js');
   const migration = read('src/migrations/035_settings_correctness.sql');
   assert.match(route, /router\.post\('\/feedback', authenticate, feedbackLimiter/);
-  assert.ok(route.indexOf('INSERT INTO feedback_messages') < route.indexOf('acknowledged: true'));
-  assert.match(route, /ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID\(id\)/);
+  assert.ok(route.indexOf('INSERT IGNORE INTO feedback_messages') < route.indexOf('acknowledged: true'));
+  assert.match(route, /duplicate = result\.affectedRows === 0/);
   assert.match(migration, /UNIQUE KEY uniq_feedback_user_submission \(user_id, client_submission_id\)/);
   assert.match(migration, /CONSTRAINT fk_feedback_user[\s\S]*ON DELETE CASCADE/);
 });

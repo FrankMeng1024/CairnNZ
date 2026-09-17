@@ -42,7 +42,7 @@ const router = express.Router();
 const pointsLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, max: 120,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => req.user?.userId ? `mempts:${req.user.userId}` : ipKeyGenerator(req, res),
+  keyGenerator: (req) => req.user?.userId ? `mempts:${req.user.userId}` : ipKeyGenerator(req.ip),
   message: { error: 'Too many memory point uploads. Slow down.' },
 });
 
@@ -246,7 +246,7 @@ router.get('/points', authenticate, async (req, res) => {
 const wipeLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000, max: 3,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => req.user?.userId ? `memwipe:${req.user.userId}` : ipKeyGenerator(req, res),
+  keyGenerator: (req) => req.user?.userId ? `memwipe:${req.user.userId}` : ipKeyGenerator(req.ip),
   message: { error: 'Too many memory wipe requests. Please try again tomorrow.' },
 });
 

@@ -40,7 +40,7 @@ router.use(authenticate);
 const hideLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, max: 200,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => req.user?.userId ? `hide:${req.user.userId}` : ipKeyGenerator(req, res),
+  keyGenerator: (req) => req.user?.userId ? `hide:${req.user.userId}` : ipKeyGenerator(req.ip),
   message: { error: 'Too many hide requests. Please slow down.' },
 });
 

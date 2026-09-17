@@ -44,7 +44,7 @@ router.use(authenticate);
 const friendRequestLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, max: 30,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => req.user?.userId ? `frireq:${req.user.userId}` : ipKeyGenerator(req, res),
+  keyGenerator: (req) => req.user?.userId ? `frireq:${req.user.userId}` : ipKeyGenerator(req.ip),
   message: { error: 'Too many friend requests. Please wait an hour.' },
 });
 

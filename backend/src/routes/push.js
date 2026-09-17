@@ -32,7 +32,7 @@ router.use(authenticate);
 const registerLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 20,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => req.user?.userId ? `pushreg:${req.user.userId}` : ipKeyGenerator(req, res),
+  keyGenerator: (req) => req.user?.userId ? `pushreg:${req.user.userId}` : ipKeyGenerator(req.ip),
   message: { error: 'Too many token registrations. Please try again later.' },
 });
 

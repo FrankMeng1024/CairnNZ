@@ -36,7 +36,7 @@ const downloadLimiter = rateLimit({
   standardHeaders: true, legacyHeaders: false,
   // Sprint 6 round-11 R11B5: /export/:token is unauthenticated, so IP-
   // keyed. IPv6-safe via ipKeyGenerator helper (avoids v7+ ERR_ERL_KEY_GEN_IPV6).
-  keyGenerator: (req, res) => ipKeyGenerator(req, res),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   message: 'Too many download attempts. Please wait a minute.',
 });
 
@@ -50,14 +50,14 @@ const downloadLimiter = rateLimit({
 const exportRequestLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, max: 5,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => req.user?.userId ? `export:${req.user.userId}` : ipKeyGenerator(req, res),
+  keyGenerator: (req) => req.user?.userId ? `export:${req.user.userId}` : ipKeyGenerator(req.ip),
   message: { error: 'Too many export requests. Please wait an hour.' },
 });
 
 const feedbackLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, max: 12,
   standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req, res) => req.user?.userId ? `feedback:${req.user.userId}` : ipKeyGenerator(req, res),
+  keyGenerator: (req) => req.user?.userId ? `feedback:${req.user.userId}` : ipKeyGenerator(req.ip),
   message: { error: 'Too many feedback attempts. Please try again later.' },
 });
 
@@ -79,13 +79,12 @@ router.post('/feedback', authenticate, feedbackLimiter, async (req, res) => {
 
   try {
     const [result] = await pool.execute(
-      `INSERT INTO feedback_messages
+      `INSERT IGNORE INTO feedback_messages
          (user_id, client_submission_id, kind, message, app_version)
-       VALUES (?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+       VALUES (?, ?, ?, ?, ?)`,
       [req.user.userId, submissionId, kind, message, appVersion || null],
     );
-    const duplicate = result.affectedRows !== 1;
+    const duplicate = result.affectedRows === 0;
     return res.status(200).json({
       acknowledged: true,
       submission_id: submissionId,
