@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
 
@@ -34,8 +35,8 @@ async function api(actor, path, { method = 'GET', body, expected } = {}) {
   return { status: response.status, body: payload, headers: response.headers };
 }
 
-function tokenFor(id, label) {
-  return jwt.sign({ userId: String(id), token_version: 0, jti: `pf-${label}-${crypto.randomUUID()}` }, jwtSecret, { expiresIn: '2h' });
+function tokenFor(id, label, tokenVersion = 0) {
+  return jwt.sign({ userId: String(id), token_version: tokenVersion, jti: `pf-${label}-${crypto.randomUUID()}` }, jwtSecret, { expiresIn: '2h' });
 }
 
 async function becomeFriends(requester, recipient) {
@@ -302,6 +303,59 @@ async function main() {
     const rawFog = await api(actors.D, '/api/circle/fog', { expected: 410 });
     assert.equal(rawFog.body.code, 'FRIEND_MEMORY_PROJECTION_REQUIRED');
     pass('SAFE-02/FR-13.legacy-containment', 'historical Public row remains stored while Public discovery and legacy raw fog fail closed');
+
+    const feedbackId = crypto.randomUUID();
+    const feedbackFirst = await api(actors.D, '/api/account/feedback', {
+      method: 'POST',
+      body: { client_submission_id: feedbackId, kind: 'feedback', message: 'Synthetic review acknowledgement', app_version: 'review' },
+      expected: 200,
+    });
+    const feedbackRetry = await api(actors.D, '/api/account/feedback', {
+      method: 'POST',
+      body: { client_submission_id: feedbackId, kind: 'feedback', message: 'Synthetic review acknowledgement', app_version: 'review' },
+      expected: 200,
+    });
+    assert.equal(feedbackFirst.body.acknowledged, true);
+    assert.equal(feedbackFirst.body.duplicate, false);
+    assert.equal(feedbackRetry.body.duplicate, true);
+    const [[feedbackCount]] = await admin.execute(
+      'SELECT COUNT(*) AS n FROM feedback_messages WHERE user_id=? AND client_submission_id=?',
+      [actors.D.id, feedbackId],
+    );
+    assert.equal(Number(feedbackCount.n), 1);
+
+    await api(actors.D, '/api/account/export', { method: 'POST', body: {}, expected: 200 });
+    let exportHistory = [];
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const response = await api(actors.D, '/api/account/exports', { expected: 200 });
+      exportHistory = response.body;
+      if (exportHistory[0]?.status === 'ready') break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.equal(exportHistory[0]?.status, 'ready');
+    assert.match(exportHistory[0]?.download_url || '', /^https:\/\/api\.yiiling\.cn\/pf-review-o60\//);
+    const [[exportRow]] = await admin.execute(
+      'SELECT status,file_path,expires_at FROM data_exports WHERE user_id=? ORDER BY id DESC LIMIT 1',
+      [actors.D.id],
+    );
+    assert.equal(exportRow.status, 'ready');
+    assert.equal(fs.existsSync(exportRow.file_path), true);
+
+    const deletion = await api(actors.D, '/api/auth/account', { method: 'DELETE', expected: 200 });
+    const graceMs = new Date(deletion.body.restore_deadline).getTime() - new Date(deletion.body.deleted_at).getTime();
+    assert.equal(graceMs, 7 * 24 * 60 * 60 * 1000);
+    await api(actors.D, '/api/friends', { expected: 401 });
+    const [[deletedActor]] = await admin.execute('SELECT token_version,deleted_at FROM users WHERE id=?', [actors.D.id]);
+    assert.ok(deletedActor.deleted_at);
+    const restoreActor = {
+      ...actors.D,
+      token: tokenFor(actors.D.id, 'D-restore', Number(deletedActor.token_version)),
+    };
+    const restored = await api(restoreActor, '/api/auth/account/restore', { method: 'POST', body: {}, expected: 200 });
+    assert.equal(restored.body.user.id, actors.D.id);
+    const [[restoredActor]] = await admin.execute('SELECT deleted_at FROM users WHERE id=?', [actors.D.id]);
+    assert.equal(restoredActor.deleted_at, null);
+    pass('SET-01.release-alignment', 'synthetic feedback is durable/idempotent, export becomes ready with 24h authority, and deletion/restore uses exactly seven days');
 
     const [grantAudit] = await Promise.all([
       actorConnections.A.execute("SELECT COUNT(*) AS n FROM memory_share_grants WHERE status='active'"),
