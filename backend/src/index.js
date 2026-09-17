@@ -263,7 +263,7 @@ async function start() {
         console.error('[cron/scheduler] authSweep failed:', err.message);
       });
     }, { timezone: 'UTC' });
-    console.log('✓ Cron registered: authSweep (* * * * * UTC — TEST-MODE, revert before launch)');
+    console.log('✓ Cron registered: authSweep (* * * * * UTC — seven-day deletion grace)');
 
     // O18 batch 6.5: push drain every minute + daily purge at 03:30 UTC.
     // Drain is aggressive so notifications feel real-time; if transport

@@ -41,6 +41,8 @@ test('account deletion uses a deliberate seven-day grace and revokes every sessi
   assert.match(route, /const RESTORE_GRACE_MS = 7 \* 24 \* 60 \* 60 \* 1000/);
   assert.match(model, /const ACCOUNT_DELETION_GRACE_MINUTES = 7 \* 24 \* 60/);
   assert.match(sweep, /graceMinutes = 7 \* 24 \* 60/);
+  assert.match(sweep, /const BATCH = 10000/);
+  assert.doesNotMatch(sweep, /DELETE FROM friend_requests[\s\S]{0,260}LIMIT \?/);
   const deletion = route.slice(route.indexOf("router.delete('/account'"), route.indexOf("router.post('/account/restore'"));
   assert.ok(deletion.indexOf('User.scheduleDeletion(user.id)') < deletion.indexOf('return res.json'));
   const schedule = model.slice(model.indexOf('async function scheduleDeletion'), model.indexOf('async function restoreDeleted'));

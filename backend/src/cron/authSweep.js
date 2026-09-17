@@ -117,8 +117,7 @@ async function run({ verbose = false, graceMinutes = 7 * 24 * 60 } = {}) {
          WHERE status IN ('rejected','accepted')
            AND resolved_at IS NOT NULL
            AND resolved_at < DATE_SUB(NOW(), INTERVAL 90 DAY)
-         LIMIT ?`,
-        [BATCH],
+         LIMIT ${BATCH}`,
       );
       friendReqsPurged += r.affectedRows || 0;
       if ((r.affectedRows || 0) < BATCH) break;
@@ -130,8 +129,7 @@ async function run({ verbose = false, graceMinutes = 7 * 24 * 60 } = {}) {
         `DELETE FROM friend_requests
          WHERE status = 'pending'
            AND created_at < DATE_SUB(NOW(), INTERVAL 180 DAY)
-         LIMIT ?`,
-        [BATCH],
+         LIMIT ${BATCH}`,
       );
       friendReqsPurged += r.affectedRows || 0;
       if ((r.affectedRows || 0) < BATCH) break;
