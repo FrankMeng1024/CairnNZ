@@ -70,4 +70,8 @@ test('friendship active uniqueness does not derive a generated column from casca
   assert.match(migration, /active_pair_slot TINYINT[\s\S]*CASE WHEN ended_at IS NULL THEN 1 ELSE NULL END/);
   assert.match(migration, /uk_friendship_active_pair \(user_low_id, user_high_id, active_pair_slot\)/);
   assert.doesNotMatch(migration, /GENERATED[\s\S]{0,160}CONCAT\(user_low_id/);
+  assert.match(
+    migration,
+    /source_activity_client_id CHAR\(36\) CHARACTER SET utf8mb4\s+COLLATE utf8mb4_unicode_ci/,
+  );
 });

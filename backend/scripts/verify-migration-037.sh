@@ -27,6 +27,8 @@ for column in evidence_source source_activity_client_id horizontal_accuracy_m co
   require_one "memory_points.$column" "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='memory_points' AND column_name='$column'"
 done
 
+require_one "source Activity identity collation" "SELECT COUNT(*) FROM information_schema.columns mp JOIN information_schema.columns s ON s.table_schema=mp.table_schema AND s.table_name='sessions' AND s.column_name='client_activity_id' AND s.collation_name=mp.collation_name WHERE mp.table_schema=DATABASE() AND mp.table_name='memory_points' AND mp.column_name='source_activity_client_id'"
+
 for table in friendship_episodes memory_share_policies memory_share_grants memory_private_places marker_audience_epochs route_audience_epochs friend_cairn_encounters shared_route_leases; do
   require_one "$table table" "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='$table' AND engine='InnoDB'"
 done

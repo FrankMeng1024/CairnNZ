@@ -5,7 +5,12 @@
 ALTER TABLE memory_points
   ADD COLUMN evidence_source ENUM('historical_unknown','activity_real','passive_real')
     NOT NULL DEFAULT 'historical_unknown' AFTER client_id,
-  ADD COLUMN source_activity_client_id CHAR(36) NULL AFTER evidence_source,
+  -- sessions.client_activity_id is explicitly utf8mb4_unicode_ci in the
+  -- deployed schema, while memory_points defaults to utf8mb4_0900_ai_ci.
+  -- Match the authoritative Activity identity column so equality joins do
+  -- not fail with an illegal collation mix.
+  ADD COLUMN source_activity_client_id CHAR(36) CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci NULL AFTER evidence_source,
   ADD COLUMN horizontal_accuracy_m DECIMAL(7,2) NULL AFTER source_activity_client_id,
   ADD COLUMN continuity_state ENUM('accepted','gap','unknown')
     NOT NULL DEFAULT 'unknown' AFTER horizontal_accuracy_m,
