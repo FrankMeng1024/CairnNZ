@@ -31,9 +31,9 @@ for table in friendship_episodes memory_share_policies memory_share_grants memor
   require_one "$table table" "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='$table' AND engine='InnoDB'"
 done
 
-require_one "memory evidence index" "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='memory_points' AND index_name='idx_memory_share_evidence'"
-require_one "active friendship uniqueness" "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='friendship_episodes' AND index_name='uk_friendship_active_pair' AND non_unique=0"
-require_one "active grant uniqueness" "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='memory_share_grants' AND index_name='uk_memory_grant_active' AND non_unique=0"
+require_one "memory evidence index" "SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='memory_points' AND index_name='idx_memory_share_evidence'"
+require_one "active friendship uniqueness" "SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='friendship_episodes' AND index_name='uk_friendship_active_pair' AND non_unique=0"
+require_one "active grant uniqueness" "SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='memory_share_grants' AND index_name='uk_memory_grant_active' AND non_unique=0"
 
 require_one "marker audience backfill" "SELECT CASE WHEN COUNT(*)=0 THEN 1 ELSE 0 END FROM markers m LEFT JOIN marker_audience_epochs a ON a.marker_id=m.id AND a.audience_epoch=m.audience_epoch WHERE a.marker_id IS NULL"
 require_one "route audience backfill" "SELECT CASE WHEN COUNT(*)=0 THEN 1 ELSE 0 END FROM routes r LEFT JOIN route_audience_epochs a ON a.route_id=r.id AND a.audience_epoch=r.audience_epoch WHERE a.route_id IS NULL"
