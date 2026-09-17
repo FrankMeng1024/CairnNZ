@@ -300,7 +300,7 @@ async function main() {
     );
     assert.equal(Number(publicCount.n), 1);
     const rawFog = await api(actors.D, '/api/circle/fog', { expected: 410 });
-    assert.equal(rawFog.body.code, 'FRIEND_PROJECTION_REQUIRED');
+    assert.equal(rawFog.body.code, 'FRIEND_MEMORY_PROJECTION_REQUIRED');
     pass('SAFE-02/FR-13.legacy-containment', 'historical Public row remains stored while Public discovery and legacy raw fog fail closed');
 
     const [grantAudit] = await Promise.all([
