@@ -118,10 +118,17 @@ async function main() {
     assert.equal(schemaRows.length, 4);
     pass('DEP-01.schema', '035/036/037 applied on MySQL 8 and core 037 tables exist');
 
-    await admin.execute(
+    const [historicalPublicMarker] = await admin.execute(
       `INSERT INTO markers (user_id,type,text,lat,lng,permission,created_at,updated_at)
        VALUES (?, 'cairn', 'historical public sentinel', -41.28, 174.77, 'public', UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`,
       [actors.A.id],
+    );
+    await admin.execute(
+      `INSERT INTO marker_audience_epochs
+         (marker_id,owner_id,audience_epoch,visibility,starts_at)
+       SELECT id,user_id,audience_epoch,'personal',audience_changed_at
+         FROM markers WHERE id=?`,
+      [historicalPublicMarker.insertId],
     );
     const historicTs = Date.now() - 30 * 24 * 60 * 60 * 1000;
     await admin.execute(
@@ -287,7 +294,10 @@ async function main() {
 
     const publicDiscovery = await api(actors.D, '/api/markers/public?bbox=-42,173,-40,176', { expected: 410 });
     assert.equal(publicDiscovery.body.code, 'PUBLIC_DISCOVERY_DEFERRED');
-    const [[publicCount]] = await admin.execute("SELECT COUNT(*) AS n FROM markers WHERE permission='public'");
+    const [[publicCount]] = await admin.execute(
+      "SELECT COUNT(*) AS n FROM markers WHERE id=? AND user_id=? AND permission='public'",
+      [historicalPublicMarker.insertId, actors.A.id],
+    );
     assert.equal(Number(publicCount.n), 1);
     const rawFog = await api(actors.D, '/api/circle/fog', { expected: 410 });
     assert.equal(rawFog.body.code, 'FRIEND_PROJECTION_REQUIRED');
