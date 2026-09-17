@@ -32,12 +32,14 @@ CREATE TABLE friendship_episodes (
   started_at DATETIME(3) NOT NULL,
   ended_at DATETIME(3) NULL,
   ended_reason ENUM('unfriended','blocked','account_deleted') NULL,
-  active_pair_key VARCHAR(64)
-    GENERATED ALWAYS AS (
-      CASE WHEN ended_at IS NULL THEN CONCAT(user_low_id, ':', user_high_id) ELSE NULL END
-    ) STORED,
+  -- Keep the generated expression independent of the two FK columns.
+  -- MySQL rejects cascading FKs when their child columns are inputs to a
+  -- stored generated column (ERROR 1215). A nullable active slot provides
+  -- the same single-active-episode invariant in a composite unique key.
+  active_pair_slot TINYINT
+    GENERATED ALWAYS AS (CASE WHEN ended_at IS NULL THEN 1 ELSE NULL END) STORED,
   UNIQUE KEY uk_friendship_episode_id (episode_id),
-  UNIQUE KEY uk_friendship_active_pair (active_pair_key),
+  UNIQUE KEY uk_friendship_active_pair (user_low_id, user_high_id, active_pair_slot),
   INDEX idx_friendship_episode_users (user_low_id, user_high_id, started_at),
   CONSTRAINT fk_friendship_episode_low FOREIGN KEY (user_low_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_friendship_episode_high FOREIGN KEY (user_high_id) REFERENCES users(id) ON DELETE CASCADE,

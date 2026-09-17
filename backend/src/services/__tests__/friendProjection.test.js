@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   CELL_SIZE_M,
@@ -58,4 +60,14 @@ test('server projection excludes whole endpoint/private cells and emits no sourc
   assert.match(calls[0].sql, /evidence_source = 'activity_real'/);
   assert.match(calls[0].sql, /finalized_at IS NOT NULL/);
   assert.match(calls[0].sql, /horizontal_accuracy_m <= 50/);
+});
+
+test('friendship active uniqueness does not derive a generated column from cascading FK inputs', () => {
+  const migration = fs.readFileSync(
+    path.resolve(__dirname, '../../migrations/037_personal_friends_v1.sql'),
+    'utf8',
+  );
+  assert.match(migration, /active_pair_slot TINYINT[\s\S]*CASE WHEN ended_at IS NULL THEN 1 ELSE NULL END/);
+  assert.match(migration, /uk_friendship_active_pair \(user_low_id, user_high_id, active_pair_slot\)/);
+  assert.doesNotMatch(migration, /GENERATED[\s\S]{0,160}CONCAT\(user_low_id/);
 });
