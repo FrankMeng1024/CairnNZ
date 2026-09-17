@@ -30,6 +30,8 @@ test('export exposes request, recovery, ready download and expiry from readiness
   assert.ok(worker.indexOf("status='ready'") < worker.indexOf('await sendDataExportReady'));
   assert.match(model, /bundle\.feedback = feedback/);
   assert.match(model, /bundle\.unlockedRegions = unlockedRegions/);
+  assert.match(model, /first_unlocked_at,[\s\S]*last_visit_ts[\s\S]*ORDER BY last_visit_ts DESC/);
+  assert.doesNotMatch(model, /SELECT region_id, unlocked_at/);
 });
 
 test('account deletion uses a deliberate seven-day grace and revokes every session', () => {

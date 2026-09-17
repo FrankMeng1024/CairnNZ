@@ -275,9 +275,10 @@ async function buildBundle(userId) {
   bundle.feedback = feedback;
 
   const [unlockedRegions] = await pool.execute(
-    `SELECT region_id, unlocked_at
+    `SELECT region_id, region_level, parent_id, first_unlocked_at,
+            last_visit_ts, point_count, regions_version
        FROM unlocked_regions
-      WHERE user_id = ? ORDER BY unlocked_at DESC LIMIT ${CAP_REGIONS + 1}`,
+      WHERE user_id = ? ORDER BY last_visit_ts DESC LIMIT ${CAP_REGIONS + 1}`,
     [userId],
   );
   bundle.unlockedRegions = unlockedRegions;
