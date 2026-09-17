@@ -87,14 +87,16 @@ async function main() {
   const admin = await mysql.createConnection(dbConfig);
   const actorConnections = {};
   try {
-    const emails = ['a', 'b', 'c', 'd'].map(label => `pf-${label}-${process.env.HARNESS_RUN_ID}@example.invalid`);
+    // example.org is IANA-reserved for documentation/testing and also passes
+    // the production email validator; `.invalid` is correctly rejected by it.
+    const emails = ['a', 'b', 'c', 'd'].map(label => `pf-${label}-${process.env.HARNESS_RUN_ID}@example.org`);
     for (let index = 0; index < 4; index += 1) {
       const label = String.fromCharCode(65 + index);
       const [result] = await admin.execute(
         'INSERT INTO users (name,email,password_hash,date_of_birth) VALUES (?,?,?,?)',
         [`Actor ${label}`, emails[index], 'synthetic-no-login', '1990-01-01'],
       );
-      evidence.actors[label] = { id: String(result.insertId), email_domain: 'example.invalid' };
+      evidence.actors[label] = { id: String(result.insertId), email_domain: 'example.org' };
     }
     const actors = Object.fromEntries(Object.entries(evidence.actors).map(([label, actor]) => [label, {
       label, id: actor.id, email: emails[label.charCodeAt(0) - 65], token: tokenFor(actor.id, label),
