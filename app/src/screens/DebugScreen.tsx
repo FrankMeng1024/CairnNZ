@@ -1,7 +1,8 @@
 /**
  * DebugScreen — list of debug sessions + telemetry controls.
  *
- * Visible only when Settings → debugMode === true (5-tap on Version text).
+ * Available only from an internal simulator-capable or development build.
+ * This screen owns QA authorization; normal Settings never exposes it.
  *
  * Features:
  *   - List most recent 10 sessions: time / duration / events / upload status
@@ -32,6 +33,9 @@ import {
   ALMOST_DONE_CLONE_V1_ROUTE,
 } from '../features/activity/almostDoneCloneV1';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
+import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
+import { resolveSimulatorContinuityLock } from '../features/activitySimulator/simulatorContinuity';
+import { useTrackingStore } from '../store/useTrackingStore';
 
 export function DebugScreen() {
   const nav = useNavigation();
@@ -62,6 +66,19 @@ export function DebugScreen() {
       sunriseMs: scenicTime.sunriseMs,
       sunsetMs: scenicTime.sunsetMs,
     });
+  const qaToolsAvailable = activitySimulatorBuildCapable || (typeof __DEV__ !== 'undefined' && __DEV__);
+  const activitySimulatorEnabled = useActivitySimulatorStore(state => state.enabled);
+  const setActivitySimulatorEnabled = useActivitySimulatorStore(state => state.setEnabled);
+  const simulatorBoundActivityId = useActivitySimulatorStore(state => state.boundActivityClientId);
+  const trackingStatus = useTrackingStore(state => state.status);
+  const trackingSessionId = useTrackingStore(state => state.sessionId);
+  const trackingProviderSource = useTrackingStore(state => state.locationProviderSource);
+  const simulatorContinuity = resolveSimulatorContinuityLock({
+    boundActivityClientId: simulatorBoundActivityId,
+    trackingStatus,
+    trackingSessionId,
+    providerSource: trackingProviderSource,
+  });
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -173,6 +190,21 @@ export function DebugScreen() {
     refresh();
   }
 
+  // Keep the hook order invariant even in a production build where this
+  // route should be unreachable. This is a defense-in-depth screen guard.
+  if (!qaToolsAvailable) {
+    return (
+      <View style={styles.container} testID="debug-unavailable">
+        <SafeAreaView style={{ flex: 1 }}>
+          <View style={styles.topBar}>
+            <BackButton onPress={() => nav.goBack()} />
+            <Text style={styles.title}>Debug unavailable</Text>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -186,6 +218,13 @@ export function DebugScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionHeader}>STATUS</Text>
             <View style={styles.statusBox}>
+              <Row label="Enable QA tools">
+                <Switch
+                  testID="debug-mode-toggle"
+                  value={debugMode}
+                  onValueChange={(value) => updateSetting('debugMode', value)}
+                />
+              </Row>
               <Text style={styles.statusLine}>
                 Debug mode: {debugMode ? 'ON' : 'OFF'}
               </Text>
@@ -205,9 +244,30 @@ export function DebugScreen() {
                 Dropped events (overflow): {debugLogger.getDroppedEventsCount()}
               </Text>
             </View>
-          </View>
+            </View>
 
-          <View style={styles.section} testID="scenic-time-diagnostics">
+            {activitySimulatorBuildCapable ? (
+              <View style={styles.section} testID="activity-simulator-owner">
+                <Text style={styles.sectionHeader}>ACTIVITY SIMULATOR</Text>
+                <Row label="Activity Simulator">
+                  <Switch
+                    testID="activity-simulator-toggle"
+                    value={activitySimulatorEnabled}
+                    disabled={!debugMode || simulatorContinuity.locked}
+                    onValueChange={setActivitySimulatorEnabled}
+                  />
+                </Row>
+                <Text style={styles.fieldHint}>
+                  {!debugMode
+                    ? 'Enable QA tools first.'
+                    : simulatorContinuity.locked
+                      ? simulatorContinuity.reason
+                      : 'Uses the explicit Clean Path or Raw GPS test source in Hike and Run.'}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.section} testID="scenic-time-diagnostics">
             <Text style={styles.sectionHeader}>SCENIC TIME</Text>
             <View style={styles.statusBox}>
               <Text style={styles.statusLine}>Appearance setting: {settings.appearance}</Text>

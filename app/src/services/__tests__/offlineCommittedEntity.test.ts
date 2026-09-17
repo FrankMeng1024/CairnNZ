@@ -136,4 +136,75 @@ describe('committed user entity outbox', () => {
       syncState: 'pending',
     });
   });
+
+  test('later enrichment rewrites the durable pending payload, not only UI state', async () => {
+    const network = new Promise<never>(() => {});
+    const entity = createOfflineEntity<{ title: string }, never>({
+      kind: 'test-pending-enrichment',
+      storageKey: '@test:pending-enrichment',
+      retainOnPermanentFailure: true,
+      syncToServer: async () => network,
+    });
+    const local = await entity.saveLocal({ title: '' });
+    expect(await entity.updateLocal(local.localId, data => ({ ...data, title: 'Ridge wind' }))).toBe(true);
+    expect((await entity.getEntry(local.localId))?.data.title).toBe('Ridge wind');
+  });
+
+  test('an accepted edit during an in-flight create survives the older acknowledgement', async () => {
+    let acceptFirst!: (value: { id: number }) => void;
+    let markStarted!: () => void;
+    const first = new Promise<{ id: number }>(resolve => { acceptFirst = resolve; });
+    const started = new Promise<void>(resolve => { markStarted = resolve; });
+    const sent: string[] = [];
+    const entity = createOfflineEntity<{ note: string }, { id: number }>({
+      kind: 'test-inflight-enrichment',
+      storageKey: '@test:inflight-enrichment',
+      retainOnPermanentFailure: true,
+      syncToServer: async data => {
+        sent.push(data.note);
+        if (sent.length === 1) {
+          markStarted();
+          return first;
+        }
+        return { id: 31 };
+      },
+    });
+    const local = await entity.saveLocal({ note: 'first words' });
+    const firstDrain = entity.drain();
+    await started;
+    await entity.updateLocal(local.localId, data => ({ ...data, note: 'newer words' }));
+    acceptFirst({ id: 31 });
+    await firstDrain;
+
+    expect(await entity.getEntry(local.localId)).toMatchObject({
+      data: { note: 'newer words' },
+      syncState: 'pending',
+      revision: 1,
+    });
+    await entity.drain();
+    expect(sent).toEqual(['first words', 'newer words']);
+    expect(await entity.getEntry(local.localId)).toBeNull();
+  });
+
+  test('manual retry clears a permanent-failure backoff without deleting the row', async () => {
+    let attempts = 0;
+    const entity = createOfflineEntity<{ value: string }, never>({
+      kind: 'test-explicit-retry',
+      storageKey: '@test:explicit-retry',
+      retainOnPermanentFailure: true,
+      syncToServer: async () => {
+        attempts += 1;
+        const error: any = new Error('rejected');
+        error.status = 400;
+        throw error;
+      },
+    });
+    const local = await entity.saveLocal({ value: 'keep' });
+    await entity.drain();
+    expect(await entity.getEntry(local.localId)).toMatchObject({ syncState: 'failed', attempts: 1 });
+    expect(await entity.retry(local.localId)).toBe(true);
+    await entity.drain();
+    expect(attempts).toBe(2);
+    expect(await entity.getEntry(local.localId)).toMatchObject({ syncState: 'failed', attempts: 1 });
+  });
 });

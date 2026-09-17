@@ -33,6 +33,7 @@ import {
 
 export type FinalRouteState =
   | 'NETWORK_CONFIDENT'
+  | 'NETWORK_WEAK_SAME_CORRIDOR'
   | 'NETWORK_AMBIGUOUS'
   | 'FREE_TRAVERSAL'
   | 'OFF_NETWORK_PATH';
@@ -41,6 +42,7 @@ export type PedestrianGeometryMode =
   | 'A_PEDESTRIAN_NETWORK'
   | 'B_ROAD_OFFSET'
   | 'C_CANONICAL_DERIVED'
+  | 'D_WEAK_SAME_CORRIDOR'
   | 'FREE_TRAVERSAL';
 
 export interface LateralOffsetEvidence {
@@ -72,6 +74,9 @@ export interface CorridorEvidence {
   overlappingWindowAgreementCount: number;
   acceptedByBaseGate: boolean;
   acceptedByCoherentOverrun: boolean;
+  /** Corridor identity can be strong even when exact sidewalk side is not. */
+  acceptedAsWeakSameCorridor: boolean;
+  corridorIdentityScore: number;
   accepted: boolean;
   reason: string;
   lateral: LateralOffsetEvidence;
@@ -118,7 +123,7 @@ export interface PedestrianFinalRequestResult {
 }
 
 export interface PedestrianFinalStats {
-  algorithmVersion: 'pedestrian-final-v1';
+  algorithmVersion: 'pedestrian-final-v2-base';
   canonicalPointCount: number;
   resampledPointCount: number;
   mapMatchingRequestCount: number;
@@ -130,6 +135,7 @@ export interface PedestrianFinalStats {
   freeTraversalSectionCount: number;
   roadOffsetSectionCount: number;
   pedestrianNetworkSectionCount: number;
+  weakSameCorridorSectionCount: number;
   rejectedNetworkCandidateCount: number;
   displayRefined: boolean;
   acceptedMatchedDistanceM: number;
@@ -151,6 +157,22 @@ export interface PedestrianFinalStats {
   preFallbackWholeRouteValidation: WholeRouteValidation;
   wholeRouteValidation: WholeRouteValidation;
   finalGeometryFingerprint: string | null;
+  baseFinalDiagnostics: BaseFinalDiagnostics;
+}
+
+export interface BaseFinalDiagnostics {
+  inputPointCount: number;
+  collapsedPointCount: number;
+  outputPointCount: number;
+  effectiveUncertaintyM: number;
+  simplificationToleranceM: number;
+  corridorClass: 'simple' | 'complex';
+  protectedTurnCount: number;
+  geometricTurnCount: number;
+  pauseBoundaryCount: number;
+  stationaryCloudCollapsed: boolean;
+  removedMicroExcursionCount: number;
+  maximumRemovedExcursionDepthM: number;
 }
 
 export interface PedestrianFinalOptions {
@@ -182,7 +204,7 @@ interface NetworkCandidate {
   points: SnappedPoint[];
   networkPoints: SnappedPoint[];
   source: 'map-matching' | 'walking-directions';
-  state: 'NETWORK_CONFIDENT' | 'NETWORK_AMBIGUOUS';
+  state: 'NETWORK_CONFIDENT' | 'NETWORK_WEAK_SAME_CORRIDOR' | 'NETWORK_AMBIGUOUS';
   mode: PedestrianGeometryMode;
   reason: string;
   confidence: number;
@@ -262,6 +284,10 @@ function bearingDegrees(
 function angleDeltaDegrees(left: number, right: number): number {
   const delta = Math.abs(left - right) % 360;
   return delta > 180 ? 360 - delta : delta;
+}
+
+function signedAngleDeltaDegrees(left: number, right: number): number {
+  return ((right - left + 540) % 360) - 180;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -454,30 +480,62 @@ function meaningfulNeighbour(points: RawPoint[], origin: number, direction: 1 | 
   return null;
 }
 
-export function finalGeometryCriticalIndices(points: RawPoint[]): number[] {
+function finalGeometryStructuralTurnIndices(points: RawPoint[]): number[] {
   if (points.length === 0) return [];
   const critical = new Set<number>([0, points.length - 1]);
   for (let index = 1; index < points.length - 1; index += 1) {
-    const previous = meaningfulNeighbour(points, index, -1, 10);
-    const next = meaningfulNeighbour(points, index, 1, 10);
-    if (previous != null && next != null) {
+    // A turn is structural when it is visible at more than one walking
+    // scale. A single noisy five-metre heading is not enough to freeze GPS
+    // wiggle into Final, while a genuine corner or mountain switchback is
+    // normally still present at ten and twenty-two metres.
+    const scales = [
+      { metres: 5, threshold: 125 },
+      { metres: 10, threshold: 72 },
+      { metres: 22, threshold: 52 },
+    ];
+    const scaleMatches: number[] = [];
+    let strongestTurn = 0;
+    for (const scale of scales) {
+      const previous = meaningfulNeighbour(points, index, -1, scale.metres);
+      const next = meaningfulNeighbour(points, index, 1, scale.metres);
+      if (previous == null || next == null) continue;
       const turn = angleDeltaDegrees(
         bearingDegrees(points[previous], points[index]),
         bearingDegrees(points[index], points[next]),
       );
-      if (turn >= 65) {
-        critical.add(index);
-      }
+      strongestTurn = Math.max(strongestTurn, turn);
+      if (turn >= scale.threshold) scaleMatches.push(scale.metres);
     }
-    const reversalPrevious = meaningfulNeighbour(points, index, -1, 5);
-    const reversalNext = meaningfulNeighbour(points, index, 1, 5);
-    if (reversalPrevious != null && reversalNext != null) {
-      const reversal = angleDeltaDegrees(
-        bearingDegrees(points[reversalPrevious], points[index]),
-        bearingDegrees(points[index], points[reversalNext]),
-      );
-      if (reversal >= 135) critical.add(index);
-    }
+    const incomingEdgeM = hav(points[index - 1], points[index]);
+    const outgoingEdgeM = hav(points[index], points[index + 1]);
+    const localTurn = angleDeltaDegrees(
+      bearingDegrees(points[index - 1], points[index]),
+      bearingDegrees(points[index], points[index + 1]),
+    );
+    const localAccuracyM = Math.max(
+      3,
+      Number(points[index - 1].accuracy) || 0,
+      Number(points[index].accuracy) || 0,
+      Number(points[index + 1].accuracy) || 0,
+    );
+    const evidenceSizedLocalTurn = incomingEdgeM >= Math.max(14, localAccuracyM)
+      && outgoingEdgeM >= Math.max(14, localAccuracyM)
+      && localTurn >= 70;
+    // A real corner remains visible at corridor scale. Requiring the 22 m
+    // view prevents a 1–5 m alternating GPS wobble from being promoted just
+    // because it looks sharp at two tiny neighbourhoods. Near-reversals stay
+    // protected even on a short out-and-back where 22 m is unavailable.
+    if (
+      evidenceSizedLocalTurn
+      || (scaleMatches.includes(22) && scaleMatches.length >= 2)
+    ) critical.add(index);
+  }
+  return Array.from(critical).sort((a, b) => a - b);
+}
+
+export function finalGeometryCriticalIndices(points: RawPoint[]): number[] {
+  const critical = new Set<number>(finalGeometryStructuralTurnIndices(points));
+  for (let index = 1; index < points.length - 1; index += 1) {
     const incomingDt = points[index].t != null && points[index - 1].t != null
       ? Number(points[index].t) - Number(points[index - 1].t)
       : 0;
@@ -491,31 +549,246 @@ export function finalGeometryCriticalIndices(points: RawPoint[]): number[] {
   return Array.from(critical).sort((a, b) => a - b);
 }
 
+function isStationaryCloud(points: RawPoint[], uncertaintyM: number): boolean {
+  if (points.length < 5) return false;
+  const origin = points[0];
+  const radiusM = Math.max(...points.map(point => hav(origin, point)));
+  const directM = hav(points[0], points[points.length - 1]);
+  const travelledM = pathLength(points);
+  return radiusM <= Math.max(6, uncertaintyM * 0.9)
+    && directM <= Math.max(4, uncertaintyM * 0.4)
+    && travelledM >= Math.max(20, uncertaintyM * 2);
+}
+
+function effectiveBaseUncertainty(points: RawPoint[]): number {
+  const accuracies = points.flatMap(point => (
+    typeof point.accuracy === 'number' && Number.isFinite(point.accuracy) && point.accuracy > 0
+      ? [point.accuracy]
+      : []
+  ));
+  // Reported horizontal accuracy remains the primary uncertainty evidence.
+  // A bounded default keeps imported/legacy paths deterministic without
+  // pretending that missing accuracy is centimetre-perfect.
+  return clamp(accuracies.length > 0 ? percentile(accuracies, 0.65) : 8, 3, 30);
+}
+
+function sameCorridorHeading(
+  points: RawPoint[],
+  start: number,
+  end: number,
+): boolean {
+  const before = meaningfulNeighbour(points, start, -1, 5);
+  const after = meaningfulNeighbour(points, end, 1, 5);
+  if (before == null || after == null) return false;
+  return angleDeltaDegrees(
+    bearingDegrees(points[before], points[start]),
+    bearingDegrees(points[end], points[after]),
+  ) <= 34;
+}
+
+function collapseSameCorridorMicroExcursions(
+  points: RawPoint[],
+  uncertaintyM: number,
+): {
+  points: RawPoint[];
+  removedCount: number;
+  maximumRemovedDepthM: number;
+} {
+  if (points.length < 7) {
+    return { points: points.slice(), removedCount: 0, maximumRemovedDepthM: 0 };
+  }
+  const maximumDepthM = clamp(uncertaintyM * 0.75, 4, 10);
+  const rejoinRadiusM = clamp(uncertaintyM * 0.28, 1.5, 4);
+  const removed = new Set<number>();
+  let removedCount = 0;
+  let maximumRemovedDepthM = 0;
+
+  for (let start = 1; start < points.length - 5; start += 1) {
+    if (removed.has(start)) continue;
+    let excursionLengthM = 0;
+    for (let end = start + 1; end < points.length - 1; end += 1) {
+      excursionLengthM += hav(points[end - 1], points[end]);
+      if (excursionLengthM > maximumDepthM * 2.9) break;
+      if (end - start < 4 || hav(points[start], points[end]) > rejoinRadiusM) continue;
+      if (!sameCorridorHeading(points, start, end)) continue;
+      const excursion = points.slice(start, end + 1);
+      const maximumDepth = Math.max(...excursion.map(point => hav(points[start], point)));
+      if (maximumDepth < 2.5 || maximumDepth > maximumDepthM) continue;
+      const hasSourcePause = excursion.slice(1).some((point, index) => (
+        point.t != null
+        && excursion[index].t != null
+        && Number(point.t) - Number(excursion[index].t) >= 8_000
+      ));
+      if (hasSourcePause) continue;
+      // Rejoining the same corridor after travelling several times the
+      // endpoint displacement is the narrow, generic micro-spur signature.
+      // Long backtracks and real route branches exceed the depth/length fuse.
+      const endpointDisplacementM = Math.max(0.75, hav(points[start], points[end]));
+      if (excursionLengthM / endpointDisplacementM < 3) continue;
+      for (let index = start + 1; index < end; index += 1) removed.add(index);
+      removedCount += 1;
+      maximumRemovedDepthM = Math.max(maximumRemovedDepthM, maximumDepth);
+      start = end - 1;
+      break;
+    }
+  }
+  return {
+    points: points.filter((_point, index) => !removed.has(index)),
+    removedCount,
+    maximumRemovedDepthM,
+  };
+}
+
+/**
+ * Offline-safe Base Final. It only removes a bounded same-corridor
+ * micro-excursion and simplifies between multi-scale structural turns. It
+ * never changes chronology, joins segments, consults a network, or feeds
+ * Activity metrics/Memory.
+ */
+export function buildBaseFinalGeometry(points: RawPoint[]): {
+  points: SnappedPoint[];
+  diagnostics: BaseFinalDiagnostics;
+} {
+  if (points.length <= 2) {
+    const exact = points.map(canonicalPoint);
+    return {
+      points: exact,
+      diagnostics: {
+        inputPointCount: points.length,
+        collapsedPointCount: points.length,
+        outputPointCount: exact.length,
+        effectiveUncertaintyM: effectiveBaseUncertainty(points),
+        simplificationToleranceM: 0,
+        corridorClass: 'simple',
+        protectedTurnCount: Math.max(0, points.length - 2),
+        geometricTurnCount: Math.max(0, points.length - 2),
+        pauseBoundaryCount: 0,
+        stationaryCloudCollapsed: false,
+        removedMicroExcursionCount: 0,
+        maximumRemovedExcursionDepthM: 0,
+      },
+    };
+  }
+  const effectiveUncertaintyM = effectiveBaseUncertainty(points);
+  if (isStationaryCloud(points, effectiveUncertaintyM)) {
+    const exact = [canonicalPoint(points[0]), canonicalPoint(points[points.length - 1])];
+    return {
+      points: exact,
+      diagnostics: {
+        inputPointCount: points.length,
+        collapsedPointCount: 2,
+        outputPointCount: 2,
+        effectiveUncertaintyM,
+        simplificationToleranceM: effectiveUncertaintyM,
+        corridorClass: 'simple',
+        protectedTurnCount: 0,
+        geometricTurnCount: 0,
+        pauseBoundaryCount: 0,
+        stationaryCloudCollapsed: true,
+        removedMicroExcursionCount: 0,
+        maximumRemovedExcursionDepthM: 0,
+      },
+    };
+  }
+  const collapsed = collapseSameCorridorMicroExcursions(points, effectiveUncertaintyM);
+  const allCritical = finalGeometryCriticalIndices(collapsed.points);
+  const rawGeometricCritical = finalGeometryStructuralTurnIndices(collapsed.points);
+  const directM = hav(collapsed.points[0], collapsed.points[collapsed.points.length - 1]);
+  const rawTurnSigns = collapsed.points.slice(1, -1).flatMap((_point, offset) => {
+    const index = offset + 1;
+    const signed = signedAngleDeltaDegrees(
+      bearingDegrees(collapsed.points[index - 1], collapsed.points[index]),
+      bearingDegrees(collapsed.points[index], collapsed.points[index + 1]),
+    );
+    return Math.abs(signed) >= 8 ? [Math.sign(signed)] : [];
+  });
+  const rawAlternatingTurnCount = rawTurnSigns.slice(1)
+    .filter((sign, index) => sign !== rawTurnSigns[index]).length;
+  const highFrequencyWobble = rawTurnSigns.length >= 4
+    && rawAlternatingTurnCount >= Math.ceil((rawTurnSigns.length - 1) * 0.35);
+  const uncertaintyBoundedStraight = directM >= 30
+    && highFrequencyWobble
+    && Math.max(...collapsed.points.map(point => projectPointToPath(
+      point,
+      [collapsed.points[0], collapsed.points[collapsed.points.length - 1]],
+    ).distanceM)) <= clamp(effectiveUncertaintyM * 0.95, 3, 12);
+  const geometricCritical = uncertaintyBoundedStraight
+    ? [0, collapsed.points.length - 1]
+    : rawGeometricCritical;
+  const rawGeometricSet = new Set(rawGeometricCritical);
+  const critical = uncertaintyBoundedStraight
+    ? allCritical.filter(index => index === 0
+      || index === collapsed.points.length - 1
+      || !rawGeometricSet.has(index))
+    : allCritical;
+  const lengthM = pathLength(collapsed.points);
+  const structuralTurnCount = Math.max(0, geometricCritical.length - 2);
+  const pauseBoundaryCount = Math.max(0, critical.length - geometricCritical.length);
+  const structuralTurnSigns = geometricCritical.slice(1, -1).flatMap(index => {
+    const previous = meaningfulNeighbour(collapsed.points, index, -1, 6);
+    const next = meaningfulNeighbour(collapsed.points, index, 1, 6);
+    if (previous == null || next == null) return [];
+    const signed = signedAngleDeltaDegrees(
+      bearingDegrees(collapsed.points[previous], collapsed.points[index]),
+      bearingDegrees(collapsed.points[index], collapsed.points[next]),
+    );
+    return Math.abs(signed) >= 35 ? [Math.sign(signed)] : [];
+  });
+  const alternatingTurnCount = structuralTurnSigns.slice(1)
+    .filter((sign, index) => sign !== structuralTurnSigns[index]).length;
+  // Ordinary urban routes may contain several genuine corners without being
+  // mountain/switchback geometry. Complexity is geometric turn density, not
+  // source cadence or stop duration.
+  const corridorClass = structuralTurnCount >= 3 && (
+    alternatingTurnCount >= 2
+    || structuralTurnCount >= Math.max(8, Math.ceil(lengthM / 80))
+  )
+    ? 'complex' as const
+    : 'simple' as const;
+  const simplificationToleranceM = uncertaintyBoundedStraight
+    ? clamp(effectiveUncertaintyM * 0.95, 3, 12)
+    : corridorClass === 'complex'
+    ? clamp(effectiveUncertaintyM * 0.20, 1.3, 2.5)
+    : clamp(effectiveUncertaintyM * 0.55, 3, 9);
+  const keep = new Set<number>(critical);
+  for (let index = 1; index < critical.length; index += 1) {
+    const start = critical[index - 1];
+    const end = critical[index];
+    const subsection = collapsed.points.slice(start, end + 1);
+    for (const localIndex of rdpIndices(subsection, simplificationToleranceM)) {
+      keep.add(start + localIndex);
+    }
+  }
+  const simplified = Array.from(keep)
+    .sort((a, b) => a - b)
+    .map(index => canonicalPoint(collapsed.points[index]));
+  const output = densifyGeometry(simplified, 16);
+  return {
+    points: output,
+    diagnostics: {
+      inputPointCount: points.length,
+      collapsedPointCount: collapsed.points.length,
+      outputPointCount: output.length,
+      effectiveUncertaintyM,
+      simplificationToleranceM,
+      corridorClass,
+      protectedTurnCount: structuralTurnCount,
+      geometricTurnCount: structuralTurnCount,
+      pauseBoundaryCount,
+      stationaryCloudCollapsed: false,
+      removedMicroExcursionCount: collapsed.removedCount,
+      maximumRemovedExcursionDepthM: collapsed.maximumRemovedDepthM,
+    },
+  };
+}
+
 /**
  * Chronological, bounded Final-only cleanup. RDP is applied independently
  * between multi-scale turns/reversals and stop boundaries, so measurement
  * wobble disappears without flattening a U-turn, Z, switchback or pause.
  */
 export function cleanCanonicalGeometry(points: RawPoint[]): SnappedPoint[] {
-  if (points.length <= 2) return points.map(canonicalPoint);
-  const accuracies = points.flatMap(point => (
-    typeof point.accuracy === 'number' && Number.isFinite(point.accuracy) && point.accuracy > 0
-      ? [point.accuracy]
-      : []
-  ));
-  const toleranceM = clamp((accuracies.length > 0 ? median(accuracies) : 8) * 0.28, 1.8, 3.2);
-  const critical = finalGeometryCriticalIndices(points);
-  const keep = new Set<number>(critical);
-  for (let index = 1; index < critical.length; index += 1) {
-    const start = critical[index - 1];
-    const end = critical[index];
-    const subsection = points.slice(start, end + 1);
-    for (const localIndex of rdpIndices(subsection, toleranceM)) keep.add(start + localIndex);
-  }
-  const simplified = Array.from(keep).sort((a, b) => a - b).map(index => canonicalPoint(points[index]));
-  // Interpolate long straight display edges instead of reintroducing noisy raw
-  // vertices merely to satisfy visual density and edge-spike guardrails.
-  return densifyGeometry(simplified, 16);
+  return buildBaseFinalGeometry(points).points;
 }
 
 function attachDisplayMetadata(points: SnappedPoint[], canonical: RawPoint[]): SnappedPoint[] {
@@ -674,6 +947,19 @@ export function evaluateCorridorEvidence(input: {
     0,
     1,
   );
+  // Deliberately excludes lateral-side stability. Corridor identity answers
+  // “which road/path?”, while lateral evidence answers “where within it?”.
+  const corridorIdentityScore = clamp(
+    input.mapboxConfidence * 0.25
+    + coverage * 0.20
+    + ambiguityScore * 0.16
+    + bearingAgreementScore * 0.14
+    + lengthAgreementScore * 0.12
+    + endpointSafetyScore * 0.08
+    + temporalPersistenceScore * 0.05,
+    0,
+    1,
+  );
   const baseStructuralGate = input.mapboxConfidence >= 0.72
     && coverage >= 0.72
     && topology.accepted
@@ -690,11 +976,30 @@ export function evaluateCorridorEvidence(input: {
     && unambiguousFraction >= 0.8
     && lateral.stable
     && score >= 0.78;
-  const accepted = acceptedByBaseGate || acceptedByCoherentOverrun;
+  const weakTruthEnvelope = quality.accepted || (
+    quality.reason === 'raw_deviation'
+    && quality.p95DeviationM <= quality.deviationEnvelopeM + 2
+    && quality.maxDeviationM <= Math.max(20, quality.deviationEnvelopeM * 1.4)
+  );
+  const acceptedAsWeakSameCorridor = !acceptedByBaseGate
+    && !acceptedByCoherentOverrun
+    && input.mapboxConfidence >= 0.76
+    && coverage >= 0.76
+    && ambiguityScore >= 0.72
+    && bearingAgreementScore >= 0.58
+    && topology.accepted
+    && quality.lengthRatio >= 0.76
+    && quality.lengthRatio <= 1.30
+    && quality.endpointDeviationM <= Math.max(20, quality.deviationEnvelopeM * 1.35)
+    && corridorIdentityScore >= 0.72
+    && weakTruthEnvelope;
+  const accepted = acceptedByBaseGate || acceptedByCoherentOverrun || acceptedAsWeakSameCorridor;
   const reason = acceptedByBaseGate
     ? 'composite-corridor-evidence'
     : acceptedByCoherentOverrun
       ? 'coherent-isolated-envelope-overrun'
+      : acceptedAsWeakSameCorridor
+        ? 'weak-same-corridor-identity'
       : !baseStructuralGate
         ? `composite-score-or-structure:${score.toFixed(3)}`
         : `truth-envelope:${quality.reason}`;
@@ -716,6 +1021,8 @@ export function evaluateCorridorEvidence(input: {
     overlappingWindowAgreementCount: input.overlappingWindowAgreementCount ?? 0,
     acceptedByBaseGate,
     acceptedByCoherentOverrun,
+    acceptedAsWeakSameCorridor,
+    corridorIdentityScore,
     accepted,
     reason,
     lateral,
@@ -772,6 +1079,19 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
     mode = 'A_PEDESTRIAN_NETWORK';
     display = networkForDisplay;
     reason = `${evidence.reason};pedestrian-aligned-network`;
+  } else if (lowAmbiguity) {
+    // Exact sidewalk side is uncertain, but the topology is not. Place a
+    // smooth evidence-centred line on the identified corridor within a
+    // bounded uncertainty envelope instead of falling back to GPS serration.
+    const maximumWeakOffsetM = Math.min(12, Math.max(3, evidence.accuracyP95M * 0.75));
+    const evidenceCentredOffsetM = clamp(
+      evidence.lateral.signedMedianM,
+      -maximumWeakOffsetM,
+      maximumWeakOffsetM,
+    );
+    mode = 'D_WEAK_SAME_CORRIDOR';
+    display = offsetNetworkGeometry(networkForDisplay, evidenceCentredOffsetM);
+    reason = `${evidence.reason};corridor-strong-side-uncertain;evidence-centred-offset`;
   } else {
     // Road topology may still be confidently identified, but uncertain side
     // evidence is not permission to put a walker on the carriageway centre.
@@ -790,7 +1110,9 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
     points: display,
     networkPoints: input.networkPoints,
     source: input.source,
-    state: mode === 'C_CANONICAL_DERIVED' ? 'NETWORK_AMBIGUOUS' : 'NETWORK_CONFIDENT',
+    state: mode === 'C_CANONICAL_DERIVED'
+      ? 'NETWORK_AMBIGUOUS'
+      : mode === 'D_WEAK_SAME_CORRIDOR' ? 'NETWORK_WEAK_SAME_CORRIDOR' : 'NETWORK_CONFIDENT',
     mode,
     reason,
     confidence: evidence.score,
@@ -1297,7 +1619,7 @@ function fallbackSection(
       decision: 'canonical-derived',
       reason: freeTraversal
         ? 'bounded-coherent-connector-inside-evidence-envelope'
-        : 'no-safe-network-candidate;bounded-heading-aware-cleanup',
+        : 'no-safe-network-candidate;uncertainty-aware-base-final',
       confidence: 1,
       corridorEvidence: null,
       lateralOffsetM: null,
@@ -1397,8 +1719,9 @@ function assembleFinal(
 
 function emptyStats(canonical: RawPoint[], durationMs = 0): PedestrianFinalStats {
   const canonicalGeometry = canonical.map(canonicalPoint);
+  const baseFinalDiagnostics = buildBaseFinalGeometry(canonical).diagnostics;
   return {
-    algorithmVersion: 'pedestrian-final-v1',
+    algorithmVersion: 'pedestrian-final-v2-base',
     canonicalPointCount: canonical.length,
     resampledPointCount: 0,
     mapMatchingRequestCount: 0,
@@ -1410,6 +1733,7 @@ function emptyStats(canonical: RawPoint[], durationMs = 0): PedestrianFinalStats
     freeTraversalSectionCount: 0,
     roadOffsetSectionCount: 0,
     pedestrianNetworkSectionCount: 0,
+    weakSameCorridorSectionCount: 0,
     rejectedNetworkCandidateCount: 0,
     displayRefined: false,
     acceptedMatchedDistanceM: 0,
@@ -1424,6 +1748,7 @@ function emptyStats(canonical: RawPoint[], durationMs = 0): PedestrianFinalStats
     preFallbackWholeRouteValidation: evaluateWholeRouteQuality(canonical, canonicalGeometry),
     wholeRouteValidation: evaluateWholeRouteQuality(canonical, canonicalGeometry),
     finalGeometryFingerprint: canonical.length > 0 ? geometryFingerprint(canonicalGeometry) : null,
+    baseFinalDiagnostics,
   };
 }
 
@@ -1534,8 +1859,9 @@ export async function reconstructPedestrianFinalRoute(
   const acceptedMatchedDistanceM = assembled.sections
     .filter(section => section.decision === 'refined')
     .reduce((sum, section) => sum + section.canonicalDistanceM, 0);
+  const baseFinalDiagnostics = buildBaseFinalGeometry(canonical).diagnostics;
   const stats: PedestrianFinalStats = {
-    algorithmVersion: 'pedestrian-final-v1',
+    algorithmVersion: 'pedestrian-final-v2-base',
     canonicalPointCount: canonical.length,
     resampledPointCount: submitted.length,
     mapMatchingRequestCount: mapRequests.length,
@@ -1547,6 +1873,7 @@ export async function reconstructPedestrianFinalRoute(
     freeTraversalSectionCount: assembled.sections.filter(section => section.state === 'FREE_TRAVERSAL').length,
     roadOffsetSectionCount: assembled.sections.filter(section => section.geometryMode === 'B_ROAD_OFFSET').length,
     pedestrianNetworkSectionCount: assembled.sections.filter(section => section.geometryMode === 'A_PEDESTRIAN_NETWORK').length,
+    weakSameCorridorSectionCount: assembled.sections.filter(section => section.geometryMode === 'D_WEAK_SAME_CORRIDOR').length,
     rejectedNetworkCandidateCount: requestResults.reduce((sum, result) => sum + result.rejectedCandidateCount, 0),
     displayRefined: assembled.points.length !== canonical.length
       || assembled.points.some((point, index) => canonical[index] == null || hav(point, canonical[index]) > 0.05),
@@ -1562,6 +1889,7 @@ export async function reconstructPedestrianFinalRoute(
     preFallbackWholeRouteValidation,
     wholeRouteValidation,
     finalGeometryFingerprint: geometryFingerprint(assembled.points),
+    baseFinalDiagnostics,
   };
   return { ok: true, points: assembled.points, stats };
 }

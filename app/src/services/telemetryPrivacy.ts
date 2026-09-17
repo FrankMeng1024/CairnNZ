@@ -1,4 +1,4 @@
-const FORBIDDEN_FIELD = /(access|refresh)?token|password|passcode|reset.?code|email|authorization|cookie|secret|api.?key/i;
+const FORBIDDEN_FIELD = /(access|refresh)?token|password|passcode|reset.?code|email|authorization|cookie|secret|api.?key|user.?id|owner.?id|author.?id/i;
 const COORDINATE_FIELD = /^(lat|lng|lon|latitude|longitude|coordinate|coordinates|location|position|centerCoordinate|cameraTarget|displayedPosition)$/i;
 
 function scrubString(value: string): string {

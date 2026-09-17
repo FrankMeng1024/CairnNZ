@@ -282,6 +282,31 @@ export async function deleteAccount(): Promise<{
   }
 }
 
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ error?: string }> {
+  const token = await getToken();
+  if (!token) return { error: 'Your session ended. Please sign in again.' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/password`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data?.error || 'Password could not be updated.' };
+    if (!data?.token) return { error: 'Password changed, but the new session could not be confirmed. Please sign in again.' };
+    await saveToken(data.token);
+    return {};
+  } catch {
+    return { error: 'Unable to connect. Your password was not changed.' };
+  }
+}
+
 // O18 AUTH-01: restore a soft-deleted account. Token in header is the one
 // just issued by /login post-delete (still valid because auth middleware
 // allows it — the row exists, jti not blacklisted).
@@ -318,8 +343,7 @@ export async function restoreAccount(): Promise<AuthResult> {
   }
   if (!res.ok) {
     // AUTH-3 4:59-race (2026-08-11, 4-eyes review #2): if the row was
-    // hard-deleted between login and Restore tap (cron sweeps every
-    // minute; happens easily in 5-min TEST-MODE), backend returns:
+    // hard-deleted between login and Restore tap, backend returns:
     //   - authenticate middleware 401 `{ message: 'Account not found.', code: 'TOKEN_INVALID' }`
     //   - or /restore route 404 `{ error: 'Account not found. It may have been permanently deleted.' }`
     // Either way, the account is gone. Surface a distinct hint so the
@@ -350,13 +374,12 @@ export async function restoreAccount(): Promise<AuthResult> {
   return { user: data.user, token: data.token };
 }
 
-// O18 batch 6.7 (AUTH-GDPR): request a full data export.
-// Backend queues + emails the download link when ready. Client also
-// gets the token immediately so the UI can show "Export requested".
+// Request a full data export. A successful response only means the job was
+// accepted; readiness is established by fetchExportHistory.
 export async function requestDataExport(): Promise<{
   error?: string;
   status?: string;
-  downloadToken?: string;
+  downloadUrl?: string | null;
   expiresAt?: string;
 }> {
   const token = await getToken();
@@ -370,7 +393,7 @@ export async function requestDataExport(): Promise<{
     if (!res.ok) return { error: data?.error || 'Could not request export.' };
     return {
       status: data.status,
-      downloadToken: data.download_token,
+      downloadUrl: data.download_url ?? null,
       expiresAt: data.expires_at,
     };
   } catch {
@@ -382,7 +405,7 @@ export async function requestDataExport(): Promise<{
 // Sprint 6 round-4 review R4B9: coerce size_bytes to Number since MySQL2
 // can return BIGINT as a string on some driver configs. TS type says
 // number|null and any UI arithmetic (e.g. formatBytes) breaks on string.
-export async function fetchExportHistory(): Promise<Array<{
+export interface DataExportSummary {
   id: number;
   status: string;
   size_bytes: number | null;
@@ -390,17 +413,27 @@ export async function fetchExportHistory(): Promise<Array<{
   built_at: string | null;
   expires_at: string | null;
   sent_at: string | null;
-}>> {
+  download_url: string | null;
+  error_msg: string | null;
+}
+
+export async function fetchExportHistory(): Promise<{
+  exports: DataExportSummary[];
+  error?: string;
+}> {
   const token = await getToken();
-  if (!token) return [];
+  if (!token) return { exports: [], error: 'Your session ended. Please sign in again.' };
   try {
     const res = await fetch(`${API_BASE_URL}/api/account/exports`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      return { exports: [], error: data?.error || 'Export status could not be loaded.' };
+    }
     const rows = await res.json();
-    if (!Array.isArray(rows)) return [];
-    return rows.map((r: any) => ({
+    if (!Array.isArray(rows)) return { exports: [], error: 'Export status could not be read.' };
+    return { exports: rows.map((r: any) => ({
       id: Number(r.id),
       status: String(r.status ?? ''),
       size_bytes: r.size_bytes == null ? null : Number(r.size_bytes),
@@ -408,9 +441,43 @@ export async function fetchExportHistory(): Promise<Array<{
       built_at: r.built_at ?? null,
       expires_at: r.expires_at ?? null,
       sent_at: r.sent_at ?? null,
-    }));
+      download_url: r.download_url ?? null,
+      error_msg: r.error_msg ?? null,
+    })) };
   } catch {
-    return [];
+    return { exports: [], error: 'Unable to connect. Export status is unchanged.' };
+  }
+}
+
+export async function submitFeedback(input: {
+  submissionId: string;
+  kind: 'feedback' | 'bug';
+  message: string;
+  appVersion?: string | null;
+}): Promise<{ acknowledged: boolean; error?: string }> {
+  const token = await getToken();
+  if (!token) return { acknowledged: false, error: 'Your session ended. Please sign in again.' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/account/feedback`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        client_submission_id: input.submissionId,
+        kind: input.kind,
+        message: input.message,
+        app_version: input.appVersion || undefined,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || data?.acknowledged !== true) {
+      return { acknowledged: false, error: data?.error || 'Feedback could not be delivered.' };
+    }
+    return { acknowledged: true };
+  } catch {
+    return { acknowledged: false, error: 'Unable to connect. Your message is still here—try again when you are online.' };
   }
 }
 // O18 AUTH-06: legacy DOB backfill (users who registered before this

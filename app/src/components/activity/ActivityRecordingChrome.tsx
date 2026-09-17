@@ -335,7 +335,7 @@ export function ActivityControlDock({
   onFinish,
 }: {
   mode: ActivityRecordingMode;
-  phase: 'tracking' | 'paused' | 'finishing';
+  phase: 'tracking' | 'paused' | 'resuming' | 'pausing' | 'finishing';
   safeBottom: number;
   backgroundWarning?: string | null;
   cairnDisabled?: boolean;
@@ -346,6 +346,7 @@ export function ActivityControlDock({
   const theme = useVisualTheme();
   const modeMeta = modePresentation(mode, theme.primaryAction);
   const paused = phase === 'paused';
+  const transitioning = phase === 'resuming' || phase === 'pausing';
   const finishing = phase === 'finishing';
   const primaryColor = mode === 'run' ? Colors.running : theme.primaryAction;
   const primaryForeground = mode === 'run' ? '#FFFFFF' : theme.onPrimary;
@@ -370,14 +371,14 @@ export function ActivityControlDock({
           <View
             style={[
               styles.recordingStateDot,
-              { backgroundColor: paused ? Colors.severityWarning : finishing ? theme.iconInactive : modeMeta.color },
+              { backgroundColor: paused || transitioning ? Colors.severityWarning : finishing ? theme.iconInactive : modeMeta.color },
             ]}
           />
           <Text style={[styles.recordingStateTitle, { color: theme.foreground }]}> 
-            {finishing ? 'Completing activity' : paused ? 'Activity paused' : 'Recording activity'}
+            {finishing ? 'Completing activity' : phase === 'resuming' ? 'Resuming activity' : phase === 'pausing' ? 'Pausing activity' : paused ? 'Activity paused' : 'Recording activity'}
           </Text>
           <Text style={[styles.recordingStateHint, { color: theme.muted }]} numberOfLines={1}>
-            {finishing ? 'Securing your route' : paused ? 'Time and route are held' : 'Your path is saved as you move'}
+            {finishing ? 'Securing your route' : phase === 'resuming' ? 'Restoring recording · Finish is available' : phase === 'pausing' ? 'Securing the pause point' : paused ? 'Time and route are held' : 'Your path is saved as you move'}
           </Text>
         </View>
 
@@ -393,41 +394,41 @@ export function ActivityControlDock({
         <View style={styles.controlRow}>
           <TouchableOpacity
             onPress={onPauseResume}
-            disabled={finishing}
+            disabled={finishing || transitioning}
             activeOpacity={0.84}
             style={[
               styles.primaryControl,
-              { backgroundColor: finishing ? theme.disabledSurface : primaryColor },
+              { backgroundColor: finishing || transitioning ? theme.disabledSurface : primaryColor },
             ]}
             accessibilityRole="button"
-            accessibilityState={{ disabled: finishing }}
-            accessibilityLabel={paused ? `Resume ${mode}` : `Pause ${mode}`}
+            accessibilityState={{ disabled: finishing || transitioning, busy: transitioning }}
+            accessibilityLabel={phase === 'resuming' ? `Resuming ${mode}` : phase === 'pausing' ? `Pausing ${mode}` : paused ? `Resume ${mode}` : `Pause ${mode}`}
           >
             <Icon
-              name={paused ? 'Play' : 'Pause'}
+              name={paused || phase === 'resuming' ? 'Play' : 'Pause'}
               size={20}
-              color={finishing ? theme.disabledText : primaryForeground}
+              color={finishing || transitioning ? theme.disabledText : primaryForeground}
               strokeWidth={2.4}
             />
-            <Text style={[styles.primaryControlText, { color: finishing ? theme.disabledText : primaryForeground }]}> 
-              {paused ? 'Resume' : 'Pause'}
+            <Text style={[styles.primaryControlText, { color: finishing || transitioning ? theme.disabledText : primaryForeground }]}>
+              {phase === 'resuming' ? 'Resuming…' : phase === 'pausing' ? 'Pausing…' : paused ? 'Resume' : 'Pause'}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={onCairn}
-            disabled={cairnDisabled || finishing}
+            disabled={cairnDisabled || finishing || transitioning}
             activeOpacity={0.8}
             style={[
               styles.secondaryControl,
               {
                 backgroundColor: theme.secondaryAction,
                 borderColor: theme.borderStrong,
-                opacity: cairnDisabled || finishing ? 0.46 : 1,
+                opacity: cairnDisabled || finishing || transitioning ? 0.46 : 1,
               },
             ]}
             accessibilityRole="button"
-            accessibilityState={{ disabled: cairnDisabled || finishing }}
+            accessibilityState={{ disabled: cairnDisabled || finishing || transitioning }}
             accessibilityLabel={mode === 'run' ? 'Quick Cairn' : 'Plant a Cairn'}
           >
             <CairnIcon name="leaveCairn" size={19} color={modeMeta.color} />

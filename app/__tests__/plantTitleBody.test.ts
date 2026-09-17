@@ -14,29 +14,24 @@
 import { encodeTitleBody, splitTitleBody, TITLE_BODY_SEP } from '../src/features/plant/services/noteEncoding';
 
 describe('title/body encoding · round-trip', () => {
-  it('encodes title-only as bare title (no separator)', () => {
+  it('encodes title-only with an explicit separator', () => {
     const enc = encodeTitleBody('Found it', '');
-    expect(enc).toBe('Found it');
+    expect(enc).toBe(`Found it${TITLE_BODY_SEP}`);
     expect(splitTitleBody(enc)).toEqual({ title: 'Found it', body: '' });
   });
 
-  it('encodes body-only as bare body (no separator)', () => {
+  it('encodes body-only without moving it into the title field', () => {
     const enc = encodeTitleBody('', 'Bring water.');
-    expect(enc).toBe('Bring water.');
-    // Body-only round-trips into title slot (acceptable — UI renders
-    // "title" prominently and that's where the user's content goes).
-    // Critical: no data loss.
-    expect(splitTitleBody(enc).title + splitTitleBody(enc).body).toBe('Bring water.');
+    expect(enc).toBe(`${TITLE_BODY_SEP}Bring water.`);
+    expect(splitTitleBody(enc)).toEqual({ title: '', body: 'Bring water.' });
   });
 
   it('preserves multiline body without title (the original data-loss bug)', () => {
     const body = 'Beautiful spot.\nReally peaceful.';
     const enc = encodeTitleBody('', body);
     const { title, body: out } = splitTitleBody(enc);
-    // Either title or body must contain the FULL multiline text — not
-    // split into a fake title + truncated body.
-    expect(title.includes('Really peaceful') || out.includes('Really peaceful')).toBe(true);
-    expect((title + out).includes('Beautiful spot.\nReally peaceful.')).toBe(true);
+    expect(title).toBe('');
+    expect(out).toBe(body);
   });
 
   it('preserves multiline body with title', () => {
@@ -50,5 +45,22 @@ describe('title/body encoding · round-trip', () => {
     const enc = encodeTitleBody('T', 'B');
     expect(enc.includes(TITLE_BODY_SEP)).toBe(true);
     expect(TITLE_BODY_SEP.charCodeAt(0)).toBe(0x1e);
+  });
+
+  it('preserves Unicode and empty content exactly', () => {
+    const encoded = encodeTitleBody('溪谷 🥾', 'Kia ora — pō mārie\n第二行');
+    expect(splitTitleBody(encoded)).toEqual({
+      title: '溪谷 🥾',
+      body: 'Kia ora — pō mārie\n第二行',
+    });
+    expect(encodeTitleBody('', '')).toBe('');
+    expect(splitTitleBody('')).toEqual({ title: '', body: '' });
+  });
+
+  it('treats a pre-separator legacy record as body-only content', () => {
+    expect(splitTitleBody('Legacy note\nSecond line')).toEqual({
+      title: '',
+      body: 'Legacy note\nSecond line',
+    });
   });
 });

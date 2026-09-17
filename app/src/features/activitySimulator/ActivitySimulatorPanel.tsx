@@ -25,6 +25,7 @@ import { hydrateActivitySimulatorForUser, simulatorAccuracyMeters, useActivitySi
 import {
   type SimulatorAccuracyPreset,
   type SimulatorAltitudeMode,
+  type SimulatorObservationMode,
   type SimulatorSpeedPreset,
   type SimulatorTimeScale,
   type SimulatorSignal,
@@ -94,6 +95,9 @@ export function ActivitySimulatorPanel() {
   const customAccuracyM = useActivitySimulatorStore(state => state.customAccuracyM);
   const signal = useActivitySimulatorStore(state => state.signal);
   const timeScale = useActivitySimulatorStore(state => state.timeScale);
+  const observationMode = useActivitySimulatorStore(state => state.observationMode);
+  const diagnosticsVisible = useActivitySimulatorStore(state => state.diagnosticsVisible);
+  const deterministicSeed = useActivitySimulatorStore(state => state.deterministicSeed);
   const effectiveVirtualElapsedMs = useActivitySimulatorStore(state => state.effectiveVirtualElapsedMs);
   const clockLimitReached = useActivitySimulatorStore(state => state.clockLimitReached);
   const pickerMode = useActivitySimulatorStore(state => state.pickerMode);
@@ -128,6 +132,7 @@ export function ActivitySimulatorPanel() {
   const [speedDraft, setSpeedDraft] = useState(String(speedKmh));
   const [verticalDraft, setVerticalDraft] = useState(String(verticalRateMPerHour));
   const [accuracyDraft, setAccuracyDraft] = useState(String(customAccuracyM ?? simulatorAccuracyMeters()));
+  const [seedDraft, setSeedDraft] = useState(String(deterministicSeed));
   const [showAdvanced, setShowAdvanced] = useState(false);
   const straightLinePickerRef = useRef(false);
 
@@ -168,6 +173,8 @@ export function ActivitySimulatorPanel() {
     setLatDraft(current.lat.toFixed(6));
     setLngDraft(current.lng.toFixed(6));
   }, [origin.lat, origin.lng]);
+
+  useEffect(() => setSeedDraft(String(deterministicSeed)), [deterministicSeed]);
 
   const stickX = useRef(new Animated.Value(0)).current;
   const stickY = useRef(new Animated.Value(0)).current;
@@ -501,6 +508,23 @@ export function ActivitySimulatorPanel() {
     });
   };
 
+  const setObservationMode = (next: SimulatorObservationMode) => {
+    if (!actions.setObservationMode(next)) return;
+    appendSimulatorLog('SIM_INPUT', 'simulator_observation_mode_set', {
+      previousMode: observationMode,
+      observationMode: next,
+      deterministicSeed: useActivitySimulatorStore.getState().deterministicSeed,
+    }, { coordinateSource: 'none' });
+  };
+
+  const setSeed = () => {
+    const accepted = actions.setDeterministicSeed(Number(seedDraft));
+    appendSimulatorLog('SIM_INPUT', accepted ? 'simulator_seed_set' : 'simulator_seed_rejected', {
+      deterministicSeed: accepted ? useActivitySimulatorStore.getState().deterministicSeed : null,
+      rejectionReason: accepted ? null : useActivitySimulatorStore.getState().lastFailure,
+    }, { coordinateSource: 'none' });
+  };
+
   const forceInterruption = async () => {
     const store = useTrackingStore.getState() as any;
     if (store.status !== 'tracking' || typeof store.simulateRecordingInterruption !== 'function') {
@@ -557,6 +581,12 @@ export function ActivitySimulatorPanel() {
     return <View style={styles.overlayHost} pointerEvents="box-none" testID="activity-simulator-overlay-host">
       <View style={[styles.preStartCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.foreground }]}>模拟起点</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>SIM MODE</Text>
+        <View style={styles.buttonRowWrap} testID="activity-simulator-mode-controls">
+          <TinyButton label="Clean Path" active={observationMode === 'clean-path'} onPress={() => setObservationMode('clean-path')} />
+          <TinyButton label="Raw GPS" active={observationMode === 'raw-gps'} onPress={() => setObservationMode('raw-gps')} />
+        </View>
+        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>{observationMode === 'raw-gps' ? `Realistic GPS · seed ${deterministicSeed}` : 'Exact deterministic position'}</Text>
         <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>移动地图，让中心标记对准任意位置</Text>
         <Text style={[styles.selectionText, { color: theme.foreground }]}>
           {pickerCoordinate ? pickerCoordinate.lat.toFixed(6) + ', ' + pickerCoordinate.lng.toFixed(6) : '地图中心'}
@@ -574,11 +604,17 @@ export function ActivitySimulatorPanel() {
         <TouchableOpacity onPress={() => setShowAdvanced(value => !value)} style={styles.advancedLink}>
           <Text style={[styles.collapseText, { color: theme.foregroundSecondary }]}>更多</Text>
         </TouchableOpacity>
-        {showAdvanced ? <View style={styles.inputActionRow}>
-          <TextInput value={latDraft} onChangeText={setLatDraft} style={styles.input} keyboardType="numbers-and-punctuation" placeholder="纬度" />
-          <TextInput value={lngDraft} onChangeText={setLngDraft} style={styles.input} keyboardType="numbers-and-punctuation" placeholder="经度" />
-          <TinyButton label="使用坐标" onPress={applyManualStart} />
-        </View> : null}
+        {showAdvanced ? <>
+          <View style={styles.inputActionRow}>
+            <TextInput value={seedDraft} onChangeText={setSeedDraft} style={styles.smallInput} keyboardType="number-pad" placeholder="Seed" />
+            <TinyButton label="Set seed" onPress={setSeed} />
+          </View>
+          <View style={styles.inputActionRow}>
+            <TextInput value={latDraft} onChangeText={setLatDraft} style={styles.input} keyboardType="numbers-and-punctuation" placeholder="纬度" />
+            <TextInput value={lngDraft} onChangeText={setLngDraft} style={styles.input} keyboardType="numbers-and-punctuation" placeholder="经度" />
+            <TinyButton label="使用坐标" onPress={applyManualStart} />
+          </View>
+        </> : null}
       </View>
     </View>;
   }
@@ -607,9 +643,9 @@ export function ActivitySimulatorPanel() {
         activeOpacity={0.84}
         onPress={() => actions.setExpanded(true)}
         accessibilityRole="button"
-        accessibilityLabel={`打开模拟行走，当前 ${timeScale} 倍，GPS ${signal}`}
+        accessibilityLabel={`打开模拟行走，${observationMode === 'raw-gps' ? 'Raw GPS' : 'Clean Path'}，当前 ${timeScale} 倍，GPS ${signal}`}
       >
-        <Text style={[styles.collapsedTitle, { color: theme.foreground }]}>SIM · Replay {timeScale}×</Text>
+        <Text style={[styles.collapsedTitle, { color: theme.foreground }]}>SIM · {observationMode === 'raw-gps' ? 'RAW GPS' : 'CLEAN'} · {timeScale}×</Text>
       </TouchableOpacity>
       {status === 'tracking' ? joystick : null}
     </View>;
@@ -624,7 +660,7 @@ export function ActivitySimulatorPanel() {
       <View style={styles.headerRow}>
         <View>
           <Text style={[styles.title, { color: theme.foreground }]}>Simulator walk</Text>
-          <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Movement {speedKmh.toFixed(1)} km/h · Replay {timeScale}× · GPS {gpsLabels[signal]}</Text>
+          <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{observationMode === 'raw-gps' ? 'RAW GPS · REALISTIC' : 'CLEAN PATH'} · {speedKmh.toFixed(1)} km/h · {timeScale}× · seed {deterministicSeed}</Text>
         </View>
         <TouchableOpacity onPress={() => actions.setExpanded(false)} style={styles.collapseButton}>
           <Text style={[styles.collapseText, { color: theme.foreground }]}>收起</Text>
@@ -632,6 +668,17 @@ export function ActivitySimulatorPanel() {
       </View>
       <ScrollView testID="activity-simulator-settings-scroll" style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" nestedScrollEnabled>
         {lastFailure ? <View style={styles.failureBanner}><Text style={styles.failureText}>{lastFailure}</Text></View> : null}
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>SIM MODE</Text>
+        <View style={styles.buttonRowWrap} testID="activity-simulator-mode-controls">
+          <TinyButton label="Clean Path" active={observationMode === 'clean-path'} disabled onPress={() => setObservationMode('clean-path')} />
+          <TinyButton label="Raw GPS" active={observationMode === 'raw-gps'} disabled onPress={() => setObservationMode('raw-gps')} />
+        </View>
+        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>{observationMode === 'raw-gps' ? 'Joystick and Auto Move are ground truth; correlated GPS observations enter Activity.' : 'Intended position enters Activity exactly and remains deterministic.'}</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>VIEW</Text>
+        <View style={styles.buttonRowWrap} testID="activity-simulator-view-controls">
+          <TinyButton label="Product" active={!diagnosticsVisible} onPress={() => actions.setDiagnosticsVisible(false)} />
+          <TinyButton label="Diagnostic" active={diagnosticsVisible} onPress={() => actions.setDiagnosticsVisible(true)} />
+        </View>
         <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Movement speed · {speedKmh.toFixed(1)} km/h</Text>
         <View style={styles.buttonRowWrap} testID="activity-simulator-speed-controls">
           {(['slow', 'walk', 'brisk', 'run', 'custom'] as SimulatorSpeedPreset[]).map(preset => <TinyButton key={preset} label={speedLabels[preset]} active={speedPreset === preset || (preset === 'walk' && speedPreset === 'hike')} onPress={() => setSpeed(preset)} />)}
@@ -639,7 +686,7 @@ export function ActivitySimulatorPanel() {
         <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Replay time acceleration</Text>
         <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>Speeds up QA time; physical movement speed stays unchanged.</Text>
         <View style={styles.buttonRowWrap} testID="activity-simulator-time-scale-controls">
-          {([1, 2, 5, 10, 30, 60, 120] as SimulatorTimeScale[]).map(scale => <TinyButton key={scale} label={String(scale) + '×'} active={timeScale === scale} onPress={() => setTimeScale(scale)} />)}
+          {([1, 2, 5, 10, 30, 60, 120] as SimulatorTimeScale[]).map(scale => <TinyButton key={scale} label={String(scale) + '×'} active={timeScale === scale} disabled={observationMode === 'raw-gps' && scale > 10} onPress={() => setTimeScale(scale)} />)}
         </View>
         <Text style={[styles.sectionTitle, { color: theme.foreground }]}>GPS 状态</Text>
         <View style={styles.buttonRowWrap}>
@@ -663,7 +710,11 @@ export function ActivitySimulatorPanel() {
           <Text style={[styles.collapseText, { color: theme.foregroundSecondary }]}>更多</Text>
         </TouchableOpacity>
         {showAdvanced ? <>
-          <Text style={[styles.diagnostic, { color: theme.foregroundSecondary }]}>虚拟位置 {current.lat.toFixed(6)}, {current.lng.toFixed(6)}</Text>
+          <Text style={[styles.diagnostic, { color: theme.foregroundSecondary }]}>Ground truth {current.lat.toFixed(6)}, {current.lng.toFixed(6)}</Text>
+          <View style={styles.inputActionRow}>
+            <TextInput value={seedDraft} onChangeText={setSeedDraft} style={styles.smallInput} keyboardType="number-pad" placeholder="Seed" />
+            <TinyButton label="Set seed" disabled onPress={setSeed} />
+          </View>
           <View style={styles.inputActionRow}>
             <TextInput value={latDraft} onChangeText={setLatDraft} style={styles.smallInput} keyboardType="numbers-and-punctuation" placeholder="纬度" />
             <TextInput value={lngDraft} onChangeText={setLngDraft} style={styles.smallInput} keyboardType="numbers-and-punctuation" placeholder="经度" />
@@ -673,12 +724,12 @@ export function ActivitySimulatorPanel() {
             <TextInput value={speedDraft} onChangeText={setSpeedDraft} style={styles.smallInput} keyboardType="decimal-pad" />
             <TinyButton label="自定义 km/h" onPress={setCustomSpeed} />
           </View>
-          <View style={styles.inputActionRow}>
+          {observationMode === 'clean-path' ? <View style={styles.inputActionRow}>
             <TextInput value={accuracyDraft} onChangeText={setAccuracyDraft} style={styles.smallInput} keyboardType="decimal-pad" />
             <TinyButton label="精度 ±m" onPress={setCustomAccuracy} />
             <TextInput value={verticalDraft} onChangeText={setVerticalDraft} style={styles.smallInput} keyboardType="numbers-and-punctuation" />
             <TinyButton label="高度 m/h" onPress={setCustomVerticalRate} />
-          </View>
+          </View> : <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>Realistic GPS derives hAcc from correlated error. Use GPS Poor for bounded degradation.</Text>}
           <View style={styles.buttonRowWrap}>
             <TinyButton label="直线移动" onPress={() => {
               straightLinePickerRef.current = true;
@@ -687,7 +738,7 @@ export function ActivitySimulatorPanel() {
             }} />
           </View>
           <Text testID="activity-simulator-native-diagnostics" style={[styles.diagnostic, { color: theme.foregroundSecondary }]}>
-            QA {qaSessionId ?? '…'}{'\n'}map {mapDiagnostics.mountId ?? '—'} · style {mapDiagnostics.styleLoaded ? 'YES' : 'NO'} · ready {mapDiagnostics.mapReady ? 'YES' : 'NO'}{'\n'}provider {locationProviderSource.toUpperCase()} · owner {ownerGeneration?.slice(-8) ?? '—'} · seg {currentSegmentId?.slice(-8) ?? '—'}{'\n'}generated #{lastGeneratedSample?.sequence ?? 0} {lastGeneratedSample ? `${lastGeneratedSample.lat.toFixed(6)},${lastGeneratedSample.lng.toFixed(6)}` : '—'}{'\n'}accepted #{lastAcceptedSample?.sequence ?? 0} {lastAcceptedSample?.lat != null && lastAcceptedSample?.lng != null ? `${lastAcceptedSample.lat.toFixed(6)},${lastAcceptedSample.lng.toFixed(6)}` : '—'} · rejected {lastRejectionReason ?? '—'}{'\n'}committed {committedPointCount} {committedPosition ? `${committedPosition.lat.toFixed(6)},${committedPosition.lng.toFixed(6)}` : '—'} · sync {String(latestSyncState).toUpperCase()} · network {networkState.toUpperCase()}
+            QA {qaSessionId ?? '…'} · {observationMode.toUpperCase()} · seed {deterministicSeed}{'\n'}map {mapDiagnostics.mountId ?? '—'} · style {mapDiagnostics.styleLoaded ? 'YES' : 'NO'} · ready {mapDiagnostics.mapReady ? 'YES' : 'NO'}{'\n'}provider {locationProviderSource.toUpperCase()} · owner {ownerGeneration?.slice(-8) ?? '—'} · seg {currentSegmentId?.slice(-8) ?? '—'}{'\n'}truth {lastGeneratedSample?.groundTruthLat != null && lastGeneratedSample?.groundTruthLng != null ? `${lastGeneratedSample.groundTruthLat.toFixed(6)},${lastGeneratedSample.groundTruthLng.toFixed(6)}` : '—'}{'\n'}raw #{lastGeneratedSample?.sequence ?? 0} {lastGeneratedSample ? `${lastGeneratedSample.lat.toFixed(6)},${lastGeneratedSample.lng.toFixed(6)}` : '—'} · hAcc {lastGeneratedSample?.accuracyM?.toFixed(1) ?? '—'}{'\n'}accepted #{lastAcceptedSample?.sequence ?? 0} {lastAcceptedSample?.lat != null && lastAcceptedSample?.lng != null ? `${lastAcceptedSample.lat.toFixed(6)},${lastAcceptedSample.lng.toFixed(6)}` : '—'} · rejected {lastRejectionReason ?? '—'}{'\n'}committed {committedPointCount} {committedPosition ? `${committedPosition.lat.toFixed(6)},${committedPosition.lng.toFixed(6)}` : '—'} · sync {String(latestSyncState).toUpperCase()} · network {networkState.toUpperCase()}
           </Text>
           <View style={styles.buttonRowWrap}>
             <TinyButton label="Copy JSONL" onPress={() => { void copyDiagnostics(); }} />

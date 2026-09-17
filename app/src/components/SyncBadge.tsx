@@ -16,17 +16,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import type { SyncState } from '../services/offlineEntity';
-
-const COLORS = {
-  bg: 'rgba(255,255,255,0.96)',
-  border: 'rgba(0,0,0,0.06)',
-  text: '#2b241b',
-  textMuted: '#7a6f5f',
-  dotPending: '#c88a2a',
-  dotSyncing: '#3B82F6',
-  dotSynced: '#5d7c46',
-  dotFailed: '#c44545',
-};
+import { useVisualTheme } from '../hooks/useVisualTheme';
 
 interface Props {
   state: SyncState;
@@ -39,46 +29,47 @@ interface Props {
 }
 
 export function SyncBadge({ state, hideWhenSynced = true, onPress, compact = false }: Props) {
+  const theme = useVisualTheme();
   if (state === 'synced' && hideWhenSynced) return null;
 
-  let dotColor = COLORS.dotPending;
+  let dotColor = theme.accent;
   let label = '';
   let showSpinner = false;
 
   switch (state) {
     case 'pending':
-      dotColor = COLORS.dotPending;
-      label = compact ? '' : 'Waiting to sync';
+      dotColor = theme.accent;
+      label = compact ? '' : 'Saved locally';
       break;
     case 'syncing':
-      dotColor = COLORS.dotSyncing;
+      dotColor = theme.primary;
       label = compact ? '' : 'Syncing…';
       showSpinner = true;
       break;
     case 'synced':
-      dotColor = COLORS.dotSynced;
+      dotColor = theme.primary;
       label = compact ? '' : 'Synced';
       break;
     case 'failed':
-      dotColor = COLORS.dotFailed;
-      label = compact ? '' : 'Retry';
+      dotColor = theme.destructive;
+      label = compact ? '' : 'Retry sync';
       break;
   }
 
   const Content = (
-    <View style={[styles.badge, compact && styles.badgeCompact]}>
+    <View style={[styles.badge, { backgroundColor: theme.surface, borderColor: theme.border }, compact && styles.badgeCompact]}>
       {showSpinner ? (
         <ActivityIndicator size="small" color={dotColor} style={styles.spinner} />
       ) : (
         <View style={[styles.dot, { backgroundColor: dotColor }, compact && styles.dotCompact]} />
       )}
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {label ? <Text style={[styles.label, { color: theme.foreground }]}>{label}</Text> : null}
     </View>
   );
 
   if (onPress) {
     return (
-      <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
+      <TouchableOpacity activeOpacity={0.7} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
         {Content}
       </TouchableOpacity>
     );
@@ -90,12 +81,10 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.bg,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: COLORS.border,
     alignSelf: 'flex-start',
   },
   badgeCompact: {
@@ -107,7 +96,7 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
   dotCompact: { width: 7, height: 7, borderRadius: 4, marginRight: 0 },
   spinner: { marginRight: 5, transform: [{ scale: 0.6 }] },
-  label: { fontSize: 11.5, fontWeight: '600', color: COLORS.text, letterSpacing: 0.1 },
+  label: { fontSize: 11.5, fontWeight: '600', letterSpacing: 0.1 },
 });
 
 export default SyncBadge;

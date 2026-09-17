@@ -45,7 +45,15 @@ import { getFlagsSync } from '../config/featureFlags';
 import { polylineLengthM } from '../services/routing/corridor/PolylineSampler';
 import { debugLogger } from '../services/debugLogger';
 import { telemetryUploader } from '../services/telemetryUploader';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { routeMatchesIdentity } from '../features/route/routeContracts';
+import {
+  createRouteEditorSaveCoordinator,
+  executeRouteEditorLeaveChoice,
+  routeEditorLeaveDecision,
+} from '../features/route/routeEditorSaveCoordinator';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 
@@ -87,16 +95,23 @@ export function RouteEditorScreen() {
   const route = useRoute<any>();
   const routeId = route.params?.routeId as string | undefined;
   const fromSessionId = route.params?.fromSessionId as string | undefined;
+  const reconnectsActivityGap = route.params?.reconnectsActivityGap === true;
   const fromSessionTrackPoints = route.params?.fromSessionTrackPoints as
-    | Array<{ lat: number; lng: number }> | undefined;
+    | Array<{ lat: number; lng: number; alt?: number | null; t?: number; accuracy?: number | null }> | undefined;
   // O12: settings-aware distance format.
   const dist = useDistance();
+  const debugMode = useSettingsStore(s => s.debugMode);
+  const qaToolsAvailable = activitySimulatorBuildCapable
+    || (typeof __DEV__ !== 'undefined' && __DEV__);
 
   const addRoute = useRouteStore(s => s.addRoute);
   const updateRoute = useRouteStore(s => s.updateRoute);
   const deleteRoute = useRouteStore(s => s.deleteRoute);
   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
-  const existingRoute = useRouteStore(s => s.routes.find(r => r.id === routeId));
+  const routeDetailState = useRouteStore(s => routeId ? (s.routeDetailState[routeId] ?? 'idle') : 'idle');
+  const existingRoute = useRouteStore(s => routeId
+    ? s.routes.find(item => routeMatchesIdentity(item, routeId))
+    : undefined);
   const session = useSessionStore(s => fromSessionId ? s.sessions.find(x => x.id === fromSessionId) : null);
 
   const [name, setName] = useState('');
@@ -108,6 +123,15 @@ export function RouteEditorScreen() {
   const [enterEditLoading, setEnterEditLoading] = useState(false);
   const [enterEditError, setEnterEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const saveInFlightRef = useRef(false);
+  const saveCoordinatorRef = useRef(createRouteEditorSaveCoordinator());
+  const mountedRef = useRef(true);
+  const saveObjectKeyRef = useRef('route-editor-unresolved');
+  const deleteInFlightRef = useRef(false);
+  const allowLeaveRef = useRef(false);
+  const initialNameRef = useRef('');
+  const initialPermissionRef = useRef<'personal' | 'friend'>('personal');
+  const didHydrateBaselineRef = useRef(false);
   // Sprint 69 STORY-00535: route visibility toggle. Original default 'friend'.
   // 2026-08-16 concept: default changed to 'personal' ('Just me') per
   // RouteEditor-1.png — safer/more private default per Playwright QA finding.
@@ -138,6 +162,8 @@ export function RouteEditorScreen() {
   // previous session must not preempt the current screen's id, which
   // would cause editRouteId !== expectedId and break edit mode entry.
   const effectiveEditId = routeId ?? (fromSessionId ? `draft_${fromSessionId}` : null);
+  const saveObjectKey = effectiveEditId ?? 'route-editor-new';
+  saveObjectKeyRef.current = saveObjectKey;
   const dualEditActive = editIsOpen && editRouteId === effectiveEditId;
   // Show committedDraft in view-mode ONLY when it belongs to this screen.
   const draftForThisScreen = committedDraft && effectiveEditId && committedDraft.routeId === effectiveEditId
@@ -182,13 +208,16 @@ export function RouteEditorScreen() {
   // flow no longer pre-fills with "Hike Jun 9" / "Run Jun 9" — PO wants
   // the user to think about the name and confirm before Save unlocks.
   useEffect(() => {
-    if (existingRoute) {
+    if (existingRoute && !didHydrateBaselineRef.current) {
       setName(existingRoute.name);
       // Sprint 69 STORY-00535: hydrate visibility for edit. Default 'friend'
       // when the existing row has no permission field (legacy rows).
       if (existingRoute.permission === 'personal' || existingRoute.permission === 'friend') {
         setPermission(existingRoute.permission);
       }
+      initialNameRef.current = existingRoute.name;
+      initialPermissionRef.current = existingRoute.permission === 'friend' ? 'friend' : 'personal';
+      didHydrateBaselineRef.current = true;
     }
   }, [existingRoute]);
 
@@ -249,19 +278,18 @@ export function RouteEditorScreen() {
       });
   }, [fromSessionId, fromSessionTrackPoints]);
 
-  // ── Detach edit on unmount (preserve session for resume).
-  // v249: also clear committedDraft so it doesn't leak across screens —
-  // any unrelated route opened next would otherwise pick up this draft's
-  // geometry. handleViewSave already clears it before nav.goBack(); this
-  // covers all other exit paths (back button, hardware back, navigate away).
+  // ── Detach edit UI on unmount while preserving the route-scoped draft.
+  // committedDraft carries its own routeId and cannot pre-empt another Route;
+  // clearing it here used to lose a failed or unresolved save when leaving.
   const dualEditActiveRef = useRef(dualEditActive);
   useEffect(() => { dualEditActiveRef.current = dualEditActive; }, [dualEditActive]);
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
+      saveCoordinatorRef.current.suppressLateNavigation();
       if (dualEditActiveRef.current) {
         try { useRouteEditStore.getState().detachUI(); } catch {}
       }
-      try { useRouteEditStore.getState().clearCommittedDraft(); } catch {}
     };
   }, []);
 
@@ -271,13 +299,13 @@ export function RouteEditorScreen() {
   // as tracking sessions, but with activity_mode=null (free / non-tracking).
   // Skips if a tracking session is already active (don't disturb it).
   useEffect(() => {
+    if (!qaToolsAvailable || !debugMode) return;
     if (debugLogger.getCurrentSessionId()) {
       // A tracking session is active — leave it alone, our logs will
       // co-mingle into that session and upload with it.
       return;
     }
     try {
-      debugLogger.setEnabled(true);
       debugLogger.startSession({ activity_mode: 'free' });
       debugLogger.log({ ts: Date.now(), event: 'breadcrumb', tag: 'route_editor_open' });
     } catch { /* swallow */ }
@@ -291,7 +319,7 @@ export function RouteEditorScreen() {
         }).catch(() => {});
       } catch { /* swallow */ }
     };
-  }, []);
+  }, [debugMode, qaToolsAvailable]);
 
   // ── Hardware back during edit → discard alert
   const discardAlertActiveRef = useRef(false);
@@ -543,12 +571,16 @@ export function RouteEditorScreen() {
   // if user has edited; otherwise falls back to sessionTrackPoints
   // (save-as-route untouched) or existingRoute.points (existing route).
   const handleViewSave = useCallback(async () => {
-    if (saving) return;
+    if (saving || saveInFlightRef.current) return;
+    setEnterEditError(null);
     const trimmed = name.trim();
     if (trimmed.length === 0) {
       Alert.alert('Name required', 'Please name this route before saving.', [{ text: 'OK' }]);
       return;
     }
+    const saveToken = saveCoordinatorRef.current.begin(saveObjectKey);
+    if (!saveToken) return;
+    saveInFlightRef.current = true;
     setSaving(true);
     try {
       const liveSourceSession = fromSessionId
@@ -556,10 +588,13 @@ export function RouteEditorScreen() {
         : null;
       if (fromSessionId && !liveSourceSession) {
         Alert.alert('Activity unavailable', 'This Activity was deleted, so it cannot create a new Route.');
-        nav.dispatch(CommonActions.reset({
-          index: 1,
-          routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'activities' } }],
-        }));
+        if (saveCoordinatorRef.current.claimNavigation(saveToken, saveObjectKeyRef.current)) {
+          allowLeaveRef.current = true;
+          nav.dispatch(CommonActions.reset({
+            index: 1,
+            routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'activities' } }],
+          }));
+        }
         return;
       }
       const draft = useRouteEditStore.getState().committedDraft;
@@ -622,15 +657,17 @@ export function RouteEditorScreen() {
           elevationGainM: elevationGainM > 0 ? elevationGainM : (session?.elevationGainM ?? 0),
           // Sprint 69 STORY-00535: persist visibility tier picked in the UI.
           permission,
+          activityMode: liveSourceSession?.activityMode,
         }, {
           clientActivityId: liveSourceSession?.clientActivityId
             ?? (liveSourceSession && !/^\d+$/.test(liveSourceSession.id) ? liveSourceSession.id : undefined),
           serverActivityId: liveSourceSession?.remoteId
             ?? liveSourceSession?.serverActivityId
             ?? (liveSourceSession && /^\d+$/.test(liveSourceSession.id) ? Number(liveSourceSession.id) : undefined),
+          reconnectsActivityGap,
         });
         if (!createdId) {
-          Alert.alert('Save failed', 'Could not save route — check your connection.', [{ text: 'OK' }]);
+          Alert.alert('Save failed', 'Could not save the Route safely on this device.', [{ text: 'OK' }]);
           return;
         }
         savedRouteId = createdId;
@@ -639,28 +676,25 @@ export function RouteEditorScreen() {
       // Clear the in-memory draft and any open edit session.
       try { useRouteEditStore.getState().clearCommittedDraft(); } catch {}
       try { useRouteEditStore.getState().cancelEdit(); } catch {}
-
-      // v6.4 PO direction: After "Save as route" succeeds, jump straight
-      // to the saved route's detail page AND reset the nav stack so back
-      // returns to Home (not the original ActivityDetail). The previous
-      // StackActions.replace kept the stack history (Home → ActivityDetail
-      // → RouteEditor), making back return to ActivityDetail — which the
-      // PO called out as "怪异" because the user is done with that flow.
-      // CommonActions.reset replaces the entire stack with [Home, RouteEditor]
-      // so back is consistently Home.
-      if (!targetId && savedRouteId) {
-        nav.dispatch(
-          CommonActions.reset({
-            index: 1,
-            routes: [
-              { name: 'Home' },
-              { name: 'RouteEditor', params: { routeId: savedRouteId } },
-            ],
-          }),
-        );
-      } else {
-        // Editing an existing route — go back is already correct.
-        nav.goBack();
+      if (saveCoordinatorRef.current.claimNavigation(saveToken, saveObjectKeyRef.current)) {
+        allowLeaveRef.current = true;
+        // A newly created future-intent object lands on the one canonical Route
+        // Detail surface. RouteEditor remains the confirmation/draft step, not
+        // an alternate post-create Detail product.
+        if (!targetId && savedRouteId) {
+          nav.dispatch(
+            CommonActions.reset({
+              index: 1,
+              routes: [
+                { name: 'Home' },
+                { name: 'MapHistory', params: { routeId: savedRouteId } },
+              ],
+            }),
+          );
+        } else {
+          // Editing an existing route — go back is already correct.
+          nav.goBack();
+        }
       }
     } catch (e: any) {
       // O18 VER-05: map known backend errors to human copy — do not lose
@@ -675,27 +709,43 @@ export function RouteEditorScreen() {
         body = 'A route with this name already exists. Try a different name.';
       } else if (raw.includes('unauthor') || raw.includes('401')) {
         body = 'Your session expired. Sign in again and try saving.';
+      } else if (e?.code === 'ROUTE_REQUEST_TIMEOUT' || e?.outcomeUnknown) {
+        body = 'The save outcome is not confirmed. Your draft is still here; retry to reconcile it.';
       } else if (raw.includes('network') || raw.includes('fetch')) {
         body = 'Check your connection and try again.';
       } else {
         body = 'Something got lost between here and our server. Try again in a moment.';
       }
-      Alert.alert('Save failed', body, [{ text: 'OK' }]);
+      if (mountedRef.current) {
+        setEnterEditError(body);
+        Alert.alert('Save failed', body, [{ text: 'OK' }]);
+      }
     } finally {
-      setSaving(false);
+      saveCoordinatorRef.current.finish(saveToken);
+      saveInFlightRef.current = false;
+      if (mountedRef.current) setSaving(false);
     }
-  }, [saving, name, routeId, fromSessionId, existingRoute, sessionTrackPoints, session, addRoute, updateRoute, nav]);
+  }, [saving, name, routeId, fromSessionId, reconnectsActivityGap, existingRoute, sessionTrackPoints, session, addRoute, updateRoute, nav, saveObjectKey]);
 
   const handleDelete = useCallback(() => {
     if (!routeId) return;
     Alert.alert(
-      'Delete route?',
-      'This action cannot be undone.',
+      'Delete Route?',
+      'This removes the Route. Its source Activity, Cairns, and Memory stay unchanged.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: async () => {
-          await deleteRoute(routeId);
-          nav.goBack();
+          if (deleteInFlightRef.current) return;
+          deleteInFlightRef.current = true;
+          try {
+            await deleteRoute(routeId);
+            allowLeaveRef.current = true;
+            nav.goBack();
+          } catch {
+            Alert.alert('Delete failed', 'The Route is still here. Check your connection and try again.');
+          } finally {
+            deleteInFlightRef.current = false;
+          }
         } },
       ],
     );
@@ -734,6 +784,71 @@ export function RouteEditorScreen() {
   // "save in flight", matching PO's expectation that Save should not
   // appear locked when nothing seems wrong.
   const canSaveView = nameValid && !saving;
+  const hasUnsavedChanges = isEditing
+    || Boolean(draftForThisScreen)
+    || name.trim() !== initialNameRef.current.trim()
+    || permission !== initialPermissionRef.current;
+
+  useEffect(() => {
+    const unsubscribe = (nav as any).addListener('beforeRemove', (event: any) => {
+      const decision = routeEditorLeaveDecision({
+        allowLeave: allowLeaveRef.current,
+        hasUnsavedChanges,
+        saving,
+      });
+      if (decision === 'allow') return;
+      event.preventDefault();
+      if (decision === 'confirm-saving') {
+        Alert.alert(
+          'Route is still saving',
+          'Keep waiting, or leave this editor. If the save outcome is uncertain, your draft stays available for retry.',
+          [
+            { text: 'Keep waiting', style: 'cancel' },
+            {
+              text: 'Leave editor',
+              style: 'destructive',
+              onPress: () => {
+                executeRouteEditorLeaveChoice(decision, 'leave-saving', {
+                  discardDraft: () => {},
+                  suppressLateNavigation: () => saveCoordinatorRef.current.suppressLateNavigation(),
+                  allowAndDispatch: () => {
+                    allowLeaveRef.current = true;
+                    (nav as any).dispatch(event.data.action);
+                  },
+                });
+              },
+            },
+          ],
+        );
+        return;
+      }
+      Alert.alert(
+        'Discard Route changes?',
+        'Your saved Route will stay unchanged.',
+        [
+          { text: 'Stay', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => {
+              executeRouteEditorLeaveChoice(decision, 'discard', {
+                discardDraft: () => {
+                  useRouteEditStore.getState().cancelEdit();
+                  useRouteEditStore.getState().clearCommittedDraft();
+                },
+                suppressLateNavigation: () => {},
+                allowAndDispatch: () => {
+                  allowLeaveRef.current = true;
+                  (nav as any).dispatch(event.data.action);
+                },
+              });
+            },
+          },
+        ],
+      );
+    });
+    return unsubscribe;
+  }, [hasUnsavedChanges, nav, saving]);
 
   // v251: stable segments + showOriginal so DualLineLayer (now memoed)
   // doesn't re-render on every appendStrokePoint frame. Deps avoid the
@@ -752,6 +867,31 @@ export function RouteEditorScreen() {
     confidence: 'confident' as const,
   }], [renderPoints.length, editBrushStrokes.length, editHasCommittedEdit, editIsModified]);
 
+  if (routeId && !existingRoute && (routeDetailState === 'not-found' || routeDetailState === 'error')) {
+    return (
+      <View style={[styles.container, styles.unavailable, { backgroundColor: visualTheme.background }]} testID="route-editor-unavailable">
+        <View style={[styles.unavailableTop, { paddingTop: insets.top + 8 }]}>
+          <BackButton variant="inline" onPress={() => nav.goBack()} />
+        </View>
+        <Icon name="Route" size={36} color={visualTheme.iconInactive} strokeWidth={1.6} />
+        <Text style={[styles.unavailableTitle, { color: visualTheme.foreground }]}>Route unavailable</Text>
+        <Text style={[styles.unavailableBody, { color: visualTheme.foregroundSecondary }]}>
+          {routeDetailState === 'not-found'
+            ? 'This Route may have been deleted or is not available to this account.'
+            : 'The saved Route could not be loaded. Check your connection and try again.'}
+        </Text>
+        {routeDetailState === 'error' ? (
+          <TouchableOpacity
+            style={[styles.unavailableRetry, { backgroundColor: visualTheme.primary }]}
+            onPress={() => { void loadRouteDetail(routeId); }}
+          >
+            <Text style={[styles.viewSaveBtnText, { color: visualTheme.onPrimary }]}>Try Again</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: visualTheme.background }]}>
       <View style={styles.mapArea}>
@@ -762,8 +902,10 @@ export function RouteEditorScreen() {
             {...(editorResolvedMapStyle.kind === 'url'
               ? { styleURL: editorResolvedMapStyle.url }
               : { styleJSON: editorResolvedMapStyle.json })}
-            logoEnabled={false}
-            attributionEnabled={false}
+            logoEnabled
+            attributionEnabled
+            logoPosition={{ top: insets.top + 58, right: 8 }}
+            attributionPosition={{ top: insets.top + 92, right: 8 }}
             scaleBarEnabled={false}
             compassEnabled={false}
             scrollEnabled={!isEditing || editActiveTool === 'pan'}
@@ -915,21 +1057,14 @@ export function RouteEditorScreen() {
       </View>
 
       {/* Top floating BackButton — same in view-mode and edit-mode for
-          consistency with the rest of the app.
-          2026-08-16 T-C06: in edit mode, show "Edit Route" title + gear icon. */}
+          consistency with the rest of the app. */}
       <View style={[styles.topOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <View style={styles.topRow} pointerEvents="box-none">
-          <BackButton variant="inline" />
+          <BackButton variant="inline" onPress={() => nav.goBack()} />
           {isEditing ? (
             <>
               <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>Edit Route</Text>
-              <TouchableOpacity
-                style={[styles.gearBtn, { backgroundColor: visualTheme.mapOverlay, borderColor: visualTheme.border }]}
-                onPress={() => { /* TODO route settings */ }}
-                activeOpacity={0.85}
-              >
-                <Icon name="Cog" size={20} color={visualTheme.icon} strokeWidth={1.9} />
-              </TouchableOpacity>
+              <View style={{ width: 40 }} />
             </>
           ) : (
             <View style={{ flex: 1 }} />
@@ -943,7 +1078,13 @@ export function RouteEditorScreen() {
           {/* Brush gesture capture — only intercepts when brush/eraser tool active */}
           <BrushOverlay mapViewRef={mapViewRef} />
           {/* Bottom card — tool strip is now inside this card */}
-          <EditOverlayV274 onCancel={handleCancelEdit} onSave={handleSave} onPreview={handlePreview} onBeautify={handleBeautify} />
+          <EditOverlayV274
+            onCancel={handleCancelEdit}
+            onSave={handleSave}
+            onPreview={handlePreview}
+            onBeautify={handleBeautify}
+            saveLabel="Apply to draft"
+          />
         </>
       ) : (
         <>
@@ -1045,7 +1186,7 @@ export function RouteEditorScreen() {
                   ) : (
                     <>
                       <Icon name="Check" size={16} color={visualTheme.onPrimary} strokeWidth={2.5} />
-                      <Text style={[styles.viewSaveBtnText, { color: visualTheme.onPrimary }]}>Save</Text>
+                      <Text style={[styles.viewSaveBtnText, { color: visualTheme.onPrimary }]}>Save Route</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -1060,6 +1201,11 @@ export function RouteEditorScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.primaryBg },
+  unavailable: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, gap: Spacing.sm },
+  unavailableTop: { position: 'absolute', top: 0, left: Spacing.md },
+  unavailableTitle: { fontSize: FontSize.h2, fontWeight: '700', marginTop: Spacing.sm },
+  unavailableBody: { fontSize: FontSize.body, lineHeight: 22, textAlign: 'center' },
+  unavailableRetry: { minHeight: 46, paddingHorizontal: Spacing.xl, borderRadius: Radius.button, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.md },
   mapArea: { flex: 1 },
   fallback: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface },
   fallbackText: { color: Colors.textSecondary, fontSize: FontSize.body },
@@ -1085,7 +1231,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.base,
   },
-  // 2026-08-16 T-C06: Edit Route title + gear
   topTitle: {
     flex: 1,
     textAlign: 'center',
@@ -1093,17 +1238,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1E2A24',
   },
-  gearBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(20,42,30,0.08)',
-  },
-
   // Bottom: rounded white card panel
   bottomPanelWrap: {
     position: 'absolute',

@@ -1,0 +1,101 @@
+{
+  "baseUrl": "http://127.0.0.1:8097",
+  "captures": [
+    {
+      "name": "root-day-390x844",
+      "file": "root-day-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "root-sunset-390x844",
+      "file": "root-sunset-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "root-night-390x844",
+      "file": "root-night-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "account-password-day-390x844",
+      "file": "account-password-day-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "account-delete-confirmation-day-390x844",
+      "file": "account-delete-confirmation-day-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "account-apple-sunset-390x844",
+      "file": "account-apple-sunset-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "privacy-export-ready-night-390x844",
+      "file": "privacy-export-ready-night-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "privacy-permission-limited-day-390x844",
+      "file": "privacy-permission-limited-day-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "help-feedback-day-390x844",
+      "file": "help-feedback-day-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "help-feedback-failed-day-390x844",
+      "file": "help-feedback-failed-day-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "root-day-small-320x568",
+      "file": "root-day-small-320x568.png",
+      "viewport": {
+        "width": 320,
+        "height": 568
+      }
+    },
+    {
+      "name": "root-night-large-430x932",
+      "file": "root-night-large-430x932.png",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      }
+    }
+  ]
+}

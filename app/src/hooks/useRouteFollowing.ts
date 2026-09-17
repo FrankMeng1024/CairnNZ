@@ -5,8 +5,7 @@
  *   - useTrackingStore.lastCoordinate (GPS ticks)
  *   - useTrackingStore.status         (only follow when actively tracking)
  *   - useRouteStore.followingRouteId  (the currently-followed route)
- *   - useSettingsStore.voiceGuidance  (mute switch)
- *   - useSettingsStore.offRouteThresholdM (deviation threshold)
+ * Route cue and deviation policy is product-owned, not a global user setting.
  *
  * Every GPS tick, this hook:
  *   1. Recomputes the FollowState (pure).
@@ -32,6 +31,8 @@ import {
 import { voiceGuidance } from '../services/routeFollowing/VoiceGuidance';
 
 const OFF_ROUTE_HYSTERESIS_FRAC = 0.3; // clear when back within (threshold × 0.7)
+const OFF_ROUTE_THRESHOLD_M = 50;
+const VOICE_GUIDANCE_ENABLED = true;
 
 export interface UseRouteFollowingResult {
   /** True when a route is selected AND tracking is active. */
@@ -51,8 +52,6 @@ export function useRouteFollowing(): UseRouteFollowingResult {
   const status = useTrackingStore((s) => s.status);
   const followingRouteId = useRouteStore((s) => s.followingRouteId);
   const routes = useRouteStore((s) => s.routes);
-  const voiceEnabled = useSettingsStore((s) => s.voiceGuidance);
-  const offRouteThresholdM = useSettingsStore((s) => s.offRouteThresholdM);
   const units = useSettingsStore((s) => s.units);
 
   const route = useMemo(
@@ -79,8 +78,8 @@ export function useRouteFollowing(): UseRouteFollowingResult {
 
   // Keep voice service in sync with mute toggle and unit preference each render.
   useEffect(() => {
-    voiceGuidance.configure({ enabled: voiceEnabled, imperial: units === 'imperial' });
-  }, [voiceEnabled, units]);
+    voiceGuidance.configure({ enabled: VOICE_GUIDANCE_ENABLED, imperial: units === 'imperial' });
+  }, [units]);
 
   // All refs declared up-front so downstream effects can safely reference
   // them (TDZ would throw if declared later in source order).
@@ -131,10 +130,10 @@ export function useRouteFollowing(): UseRouteFollowingResult {
     // Hysteresis is a fraction of the threshold rather than a fixed 15m —
     // scales with user's tolerance so tight (20m) and loose (200m) settings
     // both feel equally "sticky" on the boundary.
-    const hysteresisM = offRouteThresholdM * OFF_ROUTE_HYSTERESIS_FRAC;
+    const hysteresisM = OFF_ROUTE_THRESHOLD_M * OFF_ROUTE_HYSTERESIS_FRAC;
     const isOff = !wasOff
-      ? followState.distanceToRouteM > offRouteThresholdM
-      : followState.distanceToRouteM > offRouteThresholdM - hysteresisM;
+      ? followState.distanceToRouteM > OFF_ROUTE_THRESHOLD_M
+      : followState.distanceToRouteM > OFF_ROUTE_THRESHOLD_M - hysteresisM;
     if (isOff && !wasOff) {
       voiceGuidance.announceOffRoute();
     } else if (!isOff && wasOff) {
@@ -178,7 +177,7 @@ export function useRouteFollowing(): UseRouteFollowingResult {
       voiceGuidance.announceRouteComplete();
       routeCompletedRef.current = true;
     }
-  }, [followState, geometry, offRouteThresholdM, status]);
+  }, [followState, geometry, status]);
 
   // Reset the "completed" latch when route changes.
   useEffect(() => {
@@ -189,7 +188,7 @@ export function useRouteFollowing(): UseRouteFollowingResult {
 
   const isFollowingRoute = !!route && status === 'tracking';
   const isOffRoute =
-    isFollowingRoute && !!followState && followState.distanceToRouteM > offRouteThresholdM;
+    isFollowingRoute && !!followState && followState.distanceToRouteM > OFF_ROUTE_THRESHOLD_M;
 
   return {
     isFollowingRoute,

@@ -39,7 +39,7 @@ import {
 // R114 (2026-08-07): use canonical splitTitleBody so the U+001E-encoded
 // wire format is honoured (previous inline splitNote used \n as separator,
 // which loses the title for any note that used the encodeTitleBody path).
-import { splitTitleBody } from '../../plant/services/noteEncoding';
+import { cairnDisplayTitle, splitTitleBody } from '../../plant/services/noteEncoding';
 
 interface Props {
   /** The mark to show. null = closed. */
@@ -154,6 +154,7 @@ export function MarkDetailSheet(props: Props) {
   // separator produced by encodeTitleBody in PlantScreen; falls back
   // gracefully for legacy title-only notes (design §11 invariant).
   const { title, body } = splitTitleBody(marker.note ?? '');
+  const displayTitle = cairnDisplayTitle(title, body, marker.createdAt);
 
   return (
     <BottomSheetFrame
@@ -168,7 +169,7 @@ export function MarkDetailSheet(props: Props) {
           </TouchableOpacity>
 
           {/* Title + body */}
-          <Text style={[styles.title, { color: theme.foreground }]} testID="mark-detail-title">{title || '(untitled)'}</Text>
+          <Text style={[styles.title, { color: theme.foreground }]} testID="mark-detail-title">{displayTitle}</Text>
           {body ? <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{body}</Text> : null}
 
           {/* Tier badge row */}

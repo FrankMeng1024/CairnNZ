@@ -1,2519 +1,1040 @@
 /**
- * SettingsScreen — O12 MVP redesign (2026-07-27)
- *
- * Structure (per Mockup 5 Option A):
- *   1. Profile card (letter avatar + name + email + inline Change password)
- *   2. Preferences   — Units / Night mode / Haptic feedback
- *   3. Memory        — readonly stats
- *   4. About & Legal — MetService / Report safety / Feedback / Privacy / Terms / About Cairn
- *   5. Danger zone   — Reset my map memory (type "reset memory") + Delete account (type "delete account")
- *   6. Account       — Sign out (grey card, below Danger)
- *   7. Footer        — "Ngā mihi nui — thanks for using Cairn."
- *   Hidden Developer — unlocked by 5-tap on About Cairn row
- *
- * Removed from old Settings (see O12 commit for rationale):
- *   - Interface Mode / Explorer / Navigator (uiMode was dead double-switch)
- *   - Share flags default, Live location sharing (unimplemented)
- *   - Trip Sharing (unimplemented)
- *   - Danger Alerts, Route Deviation, Broadcast Interval, Voice Broadcasts (unimplemented — belong to
- *     future navigation panel, not global Settings)
- *   - Sound Effects, Edge Warning Glow (unimplemented)
- *   - Old Clear uploaded / Clear ALL hike data (moved to internal auto-cleanup via hikeTracksCache size cap)
- *   - Emergency Contacts (T2 already deleted; SOS work descoped)
- *   - Explicit always-visible Debug toggle (5-tap gesture restores it — App Store review safety)
+ * Settings — durable account, preference, privacy/data, and help controls.
+ * Contextual maps, progress, weather, Activity tuning, and QA tools have
+ * explicit owners elsewhere and are deliberately absent from this surface.
  */
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Application from 'expo-application';
+import * as Crypto from 'expo-crypto';
+import * as Location from 'expo-location';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Switch, Alert, TextInput, ActivityIndicator, Platform, Linking, Modal,
-  KeyboardAvoidingView, Pressable, Keyboard, Image,
+  ActivityIndicator,
+  Alert,
+  AppState,
+  Image,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigation/RootNavigator';
-import { useAppStore } from '../store/useAppStore';
-import { useSettingsStore } from '../store/useSettingsStore';
-import { useTrackingStore } from '../store/useTrackingStore';
-import { useMemoryStore } from '../features/memory/store/useMemoryStore';
-// R114/O22 STORY-73024 (S3): Memory always-on toggle read/write.
-import { useMemorySettingsStore } from '../features/memory/store/useMemorySettingsStore';
-import { useMarkerStore } from '../store/useMarkerStore';
-// O24 SETTINGS-JOURNEY: sessions count for the new Your journey section.
-import { useSessionStore } from '../store/useSessionStore';
-import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
-import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
-import { resolveSimulatorContinuityLock } from '../features/activitySimulator/simulatorContinuity';
-import { logout, patchName } from '../services/authService';
-import { haptic } from '../services/hapticService';
-import { deleteAllMemoryFromServer } from '../services/memorySync';
-import { crashLogger } from '../services/crashLogger';
-import { getToken } from '../services/tokenStore';
-import { storage } from '../store/storage';
-import { API_BASE_URL, PRIVACY_URL } from '../config/api';
-import { Colors, Spacing, Radius, FontSize, IconSize } from '../components/tokens';
-import { Icon } from '../components/Icon';
-import type { IconName } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
-import { PressBtn } from '../components/PressBtn';
-import { pickDebugScreenshots, uploadDebugScreenshots } from '../services/debugUpload';
-import { log } from '../services/appLog';
-import { useWeatherStore, NZ_TEST_CITIES } from '../store/useWeatherStore';
-import type { NZCity } from '../store/useWeatherStore';
-import { getHomeBackground, getRegisteredBackgroundLayout, getWeatherReviewBackground } from '../utils/homeBackground';
+import { ContentSurface } from '../components/ContentSurface';
+import { Icon, type IconName } from '../components/Icon';
+import { ModalCard, ModalCardHeader } from '../components/ModalCard';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { SegmentedControl } from '../components/SegmentedControl';
+import { TextField } from '../components/TextField';
+import { FontSize, IconSize, Radius, Spacing } from '../components/tokens';
+import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useScenicTimeState } from '../hooks/useScenicTimeState';
-import { OTA_VERSION } from '../components/OtaBadge';
-import { CHANGELOG } from '../constants/changelog';
+import { useAppStore } from '../store/useAppStore';
+import { useSettingsStore, type AppearancePref, type UnitsPref } from '../store/useSettingsStore';
+import { useMemorySettingsStore } from '../features/memory/store/useMemorySettingsStore';
+import { useWeatherStore } from '../store/useWeatherStore';
+import {
+  changePassword,
+  deleteAccount,
+  fetchExportHistory,
+  getMe,
+  logout,
+  patchName,
+  requestDataExport,
+  submitFeedback,
+  type DataExportSummary,
+} from '../services/authService';
+import {
+  completeDeletedAccountLocalPurge,
+  scheduleDeletedAccountLocalPurge,
+} from '../services/accountLocalData';
+import { clearCredentials } from '../services/credentialsStore';
+import { deleteAllMemoryFromServer } from '../services/memorySync';
+import { haptic } from '../services/hapticService';
+import { PRIVACY_URL } from '../config/api';
+import { getHomeBackground, getRegisteredBackgroundLayout, getWeatherReviewBackground } from '../utils/homeBackground';
 
-type Nav = NativeStackNavigationProp<RootStackParamList>;
+type Page = 'root' | 'account' | 'privacy' | 'help';
+type FeedbackKind = 'feedback' | 'bug';
+type AsyncState = 'idle' | 'sending' | 'sent' | 'failed';
 
-// O13 bug 5: openMailWithFallback helper removed — Feedback/Safety/Bug
-// merged into a single in-app inline form that posts through appLog. No
-// mailto hop needed.
+const TERMS_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+const UNITS_SEGMENTS = [
+  { key: 'metric', label: 'Metric' },
+  { key: 'imperial', label: 'Imperial' },
+] as const;
+const APPEARANCE_SEGMENTS = [
+  { key: 'auto', label: 'Auto' },
+  { key: 'day', label: 'Day' },
+  { key: 'sunset', label: 'Sunset' },
+  { key: 'night', label: 'Night' },
+] as const;
+const FEEDBACK_SEGMENTS = [
+  { key: 'feedback', label: 'Feedback' },
+  { key: 'bug', label: 'Bug' },
+] as const;
 
-// ── Row helpers ────────────────────────────────────────────────────────────
-function ToggleRow({
-  iconName, iconColor, iconBg, label, hint, value, onToggle,
-  textColor, mutedColor, disabled, testID,
-}: {
-  iconName: IconName; iconColor: string; iconBg: string;
-  label: string; hint?: string;
-  value: boolean; onToggle: () => void;
-  disabled?: boolean; testID?: string;
-  // R21 (2026-08-17): optional weather/appearance-adaptive text colors.
-  // When bg is dark (night variant), the default deep-green label + grey
-  // hint disappear; caller passes cardTextColor + cardTextColorMuted so
-  // the row stays readable on every variant.
-  textColor?: string; mutedColor?: string;
-}) {
+function SectionTitle({ children, color, shadowColor }: { children: React.ReactNode; color: string; shadowColor: string }) {
   return (
-    <View style={[rowStyles.row, disabled ? { opacity: 0.5 } : null]}>
-      <View style={[rowStyles.iconWrap, { backgroundColor: iconBg }]}>
-        <Icon name={iconName} size={18} color={iconColor} strokeWidth={1.8} />
+    <Text style={[styles.sectionTitle, { color, textShadowColor: shadowColor }]}>{children}</Text>
+  );
+}
+
+function Divider({ color }: { color: string }) {
+  return <View style={[styles.divider, { backgroundColor: color }]} />;
+}
+
+function Row({
+  icon,
+  title,
+  detail,
+  value,
+  onPress,
+  testID,
+  destructive = false,
+  external = false,
+}: {
+  icon: IconName;
+  title: string;
+  detail?: string;
+  value?: string;
+  onPress?: () => void;
+  testID?: string;
+  destructive?: boolean;
+  external?: boolean;
+}) {
+  const theme = useVisualTheme();
+  const body = (
+    <>
+      <View style={[styles.rowIcon, { backgroundColor: destructive ? theme.destructiveSurface : theme.controlSelected }]}>
+        <Icon name={icon} size={IconSize.sm} color={destructive ? theme.destructive : theme.icon} strokeWidth={1.9} />
       </View>
-      <View style={rowStyles.content}>
-        <Text style={[rowStyles.label, textColor ? { color: textColor } : null]}>{label}</Text>
-        {hint ? <Text style={[rowStyles.hint, mutedColor ? { color: mutedColor } : null]} numberOfLines={2}>{hint}</Text> : null}
+      <View style={styles.rowCopy}>
+        <Text style={[styles.rowTitle, { color: destructive ? theme.destructive : theme.textPrimary }]}>{title}</Text>
+        {detail ? <Text style={[styles.rowDetail, { color: theme.textSecondary }]}>{detail}</Text> : null}
+      </View>
+      {value ? <Text style={[styles.rowValue, { color: theme.textSecondary }]} numberOfLines={1}>{value}</Text> : null}
+      {onPress ? (
+        <Icon name={external ? 'ExternalLink' : 'ChevronRight'} size={16} color={theme.iconInactive} strokeWidth={2} />
+      ) : null}
+    </>
+  );
+  if (!onPress) return <View testID={testID} style={styles.row}>{body}</View>;
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.recordPressed }]}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+function ToggleRow({
+  icon,
+  title,
+  detail,
+  value,
+  onChange,
+  disabled = false,
+  testID,
+}: {
+  icon: IconName;
+  title: string;
+  detail: string;
+  value: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
+  testID: string;
+}) {
+  const theme = useVisualTheme();
+  return (
+    <View style={[styles.row, disabled && styles.disabled]}>
+      <View style={[styles.rowIcon, { backgroundColor: theme.controlSelected }]}>
+        <Icon name={icon} size={IconSize.sm} color={theme.icon} strokeWidth={1.9} />
+      </View>
+      <View style={styles.rowCopy}>
+        <Text style={[styles.rowTitle, { color: theme.textPrimary }]}>{title}</Text>
+        <Text style={[styles.rowDetail, { color: theme.textSecondary }]}>{detail}</Text>
       </View>
       <Switch
         testID={testID}
-        accessibilityLabel={label}
+        accessibilityLabel={title}
+        accessibilityState={{ disabled }}
         value={value}
-        onValueChange={onToggle}
         disabled={disabled}
-        trackColor={{ false: Colors.switchTrack, true: Colors.primary }}
-        thumbColor={Colors.surface}
+        onValueChange={onChange}
+        trackColor={{ false: theme.disabledBorder, true: theme.primary }}
+        thumbColor={theme.surfaceElevated}
       />
     </View>
   );
 }
 
-function ActionRow({
-  iconName, iconColor, iconBg, label, hint, value, labelColor, onPress, external, hideChevron, disabled,
-  textColor, mutedColor,
-}: {
-  iconName?: IconName; iconColor?: string; iconBg?: string;
-  label: string; hint?: string; value?: string; labelColor?: string;
-  onPress: () => void; external?: boolean; hideChevron?: boolean; disabled?: boolean;
-  // R21 (2026-08-17): appearance-adaptive text tokens (see ToggleRow).
-  textColor?: string; mutedColor?: string;
-}) {
-  return (
-    <PressBtn style={rowStyles.actionRow} onPress={onPress} scaleTo={0.97} disabled={disabled}>
-      {iconName && iconBg && iconColor ? (
-        <View style={[rowStyles.iconWrap, { backgroundColor: iconBg }]}>
-          <Icon name={iconName} size={18} color={iconColor} strokeWidth={1.8} />
-        </View>
-      ) : null}
-      <View style={{ flex: 1 }}>
-        <Text style={[rowStyles.actionLabel, textColor ? { color: textColor } : null, labelColor ? { color: labelColor } : null]}>{label}</Text>
-        {hint ? <Text style={[rowStyles.hint, mutedColor ? { color: mutedColor } : null]} numberOfLines={2}>{hint}</Text> : null}
-      </View>
-      {value ? <Text style={[rowStyles.value, mutedColor ? { color: mutedColor } : null]}>{value}</Text> : null}
-      {!hideChevron && (
-        <Icon
-          name={external ? 'ExternalLink' : 'ChevronRight'}
-          size={IconSize.sm}
-          color={mutedColor ?? Colors.textMuted}
-          strokeWidth={2}
-        />
-      )}
-    </PressBtn>
-  );
+function formatBytes(value: number | null): string | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function SectionHeader({ title, color, shadowColor }: { title: string; color?: string; shadowColor?: string }) {
-  // R21 (2026-08-17): weather-adaptive color. When bg is night variant, the
-  // muted grey `Colors.textSecondary` disappears against the dark landscape.
-  // Caller passes settingsBgTokens.textColorMuted so section headers stay
-  // readable on every bg variant. Falls back to styles.sectionHeader default.
-  return (
-    <Text
-      style={[
-        styles.sectionHeader,
-        color ? { color } : null,
-        shadowColor ? { textShadowColor: shadowColor, textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 } : null,
-      ]}
-    >
-      {title}
-    </Text>
-  );
+function providerSummary(hasPassword: boolean | undefined, providers: string[] | undefined): string {
+  const names = (providers ?? []).map((provider) => provider.charAt(0).toUpperCase() + provider.slice(1));
+  if (hasPassword === true) return names.length > 0 ? `Email + ${names.join(' + ')}` : 'Email + password';
+  if (hasPassword === false && names.length > 0) return names.join(' + ');
+  return 'Checking sign-in method…';
 }
 
-// ── Type-to-confirm modal ─────────────────────────────────────────────────
-function TypeToConfirmModal({
-  visible, title, body, keyword, confirmLabel, onCancel, onConfirm, destructive = true,
-}: {
-  visible: boolean;
-  title: string;
-  body: string;
-  keyword: string; // user must type this string exactly
-  confirmLabel: string;
-  onCancel: () => void;
-  onConfirm: () => Promise<void> | void;
-  destructive?: boolean;
-}) {
-  const [typed, setTyped] = useState('');
-  const [busy, setBusy] = useState(false);
-  const match = typed.trim().toLowerCase() === keyword.toLowerCase();
-
-  useEffect(() => {
-    if (!visible) {
-      setTyped('');
-      setBusy(false);
-    }
-  }, [visible]);
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={() => { if (!busy) onCancel(); }}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        {/* Tap outside the card → cancel. Tap on card is absorbed so
-         *  users don't lose typed text by tapping accidentally. */}
-        <Pressable
-          style={modalStyles.backdrop}
-          onPress={busy ? undefined : onCancel}
-          accessibilityLabel="Dismiss confirmation"
-        >
-          <Pressable style={modalStyles.card} onPress={() => { /* absorb — do not bubble */ }}>
-            <Text style={modalStyles.title} accessibilityRole="header">{title}</Text>
-            <Text style={modalStyles.body}>{body}</Text>
-            <Text style={modalStyles.hint}>
-              Type <Text style={modalStyles.hintKeyword}>{keyword}</Text> to confirm.
-            </Text>
-            <TextInput
-              style={modalStyles.input}
-              value={typed}
-              onChangeText={setTyped}
-              placeholder={keyword}
-              placeholderTextColor={Colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!busy}
-              autoFocus={visible}
-              accessibilityLabel={`Confirmation keyword input, type ${keyword}`}
-            />
-            <View style={modalStyles.actions}>
-              <TouchableOpacity
-                style={modalStyles.btnCancel}
-                onPress={() => { Keyboard.dismiss(); onCancel(); }}
-                disabled={busy}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel"
-              >
-                <Text style={modalStyles.btnCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  modalStyles.btnConfirm,
-                  destructive && modalStyles.btnConfirmDestructive,
-                  (!match || busy) && modalStyles.btnConfirmDisabled,
-                ]}
-                disabled={!match || busy}
-                accessibilityRole="button"
-                accessibilityLabel={`${confirmLabel}, ${match ? 'enabled' : 'disabled — type the keyword first'}`}
-                onPress={async () => {
-                  Keyboard.dismiss();
-                  setBusy(true);
-                  try {
-                    await onConfirm();
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {busy
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={modalStyles.btnConfirmText}>{confirmLabel}</Text>
-                }
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-// ── Main ──────────────────────────────────────────────────────────────────
 export function SettingsScreen() {
-  const nav = useNavigation<Nav>();
-  const { user, isLoggedIn, logout: appLogout, setUser } = useAppStore();
-  const activitySimulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
-  const setActivitySimulatorEnabled = useActivitySimulatorStore((s) => s.setEnabled);
-  const simulatorBoundActivityId = useActivitySimulatorStore((s) => s.boundActivityClientId);
-  const trackingStatus = useTrackingStore((s) => s.status);
-  const trackingSessionId = useTrackingStore((s) => s.sessionId);
-  const trackingProviderSource = useTrackingStore((s) => s.locationProviderSource);
-  const simulatorContinuity = resolveSimulatorContinuityLock({
-    boundActivityClientId: simulatorBoundActivityId,
-    trackingStatus,
-    trackingSessionId,
-    providerSource: trackingProviderSource,
-  });
+  const navigation = useNavigation();
+  const theme = useVisualTheme();
+  const scenicTime = useScenicTimeState();
+  const condition = useWeatherStore((state) => state.condition);
+  const conditionOverride = useWeatherStore((state) => state.conditionOverride);
+  const effectiveCondition = conditionOverride ?? condition;
+  const background = useMemo(() => (
+    conditionOverride === 'cloudy' || conditionOverride === 'rain' || conditionOverride === 'snow'
+      ? getWeatherReviewBackground(conditionOverride, scenicTime.timeOfDay)
+      : getHomeBackground(
+          effectiveCondition,
+          Date.now(),
+          scenicTime.timeOfDay,
+          'settings',
+          { sunriseMs: scenicTime.sunriseMs, sunsetMs: scenicTime.sunsetMs },
+        )
+  ), [conditionOverride, effectiveCondition, scenicTime.sunriseMs, scenicTime.sunsetMs, scenicTime.timeOfDay]);
+  const backgroundLayout = useMemo(() => getRegisteredBackgroundLayout(background), [background]);
+  const surfaceStyle = useMemo(() => ({
+    backgroundColor: background.settingsCardBackgroundColor,
+    borderColor: background.settingsCardBorderColor,
+  }), [background.settingsCardBackgroundColor, background.settingsCardBorderColor]);
 
-  // Weather location override (dev testing)
-  const weatherOverride = useWeatherStore((s) => s.locationOverride);
-  const setLocationOverride = useWeatherStore((s) => s.setLocationOverride);
-  const weatherCondition = useWeatherStore((s) => s.condition);
-  const weatherTemp = useWeatherStore((s) => s.temperature);
+  const user = useAppStore((state) => state.user);
+  const isLoggedIn = useAppStore((state) => state.isLoggedIn);
+  const setUser = useAppStore((state) => state.setUser);
+  const appLogout = useAppStore((state) => state.logout);
+  const units = useSettingsStore((state) => state.units);
+  const appearance = useSettingsStore((state) => state.appearance);
+  const hapticFeedback = useSettingsStore((state) => state.hapticFeedback);
+  const updateSetting = useSettingsStore((state) => state.updateSetting);
+  const exploreEnabled = useMemorySettingsStore((state) => state.foregroundAutoUnlockEnabled);
+  const setMemorySetting = useMemorySettingsStore((state) => state.set);
 
-  // Settings store — only what remains after O12 cleanup
-  // O12: nightMode field remains in useSettingsStore for a future Dark Theme
-  // Sprint, but the SettingsScreen toggle is hidden (no consumer yet).
-  const hapticFeedback = useSettingsStore((s) => s.hapticFeedback);
-  // R21 (2026-08-17): voiceGuidance UI toggle removed per concept clip-92.
-  // Field kept in store for future turn-by-turn nav Sprint; not read here.
-  const units = useSettingsStore((s) => s.units);
-  const dateFormat = useSettingsStore((s) => s.dateFormat);
-  const debugMode = useSettingsStore((s) => s.debugMode);
-  const appearance = useSettingsStore((s) => s.appearance);
-  const updateSetting = useSettingsStore((s) => s.updateSetting);
+  const [page, setPage] = useState<Page>('root');
+  const [permissionStatus, setPermissionStatus] = useState<string>('unknown');
+  const [permissionCanAskAgain, setPermissionCanAskAgain] = useState(true);
+  const [permissionLoading, setPermissionLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
 
-  // R21 (2026-08-17 user "在settings里添加一个 可以隐藏首页的探索百分比的设置
-  // 防止压力太大 默认开 用户可以选" + "第一次肯定是waiting 用户不理解是干嘛的
-  // 可以给用户一个演示 当他关的时候 提醒他"): toggle to hide the Home
-  // "% of country" swap icon. Default true. On turn-OFF we show a demo
-  // modal explaining what the feature is (users haven't seen it working
-  // yet — first-time exploration is basically 0% so they'd never notice).
-  const showExplorationPercent = useSettingsStore((s) => s.showExplorationPercent);
-  const [showExplorationDemo, setShowExplorationDemo] = useState(false);
-  const [showAppearanceHelp, setShowAppearanceHelp] = useState(false);
-
-  // Memory stats (readonly display)
-  const memoryPointCount = useMemoryStore((s) => s.points.length);
-
-  // Stats from backend — authoritative on first entry before Memory/Map tabs load.
-  const [serverStats, setServerStats] = useState<{ placesExplored: number; cairnsPlanted: number } | null>(null);
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = await getToken();
-        if (!token || cancelled) return;
-        const res = await fetch(`${API_BASE_URL}/api/auth/stats`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!cancelled && res.ok) {
-          const data = await res.json();
-          setServerStats({ placesExplored: data.placesExplored ?? 0, cairnsPlanted: data.cairnsPlanted ?? 0 });
-        }
-      } catch {}
-    })();
-    return () => { cancelled = true; };
-  }, [isLoggedIn]);
-
-  // Passive exploration toggle. Explicit Hike/Run capture is unconditional;
-  // this preference only permits foreground exploration outside Activities
-  // and intentionally defaults off.
-  const memoryAlwaysOn = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
-  const setMemorySetting = useMemorySettingsStore((s) => s.set);
-  const allMarkers = useMarkerStore((s) => s.markers);
-  const myCairnCount = user?.id ? allMarkers.filter((m) => m.authorId === user.id).length : 0;
-  // O24 SETTINGS-JOURNEY: total activity counts for the Your journey section.
-  // All-time totals (no period toggle here — Settings is for the full picture).
-  const sessionCount = useSessionStore((s) => s.sessions.length);
-  const totalCairnCount = allMarkers.length;
-
-  // O18 SET-05 (batch 6.5): push notification preferences.
-  const [pushPrefs, setPushPrefs] = useState<{ friendRequests: boolean; markerReplies: boolean; memoryHits: boolean; announcements: boolean } | null>(null);
-  // 2026-08-31: push disabled — do not fetch preferences. Kept state + hook
-  // so the Notifications section (gated behind `false &&`) still compiles.
-  // useEffect(() => {
-  //   if (!isLoggedIn) return;
-  //   let cancelled = false;
-  //   (async () => {
-  //     try {
-  //       // eslint-disable-next-line @typescript-eslint/no-require-imports
-  //       const { getPushPreferences } = require('../services/pushService');
-  //       const p = await getPushPreferences();
-  //       if (!cancelled && p) setPushPrefs(p);
-  //     } catch { /* silent */ }
-  //   })();
-  //   return () => { cancelled = true; };
-  // }, [isLoggedIn]);
-  const togglePushPref = async (key: 'friendRequests' | 'markerReplies' | 'memoryHits' | 'announcements') => {
-    if (!pushPrefs) return;
-    const next = { ...pushPrefs, [key]: !pushPrefs[key] };
-    setPushPrefs(next); // optimistic
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { updatePushPreferences } = require('../services/pushService');
-      const server = await updatePushPreferences({ [key]: next[key] });
-      if (server) setPushPrefs(server);
-    } catch { /* revert on failure — server sends full state */ }
-  };
-
-  // Change Password
-  const [showChangePw, setShowChangePw] = useState(false);
-  const [currentPw, setCurrentPw] = useState('');
-  const [newPw, setNewPw] = useState('');
-  const [confirmPw, setConfirmPw] = useState('');
-  const [pwError, setPwError] = useState('');
-  const [pwSuccess, setPwSuccess] = useState('');
-  const [pwLoading, setPwLoading] = useState(false);
-  // O13 bug 1: eye toggle to show/hide each password field. Off by default
-  // so shoulder-surfing risk stays low; user opts in per field.
-  const [showCurrentPw, setShowCurrentPw] = useState(false);
-  const [showNewPw, setShowNewPw] = useState(false);
-  const [showConfirmPw, setShowConfirmPw] = useState(false);
-
-  // R100 SETTINGS: Edit Name inline panel state. R114/O24 (2026-08-12):
-  // migrated from Modal to inline accordion panel matching the Change
-  // password UX — user found the modal jarring vs the smooth in-page
-  // Change password flow. Opens from ActionRow in the profile card.
-  // Draft holds the pending edit; saving fires patchName and updates
-  // useAppStore.user so the profile card reflects it immediately.
-  const [showEditName, setShowEditName] = useState(false);
+  const [nameOpen, setNameOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
-  const [nameSaving, setNameSaving] = useState(false);
   const [nameError, setNameError] = useState('');
-  const [nameToast, setNameToast] = useState('');
+  const [nameSaving, setNameSaving] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [nextPassword, setNextPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePhrase, setDeletePhrase] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteSaving, setDeleteSaving] = useState(false);
 
-  const openEditName = () => {
-    // Accordion toggle: if already open, collapse; else prime the draft
-    // with the current user name and open. Match Change password toggle
-    // pattern (line ~645 setShowChangePw(v => !v)).
-    if (showEditName) {
-      setShowEditName(false);
-      setNameError('');
-      return;
-    }
-    setNameDraft(user?.name || '');
-    setNameError('');
-    setShowEditName(true);
-  };
+  const [exports, setExports] = useState<DataExportSummary[]>([]);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportRequesting, setExportRequesting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [memoryDeleting, setMemoryDeleting] = useState(false);
 
-  const handleSaveName = async () => {
-    const trimmed = nameDraft.trim();
-    // R114/O22 STORY-73022 (S1): breadcrumb every step so we can trace
-    // "name didn't save to DB" root cause post-hoc if the backend echoes
-    // wrong value or the local setUser is later overwritten by hydrate.
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { crashLogger } = require('../services/crashLogger');
-      crashLogger?.breadcrumb?.(`s1:save_name_start len=${trimmed.length}`);
-    } catch { /* silent */ }
-    if (!trimmed) { setNameError('Name cannot be empty'); return; }
-    if (trimmed.length > 32) { setNameError('Name too long (max 32 characters)'); return; }
-    if (trimmed === (user?.name || '')) { setShowEditName(false); return; }
-    setNameSaving(true);
-    setNameError('');
-    try {
-      const r = await patchName(trimmed);
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { crashLogger } = require('../services/crashLogger');
-        crashLogger?.breadcrumb?.(
-          `s1:patch_name_result has_err=${!!r.error} has_user=${!!r.user} echo_name_len=${r.user?.name?.length ?? 'na'}`
-        );
-      } catch { /* silent */ }
-      if (r.error || !r.user) {
-        setNameError(r.error || 'Could not save name.');
-        setNameSaving(false);
-        return;
-      }
-      // R114 (2026-08-07): user reported "edit name 没落到数据库". The
-      // backend patchName endpoint IS wired correctly (verified against
-      // aliyun /api/auth/me — SQL UPDATE fires). Root cause suspected:
-      // after setUser(r.user) below, other flows (hydrate on app relaunch)
-      // could overwrite from a stale server response if backend hadn't
-      // fully committed by then. We now:
-      //   1) verify the returned user.name matches what we sent (else
-      //      report inconsistency rather than silently succeed);
-      //   2) update local state.
-      // If the server returns a name that doesn't match what we sent, we
-      // treat it as a save failure so the user isn't misled.
-      if (r.user.name !== trimmed) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { crashLogger } = require('../services/crashLogger');
-          crashLogger?.breadcrumb?.('s1:echo_mismatch');
-        } catch { /* silent */ }
-        setNameError('Server returned a different name — please try again.');
-        setNameSaving(false);
-        return;
-      }
-      setUser(r.user);
-      setShowEditName(false);
-      setNameToast('Name updated');
-      setTimeout(() => setNameToast(''), 2000);
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { crashLogger } = require('../services/crashLogger');
-        crashLogger?.breadcrumb?.('s1:save_name_ok');
-      } catch { /* silent */ }
-    } catch (err: any) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { crashLogger } = require('../services/crashLogger');
-        crashLogger?.breadcrumb?.(`s1:save_name_catch msg=${String(err?.message || err).slice(0, 60)}`);
-      } catch { /* silent */ }
-      setNameError('Unable to connect. Please try again.');
-    } finally {
-      setNameSaving(false);
-    }
-  };
-
-  const handleChangePassword = async () => {
-    setPwError(''); setPwSuccess('');
-    if (newPw.length < 8) { setPwError('New password must be at least 8 characters.'); return; }
-    if (newPw !== confirmPw) { setPwError('New passwords do not match.'); return; }
-    setPwLoading(true);
-    // O12 subagent audit fixes:
-    //   1. 15s AbortController timeout — pre-fix, a hung network left the
-    //      spinner turning forever with no user recourse.
-    //   2. Guard against getToken() returning null → don't send "Bearer null".
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    try {
-      const token = await getToken();
-      if (!token) {
-        setPwError('Session expired. Please sign in again.');
-        return;
-      }
-      const res = await fetch(`${API_BASE_URL}/api/auth/password`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        // O18 batch 6.3 fix (2026-07-29): schema realigned to camelCase to
-        // match the route handler (auth.js:446 reads currentPassword /
-        // newPassword). Sprint 6 subagent review B1 caught this — the
-        // O13 fix here had drifted after the schema was refactored during
-        // Batch 6.3, resulting in 100% failure on password change. Both
-        // client + schema now agree on camelCase.
-        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
-        signal: controller.signal,
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        // Round-2 N2-M6 + Round-3 V3-N1: backend error shapes vary (Express,
-        // zod, Nest, RFC7807). Try common shapes before falling back to HTTP
-        // status. `data?.errors?.[0]?.msg` handles express-validator arrays.
-        const errMsg =
-          data?.error ||
-          data?.message ||
-          data?.detail ||
-          data?.errors?.[0]?.msg ||
-          `Failed to update password (HTTP ${res.status}).`;
-        setPwError(errMsg);
-        return;
-      }
-      setPwSuccess('Password updated. Please sign in again.');
-      setCurrentPw(''); setNewPw(''); setConfirmPw('');
-      // O13 bug 1: after successful password change, force re-login. The old
-      // token stays valid on the backend but we want the user to prove they
-      // know the new password (security best practice + user expectation).
-      setTimeout(async () => {
-        if (!dbgMountedRef.current) return;
-        try { await logout(); } catch { /* swallow */ }
-        try { await storage.removeItem('cairn_remember_me'); } catch { /* swallow */ }
-        await appLogout();
-        nav.replace('Auth');
-      }, 1500);
-      return; // do not fall through to finally's setPwLoading(false) — flow ends
-    } catch (err) {
-      // AbortError = user waited past the 15s timeout.
-      const msg = (err as { name?: string })?.name === 'AbortError'
-        ? 'Network timed out. Please try again.'
-        : 'Unable to connect. Please try again.';
-      setPwError(msg);
-    } finally {
-      clearTimeout(timeoutId);
-      setPwLoading(false);
-    }
-  };
-
-  // Units picker
-  // O13 bug 2: switched from modal popup to inline expand (like Change password)
-  const [showUnitsInline, setShowUnitsInline] = useState(false);
-  // O18 HIST-09: date format picker (inline expand, same pattern as units).
-  const [showDateInline, setShowDateInline] = useState(false);
-
-  // Feedback / Report / Debug screenshot — inline unified form (O13 bug 5)
-  const [showFeedbackInline, setShowFeedbackInline] = useState(false);
-  const [feedbackKind, setFeedbackKind] = useState<'feedback' | 'safety' | 'bug'>('feedback');
+  const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>('feedback');
   const [feedbackText, setFeedbackText] = useState('');
-  const [feedbackSending, setFeedbackSending] = useState(false);
+  const [feedbackState, setFeedbackState] = useState<AsyncState>('idle');
   const [feedbackError, setFeedbackError] = useState('');
-  const [feedbackSent, setFeedbackSent] = useState(false);
-  // O15 bug 3: attached screenshot previews (clip.yiiling pattern).
-  // Stored locally in state so user can see thumbnails + remove them.
-  // On Send, upload via existing uploadDebugScreenshots pipeline.
-  const [feedbackAttachments, setFeedbackAttachments] = useState<Array<{
-    uri: string; width: number; height: number; fileName?: string;
-  }>>([]);
+  const [feedbackSubmissionId, setFeedbackSubmissionId] = useState(() => Crypto.randomUUID());
+  const feedbackFlight = useRef(false);
+  const exportFlight = useRef(false);
+  const deleteFlight = useRef(false);
 
-  // O15 bug 1: help modal explaining what "places explored" means.
-  const [showProgressHelp, setShowProgressHelp] = useState(false);
-
-  // What's new modal — shows recent OTA changelog entries.
-  const [showWhatsNew, setShowWhatsNew] = useState(false);
-
-  // Reset memory type-to-confirm
-  const [showResetMemoryModal, setShowResetMemoryModal] = useState(false);
-
-  // Delete account type-to-confirm
-  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
-
-  // Debug screenshot upload (kept — genuinely useful for support)
-  const [dbgState, setDbgState] = useState<'idle' | 'picking' | 'uploading' | 'done' | 'err'>('idle');
-  const [dbgLabel, setDbgLabel] = useState<string>('');
-  const dbgResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dbgMountedRef = useRef(true);
-
-  const dbgFlashAndReset = (next: 'done' | 'err', label: string, ms = 5000) => {
-    if (!dbgMountedRef.current) return;
-    setDbgState(next);
-    setDbgLabel(label);
-    if (dbgResetTimer.current) clearTimeout(dbgResetTimer.current);
-    dbgResetTimer.current = setTimeout(() => {
-      if (!dbgMountedRef.current) return;
-      setDbgState('idle');
-      setDbgLabel('');
-    }, ms);
-  };
-
-  useEffect(() => {
-    // O12: __DEV__ && debugMode force-clear REMOVED — 5-tap gesture on About row is the
-    // new intended unlock path. Force-clearing would nuke the unlock in production.
-    dbgMountedRef.current = true;
-    return () => {
-      dbgMountedRef.current = false;
-      if (dbgResetTimer.current) clearTimeout(dbgResetTimer.current);
-      // O12 audit fix: clean up 5-tap timer on unmount
-      if (aboutTapTimer.current) clearTimeout(aboutTapTimer.current);
-    };
+  const refreshPermission = useCallback(async () => {
+    try {
+      const result = await Location.getForegroundPermissionsAsync();
+      setPermissionStatus(result.status);
+      setPermissionCanAskAgain(result.canAskAgain !== false);
+    } catch {
+      setPermissionStatus('unavailable');
+      setPermissionCanAskAgain(false);
+    }
   }, []);
 
-  // O15 bug 3: pick screenshots but DO NOT upload here. Add to
-  // feedbackAttachments state so user sees preview thumbnails and can
-  // remove any before Send. Actual upload happens inside handleSendFeedback
-  // when the user taps Send.
-  const handlePickAttachments = async () => {
-    if (dbgState === 'picking' || dbgState === 'uploading') return;
-    if (dbgResetTimer.current) {
-      clearTimeout(dbgResetTimer.current);
-      dbgResetTimer.current = null;
-    }
-    log('settings.feedback.pick_open', { logged_in: isLoggedIn });
-    if (!dbgMountedRef.current) return;
-    setDbgState('picking');
-    // Cap the picker so total attachments (existing + new) can't exceed 5.
-    const remaining = Math.max(0, 5 - feedbackAttachments.length);
-    if (remaining === 0) {
-      setDbgState('idle');
-      setFeedbackError('Up to 5 attachments.');
-      return;
-    }
-    const outcome = await pickDebugScreenshots({ selectionLimit: remaining });
-    if (!dbgMountedRef.current) return;
-    if (outcome.kind === 'permission_denied') {
-      log('settings.feedback.pick_perm_denied');
-      setDbgState('idle');
-      setFeedbackError('Photo permission denied. Enable in iOS/Android settings.');
-      return;
-    }
-    if (outcome.kind === 'canceled') {
-      setDbgState('idle');
-      return;
-    }
-    if (outcome.kind === 'error') {
-      log('settings.feedback.pick_err', { error: outcome.message });
-      setDbgState('idle');
-      setFeedbackError(outcome.message);
-      return;
-    }
-    // Success — add to previews. No upload yet.
-    setFeedbackAttachments((cur) => [
-      ...cur,
-      ...outcome.photos.map((p) => ({
-        uri: p.uri,
-        width: p.width,
-        height: p.height,
-      })),
-    ]);
-    setDbgState('idle');
-    setFeedbackError('');
-    log('settings.feedback.pick_added', { count: outcome.photos.length });
+  const refreshProfile = useCallback(async () => {
+    if (!isLoggedIn) return;
+    setProfileLoading(true);
+    const fresh = await getMe();
+    if (fresh) setUser(fresh);
+    setProfileLoading(false);
+  }, [isLoggedIn, setUser]);
+
+  const refreshExports = useCallback(async (quiet = false) => {
+    if (!quiet) setExportLoading(true);
+    const result = await fetchExportHistory();
+    setExports(result.exports);
+    setExportError(result.error ?? '');
+    if (!quiet) setExportLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void refreshPermission();
+    void refreshProfile();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshPermission();
+    });
+    return () => subscription.remove();
+  }, [refreshPermission, refreshProfile]);
+
+  useEffect(() => {
+    if (page !== 'privacy') return;
+    void refreshExports();
+  }, [page, refreshExports]);
+
+  const hasPendingExport = exports.some((item) => item.status === 'queued' || item.status === 'building');
+  useEffect(() => {
+    if (page !== 'privacy' || !hasPendingExport) return;
+    const timer = setInterval(() => void refreshExports(true), 4_000);
+    return () => clearInterval(timer);
+  }, [hasPendingExport, page, refreshExports]);
+
+  const openPage = (next: Page) => {
+    setPage(next);
+    if (next === 'account') void refreshProfile();
   };
-  // Kept as a local name because the feedback form still uses it.
-  const handleDebugUpload = handlePickAttachments;
 
-  // O13 bug 5: dbgRowLabel / dbgRowDisabled removed — legacy debug row was
-  // replaced by the unified in-app Feedback form. handleDebugUpload is
-  // still used by the "Attach screenshots" button inside the Bug tab of
-  // that form.
-
-  // 5-tap gesture on About Cairn row → unlock Developer
-  const aboutTapCount = useRef(0);
-  const aboutTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleAboutTap = () => {
-    aboutTapCount.current += 1;
-    if (aboutTapTimer.current) clearTimeout(aboutTapTimer.current);
-    aboutTapTimer.current = setTimeout(() => { aboutTapCount.current = 0; }, 3000);
-    if (aboutTapCount.current >= 5) {
-      aboutTapCount.current = 0;
-      if (aboutTapTimer.current) clearTimeout(aboutTapTimer.current);
-      if (!debugMode) {
-        updateSetting('debugMode', true);
-        Alert.alert('Developer mode', 'Debug tools unlocked. Scroll down to see them.', [{ text: 'OK' }]);
-      } else {
-        // If already on, do nothing (avoid accidental disable via re-tap)
+  const handleExploreChange = async (next: boolean) => {
+    if (!next) {
+      setMemorySetting('foregroundAutoUnlockEnabled', false);
+      return;
+    }
+    setPermissionLoading(true);
+    try {
+      let result = await Location.getForegroundPermissionsAsync();
+      if (result.status !== Location.PermissionStatus.GRANTED && result.canAskAgain) {
+        result = await Location.requestForegroundPermissionsAsync();
       }
+      setPermissionStatus(result.status);
+      setPermissionCanAskAgain(result.canAskAgain !== false);
+      if (result.status === Location.PermissionStatus.GRANTED) {
+        setMemorySetting('foregroundAutoUnlockEnabled', true);
+        haptic.selection();
+      } else {
+        setMemorySetting('foregroundAutoUnlockEnabled', false);
+        Alert.alert(
+          'Location permission is off',
+          'Cairn can only update exploration while it is open when iOS location permission is allowed. Hike and Run permissions are handled separately when you record.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            ...(!result.canAskAgain ? [{ text: 'Open Settings', onPress: () => void Linking.openSettings() }] : []),
+          ],
+        );
+      }
+    } finally {
+      setPermissionLoading(false);
     }
   };
 
-  const appVersion = Application.nativeApplicationVersion ?? '0.2.5';
-  const aboutRowValue = `v${appVersion} · ${OTA_VERSION}`;
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign out?',
+      'Your saved and recoverable Cairn data stays with this account. Explore while Cairn is open will return to Off on this device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign out',
+          onPress: () => void (async () => {
+            try {
+              await appLogout();
+              await logout();
+            } catch {
+              Alert.alert('Could not sign out', 'Cairn could not safely stop the current account session. Please try again.');
+            }
+          })(),
+        },
+      ],
+    );
+  };
 
-  // R21 (2026-08-17 user "settings 和 homepage 一样 根据当前位置 改背景"):
-  // Weather-adaptive bg. Consumes same store as Home so nav Home↔Settings
-  // is visually continuous. Text/card colors derived from tokens.
-  const settingsCondition = useWeatherStore(s => s.condition);
-  const settingsConditionOverride = useWeatherStore(s => s.conditionOverride);
-  const effectiveSettingsCondition = settingsConditionOverride ?? settingsCondition;
-  const scenicTime = useScenicTimeState();
-  const settingsBgTokens = useMemo(() => (
-    settingsConditionOverride === 'cloudy'
-    || settingsConditionOverride === 'rain'
-    || settingsConditionOverride === 'snow'
-  )
-    ? getWeatherReviewBackground(settingsConditionOverride, scenicTime.timeOfDay)
-    : getHomeBackground(
-      effectiveSettingsCondition,
-      Date.now(),
-      scenicTime.timeOfDay,
-      'settings',
-      { sunriseMs: scenicTime.sunriseMs, sunsetMs: scenicTime.sunsetMs },
-    ), [
-      effectiveSettingsCondition,
-      settingsConditionOverride,
-      scenicTime.timeOfDay,
-      scenicTime.sunriseMs,
-      scenicTime.sunsetMs,
-    ]);
-  const registeredSettingsBackground = useMemo(
-    () => getRegisteredBackgroundLayout(settingsBgTokens),
-    [settingsBgTokens],
+  const latestExport = exports[0] ?? null;
+  const exportExpired = latestExport?.expires_at
+    ? new Date(latestExport.expires_at).getTime() <= Date.now()
+    : false;
+
+  const renderHeader = (title: string) => (
+    <View style={styles.header}>
+      <BackButton
+        variant="inline"
+        label="Back"
+        onPress={() => page === 'root' ? navigation.goBack() : setPage('root')}
+        testID="settings-back"
+      />
+      <Text style={[styles.pageTitle, { color: background.textColor, textShadowColor: background.textShadowColor }]}>{title}</Text>
+      <View style={styles.headerSpacer} />
+    </View>
   );
 
-  // R21 (2026-08-17): weather-adaptive style overrides. Card + divider + footer
-  // pick colors from tokens so Settings visually matches Home across all 8
-  // variants (day → paper cards, night → deep ink cards).
-  const cardOverride = {
-    backgroundColor: settingsBgTokens.settingsCardBackgroundColor,
-    borderWidth: 1,
-    borderColor: settingsBgTokens.settingsCardBorderColor,
+  const renderRoot = () => (
+    <>
+      {renderHeader('Settings')}
+      <ScrollView testID="settings-root" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Account</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]} onPress={() => openPage('account')} testID="settings-account-row">
+          <Row
+            icon="User"
+            title={user?.name || 'Your account'}
+            detail={user?.email || 'Account identity and sign-in'}
+            value="Account"
+          />
+        </ContentSurface>
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Preferences</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-preferences">
+          <View style={styles.preferenceBlock}>
+            <View style={styles.preferenceHeading}>
+              <Icon name="Ruler" size={IconSize.sm} color={theme.icon} />
+              <View style={styles.rowCopy}>
+                <Text style={[styles.rowTitle, { color: theme.textPrimary }]}>Units</Text>
+                <Text style={[styles.rowDetail, { color: theme.textSecondary }]}>Distance, elevation, speed and pace</Text>
+              </View>
+            </View>
+            <SegmentedControl<UnitsPref>
+              value={units}
+              segments={UNITS_SEGMENTS}
+              onChange={(value) => updateSetting('units', value)}
+              testID="settings-units"
+            />
+          </View>
+          <Divider color={background.settingsCardBorderColor} />
+          <View style={styles.preferenceBlock}>
+            <View style={styles.preferenceHeading}>
+              <Icon name="Sun" size={IconSize.sm} color={theme.icon} />
+              <View style={styles.rowCopy}>
+                <Text style={[styles.rowTitle, { color: theme.textPrimary }]}>Appearance</Text>
+                <Text style={[styles.rowDetail, { color: theme.textSecondary }]}>Auto follows Cairn’s local daylight rhythm</Text>
+              </View>
+            </View>
+            <SegmentedControl<AppearancePref>
+              value={appearance}
+              segments={APPEARANCE_SEGMENTS}
+              onChange={(value) => updateSetting('appearance', value)}
+              testID="settings-appearance"
+            />
+          </View>
+          <Divider color={background.settingsCardBorderColor} />
+          <ToggleRow
+            icon="Vibrate"
+            title="Haptics"
+            detail="Gentle feedback for Cairn actions"
+            value={hapticFeedback}
+            onChange={(value) => {
+              updateSetting('hapticFeedback', value);
+              if (value) haptic.selection();
+            }}
+            testID="settings-haptics"
+          />
+          <Divider color={background.settingsCardBorderColor} />
+          <ToggleRow
+            icon="Compass"
+            title="Explore while Cairn is open"
+            detail={permissionStatus === 'granted'
+              ? 'Updates exploration outside an Activity while the app is on screen'
+              : 'Needs foreground location permission; Activities are separate'}
+            value={exploreEnabled}
+            disabled={permissionLoading}
+            onChange={(value) => void handleExploreChange(value)}
+            testID="settings-explore-open"
+          />
+        </ContentSurface>
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Privacy & Data</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]} onPress={() => openPage('privacy')} testID="settings-privacy-row">
+          <Row icon="Shield" title="Privacy & Data" detail="Location, export and exploration history" value="Review" />
+        </ContentSurface>
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Help & About</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]} onPress={() => openPage('help')} testID="settings-help-row">
+          <Row icon="MessageSquare" title="Help & About" detail="Feedback, support, terms and app information" value="Open" />
+        </ContentSurface>
+        <Text style={[styles.footer, { color: background.textColor }]}>Ngā mihi nui — thanks for using Cairn.</Text>
+      </ScrollView>
+    </>
+  );
+
+  const renderAccount = () => (
+    <>
+      {renderHeader('Account')}
+      <ScrollView testID="settings-account" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <Text style={[styles.intro, { color: background.textColor, textShadowColor: background.textShadowColor }]}>Your identity and account actions.</Text>
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <Row icon="User" title={user?.name || 'Cairn user'} detail="Name" />
+          <Divider color={background.settingsCardBorderColor} />
+          <Row icon="Mail" title={user?.email || 'Email unavailable'} detail="Account email · not currently changeable in the app" />
+          <Divider color={background.settingsCardBorderColor} />
+          <Row
+            icon="KeyRound"
+            title="Sign-in method"
+            detail={providerSummary(user?.hasPassword, user?.providers)}
+            value={profileLoading ? 'Checking…' : undefined}
+          />
+        </ContentSurface>
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Account actions</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <Row
+            icon="Pencil"
+            title="Edit name"
+            detail="Change how your name appears in Cairn"
+            onPress={() => {
+              setNameDraft(user?.name || '');
+              setNameError('');
+              setNameOpen(true);
+            }}
+            testID="settings-edit-name"
+          />
+          {user?.hasPassword === true ? (
+            <>
+              <Divider color={background.settingsCardBorderColor} />
+              <Row
+                icon="KeyRound"
+                title="Change password"
+                detail="Requires your current Cairn password"
+                onPress={() => {
+                  setCurrentPassword('');
+                  setNextPassword('');
+                  setPasswordConfirmation('');
+                  setPasswordError('');
+                  setPasswordOpen(true);
+                }}
+                testID="settings-change-password"
+              />
+            </>
+          ) : user?.hasPassword === false ? (
+            <>
+              <Divider color={background.settingsCardBorderColor} />
+              <Row
+                icon={user.providers?.includes('apple') ? 'Apple' : 'KeyRound'}
+                title="Password managed by your provider"
+                detail={`Use ${providerSummary(false, user.providers)} to manage sign-in security`}
+              />
+            </>
+          ) : null}
+          <Divider color={background.settingsCardBorderColor} />
+          <Row icon="LogOut" title="Sign out" detail="Keep this account and its saved data" onPress={handleSignOut} testID="settings-sign-out" />
+        </ContentSurface>
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Delete account</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <Row
+            icon="Trash2"
+            title="Delete account"
+            detail="Seven days to restore, then permanent deletion"
+            destructive
+            onPress={() => {
+              setDeletePhrase('');
+              setDeleteError('');
+              setDeleteOpen(true);
+            }}
+            testID="settings-delete-account"
+          />
+        </ContentSurface>
+      </ScrollView>
+    </>
+  );
+
+  const renderExportState = () => {
+    if (exportLoading) {
+      return <View style={styles.asyncRow}><ActivityIndicator color={theme.primary} /><Text style={[styles.statusText, { color: theme.textSecondary }]}>Checking export status…</Text></View>;
+    }
+    if (!latestExport) {
+      return <Text style={[styles.body, { color: theme.textSecondary }]}>No export has been requested on this account.</Text>;
+    }
+    if ((latestExport.status === 'ready' || latestExport.status === 'sent') && !exportExpired && latestExport.download_url) {
+      return (
+        <View style={styles.stackSmall}>
+          <Text style={[styles.statusStrong, { color: theme.textPrimary }]}>Ready to download</Text>
+          <Text style={[styles.body, { color: theme.textSecondary }]}>JSON · {formatBytes(latestExport.size_bytes) || 'size unavailable'} · link expires {new Date(latestExport.expires_at || '').toLocaleString()}</Text>
+          <PrimaryButton label="Open download" variant="secondary" onPress={() => void Linking.openURL(latestExport.download_url!)} testID="settings-export-download" />
+        </View>
+      );
+    }
+    if (latestExport.status === 'queued' || latestExport.status === 'building') {
+      return <View style={styles.asyncRow}><ActivityIndicator color={theme.primary} /><Text style={[styles.statusText, { color: theme.textSecondary }]}>Preparing your export. You can leave this page and return later.</Text></View>;
+    }
+    if (latestExport.status === 'failed') {
+      return <Text style={[styles.statusText, { color: theme.destructive }]}>The export could not be prepared. Your data is unchanged; request it again.</Text>;
+    }
+    if (exportExpired || latestExport.status === 'expired') {
+      return <Text style={[styles.statusText, { color: theme.textSecondary }]}>The previous download expired. Request a fresh export when you need it.</Text>;
+    }
+    return <Text style={[styles.statusText, { color: theme.textSecondary }]}>Export status: {latestExport.status}</Text>;
   };
-  const dividerOverride = { backgroundColor: settingsBgTokens.settingsCardBorderColor };
-  // R21 (2026-08-17 user "Thanks for using Cairn. 和 signout 颜色不对"):
-  // footer + Sign out row need readable colors on every variant. Muted grey
-  // (textColorMuted) disappears on both bright cream and deep slate variants;
-  // use the main textColor with slight opacity instead so it reads clearly
-  // without competing with the section headers.
-  const footerOverride = { color: settingsBgTokens.textColor, opacity: 0.75 };
+
+  const renderPrivacy = () => (
+    <>
+      {renderHeader('Privacy & Data')}
+      <ScrollView testID="settings-privacy" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <Text style={[styles.intro, { color: background.textColor, textShadowColor: background.textShadowColor }]}>Clear controls and accurate status for location and your data.</Text>
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Location</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <Row
+            icon="MapPin"
+            title="Foreground location"
+            detail={permissionStatus === 'granted'
+              ? 'Allowed by iOS for features used while Cairn is open'
+              : permissionStatus === 'denied'
+                ? 'Off in iOS; Cairn cannot override this permission'
+                : 'Permission status is unavailable'}
+            value={permissionStatus === 'granted' ? 'Allowed' : 'Off'}
+          />
+          {permissionStatus !== 'granted' && !permissionCanAskAgain ? (
+            <>
+              <Divider color={background.settingsCardBorderColor} />
+              <Row icon="ExternalLink" title="Open system Settings" detail="Review Cairn’s location permission in iOS" external onPress={() => void Linking.openSettings()} testID="settings-open-os-settings" />
+            </>
+          ) : null}
+          <Divider color={background.settingsCardBorderColor} />
+          <Row
+            icon="Compass"
+            title="Explore while Cairn is open"
+            detail={exploreEnabled && permissionStatus === 'granted'
+              ? 'On · updates exploration only while the app is foregrounded and no Activity is recording'
+              : exploreEnabled
+                ? 'On in Cairn · unavailable until foreground location is allowed in iOS'
+                : 'Off · Hike and Run recording is separate'}
+            value={exploreEnabled ? 'On' : 'Off'}
+          />
+        </ContentSurface>
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Your data</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-export-card">
+          <View style={styles.cardHeading}>
+            <Icon name="Download" size={IconSize.md} color={theme.icon} />
+            <View style={styles.rowCopy}>
+              <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Export your data</Text>
+              <Text style={[styles.body, { color: theme.textSecondary }]}>Request a JSON copy, track preparation here, then open the download when it is ready.</Text>
+            </View>
+          </View>
+          {renderExportState()}
+          {exportError ? <Text accessibilityLiveRegion="polite" style={[styles.error, { color: theme.destructive }]}>{exportError}</Text> : null}
+          {latestExport?.status !== 'queued' && latestExport?.status !== 'building' ? (
+            <PrimaryButton
+              label={latestExport?.status === 'failed' || exportExpired ? 'Request fresh export' : 'Request export'}
+              loading={exportRequesting}
+              onPress={() => void (async () => {
+                if (exportFlight.current) return;
+                exportFlight.current = true;
+                setExportRequesting(true);
+                setExportError('');
+                try {
+                  const result = await requestDataExport();
+                  if (result.error) setExportError(result.error);
+                  await refreshExports(true);
+                } finally {
+                  exportFlight.current = false;
+                  setExportRequesting(false);
+                }
+              })()}
+              testID="settings-export-request"
+            />
+          ) : null}
+        </ContentSurface>
+
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <Row
+            icon="Trash2"
+            title="Delete exploration history"
+            detail="Deletes Memory points and derived explored regions; keeps Activities, Routes and Cairns"
+            destructive
+            onPress={() => Alert.alert(
+              'Delete exploration history?',
+              'This permanently removes your Memory points and explored-region progress from Cairn and this device. Activities, Routes and Cairns stay.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete history',
+                  style: 'destructive',
+                  onPress: () => void (async () => {
+                    setMemoryDeleting(true);
+                    const ok = await deleteAllMemoryFromServer();
+                    setMemoryDeleting(false);
+                    Alert.alert(ok ? 'Exploration history deleted' : 'Could not delete history', ok
+                      ? 'Your Activities, Routes and Cairns were not changed.'
+                      : 'Nothing was removed. Check your connection and try again.');
+                  })(),
+                },
+              ],
+            )}
+            testID="settings-delete-exploration"
+          />
+          {memoryDeleting ? <ActivityIndicator style={styles.inlineLoader} color={theme.destructive} /> : null}
+        </ContentSurface>
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Privacy</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <Row
+            icon="Info"
+            title="How Cairn uses data"
+            detail="Activities use location while recording. Optional foreground exploration uses location only while Cairn is open. Limited operational diagnostics support reliability; internal QA telemetry is separately gated."
+          />
+          <Divider color={background.settingsCardBorderColor} />
+          <Row icon="Shield" title="Privacy Policy" detail="Read the full current policy" external onPress={() => void Linking.openURL(PRIVACY_URL)} testID="settings-privacy-policy" />
+        </ContentSurface>
+      </ScrollView>
+    </>
+  );
+
+  const renderHelp = () => (
+    <>
+      {renderHeader('Help & About')}
+      <ScrollView testID="settings-help" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <Text style={[styles.intro, { color: background.textColor, textShadowColor: background.textShadowColor }]}>Send a message, find support, or review Cairn’s legal information.</Text>
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Feedback</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-feedback-card">
+          <SegmentedControl<FeedbackKind>
+            value={feedbackKind}
+            segments={FEEDBACK_SEGMENTS}
+            onChange={(value) => {
+              setFeedbackKind(value);
+              if (feedbackState === 'sent') setFeedbackState('idle');
+            }}
+            testID="settings-feedback-kind"
+          />
+          <TextField
+            testID="settings-feedback-input"
+            label={feedbackKind === 'bug' ? 'What went wrong?' : 'Your message'}
+            value={feedbackText}
+            onChangeText={(value) => {
+              setFeedbackText(value.slice(0, 2000));
+              if (feedbackState === 'sent') setFeedbackState('idle');
+            }}
+            multiline
+            textAlignVertical="top"
+            inputStyle={styles.feedbackInput}
+            placeholder={feedbackKind === 'bug' ? 'Tell us what happened and what you expected.' : 'What would make Cairn better for you?'}
+            error={feedbackState === 'failed' ? feedbackError : undefined}
+          />
+          <Text style={[styles.counter, { color: theme.textMuted }]}>{feedbackText.trim().length}/2000</Text>
+          {feedbackState === 'sent' ? (
+            <View accessibilityLiveRegion="polite" style={[styles.deliveryStatus, { backgroundColor: theme.recordSelected, borderColor: theme.borderStrong }]}>
+              <Icon name="CircleCheck" size={IconSize.sm} color={theme.primary} />
+              <Text style={[styles.statusStrong, { color: theme.textPrimary }]}>Delivered to Cairn</Text>
+            </View>
+          ) : null}
+          <PrimaryButton
+            label={feedbackState === 'failed' ? 'Retry delivery' : 'Send feedback'}
+            loading={feedbackState === 'sending'}
+            disabled={feedbackText.trim().length < 3}
+            renderIcon={(color) => <Icon name="Send" size={IconSize.sm} color={color} />}
+            onPress={() => void (async () => {
+              if (feedbackFlight.current) return;
+              feedbackFlight.current = true;
+              setFeedbackState('sending');
+              setFeedbackError('');
+              try {
+                const result = await submitFeedback({
+                  submissionId: feedbackSubmissionId,
+                  kind: feedbackKind,
+                  message: feedbackText,
+                  appVersion: Application.nativeApplicationVersion,
+                });
+                if (result.acknowledged) {
+                  setFeedbackState('sent');
+                  setFeedbackText('');
+                  setFeedbackSubmissionId(Crypto.randomUUID());
+                  haptic.notification('success');
+                } else {
+                  setFeedbackState('failed');
+                  setFeedbackError(result.error || 'Feedback was not delivered. Try again.');
+                }
+              } finally {
+                feedbackFlight.current = false;
+              }
+            })()}
+            testID="settings-feedback-send"
+          />
+          <Text style={[styles.body, { color: theme.textMuted }]}>Feedback is not an emergency or monitored safety service.</Text>
+        </ContentSurface>
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Support & legal</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <Row icon="Mail" title="Contact support" detail="support@cairnapp.nz" external onPress={() => void Linking.openURL('mailto:support@cairnapp.nz')} testID="settings-support" />
+          <Divider color={background.settingsCardBorderColor} />
+          <Row icon="Shield" title="Privacy Policy" external onPress={() => void Linking.openURL(PRIVACY_URL)} />
+          <Divider color={background.settingsCardBorderColor} />
+          <Row icon="FileText" title="Terms" detail="Apple Standard EULA" external onPress={() => void Linking.openURL(TERMS_URL)} testID="settings-terms" />
+        </ContentSurface>
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>About</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-about">
+          <Row
+            icon="Info"
+            title="Cairn"
+            detail="A quiet record of the places you have moved through."
+            value={`v${Application.nativeApplicationVersion || '—'}${Application.nativeBuildVersion ? ` (${Application.nativeBuildVersion})` : ''}`}
+          />
+        </ContentSurface>
+      </ScrollView>
+    </>
+  );
 
   return (
-    <View style={{ flex: 1, backgroundColor: settingsBgTokens.settingsBackgroundColor }}>
-      {/* R21 (2026-08-17): weather-adaptive bg + weather-adaptive veil. */}
-      <Image
-        source={settingsBgTokens.bgAsset}
-        style={[{ position: 'absolute' }, registeredSettingsBackground]}
-        resizeMode="cover"
-      />
-      <View style={[styles.bgVeil, { backgroundColor: settingsBgTokens.settingsVeilColor }]} />
-      <SafeAreaView style={styles.container} edges={['top']}>
-        {/* Top bar (no Save button — settings auto-persist via updateSetting) */}
-        <View style={styles.topBar}>
-          {/* R21 v3 (2026-08-17): unified to Auth Sign In/Up back style.
-              Settings has its own top bar (no map overlay) so the frosted
-              pill was inconsistent with Auth. */}
-          <BackButton variant="inline" onPress={() => nav.goBack()} />
-          <Text style={[styles.topTitle, { color: settingsBgTokens.textColor, textShadowColor: settingsBgTokens.textShadowColor }]}>Settings</Text>
-          <View style={styles.topBarSpacer} />
-        </View>
-
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scroll}
-        >
-
-          {/* clip-92 concept alignment (2026-08-16): one-line subtitle sits
-              under the title, mirrors the "One long scrollable page. Same
-              background as on Homepage." caption in the concept.
-              2026-08-16 fix: subtitle REMOVED — Round 4 subagent QA flagged
-              as designer caption leak, not user-facing copy. */}
-
-          {/* ── Profile card (top, no section header) ──
-              R21 (2026-08-17): Settings requires signed-in state (gated by
-              RootNavigator). Profile always renders — user is always
-              populated because RootNavigator only shows Settings when
-              isLoggedIn is true. */}
-          <View style={[styles.card, cardOverride]}>
-            <View style={profileStyles.header}>
-              <View style={profileStyles.avatar}>
-                <Text style={profileStyles.avatarText}>
-                  {(user!.name.trim().charAt(0) || '?').toUpperCase()}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                  <Text style={[profileStyles.name, { color: settingsBgTokens.cardTextColor }]}>{user!.name}</Text>
-                  <Text style={[profileStyles.email, { color: settingsBgTokens.cardTextColorMuted }]}>{user!.email}</Text>
-                  {/* O18 HOME-05: "Member for X days" — no rewards, no
-                      streaks (per user note: not habit-tracking app). Just
-                      a quiet acknowledgement of time spent together. */}
-                  {user!.createdAt && (() => {
-                    const days = Math.max(1, Math.floor((Date.now() - new Date(user!.createdAt).getTime()) / 86400000));
-                    return (
-                      <Text style={[profileStyles.memberFor, { color: settingsBgTokens.cardTextColorMuted }]}>
-                        Member for {days} {days === 1 ? 'day' : 'days'}
-                      </Text>
-                    );
-                  })()}
-                </View>
-              </View>
-              <View style={[styles.dividerFlush, dividerOverride]} />
-              <ActionRow
-                label="Edit name"
-                onPress={openEditName}
-                textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted} />
-              {/* R114/O24 (2026-08-12): inline edit-name panel, mirrors the
-                  Change password accordion below. Uses pwStyles so both
-                  panels share the same visual language. */}
-              {showEditName && (
-                <View style={pwStyles.form}>
-                  {!!nameError && <Text style={pwStyles.error}>{nameError}</Text>}
-                  <Text style={pwStyles.label}>Your name</Text>
-                  <View style={pwStyles.inputRow}>
-                    <TextInput
-                      style={pwStyles.inputFlex}
-                      value={nameDraft}
-                      onChangeText={(v) => { setNameDraft(v); if (nameError) setNameError(''); }}
-                      placeholder="How friends will see you"
-                      placeholderTextColor={Colors.textMuted}
-                      maxLength={32}
-                      autoCorrect={false}
-                      returnKeyType="done"
-                      onSubmitEditing={handleSaveName}
-                    />
-                  </View>
-                  <PressBtn
-                    style={[pwStyles.btn, (nameSaving || !nameDraft.trim()) && { opacity: 0.6 }]}
-                    onPress={handleSaveName}
-                    disabled={nameSaving || !nameDraft.trim()}
-                    scaleTo={0.96}
-                  >
-                    {nameSaving
-                      ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <ActivityIndicator size="small" color="#fff" />
-                          <Text style={pwStyles.btnText}>Saving…</Text>
-                        </View>
-                      )
-                      : <Text style={pwStyles.btnText}>Save name</Text>
-                    }
-                  </PressBtn>
-                </View>
-              )}
-              <ActionRow
-                label="Change password"
-                onPress={() => {
-                  setShowChangePw(v => !v);
-                  setPwError('');
-                  setPwSuccess('');
-                  // Round-5 R5-M1: also clear the password fields so
-                  // plaintext doesn't linger in JS memory across toggles.
-                  setCurrentPw('');
-                  setNewPw('');
-                  setConfirmPw('');
-                }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-              {showChangePw && (
-                <View style={pwStyles.form}>
-                  {!!pwError && <Text style={pwStyles.error}>{pwError}</Text>}
-                  {!!pwSuccess && <Text style={pwStyles.success}>{pwSuccess}</Text>}
-                  <Text style={pwStyles.label}>Current password</Text>
-                  <View style={pwStyles.inputRow}>
-                    <TextInput
-                      style={pwStyles.inputFlex}
-                      value={currentPw}
-                      onChangeText={setCurrentPw}
-                      placeholder="Enter your current password"
-                      placeholderTextColor={Colors.textMuted}
-                      secureTextEntry={!showCurrentPw}
-                      autoCapitalize="none"
-                    />
-                    <TouchableOpacity
-                      style={pwStyles.eyeBtn}
-                      onPress={() => setShowCurrentPw(v => !v)}
-                      accessibilityLabel={showCurrentPw ? 'Hide current password' : 'Show current password'}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Icon name={showCurrentPw ? 'EyeOff' : 'Eye'} size={18} color={Colors.textSecondary} strokeWidth={1.8} />
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={pwStyles.label}>New password</Text>
-                  <View style={pwStyles.inputRow}>
-                    <TextInput
-                      style={pwStyles.inputFlex}
-                      value={newPw}
-                      onChangeText={setNewPw}
-                      placeholder="Min. 8 characters"
-                      placeholderTextColor={Colors.textMuted}
-                      secureTextEntry={!showNewPw}
-                      autoCapitalize="none"
-                    />
-                    <TouchableOpacity
-                      style={pwStyles.eyeBtn}
-                      onPress={() => setShowNewPw(v => !v)}
-                      accessibilityLabel={showNewPw ? 'Hide new password' : 'Show new password'}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Icon name={showNewPw ? 'EyeOff' : 'Eye'} size={18} color={Colors.textSecondary} strokeWidth={1.8} />
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={pwStyles.label}>Confirm new password</Text>
-                  <View style={pwStyles.inputRow}>
-                    <TextInput
-                      style={pwStyles.inputFlex}
-                      value={confirmPw}
-                      onChangeText={setConfirmPw}
-                      placeholder="Re-enter new password"
-                      placeholderTextColor={Colors.textMuted}
-                      secureTextEntry={!showConfirmPw}
-                      autoCapitalize="none"
-                    />
-                    <TouchableOpacity
-                      style={pwStyles.eyeBtn}
-                      onPress={() => setShowConfirmPw(v => !v)}
-                      accessibilityLabel={showConfirmPw ? 'Hide confirm password' : 'Show confirm password'}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Icon name={showConfirmPw ? 'EyeOff' : 'Eye'} size={18} color={Colors.textSecondary} strokeWidth={1.8} />
-                    </TouchableOpacity>
-                  </View>
-                  <PressBtn
-                    style={[pwStyles.btn, pwLoading && { opacity: 0.6 }]}
-                    onPress={handleChangePassword}
-                    disabled={pwLoading}
-                    scaleTo={0.96}
-                  >
-                    {pwLoading
-                      ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <ActivityIndicator size="small" color="#fff" />
-                          <Text style={pwStyles.btnText}>Updating…</Text>
-                        </View>
-                      )
-                      : <Text style={pwStyles.btnText}>Update password</Text>
-                    }
-                  </PressBtn>
-                </View>
-              )}
-            </View>
-
-          {/* ── Your progress (O15 bug 1: moved here from below Preferences,
-           *  right after Profile card so the badge feels like part of the
-           *  user's identity — achievement / 功勋). Section header includes
-           *  a ? tap that opens a modal explaining how "places explored"
-           *  is calculated. */}
-          <View style={progressStyles.headerRow}>
-            <Text style={styles.sectionHeader}>Your progress</Text>
-            <TouchableOpacity
-              onPress={() => setShowProgressHelp(true)}
-              style={progressStyles.helpBtn}
-              accessibilityLabel="How is progress calculated?"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Icon name="Info" size={14} color={Colors.textMuted} strokeWidth={2} />
-            </TouchableOpacity>
-          </View>
-          <View style={badgeStyles.row}>
-            <View style={[badgeStyles.card, cardOverride]}>
-              <View style={[badgeStyles.iconBadge, { backgroundColor: '#eef3e6' }]}>
-                <Icon name="Footprints" size={22} color={Colors.primary} strokeWidth={1.8} />
-              </View>
-              <Text style={[badgeStyles.value, { color: settingsBgTokens.cardTextColor }]}>{serverStats?.placesExplored ?? memoryPointCount}</Text>
-              <Text style={[badgeStyles.label, { color: settingsBgTokens.cardTextColorMuted }]}>
-                {(serverStats?.placesExplored ?? memoryPointCount) === 1 ? 'place explored' : 'places explored'}
-              </Text>
-            </View>
-            <View style={[badgeStyles.card, cardOverride]}>
-              <View style={[badgeStyles.iconBadge, { backgroundColor: 'rgba(181,130,61,0.12)' }]}>
-                <Icon name="Mountain" size={22} color="#b5823d" strokeWidth={1.8} />
-              </View>
-              <Text style={[badgeStyles.value, { color: settingsBgTokens.cardTextColor }]}>{serverStats?.cairnsPlanted ?? myCairnCount}</Text>
-              <Text style={[badgeStyles.label, { color: settingsBgTokens.cardTextColorMuted }]}>
-                {(serverStats?.cairnsPlanted ?? myCairnCount) === 1 ? 'cairn planted' : 'cairns planted'}
-              </Text>
-            </View>
-          </View>
-
-          {/* ── Preferences ── */}
-          <SectionHeader title="Preferences" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
-          <View style={[styles.card, cardOverride]}>
-            {/* Passive Memory only. Explicit Hike/Run capture is always on. */}
-            <ToggleRow
-              iconName="MapPin"
-              iconColor={Colors.primary}
-              iconBg={Colors.primaryLight}
-              label="Record exploration outside activities"
-              hint="When on, places explored while CairnNZ is open can be added to Memory. Hikes and Runs always record Memory."
-              value={memoryAlwaysOn}
-              onToggle={() => setMemorySetting('foregroundAutoUnlockEnabled', !memoryAlwaysOn)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-            <View style={[styles.divider, dividerOverride]} />
-            <ActionRow
-              iconName="Ruler"
-              iconColor={Colors.primary}
-              iconBg={Colors.primaryLight}
-              label="Units"
-              hint="Distance and elevation"
-              value={units === 'imperial' ? 'Miles / feet' : 'Kilometres / metres'}
-              onPress={() => setShowUnitsInline(v => !v)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-            {/* O13 bug 2: inline expansion instead of popup modal. Matches
-             *  the Change-password disclosure pattern in the Profile card. */}
-            {showUnitsInline && (
-              <View style={inlineStyles.expand}>
-                <View style={[styles.divider, dividerOverride]} />
-                <TouchableOpacity
-                  style={inlineStyles.pickerRow}
-                  onPress={() => { updateSetting('units', 'metric'); setShowUnitsInline(false); }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[
-                        inlineStyles.pickerLabel,
-                        units === 'metric' && inlineStyles.pickerLabelActive,
-                      ]}
-                    >
-                      Metric
-                    </Text>
-                    <Text style={inlineStyles.pickerHint}>Kilometres, metres</Text>
-                  </View>
-                  {units === 'metric' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
-                </TouchableOpacity>
-                <View style={[styles.divider, dividerOverride]} />
-                <TouchableOpacity
-                  style={inlineStyles.pickerRow}
-                  onPress={() => { updateSetting('units', 'imperial'); setShowUnitsInline(false); }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[
-                        inlineStyles.pickerLabel,
-                        units === 'imperial' && inlineStyles.pickerLabelActive,
-                      ]}
-                    >
-                      Imperial
-                    </Text>
-                    <Text style={inlineStyles.pickerHint}>Miles, feet</Text>
-                  </View>
-                  {units === 'imperial' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
-                </TouchableOpacity>
-              </View>
-            )}
-            <View style={[styles.divider, dividerOverride]} />
-            {/* O18 HIST-09: date format picker (dmy / mdy / ymd) */}
-            <ActionRow
-              iconName="Calendar"
-              iconColor={Colors.primary}
-              iconBg={Colors.primaryLight}
-              label="Date format"
-              hint="How dates appear across the app"
-              value={dateFormat === 'mdy' ? 'MM/DD/YYYY' : dateFormat === 'ymd' ? 'YYYY-MM-DD' : 'DD/MM/YYYY'}
-              onPress={() => setShowDateInline(v => !v)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-            {showDateInline && (
-              <View style={inlineStyles.expand}>
-                <View style={[styles.divider, dividerOverride]} />
-                <TouchableOpacity
-                  style={inlineStyles.pickerRow}
-                  onPress={() => { updateSetting('dateFormat', 'dmy'); setShowDateInline(false); }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[inlineStyles.pickerLabel, dateFormat === 'dmy' && inlineStyles.pickerLabelActive]}>DD/MM/YYYY</Text>
-                    <Text style={inlineStyles.pickerHint}>New Zealand / UK · e.g. 29/07/2026</Text>
-                  </View>
-                  {dateFormat === 'dmy' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
-                </TouchableOpacity>
-                <View style={[styles.divider, dividerOverride]} />
-                <TouchableOpacity
-                  style={inlineStyles.pickerRow}
-                  onPress={() => { updateSetting('dateFormat', 'mdy'); setShowDateInline(false); }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[inlineStyles.pickerLabel, dateFormat === 'mdy' && inlineStyles.pickerLabelActive]}>MM/DD/YYYY</Text>
-                    <Text style={inlineStyles.pickerHint}>United States · e.g. 07/29/2026</Text>
-                  </View>
-                  {dateFormat === 'mdy' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
-                </TouchableOpacity>
-                <View style={[styles.divider, dividerOverride]} />
-                <TouchableOpacity
-                  style={inlineStyles.pickerRow}
-                  onPress={() => { updateSetting('dateFormat', 'ymd'); setShowDateInline(false); }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[inlineStyles.pickerLabel, dateFormat === 'ymd' && inlineStyles.pickerLabelActive]}>YYYY-MM-DD</Text>
-                    <Text style={inlineStyles.pickerHint}>ISO · e.g. 2026-07-29</Text>
-                  </View>
-                  {dateFormat === 'ymd' && <Icon name="Check" size={18} color={Colors.primary} strokeWidth={2.5} />}
-                </TouchableOpacity>
-              </View>
-            )}
-            <View style={[styles.divider, dividerOverride]} />
-            <ToggleRow
-              iconName="Vibrate"
-              iconColor="#8a6e3b"
-              iconBg="#f2ece0"
-              label="Haptic feedback"
-              hint="Little buzz when you tap buttons"
-              value={hapticFeedback}
-              onToggle={() => {
-                const next = !hapticFeedback;
-                updateSetting('hapticFeedback', next);
-                // O13 bug 3: preview the effect on toggle-on so the user
-                // immediately feels what they enabled. Toggle-off obviously
-                // does nothing (no vibration to preview).
-                if (next) haptic.notification('success');
-              }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-            <View style={[styles.divider, dividerOverride]} />
-            {/* R21 (2026-08-17): Show exploration %. Default on. When user
-                turns OFF, show a demo modal first so they understand what
-                they're hiding — most first-time users have basically 0%
-                so they've never seen the feature and don't know what to
-                turn off. */}
-            <ToggleRow
-              iconName="TrendingUp"
-              iconColor="#4a6b38"
-              iconBg="#e0e8d5"
-              label="Show exploration %"
-              hint="Little swap icon on Home that shows % of your country you've explored"
-              value={showExplorationPercent}
-              onToggle={() => {
-                if (showExplorationPercent) {
-                  // Turning OFF — show demo first so user knows what disappears.
-                  setShowExplorationDemo(true);
-                } else {
-                  // Turning ON — no demo needed, just enable.
-                  updateSetting('showExplorationPercent', true);
-                  haptic.notification('success');
-                }
-              }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-            <View style={[styles.divider, dividerOverride]} />
-            {/* One product concept: Appearance controls the Sunny time family.
-                Binary light/dark behavior is derived internally. */}
-            <View style={{ paddingHorizontal: Spacing.base, paddingVertical: Spacing.md }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                <View style={[rowStyles.iconWrap, { backgroundColor: '#E3E4DF' }]}>
-                  <Icon name="Sun" size={18} color="#53635D" strokeWidth={1.8} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={[rowStyles.label, { color: settingsBgTokens.cardTextColor }]}>Appearance</Text>
-                    <TouchableOpacity
-                      onPress={() => setShowAppearanceHelp(true)}
-                      accessibilityRole="button"
-                      accessibilityLabel="How automatic appearance works"
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      style={{ marginLeft: 7, width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      <Icon name="Info" size={15} color={settingsBgTokens.cardTextColorMuted} strokeWidth={1.9} />
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={[rowStyles.hint, { color: settingsBgTokens.cardTextColorMuted }]}>
-                    {appearance === 'auto'
-                      ? `Auto · ${scenicTime.autoTimeOfDay[0].toUpperCase()}${scenicTime.autoTimeOfDay.slice(1)}`
-                      : `Always ${appearance[0].toUpperCase()}${appearance.slice(1)}`}
-                  </Text>
-                </View>
-              </View>
-              <View style={{
-                flexDirection: 'row',
-                backgroundColor: settingsBgTokens.useDarkText ? 'rgba(33,54,44,0.06)' : 'rgba(255,255,255,0.10)',
-                borderRadius: 12,
-                padding: 3,
-              }}>
-                {(['auto', 'day', 'sunset', 'night'] as const).map((m) => {
-                  const active = appearance === m;
-                  return (
-                    <TouchableOpacity
-                      key={m}
-                      onPress={() => {
-                        updateSetting('appearance', m);
-                        haptic.selection();
-                      }}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      accessibilityLabel={`Appearance ${m}`}
-                      style={{
-                        flex: 1,
-                        minHeight: 42,
-                        borderRadius: 9,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: active
-                          ? (settingsBgTokens.useDarkText ? '#ffffff' : 'rgba(255,255,255,0.22)')
-                          : 'transparent',
-                        shadowColor: active ? '#000' : 'transparent',
-                        shadowOpacity: active ? 0.08 : 0,
-                        shadowRadius: 4,
-                        shadowOffset: { width: 0, height: 1 },
-                      }}
-                    >
-                      <Text style={{
-                        fontSize: 12,
-                        fontWeight: active ? '700' : '500',
-                        color: active
-                          ? (settingsBgTokens.useDarkText ? '#21362C' : '#F0EEE6')
-                          : settingsBgTokens.cardTextColorMuted,
-                        textTransform: 'capitalize',
-                      }}>
-                        {m}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-            {/* R21 (2026-08-17): Voice guidance removed per concept clip-92 —
-                the concept Preferences card lists only 4 rows (Memory GPS /
-                Units / Date format / Haptic). Voice guidance retained in
-                store but no UI toggle until turn-by-turn nav Sprint ships. */}
-          </View>
-
-          {/* O15 bug 1: Progress moved to right below Profile card
-           *  (was between Preferences and About). Now the user sees
-           *  their achievement immediately after their identity. */}
-
-          {/* ── Notifications section hidden (2026-08-31): push pipeline
-              exists (device_tokens + notification_log tables, cron drain)
-              but no device tokens registered in production and the only
-              wired enqueue point is friend_request. Hiding entire section
-              until push is truly ready end-to-end. Re-enable by removing
-              the `false &&` gate below. */}
-          {false && pushPrefs && (
-            <>
-              <SectionHeader title="Notifications" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
-              <View style={[styles.card, cardOverride]}>
-                <ToggleRow
-                  iconName="Users"
-                  iconColor="#5d7c46"
-                  iconBg="#e6ede0"
-                  label="Friend requests"
-                  hint="When someone wants to add you"
-                  value={pushPrefs?.friendRequests ?? false}
-                  onToggle={() => togglePushPref('friendRequests')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-                <ToggleRow
-                  iconName="Flag"
-                  iconColor="#c47a00"
-                  iconBg="#f5e6cc"
-                  label="Cairn activity"
-                  hint="Replies and reactions on your cairns"
-                  value={pushPrefs?.markerReplies ?? false}
-                  onToggle={() => togglePushPref('markerReplies')} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-              </View>
-            </>
-          )}
-
-          {/* ── About & Legal ── */}
-          <SectionHeader title="About & Legal" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
-          <View style={[styles.card, cardOverride]}>
-            <ActionRow
-              iconName="Star"
-              iconColor="#8a6e3b"
-              iconBg="#f2ece0"
-              label="What's new"
-              hint={`Latest updates in ${OTA_VERSION}`}
-              onPress={() => setShowWhatsNew(true)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-            <View style={[styles.divider, dividerOverride]} />
-            <ActionRow
-              iconName="Cloud"
-              iconColor="#4a7a8a"
-              iconBg="#e6eef0"
-              label="Check the weather"
-              hint="Opens MetService NZ"
-              external
-              onPress={() => Linking.openURL('https://www.metservice.com/rural').catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-            <View style={[styles.divider, dividerOverride]} />
-            {/* O13 bug 5: unified in-app feedback / safety / bug row.
-             *  Replaces the 3 separate mailto rows (Report / Feedback /
-             *  Debug screenshot). Expands inline; sends via appLog + optional
-             *  debug screenshot upload — no mail app hop. */}
-            <ActionRow
-              iconName="MessageSquare"
-              iconColor={Colors.primary}
-              iconBg={Colors.primaryLight}
-              label="Send feedback"
-              hint="Feedback, safety report, or bug — with optional screenshot"
-              onPress={() => {
-                setShowFeedbackInline(v => !v);
-                setFeedbackError('');
-                setFeedbackSent(false);
-              }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-            {showFeedbackInline && (
-              <View style={inlineStyles.expand}>
-                {/* Kind chips */}
-                <View style={feedbackStyles.chipRow}>
-                  {([
-                    { id: 'feedback', label: 'Feedback', icon: 'MessageSquare' as IconName },
-                    { id: 'safety', label: 'Safety report', icon: 'TriangleAlert' as IconName },
-                    { id: 'bug', label: 'Bug', icon: 'Wrench' as IconName },
-                  ] as const).map(k => {
-                    const active = feedbackKind === k.id;
-                    return (
-                      <TouchableOpacity
-                        key={k.id}
-                        onPress={() => setFeedbackKind(k.id)}
-                        style={[feedbackStyles.chip, active && feedbackStyles.chipActive]}
-                      >
-                        <Icon name={k.icon} size={14} color={active ? '#fff' : Colors.textSecondary} strokeWidth={2} />
-                        <Text style={[feedbackStyles.chipText, active && feedbackStyles.chipTextActive]}>{k.label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                <Text style={pwStyles.label}>Tell us what happened</Text>
-                <TextInput
-                  style={feedbackStyles.textarea}
-                  value={feedbackText}
-                  onChangeText={setFeedbackText}
-                  placeholder={
-                    feedbackKind === 'safety' ? 'Where and what — hazard, missing marker, or emergency…'
-                    : feedbackKind === 'bug' ? 'What did you tap? What did you expect vs see?'
-                    : 'Ideas, hellos, or anything on your mind…'
-                  }
-                  placeholderTextColor={Colors.textMuted}
-                  multiline
-                  numberOfLines={5}
-                  maxLength={1000}
-                />
-                <Text style={feedbackStyles.counter}>{feedbackText.length} / 1000</Text>
-
-                {/* O15 bug 3: attachment preview grid (clip.yiiling pattern).
-                 *  64x64 thumbnails, ✕ button top-right, tap ✕ to remove. */}
-                {feedbackAttachments.length > 0 && (
-                  <View style={feedbackStyles.previewGrid}>
-                    {feedbackAttachments.map((att, idx) => (
-                      <View key={`${att.uri}-${idx}`} style={feedbackStyles.thumb}>
-                        <Image
-                          source={{ uri: att.uri }}
-                          style={feedbackStyles.thumbImg}
-                          resizeMode="cover"
-                        />
-                        <TouchableOpacity
-                          style={feedbackStyles.thumbX}
-                          onPress={() => setFeedbackAttachments((cur) => cur.filter((_, i) => i !== idx))}
-                          accessibilityLabel={`Remove attachment ${idx + 1}`}
-                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                        >
-                          <Text style={feedbackStyles.thumbXText}>×</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {!!feedbackError && <Text style={pwStyles.error}>{feedbackError}</Text>}
-                {feedbackSent && <Text style={pwStyles.success}>Thanks — we got it.</Text>}
-                <View style={feedbackStyles.btnRow}>
-                  {Platform.OS !== 'web' && feedbackAttachments.length < 5 && (
-                    <PressBtn
-                      style={feedbackStyles.attachBtn}
-                      onPress={handlePickAttachments}
-                      disabled={dbgState === 'picking'}
-                      scaleTo={0.96}
-                    >
-                      <Icon name="Send" size={14} color={Colors.primary} strokeWidth={2} />
-                      <Text style={feedbackStyles.attachText}>
-                        {' '}
-                        {feedbackAttachments.length > 0 ? 'Add more' : 'Attach screenshots'}
-                      </Text>
-                    </PressBtn>
-                  )}
-                  <PressBtn
-                    style={[feedbackStyles.sendBtn, (feedbackSending || feedbackText.trim().length < 3) && { opacity: 0.5 }]}
-                    onPress={async () => {
-                      if (feedbackText.trim().length < 3) { setFeedbackError('Please write at least a few words.'); return; }
-                      setFeedbackSending(true);
-                      setFeedbackError('');
-                      setFeedbackSent(false);
-                      try {
-                        // O15 bug 3: send text feedback + upload any pending
-                        // attachments. Attachments go through the existing
-                        // debugUpload pipeline (POST /api/debug-snapshot);
-                        // the appLog carries a reference count so backend
-                        // can link them if needed.
-                        let attachmentUploaded = 0;
-                        if (feedbackAttachments.length > 0) {
-                          try {
-                            const result = await uploadDebugScreenshots(
-                              feedbackAttachments,
-                              'settings',
-                            );
-                            attachmentUploaded = result.okCount;
-                          } catch { /* attachments best-effort; text still sent */ }
-                        }
-                        log('user_feedback', {
-                          kind: feedbackKind,
-                          text: feedbackText.trim(),
-                          user_email: user?.email ?? null,
-                          user_name: user?.name ?? null,
-                          ota: OTA_VERSION,
-                          attachments_total: feedbackAttachments.length,
-                          attachments_ok: attachmentUploaded,
-                        });
-                        setFeedbackSent(true);
-                        setFeedbackText('');
-                        setFeedbackAttachments([]);
-                        setTimeout(() => {
-                          if (!dbgMountedRef.current) return;
-                          setShowFeedbackInline(false);
-                          setFeedbackSent(false);
-                        }, 2000);
-                      } catch {
-                        setFeedbackError('Could not send. Please try again.');
-                      } finally {
-                        setFeedbackSending(false);
-                      }
-                    }}
-                    disabled={feedbackSending || feedbackText.trim().length < 3}
-                    scaleTo={0.96}
-                  >
-                    {feedbackSending
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <Text style={feedbackStyles.sendText}>Send</Text>
-                    }
-                  </PressBtn>
-                </View>
-              </View>
-            )}
-            <View style={[styles.divider, dividerOverride]} />
-            <ActionRow
-              iconName="Shield"
-              iconColor="#4a6d8a"
-              iconBg="#e8eef3"
-              label="Privacy Policy"
-              hint="How we handle your data"
-              external
-              onPress={() => Linking.openURL(PRIVACY_URL).catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-            <View style={[styles.divider, dividerOverride]} />
-            <ActionRow
-              iconName="FileText"
-              iconColor="#7a6a4a"
-              iconBg="#f0ede4"
-              label="Terms of Service"
-              hint="Apple's standard app terms — a Cairn-specific version is coming"
-              external
-              onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/').catch(() => Alert.alert('Cannot open link', 'Please try again later.', [{ text: 'OK' }]))} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-            <View style={[styles.divider, dividerOverride]} />
-            <ActionRow
-              iconName="Info"
-              iconColor={Colors.textSecondary}
-              iconBg="#f0ede4"
-              label="About Cairn"
-              value={aboutRowValue}
-              onPress={handleAboutTap}
-              hideChevron
-              textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted} />
-            {/* R21 (2026-08-17): Export my data moved into About & Legal
-                per concept clip-92 (all legal/data-management sits together
-                in one card, not a lonely single-row card). */}
-            <View style={[styles.divider, dividerOverride]} />
-            <ActionRow
-              iconName="Download"
-              iconColor={Colors.primary}
-              iconBg={Colors.primaryLight}
-              label="Export my data"
-              hint="We'll email you a JSON bundle with everything on your account"
-              onPress={async () => {
-                Alert.alert(
-                  'Export your data',
-                  'This will build a JSON bundle of your hikes, cairns, memory points, routes, friends, and notifications. We\'ll email you a download link within a few minutes.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Request export',
-                      onPress: async () => {
-                        try {
-                          // eslint-disable-next-line @typescript-eslint/no-require-imports
-                          const { requestDataExport } = require('../services/authService');
-                          const r = await requestDataExport();
-                          if (r.error) {
-                            Alert.alert('Export failed', r.error, [{ text: 'OK' }]);
-                            return;
-                          }
-                          Alert.alert(
-                            'Export requested',
-                            'You\'ll receive an email within a few minutes with a download link. The link is valid for 24 hours.',
-                            [{ text: 'OK' }],
-                          );
-                        } catch {
-                          Alert.alert('Export failed', 'Please try again.', [{ text: 'OK' }]);
-                        }
-                      },
-                    },
-                  ],
-                );
-              }}
-              hideChevron textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-          </View>
-
-          {/* R21: standalone Export card removed — merged into About & Legal above. */}
-
-          {/* ── Danger zone (destructive actions grouped) ── */}
-          <SectionHeader title="Danger zone" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
-          <View style={[styles.card, cardOverride]}>
-            <ActionRow
-              label="Reset my map memory"
-              hint="Clears every place you have walked. Your hikes and cairns are kept."
-              labelColor={Colors.danger}
-              onPress={() => setShowResetMemoryModal(true)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-            <View style={[styles.dividerFlush, dividerOverride]} />
-            <ActionRow
-              label="Delete account"
-              hint="Permanent — opens confirmation before we email our team"
-              labelColor={Colors.danger}
-              onPress={() => setShowDeleteAccountModal(true)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-          </View>
-
-          {/* ── Account (Sign out — grey, below danger, above footer) ── */}
-          {/* 2026-08-17 R21: unwrapped {user && ...} — RootNavigator gate
-              (isLoggedIn && user) already ensures user is non-null here.
-              Kept as bare View for reader clarity, matching Profile card. */}
-          <View style={[styles.card, cardOverride, { marginTop: Spacing.xl }]}>
-            <ActionRow
-              label="Sign out"
-              hint="Your hikes stay saved"
-              onPress={async () => {
-                // O18 AUTH-09: if a hike is active, warn that data will be
-                // lost. Users tap Settings mid-hike more often than we'd
-                // like — a silent sign-out clears the in-flight session.
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                const { useTrackingStore } = require('../store/useTrackingStore');
-                const trackingStatus = useTrackingStore.getState().status;
-                if (trackingStatus === 'tracking' || trackingStatus === 'paused') {
-                  const proceed = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function'
-                    ? window.confirm("You're in the middle of a hike. Signing out will discard the current recording. Continue?")
-                    : await new Promise<boolean>((resolve) =>
-                        Alert.alert(
-                          'Sign out mid-hike?',
-                          "You're recording a hike right now. Signing out will discard this session. Save or stop first if you want to keep it.",
-                          [
-                            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-                            { text: 'Sign out anyway', style: 'destructive', onPress: () => resolve(true) },
-                          ],
-                        )
-                      );
-                  if (!proceed) return;
-                }
-                const confirmed = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function'
-                  ? window.confirm('Your hikes stay saved. You can sign back in anytime.')
-                  : await new Promise<boolean>((resolve) =>
-                      Alert.alert('Sign out', 'Your hikes stay saved. You can sign back in anytime.', [
-                        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-                        { text: 'Sign out', style: 'destructive', onPress: () => resolve(true) },
-                      ])
-                    );
-                if (!confirmed) return;
-                crashLogger.breadcrumb('signout:confirmed');
-                try { await logout(); crashLogger.breadcrumb('signout:token_cleared'); }
-                catch { crashLogger.breadcrumb('signout:token_clear_failed'); }
-                crashLogger.breadcrumb('signout:before_appLogout');
-                // R21 (2026-08-17): remember-me credentials are NOT cleared
-                // on sign out — that's user preference, they want their
-                // email/password auto-filled next time. Previously the
-                // legacy AsyncStorage removeItem was a no-op (real data
-                // in SecureStore) but even if it worked, clearing would
-                // defeat the purpose of remember-me. User must uncheck
-                // "Remember me on this device" during sign-in to clear.
-                await appLogout();
-                crashLogger.breadcrumb('signout:after_appLogout');
-              }} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-          </View>
-
-          {/* ── Developer (hidden — unlocked via 5-tap on About Cairn) ── */}
-          {debugMode && (
-            <>
-              <SectionHeader title="Developer" color={settingsBgTokens.textColorMuted} shadowColor={settingsBgTokens.textShadowColor} />
-              <View style={[styles.card, cardOverride]}>
-                <ToggleRow
-                  iconName="Wrench"
-                  iconColor={Colors.primary}
-                  iconBg={Colors.primaryLight}
-                  label="Debug mode"
-                  hint="Enables internal diagnostics"
-                  value={debugMode}
-                  onToggle={() => updateSetting('debugMode', !debugMode)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-                {activitySimulatorBuildCapable ? (
-                  <>
-                    <View style={[styles.divider, dividerOverride]} />
-                    <ToggleRow
-                      iconName="MapPin"
-                      iconColor={Colors.primary}
-                      iconBg={Colors.primaryLight}
-                      label="Activity Simulator"
-                      hint={simulatorContinuity.locked
-                        ? simulatorContinuity.reason ?? 'Resolve the Simulator Activity first'
-                        : 'Internal QA virtual GPS for Hike and Run'}
-                      value={activitySimulatorEnabled}
-                      onToggle={() => setActivitySimulatorEnabled(!activitySimulatorEnabled)}
-                      disabled={simulatorContinuity.locked}
-                      testID="activity-simulator-toggle"
-                      textColor={settingsBgTokens.cardTextColor}
-                      mutedColor={settingsBgTokens.cardTextColorMuted}
-                    />
-                  </>
-                ) : null}
-                <View style={[styles.divider, dividerOverride]} />
-                <ActionRow
-                  iconName="Settings2"
-                  iconColor={Colors.textSecondary}
-                  iconBg="#f0ede4"
-                  label="Open Debug screen"
-                  onPress={() => nav.navigate('Debug' as never)} textColor={settingsBgTokens.cardTextColor} mutedColor={settingsBgTokens.cardTextColorMuted}
-    />
-              </View>
-              <Text style={styles.devNote}>
-                Only for development and QA.
-              </Text>
-            </>
-          )}
-
-          {/* ── Footer ── */}
-          <Text style={[styles.footer, footerOverride]}>Thanks for using Cairn.</Text>
-
-        </ScrollView>
+    <View style={[styles.root, { backgroundColor: background.settingsBackgroundColor }]}>
+      <Image source={background.bgAsset} style={[styles.backgroundImage, backgroundLayout]} resizeMode="cover" />
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: background.settingsVeilColor }]} />
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        {page === 'root' ? renderRoot() : page === 'account' ? renderAccount() : page === 'privacy' ? renderPrivacy() : renderHelp()}
       </SafeAreaView>
 
-      {/* O13 bug 2: Units modal removed — replaced by inline expand above
-       *  in the Preferences card. */}
-
-      {/* O15 bug 1: Progress help modal — explains how the counts work. */}
-      <Modal
-        visible={showProgressHelp}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowProgressHelp(false)}
-      >
-        <Pressable
-          style={modalStyles.backdrop}
-          onPress={() => setShowProgressHelp(false)}
-          accessibilityLabel="Dismiss"
-        >
-          <Pressable style={modalStyles.card} onPress={() => { /* absorb */ }}>
-            <Text style={modalStyles.title}>How progress is counted</Text>
-            <Text style={helpStyles.body}>
-              <Text style={helpStyles.strong}>Places explored</Text> — the number of unique
-              map cells you've walked through. The world is divided into small
-              hexagon cells (about 25m across). Each time your GPS enters a
-              new cell during a hike or run, it's added to your total.
-            </Text>
-            <Text style={helpStyles.body}>
-              <Text style={helpStyles.strong}>Cairns planted</Text> — every cairn you have
-              dropped on the map. Cairns you find from friends do not count here.
-            </Text>
-            <TouchableOpacity
-              style={helpStyles.okBtn}
-              onPress={() => setShowProgressHelp(false)}
-            >
-              <Text style={helpStyles.okText}>Got it</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* What's new — recent OTA changelog entries (top 3) */}
-      <Modal
-        visible={showWhatsNew}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowWhatsNew(false)}
-      >
-        <Pressable
-          style={modalStyles.backdrop}
-          onPress={() => setShowWhatsNew(false)}
-          accessibilityLabel="Dismiss"
-        >
-          <Pressable style={modalStyles.card} onPress={() => { /* absorb */ }}>
-            <Text style={modalStyles.title}>What's new</Text>
-            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
-              {CHANGELOG.slice(0, 3).map((entry) => (
-                <View key={entry.version} style={{ marginBottom: 16 }}>
-                  <Text style={[helpStyles.body, { fontWeight: '700', color: Colors.primary, marginBottom: 4 }]}>
-                    {entry.version} · {entry.date}
-                  </Text>
-                  {entry.notes.map((note, i) => (
-                    <Text key={i} style={[helpStyles.body, { marginBottom: 4 }]}>· {note}</Text>
-                  ))}
-                </View>
-              ))}
-            </ScrollView>
-            <TouchableOpacity
-              style={helpStyles.okBtn}
-              onPress={() => setShowWhatsNew(false)}
-            >
-              <Text style={helpStyles.okText}>Close</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* R114/O24 (2026-08-12): Edit Name modal removed — replaced with
-          inline accordion panel next to Edit name row (matches Change
-          password UX). See panel at ~line 645. */}
-      {!!nameToast && (
-        <View pointerEvents="none" style={toastStyles.wrap}>
-          <View style={toastStyles.pill}>
-            <Text style={toastStyles.text}>{nameToast}</Text>
-          </View>
+      <ModalCard visible={nameOpen} onDismiss={() => !nameSaving && setNameOpen(false)} dismissible={!nameSaving} testID="settings-name-modal">
+        <ModalCardHeader title="Edit name" body="This is how your name appears in Cairn." onClose={() => setNameOpen(false)} />
+        <TextField
+          label="Name"
+          value={nameDraft}
+          onChangeText={(value) => { setNameDraft(value.slice(0, 32)); setNameError(''); }}
+          autoCapitalize="words"
+          error={nameError || undefined}
+          testID="settings-name-input"
+        />
+        <View style={styles.modalActions}>
+          <PrimaryButton label="Cancel" variant="secondary" disabled={nameSaving} onPress={() => setNameOpen(false)} style={styles.flexButton} />
+          <PrimaryButton
+            label="Save"
+            loading={nameSaving}
+            disabled={!nameDraft.trim()}
+            onPress={() => void (async () => {
+              setNameSaving(true);
+              const result = await patchName(nameDraft.trim());
+              if (result.user) {
+                setUser(user ? { ...user, ...result.user } : result.user);
+                setNameOpen(false);
+              } else setNameError(result.error || 'Name could not be saved.');
+              setNameSaving(false);
+            })()}
+            style={styles.flexButton}
+            testID="settings-name-save"
+          />
         </View>
-      )}
-      {/* Reset my map memory — type "reset memory" to confirm */}
-      <TypeToConfirmModal
-        visible={showResetMemoryModal}
-        title="Reset your map memory?"
-        body="This clears every place you have walked on your map. Your saved hikes and cairns are kept. This cannot be undone."
-        keyword="reset memory"
-        confirmLabel="Reset memory"
-        onCancel={() => setShowResetMemoryModal(false)}
-        onConfirm={async () => {
-          crashLogger.breadcrumb('settings:reset_memory_confirmed');
-          const ok = await deleteAllMemoryFromServer();
-          // Round-2 V-N1: use explicit if/else so both breadcrumb literals
-          // appear as string constants (greppable in log aggregation).
-          if (ok) {
-            crashLogger.breadcrumb('settings:reset_memory_ok');
-          } else {
-            crashLogger.breadcrumb('settings:reset_memory_failed');
-          }
-          setShowResetMemoryModal(false);
-          if (!ok) {
-            Alert.alert('Could not reset memory', 'Check your connection and try again.', [{ text: 'OK' }]);
-          }
-        }}
-      />
+      </ModalCard>
 
-      {/* Delete account — type "delete account" to confirm.
-       *
-       * O18 AUTH-01 (2026-07-29): replaced the mailto fallback with a real
-       * backend soft-delete + 7-day grace period. DELETE /api/auth/account
-       * marks the row deleted_at, revokes current jti, and sends a
-       * confirmation email with a restore link. The client shows the exact
-       * deadline and signs the user out. If they sign in again within 7
-       * days, backend returns hint='pending_deletion' and AuthScreen
-       * routes to the restore modal.
-       */}
-      {/* AUTH-2 TEST-MODE (2026-08-11): body copy says "a short grace period"
-          instead of "7 days" so it stays honest during the 5-minute test
-          window. The exact deadline is still shown in the post-delete
-          confirmation alert (uses server-returned restoreDeadline).
-          TODO: LAUNCH_GATE — revert body to "7 days to sign in and restore"
-          before app store launch. */}
-      <TypeToConfirmModal
-        visible={showDeleteAccountModal}
-        title="Delete your account?"
-        body="Your account will be scheduled for permanent deletion. You'll have a short grace period to sign in and restore it — we'll show the exact deadline next — before all your hikes, cairns, and memory are permanently erased."
-        keyword="delete account"
-        confirmLabel="Delete account"
-        onCancel={() => setShowDeleteAccountModal(false)}
-        onConfirm={async () => {
-          crashLogger.breadcrumb('settings:delete_account_confirmed');
-          setShowDeleteAccountModal(false);
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { deleteAccount } = require('../services/authService');
-            const r = await deleteAccount();
-            if (r.error) {
-              crashLogger.breadcrumb(`settings:delete_account_error ${String(r.error).slice(0, 60)}`);
-              Alert.alert('Could not delete account', r.error, [{ text: 'OK' }]);
-              return;
-            }
-            crashLogger.breadcrumb(`settings:delete_account_scheduled deadline=${r.restoreDeadline}`);
-            // AUTH-2 TEST-MODE: fallback wording no longer claims "7 days"
-            // since server may return 5-min deadline during test window.
-            // Server should always return a real deadline; fallback only
-            // fires on unexpected missing field. TODO: LAUNCH_GATE —
-            // revert fallback to '7 days' string before launch.
-            const deadlineStr = r.restoreDeadline
-              ? new Date(r.restoreDeadline).toLocaleDateString()
-              : 'the deadline shown in your email';
-            // Clear stored credentials so this device does not auto-fill.
-            try { await storage.removeItem('cairn_remember_me'); } catch { /* swallow */ }
-            // Local logout — deleteAccount already revoked the jti server-side,
-            // but we still need to clear the token locally to hit AuthScreen.
-            try {
-              await logout();
-            } catch { /* swallow */ }
-            await appLogout();
-            Alert.alert(
-              'Account scheduled for deletion',
-              `Your account will be permanently deleted on ${deadlineStr}. To restore it, sign in with your email and password before that date.`,
-              [{ text: 'OK' }],
-            );
-          } catch (err) {
-            crashLogger.breadcrumb(`settings:delete_account_threw ${String(err).slice(0, 80)}`);
-            Alert.alert(
-              'Could not delete account',
-              'Please check your connection and try again. If the problem persists, email privacy@cairnapp.nz.',
-              [{ text: 'OK' }],
-            );
-          }
-        }}
-      />
+      <ModalCard visible={passwordOpen} onDismiss={() => !passwordSaving && setPasswordOpen(false)} dismissible={!passwordSaving} testID="settings-password-modal">
+        <ModalCardHeader title="Change password" body="Other signed-in devices will be signed out." onClose={() => setPasswordOpen(false)} />
+        <View style={styles.stackSmall}>
+          <TextField label="Current password" value={currentPassword} onChangeText={(value) => { setCurrentPassword(value); setPasswordError(''); }} secureTextEntry autoCapitalize="none" testID="settings-current-password" />
+          <TextField label="New password" value={nextPassword} onChangeText={(value) => { setNextPassword(value); setPasswordError(''); }} secureTextEntry autoCapitalize="none" testID="settings-new-password" />
+          <TextField label="Confirm new password" value={passwordConfirmation} onChangeText={(value) => { setPasswordConfirmation(value); setPasswordError(''); }} secureTextEntry autoCapitalize="none" error={passwordError || undefined} testID="settings-confirm-password" />
+        </View>
+        <View style={styles.modalActions}>
+          <PrimaryButton label="Cancel" variant="secondary" disabled={passwordSaving} onPress={() => setPasswordOpen(false)} style={styles.flexButton} />
+          <PrimaryButton
+            label="Update"
+            loading={passwordSaving}
+            disabled={!currentPassword || nextPassword.length < 8 || passwordConfirmation.length < 8}
+            onPress={() => void (async () => {
+              if (nextPassword !== passwordConfirmation) {
+                setPasswordError('New passwords do not match.');
+                return;
+              }
+              setPasswordSaving(true);
+              const result = await changePassword(currentPassword, nextPassword);
+              if (result.error) setPasswordError(result.error);
+              else {
+                setPasswordOpen(false);
+                void refreshProfile();
+                Alert.alert('Password updated', 'This device remains signed in. Other sessions have been revoked.');
+              }
+              setPasswordSaving(false);
+            })()}
+            style={styles.flexButton}
+            testID="settings-password-save"
+          />
+        </View>
+      </ModalCard>
 
-      <Modal
-        visible={showAppearanceHelp}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowAppearanceHelp(false)}
-      >
-        <Pressable
-          style={demoStyles.backdrop}
-          onPress={() => setShowAppearanceHelp(false)}
-          accessibilityLabel="Dismiss appearance help"
-        >
-          <Pressable
-            style={[demoStyles.card, {
-              backgroundColor: settingsBgTokens.settingsCardBackgroundColor,
-              borderColor: settingsBgTokens.settingsCardBorderColor,
-              borderWidth: 1,
-            }]}
-            onPress={(event) => event.stopPropagation()}
-          >
-            <Text style={[demoStyles.title, { color: settingsBgTokens.cardTextColor }]}>Automatic appearance</Text>
-            <Text style={[demoStyles.body, { color: settingsBgTokens.cardTextColorMuted }]}>
-              {"Automatic appearance changes CairnNZ between Day, Sunset and Night using local sunrise and sunset times for your current location. If solar timing isn't available, local time is used instead."}
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowAppearanceHelp(false)}
-              style={[demoStyles.keepBtn, { alignSelf: 'stretch' }]}
-              accessibilityRole="button"
-              accessibilityLabel="Close appearance help"
-            >
-              <Text style={demoStyles.keepBtnText}>Got it</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* R21 (2026-08-17): Exploration % demo modal — shown when user
-          turns OFF the "Show exploration %" toggle. Explains the feature
-          they're about to hide, since first-time users have basically 0%
-          explored and would never have seen it in action. */}
-      <Modal
-        visible={showExplorationDemo}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowExplorationDemo(false)}
-      >
-        <Pressable
-          style={demoStyles.backdrop}
-          onPress={() => setShowExplorationDemo(false)}
-        >
-          <Pressable style={demoStyles.card} onPress={(e) => e.stopPropagation()}>
-            <Text style={demoStyles.title}>Before you hide it</Text>
-            <Text style={demoStyles.body}>
-              On Home, a small swap icon lets you flip between km² and % of your country explored.
-            </Text>
-
-            {/* Preview mini illustration — two rows, showing what it looks like on Home */}
-            <View style={demoStyles.previewCard}>
-              <View style={demoStyles.previewRow}>
-                <Text style={demoStyles.previewValue}>2.4</Text>
-                <Text style={demoStyles.previewUnit}>km²</Text>
-                <View style={demoStyles.previewSwap}>
-                  <Icon name="ArrowLeftRight" size={12} color="#6b7280" strokeWidth={2} />
-                </View>
-              </View>
-              <Text style={demoStyles.previewCaption}>of your world</Text>
-
-              <View style={demoStyles.previewDivider} />
-
-              <View style={demoStyles.previewRow}>
-                <Text style={demoStyles.previewValue}>0.01</Text>
-                <Text style={demoStyles.previewUnit}>%</Text>
-                <View style={demoStyles.previewSwap}>
-                  <Icon name="ArrowLeftRight" size={12} color="#6b7280" strokeWidth={2} />
-                </View>
-              </View>
-              <Text style={demoStyles.previewCaption}>of New Zealand</Text>
-            </View>
-
-            <Text style={demoStyles.hint}>
-              Some people find % motivating. Others find it stressful — the number stays tiny for a long time. Your call.
-            </Text>
-
-            <View style={demoStyles.buttonRow}>
-              <TouchableOpacity
-                style={demoStyles.keepBtn}
-                onPress={() => {
-                  setShowExplorationDemo(false);
-                  haptic.notification('success');
-                }}
-              >
-                <Text style={demoStyles.keepBtnText}>Keep it on</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={demoStyles.hideBtn}
-                onPress={() => {
-                  updateSetting('showExplorationPercent', false);
-                  setShowExplorationDemo(false);
-                  haptic.notification('success');
-                }}
-              >
-                <Text style={demoStyles.hideBtnText}>Hide it anyway</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <ModalCard visible={deleteOpen} onDismiss={() => !deleteSaving && setDeleteOpen(false)} dismissible={!deleteSaving} testID="settings-delete-modal">
+        <ModalCardHeader
+          title="Delete your account?"
+          body="Your account will be disabled now. You can restore server-backed data by signing in during the next seven days. After that, Cairn permanently deletes your profile, Activities, Routes, Cairns, Memory, friendships, exports, feedback and account-linked diagnostics. Account data on this device is cleared now; unsynced device-only data cannot be restored."
+          onClose={() => setDeleteOpen(false)}
+        />
+        <TextField
+          label="Type delete account to confirm"
+          value={deletePhrase}
+          onChangeText={(value) => { setDeletePhrase(value); setDeleteError(''); }}
+          autoCapitalize="none"
+          error={deleteError || undefined}
+          testID="settings-delete-phrase"
+        />
+        <View style={styles.stackSmall}>
+          <PrimaryButton label="Keep account" variant="secondary" disabled={deleteSaving} onPress={() => setDeleteOpen(false)} />
+          <PrimaryButton
+            label="Delete account"
+            variant="destructive"
+            loading={deleteSaving}
+            disabled={deletePhrase.trim().toLowerCase() !== 'delete account' || !user?.id}
+            onPress={() => void (async () => {
+              if (!user?.id || deleteFlight.current) return;
+              deleteFlight.current = true;
+              const ownerId = String(user.id);
+              setDeleteSaving(true);
+              setDeleteError('');
+              const result = await deleteAccount();
+              if (result.error) {
+                setDeleteError(result.error === 'not_signed_in' ? 'Your session ended. Sign in again before deleting your account.' : result.error);
+                setDeleteSaving(false);
+                deleteFlight.current = false;
+                return;
+              }
+              let purgeScheduled = true;
+              try {
+                await scheduleDeletedAccountLocalPurge(ownerId);
+              } catch {
+                // Continue with the immediate purge even if both durable marker
+                // stores are unavailable. If that purge also fails, the user is
+                // told that this installation is not safe for another account.
+                purgeScheduled = false;
+              }
+              const deadline = result.restoreDeadline ? new Date(result.restoreDeadline).toLocaleString() : 'seven days from now';
+              let localCleanupDeferred = false;
+              try {
+                await appLogout();
+                await completeDeletedAccountLocalPurge(ownerId);
+                await clearCredentials();
+                await logout();
+              } catch (error) {
+                // The server transaction has already accepted deletion. Keep
+                // moving to signed-out state. When it was written successfully,
+                // the durable purge marker retries owner-scoped cleanup before
+                // the next account can hydrate.
+                localCleanupDeferred = true;
+                useAppStore.setState({ isLoggedIn: false, user: null });
+                await clearCredentials().catch(() => undefined);
+                await logout().catch(() => undefined);
+              }
+              setDeleteOpen(false);
+              setDeleteSaving(false);
+              deleteFlight.current = false;
+              if (localCleanupDeferred && !purgeScheduled) {
+                Alert.alert(
+                  'Account deletion accepted',
+                  'Cairn could not confirm that all account data was cleared from this installation. Do not sign another account into this installation; reinstall Cairn first.',
+                );
+              } else if (localCleanupDeferred) {
+                Alert.alert(
+                  'Account scheduled for deletion',
+                  `You can restore server-backed data by signing in before ${deadline}. Cairn will retry clearing this device before another account is loaded.`,
+                );
+              } else {
+                Alert.alert('Account scheduled for deletion', `You can restore server-backed data by signing in before ${deadline}. After that it cannot be recovered.`);
+              }
+            })()}
+            testID="settings-delete-confirm"
+          />
+        </View>
+      </ModalCard>
     </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  // clip-92 concept alignment (2026-08-16): container is transparent so the
-  // landscape ImageBackground behind it can show through. The cream veil
-  // (bgVeil) softens the photograph so cards stay readable.
-  container: { flex: 1, backgroundColor: 'transparent' },
-
-  // Warm paper veil over the landscape — R21 (2026-08-17): reduced 0.72 → 0.55
-  // so the scrolling landscape reads more clearly. Cards stay readable
-  // because they are pure white on top, not translucent.
-  bgVeil: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(244,239,230,0.55)',
-  },
-
-  topBar: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: Spacing.sm,
-    backgroundColor: 'transparent',
-  },
-  topBarSpacer: { width: 40 }, // balance BackButton for centred title
-  topTitle: {
-    flex: 1, textAlign: 'center',
-    fontSize: FontSize.h2, fontWeight: '700', color: Colors.textPrimary,
-  },
-
-  // clip-92 concept alignment: quiet subtitle under the title.
-  subtitle: {
-    fontSize: FontSize.small,
-    color: Colors.textSecondary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginHorizontal: Spacing.base,
-    marginTop: -Spacing.xs,
-    marginBottom: Spacing.md,
-  },
-
-  // R21 (2026-08-17): paddingBottom bumped 32 → 160 so Danger zone /
-  // Sign out / Footer clear the tab bar + home indicator on iPhone. User
-  // reported "只能看到 Reset memory 后面就没了" — root cause was insufficient
-  // scroll padding letting the bottom rows sit under the tab bar.
-  scroll: { paddingBottom: Spacing.xxl * 5 },
-
-  sectionHeader: {
-    // R114/O24 (2026-08-12): removed uppercase per user rule — every page's
-    // titles should be sentence case, not shouted caps. Bumped weight and
-    // color slightly so the header still reads as a header without caps.
-    fontSize: FontSize.caption, fontWeight: '600', color: Colors.textSecondary,
-    letterSpacing: 0.2,
-    marginHorizontal: Spacing.base, marginTop: Spacing.xl, marginBottom: Spacing.sm,
-  },
-
-  // Concept alignment (2026-08-16): match Settings-2 fullpage — pure white
-  // cards, 20px radius, no visible border, softer shadow. Cards float on the
-  // cream paper bg so any translucent tint muddied the contrast.
-  card: {
-    backgroundColor: '#ffffff', marginHorizontal: Spacing.base,
-    borderRadius: 20, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
-  },
-  // Default divider: skip the icon column so it visually starts under the
-  // label. Rows without an icon should use `dividerFlush` to avoid an
-  // unnaturally-inset line hanging in whitespace.
-  divider: { height: 1, backgroundColor: Colors.border, marginLeft: 64 },
-  dividerFlush: { height: 1, backgroundColor: Colors.border, marginHorizontal: Spacing.base },
-
-  footer: {
-    textAlign: 'center', fontSize: 12, color: Colors.textMuted,
-    marginTop: Spacing.xl, marginBottom: Spacing.base,
-    fontStyle: 'italic',
-  },
-
-  devNote: {
-    marginHorizontal: Spacing.base, marginTop: 6,
-    fontSize: 11, color: Colors.textMuted,
-    fontStyle: 'italic',
-  },
-});
-
-const rowStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: Spacing.base, paddingVertical: Spacing.md,
-    minHeight: 64,
-  },
-  iconWrap: {
-    width: 36, height: 36, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: Spacing.md,
-  },
-  content: { flex: 1 },
-  label: { fontSize: FontSize.body, fontWeight: '500', color: Colors.textPrimary },
-  hint: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2, lineHeight: 16 },
-  value: { fontSize: FontSize.small, color: Colors.textSecondary, marginRight: 8 },
-  actionRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: Spacing.base, paddingVertical: Spacing.md,
-    minHeight: 64,
-  },
-  actionLabel: { fontSize: FontSize.body, fontWeight: '500', color: Colors.textPrimary },
-});
-
-const profileStyles = StyleSheet.create({
+  root: { flex: 1 },
+  safe: { flex: 1 },
+  backgroundImage: { position: 'absolute' },
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: Spacing.base, paddingVertical: Spacing.md,
-  },
-  // Concept alignment (2026-08-16): avatar chip = muted sage disk, dark
-  // ink letter. Matches Settings-1/2 hero shot exactly.
-  avatar: {
-    width: 48, height: 48, borderRadius: 24,
-    backgroundColor: '#d9dfc9',
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: Spacing.md,
-  },
-  avatarText: {
-    fontSize: FontSize.h3, fontWeight: '700', color: '#4a5d3a',
-  },
-  name: {
-    fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary,
-  },
-  email: {
-    fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2,
-  },
-  // O18 HOME-05: subtle "Member for X days" line under email.
-  memberFor: {
-    fontSize: FontSize.tiny, color: Colors.textMuted, marginTop: 4,
-  },
-});
-
-const pwStyles = StyleSheet.create({
-  form: {
-    paddingHorizontal: Spacing.base,
-    paddingBottom: Spacing.md,
-  },
-  label: {
-    fontSize: FontSize.small, fontWeight: '600',
-    color: Colors.textSecondary, marginBottom: 4, marginTop: Spacing.sm,
-  },
-  input: {
-    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.card,
-    paddingHorizontal: Spacing.sm, paddingVertical: 10,
-    fontSize: FontSize.body, color: Colors.textPrimary,
-    backgroundColor: Colors.surface,
-  },
-  // O13 bug 1: input with eye toggle — outer row holds input + button.
-  inputRow: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.card,
-    backgroundColor: Colors.surface,
-  },
-  inputFlex: {
-    flex: 1,
-    paddingHorizontal: Spacing.sm, paddingVertical: 10,
-    fontSize: FontSize.body, color: Colors.textPrimary,
-  },
-  eyeBtn: {
-    paddingHorizontal: Spacing.sm, paddingVertical: 10,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  btn: {
-    backgroundColor: Colors.primary, borderRadius: Radius.card,
-    paddingVertical: 12, alignItems: 'center', marginTop: Spacing.md,
-  },
-  btnText: { fontSize: FontSize.body, fontWeight: '600', color: '#fff' },
-  error: { fontSize: FontSize.small, color: Colors.danger, marginTop: Spacing.sm },
-  success: { fontSize: FontSize.small, color: Colors.success, marginTop: Spacing.sm },
-});
-
-// O13 bug 2 + bug 5: inline expansion regions (Units picker, Feedback form).
-// O15 bug 2: inline expansion styling harmonised with ActionRow.
-// Pre-fix, pickerRow had no leading icon column, an extra background
-// tint on the expand area, and pickerLabel was semi-bold whereas
-// ActionRow labels are 500. Now the expand section reuses ActionRow's
-// leading indent (52px, same as styles.divider) so labels align with
-// the parent ActionRow above, and pickerRow inherits the same padding
-// + typography as ActionRow itself.
-const inlineStyles = StyleSheet.create({
-  expand: {
-    // No background tint — sits flush inside the card.
-    paddingBottom: Spacing.xs,
-  },
-  pickerRow: {
-    flexDirection: 'row', alignItems: 'center',
-    // Match ActionRow.paddingHorizontal = Spacing.base and add a
-    // 52px leading indent so the row starts at the same x-position
-    // as the parent ActionRow's label (skipping the 36px icon +
-    // 12px marginRight + Spacing.base padding).
-    paddingLeft: Spacing.base + 36 + Spacing.md,
-    paddingRight: Spacing.base,
-    paddingVertical: 12,
-    minHeight: 48,
-  },
-  pickerRowActive: {
-    // No background — use a leading dot / trailing check for state.
-  },
-  pickerLabel: {
-    fontSize: FontSize.body,
-    fontWeight: '500',
-    color: Colors.textPrimary,
-  },
-  pickerLabelActive: {
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  pickerHint: {
-    fontSize: FontSize.small,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-});
-
-// O13 bug 5: unified in-app feedback form styles.
-const feedbackStyles = StyleSheet.create({
-  chipRow: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    gap: 8,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: Radius.pill,
-    backgroundColor: '#f0ede4', borderWidth: 1, borderColor: Colors.border,
-  },
-  chipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  chipText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.textSecondary },
-  chipTextActive: { color: '#fff' },
-  textarea: {
-    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.card,
-    paddingHorizontal: Spacing.sm, paddingVertical: 10,
-    fontSize: FontSize.body, color: Colors.textPrimary,
-    backgroundColor: Colors.surface,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  counter: {
-    fontSize: FontSize.tiny, color: Colors.textMuted,
-    textAlign: 'right', marginTop: 2, marginBottom: Spacing.xs,
-  },
-  // O15 bug 3: attachment preview grid (clip.yiiling pattern).
-  // 64x64 thumbnails, flex-wrap so they overflow to next row after
-  // ~4-5 per row on mobile widths.
-  previewGrid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 6, marginBottom: Spacing.sm,
-  },
-  thumb: {
-    position: 'relative',
-    width: 64, height: 64,
-    borderRadius: 8, overflow: 'hidden',
-    borderWidth: 1, borderColor: Colors.border,
-    backgroundColor: Colors.bg,
-  },
-  thumbImg: {
-    width: '100%', height: '100%',
-  },
-  thumbX: {
-    position: 'absolute', top: 3, right: 3,
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  thumbXText: {
-    color: '#fff', fontSize: 14, fontWeight: '700',
-    lineHeight: 16,
-    // Nudge up: the "×" glyph has extra bottom whitespace baked in
-    marginTop: -1,
-  },
-  btnRow: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-  attachBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingVertical: 10,
-    borderRadius: Radius.card,
-    borderWidth: 1, borderColor: Colors.primary,
-  },
-  attachText: { fontSize: FontSize.small, fontWeight: '600', color: Colors.primary },
-  sendBtn: {
-    flex: 1,
-    backgroundColor: Colors.primary, borderRadius: Radius.card,
-    paddingVertical: 12, alignItems: 'center',
-  },
-  sendText: { fontSize: FontSize.body, fontWeight: '600', color: '#fff' },
-});
-
-// O15 bug 1: "Your progress" header row with inline ? help icon.
-// sectionHeader already has marginHorizontal + marginTop, so headerRow
-// just wraps flex-row without extra padding — icon sits right after text.
-const progressStyles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row', alignItems: 'center',
-  },
-  helpBtn: {
-    marginLeft: 4,
-    padding: 4,
-    // Vertical align with the small uppercase section header text
-    marginTop: Spacing.xl - 2,
-    marginBottom: 2,
-  },
-});
-
-// O15 bug 1: "Your progress" help modal body text.
-const helpStyles = StyleSheet.create({
-  body: {
-    fontSize: FontSize.body,
-    color: Colors.textPrimary,
-    lineHeight: 22,
-    marginBottom: Spacing.md,
-  },
-  strong: {
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  okBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.card,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: Spacing.sm,
-  },
-  okText: {
-    color: '#fff',
-    fontSize: FontSize.body,
-    fontWeight: '600',
-  },
-});
-
-// Concept alignment (2026-08-16): "Your progress" — bigger flat cards on
-// white, larger number, softer icon badges. Removed border to match concept.
-const badgeStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row', gap: Spacing.md,
-    paddingHorizontal: Spacing.base,
-  },
-  card: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.md,
-    alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
-  },
-  iconBadge: {
-    width: 48, height: 48, borderRadius: 24,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: Spacing.md,
-  },
-  value: {
-    fontSize: 32, fontWeight: '800', color: Colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -0.5,
-  },
-  label: {
-    fontSize: FontSize.caption, color: Colors.textSecondary,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-});
-
-// O24 SETTINGS-JOURNEY: stats chips inside the Your journey card.
-// Concept alignment (2026-08-16): chips sit on white card, softer cream fill
-// with subtle warm border — matches Settings-2 exact.
-const journeyStyles = StyleSheet.create({
-  statsRow: {
+    minHeight: 58,
     flexDirection: 'row',
-    gap: Spacing.sm,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  headerSpacer: { width: 54 },
+  pageTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: FontSize.h2,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    textShadowRadius: 5,
+    textShadowOffset: { width: 0, height: 1 },
+  },
+  scroll: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xxl + Spacing.xl,
+  },
+  sectionTitle: {
+    marginTop: Spacing.xl,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    fontSize: FontSize.small,
+    fontWeight: '700',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    textShadowRadius: 4,
+    textShadowOffset: { width: 0, height: 1 },
+  },
+  intro: {
+    fontSize: FontSize.body,
+    lineHeight: 22,
+    fontWeight: '600',
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+    paddingHorizontal: Spacing.xs,
+    textShadowRadius: 4,
+    textShadowOffset: { width: 0, height: 1 },
+  },
+  surface: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    overflow: 'hidden',
+  },
+  row: {
+    minHeight: 70,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.md,
+    gap: Spacing.md,
   },
-  statChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#faf7f0',
-    borderRadius: Radius.pill,
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderWidth: 1, borderColor: '#ece6de',
-  },
-  statText: {
-    fontSize: FontSize.caption,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-});
-
-const modalStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    maxWidth: 340,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 10,
-  },
-  title: {
-    fontSize: FontSize.h3, fontWeight: '700', color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  body: {
-    fontSize: FontSize.small, color: Colors.textSecondary,
-    marginBottom: 12, lineHeight: 20,
-  },
-  hint: {
-    fontSize: FontSize.small, color: Colors.textSecondary, marginBottom: 6,
-  },
-  hintKeyword: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: Colors.textPrimary, fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1, borderColor: Colors.border, borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 10,
-    fontSize: FontSize.body, color: Colors.textPrimary,
-    marginBottom: 16,
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  btnCancel: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8,
-  },
-  btnCancelText: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textSecondary },
-  btnConfirm: {
-    paddingHorizontal: 18, paddingVertical: 10, borderRadius: 8,
-    backgroundColor: Colors.primary,
-    minWidth: 96, alignItems: 'center',
-  },
-  btnConfirmDestructive: { backgroundColor: Colors.danger },
-  btnConfirmDisabled: { opacity: 0.4 },
-  btnConfirmText: { fontSize: FontSize.body, fontWeight: '700', color: '#fff' },
-
-  pickerRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 12, paddingHorizontal: 12,
-    borderRadius: 8, marginBottom: 4,
-  },
-  pickerRowActive: { backgroundColor: Colors.primaryBg },
-  pickerLabel: { fontSize: FontSize.body, fontWeight: '600', color: Colors.textPrimary },
-  pickerHint: { fontSize: FontSize.small, color: Colors.textSecondary, marginTop: 2 },
-});
-
-// R100 SETTINGS: tiny toast used after Edit Name save. Non-blocking,
-// auto-dismisses after 2s via setTimeout in handleSaveName.
-const toastStyles = StyleSheet.create({
-  wrap: {
-    position: 'absolute',
-    bottom: 60,
-    left: 0, right: 0,
-    alignItems: 'center',
-  },
-  pill: {
-    backgroundColor: 'rgba(20,20,20,0.9)',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  text: {
-    color: '#fff',
-    fontSize: FontSize.small,
-    fontWeight: '600',
-  },
-});
-
-// R21 (2026-08-17): Exploration % demo modal styles.
-const demoStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    paddingHorizontal: 22,
-    paddingTop: 22,
-    paddingBottom: 18,
-    width: '100%',
-    maxWidth: 340,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#21362C',
-    marginBottom: 8,
-    letterSpacing: -0.2,
-  },
-  body: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#4a5560',
-    marginBottom: 14,
-  },
-  previewCard: {
-    backgroundColor: '#f5f2ea',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 12,
-  },
-  previewRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-  },
-  previewValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#21362C',
-    letterSpacing: -0.5,
-  },
-  previewUnit: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4a5560',
-  },
-  previewSwap: {
-    marginLeft: 4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(107,114,128,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-  },
-  previewCaption: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  previewDivider: {
-    height: 1,
-    backgroundColor: 'rgba(107,114,128,0.15)',
-    marginVertical: 10,
-  },
-  hint: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#6b7280',
-    marginBottom: 16,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  keepBtn: {
-    flex: 1,
-    backgroundColor: '#21362C',
-    borderRadius: 14,
-    minHeight: 48,
+  rowIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  keepBtnText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  hideBtn: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    borderRadius: 14,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(33,54,44,0.2)',
-  },
-  hideBtnText: {
-    color: '#21362C',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  rowCopy: { flex: 1 },
+  rowTitle: { fontSize: FontSize.body, fontWeight: '700', lineHeight: 20 },
+  rowDetail: { fontSize: FontSize.caption, lineHeight: 18, marginTop: 2 },
+  rowValue: { maxWidth: 92, fontSize: FontSize.caption, fontWeight: '600' },
+  divider: { height: StyleSheet.hairlineWidth, marginLeft: 62 },
+  disabled: { opacity: 0.58 },
+  preferenceBlock: { padding: Spacing.base, gap: Spacing.md },
+  preferenceHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  footer: { textAlign: 'center', fontSize: FontSize.caption, fontWeight: '600', marginTop: Spacing.xxl, opacity: 0.82 },
+  cardHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, padding: Spacing.base, paddingBottom: Spacing.sm },
+  cardTitle: { fontSize: FontSize.h3, fontWeight: '700', lineHeight: 23 },
+  body: { fontSize: FontSize.caption, lineHeight: 19 },
+  statusText: { flex: 1, fontSize: FontSize.caption, lineHeight: 19, fontWeight: '600' },
+  statusStrong: { fontSize: FontSize.body, lineHeight: 20, fontWeight: '700' },
+  asyncRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.base },
+  stackSmall: { gap: Spacing.md, padding: Spacing.base },
+  error: { fontSize: FontSize.caption, lineHeight: 18, fontWeight: '600', marginHorizontal: Spacing.base, marginBottom: Spacing.md },
+  inlineLoader: { position: 'absolute', right: Spacing.base, top: Spacing.xl },
+  feedbackInput: { minHeight: 116, paddingTop: Spacing.md },
+  counter: { textAlign: 'right', fontSize: FontSize.small, marginTop: -Spacing.sm },
+  deliveryStatus: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1, borderRadius: Radius.button, padding: Spacing.md },
+  modalActions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.lg },
+  flexButton: { flex: 1 },
 });

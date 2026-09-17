@@ -668,39 +668,39 @@ function FieldInput({ icon, placeholder, value, onChangeText, error, onBlur, key
 
 // ── Privacy Policy content ─────────────────────────────────────────────────
 const PRIVACY_POLICY = `Cairn Privacy Policy
-Effective date: May 2026
+Effective date: 14 September 2026
 
 1. What we collect
-• Account data: name, email address, hashed password (never stored in plain text)
-• Location data: GPS coordinates, only while you actively start a tracking session
-• Activity data: track routes, distance, duration, planted markers — associated with your account
-• Device info: OS type, app version (for crash reporting only)
+• Account data: name, email, sign-in provider, and a hashed password for Cairn password accounts
+• Activity data: GPS observations, routes, distance, duration, Cairns and Memory associated with your account
+• Optional exploration data: foreground location while Cairn is open, only when you enable it
+• Reliability data: limited app, device, crash and event information; precise real-location coordinates and credentials are removed from diagnostic uploads
+• Feedback: messages you choose to send from Cairn
 
 2. Why we collect it
-• Location: to record your track, calculate distance, and enable safety features
-• Account data: to identify you and protect your personal track history
-• We never collect your location in the background without an active session
+• Location: to record an Activity, calculate your journey and update Memory
+• Optional foreground location: to update exploration while the app is open outside an Activity
+• Reliability information: to diagnose crashes, sync and Activity failures
+• Account data: to identify you and protect your saved data
 
 3. How we protect it
-• Passwords hashed with bcrypt (industry standard)
+• Cairn passwords are hashed with bcrypt
 • Data encrypted in transit (HTTPS/TLS)
-• JWT tokens expire after 7 days
-• You can delete your account and all associated data at any time
+• Signed sessions can be revoked
 
 4. Sharing
 • We do not sell your data to third parties — ever
-• Location and track data shared only with friends you explicitly add
-• We may use aggregated, anonymised statistics to improve the product
+• Cairn uses service providers needed to operate the app
+• Road-aware route reconstruction may send relevant route coordinates to Mapbox
+• Product visibility follows the sharing choices available in Cairn
 
 5. Your rights
-• Access: request a copy of your data at any time
-• Deletion: delete your account and all data via Settings → Account → Delete Account
-• Correction: update your profile information at any time
+• Access: request and download a JSON copy from Settings → Privacy & Data
+• Correction: update your display name and Cairn password in Settings; contact support about an incorrect email
+• Exploration: delete Memory points and explored regions without deleting Activities, Routes or Cairns
+• Account deletion: disable the account now, restore within seven days, or let Cairn permanently delete account-owned data after the recovery window
 
-6. Applicable law
-Cairn complies with the New Zealand Privacy Act 2020 and, where applicable, the EU General Data Protection Regulation (GDPR).
-
-7. Contact
+6. Contact
 privacy@cairnapp.nz`;
 
 // ── Auth Screen ────────────────────────────────────────────────────────────
@@ -2322,9 +2322,8 @@ export function AuthScreen() {
   if (view === 'restore_confirm') {
     const deadlineStr = restoreDeadline
       ? (() => {
-          // AUTH-3: with the 5-minute cooling-off test window, showing a
-          // date alone is useless (deadline is minutes away). Show
-          // date + time so the user sees an actionable countdown.
+          // Include the exact time as well as the date so the seven-day
+          // restoration deadline remains unambiguous across time zones.
           const d = new Date(restoreDeadline);
           const now = new Date();
           const sameDay = d.toDateString() === now.toDateString();

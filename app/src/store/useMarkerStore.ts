@@ -23,7 +23,12 @@ import {
   type MarkerCreateServerResponse,
 } from '../services/markerOfflineEntities';
 import type { SyncState } from '../services/offlineEntity';
-import { tombstoneMarker, isMarkerTombstoned } from '../services/markerTombstones';
+import { tombstoneMarker, isMarkerTombstoned, listMarkerTombstones } from '../services/markerTombstones';
+import {
+  cairnIdentityKeys,
+  cairnMatchesIdentity,
+  mergeOwnedCairns,
+} from '../features/cairns/cairnIdentity';
 
 // Sprint 6 review C3 (2026-07-30): serialize concurrent hydrate() calls
 // so a race between login + focus + nav can't overwrite user A's markers
@@ -51,6 +56,8 @@ export interface Marker {
   note: string;            // backend field: text
   authorId: string;        // 'local' for offline; userId for synced
   createdAt: number;       // Unix ms
+  /** Last accepted content mutation when the backend supplies it. */
+  updatedAt?: number;
   permission: MarkerPermission;
   sessionId?: string;      // legacy alias
   originActivityClientId?: string | null;
@@ -121,6 +128,7 @@ function fromBackend(row: {
   approximate?: number | boolean | null;
   public_snapshot?: string | null | any;
   created_at: string;
+  updated_at?: string | null;
   /** Sprint 69 STORY-00537: circle endpoint returns user_id (for tier
    *  computation) and author_name (Friend tier only — Public anonymized
    *  server-side per v4 row Q). Optional on /api/markers (own) path. */
@@ -156,6 +164,7 @@ function fromBackend(row: {
     // own-marker responses which don't echo user_id.
     authorId: row.user_id != null ? String(row.user_id) : 'server',
     createdAt: new Date(row.created_at).getTime(),
+    updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : undefined,
     permission: (row.permission as MarkerPermission) || 'personal',
     synced: true,
     approximate: row.approximate === true || row.approximate === 1 || false,
@@ -165,6 +174,12 @@ function fromBackend(row: {
     authorName: row.author_name ?? undefined,
   };
 }
+
+export type CairnDeleteResult = {
+  remoteState: 'not-needed' | 'deleted' | 'queued';
+};
+
+export type CairnLibraryCoverage = 'not-loaded' | 'complete' | 'partial' | 'local-only';
 
 interface MarkerState {
   markers: Marker[];
@@ -189,9 +204,18 @@ interface MarkerState {
    *  but the client has already wiped them locally. Cleared on POST
    *  success or failure. */
   hidingIds: ReadonlyArray<string>;
+  /** Server pages for All Cairns. `markers` remains the single local projection. */
+  libraryRemoteMarkers: Marker[];
+  libraryQuery: string;
+  libraryNextCursor: string | null;
+  libraryHasMore: boolean;
+  libraryCoverage: CairnLibraryCoverage;
+  libraryLoading: boolean;
+  libraryError: 'unavailable' | 'server-upgrade-required' | null;
   addMarker: (marker: Omit<Marker, 'id' | 'createdAt'>) => Promise<Marker>;
   updateMarker: (id: string, updates: Partial<Omit<Marker, 'id' | 'createdAt'>>) => Promise<void>;
-  deleteMarker: (id: string) => Promise<void>;
+  retryMarkerSync: (id: string) => Promise<void>;
+  deleteMarker: (id: string) => Promise<CairnDeleteResult>;
   /** Sprint 68 STORY-00534: hide a foreign mark from this viewer's map.
    *  Optimistic local wipe + POST /api/hide. Idempotent. */
   hideMark: (id: string) => Promise<void>;
@@ -199,6 +223,8 @@ interface MarkerState {
   getMarkersForRegion: (regionCode: string) => Marker[];
   hydrate: (userId: string) => Promise<void>;
   loadFromBackend: () => Promise<void>;
+  loadCairnLibrary: (options?: { query?: string; reset?: boolean }) => Promise<void>;
+  resetCairnLibrary: () => void;
   /** Sprint 69 STORY-00537: load subscribed-friend marks (friend+public
    *  tiers) from GET /api/circle/markers. Stored in `circleMarkers`. */
   loadCircleMarkers: () => Promise<void>;
@@ -217,6 +243,13 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   loadingPublic: false,
   // BUG-009 fix: initial empty set of in-flight hide ids.
   hidingIds: [],
+  libraryRemoteMarkers: [],
+  libraryQuery: '',
+  libraryNextCursor: null,
+  libraryHasMore: false,
+  libraryCoverage: 'not-loaded',
+  libraryLoading: false,
+  libraryError: null,
 
   addMarker: async (data) => {
     const ownerId = String(get().userId ?? '');
@@ -307,6 +340,12 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     }
     set((s) => {
       if (String(s.userId ?? '') !== ownerId) return s;
+      // A very fast acknowledgement may already have materialized the same
+      // stable client identity. Never append a second pending placeholder or
+      // downgrade the acknowledged row.
+      if (s.markers.some(existing => (
+        existing.clientCairnId === localId || existing.id === localId
+      ))) return s;
       const next = [...s.markers, marker];
       storage.setItem(storageKey(ownerId), JSON.stringify(next));
       return { markers: next };
@@ -350,44 +389,6 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       });
     } catch {/* never throw on log */}
 
-    // Final accepted Cairn coordinate is genuine explored-place evidence.
-    // Use the shared authority so an Activity or passive producer at the same
-    // place becomes one semantic Memory unlock.
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { recordMemoryEvidence } = require('../features/memory/services/recordMemoryEvidence');
-      await recordMemoryEvidence({
-        lat: data.lat,
-        lng: data.lng,
-        atMs: Date.now(),
-        source: 'cairn',
-        ownerUserId: ownerId,
-      });
-    } catch (err) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const tracking = require('./useTrackingStore').useTrackingStore.getState();
-        if (tracking.locationProviderSource === 'simulator') {
-          const reason = `Cairn Memory commit failed: ${String(err).slice(0, 100)}`;
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          require('../features/activitySimulator/useActivitySimulatorStore').useActivitySimulatorStore.getState().setLastFailure(reason);
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          require('../features/activitySimulator/simulatorLog').appendSimulatorLog('ERROR', 'cairn_memory_commit_failed', {
-            cairnClientIdSuffix: localId.slice(-8),
-            errorCode: String(err).slice(0, 120),
-          }, { userId: ownerId, clientActivityId: activeActivityClientId });
-        }
-      } catch { /* diagnostics only */ }
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { log } = require('../services/appLog');
-        log('v422.plant_unlock_err', {
-          err: String(err && (err as any).message ? (err as any).message : err),
-        });
-      } catch {/* ignore */}
-      console.warn('[addMarker] plant-unlock failed:', err);
-    }
-
     // Debug logger: marker_placed
     debugLogger.log({
       ts: Date.now(),
@@ -407,29 +408,22 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   },
 
   updateMarker: async (id, updates) => {
-    set((s) => {
-      const next = s.markers.map((m) => {
-        if (m.id !== id) return m;
-        // v300: if this update is the FIRST transition to public, snapshot
-        // the marker's current state (including any pending changes in
-        // this same updates patch). Skip if publicSnapshot already exists.
-        let publicSnapshot = m.publicSnapshot;
-        if (updates.permission === 'public' && publicSnapshot == null) {
-          const snapType = updates.type !== undefined ? updates.type : m.type;
-          const snapNote = updates.note !== undefined ? updates.note : m.note;
-          publicSnapshot = {
-            type: snapType,
-            lat: m.lat,     // lat/lng are immutable
-            lng: m.lng,
-            note: snapNote,
-            snapshottedAt: Date.now(),
-          };
-        }
-        return { ...m, ...updates, publicSnapshot };
-      });
-      if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
-      return { markers: next };
-    });
+    const ownerId = String(get().userId ?? '');
+    const original = get().markers.find((marker) => cairnMatchesIdentity(marker, id));
+    if (!original || !ownerId) throw new Error('cairn_not_found');
+    const patchMarker = (marker: Marker, updatedAt: number): Marker => {
+      let publicSnapshot = marker.publicSnapshot;
+      if (updates.permission === 'public' && publicSnapshot == null) {
+        publicSnapshot = {
+          type: updates.type ?? marker.type,
+          lat: marker.lat,
+          lng: marker.lng,
+          note: updates.note ?? marker.note,
+          snapshottedAt: Date.now(),
+        };
+      }
+      return { ...marker, ...updates, publicSnapshot, updatedAt };
+    };
 
     // Sync to backend (text, permission, type are updatable). Backend
     // mirrors the same publicSnapshot-on-first-public logic so a stale
@@ -440,47 +434,148 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     if (updates.type !== undefined) backendUpdates.type = updates.type;
     if (Object.keys(backendUpdates).length === 0) return;
 
-    try {
-      await authenticatedFetch(`/api/markers/${id}`, {
+    const localId = original.clientCairnId ?? original.localId;
+    const serverId = original.serverCairnId
+      ?? (original.synced && /^\d+$/.test(original.id) ? original.id : undefined);
+    const pendingCreateEdit = Boolean(!serverId && localId);
+
+    if (!serverId && localId) {
+      const updated = await offlineMarkers.updateLocal(localId, (payload) => ({
+        ...payload,
+        ...(updates.note !== undefined ? { text: updates.note } : {}),
+        ...(updates.permission !== undefined ? { permission: updates.permission } : {}),
+        ...(updates.type !== undefined ? { type: updates.type } : {}),
+      }), ownerId);
+      if (!updated) throw new Error('cairn_pending_update_missing');
+    } else {
+      if (!serverId) throw new Error('cairn_server_identity_missing');
+      const response = await authenticatedFetch(`/api/markers/${encodeURIComponent(serverId)}`, {
         method: 'PUT',
         body: JSON.stringify(backendUpdates),
       });
-    } catch {
-      // Network failure — local update persisted, backend will be stale until next sync
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     }
+
+    if (String(get().userId ?? '') !== ownerId) throw new Error('cairn_owner_changed_after_save');
+    const acceptedAt = Date.now();
+    set((s) => {
+      if (String(s.userId ?? '') !== ownerId) return s;
+      if (!s.markers.some(marker => cairnMatchesIdentity(marker, id))) return s;
+      const next = s.markers.map((marker) => (
+        cairnMatchesIdentity(marker, id)
+          ? {
+              ...patchMarker(marker, acceptedAt),
+              ...(pendingCreateEdit ? { synced: false, syncState: 'pending' as SyncState } : {}),
+            }
+          : marker
+      ));
+      storage.setItem(storageKey(ownerId), JSON.stringify(next));
+      return {
+        markers: next,
+        libraryRemoteMarkers: s.libraryRemoteMarkers.map(marker => (
+          cairnMatchesIdentity(marker, id)
+            ? {
+                ...patchMarker(marker, acceptedAt),
+                ...(pendingCreateEdit ? { synced: false, syncState: 'pending' as SyncState } : {}),
+              }
+            : marker
+        )),
+      };
+    }
+    );
+  },
+
+  retryMarkerSync: async (id) => {
+    const ownerId = String(get().userId ?? '');
+    const marker = get().markers.find((item) => cairnMatchesIdentity(item, id));
+    const localId = marker?.clientCairnId ?? marker?.localId;
+    if (!ownerId || !localId) throw new Error('cairn_retry_unavailable');
+    const accepted = await offlineMarkers.retry(localId, ownerId);
+    if (!accepted) throw new Error('cairn_retry_unavailable');
+    set((s) => {
+      if (String(s.userId ?? '') !== ownerId) return s;
+      const next = s.markers.map((item) => (
+        cairnMatchesIdentity(item, id)
+          ? { ...item, syncState: 'pending' as SyncState }
+          : item
+      ));
+      storage.setItem(storageKey(ownerId), JSON.stringify(next));
+      return { markers: next };
+    });
   },
 
   deleteMarker: async (id) => {
     crashLogger.breadcrumb(`marker:delete:start id=${id}`);
-    const current = get().markers.find((marker) => marker.id === id);
+    const current = get().markers.find((marker) => cairnMatchesIdentity(marker, id));
+    if (!current) throw new Error('cairn_not_found');
     const clientCairnId = current?.clientCairnId ?? current?.localId;
     const serverCairnId = current?.serverCairnId ?? (current?.synced ? current.id : undefined);
     const ownerId = String(get().userId ?? '');
-    // Tombstone and cancel create work before hiding the product object.
-    if (ownerId && clientCairnId) await tombstoneMarker(ownerId, clientCairnId);
-    if (clientCairnId && ownerId) await offlineMarkers.discard(clientCairnId, ownerId);
-    if (get().userId !== ownerId) throw new Error('marker_owner_changed_after_commit');
-    set((s) => {
-      if (s.userId !== ownerId) return s;
-      const next = s.markers.filter((m) => m.id !== id);
-      if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(next));
-      return { markers: next };
-    });
+    if (!ownerId) throw new Error('marker_owner_required');
 
-    try {
-      if (get().userId !== ownerId) return;
-      if (!clientCairnId && !serverCairnId) return;
-      const primaryPath = clientCairnId
-        ? `/api/markers/client/${encodeURIComponent(clientCairnId)}`
-        : `/api/markers/${serverCairnId}`;
-      let res = await authenticatedFetch(primaryPath, { method: 'DELETE' });
-      if (!res.ok && clientCairnId && serverCairnId) {
-        res = await authenticatedFetch(`/api/markers/${serverCairnId}`, { method: 'DELETE' });
+    // Modern Cairns have a durable client identity. Commit the tombstone and
+    // cancel a pending create before hiding the object; the sync daemon then
+    // retries any unacknowledged server deletion without resurrection.
+    if (clientCairnId) {
+      await tombstoneMarker(ownerId, clientCairnId);
+      let pendingCreateDiscarded = true;
+      try {
+        await offlineMarkers.discard(clientCairnId, ownerId);
+      } catch (discardError) {
+        // The durable tombstone remains authoritative. A retained create row
+        // may retry, but its acknowledgement path sees the tombstone and
+        // removes the server copy instead of resurrecting the Cairn.
+        pendingCreateDiscarded = false;
+        crashLogger.breadcrumb(`marker:delete:discard-queued ${String(discardError).slice(0, 80)}`);
       }
-      crashLogger.breadcrumb(`marker:delete:remote ok=${res.ok} id=${id}`);
-    } catch (err) {
-      crashLogger.breadcrumb(`marker:delete:remote-error ${String(err).slice(0, 80)}`);
+      if (String(get().userId ?? '') !== ownerId) throw new Error('marker_owner_changed_after_commit');
+      set((s) => {
+        if (String(s.userId ?? '') !== ownerId) return s;
+        const next = s.markers.filter(marker => !cairnMatchesIdentity(marker, id));
+        storage.setItem(storageKey(ownerId), JSON.stringify(next));
+        return {
+          markers: next,
+          libraryRemoteMarkers: s.libraryRemoteMarkers.filter(marker => !cairnMatchesIdentity(marker, id)),
+        };
+      });
+
+      if (!serverCairnId) {
+        return { remoteState: pendingCreateDiscarded ? 'not-needed' : 'queued' };
+      }
+      try {
+        let response = await authenticatedFetch(
+          `/api/markers/client/${encodeURIComponent(clientCairnId)}`,
+          { method: 'DELETE' },
+        );
+        if (!response.ok && response.status !== 404 && serverCairnId) {
+          response = await authenticatedFetch(`/api/markers/${encodeURIComponent(serverCairnId)}`, { method: 'DELETE' });
+        }
+        const deleted = response.ok || response.status === 404;
+        crashLogger.breadcrumb(`marker:delete:remote ok=${deleted} id=${id}`);
+        return { remoteState: deleted ? 'deleted' : 'queued' };
+      } catch (err) {
+        crashLogger.breadcrumb(`marker:delete:remote-error ${String(err).slice(0, 80)}`);
+        return { remoteState: 'queued' };
+      }
     }
+
+    // A legacy server-only row has no client tombstone that can make an
+    // offline delete durable. Require a real acknowledgement before removing
+    // it locally so a transient failure cannot become false success.
+    if (!serverCairnId) throw new Error('cairn_delete_identity_missing');
+    const response = await authenticatedFetch(`/api/markers/${encodeURIComponent(serverCairnId)}`, { method: 'DELETE' });
+    if (!response.ok && response.status !== 404) throw new Error(`HTTP ${response.status}`);
+    if (String(get().userId ?? '') !== ownerId) throw new Error('marker_owner_changed_after_delete');
+    set((s) => {
+      if (String(s.userId ?? '') !== ownerId) return s;
+      const next = s.markers.filter(marker => !cairnMatchesIdentity(marker, id));
+      storage.setItem(storageKey(ownerId), JSON.stringify(next));
+      return {
+        markers: next,
+        libraryRemoteMarkers: s.libraryRemoteMarkers.filter(marker => !cairnMatchesIdentity(marker, id)),
+      };
+    });
+    return { remoteState: 'deleted' };
   },
 
   // Sprint 68 STORY-00534: hide-from-me cache wipe + server call.
@@ -557,8 +652,21 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     // login flow that goes clearMarkers → hydrate would skip the
     // user-switch detection in hydrate (prevUserId is null after clear),
     // leaving prior user's subscriptions in-memory until next load().
-    set({ markers: [], userId: null, circleMarkers: [], hidingIds: [],
-      publicMarkers: [], loadingPublic: false });
+    set({
+      markers: [],
+      userId: null,
+      circleMarkers: [],
+      hidingIds: [],
+      publicMarkers: [],
+      loadingPublic: false,
+      libraryRemoteMarkers: [],
+      libraryQuery: '',
+      libraryNextCursor: null,
+      libraryHasMore: false,
+      libraryCoverage: 'not-loaded',
+      libraryLoading: false,
+      libraryError: null,
+    });
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { useMemorySubscriptionsStore } = require('../features/memory/store/useMemorySubscriptionsStore');
@@ -593,7 +701,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       const res = await authenticatedFetch('/api/markers');
       if (!res.ok) return;
       const rows = await res.json();
-      const serverMarkers: Marker[] = rows.map(fromBackend);
+      if (!Array.isArray(rows)) return;
+      const tombstones = new Set(await listMarkerTombstones(String(capturedUserId ?? '')));
+      const serverMarkers: Marker[] = rows.map(fromBackend)
+        .filter(marker => !cairnIdentityKeys(marker).some(id => tombstones.has(id)));
 
       // If the user changed while the fetch was in flight, drop the
       // response on the floor. The new user's hydrate will fetch its
@@ -605,12 +716,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
         // is synchronous but we want to be sure the check is atomic
         // with the write).
         if (s.userId !== capturedUserId) return { markers: s.markers };
-        // Merge: server markers replace any with same id, keep local-only
-        const localOnly = s.markers.filter((m) => !m.synced);
-        const merged = [
-          ...serverMarkers,
-          ...localOnly.filter((lo) => !serverMarkers.some((sm) => sm.id === lo.id)),
-        ];
+        const merged = mergeOwnedCairns(s.markers, serverMarkers, tombstones);
         if (s.userId) storage.setItem(storageKey(s.userId), JSON.stringify(merged));
         return { markers: merged };
       });
@@ -699,6 +805,88 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     }
   },
 
+  loadCairnLibrary: async (options) => {
+    const capturedUserId = String(get().userId ?? '');
+    if (!capturedUserId || get().libraryLoading) return;
+    const query = String(options?.query ?? get().libraryQuery).trim();
+    const reset = options?.reset ?? query !== get().libraryQuery;
+    const cursor = reset ? null : get().libraryNextCursor;
+    if (!reset && !get().libraryHasMore && get().libraryCoverage !== 'not-loaded') return;
+    set({
+      libraryLoading: true,
+      libraryQuery: query,
+      libraryError: null,
+      ...(reset ? {
+        libraryRemoteMarkers: [],
+        libraryNextCursor: null,
+        libraryHasMore: false,
+        libraryCoverage: 'not-loaded' as CairnLibraryCoverage,
+      } : {}),
+    });
+    const params = ['limit=40'];
+    if (query) params.push(`q=${encodeURIComponent(query)}`);
+    if (cursor) params.push(`cursor=${encodeURIComponent(cursor)}`);
+    try {
+      const response = await authenticatedFetch(`/api/markers/library?${params.join('&')}`);
+      if (String(get().userId ?? '') !== capturedUserId) return;
+      if (response.status === 404) {
+        await get().loadFromBackend();
+        if (String(get().userId ?? '') !== capturedUserId) return;
+        set({
+          libraryLoading: false,
+          libraryCoverage: 'partial',
+          libraryError: 'server-upgrade-required',
+          libraryHasMore: false,
+          libraryNextCursor: null,
+        });
+        return;
+      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      const rows: unknown[] = Array.isArray(payload?.markers) ? payload.markers : [];
+      const tombstones = new Set(await listMarkerTombstones(capturedUserId));
+      const page = rows.map(row => fromBackend(row as Parameters<typeof fromBackend>[0]));
+      if (String(get().userId ?? '') !== capturedUserId) return;
+      set((s) => {
+        if (String(s.userId ?? '') !== capturedUserId || s.libraryQuery !== query) return s;
+        const remote = mergeOwnedCairns(reset ? [] : s.libraryRemoteMarkers, page, tombstones);
+        // A downloaded library page joins the same owner-scoped projection
+        // used by map, Activity links, and Own Cairn Detail. Persisting the
+        // merge makes viewed history available offline and ensures a row
+        // never opens a second, library-only representation of the Cairn.
+        const markers = mergeOwnedCairns(s.markers, page, tombstones);
+        storage.setItem(storageKey(capturedUserId), JSON.stringify(markers));
+        const hasMore = Boolean(payload?.has_more && payload?.next_cursor);
+        return {
+          markers,
+          libraryRemoteMarkers: remote,
+          libraryNextCursor: hasMore ? String(payload.next_cursor) : null,
+          libraryHasMore: hasMore,
+          libraryCoverage: hasMore ? 'partial' : 'complete',
+          libraryLoading: false,
+          libraryError: null,
+        };
+      });
+    } catch {
+      if (String(get().userId ?? '') !== capturedUserId) return;
+      set((s) => ({
+        libraryLoading: false,
+        libraryCoverage: s.libraryRemoteMarkers.length > 0 ? 'partial' : 'local-only',
+        libraryError: 'unavailable',
+      }));
+    }
+  },
+
+  resetCairnLibrary: () => set({
+    libraryRemoteMarkers: [],
+    libraryQuery: '',
+    libraryNextCursor: null,
+    libraryHasMore: false,
+    libraryCoverage: 'not-loaded',
+    libraryLoading: false,
+    libraryError: null,
+  }),
+
   hydrate: async (userId: string) => {
     crashLogger.breadcrumb(`marker_hydrate:start user_id=${userId}`);
     // Sprint 6 review C3 fix (2026-07-30): apply the same mutex pattern
@@ -729,7 +917,17 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       // to overwrite below either way.)
       const prevUserId = get().userId;
       if (prevUserId && prevUserId !== userId) {
-        set({ circleMarkers: [], hidingIds: [] });
+        set({
+          circleMarkers: [],
+          hidingIds: [],
+          libraryRemoteMarkers: [],
+          libraryQuery: '',
+          libraryNextCursor: null,
+          libraryHasMore: false,
+          libraryCoverage: 'not-loaded',
+          libraryLoading: false,
+          libraryError: null,
+        });
         // Dynamic import to avoid module-cycle between marker + memory stores.
         try {
           // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -754,6 +952,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       // AsyncStorage budget on TestFlight installs upgraded across schema bump.
       void storage.removeItem('cairn_markers').catch(() => {});
       const raw = await storage.getItem(key);
+      const tombstones = new Set(await listMarkerTombstones(userId));
       // Re-check userId in case a newer hydrate raced ahead — only apply
       // if we're still the current target user.
       if (get().userId !== undefined && get().userId !== userId && markerHydrateInFlightUserId !== userId) {
@@ -767,8 +966,14 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       }
       if (raw) {
         try {
-          const markers: Marker[] = JSON.parse(raw);
+          const parsed: Marker[] = JSON.parse(raw);
+          const markers = parsed.filter(marker => (
+            !cairnIdentityKeys(marker).some(id => tombstones.has(id))
+          ));
           crashLogger.breadcrumb(`marker_hydrate:parsed count=${markers.length}`);
+          if (markers.length !== parsed.length) {
+            await storage.setItem(key, JSON.stringify(markers));
+          }
           set({ markers, userId });
         } catch (parseErr: any) {
           crashLogger.breadcrumb(`marker_hydrate:parse_fail ${String(parseErr?.message || parseErr).slice(0, 60)}`);
@@ -786,22 +991,8 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
         const pending = await offlineMarkers.listPending();
         const visiblePending: Marker[] = [];
         for (const entry of pending) {
-          if (await isMarkerTombstoned(userId, entry.localId)) continue;
+          if (tombstones.has(entry.localId)) continue;
           const data = entry.data;
-          // If the process died immediately after the Cairn outbox commit,
-          // finish its Memory side-effect before network hydration. This is
-          // limited to still-pending commits, so an intentional later Reset
-          // Memory is not undone by every historical Cairn on login.
-          try {
-            const { recordMemoryEvidence } = require('../features/memory/services/recordMemoryEvidence');
-            await recordMemoryEvidence({
-              lat: data.lat,
-              lng: data.lng,
-              atMs: entry.savedAt,
-              source: 'reconciliation',
-              ownerUserId: userId,
-            });
-          } catch { /* pending Cairn remains and reconciliation will retry */ }
           visiblePending.push({
             id: entry.localId,
             clientCairnId: entry.localId,
@@ -862,7 +1053,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
 // 注意: 本 handler 不能抛异常, 抛会拖累 offlineEntity daemon. 全部 try/catch。
 
 setMarkerCreateAckHandler(
-  async (localId, server: MarkerCreateServerResponse, ownerId) => {
+  async (localId, server: MarkerCreateServerResponse, data, ownerId) => {
     try {
       if (!ownerId) throw new Error('marker_ack_owner_missing');
       // Never use the account that happens to be active when a response
@@ -877,19 +1068,51 @@ setMarkerCreateAckHandler(
       }
       const serverAuthorId =
         server.user_id != null ? String(server.user_id) : undefined;
+      const latestEntry = await offlineMarkers.getEntry(localId);
+      const latestData = latestEntry?.data ?? data;
+      const supersededWhileSyncing = Boolean(latestEntry && (
+        latestData.text !== data.text
+        || latestData.type !== data.type
+        || latestData.permission !== data.permission
+      ));
       const snapshot = useMarkerStore.getState();
-      const next = snapshot.markers.map((m) => {
-          if (m.localId !== localId && m.id !== localId) return m;
-          return {
-            ...m,
-            id: m.clientCairnId ?? localId,
-            clientCairnId: m.clientCairnId ?? localId,
+      const existing = snapshot.markers.find(m => m.localId === localId || m.id === localId);
+      const acknowledged: Marker = existing
+        ? {
+            ...existing,
+            id: existing.clientCairnId ?? localId,
+            clientCairnId: existing.clientCairnId ?? localId,
             serverCairnId: String(server.id),
-            authorId: serverAuthorId ?? m.authorId,
-            synced: true,
-            syncState: 'synced' as SyncState,
+            authorId: serverAuthorId ?? existing.authorId,
+            synced: !supersededWhileSyncing,
+            syncState: (supersededWhileSyncing ? 'pending' : 'synced') as SyncState,
+          }
+        : {
+            id: localId,
+            clientCairnId: localId,
+            serverCairnId: String(server.id),
+            localId,
+            type: latestData.type,
+            regionCode: 'nz',
+            lat: data.lat,
+            lng: data.lng,
+            alt: data.alt,
+            note: latestData.text,
+            authorId: serverAuthorId ?? ownerId,
+            createdAt: Date.now(),
+            permission: latestData.permission,
+            approximate: latestData.approximate,
+            originActivityClientId: latestData.originActivityClientId ?? null,
+            synced: !supersededWhileSyncing,
+            syncState: (supersededWhileSyncing ? 'pending' : 'synced') as SyncState,
+            publicSnapshot: null,
           };
-      });
+      const next = existing
+        ? snapshot.markers.map((m) => {
+          if (m.localId !== localId && m.id !== localId) return m;
+          return acknowledged;
+        })
+        : [...snapshot.markers, acknowledged];
       await storage.setItem(storageKey(ownerId), JSON.stringify(next));
       if (String(useMarkerStore.getState().userId ?? '') !== ownerId) throw new Error('marker_ack_owner_changed');
       useMarkerStore.setState({ markers: next });
@@ -899,6 +1122,7 @@ setMarkerCreateAckHandler(
       throw err;
     }
   },
+
   (localId, err, ownerId) => {
     try {
       useMarkerStore.setState((s) => {

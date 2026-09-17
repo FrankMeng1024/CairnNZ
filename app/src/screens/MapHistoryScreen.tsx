@@ -6,12 +6,12 @@
  */
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert,
+  ActivityIndicator, View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert,
   Dimensions, Animated, Easing, Platform, TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CommonActions, useNavigation, useRoute } from '@react-navigation/native';
+import { CommonActions, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useSessionStore, loadTrackPoints } from '../store/useSessionStore';
@@ -23,7 +23,7 @@ import { crashLogger } from '../services/crashLogger';
 import { getCurrentRegion } from '../config/regions';
 import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { useSettingsStore } from '../store/useSettingsStore';
-import { formatDuration, formatDate, getRelativeTime, haversineM, kalmanInit, kalmanUpdate, simplifyPolyline } from '../utils/geo';
+import { formatDuration, formatDate, getRelativeTime, haversineM } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
@@ -37,6 +37,22 @@ import type { Marker } from '../store/useMarkerStore';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { segmentTrace } from '../features/activity/activityContracts';
+import { ContentSurface } from '../components/ContentSurface';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { SyncBadge } from '../components/SyncBadge';
+import { ModalCard, ModalCardHeader } from '../components/ModalCard';
+import {
+  deriveActivityRouteState,
+} from '../features/activity/activityRouteState';
+import {
+  activityDetailNotices,
+  activityMatchesTarget,
+  activityMetricLabels,
+  formatAverageActivityPace,
+  linkedCairnsForActivity,
+} from '../features/activity/activityDetailPresentation';
+import { routeMatchesIdentity, routeOriginLines } from '../features/route/routeContracts';
+import { cairnDisplayTitle, splitTitleBody } from '../features/plant/services/noteEncoding';
 import {
   ALMOST_DONE_CLONE_V1_ID,
   loadOrBuildAlmostDoneCloneV1,
@@ -74,17 +90,6 @@ const { width: W, height: H } = Dimensions.get('window');
 const MAP_H = H - 380;
 // Map bounds for coordinate mapping
 const MAP_PADDING = 40;
-
-function formatActivityPace(durationS: number, distanceM: number, imperial: boolean): string {
-  const unitM = imperial ? 1609.344 : 1000;
-  if (!(durationS > 0) || distanceM < 20) return '--';
-  const secondsPerUnit = durationS / (distanceM / unitM);
-  if (!Number.isFinite(secondsPerUnit) || secondsPerUnit <= 0) return '--';
-  const roundedSeconds = Math.round(secondsPerUnit);
-  const minutes = Math.floor(roundedSeconds / 60);
-  const seconds = roundedSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
 
 // ── Spring press wrapper ────────────────────────────────────────────────────
 function PressRow({
@@ -176,8 +181,10 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
       {...(resolvedMapStyle.kind === 'url'
         ? { styleURL: resolvedMapStyle.url }
         : { styleJSON: resolvedMapStyle.json })}
-      logoEnabled={false}
-      attributionEnabled={false}
+      logoEnabled
+      attributionEnabled
+      logoPosition={{ top: 76, right: 8 }}
+      attributionPosition={{ top: 112, right: 8 }}
       scaleBarEnabled={false}
       compassEnabled={false}
       onRegionDidChange={(e: any) => {
@@ -222,12 +229,6 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
           geometry: { type: 'LineString' as const, coordinates: segment.map(point => [point.lng, point.lat]) },
           properties: {},
         }));
-        const gapFeatures = trace.gaps.map((gap, i) => ({
-          type: 'Feature' as const,
-          id: `gap-${i}`,
-          geometry: { type: 'LineString' as const, coordinates: [[gap.from.lng, gap.from.lat], [gap.to.lng, gap.to.lat]] },
-          properties: {},
-        }));
         return (
           <>
             {solidFeatures.length > 0 && (
@@ -239,34 +240,11 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
                   id="track-line-layer"
                   style={{
                     lineColor: color,
-                    // v(post-O2): 4 → 7. Combined with DP simplify above,
-                    // out-and-back overlaps read as one thick path instead of
-                    // two neighbouring lines. 7px is still narrow enough at
-                    // z11 (zoomed-out summary) not to smear over map labels.
+                    // Chosen Final points are rendered exactly as persisted.
+                    // Seven pixels keeps out-and-back display geometry legible
+                    // without applying another Detail-only simplification.
                     lineWidth: 7,
                     lineOpacity: 0.9,
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                  }}
-                />
-              </ShapeSource>
-            )}
-            {gapFeatures.length > 0 && (
-              <ShapeSource
-                id="track-gap-line"
-                shape={{ type: 'FeatureCollection', features: gapFeatures }}
-              >
-                <LineLayer
-                  id="track-gap-line-layer"
-                  style={{
-                    lineColor: Colors.textMuted,
-                    // Keep dash screen density legible across the fitted
-                    // overview and close inspection. A constant 5px width
-                    // made the relative dash pattern merge into a heavy,
-                    // ambiguous connector at low zoom.
-                    lineWidth: ['interpolate', ['linear'], ['zoom'], 8, 2, 12, 3.25, 16, 5],
-                    lineDasharray: [2, 1.5],
-                    lineOpacity: 0.84,
                     lineCap: 'round',
                     lineJoin: 'round',
                   }}
@@ -327,14 +305,6 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
         <Icon name="Target" size={20} color={Colors.primary} strokeWidth={2} />
       </TouchableOpacity>
     )}
-    {/* 2026-08-16 T-C03: layers FAB per concept row-02 col 2/5 */}
-    <TouchableOpacity
-      onPress={() => { /* layer toggle - todo */ }}
-      activeOpacity={0.85}
-      style={trackStyles.layersBtn}
-    >
-      <Icon name="Layers" size={20} color={Colors.primary} strokeWidth={2} />
-    </TouchableOpacity>
     </View>
   );
 }
@@ -343,6 +313,7 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
 // Converts trackPoints lat/lng to pixel positions within the map area.
 // If no trackPoints, renders a dashed "No GPS" placeholder line.
 function TrackPolyline({ session }: { session: TrackingSession }) {
+  const theme = useVisualTheme();
   const pts = session.trackPoints;
   const color = session.activityMode === 'running' ? Colors.running : Colors.primary;
 
@@ -365,7 +336,7 @@ function TrackPolyline({ session }: { session: TrackingSession }) {
     return (
       <View style={trackStyles.noGpsWrap}>
         <View style={[trackStyles.noGpsLine, { borderColor: color }]} />
-        <Text style={trackStyles.noGpsLabel}>{label}</Text>
+        <Text style={[trackStyles.noGpsLabel, { color: theme.foregroundSecondary }]}>{label}</Text>
       </View>
     );
   }
@@ -390,14 +361,13 @@ function TrackPolyline({ session }: { session: TrackingSession }) {
   });
 
   // Draw as connected line segments using thin Views positioned absolutely
-  const segments: { x1: number; y1: number; x2: number; y2: number; gap: boolean }[] = [];
+  const segments: { x1: number; y1: number; x2: number; y2: number }[] = [];
   for (let i = 0; i < pts.length - 1; i++) {
+    const isGap = (pts[i].segmentId || 'legacy-0') !== (pts[i + 1].segmentId || 'legacy-0');
+    if (isGap) continue;
     const a = toPixel(pts[i].lat, pts[i].lng);
     const b = toPixel(pts[i + 1].lat, pts[i + 1].lng);
-    segments.push({
-      x1: a.x, y1: a.y, x2: b.x, y2: b.y,
-      gap: (pts[i].segmentId || 'legacy-0') !== (pts[i + 1].segmentId || 'legacy-0'),
-    });
+    segments.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
   }
 
   return (
@@ -415,11 +385,8 @@ function TrackPolyline({ session }: { session: TrackingSession }) {
               left: seg.x1,
               top: seg.y1,
               width: length,
-              height: seg.gap ? 0 : 3,
-              backgroundColor: seg.gap ? 'transparent' : color + 'cc',
-              borderTopWidth: seg.gap ? 2 : 0,
-              borderStyle: seg.gap ? 'dashed' : 'solid',
-              borderColor: seg.gap ? Colors.textMuted : 'transparent',
+              height: 3,
+              backgroundColor: color + 'cc',
               borderRadius: 2,
               transform: [{ rotate: `${angle}deg` }],
               transformOrigin: 'left center',
@@ -775,7 +742,7 @@ function FlagDetailSheet({ marker, onClose, onDelete }: {
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
-export function MapHistoryScreen() {
+function MapHistoryObjectScreen() {
   const visualTheme = useVisualTheme();
   const nav = useNavigation<Nav>();
   const route = useRoute<any>();
@@ -788,7 +755,17 @@ export function MapHistoryScreen() {
   // by targetRouteId. Renders a full-screen route detail view with Edit Route
   // + Preview + Delete stacked buttons per row-03 col 5.
   const allRoutes = useRouteStore(s => s.routes);
-  const selectedRoute = targetRouteId ? allRoutes.find(r => r.id === targetRouteId) : null;
+  const selectedRoute = targetRouteId
+    ? allRoutes.find(item => routeMatchesIdentity(item, targetRouteId)) ?? null
+    : null;
+  const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
+  const routeDetailState = useRouteStore(s => targetRouteId
+    ? (s.routeDetailState[selectedRoute?.id ?? targetRouteId] ?? 'idle')
+    : 'idle');
+  const [routeUseLoading, setRouteUseLoading] = useState(false);
+  const [routeUseTargetId, setRouteUseTargetId] = useState<string | null>(null);
+  const [routeDeleteConfirm, setRouteDeleteConfirm] = useState(false);
+  const routeUseInFlightRef = useRef(false);
   // O12: settings-aware distance format for detail modal + stat displays.
   const dist = useDistance();
   const debugMode = useSettingsStore(s => s.debugMode);
@@ -813,13 +790,80 @@ export function MapHistoryScreen() {
   const [periodFilter, setPeriodFilter] = useState<'all' | 'week' | 'month' | 'year'>('all');
   const [showFilters, setShowFilters] = useState(false);
 
+  useEffect(() => {
+    if (!targetRouteId || (selectedRoute && selectedRoute.points.length >= 2)) return;
+    void loadRouteDetail(selectedRoute?.id ?? targetRouteId).catch(() => {});
+  }, [loadRouteDetail, selectedRoute?.id, selectedRoute?.points.length, targetRouteId]);
+
+  const useSelectedRoute = useCallback(async () => {
+    if (!selectedRoute || routeUseLoading || routeUseInFlightRef.current) return;
+    routeUseInFlightRef.current = true;
+    setRouteUseLoading(true);
+    try {
+      if (selectedRoute.points.length < 2) {
+        await loadRouteDetail(selectedRoute.id);
+      }
+      const ready = useRouteStore.getState().routes.find(item => routeMatchesIdentity(item, selectedRoute.id));
+      if (!ready || ready.points.length < 2) {
+        Alert.alert(
+          'Route unavailable',
+          'This route’s path is not available on this device yet. Check your connection and try again.',
+        );
+        return;
+      }
+      const tracking = useTrackingStore.getState();
+      if (tracking.status !== 'idle') {
+        Alert.alert(
+          'Activity already in progress',
+          'Finish or discard the current Activity before choosing another Route.',
+          [
+            {
+              text: 'Return to Activity',
+              onPress: () => {
+                routeUseInFlightRef.current = false;
+                nav.navigate(tracking.activityMode === 'running' ? 'Running' : 'Hiking');
+              },
+            },
+            { text: 'Stay here', style: 'cancel', onPress: () => { routeUseInFlightRef.current = false; } },
+          ],
+        );
+        return;
+      }
+      setRouteUseTargetId(ready.id);
+    } catch {
+      Alert.alert('Route unavailable', 'The route could not be prepared. Check your connection and try again.');
+    } finally {
+      routeUseInFlightRef.current = false;
+      setRouteUseLoading(false);
+    }
+  }, [loadRouteDetail, nav, routeUseLoading, selectedRoute]);
+
+  const openRouteForActivity = useCallback((mode: 'hiking' | 'running') => {
+    if (!routeUseTargetId || routeUseInFlightRef.current) return;
+    const ready = useRouteStore.getState().routes.find(item => routeMatchesIdentity(item, routeUseTargetId));
+    if (!ready || ready.points.length < 2) {
+      setRouteUseTargetId(null);
+      Alert.alert('Route unavailable', 'The route could not be prepared. Check your connection and try again.');
+      return;
+    }
+    routeUseInFlightRef.current = true;
+    setRouteUseTargetId(null);
+    if (mode === 'running') nav.navigate('Running', { routeId: ready.id });
+    else nav.navigate('Hiking', { routeId: ready.id });
+    routeUseInFlightRef.current = false;
+  }, [nav, routeUseTargetId]);
+
   const region = getCurrentRegion();
   const allSessions = useSessionStore(s => s.sessions);
-  // If a specific sessionId was passed, only show that one
+  const resolvedTargetSession = targetSessionId
+    ? allSessions.find(session => activityMatchesTarget(session, targetSessionId)) ?? null
+    : null;
+  // A Finish/local identity and a Trails/server identity resolve to the same
+  // stable Activity object. The route param never creates a second projection.
   const sessions = targetQaReviewClone
     ? (qaReviewClone ? [qaReviewClone.session] : [])
     : targetSessionId
-      ? allSessions.filter(s => s.id === targetSessionId)
+      ? (resolvedTargetSession ? [resolvedTargetSession] : [])
       : allSessions;
 
   // O18 HIST-01/02: apply search + type + period filters, then sort.
@@ -845,11 +889,18 @@ export function MapHistoryScreen() {
     return sorted;
   }, [sessions, searchQuery, typeFilter, periodFilter, sortOrder]);
 
-  // Auto-select the target session or first session on mount
+  // Resolve again after asynchronous store hydration. A direct Detail entry
+  // must not become a false missing Activity just because the local cache
+  // arrived after this component mounted.
   useEffect(() => {
-    if (targetSessionId) {
-      setSelectedSessionId(targetSessionId);
-      setExpandedSessionId(targetSessionId);
+    const resolvedId = targetQaReviewClone
+      ? qaReviewClone?.session.id ?? null
+      : targetSessionId
+        ? resolvedTargetSession?.id ?? null
+        : sessions[0]?.id ?? null;
+    if (resolvedId) {
+      setSelectedSessionId(resolvedId);
+      setExpandedSessionId(resolvedId);
     } else if (sessions.length > 0) {
       setSelectedSessionId(sessions[0].id);
       setExpandedSessionId(sessions[0].id);
@@ -857,7 +908,7 @@ export function MapHistoryScreen() {
       setSelectedSessionId(null);
       setExpandedSessionId(null);
     }
-  }, []);
+  }, [qaReviewClone?.session.id, resolvedTargetSession?.id, sessions.length, targetQaReviewClone, targetSessionId]);
   const deleteSession = useSessionStore(s => s.deleteSession);
   // O18 HIST-03: rename hike from the detail panel.
   const renameSession = useSessionStore(s => s.renameSession);
@@ -865,6 +916,8 @@ export function MapHistoryScreen() {
   const [renameText, setRenameText] = useState('');
   const [renameSaving, setRenameSaving] = useState(false);
   const [invalidatedSessionId, setInvalidatedSessionId] = useState<string | null>(null);
+  const [deleteSaving, setDeleteSaving] = useState(false);
+  const [routeDraftOpening, setRouteDraftOpening] = useState(false);
   const allMarkers = useMarkerStore(s => s.markers);
   const markers = allMarkers.filter(m => m.regionCode === region.code);
   const deleteMarker = useMarkerStore(s => s.deleteMarker);
@@ -872,6 +925,50 @@ export function MapHistoryScreen() {
   // Updates reactively as the user moves (Zustand subscription).
   const lastCoord = useTrackingStore(s => s.lastCoordinate);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [routeActionError, setRouteActionError] = useState<string | null>(null);
+  const routeRenameInFlightRef = useRef(false);
+  const routeDeleteInFlightRef = useRef(false);
+
+  const commitRouteRename = useCallback(async () => {
+    if (!selectedRoute || renameSaving || routeRenameInFlightRef.current) return;
+    const nextName = renameText.trim();
+    if (!nextName) return;
+    routeRenameInFlightRef.current = true;
+    setRenameSaving(true);
+    setRouteActionError(null);
+    try {
+      await useRouteStore.getState().updateRoute(selectedRoute.id, { name: nextName });
+      setRenameEditing(false);
+    } catch {
+      setRouteActionError('The Route name was not saved. Your draft is still here.');
+    } finally {
+      routeRenameInFlightRef.current = false;
+      setRenameSaving(false);
+    }
+  }, [renameSaving, renameText, selectedRoute]);
+
+  const deleteSelectedRoute = useCallback(async () => {
+    if (!selectedRoute || deleteSaving || routeDeleteInFlightRef.current) return;
+    routeDeleteInFlightRef.current = true;
+    setDeleteSaving(true);
+    setRouteActionError(null);
+    try {
+      await useRouteStore.getState().deleteRoute(selectedRoute.id);
+      setRouteDeleteConfirm(false);
+      nav.goBack();
+    } catch {
+      setRouteActionError('The Route was not deleted. Try again when you are ready.');
+      setRouteDeleteConfirm(false);
+    } finally {
+      routeDeleteInFlightRef.current = false;
+      setDeleteSaving(false);
+    }
+  }, [deleteSaving, nav, selectedRoute]);
+
+  useFocusEffect(useCallback(() => {
+    setRouteDraftOpening(false);
+    return undefined;
+  }, []));
 
   const liveSelectedSession = sessions.find(s => s.id === selectedSessionId) ?? null;
   const retainedSelectedSession = selectedSessionId
@@ -920,26 +1017,35 @@ export function MapHistoryScreen() {
 
   const deleteSelectedActivity = useCallback(async () => {
     const id = selectedSessionId;
-    if (!id || id === invalidatedSessionId) return;
+    if (!id || id === invalidatedSessionId || deleteSaving) return;
     // Invalidate this mounted projection before the first await. It can no
     // longer rename, create a Route, or re-delete while persistence runs.
     setInvalidatedSessionId(id);
+    setDeleteSaving(true);
     setRenameEditing(false);
-    setDeleteConfirm(false);
     detailSessionSnapshots.current.delete(id);
     detailTrackSnapshots.current.delete(id);
     try {
-      await deleteSession(id);
+      const result = await deleteSession(id);
       setSelectedSessionId(null);
+      setDeleteConfirm(false);
       nav.dispatch(CommonActions.reset({
         index: 1,
         routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'activities' } }],
       }));
+      if (result.remoteState === 'queued') {
+        Alert.alert(
+          'Delete queued',
+          'The Activity is removed from this iPhone. Cairn will finish deleting the server copy when you are online.',
+        );
+      }
     } catch {
       setInvalidatedSessionId(null);
       Alert.alert('Delete failed', 'The Activity could not be deleted. Try again.');
+    } finally {
+      setDeleteSaving(false);
     }
-  }, [deleteSession, invalidatedSessionId, nav, selectedSessionId]);
+  }, [deleteSaving, deleteSession, invalidatedSessionId, nav, selectedSessionId]);
 
   // Load track points on demand when session is selected.
   //
@@ -1076,167 +1182,82 @@ export function MapHistoryScreen() {
     ? { ...selectedSession, trackPoints: loadedTrackPoints ?? [] }
     : null;
   const isQaReviewClone = selectedSession?.id === ALMOST_DONE_CLONE_V1_ID;
-
-  // v75: full GPS quality pipeline applied at render time so historical
-  // hikes (recorded before v74a's live filters existed) get the same
-  // treatment as live tracking. The pipeline is identical to live but
-  // re-implemented here because:
-  //   - server only stores raw points (never filters)
-  //   - client live filters only run during recording, not render
-  //
-  // Pipeline:
-  //   1. Drop accuracy > 25m fixes (urban canyon / indoor noise)
-  //   2. Drop teleports (>15 m/s & >30m vs last accepted = GPS glitch)
-  //   3. Stationary collapse (recent avg <0.5 m/s and within max(acc, 8m)
-  //      of last accepted → suppress, no new vertex)
-  //   4. Kalman 1D smoothing per channel, Q=1e-9 (low → trust prior →
-  //      visibly smooth output)
-  //
-  // Distance shown to user is the SERVER-STORED `distance_m` (computed
-  // on raw GPS during recording — accurate). Polyline RENDER uses
-  // smoothed. Same split as Strava.
-  const smoothedTrackPoints = React.useMemo(() => {
-    if (!sessionForDisplay || sessionForDisplay.trackPoints.length === 0) return [];
-    // New Activities were already accepted/smoothed by the centralized
-    // recorder. Preserve their explicit segment identities exactly; legacy
-    // flat tracks alone use the historical render-only cleanup below.
-    if (sessionForDisplay.trackPoints.some(point => point.segmentId && point.segmentId !== 'legacy-0')) {
-      return sessionForDisplay.trackPoints;
-    }
-    // v(post-O2): Kalman Q 1e-9 → 1e-7. 1e-9 heavily trusted the prior, which
-    // over-smoothed U-turns/out-and-back — the return leg lagged the outbound
-    // leg by 5-15m and rendered as a visible parallel line rather than
-    // overlapping. 1e-7 gives the filter more freedom to snap back on
-    // direction reversals while still suppressing sub-meter GPS jitter.
-    const KALMAN_PROCESS_NOISE = 1e-7;
-    const ACCURACY_REJECT_M = 25;
-    const TELEPORT_SPEED_MPS = 15;
-    const TELEPORT_DIST_MIN_M = 30;
-    const STATIONARY_SPEED_MPS = 0.5;
-    const STATIONARY_RADIUS_MIN_M = 8;
-    type P = typeof sessionForDisplay.trackPoints[number];
-    const pts = sessionForDisplay.trackPoints;
-    const kept: P[] = [];
-
-    // Filters 1, 2, 3 in one pass
-    for (let i = 0; i < pts.length; i++) {
-      const p = pts[i];
-      // Filter 1: accuracy reject
-      if (p.accuracy != null && p.accuracy > ACCURACY_REJECT_M) continue;
-
-      if (kept.length > 0) {
-        const last = kept[kept.length - 1];
-        const distM = haversineM({ lat: last.lat, lng: last.lng }, { lat: p.lat, lng: p.lng });
-        const dtS = (p.t - last.t) / 1000;
-
-        // Filter 2: teleport reject
-        if (dtS > 0) {
-          const speed = distM / dtS;
-          if (speed > TELEPORT_SPEED_MPS && distM > TELEPORT_DIST_MIN_M) continue;
-        }
-
-        // Filter 3: stationary collapse — rolling 5-point speed.
-        // v75 BUGFIX: only apply when we have ≥3 accepted points so
-        // the speed calc has enough data. Otherwise the very first
-        // fixes get suppressed (avgSpeed=0 on empty window matches
-        // the stationary condition).
-        if (kept.length >= 3) {
-          const window = kept.slice(-5);
-          if (window.length >= 2) {
-            const winDt = (window[window.length - 1].t - window[0].t) / 1000;
-            let winDist = 0;
-            for (let j = 1; j < window.length; j++) {
-              winDist += haversineM(
-                { lat: window[j - 1].lat, lng: window[j - 1].lng },
-                { lat: window[j].lat, lng: window[j].lng },
-              );
-            }
-            const winSpeed = winDt > 0 ? winDist / winDt : 0;
-            const suppressRadius = Math.max(STATIONARY_RADIUS_MIN_M, p.accuracy ?? 0);
-            if (winSpeed < STATIONARY_SPEED_MPS && distM <= suppressRadius) continue;
-          }
-        }
-      }
-      kept.push(p);
-    }
-
-    // Filter 4: Kalman smoothing pass over the survivors. Q hard-coded
-    // to 1e-9 here because kalmanInit uses 1e-5 by default (geo.ts:159)
-    // — see plan. Override per call.
-    const out: P[] = [];
-    let kLat: ReturnType<typeof kalmanInit> | null = null;
-    let kLng: ReturnType<typeof kalmanInit> | null = null;
-    for (const p of kept) {
-      const acc = p.accuracy ?? 10;
-      if (kLat === null || kLng === null) {
-        kLat = kalmanInit(p.lat, acc, KALMAN_PROCESS_NOISE);
-        kLng = kalmanInit(p.lng, acc, KALMAN_PROCESS_NOISE);
-        out.push(p);
-      } else {
-        const sLat = kalmanUpdate(kLat, p.lat, acc);
-        const sLng = kalmanUpdate(kLng, p.lng, acc);
-        out.push({ ...p, lat: sLat, lng: sLng });
-      }
-    }
-    // v118: Douglas-Peucker simplify removed (was reducing vertices ~30%).
-    // User reported the live hike polyline looked smoother than the activity
-    // view of the same hike. Both should be visually identical. HikingScreen
-    // renders trackPointsSmoothed live (Kalman only); we now do the same here
-    // (Kalman + filters above, but no DP simplify). Slightly more vertices
-    // on long hikes but typical NZ trail is < 2000 points — Mapbox handles
-    // it without effort.
-    //
-    // v(post-O2) re-add DP simplify with ε=5m. User reported out-and-back
-    // hikes render as "two nearby parallel lines" instead of one thick
-    // overlapping line. Root cause: GPS ±5-10m jitter on the return leg
-    // never falls exactly on the outbound vertices → Kalman preserves the
-    // parallel offset. DP simplify at ε=5m drops sub-5m deviations, so
-    // outbound and inbound vertices merge into visually collinear segments;
-    // combined with a wider lineWidth the two legs read as one path.
-    // NOTE: distance shown to user still comes from server-stored raw
-    // distance_m — this simplify is render-only, upstream calculators
-    // (routeFlags, bbox) still receive the un-simplified `out` via the
-    // export path immediately below. If we later route bbox/flags through
-    // the return value, revisit whether distance should be preserved.
-    const DP_EPSILON_M = 5;
-    return simplifyPolyline(out, DP_EPSILON_M);
-  }, [sessionForDisplay?.trackPoints]);
-
-  // Replace raw with smoothed in sessionForDisplay so all downstream
-  // renderers (NativeTrackMap, TrackPolyline, marker bbox) read smoothed.
-  const sessionRender = sessionForDisplay
-    ? { ...sessionForDisplay, trackPoints: smoothedTrackPoints }
+  const selectedActivityRouteState = selectedSession
+    ? deriveActivityRouteState({ session: selectedSession, trackPoints: loadedTrackPoints })
     : null;
+  const selectedActivityNotices = selectedActivityRouteState
+    ? activityDetailNotices(selectedActivityRouteState)
+    : [];
 
-  // v73: nearby-flag filter — only show personal markers within ~80m
-  // of any point on the route polyline. v74a: widened from 50m to 80m
-  // because v72 hit-test plants 5-15m from user + GPS noise + offset
-  // from actual trail can push markers outside a 50m envelope.
-  const NEARBY_FLAG_RADIUS_M = 80;
-  const routeFlags: Marker[] = (() => {
-    if (isQaReviewClone) return [];
-    if (!sessionForDisplay || sessionForDisplay.trackPoints.length === 0) return [];
-    return markers.filter(m => {
-      if (m.originActivityClientId) {
-        return m.originActivityClientId === (sessionForDisplay.clientActivityId ?? sessionForDisplay.id);
-      }
-      // Cheap bounding-box reject before haversine to keep this fast on
-      // long hikes with many flags. ~0.001° lat/lng ≈ 100m at NZ
-      // latitudes, well above the 50m threshold.
-      return sessionForDisplay.trackPoints.some(p => {
-        if (Math.abs(p.lat - m.lat) > 0.001) return false;
-        if (Math.abs(p.lng - m.lng) > 0.001) return false;
-        return haversineM({ lat: p.lat, lng: p.lng }, { lat: m.lat, lng: m.lng }) <= NEARBY_FLAG_RADIUS_M;
+  // `trackPoints` is the chosen, durably persisted Final display geometry.
+  // Detail renders it exactly; Activity metrics and Memory remain independent
+  // canonical truth and are never recomputed here.
+  const sessionRender = sessionForDisplay;
+  const routeFlags: Marker[] = isQaReviewClone || !selectedSession
+    ? []
+    : linkedCairnsForActivity(markers, selectedSession);
+  const selectedMetricLabels = selectedSession
+    ? activityMetricLabels(selectedSession.activityMode)
+    : activityMetricLabels('hiking');
+
+  const openActivityRouteDraft = useCallback(() => {
+    if (!selectedSession || routeDraftOpening) return;
+    const realSegments = segmentTrace(loadedTrackPoints ?? []).segments
+      .filter(segment => segment.length >= 2);
+    const openSegment = (segment: typeof realSegments[number], reconnectsGap = false) => {
+      if (routeDraftOpening) return;
+      setRouteDraftOpening(true);
+      crashLogger.breadcrumb(`saveroute:nav-to-editor session=${selectedSession.id} segment=${segment[0]?.segmentId ?? 'legacy'}`);
+      (nav as any).navigate('RouteEditor', {
+        fromSessionId: selectedSession.id,
+        reconnectsActivityGap: reconnectsGap,
+        fromSessionTrackPoints: segment.map(point => ({
+          lat: point.lat,
+          lng: point.lng,
+          alt: point.alt ?? null,
+          t: point.t,
+          accuracy: point.accuracy ?? null,
+        })),
       });
-    });
-  })();
+    };
+    if (realSegments.length <= 1) {
+      if (realSegments[0]) openSegment(realSegments[0]);
+      return;
+    }
+    Alert.alert(
+      'Choose a recorded section',
+      'The missing section is not Activity geometry. Choose one recorded section, or explicitly reconnect only in the new Route.',
+      [
+        {
+          text: 'Reconnect in Route',
+          onPress: () => openSegment(realSegments.flat(), true),
+        },
+        ...realSegments.map((segment, index) => ({
+          text: `Section ${index + 1}`,
+          onPress: () => openSegment(segment),
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ],
+    );
+  }, [loadedTrackPoints, nav, routeDraftOpening, selectedSession]);
 
-  // Show real markers on map. v73: when a session is selected, restrict
-  // to flags planted along that route (within 50m of any track point);
-  // when nothing is selected, show up to 8 generic recent markers.
+  // Show real markers on map. Activity Detail requires explicit Activity
+  // provenance or recorded marker membership; spatial proximity alone never
+  // claims that an arbitrary Cairn came from this Activity.
   const mapMarkers: Marker[] = sessionForDisplay
     ? routeFlags
     : markers.slice(0, 8);
+  const routePreviewSession = selectedRoute && selectedRoute.points.length >= 2
+    ? ({
+        id: `route-preview-${selectedRoute.id}`,
+        activityMode: selectedRoute.activityMode ?? 'hiking',
+        trackPoints: selectedRoute.points.map((point, index) => ({
+          ...point,
+          t: selectedRoute.createdAt + index,
+          segmentId: 'route-reference',
+        })),
+      } as unknown as TrackingSession)
+    : null;
 
   return (
     <View style={[styles.container, { backgroundColor: visualTheme.background }]}>
@@ -1245,7 +1266,22 @@ export function MapHistoryScreen() {
         {/* Track polyline when session selected. Native (iOS/Android with
             @rnmapbox/maps available) renders the track on a real Mapbox
             map; web/Expo Go falls back to the SVG-on-panel rendering. */}
-        {sessionRender ? (
+        {routePreviewSession ? (
+          MapView
+            ? <NativeTrackMap session={routePreviewSession} markers={[]} />
+            : <TrackPolyline session={routePreviewSession} />
+        ) : targetRouteId ? (
+          <View style={trackStyles.noGpsWrap} testID="route-map-unavailable">
+            {routeDetailState === 'loading' ? <ActivityIndicator color={visualTheme.primary} /> : null}
+            <Text style={[trackStyles.noGpsLabel, { color: visualTheme.foregroundSecondary }]}>
+              {routeDetailState === 'not-found'
+                ? 'Route unavailable'
+                : routeDetailState === 'error'
+                  ? 'Route map unavailable — details remain accessible offline'
+                  : 'Preparing Route map…'}
+            </Text>
+          </View>
+        ) : sessionRender ? (
           isLoadingTrackPoints
             // v261: still fetching trackPoints — render nothing in the
             // map area instead of flashing "Activity too short to record
@@ -1273,37 +1309,6 @@ export function MapHistoryScreen() {
             label (previously showed "History" + "Select a route below to view").
             The tab bar (Activities/Routes/Cairns) below already anchors context.
             Only the decorative offset lines render in the empty map area. */}
-
-        {/* Selected session stat bar on map */}
-        {selectedSession && (
-          <View style={styles.trackStatBar}>
-            <View style={[styles.trackStat, { borderLeftWidth: 2, borderLeftColor: Colors.running }]}>
-              <Text style={styles.trackStatValue}>
-                {selectedSession.distanceM < 10 ? '0' : dist.format(selectedSession.distanceM, 2)}
-              </Text>
-              <Text style={styles.trackStatUnit}>{dist.unit}</Text>
-            </View>
-            <View style={styles.trackStatDivider} />
-            <View style={[styles.trackStat, { borderLeftWidth: 2, borderLeftColor: Colors.primary }]}>
-              <Text style={styles.trackStatValue}>{formatDuration(selectedSession.durationS)}</Text>
-              <Text style={styles.trackStatUnit}>time</Text>
-            </View>
-            <View style={styles.trackStatDivider} />
-            <View style={[styles.trackStat, { borderLeftWidth: 2, borderLeftColor: Colors.flag }]}>
-              <Text style={styles.trackStatValue}>{selectedSession.markerIds.length}</Text>
-              <Text style={styles.trackStatUnit}>flags</Text>
-            </View>
-            <View style={styles.trackStatDivider} />
-            <View style={[styles.trackStat, { borderLeftWidth: 2, borderLeftColor: Colors.textMuted }]}>
-              <Text style={styles.trackStatValue}>
-                {selectedSession.activityMode === 'running'
-                  ? formatActivityPace(selectedSession.durationS, selectedSession.distanceM, dist.imperial)
-                  : `+${dist.formatElevation(selectedSession.elevationGainM ?? 0)}${dist.elevUnit}`}
-              </Text>
-              <Text style={styles.trackStatUnit}>{selectedSession.activityMode === 'running' ? `/${dist.unit}` : 'elev'}</Text>
-            </View>
-          </View>
-        )}
 
         {/* Real marker pins.
             ⚠️ When NativeTrackMap is rendering, markers are drawn INSIDE
@@ -1380,6 +1385,7 @@ export function MapHistoryScreen() {
           (red outline pill, full width). Pill radius 14, minHeight 54 — Auth
           submit style. */}
       {targetRouteId && selectedRoute ? (
+        <>
         <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
           <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
           <View style={{ marginBottom: Spacing.md }}>
@@ -1391,25 +1397,21 @@ export function MapHistoryScreen() {
                   onChangeText={setRenameText}
                   autoFocus
                   maxLength={60}
-                  onSubmitEditing={() => {
-                    const t = renameText.trim();
-                    if (t) useRouteStore.getState().updateRoute(selectedRoute.id, { name: t });
-                    setRenameEditing(false);
-                  }}
+                  editable={!renameSaving}
+                  onSubmitEditing={() => { void commitRouteRename(); }}
                   returnKeyType="done"
                   placeholder="Route name"
                   placeholderTextColor={visualTheme.muted}
                 />
                 <TouchableOpacity
-                  onPress={() => {
-                    const t = renameText.trim();
-                    if (t) useRouteStore.getState().updateRoute(selectedRoute.id, { name: t });
-                    setRenameEditing(false);
-                  }}
+                  onPress={() => { void commitRouteRename(); }}
+                  disabled={renameSaving || !renameText.trim()}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Save new route name"
                 >
-                  <Icon name="Check" size={20} color={visualTheme.iconActive} strokeWidth={2.5} />
+                  {renameSaving
+                    ? <ActivityIndicator size="small" color={visualTheme.primary} />
+                    : <Icon name="Check" size={20} color={visualTheme.iconActive} strokeWidth={2.5} />}
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setRenameEditing(false)}
@@ -1437,236 +1439,431 @@ export function MapHistoryScreen() {
               </TouchableOpacity>
             )}
           </View>
+          {selectedRoute.syncState && selectedRoute.syncState !== 'synced' ? (
+            <View style={styles.routeSyncBlock}>
+              <SyncBadge
+                state={selectedRoute.syncState}
+                onPress={selectedRoute.syncState === 'failed'
+                  && selectedRoute.syncErrorCode !== 'SOURCE_ACTIVITY_DELETED'
+                  && selectedRoute.syncErrorCode !== 'SOURCE_ACTIVITY_UNAUTHORIZED'
+                  ? () => useRouteStore.getState().retryRouteSync(selectedRoute.id)
+                  : undefined}
+              />
+              {selectedRoute.syncState === 'failed' ? (
+                <Text style={[styles.routeStateText, { color: visualTheme.foregroundSecondary }]} testID="route-sync-failure-detail">
+                  {selectedRoute.syncErrorCode === 'SOURCE_ACTIVITY_DELETED'
+                    ? 'The source Activity was deleted before this Route could sync. This Route remains saved on this device.'
+                    : selectedRoute.syncErrorCode === 'SOURCE_ACTIVITY_UNAUTHORIZED'
+                      ? 'The source Activity is not available to this account. This Route remains saved on this device.'
+                      : 'This Route is saved on this device. Retry when your connection is available.'}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+          {routeActionError ? (
+            <Text style={[styles.routeStateText, { color: visualTheme.destructive }]} testID="route-action-error">
+              {routeActionError}
+            </Text>
+          ) : null}
+          <View style={styles.routeOriginBlock} testID="route-origin-context">
+            {routeOriginLines(selectedRoute).map(line => (
+              <Text key={line} style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary }]}>{line}</Text>
+            ))}
+            {selectedRoute.originPersistence === 'legacy-local' ? (
+              <Text style={[styles.routeStateText, { color: Colors.warning }]}>Origin is saved on this device; server support is pending.</Text>
+            ) : null}
+            <Text style={[styles.routeUpdatedText, { color: visualTheme.muted }]}>Updated {formatDate(selectedRoute.updatedAt)}</Text>
+          </View>
           <View style={styles.singleSessionStats}>
             <View style={styles.singleStat}>
               <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{dist.format(selectedRoute.distanceM ?? 0, 2)}</Text>
               <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>{dist.unit}</Text>
             </View>
-            <View style={styles.singleStat}>
-              {/* Concept crops/05 middle stat = estimated time. Routes carry no
-                  recorded duration, so estimate from distance + typical pace
-                  per activity mode (hiking 4 km/h, running 10 km/h). */}
-              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>
-                {formatDuration(
-                  Math.round(
-                    (selectedRoute.distanceM ?? 0) /
-                    (selectedRoute.activityMode === 'running' ? 2.78 : 1.11)
-                  )
-                )}
-              </Text>
-              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>time</Text>
-            </View>
-            <View style={styles.singleStat}>
-              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>+{dist.formatElevation(selectedRoute.elevationGainM ?? 0)}{dist.elevUnit}</Text>
-              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>elev</Text>
-            </View>
-          </View>
-          <View style={{ gap: Spacing.sm, marginTop: Spacing.lg }}>
-            <TouchableOpacity
-              style={[styles.actionPillPrimary, { backgroundColor: visualTheme.primary }]}
-              onPress={() => {
-                (nav as any).navigate('RouteEditor', { routeId: selectedRoute.id });
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Edit route"
-            >
-              <Icon name="Edit3" size={IconSize.sm} color="#fff" strokeWidth={2} />
-              <Text style={styles.actionPillPrimaryText}>Edit Route</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionPillDanger, { backgroundColor: visualTheme.surface, borderColor: visualTheme.destructive }, deleteConfirm && { backgroundColor: visualTheme.destructive, borderColor: visualTheme.destructive }]}
-              onPress={() => {
-                if (!deleteConfirm) { setDeleteConfirm(true); return; }
-                // deleteRoute API — falls back to nav goBack on missing
-                const rs = useRouteStore.getState();
-                if (rs.deleteRoute) rs.deleteRoute(selectedRoute.id);
-                nav.goBack();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Delete route"
-            >
-              <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? visualTheme.onPrimary : visualTheme.destructive} strokeWidth={2} />
-              <Text style={[styles.actionPillDangerText, { color: deleteConfirm ? visualTheme.onPrimary : visualTheme.destructive }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : targetSessionId && selectedSession ? (
-        <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
-          <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
-          {/* 2026-08-17 Activity Detail (concept crops/02): panel handle +
-              title with pencil (rename) + 3-col stats (km / time / elev) +
-              meta row (activity icon · date · time-of-day) + Delete (red
-              outline pill) left / Save as Route (deep green pill) right.
-              Pill radius 14, minHeight 54 — Auth submit style. */}
-          <View style={{ marginBottom: Spacing.sm }}>
-            {renameEditing ? (
-              <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
-                <TextInput
-                  style={[styles.renameInput, { color: visualTheme.foreground, borderBottomColor: visualTheme.primary }]}
-                  value={renameText}
-                  onChangeText={setRenameText}
-                  autoFocus
-                  maxLength={60}
-                  onSubmitEditing={() => { void commitActivityRename(); }}
-                  editable={!renameSaving}
-                  returnKeyType="done"
-                  placeholder="Hike name"
-                  placeholderTextColor={visualTheme.muted}
-                />
-                <TouchableOpacity
-                  onPress={() => { void commitActivityRename(); }}
-                  disabled={renameSaving}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel="Save new name"
-                >
-                  <Icon name="Check" size={20} color={visualTheme.iconActive} strokeWidth={2.5} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setRenameEditing(false)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel="Cancel rename"
-                >
-                  <Icon name="X" size={20} color={visualTheme.iconInactive} strokeWidth={2.5} />
-                </TouchableOpacity>
+            {selectedRoute.elevationGainM > 0 ? (
+              <View style={styles.singleStat}>
+                <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>+{dist.formatElevation(selectedRoute.elevationGainM)}{dist.elevUnit}</Text>
+                <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>elevation</Text>
               </View>
-            ) : (
+            ) : null}
+          </View>
+          <View style={styles.routeActions}>
+            <PrimaryButton
+              label="Use Route"
+              onPress={() => { void useSelectedRoute(); }}
+              loading={routeUseLoading}
+              renderIcon={color => <Icon name="Navigation" size={IconSize.sm} color={color} strokeWidth={2} />}
+              testID="route-use-action"
+            />
+            <View style={styles.routeMaintenanceRow}>
               <TouchableOpacity
+                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
                 onPress={() => {
-                  setRenameText(selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike'));
-                  setRenameEditing(true);
+                  (nav as any).navigate('RouteEditor', { routeId: selectedRoute.id });
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Rename hike"
-                accessibilityHint="Double tap to edit the hike name"
-                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                accessibilityLabel="Edit route"
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.detailTitle, { color: visualTheme.foreground }]} numberOfLines={1}>
-                    {selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike')}
-                  </Text>
-                  {!isQaReviewClone ? <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} /> : null}
-                </View>
+                <Icon name="Edit3" size={IconSize.sm} color={visualTheme.iconActive} strokeWidth={2} />
+                <Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>Edit</Text>
               </TouchableOpacity>
-            )}
+              <TouchableOpacity
+                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.destructiveSurface, borderColor: visualTheme.destructive }]}
+                onPress={() => setRouteDeleteConfirm(true)}
+                disabled={deleteSaving}
+                accessibilityRole="button"
+                accessibilityLabel="Delete route"
+              >
+                {deleteSaving
+                  ? <ActivityIndicator size="small" color={visualTheme.destructive} />
+                  : <Icon name="Trash2" size={IconSize.sm} color={visualTheme.destructive} strokeWidth={2} />}
+                <Text style={[styles.routeMaintenanceText, { color: visualTheme.destructive }]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          {isQaReviewClone ? (
-            <View style={styles.detailMetaRow} testID="qa-snap-review-clone-label">
-              <Icon name="Eye" size={13} color={visualTheme.iconActive} strokeWidth={2} />
-              <Text style={[styles.detailMetaText, { color: visualTheme.primary, fontWeight: '700' }]}>QA / SNAP REVIEW CLONE · NO PRODUCT EFFECTS</Text>
+        </View>
+        <ModalCard
+          visible={routeUseTargetId != null}
+          onDismiss={() => setRouteUseTargetId(null)}
+          testID="route-use-mode-picker"
+        >
+          <ModalCardHeader
+            title="Use this Route"
+            body="Choose an Activity. This Route is shown on the map for reference, and you will review it before starting."
+            onClose={() => setRouteUseTargetId(null)}
+          />
+          <View style={styles.deleteModalActions}>
+            <PrimaryButton
+              label="Hike"
+              onPress={() => openRouteForActivity('hiking')}
+              testID="route-use-hike"
+            />
+            <PrimaryButton
+              label="Run"
+              variant="secondary"
+              onPress={() => openRouteForActivity('running')}
+              testID="route-use-run"
+            />
+            <PrimaryButton
+              label="Cancel"
+              variant="secondary"
+              onPress={() => setRouteUseTargetId(null)}
+            />
+          </View>
+        </ModalCard>
+        <ModalCard
+          visible={routeDeleteConfirm}
+          onDismiss={() => !deleteSaving && setRouteDeleteConfirm(false)}
+          dismissible={!deleteSaving}
+          testID="route-delete-confirmation"
+        >
+          <ModalCardHeader
+            title="Delete Route?"
+            body="This removes the Route. Its source Activity, Cairns, and Memory stay unchanged."
+            onClose={deleteSaving ? undefined : () => setRouteDeleteConfirm(false)}
+          />
+          <View style={styles.deleteModalActions}>
+            <PrimaryButton
+              label="Delete Route"
+              variant="destructive"
+              onPress={() => { void deleteSelectedRoute(); }}
+              loading={deleteSaving}
+              testID="route-delete-confirm"
+            />
+            <PrimaryButton
+              label="Keep Route"
+              variant="secondary"
+              onPress={() => setRouteDeleteConfirm(false)}
+              disabled={deleteSaving}
+            />
+          </View>
+        </ModalCard>
+        </>
+      ) : targetRouteId ? (
+        <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]} testID="route-detail-state">
+          <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
+          <Text style={[styles.detailTitle, { color: visualTheme.foreground }]}>
+            {routeDetailState === 'not-found' ? 'Route unavailable' : 'Loading Route'}
+          </Text>
+          <Text style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary, marginTop: Spacing.sm }]}>
+            {routeDetailState === 'not-found'
+              ? 'This Route may have been deleted or is not available to this account.'
+              : routeDetailState === 'error'
+                ? 'The Route could not be loaded. Check your connection and try again.'
+                : 'Preparing the saved Route…'}
+          </Text>
+          {routeDetailState === 'error' ? (
+            <View style={{ marginTop: Spacing.lg }}>
+              <PrimaryButton label="Try Again" onPress={() => { void loadRouteDetail(targetRouteId); }} />
             </View>
           ) : null}
-          <View style={styles.singleSessionStats}>
-            <View style={styles.singleStat}>
-              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{dist.format(selectedSession.distanceM, 1)}</Text>
-              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>{dist.unit}</Text>
-            </View>
-            <View style={styles.singleStat}>
-              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{formatDuration(selectedSession.durationS)}</Text>
-              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>time</Text>
-            </View>
-            <View style={styles.singleStat}>
-              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>
-                {selectedSession.activityMode === 'running'
-                  ? formatActivityPace(selectedSession.durationS, selectedSession.distanceM, dist.imperial)
-                  : `+${dist.formatElevation(selectedSession.elevationGainM ?? 0)}${dist.elevUnit}`}
-              </Text>
-              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>
-                {selectedSession.activityMode === 'running' ? `/${dist.unit}` : 'elev'}
-              </Text>
-            </View>
-          </View>
-          {/* Meta row: activity type · date · time-of-day (concept crops/02). */}
-          <View style={styles.detailMetaRow}>
-            {selectedSession.activityMode === 'running' ? (
-              <RunningIcon size={14} color={visualTheme.iconInactive} />
-            ) : (
-              <HikingIcon size={14} color={visualTheme.iconInactive} />
-            )}
-            <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>
-              {selectedSession.activityMode === 'running' ? 'Running' : 'Hiking'}
-              {'  ·  '}
-              {formatDate(selectedSession.startedAt)}
-              {'  ·  '}
-              {new Date(selectedSession.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-            </Text>
-          </View>
-          {selectedSession.syncState !== 'synced' ? (
-            <View style={styles.detailMetaRow}>
-              <Icon name="CloudOff" size={13} color={visualTheme.iconInactive} strokeWidth={2} />
-              <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>
-                {selectedSession.syncState === 'syncing'
-                  ? 'Syncing…'
-                  : selectedSession.syncState === 'sync_error'
-                    ? 'Sync issue · Retrying'
-                    : 'Waiting to sync'}
-              </Text>
-            </View>
-          ) : null}
-          {isQaReviewClone ? (
-            <View style={[styles.detailMetaRow, { marginTop: Spacing.sm }]}>
-              <Icon name="Lock" size={13} color={visualTheme.iconInactive} strokeWidth={2} />
-              <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Read-only · rename, delete, Save as Route, sync, Memory and stats are disabled</Text>
-            </View>
-          ) : <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.actionPillDanger, { flex: 1, backgroundColor: visualTheme.surface, borderColor: visualTheme.destructive }, deleteConfirm && { backgroundColor: visualTheme.destructive, borderColor: visualTheme.destructive }]}
-              onPress={() => {
-                if (!deleteConfirm) { setDeleteConfirm(true); return; }
-                void deleteSelectedActivity();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Delete hike"
+        </View>
+      ) : targetSessionId && selectedSession ? (
+        <>
+          <View style={[styles.singleSessionPanel, styles.activityDetailPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
+            <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
+            <ScrollView
+              style={styles.activityDetailScroll}
+              contentContainerStyle={styles.activityDetailContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? visualTheme.onPrimary : visualTheme.destructive} strokeWidth={2} />
-              <Text style={[styles.actionPillDangerText, { color: deleteConfirm ? visualTheme.onPrimary : visualTheme.destructive }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.actionPillPrimary,
-                { flex: 1, backgroundColor: visualTheme.primary },
-                loadedTrackPoints == null || loadedTrackPoints.length < 2 ? { opacity: 0.4 } : undefined,
-              ]}
-              disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}
-              onPress={() => {
-                const ts = selectedSession;
-                const realSegments = segmentTrace(loadedTrackPoints ?? []).segments
-                  .filter(segment => segment.length >= 2);
-                const openSegment = (segment: typeof realSegments[number]) => {
-                  crashLogger.breadcrumb(`saveroute:nav-to-editor session=${ts.id} segment=${segment[0]?.segmentId ?? 'legacy'}`);
-                  (nav as any).navigate('RouteEditor', {
-                    fromSessionId: ts.id,
-                    fromSessionTrackPoints: segment.map(p => ({
-                    lat: p.lat,
-                    lng: p.lng,
-                    alt: p.alt ?? null,
-                    t: p.t,
-                    accuracy: (p as any).accuracy ?? null,
-                    })),
-                  });
-                };
-                if (realSegments.length <= 1) {
-                  if (realSegments[0]) openSegment(realSegments[0]);
-                  return;
-                }
-                Alert.alert(
-                  'Choose a recorded segment',
-                  'The dashed gaps were not recorded and cannot become route geometry. Choose one real segment to edit.',
-                  [
-                    ...realSegments.map((segment, index) => ({
-                      text: `Segment ${index + 1}`,
-                      onPress: () => openSegment(segment),
-                    })),
-                    { text: 'Cancel', style: 'cancel' as const },
-                  ],
-                );
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Save as route"
-            >
-              <Icon name="Route" size={IconSize.sm} color="#fff" strokeWidth={2} />
-              <Text style={styles.actionPillPrimaryText}>Save as Route</Text>
-            </TouchableOpacity>
-          </View>}
+              <View style={{ marginBottom: Spacing.xs }}>
+                {renameEditing ? (
+                  <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
+                    <TextInput
+                      style={[styles.renameInput, { color: visualTheme.foreground, borderBottomColor: visualTheme.primary }]}
+                      value={renameText}
+                      onChangeText={setRenameText}
+                      autoFocus
+                      maxLength={60}
+                      onSubmitEditing={() => { void commitActivityRename(); }}
+                      editable={!renameSaving}
+                      returnKeyType="done"
+                      placeholder={selectedSession.activityMode === 'running' ? 'Run name' : 'Hike name'}
+                      placeholderTextColor={visualTheme.muted}
+                    />
+                    {renameSaving ? <ActivityIndicator size="small" color={visualTheme.primary} /> : (
+                      <TouchableOpacity
+                        onPress={() => { void commitActivityRename(); }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityLabel="Save new Activity name"
+                      >
+                        <Icon name="Check" size={20} color={visualTheme.iconActive} strokeWidth={2.5} />
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => setRenameEditing(false)}
+                      disabled={renameSaving}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Cancel rename"
+                    >
+                      <Icon name="X" size={20} color={visualTheme.iconInactive} strokeWidth={2.5} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    disabled={isQaReviewClone}
+                    onPress={() => {
+                      setRenameText(selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike'));
+                      setRenameEditing(true);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Rename ${selectedSession.activityMode === 'running' ? 'Run' : 'Hike'} Activity`}
+                    accessibilityHint="Double tap to edit the Activity name"
+                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.detailTitle, { color: visualTheme.foreground }]} numberOfLines={2}>
+                        {selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike')}
+                      </Text>
+                      {!isQaReviewClone ? <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} /> : null}
+                    </View>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.detailMetaRow}>
+                {selectedSession.activityMode === 'running' ? (
+                  <RunningIcon size={14} color={visualTheme.iconInactive} />
+                ) : (
+                  <HikingIcon size={14} color={visualTheme.iconInactive} />
+                )}
+                <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>
+                  {selectedSession.activityMode === 'running' ? 'Run' : 'Hike'}
+                  {'  ·  '}
+                  {formatDate(selectedSession.startedAt)}
+                  {'  ·  '}
+                  {new Date(selectedSession.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+
+              {isQaReviewClone ? (
+                <View style={styles.detailMetaRow} testID="qa-snap-review-clone-label">
+                  <Icon name="Eye" size={13} color={visualTheme.iconActive} strokeWidth={2} />
+                  <Text style={[styles.detailMetaText, { color: visualTheme.primary, fontWeight: '700' }]}>QA / SNAP REVIEW CLONE · NO PRODUCT EFFECTS</Text>
+                </View>
+              ) : null}
+
+              <View style={[styles.singleSessionStats, styles.activityMetrics, { borderColor: visualTheme.borderSubtle }]}>
+                <View style={[styles.singleStat, styles.activityMetricStat]}>
+                  <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{dist.format(selectedSession.distanceM, 1)}</Text>
+                  <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>{selectedMetricLabels[0]} · {dist.unit}</Text>
+                </View>
+                <View style={[styles.singleStatDivider, { backgroundColor: visualTheme.borderSubtle }]} />
+                <View style={[styles.singleStat, styles.activityMetricStat]}>
+                  <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{formatDuration(selectedSession.durationS)}</Text>
+                  <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>{selectedMetricLabels[1]}</Text>
+                </View>
+                <View style={[styles.singleStatDivider, { backgroundColor: visualTheme.borderSubtle }]} />
+                <View style={[styles.singleStat, styles.activityMetricStat]}>
+                  <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>
+                    {selectedSession.activityMode === 'running'
+                      ? formatAverageActivityPace(selectedSession.durationS, selectedSession.distanceM, dist.imperial)
+                      : `+${dist.formatElevation(selectedSession.elevationGainM ?? 0)}${dist.elevUnit}`}
+                  </Text>
+                  <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>
+                    {selectedMetricLabels[2]}{selectedSession.activityMode === 'running' ? ` · /${dist.unit}` : ''}
+                  </Text>
+                </View>
+              </View>
+
+              {selectedActivityNotices.length > 0 ? (
+                <ContentSurface level="record" style={styles.activityStateSurface} testID="activity-route-state-surface">
+                  {selectedActivityNotices.map(notice => {
+                    const iconName: IconName = notice.kind === 'sync'
+                      ? 'CloudOff'
+                      : notice.kind === 'gap'
+                        ? 'Route'
+                        : notice.kind === 'route-review'
+                          ? 'TriangleAlert'
+                          : 'Map';
+                    const content = (
+                      <>
+                        <Icon
+                          name={iconName}
+                          size={15}
+                          color={notice.action ? visualTheme.destructive : visualTheme.iconActive}
+                          strokeWidth={2.2}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.activityStateLabel, { color: visualTheme.foreground }]}>{notice.title}</Text>
+                          <Text style={[styles.activityStateDetail, { color: visualTheme.foregroundSecondary }]}>{notice.detail}</Text>
+                        </View>
+                        {notice.action ? <Icon name="RotateCcw" size={14} color={visualTheme.destructive} strokeWidth={2.2} /> : null}
+                      </>
+                    );
+                    return notice.action ? (
+                      <TouchableOpacity
+                        key={`${notice.kind}-${notice.title}`}
+                        style={styles.activityStateRow}
+                        onPress={() => { void import('../services/syncDaemon').then(({ drainPending }) => drainPending()); }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Retry Activity sync"
+                      >
+                        {content}
+                      </TouchableOpacity>
+                    ) : (
+                      <View key={`${notice.kind}-${notice.title}`} style={styles.activityStateRow}>{content}</View>
+                    );
+                  })}
+                </ContentSurface>
+              ) : null}
+
+              {routeFlags.length > 0 ? (
+                <View style={styles.linkedCairnSection} testID="activity-linked-cairns">
+                  <View style={styles.sectionHeadingRow}>
+                    <Text style={[styles.sectionHeading, { color: visualTheme.foreground }]}>Cairns from this Activity</Text>
+                    <Text style={[styles.sectionCount, { color: visualTheme.foregroundSecondary }]}>{routeFlags.length}</Text>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.linkedCairnList}>
+                    {routeFlags.map(marker => {
+                      const meta = MARKER_META[marker.type] || MARKER_META.free;
+                      const decoded = splitTitleBody(marker.note ?? '');
+                      const title = cairnDisplayTitle(decoded.title, decoded.body, marker.createdAt);
+                      return (
+                        <ContentSurface
+                          key={marker.id}
+                          level="record"
+                          onPress={() => nav.navigate('MarkerDetail', { markerId: marker.id })}
+                          style={styles.linkedCairnCard}
+                          testID={`activity-linked-cairn-${marker.id}`}
+                        >
+                          <View style={styles.linkedCairnRow}>
+                            <View style={[styles.linkedCairnIcon, { backgroundColor: visualTheme.surface, borderColor: visualTheme.borderStrong }]}>
+                              <Icon name={meta.iconName as IconName} size={17} color={meta.color} strokeWidth={2} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.linkedCairnTitle, { color: visualTheme.foreground }]} numberOfLines={1}>{title}</Text>
+                              <Text style={[styles.linkedCairnMeta, { color: visualTheme.foregroundSecondary }]} numberOfLines={1}>
+                                {marker.syncState === 'failed' ? 'Sync needs attention' : meta.label}
+                              </Text>
+                            </View>
+                            <Icon name="ChevronRight" size={15} color={visualTheme.iconInactive} strokeWidth={2} />
+                          </View>
+                        </ContentSurface>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              ) : null}
+
+              {isQaReviewClone ? (
+                <View style={[styles.detailMetaRow, { marginTop: Spacing.sm }]}>
+                  <Icon name="Lock" size={13} color={visualTheme.iconInactive} strokeWidth={2} />
+                  <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Read-only · rename, delete, Save as Route, sync, Memory and stats are disabled</Text>
+                </View>
+              ) : (
+                <View style={styles.activityActions}>
+                  <PrimaryButton
+                    label={selectedActivityRouteState?.routeReadiness === 'ready' ? 'Save as Route' : 'Review Route'}
+                    onPress={openActivityRouteDraft}
+                    disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}
+                    loading={routeDraftOpening}
+                    renderIcon={color => <Icon name="Route" size={IconSize.sm} color={color} strokeWidth={2} />}
+                    testID="activity-save-as-route"
+                  />
+                  <TouchableOpacity
+                    style={styles.activityDeleteAction}
+                    onPress={() => setDeleteConfirm(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete Activity"
+                    testID="activity-delete-action"
+                  >
+                    <Icon name="Trash2" size={15} color={visualTheme.destructive} strokeWidth={2} />
+                    <Text style={[styles.activityDeleteText, { color: visualTheme.destructive }]}>Delete Activity</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+
+          <ModalCard
+            visible={deleteConfirm}
+            onDismiss={() => !deleteSaving && setDeleteConfirm(false)}
+            dismissible={!deleteSaving}
+            testID="activity-delete-confirmation"
+          >
+            <ModalCardHeader
+              title="Delete Activity?"
+              body="This removes the Activity record. Cairns, independent Routes, and Memory already earned stay in place."
+              onClose={deleteSaving ? undefined : () => setDeleteConfirm(false)}
+            />
+            <View style={styles.deleteModalActions}>
+              <PrimaryButton
+                label="Delete Activity"
+                variant="destructive"
+                onPress={() => { void deleteSelectedActivity(); }}
+                loading={deleteSaving}
+                testID="activity-delete-confirm"
+              />
+              <PrimaryButton
+                label="Keep Activity"
+                variant="secondary"
+                onPress={() => setDeleteConfirm(false)}
+                disabled={deleteSaving}
+              />
+            </View>
+          </ModalCard>
+        </>
+      ) : targetSessionId ? (
+        <View
+          style={[
+            styles.singleSessionPanel,
+            { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow },
+          ]}
+          testID="activity-detail-unavailable"
+        >
+          <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
+          <View style={styles.emptyState}>
+            <Icon name="Map" size={34} color={visualTheme.iconInactive} strokeWidth={1.7} />
+            <Text style={[styles.emptyTitle, { color: visualTheme.foreground }]}>Activity unavailable</Text>
+            <Text style={[styles.emptySubtitle, { color: visualTheme.foregroundSecondary }]}>This Activity could not be found in local Activity history.</Text>
+            <PrimaryButton
+              label="Back to Activities"
+              variant="secondary"
+              onPress={returnToActivities}
+            />
+          </View>
         </View>
       ) : (
       <View style={styles.listPanel}>
@@ -1937,6 +2134,31 @@ export function MapHistoryScreen() {
   );
 }
 
+/**
+ * Parameterless MapHistory was a second, divergent personal-history library.
+ * Keep old deep links safe by redirecting them to Trails while object-specific
+ * Activity/Route Detail remains here.
+ */
+function TrailsIndexRedirect() {
+  const nav = useNavigation<Nav>();
+  const theme = useVisualTheme();
+  useEffect(() => {
+    nav.replace('Routes', { initialTab: 'activities' });
+  }, [nav]);
+  return (
+    <View style={[styles.legacyRedirect, { backgroundColor: theme.background }]} testID="map-history-index-redirect">
+      <ActivityIndicator color={theme.primary} />
+      <Text style={[styles.legacyRedirectText, { color: theme.textSecondary }]}>Opening Trails…</Text>
+    </View>
+  );
+}
+
+export function MapHistoryScreen() {
+  const route = useRoute<any>();
+  const hasObjectTarget = Boolean(route.params?.sessionId || route.params?.routeId || route.params?.qaReviewClone);
+  return hasObjectTarget ? <MapHistoryObjectScreen /> : <TrailsIndexRedirect />;
+}
+
 // ── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   // 2026-08-16 Round 6: concept uses paper bg (#F4EFE6), not Colors.mapBg (sage green).
@@ -2047,12 +2269,27 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08, shadowRadius: 16, elevation: 6,
   },
+  activityDetailPanel: {
+    maxHeight: Math.min(H * 0.68, 580),
+    paddingBottom: Spacing.md,
+  },
+  activityDetailScroll: { flexShrink: 1 },
+  activityDetailContent: { paddingBottom: Spacing.md },
   singleSessionStats: {
     flexDirection: 'row', justifyContent: 'space-around', marginBottom: Spacing.lg,
   },
   singleStat: { alignItems: 'center', gap: 4 },
   singleStatValue: { fontSize: FontSize.h2, fontWeight: '700', color: Colors.textPrimary },
   singleStatLabel: { fontSize: FontSize.small, color: Colors.textSecondary },
+  activityMetrics: {
+    alignItems: 'stretch',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    paddingVertical: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  activityMetricStat: { flex: 1, justifyContent: 'center', paddingHorizontal: 3 },
+  singleStatDivider: { width: 1, height: 40, alignSelf: 'center' },
 
   listPanel: {
     backgroundColor: '#FFFFFF',
@@ -2158,6 +2395,70 @@ const styles = StyleSheet.create({
   detailMetaText: {
     fontSize: FontSize.caption, fontWeight: '600', color: Colors.textSecondary,
   },
+  activityStateSurface: {
+    marginBottom: Spacing.md,
+    gap: Spacing.md,
+  },
+  activityStateRow: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+  },
+  activityStateLabel: { fontSize: FontSize.caption, fontWeight: '600' },
+  activityStateDetail: { fontSize: FontSize.small, lineHeight: 17, marginTop: 2 },
+  linkedCairnSection: { marginBottom: Spacing.md },
+  sectionHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
+  sectionHeading: { fontSize: FontSize.caption, fontWeight: '700' },
+  sectionCount: { fontSize: FontSize.small, fontWeight: '600' },
+  linkedCairnList: { gap: Spacing.sm, paddingRight: Spacing.sm },
+  linkedCairnCard: { width: 244, paddingVertical: Spacing.sm },
+  linkedCairnRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  linkedCairnIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linkedCairnTitle: { fontSize: FontSize.caption, fontWeight: '700' },
+  linkedCairnMeta: { fontSize: FontSize.small, marginTop: 2 },
+  activityActions: { gap: Spacing.sm, marginTop: Spacing.xs },
+  activityDeleteAction: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+  },
+  activityDeleteText: { fontSize: FontSize.caption, fontWeight: '600' },
+  deleteModalActions: { gap: Spacing.sm },
+  routeActions: { gap: Spacing.sm, marginTop: Spacing.lg },
+  routeOriginBlock: { gap: 3, marginBottom: Spacing.md },
+  routeSyncBlock: { gap: Spacing.xs, marginBottom: Spacing.sm, alignItems: 'flex-start' },
+  routeOriginText: { fontSize: FontSize.caption, lineHeight: 19, fontWeight: '600' },
+  routeUpdatedText: { fontSize: FontSize.small, lineHeight: 17, marginTop: 2 },
+  routeStateText: { fontSize: FontSize.small, lineHeight: 18, marginBottom: Spacing.xs },
+  routeMaintenanceRow: { flexDirection: 'row', gap: Spacing.sm },
+  routeMaintenanceAction: {
+    flex: 1,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: Radius.button,
+  },
+  routeMaintenanceText: { fontSize: FontSize.caption, fontWeight: '700' },
+  legacyRedirect: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
+  legacyRedirectText: { fontSize: FontSize.caption, fontWeight: '600' },
   // Concept action row: Delete (red outline pill) + Save as Route (deep
   // green pill), side-by-side, equal flex. Route Detail uses the same
   // pill styles stacked (gap wraps them). Auth submit pill spec:

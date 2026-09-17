@@ -4,6 +4,7 @@ import {
   calculateLifecycleDurationMs,
   isCredibleMotionSample,
   saveEligibility,
+  resolveSegmentProvenance,
   segmentTrace,
   shouldStartNewSegment,
   toServerPoint,
@@ -140,6 +141,61 @@ describe('segmented Activity truth', () => {
       acc: 7,
       segment_id: 'seg-1',
       segment_start_reason: 'gps-reacquired',
+    });
+  });
+
+  test('a late old-provider segment cannot revert provenance after reacquisition', () => {
+    expect(resolveSegmentProvenance({
+      tailSegmentId: 'segment-new',
+      currentSegmentId: 'segment-new',
+      incomingSegmentId: 'segment-old',
+      physicalGap: false,
+    })).toEqual({
+      segmentId: 'segment-new',
+      startsNewSegment: false,
+      ignoredStaleIncoming: true,
+    });
+  });
+
+  test('the first accepted point establishes its supplied segment identity', () => {
+    expect(resolveSegmentProvenance({
+      tailSegmentId: null,
+      currentSegmentId: 'provisional-start',
+      incomingSegmentId: 'provider-start',
+      physicalGap: false,
+    })).toMatchObject({
+      segmentId: 'provider-start',
+      startsNewSegment: false,
+      ignoredStaleIncoming: false,
+    });
+  });
+
+  test('an explicit durable reacquisition boundary remains authoritative', () => {
+    expect(resolveSegmentProvenance({
+      tailSegmentId: 'segment-old',
+      currentSegmentId: 'segment-old',
+      incomingSegmentId: 'segment-new',
+      incomingStartReason: 'gps-reacquired',
+      physicalGap: false,
+    })).toEqual({
+      segmentId: 'segment-new',
+      startsNewSegment: true,
+      startReason: 'gps-reacquired',
+      ignoredStaleIncoming: false,
+    });
+  });
+
+  test('an explicit boundary without a provider id allocates instead of reusing the old segment', () => {
+    expect(resolveSegmentProvenance({
+      tailSegmentId: 'segment-old',
+      currentSegmentId: 'segment-old',
+      incomingStartReason: 'gps-reacquired',
+      physicalGap: false,
+    })).toEqual({
+      segmentId: null,
+      startsNewSegment: true,
+      startReason: 'gps-reacquired',
+      ignoredStaleIncoming: false,
     });
   });
 });

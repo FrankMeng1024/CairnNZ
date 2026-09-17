@@ -17,6 +17,13 @@ describe('activity operational state authority', () => {
     expect(deriveActivityOperationalState({ trackingStatus, isFinishing, hasRecovery })).toBe(expected);
   });
 
+  it('represents source transitions separately and never removes Finish during recovery', () => {
+    expect(deriveActivityOperationalState({ trackingStatus: 'paused', transitionState: 'resuming' })).toBe('resuming');
+    expect(deriveActivityOperationalState({ trackingStatus: 'paused', transitionState: 'pausing' })).toBe('pausing');
+    expect(canFinishActivity('resuming')).toBe(true);
+    expect(canFinishActivity('pausing')).toBe(true);
+  });
+
   it('never exposes Start while a session control family is visible', () => {
     for (const state of ['starting', 'tracking', 'paused', 'finishing', 'recovery'] as const) {
       expect(canStartActivity(state)).toBe(false);
@@ -30,4 +37,3 @@ describe('activity operational state authority', () => {
     expect(canFinishActivity('finishing')).toBe(false);
   });
 });
-

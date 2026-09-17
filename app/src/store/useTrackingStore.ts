@@ -25,7 +25,7 @@ import {
 import { getCurrentRegion } from '../config/regions';
 import { resolveMapboxPublicTokenAuthority } from '../config/mapbox';
 import { useSessionStore } from './useSessionStore';
-import type { TrackPoint, ActivityMode } from './useSessionStore';
+import type { TrackPoint, ActivityMode, TrackingSession } from './useSessionStore';
 import type { Coordinate } from '../utils/geo';
 import { debugLogger } from '../services/debugLogger';
 import { batteryMonitor } from '../services/batteryMonitor';
@@ -52,7 +52,10 @@ import {
   evaluateMatchedGeometryQuality,
   preserveTrustedRouteEndpoints,
 } from '../services/routing/snapTrack';
-import { reconstructPedestrianFinalRoute } from '../services/routing/pedestrianFinalRoute';
+import {
+  buildBaseFinalGeometry,
+  reconstructPedestrianFinalRoute,
+} from '../services/routing/pedestrianFinalRoute';
 import {
   BACKGROUND_LOCATION_TASK,
   registerBackgroundTask,
@@ -69,6 +72,7 @@ import {
   newSegmentId,
   saveEligibility,
   segmentTrace,
+  resolveSegmentProvenance,
   shouldStartNewSegment,
   toServerPoint,
   type SegmentedTrackPoint,
@@ -146,6 +150,8 @@ import {
   planRealLocationLifecycleTransition,
 } from '../features/activity/activityLocationLifecycle';
 import { deriveActivityLocationHealth } from '../features/activity/activityLocationHealth';
+import type { ActivityTransitionState } from '../features/activity/activityOperationalState';
+import { appendCausalLivePoint } from '../features/activity/causalLiveRoute';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
@@ -162,6 +168,13 @@ let simulatorSourceActive = false;
 let backgroundGrantedCached = false;
 let pointIngestTail: Promise<void> = Promise.resolve();
 let acceptanceFenceCutoffMs: number | null = null;
+/** Once Finish snapshots canonical truth, a slow pre-fence WAL append may
+ * complete durably but must never publish into the completed/reset session. */
+let finishAcceptanceSnapshotClosed = false;
+let activityLifecycleTransitionEpoch = 0;
+let resumeTransitionInFlight: Promise<boolean> | null = null;
+let pauseTransitionInFlight: Promise<void> | null = null;
+let realLocationLifecycleIntentEpoch = 0;
 let realGpsContinuitySessionId: string | null = null;
 let realGpsContinuityState: RealGpsContinuityState = createRealGpsContinuityState();
 let realGpsRawOrdinal = 0;
@@ -174,6 +187,28 @@ let realForegroundCadenceExperiment: LocationCadenceExperiment = {
 };
 let previousRealRawDiagnostic: { lat: number; lng: number; t: number } | null = null;
 let latestRealCanonicalDecisionReason: string | null = null;
+
+function settleWithin<T>(work: Promise<T>, budgetMs: number, fallback: T): Promise<T> {
+  return new Promise(resolve => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve(fallback);
+    }, budgetMs);
+    work.then(value => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    }).catch(() => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(fallback);
+    });
+  });
+}
 type RealProviderKind = 'foreground' | 'background';
 let realProviderEfficiency = {
   foreground: { activeSince: null as number | null, elapsedMs: 0, starts: 0, stops: 0 },
@@ -477,8 +512,9 @@ function emitRealGpsDecision(
   decision: MotionDecision,
   decisionStartedAtMs: number,
   rawOrdinal: number,
+  coordinateSource: 'real' | 'simulator' = 'real',
 ): void {
-  latestRealCanonicalDecisionReason = decision.reason;
+  if (coordinateSource === 'real') latestRealCanonicalDecisionReason = decision.reason;
   const fields = {
     filterVersion: REAL_GPS_CONTINUITY_VERSION,
     rawOrdinal,
@@ -525,8 +561,8 @@ function emitRealGpsDecision(
     {
       userId: owner.ownerUserId,
       clientActivityId: owner.sessionId,
-      qaSessionId: realActivityQaSessionId,
-      coordinateSource: 'real',
+      qaSessionId: coordinateSource === 'real' ? realActivityQaSessionId : undefined,
+      coordinateSource,
     },
   );
   if (decision.candidateEvent) {
@@ -545,8 +581,8 @@ function emitRealGpsDecision(
     }, {
       userId: owner.ownerUserId,
       clientActivityId: owner.sessionId,
-      qaSessionId: realActivityQaSessionId,
-      coordinateSource: 'real',
+      qaSessionId: coordinateSource === 'real' ? realActivityQaSessionId : undefined,
+      coordinateSource,
     });
     appendSimulatorLog(
       decision.candidateEvent.type === 'candidate_confirmed' ? 'GPS_ACCEPT' : 'GPS_REJECT',
@@ -568,8 +604,8 @@ function emitRealGpsDecision(
       {
         userId: owner.ownerUserId,
         clientActivityId: owner.sessionId,
-        qaSessionId: realActivityQaSessionId,
-        coordinateSource: 'real',
+        qaSessionId: coordinateSource === 'real' ? realActivityQaSessionId : undefined,
+        coordinateSource,
       },
     );
   }
@@ -678,6 +714,7 @@ async function persistCurrentRealBackgroundContext(): Promise<boolean> {
   if (
     state.locationProviderSource !== 'real'
     || (state.status !== 'tracking' && state.status !== 'requesting')
+    || state.isFinishing
     || !state.sessionId
     || !state.ownerUserId
     || !state.liveOwnerGeneration
@@ -728,8 +765,8 @@ function schedulePendingCandidateTimeout(owner: TrackingState): void {
     }, {
       userId: owner.ownerUserId,
       clientActivityId: activityId,
-      qaSessionId: realActivityQaSessionId,
-      coordinateSource: 'real',
+      qaSessionId: owner.locationProviderSource === 'real' ? realActivityQaSessionId : undefined,
+      coordinateSource: owner.locationProviderSource === 'simulator' ? 'simulator' : 'real',
     });
     void persistCurrentRealBackgroundContext();
   }, candidateMaxAgeMs);
@@ -752,6 +789,9 @@ export interface ActivityCoordinate extends Coordinate {
   segmentId?: string;
   segmentStartReason?: SegmentStartReason;
   source?: 'foreground' | 'background' | 'significant-change' | 'simulator';
+  /** Debug provenance only. Raw GPS still enters the production continuity
+   * classifier; Clean Path preserves the legacy exact Simulator contract. */
+  simulatorObservationMode?: 'clean-path' | 'raw-gps';
   /** A headless point durably committed before Finish disabled the lease. */
   committedBeforeFence?: boolean;
   /** Background TaskManager already durably committed this accepted point. */
@@ -763,6 +803,8 @@ export interface ActivityCoordinate extends Coordinate {
 
 interface TrackingState {
   status: TrackingStatus;
+  /** Native/storage transition truth. UI must not infer this from status. */
+  transitionState: ActivityTransitionState;
   /** Store-boundary finish lock. UI disabling alone cannot prevent two
    * concurrent stop/save pipelines from persisting the same session twice. */
   isFinishing: boolean;
@@ -801,7 +843,7 @@ interface TrackingState {
    *  session finalize as `route_points_raw` for debug / future
    *  re-processing with new algorithms. NOT used for rendering or
    *  distance — those use `trackPoints` (clean) and
-   *  `trackPointsSmoothed` (Kalman-smoothed clean). */
+   *  `trackPointsSmoothed` (bounded causal display geometry). */
   trackPointsRaw: TrackPoint[];
   markerIds: string[];         // markers planted during this session
   pausePins: Coordinate[];     // locations where user paused (rendered as flag pins)
@@ -878,7 +920,10 @@ interface TrackingState {
   // Optional sessionName: when supplied (from the post-stop summary sheet)
   // the saved session is tagged with this name; otherwise the session
   // gets a default name on the consumer side ("Hike — DD/MM/YYYY").
-  stopTracking: (sessionName?: string) => Promise<boolean>;
+  stopTracking: (
+    sessionName?: string,
+    onLocalCommitted?: (clientActivityId: string) => void,
+  ) => Promise<boolean>;
   pauseTracking: () => Promise<void>;
   resumeTracking: () => Promise<boolean>;
   addTrackPoint: (coord: ActivityCoordinate, timestamp?: number) => Promise<ActivityLocationAcceptance>;
@@ -916,6 +961,7 @@ interface TrackingState {
 
 const initialState = {
   status: 'idle' as TrackingStatus,
+  transitionState: 'idle' as ActivityTransitionState,
   isFinishing: false,
   startError: null as TrackingStartError | null,
   sessionId: null,
@@ -1070,6 +1116,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // Reset module-level state from any previous session
     lastFlushedIdx = 0;
     acceptanceFenceCutoffMs = null;
+    finishAcceptanceSnapshotClosed = false;
     kalmanLat = null;
     kalmanLng = null;
 
@@ -1594,6 +1641,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             const { refreshToken } = await import('../services/authService');
             const result = await refreshToken();
             if (result.token) {
+              const { notifyMemoryAuthRefreshed } = await import('../services/memorySync');
+              notifyMemoryAuthRefreshed(String(get().ownerUserId ?? ''));
               crashLogger.breadcrumb('hiking_refresh:success');
             } else {
               crashLogger.breadcrumb(`hiking_refresh:fail reason=${result.error ?? 'unknown'} authInvalid=${!!result.authInvalid}`);
@@ -1661,13 +1710,17 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
   },
 
-  stopTracking: async (sessionName?: string) => {
+  stopTracking: async (sessionName?: string, onLocalCommitted?: (clientActivityId: string) => void) => {
     const stopEntry = get();
     if (stopEntry.status === 'idle' || stopEntry.isFinishing) return false;
     const finishOwnerUserId = String(stopEntry.ownerUserId ?? '');
     if (!finishOwnerUserId || String(useAppStore.getState().user?.id ?? '') !== finishOwnerUserId) {
       return false;
     }
+    // Finish supersedes a pending Pause/Resume. Those tasks must not publish a
+    // late lifecycle result after this point.
+    activityLifecycleTransitionEpoch += 1;
+    realLocationLifecycleIntentEpoch += 1;
     const saveTimelineStartedAt = Date.now();
     const recordSavePhase = (phase: string, phaseStartedAt: number, details: Record<string, unknown> = {}) => {
       appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_save_phase_timing', {
@@ -1687,8 +1740,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       ? lifecycleDurationPatch(stopEntry)
       : null;
     acceptanceFenceCutoffMs = Date.now();
+    finishAcceptanceSnapshotClosed = false;
     stopActivityLifecycleTimer();
-    set({ ...(frozenLifecycle ?? {}), isFinishing: true });
+    set({ ...(frozenLifecycle ?? {}), isFinishing: true, transitionState: 'finishing' });
     if (frozenLifecycle && stopEntry.sessionId) {
       // Finish is already an acceptance fence. Persist the frozen lifecycle
       // clock before any network/review await so a crash cannot resurrect it
@@ -1713,8 +1767,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     try { appStateSubscription?.remove(); } catch { /* no-op */ }
     appStateSubscription = null;
     deactivateForegroundSource();
+    let sourceStoppedWithinBudget = true;
     if (stopEntry.locationProviderSource === 'real') {
-      await stopRealBackgroundSourceForHandoff();
+      sourceStoppedWithinBudget = await settleWithin(
+        stopRealBackgroundSourceForHandoff().then(() => true),
+        2_000,
+        false,
+      );
     } else {
       deactivateBackgroundSource();
     }
@@ -1722,32 +1781,41 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       pauseSimulatorProvider();
       simulatorSourceActive = false;
     }
-    const finishFenceDurable = await persistBackgroundContext(null, false);
+    const finishFenceDurable = await settleWithin(persistBackgroundContext(null, false), 2_000, false);
     if (!finishFenceDurable) {
-      acceptanceFenceCutoffMs = null;
-      set({
-        status: 'paused',
-        isFinishing: false,
-        startError: 'initialization-failed',
-        pendingSegmentStartReason: 'resume',
+      // The in-memory acceptance fence and stopped native producers already
+      // freeze current truth. A failed ancillary lease write must never trap
+      // the user in Signal Lost or require Resume before Finish. Continue to
+      // the local Activity commit and retain an explicit diagnostic.
+      set({ locationAvailable: false, startError: 'initialization-failed' });
+      appendSimulatorLog('ERROR', 'activity_finish_background_fence_degraded', {
+        finishContinued: true,
+        providerSource: stopEntry.locationProviderSource,
+      }, {
+        userId: finishOwnerUserId,
+        clientActivityId: stopEntry.sessionId,
+        qaSessionId: realActivityQaSessionId,
+        coordinateSource: 'none',
       });
-      Alert.alert(
-        'Could not finish safely',
-        'CairnNZ could not disable background recording. Your Activity remains recoverable and has not been saved.',
-      );
-      return false;
     }
-    if (stopEntry.locationProviderSource === 'real') {
-      await drainCommittedBackgroundLocations(true);
-    }
+    const drainedBeforeFinish = stopEntry.locationProviderSource === 'real'
+      ? await settleWithin(drainCommittedBackgroundLocations(true), 2_000, -1)
+      : 0;
     // Include every foreground fix whose acceptance pipeline began before
     // Finish froze new ingestion. Each such fix reaches disk and store state
-    // before the completion snapshot below is calculated.
-    await pointIngestTail.catch(() => {});
+    // before the completion snapshot below is calculated when it settles
+    // within the budget. A slower WAL append remains durable evidence but is
+    // fenced from publishing after this immutable completion snapshot.
+    const ingestSettledWithinBudget = await settleWithin(pointIngestTail.then(() => true), 2_000, false);
+    finishAcceptanceSnapshotClosed = true;
     acceptanceFenceCutoffMs = null;
     recordSavePhase('finish_reconciliation', saveTimelineStartedAt, {
       acceptedPointCount: get().trackPoints.length,
       rawPointCount: get().trackPointsRaw.length,
+      sourceStoppedWithinBudget,
+      drainSettledWithinBudget: drainedBeforeFinish >= 0,
+      drainedPointCount: Math.max(0, drainedBeforeFinish),
+      ingestSettledWithinBudget,
     });
 
     // v118 too-short pre-check (BEFORE any cleanup): if the session has
@@ -1795,8 +1863,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         // saves, or discards it. Keep the idempotent remote shell mapping:
         // deleting it merely because the Save UI was opened would make a
         // continued Activity split across two server identities.
-        set({ status: 'paused', lastStopReason: 'too-short', pendingSegmentStartReason: 'resume' });
-        set({ isFinishing: false });
+        finishAcceptanceSnapshotClosed = false;
+        set({ status: stopEntry.status, lastStopReason: 'too-short', transitionState: 'idle', isFinishing: false });
         return false;
       }
     }
@@ -1917,6 +1985,159 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         Date.now(),
         s.trackPoints[s.trackPoints.length - 1]?.t ?? s.startedAt,
       );
+      const canonicalSegments = segmentTrace(s.trackPoints).segments;
+      const baseFinalTrackPoints: TrackPoint[] = canonicalSegments.flatMap(segment => {
+        const first = segment[0];
+        const last = segment[segment.length - 1];
+        const base = buildBaseFinalGeometry(segment.map(point => ({
+          lat: point.lat,
+          lng: point.lng,
+          alt: point.alt,
+          t: point.t,
+          accuracy: point.accuracy,
+        })));
+        return base.points.map((point, index) => ({
+          lat: point.lat,
+          lng: point.lng,
+          alt: point.alt,
+          t: point.t ?? first.t + Math.round(
+            ((last.t - first.t) * index) / Math.max(1, base.points.length - 1),
+          ),
+          segmentId: first.segmentId,
+          ...(index === 0 && first.segmentStartReason
+            ? { segmentStartReason: first.segmentStartReason }
+            : {}),
+        }));
+      });
+      const baseRoutePayload = baseFinalTrackPoints.map(point => toServerPoint(point));
+      const rawRoutePayload = (s.trackPointsRaw.length > 0 ? s.trackPointsRaw : s.trackPoints)
+        .map(point => toServerPoint(point));
+      const baseMemoryUnsynced = useMemoryStore.getState().points
+        .filter((point: any) => !point.synced && point.ts >= s.startedAt! && point.ts <= endedAt)
+        .map((point: any) => ({
+          lat: point.lat,
+          lng: point.lng,
+          ts: Math.floor(point.ts),
+          cid: point.cid,
+        }));
+      let finishIdempotencyKey: string;
+      try {
+        finishIdempotencyKey = uuidv4();
+      } catch (uuidError) {
+        finishIdempotencyKey = `fallback-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        crashLogger.breadcrumb(`activity:finish_uuid_fallback ${String(uuidError).slice(0, 60)}`);
+      }
+      const basePayload = {
+        end_time: new Date(endedAt).toISOString(),
+        distance_m: finalStats.distanceM,
+        duration_s: finalDurationS,
+        name: finalName,
+        route_points: baseRoutePayload,
+        route_points_raw: rawRoutePayload,
+        memory_points: baseMemoryUnsynced,
+      };
+
+      // Finish authority is entirely local and offline-safe. Persist the
+      // immutable evidence plus a consumer-grade Base Final before Mapbox,
+      // Memory repair, server ACK, or completed-journal cleanup. Any later
+      // failure can therefore return a real Activity Detail, never a trapped
+      // recording or an Activity that only exists in memory.
+      const baseCommitStartedAt = Date.now();
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { savePending } = require('../services/pendingSyncStore');
+        await savePending({
+          localId: s.sessionId,
+          userId: ownerUserId,
+          remoteId,
+          idempotencyKey: finishIdempotencyKey,
+          activityMode: s.activityMode,
+          payload: basePayload,
+          createdAt: Date.now(),
+          startedAt: s.startedAt,
+          summary: {
+            startedAt: s.startedAt,
+            endedAt,
+            distanceM: finalStats.distanceM,
+            durationS: finalDurationS,
+            elevationGainM: finalStats.elevationGainM,
+            name: finalName,
+            markerIds: s.markerIds,
+          },
+          lastAttemptAt: null,
+          attemptCount: 0,
+        });
+        await useSessionStore.getState().addSession({
+          id: s.sessionId,
+          clientActivityId: s.sessionId,
+          remoteId: remoteId ?? undefined,
+          serverActivityId: remoteId ?? undefined,
+          activityMode: s.activityMode,
+          regionCode: region.code,
+          startedAt: s.startedAt,
+          endedAt,
+          durationS: finalDurationS,
+          distanceM: finalStats.distanceM,
+          elevationGainM: finalStats.elevationGainM,
+          trackPoints: baseFinalTrackPoints,
+          markerIds: s.markerIds,
+          name: finalName,
+          memoryNewCells: 0,
+          syncState: 'pending',
+          finalGeometryState: 'base_ready',
+          finalGeometryVersion: 'pedestrian-final-v2-base',
+        }, ownerUserId);
+        await completeActivity({
+          clientActivityId: s.sessionId,
+          serverActivityId: remoteId,
+          userId: ownerUserId,
+          activityMode: s.activityMode,
+          startedAt: s.startedAt,
+          endedAt,
+          lifecycle: 'completed_local',
+          syncState: 'pending',
+          locationProviderSource: s.locationProviderSource,
+        });
+        durableSaveCommitted = true;
+        recordSavePhase('base_final_local_commit', baseCommitStartedAt, {
+          canonicalPointCount: s.trackPoints.length,
+          baseDisplayPointCount: baseFinalTrackPoints.length,
+          canonicalSegmentCount: canonicalSegments.length,
+        });
+        appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_base_final_committed', {
+          algorithmVersion: 'pedestrian-final-v2-base',
+          canonicalPointCount: s.trackPoints.length,
+          displayPointCount: baseFinalTrackPoints.length,
+          segmentCount: canonicalSegments.length,
+          mapboxRequired: false,
+        }, {
+          userId: ownerUserId,
+          clientActivityId: s.sessionId,
+          qaSessionId: realActivityQaSessionId,
+          coordinateSource: 'none',
+        });
+        // Navigation may now open Activity Detail while bounded geometry and
+        // sync enhancement continue against the immutable captured snapshot.
+        // Callback failure is presentation-only and cannot undo completion.
+        try { onLocalCommitted?.(s.sessionId); } catch (callbackError) {
+          crashLogger.breadcrumb(`activity:local_commit_callback_failed ${String(callbackError).slice(0, 80)}`);
+        }
+      } catch (baseCommitError) {
+        crashLogger.breadcrumb(`activity:base_local_commit_failed ${String(baseCommitError).slice(0, 80)}`);
+        Alert.alert(
+          'Activity not saved',
+          'CairnNZ could not safely complete the local save. Your recorded Activity remains paused so you can try again.',
+        );
+        finishAcceptanceSnapshotClosed = false;
+        set({
+          status: 'paused',
+          transitionState: 'idle',
+          isFinishing: false,
+          lastStopReason: null,
+          savingHikeStep: null,
+        });
+        return false;
+      }
       // v404: final-flush 提前跑（还是 fire-and-forget，只推增量 tail）。
       // 不含 finalize —— finalize 挪到 snap 完成之后，才能带上 snapped
       // route_points。
@@ -1938,18 +2159,20 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       let snappedTrackPoints: TrackPoint[] | null = null;
       let hybridSnapUsed = false;
       let matchedSegmentCount = 0;
+      let baseFinalSegmentCount = 0;
+      let finalGeometryState: TrackingSession['finalGeometryState'] = 'base_ready';
       const matchingStartedAt = Date.now();
       try {
         const mapboxAuthority = await resolveMapboxPublicTokenAuthority();
         const mapboxToken = mapboxAuthority.token;
         let hikeSource: TrackPoint[] = s.trackPoints;
-        const sourceSegments = segmentTrace(s.trackPoints).segments;
+        const sourceSegments = canonicalSegments;
         // Matching is a bounded presentation refinement. A slightly larger
         // four-second envelope lets the longest useful segment run first while
         // preserving fast durable Save and canonical fallback on every failure.
         const matchingDeadlineMs = matchingStartedAt + 10_000;
         appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_preflight_v2', {
-          algorithmVersion: 'pedestrian-final-v1',
+          algorithmVersion: 'pedestrian-final-v2-base',
           matcherCredentialAuthority: mapboxAuthority.source,
           matcherAvailable: Boolean(mapboxToken),
           segmentCount: sourceSegments.length,
@@ -1974,7 +2197,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 reason: 'finish-budget-exhausted',
               }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
               appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_segment_v2', {
-                algorithmVersion: 'pedestrian-final-v1',
+                algorithmVersion: 'pedestrian-final-v2-base',
                 segmentIndex,
                 priority,
                 pointCount: segment.length,
@@ -2021,7 +2244,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                   reason: fallbackReason,
                 }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
                 appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_segment_v2', {
-                  algorithmVersion: 'pedestrian-final-v1',
+                  algorithmVersion: 'pedestrian-final-v2-base',
                   segmentIndex,
                   priority,
                   pointCount: segment.length,
@@ -2039,7 +2262,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               const unanchoredQuality = evaluateMatchedGeometryQuality(canonicalInput, snapRes.points);
               if (!endpointCoverage.eligibleForAnchoring) {
                 appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_segment_v2', {
-                  algorithmVersion: 'pedestrian-final-v1',
+                  algorithmVersion: 'pedestrian-final-v2-base',
                   segmentIndex,
                   priority,
                   pointCount: segment.length,
@@ -2063,7 +2286,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                   quality: finalQuality,
                 }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
                 appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_segment_v2', {
-                  algorithmVersion: 'pedestrian-final-v1',
+                  algorithmVersion: 'pedestrian-final-v2-base',
                   segmentIndex,
                   priority,
                   pointCount: segment.length,
@@ -2090,8 +2313,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                   ? { segmentStartReason: first.segmentStartReason }
                   : {}),
               }));
-              hybridSnapUsed = hybridSnapUsed || snapRes.stats.canonicalDerivedSectionCount > 0;
-              matchedSegmentCount += 1;
+              const networkDistanceAccepted = snapRes.stats.acceptedMatchedDistanceM > 0.5;
+              hybridSnapUsed = hybridSnapUsed || (
+                networkDistanceAccepted && snapRes.stats.canonicalDerivedSectionCount > 0
+              );
+              if (networkDistanceAccepted) matchedSegmentCount += 1;
+              else baseFinalSegmentCount += 1;
               appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_map_matching_completed', {
                 segmentIndex,
                 rawPointCount: segment.length,
@@ -2103,12 +2330,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 stats: snapRes.stats,
               }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
               appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_match_segment_v2', {
-                algorithmVersion: 'pedestrian-final-v1',
+                algorithmVersion: 'pedestrian-final-v2-base',
                 segmentIndex,
                 priority,
                 pointCount: segment.length,
                 matchedPointCount: anchored.length,
-                decision: snapRes.stats.canonicalFallbackDistanceM > 0.5 ? 'hybrid' : 'matched',
+                decision: !networkDistanceAccepted
+                  ? 'base-final'
+                  : snapRes.stats.canonicalFallbackDistanceM > 0.5 ? 'hybrid' : 'matched',
                 matchedSubsectionCount: snapRes.stats.matchedIslandCount,
                 canonicalFallbackSubsectionCount: snapRes.stats.canonicalDerivedSectionCount,
                 matchedDistanceM: snapRes.stats.acceptedMatchedDistanceM,
@@ -2134,7 +2363,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 errorCode: String(snapErr).slice(0, 100),
               }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
               appendSimulatorLog('ERROR', 'activity_match_segment_v2', {
-                algorithmVersion: 'pedestrian-final-v1',
+                algorithmVersion: 'pedestrian-final-v2-base',
                 segmentIndex,
                 priority,
                 pointCount: segment.length,
@@ -2152,7 +2381,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           // others, and flattening retains segmentId boundaries so no gap is
           // ever presented or measured as walked geometry.
           hikeSource = snappedSegments.flat();
-          if (matchedSegmentCount > 0) snappedTrackPoints = hikeSource;
+          if (matchedSegmentCount > 0 || baseFinalSegmentCount > 0) snappedTrackPoints = hikeSource;
+          const eligibleSegmentCount = sourceSegments.filter(segment => segment.length >= 2).length;
+          finalGeometryState = matchedSegmentCount === 0
+            ? 'base_ready'
+            : matchedSegmentCount === eligibleSegmentCount && !hybridSnapUsed
+              ? 'enhanced'
+              : 'limited_evidence';
         } else if (!mapboxToken) {
           appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_map_matching_unavailable', {
             reason: 'public-token-unavailable',
@@ -2165,6 +2400,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           matched: snappedTrackPoints !== null,
           segmentCount: sourceSegments.length,
           matchedSegmentCount,
+          baseFinalSegmentCount,
         });
         // Finish is only a completeness pass. Memory authority is the real
         // accepted GPS evidence, never road-matched presentation geometry.
@@ -2188,17 +2424,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         });
         crashLogger.breadcrumb(`activity:memory_reconciled pts=${s.trackPoints.length} new=${memoryNewCells}`);
       } catch (e) {
-        // The Activity journal is the crash-recoverable intent for accepted
-        // points that may not yet exist in Memory (notably headless points).
-        // Do not complete or rename/delete that journal until reconciliation
-        // is durably committed.
+        // Memory is normally committed incrementally for every accepted point.
+        // Finish reconciliation is a repair pass, not permission to end. Keep
+        // canonical Activity truth and local completion independent so a
+        // Memory subsystem error cannot trap a user in an Activity.
         crashLogger.breadcrumb(`activity:memory_commit_failed ${String(e).slice(0, 80)}`);
-        Alert.alert(
-          'Activity not saved',
-          'CairnNZ could not safely preserve your exploration Memory. Your Activity remains paused so you can try again.',
-        );
-        set({ status: 'paused', isFinishing: false, lastStopReason: null, savingHikeStep: null });
-        return false;
+        appendSimulatorLog('ERROR', 'activity_finish_memory_reconciliation_deferred', {
+          finishContinued: true,
+          canonicalPointCount: s.trackPoints.length,
+          errorCategory: String(e).slice(0, 120),
+        }, {
+          userId: ownerUserId,
+          clientActivityId: s.sessionId,
+          qaSessionId: realActivityQaSessionId,
+          coordinateSource: 'none',
+        });
       }
 
       // v412: 用原子 save-hike-atomic 端点替换 v411 的 "pushMemoryNow +
@@ -2217,11 +2457,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const finalDisplayTrackPoints = snappedTrackPoints ?? s.trackPoints;
       appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_final_geometry_v2', {
         geometrySource: snappedTrackPoints
-          ? (hybridSnapUsed || matchedSegmentCount < segmentTrace(s.trackPoints).segments.filter(segment => segment.length >= 2).length
+          ? (matchedSegmentCount === 0
+            ? 'base-final'
+            : hybridSnapUsed || matchedSegmentCount < segmentTrace(s.trackPoints).segments.filter(segment => segment.length >= 2).length
             ? 'hybrid-matched-canonical'
             : 'matched')
           : 'canonical',
-        algorithmVersion: snappedTrackPoints ? 'pedestrian-final-v1' : 'canonical-fallback-v1',
+        algorithmVersion: 'pedestrian-final-v2-base',
         canonicalPointCount: s.trackPoints.length,
         displayPointCount: finalDisplayTrackPoints.length,
         canonicalSegmentCount: segmentTrace(s.trackPoints).segments.length,
@@ -2274,18 +2516,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           memory_unsynced_n: memoryUnsynced.length,
         });
       } catch { /* ignore */ }
-      let idempotencyKey: string;
-      try {
-        idempotencyKey = uuidv4();
-      } catch (uuidErr) {
-        // Fallback: 用 time + random 做 idempotencyKey (质量弱一些但 non-throw)
-        idempotencyKey = `fallback-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { log } = require('../services/appLog');
-          log('o8.stop.uuidv4_fallback', { err: String(uuidErr).slice(0, 100), key: idempotencyKey });
-        } catch { /* ignore */ }
-      }
+      const idempotencyKey = finishIdempotencyKey;
       let v412Result: any = null;
       let v412Success = false;
       // Local product data is authoritative until verified server handoff.
@@ -2331,6 +2562,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           name: finalName,
           memoryNewCells,
           syncState: 'pending',
+          finalGeometryState,
+          finalGeometryVersion: 'pedestrian-final-v2-base',
         }, ownerUserId);
         await completeActivity({
           clientActivityId: s.sessionId,
@@ -2359,6 +2592,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           'Activity not saved',
           'CairnNZ could not safely complete the local save. Your recorded Activity remains paused so you can try again.',
         );
+        finishAcceptanceSnapshotClosed = false;
         set({
           status: 'paused',
           isFinishing: false,
@@ -2617,8 +2851,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             'Activity not saved',
             'CairnNZ could not safely complete the local save. Your recorded Activity remains paused so you can try again.',
           );
+          finishAcceptanceSnapshotClosed = false;
           set({
             status: 'paused',
+            transitionState: 'idle',
             isFinishing: false,
             lastStopReason: null,
             savingHikeStep: null,
@@ -2772,6 +3008,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       await endQaTelemetrySession(ownerUserId, 'real-activity-completed');
       realActivityQaSessionId = null;
     }
+    finishAcceptanceSnapshotClosed = false;
     set((prev) => ({
       ...initialState,
       lastStopReason: stopReason,
@@ -2781,9 +3018,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     return true;
   },
 
-  pauseTracking: async () => {
+  pauseTracking: () => {
+    if (pauseTransitionInFlight) return pauseTransitionInFlight;
     const pauseOwner = get();
-    if (pauseOwner.status !== 'tracking' || pauseOwner.isFinishing) return;
+    if (pauseOwner.status !== 'tracking' || pauseOwner.isFinishing) return Promise.resolve();
+    const transitionEpoch = ++activityLifecycleTransitionEpoch;
+    realLocationLifecycleIntentEpoch += 1;
+    const work = (async () => {
     // Drop a flag pin at the current location so the user can see WHERE they paused.
     const cur = get().lastCoordinate;
     if (cur) {
@@ -2794,7 +3035,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     const frozenLifecycle = lifecycleDurationPatch(pauseOwner);
     acceptanceFenceCutoffMs = Date.now();
     stopActivityLifecycleTimer();
-    set({ ...frozenLifecycle, status: 'paused' });
+    set({ ...frozenLifecycle, status: 'paused', transitionState: 'pausing' });
     appendSimulatorLog('ACTIVITY_STATE', 'activity_paused', {
       providerSource: pauseOwner.locationProviderSource,
     }, {
@@ -2827,6 +3068,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
     const afterFence = get();
     if (
+      transitionEpoch !== activityLifecycleTransitionEpoch
+      || afterFence.isFinishing
+      ||
       afterFence.sessionId !== pauseOwner.sessionId
       || afterFence.ownerUserId !== pauseOwner.ownerUserId
       || afterFence.liveOwnerGeneration !== pauseOwner.liveOwnerGeneration
@@ -2835,7 +3079,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       set({ locationAvailable: false, startError: 'initialization-failed' });
       Alert.alert(
         'Recording paused',
-        'CairnNZ stopped the visible GPS source but could not verify the durable background fence. Finish or logout is blocked until storage is available.',
+        'CairnNZ paused the visible GPS source but could not verify background storage. You can still Finish this Activity.',
       );
       return;
     }
@@ -2844,6 +3088,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // paused distance back to the pre-Pause coordinate.
     set({
       status: 'paused',
+      transitionState: 'idle',
       lastCoordinate: null,
       lastFixTimestamp: null,
       pendingSegmentStartReason: 'resume',
@@ -2861,10 +3106,35 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       activeDurationMs: frozenLifecycle.activeDurationAccumulatedMs,
       activeSinceMs: null,
     }).catch(() => false);
+    })();
+    pauseTransitionInFlight = work.catch((error) => {
+      // Pause became authoritative at the synchronous acceptance fence.
+      // Native shutdown diagnostics may degrade, but must not produce an
+      // unhandled control promise or claim that recording continued.
+      crashLogger.breadcrumb(`activity:pause_transition_degraded ${String(error).slice(0, 80)}`);
+    }).finally(() => {
+      pauseTransitionInFlight = null;
+      const current = get();
+      if (transitionEpoch === activityLifecycleTransitionEpoch && current.transitionState === 'pausing') {
+        set({ transitionState: 'idle' });
+      }
+    });
+    return pauseTransitionInFlight;
   },
 
-  resumeTracking: async () => {
-    if (get().status !== 'paused' || get().isFinishing) return false;
+  resumeTracking: () => {
+    if (resumeTransitionInFlight) return resumeTransitionInFlight;
+    if (get().status !== 'paused' || get().isFinishing) return Promise.resolve(false);
+    const transitionEpoch = ++activityLifecycleTransitionEpoch;
+    realLocationLifecycleIntentEpoch += 1;
+    set({ transitionState: 'resuming' });
+    const work = (async () => {
+    const resumeStillAuthoritative = () => {
+      const state = get();
+      return transitionEpoch === activityLifecycleTransitionEpoch
+        && !state.isFinishing
+        && state.status === 'paused';
+    };
     const rebuildingAfterProcessDeath = appStateSubscription === null;
     const resumeSource = get().locationProviderSource;
     const ownerForProvider = String(get().ownerUserId ?? '');
@@ -2873,6 +3143,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       return false;
     }
     const loc = resumeSource === 'real' ? await getLocation() : null;
+    if (!resumeStillAuthoritative()) return false;
     if (resumeSource === 'real' && !loc) {
       set({ locationAvailable: false, startError: 'location-unavailable' });
       return false;
@@ -2942,6 +3213,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       crashLogger.breadcrumb(`activity:resume_prepare_failed ${String(error).slice(0, 80)}`);
       return false;
     }
+    if (!resumeStillAuthoritative()) return false;
 
     // Establish a real source before presenting the recovered/paused session
     // as TRACKING. A failed resume keeps the preserved session paused.
@@ -2993,6 +3265,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       set({ status: 'paused', locationAvailable: false, startError: 'initialization-failed' });
       return false;
     }
+    if (!resumeStillAuthoritative()) {
+      deactivateForegroundSource();
+      deactivateBackgroundSource();
+      await persistBackgroundContext(null, false).catch(() => false);
+      return false;
+    }
     const lifecycleStartedAt = activityTimestampForSource(
       resumeSource,
       Date.now(),
@@ -3011,6 +3289,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
     set({
       status: 'tracking',
+      transitionState: 'idle',
       locationAvailable: true,
       startError: null,
       activeDurationStartedAtMs: lifecycleStartedAt,
@@ -3113,11 +3392,36 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         if (get().status !== 'tracking' && get().status !== 'paused') return;
         try {
           const { refreshToken } = await import('../services/authService');
-          await refreshToken();
+          const result = await refreshToken();
+          if (result.token) {
+            const { notifyMemoryAuthRefreshed } = await import('../services/memorySync');
+            notifyMemoryAuthRefreshed(String(get().ownerUserId ?? ''));
+          }
         } catch { /* never interrupt a recording */ }
       }, 30 * 60_000);
     }
     return true;
+    })();
+    resumeTransitionInFlight = work.catch(async (error) => {
+      // A thrown permission/provider/persistence step is a failed Resume, not
+      // an implicit Recording state. Preserve the Activity for Finish/retry.
+      const current = get();
+      if (transitionEpoch === activityLifecycleTransitionEpoch && !current.isFinishing) {
+        deactivateForegroundSource();
+        deactivateBackgroundSource();
+        await persistBackgroundContext(null, false).catch(() => false);
+        set({ status: 'paused', locationAvailable: false, startError: 'initialization-failed' });
+      }
+      crashLogger.breadcrumb(`activity:resume_transition_failed ${String(error).slice(0, 80)}`);
+      return false;
+    }).finally(() => {
+      resumeTransitionInFlight = null;
+      const current = get();
+      if (transitionEpoch === activityLifecycleTransitionEpoch && current.transitionState === 'resuming') {
+        set({ transitionState: 'idle' });
+      }
+    });
+    return resumeTransitionInFlight;
   },
 
   addTrackPoint: async (coord, timestamp) => {
@@ -3185,6 +3489,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         return reject('stale-owner-generation');
       }
       const isSimulatorSample = owned.source === 'simulator';
+      const isRawGpsSimulatorSample = isSimulatorSample
+        && owned.simulatorObservationMode === 'raw-gps';
       if (
         (before.locationProviderSource === 'simulator') !== isSimulatorSample
       ) {
@@ -3211,7 +3517,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       ) {
         return reject('non-monotonic-timestamp');
       }
-      if (!isSimulatorSample) {
+      if (!isSimulatorSample || isRawGpsSimulatorSample) {
         // Puck/camera presentation consumes the owned raw Expo stream without
         // waiting for reducer + WAL latency. Canonical route truth is still
         // published only after the journal commit below.
@@ -3276,7 +3582,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           ));
           return reject(owned.decisionReason ?? 'background-preclassified-rejection');
         }
-      } else if (!isSimulatorSample) {
+      } else if (!isSimulatorSample || isRawGpsSimulatorSample) {
         const continuity = ensureRealGpsContinuityState(before);
         rawOrdinal = ++realGpsRawOrdinal;
         realObservation = {
@@ -3326,15 +3632,20 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           courseAccuracyDeg: diagnosticNumber(realObservation.courseAccuracy),
           dtFromPreviousRawMs,
           displacementFromPreviousRawM: diagnosticNumber(displacementFromPreviousRawM),
-          cadenceVariant: realForegroundCadenceExperiment.variant,
-          foregroundDistanceFilterM: realForegroundCadenceExperiment.distanceFilterM,
+          cadenceVariant: isRawGpsSimulatorSample
+            ? 'calibrated-raw-gps'
+            : realForegroundCadenceExperiment.variant,
+          foregroundDistanceFilterM: isRawGpsSimulatorSample
+            ? null
+            : realForegroundCadenceExperiment.distanceFilterM,
+          simulatorObservationMode: owned.simulatorObservationMode ?? null,
           appState: AppState.currentState,
           ownerGenerationSuffix: before.liveOwnerGeneration.slice(-8),
         }, {
           userId: before.ownerUserId,
           clientActivityId: before.sessionId,
-          qaSessionId: realActivityQaSessionId,
-          coordinateSource: 'real',
+          qaSessionId: isRawGpsSimulatorSample ? undefined : realActivityQaSessionId,
+          coordinateSource: isRawGpsSimulatorSample ? 'simulator' : 'real',
         });
         realMotionDecision = evaluateRealGpsObservation(
           continuity,
@@ -3345,7 +3656,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         realGpsContinuityState = realMotionDecision.state;
         confirmedCandidateObservations = realMotionDecision.confirmedCandidates
           ?? (realMotionDecision.confirmedCandidate ? [realMotionDecision.confirmedCandidate] : []);
-        emitRealGpsDecision(before, realObservation, realMotionDecision, ingestStartedAt, rawOrdinal);
+        emitRealGpsDecision(
+          before,
+          realObservation,
+          realMotionDecision,
+          ingestStartedAt,
+          rawOrdinal,
+          isRawGpsSimulatorSample ? 'simulator' : 'real',
+        );
         schedulePendingCandidateTimeout(before);
         if (realMotionDecision.kind !== 'ACCEPT') {
           // Raw observations are audit evidence, not automatically Activity
@@ -3443,23 +3761,37 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         const tail = s.trackPoints.length > 0
           ? s.trackPoints[s.trackPoints.length - 1] as SegmentedTrackPoint
           : null;
-        const durableBackgroundSegment = owned.source === 'background' ? owned.segmentId : undefined;
-        const explicitSimulatorReacquisitionSegment = owned.source === 'simulator'
-          && owned.segmentStartReason === 'gps-reacquired'
-          ? owned.segmentId
-          : undefined;
-        const classifiedGap = durableBackgroundSegment
-          ? !!tail && durableBackgroundSegment !== tail.segmentId
-          : shouldStartNewSegment({
-              previous: tail,
-              next: { ...coord, t },
-              mode: s.activityMode,
-            });
-        const segmentId = durableBackgroundSegment ?? explicitSimulatorReacquisitionSegment ?? (classifiedGap
-          ? newSegmentId(s.sessionId ?? 'activity', t)
-          : (owned.segmentId || s.currentSegmentId || newSegmentId(s.sessionId ?? 'activity', t)));
-        const segmentStartReason = owned.segmentStartReason ?? s.pendingSegmentStartReason
-          ?? (classifiedGap ? 'gps-reacquired' : tail ? undefined : 'start');
+        const physicalGap = shouldStartNewSegment({
+          previous: tail,
+          next: { ...coord, t },
+          mode: s.activityMode,
+        });
+        const provenance = resolveSegmentProvenance({
+          tailSegmentId: tail?.segmentId ?? null,
+          currentSegmentId: s.currentSegmentId,
+          incomingSegmentId: owned.segmentId,
+          incomingStartReason: owned.segmentStartReason,
+          pendingStartReason: s.pendingSegmentStartReason ?? undefined,
+          physicalGap,
+        });
+        const classifiedGap = provenance.startsNewSegment;
+        const segmentId = provenance.segmentId
+          ?? newSegmentId(s.sessionId ?? 'activity', t);
+        const segmentStartReason = provenance.startReason
+          ?? (tail ? undefined : 'start');
+        if (provenance.ignoredStaleIncoming) {
+          appendSimulatorLog('GPS_SEGMENT', 'activity_stale_segment_provenance_ignored', {
+            sampleSource: owned.source ?? 'foreground',
+            incomingSegmentId: owned.segmentId ?? null,
+            currentSegmentId: s.currentSegmentId,
+            acceptedSegmentId: segmentId,
+          }, {
+            userId: s.ownerUserId,
+            clientActivityId: s.sessionId,
+            qaSessionId: realActivityQaSessionId,
+            coordinateSource,
+          });
+        }
         if (classifiedGap) {
           acceptance.gapDecision = {
             previousSegmentId: tail?.segmentId ?? null,
@@ -3604,7 +3936,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           smoothedLat = owned.continuityStateAfter.liveCoordinate?.lat ?? acceptedCoord.lat;
           smoothedLng = owned.continuityStateAfter.liveCoordinate?.lng ?? acceptedCoord.lng;
           acceptance.continuityState = owned.continuityStateAfter;
-        } else if (!isSimulatorSample && realObservation && realMotionDecision) {
+        } else if (realObservation && realMotionDecision) {
           let continuityForAcceptance = realMotionDecision.state;
           for (const [index, candidateObservation] of confirmedCandidateObservations.entries()) {
             const candidatePoint = confirmedCandidatePoints[index];
@@ -3689,9 +4021,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         acceptance.point = cleanPoint;
         acceptance.points = canonicalPoints;
         acceptance.reason = acceptance.reason ?? (classifiedGap ? 'accepted-new-segment' : 'accepted');
+        const nextLivePresentation = isSimulatorSample && !isRawGpsSimulatorSample
+          ? [...s.trackPointsSmoothed, ...smoothedPoints]
+          : (() => {
+              const canonicalHistory = [...s.trackPoints];
+              return smoothedPoints.reduce((route, point) => {
+                canonicalHistory.push(point);
+                return appendCausalLivePoint(route, point, canonicalHistory);
+              }, s.trackPointsSmoothed);
+            })();
         acceptance.transition = {
           trackPoints: [...s.trackPoints, ...canonicalPoints],
-          trackPointsSmoothed: [...s.trackPointsSmoothed, ...smoothedPoints],
+          trackPointsSmoothed: nextLivePresentation,
           trackPointsRaw: s.trackPointsRaw.some(point => point.rawOrdinal === rawPoint.rawOrdinal)
             ? s.trackPointsRaw
             : [...s.trackPointsRaw, rawPoint],
@@ -3722,7 +4063,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const acceptedTransition = acceptance.transition;
       try {
         const journalStartedAt = Date.now();
-        if (!isSimulatorSample) {
+        if (!isSimulatorSample || isRawGpsSimulatorSample) {
           appendSimulatorLog('ACTIVITY_POINT', 'activity_journal_commit_v2', {
             phase: 'attempt',
             firstRawOrdinal: acceptedPoints[0]?.rawOrdinal ?? null,
@@ -3782,6 +4123,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         const current = get();
         if (
           (current.status !== 'tracking' && current.status !== 'paused')
+          || (current.isFinishing && finishAcceptanceSnapshotClosed)
           || current.ownerUserId !== before.ownerUserId
           || current.sessionId !== before.sessionId
           || current.liveOwnerGeneration !== before.liveOwnerGeneration
@@ -3815,15 +4157,15 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             coordinateSource: 'none',
           });
         }
-        if (!isSimulatorSample) {
+        if (!isSimulatorSample || isRawGpsSimulatorSample) {
           if (acceptance.continuityState) realGpsContinuityState = acceptance.continuityState;
-          if (acceptance.elevationState) realElevationState = acceptance.elevationState;
+          if (!isSimulatorSample && acceptance.elevationState) realElevationState = acceptance.elevationState;
           if (!realGpsContinuityState.pending && realGpsCandidateTimer) {
             clearTimeout(realGpsCandidateTimer);
             realGpsCandidateTimer = null;
           }
         }
-        if (!isSimulatorSample && acceptance.gapDecision) {
+        if ((!isSimulatorSample || isRawGpsSimulatorSample) && acceptance.gapDecision) {
           appendSimulatorLog('GPS_SEGMENT', 'activity_segment_decision_v2', {
             decision: 'new-segment',
             trigger: owned.segmentStartReason ?? 'canonical-continuity-classifier',
@@ -3835,8 +4177,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           }, {
             userId: before.ownerUserId,
             clientActivityId: before.sessionId,
-            qaSessionId: realActivityQaSessionId,
-            coordinateSource: 'none',
+            qaSessionId: isSimulatorSample ? undefined : realActivityQaSessionId,
+            coordinateSource: isSimulatorSample ? 'simulator' : 'none',
           });
         }
 
@@ -4647,23 +4989,24 @@ function recentAutoPausePoints(cutoffMs: number) {
  * concurrently observe `hasStartedLocationUpdatesAsync = false` and both call
  * `startLocationUpdatesAsync`, causing the second to throw.
  *
- * Each task is bounded by a 5s timeout so a stalled expo-location call (e.g.
- * during OS suspend) cannot block the whole queue indefinitely.
+ * Callers receive a bounded acknowledgement, but the queue remains chained to
+ * actual settlement. A timeout is not cancellation: releasing the queue at
+ * five seconds previously let a late task fight a newer foreground intent.
  */
 let activationChain: Promise<void> = Promise.resolve();
 function enqueueActivation(task: () => Promise<void>): Promise<void> {
-  activationChain = activationChain.then(() =>
-    Promise.race([
-      task(),
-      new Promise<void>((resolve) => setTimeout(resolve, 5000)),
-    ]),
-  ).catch((err) => {
+  const actualSettlement = activationChain.then(task).catch((err) => {
     debugLogger.logError(err, 'enqueueActivation');
   });
-  return activationChain;
+  activationChain = actualSettlement;
+  return Promise.race([
+    actualSettlement,
+    new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+  ]);
 }
 
 function enqueueRealLocationLifecycleTransition(nextState: AppStateStatus): Promise<void> {
+  const intentEpoch = ++realLocationLifecycleIntentEpoch;
   return enqueueActivation(async () => {
     // Coalescing is event/ownership based: a queued obsolete transition does
     // no work, while a real foreground takeover does not sleep for 2 seconds.
@@ -4671,6 +5014,7 @@ function enqueueRealLocationLifecycleTransition(nextState: AppStateStatus): Prom
       (nextState === 'active' || nextState === 'background')
       && AppState.currentState !== nextState
     ) return;
+    if (intentEpoch !== realLocationLifecycleIntentEpoch) return;
     const owner = useTrackingStore.getState();
     if (owner.status !== 'tracking' || owner.locationProviderSource !== 'real') return;
     const plan = planRealLocationLifecycleTransition({
@@ -4692,11 +5036,15 @@ function enqueueRealLocationLifecycleTransition(nextState: AppStateStatus): Prom
       coordinateSource: 'none',
     });
     if (plan.action === 'transition-to-foreground') {
-      await transitionToForegroundSource();
+      await transitionToForegroundSource(intentEpoch);
     } else if (plan.action === 'transition-to-background') {
       deactivateForegroundSource();
-      const active = await activateBackgroundSource();
-      if (!active) await markRecordingContinuityUnavailable('background-provider-unavailable');
+      const active = await activateBackgroundSource(intentEpoch);
+      if (
+        intentEpoch === realLocationLifecycleIntentEpoch
+        && AppState.currentState === 'background'
+        && !active
+      ) await markRecordingContinuityUnavailable('background-provider-unavailable');
     }
   });
 }
@@ -4705,9 +5053,14 @@ function enqueueRealLocationLifecycleTransition(nextState: AppStateStatus): Prom
  * Start the foreground watcher, replacing any existing one.
  * Called when AppState transitions to 'active'.
  */
-async function activateForegroundSource(): Promise<void> {
+async function activateForegroundSource(expectedIntentEpoch?: number): Promise<void> {
   const ownerAtActivation = useTrackingStore.getState();
   if (!ownerAtActivation.sessionId || !ownerAtActivation.liveOwnerGeneration) return;
+  const intentIsCurrent = () => expectedIntentEpoch == null || (
+    expectedIntentEpoch === realLocationLifecycleIntentEpoch
+    && AppState.currentState === 'active'
+  );
+  if (!intentIsCurrent()) return;
 
   if (ownerAtActivation.locationProviderSource === 'simulator') {
     deactivateRealForegroundSource();
@@ -4735,11 +5088,12 @@ async function activateForegroundSource(): Promise<void> {
   // provider itself before starting the foreground watcher so recovery can
   // never leave an OS-owned background stream running beside the new watcher.
   await stopRealBackgroundSourceForHandoff();
+  if (!intentIsCurrent()) return;
   // Tear down any existing foreground sub first.
   deactivateRealForegroundSource();
 
   try {
-    locationSubscription = await Location.watchPositionAsync(
+    const nextSubscription = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.BestForNavigation,
         // Expo's timeInterval is Android-only. The iOS-effective production
@@ -4818,6 +5172,11 @@ async function activateForegroundSource(): Promise<void> {
         });
       },
     );
+    if (!intentIsCurrent()) {
+      try { nextSubscription.remove(); } catch { /* obsolete activation */ }
+      return;
+    }
+    locationSubscription = nextSubscription;
     markRealProviderStarted('foreground');
     appendSimulatorLog('PROVIDER', 'real_activity_location_source_activated', {
       sampleSource: 'foreground',
@@ -4926,6 +5285,29 @@ async function markRecordingContinuityUnavailable(reason: string): Promise<void>
 async function drainCommittedBackgroundLocations(committedBeforeFence = false): Promise<number> {
   await settleBackgroundLocationWrites();
   const drained = drainBackgroundLocations().sort((a, b) => a.timestamp - b.timestamp);
+  // Foreground presentation may recover immediately from the newest
+  // Activity-owned background observation. It must not wait for a brand-new
+  // foreground callback, and it remains separate from canonical acceptance.
+  const retained = drained[drained.length - 1];
+  const retainedOwner = useTrackingStore.getState();
+  if (
+    retained
+    && retained.clientActivityId === retainedOwner.sessionId
+    && retained.ownerGeneration === retainedOwner.liveOwnerGeneration
+  ) {
+    useTrackingStore.setState({
+      latestSourceLocationTime: retained.timestamp,
+      latestSourceCoordinate: {
+        lat: retained.latitude,
+        lng: retained.longitude,
+        alt: retained.altitude,
+        accuracy: retained.accuracy,
+        speed: retained.speed,
+        course: retained.heading,
+        t: retained.timestamp,
+      },
+    });
+  }
   for (const coordinate of drained) {
     await useTrackingStore.getState().addTrackPoint({
       lat: coordinate.latitude,
@@ -4999,8 +5381,12 @@ async function stopRealBackgroundSourceForHandoff(): Promise<void> {
   backgroundTaskActive = false;
 }
 
-async function transitionToForegroundSource(): Promise<void> {
+async function transitionToForegroundSource(expectedIntentEpoch?: number): Promise<void> {
   const owner = useTrackingStore.getState();
+  const intentIsCurrent = () => expectedIntentEpoch == null || (
+    expectedIntentEpoch === realLocationLifecycleIntentEpoch
+    && AppState.currentState === 'active'
+  );
   appendSimulatorLog('PROVIDER', 'real_activity_foreground_takeover', {
     phase: 'started',
     appState: AppState.currentState,
@@ -5026,10 +5412,10 @@ async function transitionToForegroundSource(): Promise<void> {
     qaSessionId: realActivityQaSessionId,
     coordinateSource: 'real',
   });
-  await refreshRealBackgroundAuthorization(false);
-  await activateForegroundSource();
+  if (intentIsCurrent()) await refreshRealBackgroundAuthorization(false);
+  if (intentIsCurrent()) await activateForegroundSource(expectedIntentEpoch);
   const active = isCurrentLocationSourceActive();
-  useTrackingStore.setState({ locationAvailable: active });
+  if (intentIsCurrent()) useTrackingStore.setState({ locationAvailable: active });
   appendSimulatorLog('PROVIDER', 'real_activity_foreground_takeover', {
     phase: 'completed',
     drainedCount,
@@ -5043,8 +5429,13 @@ async function transitionToForegroundSource(): Promise<void> {
   });
 }
 
-async function activateBackgroundSource(): Promise<boolean> {
+async function activateBackgroundSource(expectedIntentEpoch?: number): Promise<boolean> {
   const state = useTrackingStore.getState();
+  const intentIsCurrent = () => expectedIntentEpoch == null || (
+    expectedIntentEpoch === realLocationLifecycleIntentEpoch
+    && AppState.currentState === 'background'
+  );
+  if (!intentIsCurrent()) return false;
   if (state.locationProviderSource === 'simulator') {
     deactivateRealForegroundSource();
     deactivateRealBackgroundSource();
@@ -5116,6 +5507,7 @@ async function activateBackgroundSource(): Promise<boolean> {
     if (!taskRegistered) throw new Error('background-task-registration-failed');
     const contextPersisted = await persistCurrentRealBackgroundContext();
     if (!contextPersisted) throw new Error('background-context-refresh-failed');
+    if (!intentIsCurrent()) return false;
     const already = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
     // O43 leading, explicitly hypothesis-driven correction: repository evidence
     // shows repeated stop/start churn on lifecycle and sampling evaluations.
@@ -5142,7 +5534,15 @@ async function activateBackgroundSource(): Promise<boolean> {
         notificationColor: '#5d7c46',
       },
     });
+    if (!intentIsCurrent()) {
+      await stopRealBackgroundSourceForHandoff();
+      return false;
+    }
     const verifiedStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+    if (!intentIsCurrent()) {
+      await stopRealBackgroundSourceForHandoff();
+      return false;
+    }
     if (!verifiedStarted) throw new Error('background-task-start-not-observed');
     backgroundTaskActive = verifiedStarted;
     if (verifiedStarted) markRealProviderStarted('background');

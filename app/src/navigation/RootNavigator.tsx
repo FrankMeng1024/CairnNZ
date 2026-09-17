@@ -44,6 +44,7 @@ import { MemoryScreen } from '../features/memory/screens/MemoryScreen';
 import { MarkDetailDevPreviewScreen } from '../features/marks/dev/MarkDetailDevPreviewScreen';
 import { Gate1IconSheetScreen } from '../screens/Gate1IconSheetScreen';
 import { MarkerDetailScreen } from '../screens/MarkerDetailScreen';
+import { AllCairnsScreen } from '../screens/AllCairnsScreen';
 import { OnboardingModal, hasCompletedOnboarding } from '../features/onboarding/OnboardingModal';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useAppStore } from '../store/useAppStore';
@@ -60,13 +61,20 @@ markBootPhase('navigator_module_loaded');
 export type RootStackParamList = {
   Auth: undefined;
   Home: undefined;
-  Hiking: { recoverClientActivityId?: string } | undefined;
-  Running: { recoverClientActivityId?: string } | undefined;
+  Hiking: { recoverClientActivityId?: string; routeId?: string } | undefined;
+  Running: { recoverClientActivityId?: string; routeId?: string } | undefined;
   MapHistory: { sessionId?: string; routeId?: string; qaReviewClone?: 'almost-done-v1' } | undefined;
-  Routes: { initialTab?: 'routes' | 'activities' | 'flags' } | undefined;
-  RouteEditor: { routeId?: string; fromSessionId?: string } | undefined;
+  Routes: { initialTab?: 'routes' | 'activities' } | undefined;
+  RouteEditor: {
+    routeId?: string;
+    fromSessionId?: string;
+    fromSessionTrackPoints?: Array<{ lat: number; lng: number; alt?: number | null; t?: number; accuracy?: number | null }>;
+    /** Explicit user choice; never written back to the Activity. */
+    reconnectsActivityGap?: boolean;
+  } | undefined;
   Plant: undefined;
   MarkerDetail: { markerId: string };
+  AllCairns: undefined;
   Friends: undefined;
   /** dev-only preview: renders the auto-generated FriendsScreen from spec.json.
    *  Query param 'state' picks which of F0-F6 to render. */
@@ -226,6 +234,7 @@ export function RootNavigator() {
             <Stack.Screen name="RouteEditor" component={RouteEditorScreen} />
             <Stack.Screen name="Plant"       component={PlantScreen} />
             <Stack.Screen name="MarkerDetail" component={MarkerDetailScreen} />
+            <Stack.Screen name="AllCairns" component={AllCairnsScreen} />
             <Stack.Screen name="Friends"     component={FriendsScreen} />
             {__DEV__ && <Stack.Screen name="FriendsPreview" component={FriendsPreviewScreen} />}
             {__DEV__ && <Stack.Screen name="HomePreview" component={HomePreviewScreen} />}

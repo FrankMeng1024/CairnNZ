@@ -28,6 +28,14 @@ describe('Free Activity integration contracts', () => {
     expect(recoverySave).toContain("{ name: 'MapHistory', params: { sessionId:");
   });
 
+  test.each(['HikingScreen.tsx', 'RunningScreen.tsx'])('%s successful Finish resets one Detail over Trails Activities', file => {
+    const source = read(`src/screens/${file}`);
+    const finish = source.slice(source.indexOf('const openCommittedDetail'), source.indexOf('if (detailOpenedFromBase) return'));
+    expect(finish).toContain('CommonActions.reset');
+    expect(finish).toContain("{ name: 'Routes', params: { initialTab: 'activities' } }");
+    expect(finish).toContain("{ name: 'MapHistory', params: { sessionId: committedId } }");
+  });
+
   test('recovery is exact-ID, creates a process gap, and does not impose a 72-hour expiry', () => {
     const source = read('src/features/activity/activityRecovery.ts');
     expect(source).toContain('meta.session_id === exactId');
@@ -56,12 +64,33 @@ describe('Free Activity integration contracts', () => {
     expect(failure).toContain('return false');
   });
 
-  test('Run freezes recording before naming and has no separate complete state', () => {
+  test('Run Finish confirmation preserves lifecycle instead of pausing and guessing on Cancel', () => {
     const source = read('src/screens/RunningScreen.tsx');
     const open = source.slice(source.indexOf('const openSaveSheet'), source.indexOf('const closeSaveSheet'));
-    expect(open.indexOf('pauseTracking()')).toBeLessThan(open.indexOf('setShowSaveSheet(true)'));
+    const close = source.slice(source.indexOf('const closeSaveSheet'), source.indexOf('async function handleStart'));
+    expect(open).not.toContain('pauseTracking()');
+    expect(close).not.toContain('resumeTracking()');
+    expect(source).toContain('finishLifecycleBeforeSheet');
     expect(source).not.toContain('Run Complete');
     expect(source).not.toMatch(/setRunState\(['"]complete/);
+  });
+
+  test('Hike Finish confirmation also leaves Recording or Paused untouched', () => {
+    const source = read('src/screens/HikingScreen.tsx');
+    const open = source.slice(source.indexOf('const handleFinishHike'), source.indexOf('if (!activitySessionVisible)'));
+    const cancel = source.slice(source.indexOf('onCancel={() =>'), source.indexOf('onDiscard={async'));
+    expect(open).not.toContain('await pauseTracking()');
+    expect(cancel).not.toContain('resumeTracking()');
+    expect(source).toContain('finishLifecycleBeforeSummary');
+  });
+
+  test('transition chrome shows truthful Resuming state while keeping Finish enabled', () => {
+    const chrome = read('src/components/activity/ActivityRecordingChrome.tsx');
+    expect(chrome).toContain("phase: 'tracking' | 'paused' | 'resuming' | 'pausing' | 'finishing'");
+    expect(chrome).toContain("phase === 'resuming' ? 'Resuming…'");
+    const finishControl = chrome.slice(chrome.indexOf('onPress={onFinish}'), chrome.indexOf('</TouchableOpacity>', chrome.indexOf('onPress={onFinish}')));
+    expect(finishControl).toContain('disabled={finishing}');
+    expect(finishControl).not.toContain('transitioning');
   });
 
   test('accepted foreground points require Activity and ownership-generation identity', () => {
@@ -92,6 +121,27 @@ describe('Free Activity integration contracts', () => {
     expect(server).toBeGreaterThan(durable);
     expect(source).toContain('const IMMEDIATE_SERVER_SAVE_BUDGET_MS = 4_000');
     expect(source).not.toContain('v412 wall-clock timeout 20s');
+  });
+
+  test('Finish durably commits offline Base Final before optional Mapbox reconstruction', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    const baseCommit = source.indexOf("recordSavePhase('base_final_local_commit'");
+    const mapbox = source.indexOf('resolveMapboxPublicTokenAuthority()', baseCommit);
+    const reconstruction = source.indexOf('reconstructPedestrianFinalRoute(canonicalInput', mapbox);
+    expect(baseCommit).toBeGreaterThan(0);
+    expect(mapbox).toBeGreaterThan(baseCommit);
+    expect(reconstruction).toBeGreaterThan(mapbox);
+    expect(source.slice(0, mapbox)).toContain('activity_base_final_committed');
+  });
+
+  test('a slow pre-Finish WAL append cannot publish after the immutable completion snapshot', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    const snapshotClosed = source.indexOf('finishAcceptanceSnapshotClosed = true');
+    const completionSnapshot = source.indexOf('const s = get();', snapshotClosed);
+    const postJournalGuard = source.indexOf('(current.isFinishing && finishAcceptanceSnapshotClosed)');
+    expect(snapshotClosed).toBeGreaterThan(source.indexOf('await settleWithin(pointIngestTail.then'));
+    expect(completionSnapshot).toBeGreaterThan(snapshotClosed);
+    expect(postJournalGuard).toBeGreaterThan(completionSnapshot);
   });
 
   test('rejected real fixes advance only the raw reducer watermark, never the accepted continuity anchor', () => {
@@ -151,6 +201,18 @@ describe('Free Activity integration contracts', () => {
     expect(tracking).not.toContain("markRecordingContinuityUnavailable('inactive'");
   });
 
+  test('a timed-out lifecycle acknowledgement never releases the actual native transition queue', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    const queue = source.slice(
+      source.indexOf('let activationChain:'),
+      source.indexOf('function enqueueRealLocationLifecycleTransition'),
+    );
+    expect(queue).toContain('const actualSettlement = activationChain.then(task)');
+    expect(queue).toContain('activationChain = actualSettlement');
+    expect(queue).toContain('return Promise.race([');
+    expect(queue.indexOf('activationChain = actualSettlement')).toBeLessThan(queue.indexOf('return Promise.race(['));
+  });
+
   test('foreground and background request one fixed precision policy without a sampling state machine', () => {
     const tracking = read('src/store/useTrackingStore.ts');
     expect(tracking.match(/accuracy: Location\.Accuracy\.BestForNavigation/g)).toHaveLength(2);
@@ -192,7 +254,7 @@ describe('Free Activity integration contracts', () => {
     expect(source).toContain('const finalDisplayTrackPoints = snappedTrackPoints ?? s.trackPoints');
     expect(source).toContain('const v412Route3 = finalDisplayTrackPoints.map');
     expect(source).toContain('trackPoints: finalDisplayTrackPoints');
-    expect(source).toContain("algorithmVersion: 'pedestrian-final-v1'");
+    expect(source).toContain("algorithmVersion: 'pedestrian-final-v2-base'");
     expect(source).toContain('!snapRes.stats.displayRefined');
     expect(source).toContain('snapRes.stats.canonicalFallbackDistanceM');
     expect(source).toContain("endpointDecision: 'atomic-canonical-boundary'");
@@ -201,20 +263,25 @@ describe('Free Activity integration contracts', () => {
 
   test('Final matching remains segment-local and Memory remains canonical', () => {
     const source = read('src/store/useTrackingStore.ts');
-    expect(source).toContain('const sourceSegments = segmentTrace(s.trackPoints).segments');
+    expect(source).toContain('const canonicalSegments = segmentTrace(s.trackPoints).segments');
+    expect(source).toContain('const sourceSegments = canonicalSegments');
     expect(source).toContain('const snapRes = await reconstructPedestrianFinalRoute(canonicalInput');
     expect(source).toContain('for (const point of s.trackPoints)');
-    expect(source).toContain("source: 'reconciliation'");
+    expect(source).toContain("source: 'activity'");
     expect(source).not.toContain('for (const point of finalDisplayTrackPoints)');
   });
 
   test('live Hike and Run traces render the bounded causal accepted-route presentation', () => {
     const hike = read('src/screens/HikingScreen.tsx');
     const run = read('src/screens/RunningScreen.tsx');
-    expect(hike).toContain("const liveTrackPoints = locationProviderSource === 'real' ? trackPointsSmoothed : trackPoints");
-    expect(hike).toContain('const liveMapTrackPoints = useMemo(');
-    expect(hike).toContain('trackPoints={activitySessionVisible ? liveMapTrackPoints : []}');
-    expect(run).toContain("const liveTrackPoints = locationProviderSource === 'real' ? trackPointsSmoothed : trackPoints");
+    expect(hike).toContain("const liveTrackPoints = locationProviderSource === 'real'");
+    expect(hike).toContain("|| (locationProviderSource === 'simulator' && simulatorObservationMode === 'raw-gps')");
+    expect(hike).toContain('? trackPointsSmoothed');
+    expect(hike).not.toContain('const liveMapTrackPoints = useMemo(');
+    expect(hike).toContain('trackPoints={activitySessionVisible ? liveTrackPoints : []}');
+    expect(run).toContain("const liveTrackPoints = locationProviderSource === 'real'");
+    expect(run).toContain("|| (locationProviderSource === 'simulator' && simulatorObservationMode === 'raw-gps')");
+    expect(run).toContain('? trackPointsSmoothed');
     expect(run).toContain('trackPoints={liveTrackPoints}');
   });
 
@@ -309,11 +376,12 @@ describe('Free Activity integration contracts', () => {
     expect(durableSave).toBeLessThan(cacheWrite);
   });
 
-  test('Activity and Cairn evidence use the one central durable Memory authority', () => {
+  test('movement owns Memory evidence and Plant cannot reveal unexplored terrain', () => {
     const tracking = read('src/store/useTrackingStore.ts');
     const cairns = read('src/store/useMarkerStore.ts');
     const passive = read('src/features/memory/components/PassiveMemoryRecorder.tsx');
-    for (const source of [tracking, cairns, passive]) expect(source).toContain('recordMemoryEvidence');
+    for (const source of [tracking, passive]) expect(source).toContain('recordMemoryEvidence');
+    expect(cairns).not.toContain('recordMemoryEvidence');
     expect(passive).toContain("status !== 'idle'");
   });
 
@@ -321,9 +389,11 @@ describe('Free Activity integration contracts', () => {
     const settings = read('src/features/memory/store/useMemorySettingsStore.ts');
     const ui = read('src/screens/SettingsScreen.tsx');
     expect(settings).toMatch(/foregroundAutoUnlockEnabled:\s*false/);
-    expect(settings).toContain('passiveExplorationContractVersion: 1');
-    expect(settings).toContain("migratedToPassiveContract ? parsed.recordMode : 'session-only'");
-    expect(ui).toContain('Record exploration outside activities');
+    expect(settings).toContain('passiveExplorationContractVersion: 3');
+    expect(settings).not.toContain('recordMode:');
+    expect(settings).not.toContain('showFriendOverlay:');
+    expect(settings).not.toContain('useH3Fog:');
+    expect(ui).toContain('Explore while Cairn is open');
   });
 
   test('background task publishes activation last, clears it first, and requires exact owner identity', () => {
@@ -416,11 +486,12 @@ describe('Free Activity integration contracts', () => {
     expect(cairn).toContain('retainOnPermanentFailure: true');
   });
 
-  test('Activity Detail renders real segments plus dashed non-metric gaps', () => {
+  test('Activity Detail renders real segments with true gaps disconnected', () => {
     const source = read('src/screens/MapHistoryScreen.tsx');
     expect(source).toContain('segmentTrace(pts)');
-    expect(source).toContain('trace.gaps.map');
-    expect(source).toContain('lineDasharray: [2, 1.5]');
+    expect(source).toContain('if (isGap) continue');
+    expect(source).not.toContain('track-gap-line');
+    expect(source).not.toContain('lineDasharray: [2, 1.5]');
   });
 
   test('Activity Detail owns a mount-lifetime trace snapshot across sync cleanup', () => {
@@ -437,11 +508,33 @@ describe('Free Activity integration contracts', () => {
     expect(loader).not.toMatch(/}, \[[^\]]*sessions[^\]]*\]\);/);
   });
 
+  test('a missing Activity target has a Detail-specific degraded state', () => {
+    const source = read('src/screens/MapHistoryScreen.tsx');
+    expect(source).toContain('testID="activity-detail-unavailable"');
+    expect(source).toContain('This Activity could not be found in local Activity history.');
+    expect(source).toContain('label="Back to Activities"');
+  });
+
+  test('Activity Detail uses shared semantic roles across Day, Sunset, and Night', () => {
+    const source = read('src/screens/MapHistoryScreen.tsx');
+    const detail = source.slice(
+      source.indexOf('targetSessionId && selectedSession ?'),
+      source.indexOf('testID="activity-detail-unavailable"'),
+    );
+    for (const role of ['surfaceElevated', 'foreground', 'foregroundSecondary', 'borderSubtle', 'destructive']) {
+      expect(detail).toContain(`visualTheme.${role}`);
+    }
+    expect(detail).toContain('<ModalCard');
+    expect(detail).toContain('<PrimaryButton');
+  });
+
   test('Save as Route sends only selected real segment geometry', () => {
     const source = read('src/screens/MapHistoryScreen.tsx');
     expect(source).toContain('const realSegments = segmentTrace(loadedTrackPoints ?? []).segments');
-    expect(source).toContain('const openSegment = (segment: typeof realSegments[number])');
+    expect(source).toContain('const openSegment = (segment: typeof realSegments[number], reconnectsGap = false)');
     expect(source).toContain('fromSessionTrackPoints: segment.map');
+    expect(source).toContain("text: 'Reconnect in Route'");
+    expect(source).toContain('openSegment(realSegments.flat(), true)');
     expect(source).not.toContain('trace.gaps.flatMap');
   });
 

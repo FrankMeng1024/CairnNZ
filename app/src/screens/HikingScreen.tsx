@@ -18,13 +18,14 @@ import {
 import { haptic } from '../services/hapticService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { useNavigation, CommonActions, useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { useNavigation, useRoute, CommonActions, useFocusEffect, useIsFocused } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppStore } from '../store/useAppStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { useRouteStore } from '../store/useRouteStore';
+import { routeMatchesIdentity } from '../features/route/routeContracts';
 import { getCurrentRegion } from '../config/regions';
 import { formatDuration, haversineM } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
@@ -92,6 +93,7 @@ export function HikingScreen() {
   const simulatorHydratedUserId = useActivitySimulatorStore((s) => s.hydratedUserId);
   const debugMode = useSettingsStore((s) => s.debugMode);
   const simulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
+  const simulatorObservationMode = useActivitySimulatorStore((s) => s.observationMode);
   const simulatorStartConfigured = useActivitySimulatorStore((s) => s.startConfigured);
   const simulatorPosition = useActivitySimulatorStore((s) => s.current);
   const simulatorSignal = useActivitySimulatorStore((s) => s.signal);
@@ -114,6 +116,8 @@ export function HikingScreen() {
   );
 
   const nav = useNavigation<Nav>();
+  const entryRoute = useRoute<any>();
+  const requestedRouteId = entryRoute.params?.routeId as string | undefined;
   const isFocused = useIsFocused();
   useFocusEffect(
     React.useCallback(() => {
@@ -142,6 +146,7 @@ export function HikingScreen() {
 
   // Real tracking store
   const isFinishing = useTrackingStore(s => s.isFinishing);
+  const transitionState = useTrackingStore(s => s.transitionState);
   const startError = useTrackingStore(s => s.startError);
   const durationS = useTrackingStore(s => s.durationS);
   const distanceM = useTrackingStore(s => s.distanceM);
@@ -187,16 +192,10 @@ export function HikingScreen() {
   const sessionId = useTrackingStore(s => s.sessionId);
   const trackPoints = useTrackingStore(s => s.trackPoints);
   const trackPointsSmoothed = useTrackingStore(s => s.trackPointsSmoothed);
-  const liveTrackPoints = locationProviderSource === 'real' ? trackPointsSmoothed : trackPoints;
-  const liveMapTrackPoints = useMemo(
-    () => liveTrackPoints.map(point => ({
-      lat: point.lat,
-      lng: point.lng,
-      t: point.t,
-      segmentId: point.segmentId,
-    })),
-    [liveTrackPoints],
-  );
+  const liveTrackPoints = locationProviderSource === 'real'
+    || (locationProviderSource === 'simulator' && simulatorObservationMode === 'raw-gps')
+    ? trackPointsSmoothed
+    : trackPoints;
   // Completion still uses canonical truth. The real live line uses only its
   // bounded causal presentation twin (same points/segments/timestamps, ≤6m
   // tail offset); Simulator keeps exact canonical parity.
@@ -304,10 +303,14 @@ export function HikingScreen() {
   // avoids racing with useTrackingStore.stopTracking's own lastStopReason
   // pathway and always shows the confirmation sheet before any teardown.
   const [showTooShortConfirm, setShowTooShortConfirm] = useState(false);
-  const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<string | null>(requestedRouteId ?? null);
 
   const routes = useRouteStore(s => s.routes);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
+  const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
+  const activityRouteReference = useRouteStore(s => s.activityRouteReference);
+  const captureActivityRouteReference = useRouteStore(s => s.captureActivityRouteReference);
+  const clearActivityRouteReference = useRouteStore(s => s.clearActivityRouteReference);
   const isTracking = status === 'tracking';
   // v120: paused state behaves like tracking for layout purposes (the
   // user pauses via Stop, the summary sheet appears, but the live stats
@@ -335,7 +338,16 @@ export function HikingScreen() {
     }
   }, [hydrationTs, hasLiveSession]);
 
-  useEffect(() => { loadRoutes(); }, []);
+  useEffect(() => { void loadRoutes(); }, [loadRoutes]);
+  useEffect(() => {
+    if (!requestedRouteId) return;
+    setSelectedRoute(requestedRouteId);
+  }, [requestedRouteId]);
+  useEffect(() => {
+    const selected = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+    if (!selected || selected.points.length >= 2) return;
+    void loadRouteDetail(selected.id).catch(() => {});
+  }, [loadRouteDetail, routes, selectedRoute]);
 
   // Sprint 6 round-11 R11B3: SAF-01 alert-visibility ref, shared by
   // primary useEffect and AppState re-fire useEffect. Declared here so
@@ -580,6 +592,7 @@ export function HikingScreen() {
 
   const operationalState = deriveActivityOperationalState({
     trackingStatus: status,
+    transitionState,
     isFinishing,
     hasRecovery: unfinished !== null,
     hasStartError: startError !== null,
@@ -597,8 +610,14 @@ export function HikingScreen() {
       setUnfinishedResolutionRequested(true);
       return;
     }
+    if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
+      Alert.alert('Route unavailable', 'This Route is not ready on this device yet.');
+      return;
+    }
+    if (!selectedRoute) clearActivityRouteReference();
     const started = await startTracking();
     if (!started) {
+      clearActivityRouteReference();
       const authoritative = await findRecoverableActivity('hiking');
       if (authoritative) {
         setUnfinished(authoritative);
@@ -634,12 +653,30 @@ export function HikingScreen() {
     const preState = useTrackingStore.getState();
     const capturedSessionId = preState.sessionId;
     let saved = false;
+    let detailOpenedFromBase = false;
+    const openCommittedDetail = (committedId: string) => {
+      if (!useAppStore.getState().isLoggedIn || detailOpenedFromBase) return;
+      detailOpenedFromBase = true;
+      setSavingHike(false);
+      setStopSummary(null);
+      nav.dispatch(
+        CommonActions.reset({
+          index: 2,
+          routes: [
+            { name: 'Home' },
+            { name: 'Routes', params: { initialTab: 'activities' } },
+            { name: 'MapHistory', params: { sessionId: committedId } },
+          ],
+        }),
+      );
+    };
     try {
-      saved = await stopTracking(name);
+      saved = await stopTracking(name, openCommittedDetail);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[activity] stopTracking error:', String(err));
     }
+    if (detailOpenedFromBase) return;
     setSavingHike(false);
     if (saved || useTrackingStore.getState().lastStopReason === 'too-short') {
       setStopSummary(null);
@@ -755,11 +792,13 @@ export function HikingScreen() {
   const signalLostFor = signalLost ? realLocationHealth.sourceAgeMs ?? 0 : 0;
   const signalLostMin = Math.floor(signalLostFor / 60_000);
   const gpsFixHealthy = isTracking && locationAvailable && lastTrackT !== null
-    && realLocationHealth.sourceHealth === 'fresh'
+    && (realLocationHealth.sourceHealth === 'fresh' || realMotionState === 'probably-stationary')
     && !signalLost && !canonicalDegraded;
   const simulatorGpsActive = isTracking && locationProviderSource === 'simulator';
   const gpsStatusLabel = simulatorGpsActive
     ? `SIM · ${{ normal: 'Good', poor: 'Poor', lost: 'Lost', frozen: 'Frozen' }[simulatorSignal]}`
+    : transitionState === 'resuming'
+      ? 'Restoring GPS'
     : status === 'paused'
       ? 'GPS held'
       : signalLost
@@ -776,7 +815,8 @@ export function HikingScreen() {
       : simulatorSignal === 'poor' ? 'warning'
         : simulatorSignal === 'lost' ? 'danger'
           : 'info'
-    : status === 'paused' ? 'muted'
+    : transitionState === 'resuming' ? 'warning'
+      : status === 'paused' ? 'muted'
       : signalLost ? 'danger'
         : canonicalDegraded ? 'warning'
         : gpsFixHealthy ? 'healthy'
@@ -832,7 +872,7 @@ export function HikingScreen() {
     closeRoutePicker();
   };
 
-  const selectedRouteName = routes.find(r => r.id === selectedRoute)?.name ?? 'Free Hike';
+  const selectedRouteName = routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Hike';
 
   // v412: 两个 return 分支 (phase='select' early return + Phase 2 主 return) 都需要挂
   // UnfinishedRecoveryModal, 抽成一个 node 避免复制粘贴导致 onContinue/onDiscard 逻辑分叉。
@@ -923,19 +963,22 @@ export function HikingScreen() {
   // One native Mapbox owner spans pre-start and Tracking. Activity/provider
   // transitions update layers and camera data; they never replace a map that
   // has already loaded on the device.
-  const activeRoute = selectedRoute ? routes.find(r => r.id === selectedRoute) : null;
-  const routePolyline = activeRoute?.points ?? [];
+  const activeRoute = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+  const routePolyline = activitySessionVisible && activityRouteReference
+    ? activityRouteReference.points
+    : (activeRoute?.points ?? []);
   const hikeMapSurface = (
     <HikingMap
       key="hike-map-surface"
       markers={activitySessionVisible ? markers : []}
-      trackPoints={activitySessionVisible ? liveMapTrackPoints : []}
+      trackPoints={activitySessionVisible ? liveTrackPoints : []}
+      plannedRoutePoints={routePolyline}
       onMarkerPress={(id) => {
         if (!activitySessionVisible) return;
         setSelectedMarkerId(id);
         setUi('detail');
       }}
-      routeStart={activitySessionVisible && routePolyline.length > 0
+      routeStart={routePolyline.length > 0
         ? { lat: routePolyline[0].lat, lng: routePolyline[0].lng }
         : null}
       userPos={hikeCameraContract.userPosition}
@@ -956,6 +999,8 @@ export function HikingScreen() {
     else void pauseTracking();
   };
 
+  const finishLifecycleBeforeSummary = useRef<'tracking' | 'paused' | null>(null);
+
   const handleFinishHike = async () => {
     haptic.impact('medium');
     const current = useTrackingStore.getState();
@@ -963,19 +1008,20 @@ export function HikingScreen() {
       await stopTracking();
       return;
     }
-    await pauseTracking();
-    const frozen = useTrackingStore.getState();
-    if (!saveEligibility(frozen.trackPoints, frozen.distanceM).eligible) {
+    finishLifecycleBeforeSummary.current = current.status === 'tracking' ? 'tracking' : 'paused';
+    // Opening confirmation is a presentation transaction, not a lifecycle
+    // transition. Finish itself owns the acceptance fence on confirmation.
+    if (!saveEligibility(current.trackPoints, current.distanceM).eligible) {
       setShowTooShortConfirm(true);
       return;
     }
     setStopSummary({
-      distanceM: frozen.distanceM,
-      durationS: frozen.durationS,
-      elevationGainM: frozen.elevationGainM,
-      activityMode: frozen.activityMode,
-      trackPoints: frozen.trackPoints.map(point => ({ lat: point.lat, lng: point.lng })),
-      startedAt: frozen.startedAt!,
+      distanceM: current.distanceM,
+      durationS: current.durationS,
+      elevationGainM: current.elevationGainM,
+      activityMode: current.activityMode,
+      trackPoints: current.trackPoints.map(point => ({ lat: point.lat, lng: point.lng })),
+      startedAt: current.startedAt!,
     });
   };
 
@@ -1006,7 +1052,7 @@ export function HikingScreen() {
           mode="hike"
           safeBottom={insets.bottom}
           routeName={selectedRouteName}
-          routeDescription={selectedRoute ? 'Follow a saved route' : 'Explore freely without a planned route'}
+          routeDescription={selectedRoute ? 'This Route is shown on the map for reference.' : 'Explore freely without a planned route'}
           readinessLabel={simulatorLocationAuthoritative
             ? 'Simulator origin ready'
             : hasLocationPermission === false
@@ -1127,6 +1173,8 @@ export function HikingScreen() {
         mode="hike"
         phase={operationalState === 'finishing'
           ? 'finishing'
+          : operationalState === 'resuming' ? 'paused'
+            : operationalState === 'pausing' ? 'tracking'
           : operationalState === 'paused' ? 'paused' : 'tracking'}
         safeTop={insets.top}
         gpsLabel={gpsStatusLabel}
@@ -1145,6 +1193,8 @@ export function HikingScreen() {
           mode="hike"
           phase={operationalState === 'finishing'
             ? 'finishing'
+            : operationalState === 'resuming' ? 'resuming'
+              : operationalState === 'pausing' ? 'pausing'
             : status === 'paused' ? 'paused' : 'tracking'}
           safeBottom={insets.bottom}
           backgroundWarning={backgroundTrackingWarning}
@@ -1227,12 +1277,9 @@ export function HikingScreen() {
           saving={savingHike}
           savingStep={savingHikeStep}
           onCancel={() => {
-            // v120: Resume — un-pause and dismiss the sheet. Tracking
-            // resumes from where it left off. The gap between Stop
-            // tap and Resume tap is recorded as a signal-loss interval
-            // (no distance/elev accumulation; Kalman jumps once on the
-            // next fresh GPS point).
-            resumeTracking();
+            // No state restoration is inferred or attempted: confirmation
+            // never changed Recording/Paused in the first place.
+            finishLifecycleBeforeSummary.current = null;
             setStopSummary(null);
           }}
           onDiscard={async () => {

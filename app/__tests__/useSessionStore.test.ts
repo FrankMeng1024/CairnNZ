@@ -284,4 +284,24 @@ describe('useSessionStore — per-user isolation', () => {
     await expect(useSessionStore.getState().renameSession('local-pending', 'Queued')).resolves.toEqual({ ok: true });
     expect(useSessionStore.getState().sessions[0].name).toBe('Queued');
   });
+
+  it('reports a durable queued server deletion without resurrecting the local Activity', async () => {
+    setupAsyncStorageMock();
+    const service = require('../src/services/sessionService');
+    const { useSessionStore } = require('../src/store/useSessionStore');
+    await useSessionStore.getState().hydrate('userA');
+    await useSessionStore.getState().addSession({
+      id: 'delete-me', clientActivityId: 'delete-me', serverActivityId: 42, syncState: 'synced',
+      activityMode: 'hiking', regionCode: 'nz', startedAt: 1, endedAt: 2,
+      durationS: 1, distanceM: 30, elevationGainM: 0, trackPoints: [], markerIds: [],
+    });
+    service.deleteRemoteSessionByClientId.mockResolvedValueOnce(false);
+    service.deleteRemoteSession.mockResolvedValueOnce(false);
+
+    await expect(useSessionStore.getState().deleteSession('delete-me')).resolves.toEqual({
+      remoteState: 'queued',
+    });
+    expect(useSessionStore.getState().sessions).toHaveLength(0);
+    expect(service.deleteRemoteSession).toHaveBeenCalledWith(42);
+  });
 });

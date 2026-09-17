@@ -29,19 +29,22 @@ import { TrimSlider } from './TrimSlider';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../tokens';
 import { Icon } from '../Icon';
 import { useDistance } from '../../utils/distanceFormat';
+import { useVisualTheme } from '../../hooks/useVisualTheme';
 
 interface EditOverlayV274Props {
   onCancel: () => void;
   onSave: () => Promise<void> | void;
   onPreview: () => Promise<void> | void;
   onBeautify: () => Promise<void> | void;
+  saveLabel?: string;
 }
 
 type ToolKey = 'pan' | 'brush';
 
 export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element {
-  const { onSave, onPreview, onBeautify } = props;
+  const { onSave, onPreview, onBeautify, saveLabel = 'Apply to draft' } = props;
   const insets = useSafeAreaInsets();
+  const theme = useVisualTheme();
   // O12 Round-3 R3-C1: settings-aware distance format for trim readout.
   const dist = useDistance();
 
@@ -152,16 +155,23 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
           activeOpacity={0.85}
           disabled={!canUndo}
           onPress={handleUndoTap}
-          style={[styles.utilityBadge, !canUndo && styles.btnDisabled]}
+          style={[
+            styles.utilityBadge,
+            { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle, shadowColor: theme.shadow },
+            !canUndo && styles.btnDisabled,
+          ]}
         >
-          <Icon name="Undo2" size={16} color={CONCEPT_GREEN} strokeWidth={2.4} />
+          <Icon name="Undo2" size={16} color={theme.iconActive} strokeWidth={2.4} />
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={handleResetTap}
-          style={[styles.utilityBadge, { backgroundColor: Colors.dangerBg }]}
+          style={[
+            styles.utilityBadge,
+            { backgroundColor: theme.destructiveSurface, borderColor: theme.borderSubtle, shadowColor: theme.shadow },
+          ]}
         >
-          <Icon name="RotateCcw" size={16} color={Colors.danger} strokeWidth={2.4} />
+          <Icon name="RotateCcw" size={16} color={theme.destructive} strokeWidth={2.4} />
         </TouchableOpacity>
       </View>
 
@@ -284,29 +294,33 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
         >
           {/* Error pill (red, overrides status) OR status pill (light) */}
           {inErrorState ? (
-            <View style={styles.errorPill}>
-              <Icon name="TriangleAlert" size={14} color={Colors.surface} strokeWidth={2.5} />
-              <Text style={styles.errorPillText} numberOfLines={2}>{lastError}</Text>
+            <View style={[styles.errorPill, { backgroundColor: theme.destructive, shadowColor: theme.shadow }]}>
+              <Icon name="TriangleAlert" size={14} color={theme.onPrimary} strokeWidth={2.5} />
+              <Text style={[styles.errorPillText, { color: theme.onPrimary }]} numberOfLines={2}>{lastError}</Text>
             </View>
           ) : statusText ? (
-            <View style={styles.statusPill}>
-              <Text style={styles.statusPillText} numberOfLines={1}>{statusText}</Text>
+            <View style={[styles.statusPill, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle, shadowColor: theme.shadow }]}>
+              <Text style={[styles.statusPillText, { color: theme.foreground }]} numberOfLines={1}>{statusText}</Text>
             </View>
           ) : null}
 
           {hasUnpreviewedStrokes ? (
             <TouchableOpacity
               activeOpacity={0.85}
-              style={[styles.previewBtn, !canPreview && styles.btnDisabled]}
+              style={[
+                styles.previewBtn,
+                { backgroundColor: theme.secondaryAction, borderColor: theme.primary },
+                !canPreview && styles.btnDisabled,
+              ]}
               disabled={!canPreview}
               onPress={() => canPreview && onPreview()}
             >
               {isComputing ? (
-                <ActivityIndicator size="small" color={Colors.primary} />
+                <ActivityIndicator size="small" color={theme.primary} />
               ) : (
                 <>
-                  <Icon name="Eye" size={16} color={Colors.primary} strokeWidth={2.5} />
-                  <Text style={styles.previewBtnText} numberOfLines={1}>
+                  <Icon name="Eye" size={16} color={theme.primary} strokeWidth={2.5} />
+                  <Text style={[styles.previewBtnText, { color: theme.foreground }]} numberOfLines={1}>
                     {inErrorState ? 'Fix the stroke first' : 'Preview'}
                   </Text>
                 </>
@@ -318,12 +332,12 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   trimOpen. Tap-outside backdrop dismisses it (rendered
                   separately, see below). */}
               {trimOpen && (
-                <View style={styles.trimPanel} pointerEvents="auto">
+                <View style={[styles.trimPanel, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle, shadowColor: theme.shadow }]} pointerEvents="auto">
                   <View style={styles.trimHeaderRow}>
-                    <Icon name="Scissors" size={14} color={CONCEPT_GREEN} strokeWidth={2.5} />
-                    <Text style={styles.trimHeaderText} numberOfLines={1}>Trim · drag handles</Text>
+                    <Icon name="Scissors" size={14} color={theme.iconActive} strokeWidth={2.5} />
+                    <Text style={[styles.trimHeaderText, { color: theme.foreground }]} numberOfLines={1}>Trim · drag handles</Text>
                     {totalLengthM > 0 && (trimStartFrac > 0 || trimEndFrac < 1) && (
-                      <Text style={styles.trimReadout} numberOfLines={1}>
+                      <Text style={[styles.trimReadout, { color: theme.foregroundSecondary }]} numberOfLines={1}>
                         {dist.format(editedLengthM, 2)} / {dist.format(totalLengthM, 2)} {dist.unit}
                       </Text>
                     )}
@@ -344,17 +358,17 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   Trim     = toggles trim slider panel
                   Draw     = brush tool
                   Move     = pan tool (map pan, no polyline translate) */}
-              <View style={styles.toolsCard} pointerEvents="auto">
+              <View style={[styles.toolsCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle, shadowColor: theme.shadow }]} pointerEvents="auto">
                 <TouchableOpacity
                   activeOpacity={0.85}
                   style={styles.toolTab}
                   disabled={!canBeautify}
                   onPress={() => { setTrimOpen(false); if (canBeautify) onBeautify(); }}
                 >
-                  <View style={styles.toolIconWrap}>
-                    <Icon name="Sparkles" size={22} color={CONCEPT_GREEN} strokeWidth={2.2} />
+                  <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }]}>
+                    <Icon name="Sparkles" size={22} color={theme.iconActive} strokeWidth={2.2} />
                   </View>
-                  <Text style={styles.toolTabLabel}>Beautify</Text>
+                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }]}>Beautify</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -362,10 +376,10 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   style={[styles.toolTab, trimOpen && styles.toolTabActive]}
                   onPress={() => setTrimOpen(v => !v)}
                 >
-                  <View style={[styles.toolIconWrap, trimOpen && styles.toolIconWrapActive]}>
-                    <Icon name="Scissors" size={22} color={trimOpen ? Colors.surface : CONCEPT_GREEN} strokeWidth={2.2} />
+                  <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, trimOpen && { backgroundColor: theme.primary }]}>
+                    <Icon name="Scissors" size={22} color={trimOpen ? theme.onPrimary : theme.iconActive} strokeWidth={2.2} />
                   </View>
-                  <Text style={[styles.toolTabLabel, trimOpen && styles.toolTabLabelActive]}>Trim</Text>
+                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, trimOpen && { color: theme.primary, fontWeight: '800' }]}>Trim</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -373,10 +387,10 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   style={[styles.toolTab, safeTool === 'brush' && styles.toolTabActive]}
                   onPress={() => { setTrimOpen(false); setActiveTool('brush'); }}
                 >
-                  <View style={[styles.toolIconWrap, safeTool === 'brush' && styles.toolIconWrapActive]}>
-                    <Icon name="Pencil" size={22} color={safeTool === 'brush' ? Colors.surface : CONCEPT_GREEN} strokeWidth={2.2} />
+                  <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, safeTool === 'brush' && { backgroundColor: theme.primary }]}>
+                    <Icon name="Pencil" size={22} color={safeTool === 'brush' ? theme.onPrimary : theme.iconActive} strokeWidth={2.2} />
                   </View>
-                  <Text style={[styles.toolTabLabel, safeTool === 'brush' && styles.toolTabLabelActive]}>Draw</Text>
+                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'brush' && { color: theme.primary, fontWeight: '800' }]}>Draw</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -384,10 +398,10 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   style={[styles.toolTab, safeTool === 'pan' && styles.toolTabActive]}
                   onPress={() => { setTrimOpen(false); setActiveTool('pan'); }}
                 >
-                  <View style={[styles.toolIconWrap, safeTool === 'pan' && styles.toolIconWrapActive]}>
-                    <Icon name="Move" size={22} color={safeTool === 'pan' ? Colors.surface : CONCEPT_GREEN} strokeWidth={2.2} />
+                  <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, safeTool === 'pan' && { backgroundColor: theme.primary }]}>
+                    <Icon name="Move" size={22} color={safeTool === 'pan' ? theme.onPrimary : theme.iconActive} strokeWidth={2.2} />
                   </View>
-                  <Text style={[styles.toolTabLabel, safeTool === 'pan' && styles.toolTabLabelActive]}>Move</Text>
+                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'pan' && { color: theme.primary, fontWeight: '800' }]}>Move</Text>
                 </TouchableOpacity>
               </View>
 
@@ -396,12 +410,12 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   previewed, so we surface Save). */}
               <TouchableOpacity
                 activeOpacity={0.85}
-                style={[styles.primaryCta, !canSave && styles.btnDisabled]}
+                style={[styles.primaryCta, { backgroundColor: theme.primaryAction }, !canSave && styles.btnDisabled]}
                 disabled={!canSave}
                 onPress={() => { setTrimOpen(false); if (canSave) onSave(); }}
               >
-                <Icon name="Check" size={18} color={Colors.surface} strokeWidth={2.6} />
-                <Text style={styles.primaryCtaText} numberOfLines={1}>Save</Text>
+                <Icon name="Check" size={18} color={theme.onPrimary} strokeWidth={2.6} />
+                <Text style={[styles.primaryCtaText, { color: theme.onPrimary }]} numberOfLines={1}>{saveLabel}</Text>
               </TouchableOpacity>
             </>
           )}

@@ -51,9 +51,6 @@ export function ForegroundUnlockManager({ managePassiveGps = false }: { managePa
     require('../../../services/bootDiagnostics').markBootPhase('fgum_render_enter');
   } catch {/* ignore */}
   const enabled = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
-  // recordMode is retained only as a diagnostic log field. Product gating is
-  // the passive preference plus the explicit no-live-Activity check below.
-  const recordMode = useMemorySettingsStore((s) => s.recordMode);
   const userId = useAppStore((s) => s.user?.id ?? null);
   // Require isLoggedIn=true so a cached user object from an expired session
   // cannot hydrate account-scoped screen data under stale auth.
@@ -64,8 +61,6 @@ export function ForegroundUnlockManager({ managePassiveGps = false }: { managePa
   // mid-AppState transition doesn't fire the wrong branch.
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
-  const recordModeRef = useRef(recordMode);
-  recordModeRef.current = recordMode;
 
   // MemoryScreen owns only its optional H3 rendering cache. The canonical
   // point store/persistence/server reconcile is app-scoped (useAppStore
@@ -156,8 +151,7 @@ export function ForegroundUnlockManager({ managePassiveGps = false }: { managePa
         const sub = await Location.watchPositionAsync(WATCH_OPTIONS, (loc) => {
           if (cancelled) return;
           // R4 fix (v0.2.6.4): cache the latest fix for MemoryScreen
-          // even if recordMode gates the actual fog clearing — this
-          // way Memory tab opens fast without competing for GPS.
+          // so Memory can open quickly without competing for GPS.
           useMemoryStore.getState().setLastWatcherFix(
             loc.coords.latitude,
             loc.coords.longitude,
@@ -175,7 +169,7 @@ export function ForegroundUnlockManager({ managePassiveGps = false }: { managePa
             source: 'passive',
           });
         });
-        log('memory.watcher_started', { mode: recordModeRef.current });
+        log('memory.watcher_started', { mode: 'foreground-opt-in' });
         if (cancelled) {
           sub.remove();
         } else {

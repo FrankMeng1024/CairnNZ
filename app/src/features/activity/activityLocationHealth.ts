@@ -8,6 +8,7 @@ export type ActivityUserFacingLocationIssue =
   | 'none'
   | 'source-unavailable'
   | 'sustained-route-unreliable';
+export type ActivityPresentationFreshness = 'CURRENT' | 'RECOVERING_PUCK' | 'STALE_PUCK';
 
 export interface ActivityLocationHealth {
   sourceHealth: ActivitySourceHealth;
@@ -29,6 +30,20 @@ export interface ActivityLocationHealth {
 
 function age(nowMs: number, timestamp: number | null): number | null {
   return timestamp === null ? null : Math.max(0, nowMs - timestamp);
+}
+
+/** Presentation freshness is independent from camera-follow intent. */
+export function deriveActivityPresentationFreshness(args: {
+  nowMs: number;
+  sourceActive: boolean;
+  latestSourceTimestamp: number | null;
+  freshForMs?: number;
+}): ActivityPresentationFreshness {
+  const sourceAgeMs = age(args.nowMs, args.latestSourceTimestamp);
+  if (sourceAgeMs === null || (!args.sourceActive && sourceAgeMs <= (args.freshForMs ?? 20_000))) {
+    return 'RECOVERING_PUCK';
+  }
+  return sourceAgeMs <= (args.freshForMs ?? 20_000) ? 'CURRENT' : 'STALE_PUCK';
 }
 
 /** Provider freshness and accepted-Activity freshness are separate facts. */
@@ -79,8 +94,16 @@ export function deriveActivityLocationHealth(args: {
     } else if (reason.includes('accuracy')) canonicalDegradationReason = 'accuracy-reject';
     else canonicalDegradationReason = 'other-reject';
   }
-  const userFacingIssue: ActivityUserFacingLocationIssue = sourceHealth === 'stale'
+  // A distance-filtered provider is allowed to stay quiet while its recent
+  // evidence says the user is stationary. No callback / no canonical advance
+  // is not, by itself, source loss. Native source inactivity remains a real
+  // unavailable state, and stale evidence while moving/uncertain still warns.
+  const stationaryQuietProvider = args.sourceActive
+    && args.motionState === 'probably-stationary';
+  const userFacingIssue: ActivityUserFacingLocationIssue = (
+    (sourceHealth === 'stale' && !stationaryQuietProvider)
     || (sourceHealth === 'inactive' && sourceAgeMs !== null)
+  )
     ? 'source-unavailable'
     : sourceHealth === 'fresh'
       && canonicalHealth === 'degraded'

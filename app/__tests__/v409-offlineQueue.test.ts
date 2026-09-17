@@ -33,8 +33,18 @@ jest.mock('../src/services/networkMonitor', () => ({
   default: { onChange: jest.fn(() => () => {}), isOnline: () => true },
 }));
 
-const { makeOp, enqueue, drain, readQueueSnapshot, clearQueue } = require('../src/services/offlineQueue');
+const { makeOp, enqueue, drain } = require('../src/services/offlineQueue');
 const { authenticatedFetch } = require('../src/services/apiService');
+const QUEUE_KEY = '@cairn:offline_queue:v1';
+type QueueSnapshotItem = {
+  opId: string;
+  lastTriedAt?: number;
+  body?: { points?: unknown[] };
+  [key: string]: unknown;
+};
+const readQueueSnapshot = async (): Promise<QueueSnapshotItem[]> =>
+  JSON.parse(mockStore[QUEUE_KEY] ?? '[]') as QueueSnapshotItem[];
+const clearQueue = async () => { delete mockStore[QUEUE_KEY]; };
 
 describe('v409 offlineQueue', () => {
   beforeEach(async () => {
@@ -130,9 +140,9 @@ describe('v409 offlineQueue', () => {
     });
   });
 
-  describe('readQueueSnapshot + clearQueue (v409 web hook helpers)', () => {
+  describe('persisted queue isolation', () => {
     it('snapshot returns copies (mutation safe)', async () => {
-      await enqueue(makeOp('session_start', '/api/sessions/start', 'POST', {}, 'test-a'));
+      await enqueue(makeOp('session_append', '/api/sessions/1/append-points', 'PATCH', { points: [] }, 'test-a'));
       const s1 = await readQueueSnapshot();
       s1[0].attempts = 999;
       const s2 = await readQueueSnapshot();
@@ -140,8 +150,8 @@ describe('v409 offlineQueue', () => {
     });
 
     it('clearQueue empties everything', async () => {
-      await enqueue(makeOp('session_start', '/api/sessions/start', 'POST', {}, 'a'));
-      await enqueue(makeOp('session_start', '/api/sessions/start', 'POST', {}, 'b'));
+      await enqueue(makeOp('session_append', '/api/sessions/1/append-points', 'PATCH', { points: [] }, 'a'));
+      await enqueue(makeOp('session_append', '/api/sessions/1/append-points', 'PATCH', { points: [] }, 'b'));
       expect((await readQueueSnapshot()).length).toBe(2);
       await clearQueue();
       expect((await readQueueSnapshot()).length).toBe(0);

@@ -23,6 +23,7 @@ import { useSettingsStore } from '../store/useSettingsStore';
 import type { SessionMetadata, DeviceInfo } from '../types/debugLog';
 import { getToken } from './tokenStore';
 import { sanitizeTelemetryJsonlForUpload } from './telemetryPrivacy';
+import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 
 export type UploadResult =
   | { ok: true; sessionId: string; bytes: number }
@@ -93,6 +94,11 @@ class TelemetryUploader {
     }
 
     const settings = useSettingsStore.getState();
+    const qaAuthorized = settings.debugMode
+      && (activitySimulatorBuildCapable || (typeof __DEV__ !== 'undefined' && __DEV__));
+    if (!qaAuthorized) {
+      return { ok: false, sessionId, error: 'Internal QA upload is not authorized', retryable: false };
+    }
     if (!settings.telemetryUploadEnabled) {
       return { ok: false, sessionId, error: 'Upload disabled in settings', retryable: false };
     }
@@ -222,6 +228,11 @@ class TelemetryUploader {
       return { ok: false, sessionId, error: 'Upload already in progress', retryable: false };
     }
     const settings = useSettingsStore.getState();
+    const qaAuthorized = settings.debugMode
+      && (activitySimulatorBuildCapable || (typeof __DEV__ !== 'undefined' && __DEV__));
+    if (!qaAuthorized) {
+      return { ok: false, sessionId, error: 'Internal QA upload is not authorized', retryable: false };
+    }
     if (!settings.telemetryUploadEnabled) {
       return { ok: false, sessionId, error: 'Internal QA upload is disabled', retryable: false };
     }

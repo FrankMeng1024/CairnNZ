@@ -18,6 +18,7 @@ import { MARKER_TYPE_ORDER, MARKER_TYPES, MarkerType } from '../../../config/mar
 import { MarkerPermission } from '../../../store/useMarkerStore';
 import { haptic } from '../../../services/hapticService';
 import { log } from '../../../services/appLog';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
 
 export interface MarkFormProps {
   // Values
@@ -44,6 +45,10 @@ export interface MarkFormProps {
   // Limits
   titleMaxChars?: number;
   noteMaxChars?: number;
+  /** Plant captures a personal Cairn first; field-report taxonomy is later. */
+  showTypePicker?: boolean;
+  /** Plant defaults personal without requiring a social decision in motion. */
+  showVisibilityPicker?: boolean;
 }
 
 const DEFAULT_TITLE_MAX = 30;
@@ -59,7 +64,10 @@ export function MarkForm(props: MarkFormProps) {
     autoFocus = null,
     titleMaxChars = DEFAULT_TITLE_MAX,
     noteMaxChars = DEFAULT_NOTE_MAX,
+    showTypePicker = true,
+    showVisibilityPicker = true,
   } = props;
+  const theme = useVisualTheme();
 
   // R114: char counter warning thresholds — 90% = warn tone, 100% = danger.
   const titleWarn = title.length >= Math.floor(titleMaxChars * 0.9);
@@ -75,7 +83,8 @@ export function MarkForm(props: MarkFormProps) {
           4-eyes review add-on: paddingRight=40 leaves the last visible
           chip peeking under the edge of the viewport so users see there
           is more to scroll — otherwise the row looked like a fixed set. */}
-      <Text style={styles.fieldLabel}>Type</Text>
+      {showTypePicker ? <>
+      <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Type</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -90,6 +99,7 @@ export function MarkForm(props: MarkFormProps) {
               key={t}
               style={[
                 styles.typeChip,
+                { backgroundColor: theme.surface, borderColor: theme.border },
                 active && { backgroundColor: meta.bg, borderColor: meta.color },
               ]}
               onPress={() => {
@@ -104,12 +114,13 @@ export function MarkForm(props: MarkFormProps) {
               <Icon
                 name={meta.icon as IconName}
                 size={16}
-                color={active ? meta.color : Colors.textSecondary}
+                color={active ? meta.color : theme.iconInactive}
                 strokeWidth={active ? 2.4 : 2}
               />
               <Text
                 style={[
                   styles.typeChipLabel,
+                  { color: theme.foregroundSecondary },
                   active && { color: meta.color, fontWeight: '600' },
                 ]}
               >
@@ -119,13 +130,14 @@ export function MarkForm(props: MarkFormProps) {
           );
         })}
       </ScrollView>
+      </> : null}
 
       {/* TITLE */}
-      <Text style={styles.fieldLabel}>Title</Text>
+      <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Name <Text style={{ color: theme.muted, fontWeight: '400' }}>(optional)</Text></Text>
       <TextInput
-        style={styles.input}
-        placeholder="What kind of mark is this?"
-        placeholderTextColor={Colors.textMuted}
+        style={[styles.input, { backgroundColor: theme.inputSurface, borderColor: theme.border, color: theme.foreground }]}
+        placeholder="Name this place or moment"
+        placeholderTextColor={theme.muted}
         maxLength={titleMaxChars}
         value={title}
         onChangeText={onTitleChange}
@@ -137,7 +149,7 @@ export function MarkForm(props: MarkFormProps) {
       {title.length > 0 ? (
         <Text
           style={[
-            styles.charCounter,
+            styles.charCounter, { color: theme.muted },
             titleWarn && { color: Colors.warning },
             titleDanger && { color: Colors.danger },
           ]}
@@ -148,11 +160,11 @@ export function MarkForm(props: MarkFormProps) {
       ) : null}
 
       {/* NOTE */}
-      <Text style={styles.fieldLabel}>Note</Text>
+      <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Note <Text style={{ color: theme.muted, fontWeight: '400' }}>(optional)</Text></Text>
       <TextInput
-        style={[styles.input, styles.textArea]}
-        placeholder="Tell whoever finds this…"
-        placeholderTextColor={Colors.textMuted}
+        style={[styles.input, styles.textArea, { backgroundColor: theme.inputSurface, borderColor: theme.border, color: theme.foreground }]}
+        placeholder="What did you notice here?"
+        placeholderTextColor={theme.muted}
         maxLength={noteMaxChars}
         value={note}
         onChangeText={onNoteChange}
@@ -166,7 +178,7 @@ export function MarkForm(props: MarkFormProps) {
       {note.length > 0 ? (
         <Text
           style={[
-            styles.charCounter,
+            styles.charCounter, { color: theme.muted },
             noteWarn && { color: Colors.warning },
             noteDanger && { color: Colors.danger },
           ]}
@@ -177,7 +189,8 @@ export function MarkForm(props: MarkFormProps) {
       ) : null}
 
       {/* WHO CAN SEE THIS */}
-      <Text style={styles.fieldLabel}>Who can see this</Text>
+      {showVisibilityPicker ? <>
+      <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Who can see this</Text>
       <View style={styles.visRow}>
         <VisChip
           label="Just me"
@@ -202,12 +215,13 @@ export function MarkForm(props: MarkFormProps) {
           onPress={() => { haptic.selection(); onVisibilityChange('public'); }}
         />
       </View>
+      </> : null}
 
       {/* LOCATION LOCKED — edit mode only. */}
       {showLocationLockedNotice ? (
         <View style={styles.lockedField}>
-          <Icon name="Lock" size={12} color={Colors.textMuted} strokeWidth={2} />
-          <Text style={styles.lockedFieldText}>
+          <Icon name="Lock" size={12} color={theme.iconInactive} strokeWidth={2} />
+          <Text style={[styles.lockedFieldText, { color: theme.muted }]}>
             Location is fixed where you planted it.
           </Text>
         </View>
@@ -226,19 +240,21 @@ interface VisChipProps {
 }
 
 function VisChip({ label, iconName, active, activeTone, disabled, onPress }: VisChipProps) {
+  const theme = useVisualTheme();
   // R114: three tones so each visibility tier has a distinct active look.
   // Neutral = personal (grey), primary = friends (forest green), info = anyone (blue).
   const toneStyle =
     activeTone === 'neutral'
-      ? { border: Colors.textSecondary, bg: 'rgba(140,126,114,0.10)', fg: Colors.textPrimary }
+      ? { border: theme.foregroundSecondary, bg: theme.controlSelected, fg: theme.foreground }
       : activeTone === 'primary'
-      ? { border: Colors.primary, bg: Colors.primaryBg, fg: Colors.primary }
+      ? { border: theme.primary, bg: theme.controlSelected, fg: theme.primary }
       : { border: Colors.info, bg: Colors.infoBg, fg: Colors.info };
 
   return (
     <TouchableOpacity
       style={[
         styles.visChip,
+        { backgroundColor: theme.surface, borderColor: theme.border },
         active && { borderColor: toneStyle.border, backgroundColor: toneStyle.bg },
         disabled && styles.visChipDisabled,
       ]}
@@ -251,12 +267,13 @@ function VisChip({ label, iconName, active, activeTone, disabled, onPress }: Vis
       <Icon
         name={iconName}
         size={14}
-        color={active ? toneStyle.fg : Colors.textSecondary}
+        color={active ? toneStyle.fg : theme.iconInactive}
         strokeWidth={2}
       />
       <Text
         style={[
           styles.visChipLabel,
+          { color: theme.foregroundSecondary },
           active && { color: toneStyle.fg, fontWeight: '600' },
         ]}
       >

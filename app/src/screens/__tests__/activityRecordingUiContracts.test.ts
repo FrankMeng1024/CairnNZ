@@ -23,7 +23,9 @@ describe('shared Hike and Run recording UI contracts', () => {
   });
 
   test('tracking actions stay visible and paused Resume is primary', () => {
-    expect(shared).toContain("{paused ? 'Resume' : 'Pause'}");
+    expect(shared).toContain("phase === 'resuming' ? 'Resuming…'");
+    expect(shared).toContain("phase === 'pausing' ? 'Pausing…'");
+    expect(shared).toContain("paused ? 'Resume' : 'Pause'");
     expect(shared).toContain('styles.primaryControl');
     expect(shared).toContain("accessibilityLabel={`Finish ${mode}`}");
     expect(shared).toContain("mode === 'run' ? 'Cairn' : 'Plant'");
@@ -72,11 +74,15 @@ describe('shared Hike and Run recording UI contracts', () => {
 
   test('Mapbox route styling keeps explicit Hike/Run identity and a readability casing', () => {
     const map = read('src/screens/HikingMap.tsx');
-    expect(map).toContain('id="track-line-casing"');
-    expect(map).toContain("activityVariant === 'run' ? Colors.running : theme.primary");
-    expect(map).toContain('lineWidth: 4.5');
-    expect(map).toContain('if (isSegmentBreak)');
-    expect(map).toContain('features: []');
+    const presentation = read('src/features/activity/activityMapPresentation.ts');
+    expect(map).toContain('id={`${id}-casing`}');
+    expect(map).toContain('activityMapPresentation(mapTheme, activityVariant)');
+    expect(map).toContain('lineWidth={mapPresentation.routeWidth}');
+    expect(map).toContain('lineEmissiveStrength: emissiveStrength');
+    expect(map).toContain('slot="top"');
+    expect(map).toContain('updateIncrementalRoutePresentation');
+    expect(presentation).toContain("routeCasingColor: '#FFF9ED'");
+    expect(presentation).toContain('emissiveStrength: 1');
   });
 
   test('Run recenter calls the provider-selected accepted map target', () => {

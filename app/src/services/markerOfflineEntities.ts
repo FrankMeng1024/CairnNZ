@@ -55,11 +55,11 @@ export interface MarkerCreateServerResponse {
  *          (通常 B 类不回滚, 保留本地 + 标 syncState='failed' 让用户手动重试)
  * 每个 store 实例注册一次 (store 层做)。
  */
-let markerCreateAckHandler: ((localId: string, server: MarkerCreateServerResponse, ownerId: string) => Promise<void> | void) | null = null;
+let markerCreateAckHandler: ((localId: string, server: MarkerCreateServerResponse, data: MarkerCreatePayload, ownerId: string) => Promise<void> | void) | null = null;
 let markerCreateFailHandler: ((localId: string, err: any, ownerId: string) => void) | null = null;
 
 export function setMarkerCreateAckHandler(
-  ack: (localId: string, server: MarkerCreateServerResponse, ownerId: string) => Promise<void> | void,
+  ack: (localId: string, server: MarkerCreateServerResponse, data: MarkerCreatePayload, ownerId: string) => Promise<void> | void,
   fail?: (localId: string, err: any, ownerId: string) => void,
 ): void {
   markerCreateAckHandler = ack;
@@ -157,11 +157,9 @@ export const offlineMarkers = createOfflineEntity<MarkerCreatePayload, MarkerCre
     });
   },
   onSyncSuccess: async (localId, server, data, ownerId) => {
-    // Never drop the durable Cairn outbox after server acceptance until its
-    // independent Memory evidence is durably reconciled as well.
-    const { recordMemoryEvidence } = require('../features/memory/services/recordMemoryEvidence');
-    await recordMemoryEvidence({ lat: data.lat, lng: data.lng, atMs: Date.now(), source: 'reconciliation', ownerUserId: ownerId });
-    await markerCreateAckHandler?.(localId, server, ownerId);
+    // Plant owns a durable Cairn object, not explored-area evidence. Movement
+    // producers remain the sole authority for Memory/fog.
+    await markerCreateAckHandler?.(localId, server, data, ownerId);
   },
   onSyncFailure: (localId, err, _data, ownerId) => {
     try { markerCreateFailHandler?.(localId, err, ownerId); } catch { /* silent */ }

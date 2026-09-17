@@ -1,4 +1,4 @@
-import { deriveActivityLocationHealth } from '../activityLocationHealth';
+import { deriveActivityLocationHealth, deriveActivityPresentationFreshness } from '../activityLocationHealth';
 
 describe('Activity source and canonical health', () => {
   test('fresh provider evidence can coexist with degraded canonical evidence', () => {
@@ -107,5 +107,46 @@ describe('Activity source and canonical health', () => {
       continuityGapOpen: false,
       motionState: 'probably-stationary',
     }).userFacingIssue).toBe('none');
+  });
+
+  test('a quiet distance-filtered source while stationary is not Signal Lost', () => {
+    expect(deriveActivityLocationHealth({
+      nowMs: 160_000,
+      sourceActive: true,
+      latestSourceTimestamp: 90_000,
+      latestCanonicalTimestamp: 80_000,
+      pendingCandidate: false,
+      latestCanonicalDecisionReason: 'stationary-cluster-refined',
+      continuityGapOpen: false,
+      motionState: 'probably-stationary',
+    })).toMatchObject({
+      sourceHealth: 'stale',
+      userFacingIssue: 'none',
+    });
+  });
+
+  test('actual provider inactivity remains unavailable even after stationary evidence', () => {
+    expect(deriveActivityLocationHealth({
+      nowMs: 160_000,
+      sourceActive: false,
+      latestSourceTimestamp: 90_000,
+      latestCanonicalTimestamp: 80_000,
+      pendingCandidate: false,
+      latestCanonicalDecisionReason: 'stationary-cluster-refined',
+      continuityGapOpen: false,
+      motionState: 'probably-stationary',
+    }).userFacingIssue).toBe('source-unavailable');
+  });
+
+  test('foreground puck uses fresh retained evidence but never presents a stale point as current', () => {
+    expect(deriveActivityPresentationFreshness({
+      nowMs: 100_000, sourceActive: true, latestSourceTimestamp: 95_000,
+    })).toBe('CURRENT');
+    expect(deriveActivityPresentationFreshness({
+      nowMs: 100_000, sourceActive: true, latestSourceTimestamp: 60_000,
+    })).toBe('STALE_PUCK');
+    expect(deriveActivityPresentationFreshness({
+      nowMs: 100_000, sourceActive: false, latestSourceTimestamp: null,
+    })).toBe('RECOVERING_PUCK');
   });
 });

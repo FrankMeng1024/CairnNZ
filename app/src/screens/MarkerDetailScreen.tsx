@@ -5,24 +5,24 @@
  * project's other detail screens (MapHistoryScreen, RoutesScreen):
  * top map hero + scrollable content panel + top-left BackButton.
  *
- * Two entry points (the user spec calls for one shared screen):
- *   1. Plant flow success: PlantScreen.commit replaces the route here
- *   2. RoutesScreen Flags tab: tap navigates here
+ * One authoritative owned-Cairn surface reached by Plant/Quick Cairn,
+ * Activity linkage, Memory pins, and the personal All Cairns library.
  *
  * Behavior (v300 reversal of v299's read-only stance):
  *   - Owner sees Edit + Delete actions
- *   - Edit can modify title / body / type / permission (lat/lng locked)
- *   - Delete prompts confirm, then removes + nav.goBack
+ *   - Edit changes supported words only; identity/place/provenance stay locked
+ *   - Delete commits the existing tombstone contract before leaving Detail
  *   - publicSnapshot: once a marker has been public, what others
  *     see is frozen. If the owner has edited away from the snapshot,
  *     a small banner shows "Others see: [snapshot.note], pinned as
  *     [snapshot.type]" so the owner is reminded of the divergence.
- *   - Toggling public off/on flips visibility but never re-snapshots.
+ * Existing type/visibility and public-snapshot behavior remain readable but
+ * are not exposed as editing controls in this personal-management slice.
  */
 import React, { useMemo, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Dimensions, Platform, Alert,
-  TouchableOpacity, Modal, KeyboardAvoidingView, Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -31,8 +31,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useMarkerStore, type MarkerPermission } from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
+import { useSessionStore } from '../store/useSessionStore';
 import { MARKER_TYPES, type MarkerType } from '../config/markerTypes';
-import { splitTitleBody, encodeTitleBody } from '../features/plant/services/noteEncoding';
+import { cairnDisplayTitle, splitTitleBody, encodeTitleBody } from '../features/plant/services/noteEncoding';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
@@ -52,13 +53,23 @@ import { CairnPin, resolveTier } from '../features/memory/components/CairnPinsLa
 import { getPrimaryMapStyle, getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { formatDate } from '../utils/geo';
 import { log } from '../services/appLog';
-import { ContentConfig, VisibilityConfig } from '../features/plant/config/plantConfig';
+import { ContentConfig } from '../features/plant/config/plantConfig';
 // v422 offline-first: 显示同步状态 badge (pending / syncing / synced / failed)
 import { SyncBadge } from '../components/SyncBadge';
-// v422 D 类: marker edit/delete 是"回家做"的动作, 无网禁用按钮 + 提示
+// Connectivity explains the synced-edit boundary; local pending edits remain durable.
 import { useOnlineOnly } from '../hooks/useOnlineOnly';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
+import { cairnMatchesIdentity } from '../features/cairns/cairnIdentity';
+import { activityMatchesTarget } from '../features/activity/activityDetailPresentation';
+import { ContentSurface } from '../components/ContentSurface';
+import {
+  BottomSheetContent,
+  BottomSheetFrame,
+  BottomSheetHeader,
+} from '../components/BottomSheetFrame';
+import { ModalCard, ModalCardHeader } from '../components/ModalCard';
+import { PrimaryButton } from '../components/PrimaryButton';
 
 let MapView: any = null;
 let CameraComponent: any = null;
@@ -91,7 +102,7 @@ if (Platform.OS !== 'web') {
 }
 
 const { height: H } = Dimensions.get('window');
-const MAP_H = Math.max(280, H - 480);
+const MAP_H = Math.min(300, Math.max(220, Math.round(H * 0.32)));
 
 type DetailRoute = RouteProp<RootStackParamList, 'MarkerDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -111,17 +122,22 @@ export function MarkerDetailScreen() {
   const route = useRoute<DetailRoute>();
   const markerId = route.params?.markerId;
   const markers = useMarkerStore((s) => s.markers);
+  const markerStoreOwnerId = useMarkerStore((s) => s.userId);
   const updateMarker = useMarkerStore((s) => s.updateMarker);
+  const retryMarkerSync = useMarkerStore((s) => s.retryMarkerSync);
   const deleteMarker = useMarkerStore((s) => s.deleteMarker);
   const userId = useAppStore((s) => s.user?.id ?? '');
+  const sessions = useSessionStore((s) => s.sessions);
 
   const marker = useMemo(
     // v423 C1 fix: offline-first ack 后 marker.id 会从 localId 换成 server id.
     // Plant flow nav.replace 传的 markerId 是 localId, 若只按 m.id 匹配, ack
     // 一成功 find 立刻返回 undefined, 屏幕空白. 用 (id | localId) 双匹配保证
     // 用户在同一屏看到 pending → syncing → synced 完整生命周期.
-    () => markers.find((m) => m.id === markerId || m.localId === markerId),
-    [markers, markerId]
+    () => String(markerStoreOwnerId ?? '') === String(userId)
+      ? markers.find((candidate) => cairnMatchesIdentity(candidate, markerId))
+      : undefined,
+    [markerId, markerStoreOwnerId, markers, userId]
   );
 
   // Edit-mode local state. Initialized from marker only when entering edit.
@@ -131,8 +147,10 @@ export function MarkerDetailScreen() {
   const [editType, setEditType] = useState<MarkerType>('cairn');
   const [editPermission, setEditPermission] = useState<MarkerPermission>('personal');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  // v422 D 类: edit/delete 无网禁用. reason="Needs internet" 用于 button hint.
   const { online } = useOnlineOnly();
 
   const enterEdit = useCallback(() => {
@@ -142,52 +160,75 @@ export function MarkerDetailScreen() {
     setEditBody(body);
     setEditType(marker.type);
     setEditPermission(marker.permission);
+    setSaveError(null);
     setIsEditing(true);
     log('marker.edit_open', { id: marker.id });
   }, [marker]);
 
-  const cancelEdit = useCallback(() => {
+  const closeEdit = useCallback(() => {
+    setSaveError(null);
     setIsEditing(false);
   }, []);
 
+  const editDirty = Boolean(marker) && (
+    encodeTitleBody(editTitle.trim(), editBody) !== marker?.note
+  );
+
+  const requestCloseEdit = useCallback(() => {
+    if (saving) return;
+    if (!editDirty) {
+      closeEdit();
+      return;
+    }
+    Alert.alert(
+      'Discard changes?',
+      'Your draft has not been saved.',
+      [
+        { text: 'Stay', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: closeEdit },
+      ],
+    );
+  }, [closeEdit, editDirty, saving]);
+
   const saveEdit = useCallback(async () => {
     if (!marker) return;
+    setSaveError(null);
     setSaving(true);
     try {
-      const newNote = encodeTitleBody(editTitle.trim(), editBody.trim());
+      const newNote = encodeTitleBody(editTitle.trim(), editBody);
       await updateMarker(marker.id, {
-        type: editType,
         note: newNote,
-        permission: editPermission,
       });
-      log('marker.edit_save', { id: marker.id, type: editType, perm: editPermission });
+      log('marker.edit_save', { id: marker.id });
       setIsEditing(false);
     } catch (e: any) {
-      Alert.alert('Could not save', e?.message ?? 'Please try again in a moment.', [{ text: 'OK' }]);
+      setSaveError('Changes were not saved. Your draft is still here so you can try again.');
     } finally {
       setSaving(false);
     }
-  }, [marker, editTitle, editBody, editType, editPermission, updateMarker]);
+  }, [marker, editTitle, editBody, updateMarker]);
 
-  const handleDelete = useCallback(() => {
-    if (!marker) return;
-    Alert.alert(
-      'Delete this cairn?',
-      'It will be removed from your Memory and (if shared) from public view. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            log('marker.delete', { id: marker.id });
-            await deleteMarker(marker.id);
-            if (nav.canGoBack()) nav.goBack();
-          },
-        },
-      ]
-    );
-  }, [marker, deleteMarker, nav]);
+  const handleDelete = useCallback(async () => {
+    if (!marker || deleting) return;
+    setDeleting(true);
+    try {
+      log('marker.delete', { id: marker.id });
+      const result = await deleteMarker(marker.id);
+      setDeleteConfirmOpen(false);
+      if (nav.canGoBack()) nav.goBack();
+      else nav.replace('AllCairns');
+      if (result.remoteState === 'queued') {
+        Alert.alert(
+          'Delete queued',
+          'This Cairn is removed from this iPhone. Cairn will finish deleting the server copy when you are online.',
+        );
+      }
+    } catch {
+      Alert.alert('Could not delete', 'This Cairn is still here. Check your connection and try again.');
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteMarker, deleting, marker, nav]);
 
   if (!marker) {
     return (
@@ -207,14 +248,24 @@ export function MarkerDetailScreen() {
 
   const meta = MARKER_TYPES[marker.type] ?? MARKER_TYPES.cairn;
   const { title: privateTitle, body: privateBody } = splitTitleBody(marker.note);
+  const displayTitle = privateTitle.trim()
+    ? privateTitle.trim()
+    : cairnDisplayTitle('', '', marker.createdAt);
   const vis = VISIBILITY_LABEL[marker.permission] ?? VISIBILITY_LABEL.personal;
+  const localOnlyCairn = !marker.synced && Boolean(marker.clientCairnId ?? marker.localId);
   const dateStr = formatDate(marker.createdAt);
+  const updatedDateStr = marker.updatedAt && marker.updatedAt > marker.createdAt
+    ? formatDate(marker.updatedAt)
+    : null;
   // v416 fix (Bug D): 移除 authorId === 'server' 视为 owner. 后端 GET /api/markers
   // 之前未返回 user_id, fromBackend fallback 'server' 使**任何** marker 都被视为 owner,
   // 显示 Edit/Delete 按钮但 backend DELETE 会静默失败 (WHERE user_id 保护). optimistic
   // 移除本地 state 造成"删了但重启回来"的诡异体验. v414 backend fix 后 user_id 已回,
   // 只需信 authorId === userId. 'local' 保留 (未同步本地 marker, id 未生成 remote id).
-  const isOwner = marker.authorId === userId || marker.authorId === 'local';
+  const isOwner = String(markerStoreOwnerId ?? '') === String(userId);
+  const sourceActivity = marker.originActivityClientId
+    ? sessions.find(session => activityMatchesTarget(session, marker.originActivityClientId!))
+    : null;
 
   // Public snapshot divergence: only relevant if a snapshot exists AND
   // its content differs from the current marker fields (or the marker
@@ -238,8 +289,10 @@ export function MarkerDetailScreen() {
               : { styleJSON: markerResolvedMapStyle.json })}
             compassEnabled={false}
             scaleBarEnabled={false}
-            attributionEnabled={false}
-            logoEnabled={false}
+            attributionEnabled
+            logoEnabled
+            logoPosition={{ bottom: 8, left: 8 }}
+            attributionPosition={{ bottom: 8, right: 8 }}
           >
             {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
             {StyleImport ? (
@@ -294,13 +347,13 @@ export function MarkerDetailScreen() {
           </MapView>
         ) : (
           <View style={[styles.mapFallback, { backgroundColor: visualTheme.background }]}>
-            <Text style={[styles.mapFallbackText, { color: visualTheme.foregroundSecondary }]}>
-              {marker.lat.toFixed(5)}, {marker.lng.toFixed(5)}
-            </Text>
+            <Icon name="Map" size={24} color={visualTheme.iconInactive} strokeWidth={1.8} />
+            <Text style={[styles.mapFallbackTitle, { color: visualTheme.foreground }]}>Map unavailable</Text>
+            <Text style={[styles.mapFallbackText, { color: visualTheme.foregroundSecondary }]}>Your Cairn is still available.</Text>
           </View>
         )}
         <View style={styles.backRowOverlay} pointerEvents="box-none">
-          <BackButton variant="inline" />
+          <BackButton variant="pill" />
         </View>
       </View>
 
@@ -326,11 +379,13 @@ export function MarkerDetailScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* 1. Title */}
-        {privateTitle ? (
-          <Text style={[styles.title, { color: visualTheme.foreground }]} numberOfLines={2} ellipsizeMode="tail">{privateTitle}</Text>
-        ) : (
-          <Text style={[styles.titleEmpty, { color: visualTheme.muted }]}>Untitled cairn</Text>
-        )}
+        <Text
+          style={[styles.title, !privateTitle && !privateBody && styles.titleEmpty, { color: privateTitle || privateBody ? visualTheme.foreground : visualTheme.muted }]}
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {displayTitle}
+        </Text>
 
         {/* 2. Body */}
         {privateBody ? <Text style={[styles.body, { color: visualTheme.foregroundSecondary }]}>{privateBody}</Text> : null}
@@ -346,7 +401,14 @@ export function MarkerDetailScreen() {
             <Text style={[styles.visBadgeText, { color: visualTheme.foregroundSecondary }]}>{vis.label}</Text>
           </View>
           {marker.syncState && marker.syncState !== 'synced' ? (
-            <SyncBadge state={marker.syncState} />
+            <SyncBadge
+              state={marker.syncState}
+              onPress={marker.syncState === 'failed'
+                ? () => { void retryMarkerSync(marker.id).catch(() => {
+                    Alert.alert('Still saved locally', 'Cairn will remain on this device. Try syncing again when you have a connection.');
+                  }); }
+                : undefined}
+            />
           ) : null}
         </View>
 
@@ -356,12 +418,32 @@ export function MarkerDetailScreen() {
         {/* 5. Date / location — with clear labels */}
         <View style={styles.metaList}>
           <MetaRow iconName="Calendar" label="Planted" text={dateStr} />
+          {updatedDateStr ? <MetaRow iconName="Pencil" label="Updated" text={updatedDateStr} /> : null}
           <MetaRow
             iconName="MapPin"
-            label="Location"
-            text={`${marker.lat.toFixed(5)}, ${marker.lng.toFixed(5)}`}
+            label="Place"
+            text={marker.approximate ? 'Original approximate location saved' : 'Original location saved'}
           />
         </View>
+
+        {sourceActivity ? (
+          <ContentSurface
+            level="record"
+            onPress={() => nav.navigate('MapHistory', { sessionId: sourceActivity.id })}
+            style={styles.activityContext}
+            testID="cairn-source-activity"
+          >
+            <View style={styles.activityContextRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.activityContextLabel, { color: visualTheme.foregroundSecondary }]}>FROM ACTIVITY</Text>
+                <Text style={[styles.activityContextTitle, { color: visualTheme.foreground }]} numberOfLines={1}>
+                  {sourceActivity.name || (sourceActivity.activityMode === 'running' ? 'Run' : 'Hike')}
+                </Text>
+              </View>
+              <Icon name="ChevronRight" size={16} color={visualTheme.iconInactive} strokeWidth={2} />
+            </View>
+          </ContentSurface>
+        ) : null}
 
         {/* 6. Public snapshot divergence banner (owner only) */}
         {snap && snapDiffers && isOwner && (
@@ -374,7 +456,7 @@ export function MarkerDetailScreen() {
               {(() => {
                 const sm = MARKER_TYPES[snap.type];
                 const sn = splitTitleBody(snap.note);
-                return `"${sn.title || sn.body || 'Untitled'}", pinned as ${sm?.label ?? snap.type}.`;
+                return `"${cairnDisplayTitle(sn.title, sn.body, marker.createdAt)}", pinned as ${sm?.label ?? snap.type}.`;
               })()}
             </Text>
             <Text style={[styles.snapshotFootnote, { color: visualTheme.muted }]}>
@@ -393,98 +475,112 @@ export function MarkerDetailScreen() {
       {isOwner && (
         <View style={[styles.stickyActionRow, { backgroundColor: visualTheme.surfaceElevated, borderTopColor: visualTheme.border }]}>
           <TouchableOpacity
-            style={[styles.deleteIconBtn, { backgroundColor: visualTheme.surface, borderColor: visualTheme.border }, !online && { opacity: 0.4 }]}
-            onPress={handleDelete}
-            disabled={!online}
+            testID="cairn-delete-open"
+            style={[styles.deleteIconBtn, { backgroundColor: visualTheme.surface, borderColor: visualTheme.border }, deleting && { opacity: 0.4 }]}
+            onPress={() => setDeleteConfirmOpen(true)}
+            disabled={deleting}
             accessibilityRole="button"
-            accessibilityLabel={online ? 'Delete cairn' : 'Delete cairn (needs internet)'}
+            accessibilityLabel="Delete Cairn"
           >
             <Icon name="Trash2" size={18} color={visualTheme.destructive} strokeWidth={2} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnPrimary, { backgroundColor: visualTheme.primary }, styles.editPrimaryBtn, !online && { opacity: 0.4 }]}
+            testID="cairn-edit-open"
+            style={[styles.actionBtn, styles.actionBtnPrimary, { backgroundColor: visualTheme.primary }, styles.editPrimaryBtn]}
             onPress={enterEdit}
-            disabled={!online}
           >
-            <Icon name="Pencil" size={14} color="#fff" strokeWidth={2} />
-            <Text style={styles.actionBtnPrimaryText}>
-              {online ? 'Edit' : 'Edit · Needs internet'}
+            <Icon name="Pencil" size={14} color={visualTheme.onPrimary} strokeWidth={2} />
+            <Text style={[styles.actionBtnPrimaryText, { color: visualTheme.onPrimary }]}>
+              {privateTitle || privateBody ? 'Edit Cairn' : 'Add a note'}
             </Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* ── Edit Modal ────────────────────────────────────────────
-          R114/O24 (2026-08-12): edit UI moved from inline replacement
-          to a bottom-sheet Modal. User reported keyboard hid the Save
-          button and dismissing keyboard was annoying. Modal has its
-          own SafeAreaView + KeyboardAvoidingView + full-height card
-          so the Save button always sits above the keyboard. */}
-      <Modal
+      <BottomSheetFrame
         visible={isEditing}
-        transparent
-        animationType="slide"
-        onRequestClose={() => (saving ? null : cancelEdit())}
+        onDismiss={requestCloseEdit}
+        dismissible={!saving}
+        testID="cairn-edit-sheet"
       >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        <BottomSheetHeader
+          title={privateTitle || privateBody ? 'Edit Cairn' : 'Add words to this Cairn'}
+          subtitle="Its original place, time, and Activity stay unchanged."
+          onClose={requestCloseEdit}
+        />
+        <BottomSheetContent
+          scrollable
+          contentContainerStyle={styles.editBody}
+          testID="cairn-edit-content"
         >
-          <View style={[styles.editBackdrop, { backgroundColor: visualTheme.readabilityScrim }]}>
-            <View style={[styles.editSheet, { backgroundColor: visualTheme.surfaceElevated }]}>
-              {/* Sheet header — grabber + title + close */}
-              <View style={[styles.editHeader, { borderBottomColor: visualTheme.border }]}>
-                <View style={[styles.editGrabber, { backgroundColor: visualTheme.border }]} />
-                <View style={styles.editHeaderRow}>
-                  <Text style={[styles.editHeaderTitle, { color: visualTheme.foreground }]}>Edit cairn</Text>
-                  <TouchableOpacity
-                    onPress={cancelEdit}
-                    disabled={saving}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                    accessibilityLabel="Close edit"
-                  >
-                    <Icon name="X" size={22} color={visualTheme.iconInactive} strokeWidth={2} />
-                  </TouchableOpacity>
-                </View>
-              </View>
+          <MarkForm
+            type={editType}
+            title={editTitle}
+            note={editBody}
+            visibility={editPermission}
+            onTypeChange={setEditType}
+            onTitleChange={setEditTitle}
+            onNoteChange={setEditBody}
+            onVisibilityChange={setEditPermission}
+            mode="edit"
+            showTypePicker={false}
+            showVisibilityPicker={false}
+            showLocationLockedNotice
+            autoFocus={null}
+            titleMaxChars={ContentConfig.titleMaxChars}
+            noteMaxChars={ContentConfig.textMaxChars}
+          />
+          {!online && !localOnlyCairn ? (
+            <Text style={[styles.editBoundaryCopy, { color: visualTheme.foregroundSecondary }]}>
+              This synced Cairn needs a connection to save. Your draft stays here if saving fails.
+            </Text>
+          ) : null}
+          {saveError ? (
+            <ContentSurface level="record" style={styles.editError} testID="cairn-edit-error">
+              <Text style={[styles.editErrorText, { color: visualTheme.destructive }]}>{saveError}</Text>
+            </ContentSurface>
+          ) : null}
+        </BottomSheetContent>
+        <View style={[styles.editFooter, { backgroundColor: visualTheme.sheetSurface, borderTopColor: visualTheme.borderSubtle }]}>
+          <PrimaryButton
+            label="Save changes"
+            onPress={() => { void saveEdit(); }}
+            loading={saving}
+            disabled={!editDirty}
+            testID="cairn-edit-save"
+          />
+        </View>
+      </BottomSheetFrame>
 
-              <ScrollView
-                contentContainerStyle={styles.editBody}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                <MarkForm
-                  type={editType}
-                  title={editTitle}
-                  note={editBody}
-                  visibility={editPermission}
-                  onTypeChange={setEditType}
-                  onTitleChange={setEditTitle}
-                  onNoteChange={setEditBody}
-                  onVisibilityChange={setEditPermission}
-                  mode="edit"
-                  disableVisibilityPublic={!VisibilityConfig.enablePublicOption}
-                  showLocationLockedNotice
-                  autoFocus={null}
-                  titleMaxChars={ContentConfig.titleMaxChars}
-                  noteMaxChars={ContentConfig.textMaxChars}
-                />
-              </ScrollView>
-
-              {/* Save button — sits above the keyboard, always visible */}
-              <View style={[styles.editFooter, { backgroundColor: visualTheme.surfaceElevated, borderTopColor: visualTheme.border }]}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionBtnPrimary, { backgroundColor: visualTheme.primary }, saving && { opacity: 0.6 }]}
-                  onPress={saveEdit}
-                  disabled={saving}
-                >
-                  <Text style={styles.actionBtnPrimaryText}>{saving ? 'Saving…' : 'Save changes'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <ModalCard
+        visible={deleteConfirmOpen}
+        onDismiss={() => !deleting && setDeleteConfirmOpen(false)}
+        dismissible={!deleting}
+        testID="cairn-delete-confirmation"
+      >
+        <ModalCardHeader
+          title="Delete this Cairn?"
+          body="This removes the Cairn. Its source Activity, independent Routes, and ordinary personal Memory remain."
+          onClose={deleting ? undefined : () => setDeleteConfirmOpen(false)}
+        />
+        <View style={styles.deleteActions}>
+          <PrimaryButton
+            label="Keep Cairn"
+            variant="secondary"
+            onPress={() => setDeleteConfirmOpen(false)}
+            disabled={deleting}
+            style={styles.deleteAction}
+          />
+          <PrimaryButton
+            label="Delete Cairn"
+            variant="destructive"
+            onPress={() => { void handleDelete(); }}
+            loading={deleting}
+            style={styles.deleteAction}
+            testID="cairn-delete-confirm"
+          />
+        </View>
+      </ModalCard>
     </SafeAreaView>
   );
 }
@@ -512,10 +608,15 @@ const styles = StyleSheet.create({
   },
   map: { flex: 1 },
   mapFallback: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.xs,
+    paddingHorizontal: Spacing.xl,
+  },
+  mapFallbackTitle: {
+    fontSize: FontSize.body,
+    fontWeight: '700',
   },
   mapFallbackText: {
-    fontFamily: 'Courier', fontSize: FontSize.caption, color: Colors.textPrimary,
+    fontSize: FontSize.caption, color: Colors.textPrimary, textAlign: 'center',
   },
   backRowOverlay: {
     position: 'absolute',
@@ -610,6 +711,10 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     flex: 1,
   },
+  activityContext: { marginBottom: Spacing.lg },
+  activityContextRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  activityContextLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.7 },
+  activityContextTitle: { fontSize: FontSize.caption, fontWeight: '700', marginTop: 3 },
   snapshotBanner: {
     backgroundColor: '#fff',
     borderRadius: Radius.md,
@@ -703,6 +808,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.lg,
   },
+  editBoundaryCopy: {
+    fontSize: FontSize.small,
+    lineHeight: 18,
+    marginTop: Spacing.md,
+  },
+  editError: { marginTop: Spacing.md },
+  editErrorText: { fontSize: FontSize.small, lineHeight: 18, fontWeight: '600' },
   editFooter: {
     paddingHorizontal: Spacing.lg,
     paddingTop: 12,
@@ -711,6 +823,8 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
     backgroundColor: Colors.bg,
   },
+  deleteActions: { gap: Spacing.sm },
+  deleteAction: { minHeight: 50 },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',

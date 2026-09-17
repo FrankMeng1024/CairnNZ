@@ -4,7 +4,7 @@
  * Wraps expo-speech with:
  *   - a message queue (never overlap two utterances)
  *   - de-duplication (don't repeat the same phrase within N seconds)
- *   - a global mute switch (from useSettingsStore.voiceGuidance)
+ *   - product-owned enablement supplied by the Route-following context
  *   - English-only phrases (app ships in English for the NZ market;
  *     memory rule: code + UI copy in English)
  *

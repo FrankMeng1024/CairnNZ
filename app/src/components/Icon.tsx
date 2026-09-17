@@ -30,7 +30,7 @@ import {
   // Sprint 21
   Apple,
   // Sprint 26
-  RotateCcw, Download,
+  RotateCcw, Download, Undo2, Sparkles, Move,
   // Sprint 27
   PlayCircle,
   // Sprint 42+ (Phase 1-2)
@@ -80,7 +80,7 @@ const ICON_MAP = {
   Globe,
   Compass,
   Apple,
-  RotateCcw, Download,
+  RotateCcw, Download, Undo2, Sparkles, Move,
   PlayCircle,
   Pause, Pencil, TrendingUp, Phone,
   Plus, Edit3,

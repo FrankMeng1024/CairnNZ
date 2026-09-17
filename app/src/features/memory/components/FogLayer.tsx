@@ -12,7 +12,6 @@
  */
 
 import React, { useEffect, useMemo, useRef } from 'react';
-import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
@@ -138,7 +137,6 @@ export function buildFogShape(
 export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
   const theme = useVisualTheme();
   const Mapbox = getMapbox();
-  const useH3Fog = useMemorySettingsStore((s) => s.useH3Fog);
   // v346: drive geometry from useMemoryStore.points (real GPS path),
   // not from useH3VisitedStore.cells (hex mosaic — wrong abstraction).
   const selfPoints = useMemoryStore((s) => s.points);
@@ -218,7 +216,6 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const fogShape = useMemo<Feature<Polygon | MultiPolygon> | null>(() => {
-    if (!useH3Fog) return null;
     // v358 fix (reverse v355): when points=0 (hydrate not yet completed)
     // render SOLID world-rect fog (no holes) instead of returning null.
     // v357 telemetry showed exactly this is the 'middle stage' the user
@@ -328,7 +325,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
     _moduleFogShape = shape;
     return shape;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [points, geometryVersion, useH3Fog]);
+  }, [points, geometryVersion]);
 
   // v359: detect when fogShape first contains holes (corridor cutouts from
   // GPS data), then fire onFogReady ONCE. This is one of two gates the
@@ -358,7 +355,6 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
     }
   }, [fogShape, onFogReady, points.length]);
 
-  if (!useH3Fog) return null;
   if (!Mapbox.available) return null;
   if (!fogShape) return null;
 

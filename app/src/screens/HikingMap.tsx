@@ -16,7 +16,7 @@ import {
 import { Colors, Spacing, FontSize, Radius, Shadow } from '../components/tokens';
 import { Icon, type IconName } from '../components/Icon';
 import { getCurrentRegion } from '../config/regions';
-import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle, themeToStandardPreset, buildStandardConfig, isMapboxTokenConfigured } from '../config/mapbox';
+import { getMapStyleForTheme, themeToStandardPreset, buildActivityStandardConfig, isMapboxTokenConfigured } from '../config/mapbox';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
@@ -41,7 +41,12 @@ import {
   planContinuousRouteTarget,
   updateIncrementalRoutePresentation,
 } from '../features/activity/confirmedRoutePresentation';
+import {
+  ACTIVITY_MAP_ORNAMENTS,
+  activityMapPresentation,
+} from '../features/activity/activityMapPresentation';
 import { useIsFocused } from '@react-navigation/native';
+import { deriveActivityPresentationFreshness } from '../features/activity/activityLocationHealth';
 
 // ── Mapbox conditional import ────────────────────────────────────────────
 // @rnmapbox/maps components are native-only — on web they may be undefined.
@@ -92,6 +97,10 @@ function ContinuousConfirmedRoute({
   coordinates,
   lineColor,
   casingColor,
+  lineWidth,
+  casingWidth,
+  casingOpacity,
+  emissiveStrength,
   reduceMotion,
   animateInitial,
   targetTimestamp,
@@ -100,6 +109,10 @@ function ContinuousConfirmedRoute({
   coordinates: [number, number][];
   lineColor: string;
   casingColor: string;
+  lineWidth: number;
+  casingWidth: number;
+  casingOpacity: number;
+  emissiveStrength: number;
   reduceMotion: boolean;
   animateInitial: boolean;
   targetTimestamp: number | null;
@@ -239,8 +252,8 @@ function ContinuousConfirmedRoute({
 
   return (
     <AnimatedShapeSource id="track-confirmed-continuous" shape={nodes.shape}>
-      <LineLayer id="track-confirmed-continuous-casing" style={{ lineColor: casingColor, lineOpacity: 0.86, lineWidth: 8, lineCap: 'round', lineJoin: 'round' }} />
-      <LineLayer id="track-confirmed-continuous-layer" style={{ lineColor, lineWidth: 4.5, lineCap: 'round', lineJoin: 'round' }} />
+      <LineLayer id="track-confirmed-continuous-casing" slot="top" style={{ lineColor: casingColor, lineOpacity: casingOpacity, lineWidth: casingWidth, lineCap: 'round', lineJoin: 'round', lineEmissiveStrength: emissiveStrength }} />
+      <LineLayer id="track-confirmed-continuous-layer" slot="top" style={{ lineColor, lineWidth, lineCap: 'round', lineJoin: 'round', lineEmissiveStrength: emissiveStrength }} />
     </AnimatedShapeSource>
   );
 }
@@ -250,11 +263,19 @@ const StaticConfirmedRoute = React.memo(function StaticConfirmedRoute({
   coordinates,
   lineColor,
   casingColor,
+  lineWidth,
+  casingWidth,
+  casingOpacity,
+  emissiveStrength,
 }: {
   id: string;
   coordinates: [number, number][];
   lineColor: string;
   casingColor: string;
+  lineWidth: number;
+  casingWidth: number;
+  casingOpacity: number;
+  emissiveStrength: number;
 }) {
   if (coordinates.length < 2) return null;
   const shape = {
@@ -264,11 +285,78 @@ const StaticConfirmedRoute = React.memo(function StaticConfirmedRoute({
   };
   return (
     <ShapeSource id={`${id}-source`} shape={shape}>
-      <LineLayer id={`${id}-casing`} style={{ lineColor: casingColor, lineOpacity: 0.86, lineWidth: 8, lineCap: 'round', lineJoin: 'round' }} />
-      <LineLayer id={`${id}-line`} style={{ lineColor, lineWidth: 4.5, lineCap: 'round', lineJoin: 'round' }} />
+      <LineLayer id={`${id}-casing`} slot="top" style={{ lineColor: casingColor, lineOpacity: casingOpacity, lineWidth: casingWidth, lineCap: 'round', lineJoin: 'round', lineEmissiveStrength: emissiveStrength }} />
+      <LineLayer id={`${id}-line`} slot="top" style={{ lineColor, lineWidth, lineCap: 'round', lineJoin: 'round', lineEmissiveStrength: emissiveStrength }} />
     </ShapeSource>
   );
 });
+
+/**
+ * Debug-only truth/raw layers. Keeping the subscriptions in this small child
+ * prevents one-second Simulator trail writes from rebuilding the map screen
+ * while Product view is selected. These layers are never mounted for real GPS.
+ */
+function SimulatorDiagnosticLayers() {
+  const visible = useActivitySimulatorStore(state => state.diagnosticsVisible);
+  const observationMode = useActivitySimulatorStore(state => state.observationMode);
+  const groundTruthTrail = useActivitySimulatorStore(state => state.groundTruthTrail);
+  const rawGpsTrail = useActivitySimulatorStore(state => state.rawGpsTrail);
+  if (!visible || observationMode !== 'raw-gps' || !ShapeSource || !LineLayer || !CircleLayer) return null;
+
+  const groundTruthCoordinates = groundTruthTrail.map(point => [point.lng, point.lat]);
+  const rawFeatures = rawGpsTrail.map(point => ({
+    type: 'Feature' as const,
+    properties: {
+      sequence: point.sequence,
+      accuracyM: point.accuracyM ?? null,
+    },
+    geometry: { type: 'Point' as const, coordinates: [point.lng, point.lat] },
+  }));
+
+  return <>
+    {groundTruthCoordinates.length >= 2 ? (
+      <ShapeSource
+        id="activity-simulator-ground-truth-source"
+        shape={{
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: groundTruthCoordinates },
+        }}
+      >
+        <LineLayer
+          id="activity-simulator-ground-truth-line"
+          slot="top"
+          style={{
+            lineColor: Colors.info,
+            lineWidth: 2,
+            lineOpacity: 0.9,
+            lineDasharray: [2, 1.5],
+            lineCap: 'round',
+            lineJoin: 'round',
+          }}
+        />
+      </ShapeSource>
+    ) : null}
+    {rawFeatures.length > 0 ? (
+      <ShapeSource
+        id="activity-simulator-raw-gps-source"
+        shape={{ type: 'FeatureCollection', features: rawFeatures }}
+      >
+        <CircleLayer
+          id="activity-simulator-raw-gps-fixes"
+          slot="top"
+          style={{
+            circleRadius: 3.5,
+            circleColor: Colors.severityWarning,
+            circleOpacity: 0.55,
+            circleStrokeColor: Colors.surface,
+            circleStrokeWidth: 0.75,
+          }}
+        />
+      </ShapeSource>
+    ) : null}
+  </>;
+}
 
 function optionalFiniteNumber(value: unknown): number | null {
   return value != null && Number.isFinite(Number(value)) ? Number(value) : null;
@@ -281,6 +369,8 @@ type HikingMapProps = {
   // separated by more than GAP_THRESHOLD_MS in time, we render that
   // segment as a dashed "lost signal" line instead of a solid track.
   trackPoints: Array<{ lat: number; lng: number; t?: number; segmentId?: string }>;
+  /** Saved Route shown as quiet reference geometry; never mutates Activity truth. */
+  plannedRoutePoints?: Array<{ lat: number; lng: number }>;
   onMarkerPress: (id: string) => void;
   // When a saved route is selected and the user isn't already at its
   // start, we draw a dashed "approach" line from the user's current
@@ -317,7 +407,7 @@ type HikingMapProps = {
 };
 
 export function HikingMap({
-  markers, trackPoints, onMarkerPress, routeStart, userPos,
+  markers, trackPoints, plannedRoutePoints = [], onMarkerPress, routeStart, userPos,
   instantCamera, followUser = true, onUserGesture, recenterImperativeRef,
   simulatorEnabled, simulatorControlsEnabled = simulatorEnabled,
   simulatorCenterPickerVisible = false,
@@ -332,6 +422,7 @@ export function HikingMap({
   const theme = useVisualTheme();
   const mapTheme = useMapTheme();
   const hikeLightPreset = themeToStandardPreset(mapTheme);
+  const mapPresentation = activityMapPresentation(mapTheme, activityVariant);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [mapAppState, setMapAppState] = useState(AppState.currentState);
   useEffect(() => {
@@ -492,6 +583,13 @@ export function HikingMap({
     && trackingStatus === 'tracking'
     && !trackingIsFinishing,
   );
+  const presentationFreshness = deriveActivityPresentationFreshness({
+    nowMs: Date.now(),
+    sourceActive: realCustomProviderActive,
+    latestSourceTimestamp: latestSourceCoordinate?.t ?? null,
+  });
+  const currentActivityPositionVisible = realCustomProviderActive
+    && presentationFreshness === 'CURRENT';
   // Before Start, Mapbox's Apple provider is the sole source. Once an
   // Activity requests ownership, it is removed; the Expo stream feeds the
   // installed CustomLocationProvider for puck + camera as presentation only.
@@ -502,7 +600,7 @@ export function HikingMap({
     && trackingStatus === 'idle'
     && !trackingIsFinishing,
   );
-  const realUserLocationActive = realCustomProviderActive || idleNativeProviderActive;
+  const realUserLocationActive = currentActivityPositionVisible || idleNativeProviderActive;
   useEffect(() => {
     const providerMode = realCustomProviderActive
       ? 'cairn-custom'
@@ -536,7 +634,7 @@ export function HikingMap({
     && AnimatedCoordinatesArrayClass
     && AnimatedShapeClass,
   );
-  const activityTraceColor = activityVariant === 'run' ? Colors.running : theme.primary;
+  const activityTraceColor = mapPresentation.routeColor;
   const activeTailTimestamp = trackPoints[trackPoints.length - 1]?.t ?? null;
   const animateInitialConfirmedEdge = trackingStatus === 'tracking'
     && activeTailTimestamp != null
@@ -875,8 +973,8 @@ export function HikingMap({
           : { styleJSON: resolvedMapStyle.json })}
         logoEnabled
         attributionEnabled
-        logoPosition={{ top: trackStartVariant ? 214 : 116, left: 8 }}
-        attributionPosition={{ top: trackStartVariant ? 214 : 116, right: 8 }}
+        logoPosition={ACTIVITY_MAP_ORNAMENTS.logoPosition}
+        attributionPosition={ACTIVITY_MAP_ORNAMENTS.attributionPosition}
         // Mapbox's built-in compass is hidden — we draw our own as a
         // bottom-left chip so it sits in a predictable spot relative to
         // Place Flag (right). showCompass is also
@@ -952,15 +1050,16 @@ export function HikingMap({
             key={hikeLightPreset}
             id="basemap"
             existing
-            config={buildStandardConfig(mapTheme) as any}
+            config={buildActivityStandardConfig(mapTheme) as any}
           />
         ) : null}
+        {simulatorEnabled ? <SimulatorDiagnosticLayers /> : null}
         {/* Keep the passive override mounted throughout an Activity so
             RNMapbox cannot restore its Apple provider during Pause/background.
             UserLocation and camera consumption remain active-foreground only. */}
         {activityCustomProviderMounted ? (
           <CustomLocationProviderComponent
-            coordinate={latestSourceCoordinate
+            coordinate={currentActivityPositionVisible && latestSourceCoordinate
               ? [latestSourceCoordinate.lng, latestSourceCoordinate.lat]
               : undefined}
             heading={latestSourceCoordinate?.course != null && latestSourceCoordinate.course >= 0
@@ -983,28 +1082,32 @@ export function HikingMap({
             ? { centerCoordinate: [userPos.lng, userPos.lat], zoomLevel: 15 }
             : undefined}
         />
-        {(simulatorEnabled || (!realUserLocationActive && trackingStatus === 'paused')) && userPos ? (
+        {plannedRoutePoints.length >= 2 && ShapeSource && LineLayer ? (
           <ShapeSource
-            id={simulatorEnabled ? 'activity-simulator-puck' : 'activity-paused-puck'}
-            shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: [userPos.lng, userPos.lat] }, properties: {} } as any}
+            id="planned-route-source"
+            shape={{
+              type: 'Feature',
+              geometry: {
+                type: 'LineString',
+                coordinates: plannedRoutePoints.map(point => [point.lng, point.lat]),
+              },
+              properties: {},
+            }}
           >
-            <CircleLayer
-              id="activity-simulator-puck-halo"
-              style={{ circleRadius: 14, circleColor: '#1E88E5', circleOpacity: 0.25 }}
-            />
-            <CircleLayer
-              id="activity-simulator-puck-dot"
-              style={{ circleRadius: 7, circleColor: '#1E88E5', circleStrokeWidth: 2, circleStrokeColor: '#ffffff' }}
+            <LineLayer
+              id="planned-route-line"
+              slot="top"
+              style={{
+                lineColor: theme.primary,
+                lineWidth: 4,
+                lineOpacity: 0.72,
+                lineDasharray: [2, 1.5],
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
             />
           </ShapeSource>
-        ) : realUserLocationActive ? (
-          <UserLocationComponent
-            visible={true}
-            renderMode="normal"
-            onUpdate={activitySimulatorBuildCapable ? handleRealUserLocationUpdate : undefined}
-          />
         ) : null}
-
         {/* Stable chunks never retransmit when only the live head changes. */}
         {routePresentation.staticChunks.map((chunk, index) => (
           <StaticConfirmedRoute
@@ -1012,7 +1115,11 @@ export function HikingMap({
             id={`track-body-${index}`}
             coordinates={chunk.coordinates}
             lineColor={activityTraceColor}
-            casingColor={theme.surfaceElevated}
+            casingColor={mapPresentation.routeCasingColor}
+            lineWidth={mapPresentation.routeWidth}
+            casingWidth={mapPresentation.routeCasingWidth}
+            casingOpacity={mapPresentation.routeCasingOpacity}
+            emissiveStrength={mapPresentation.emissiveStrength}
           />
         ))}
         {animateConfirmedHead && activeConfirmedSegment ? (
@@ -1020,7 +1127,11 @@ export function HikingMap({
             key={activeConfirmedSegment.key}
             coordinates={activeConfirmedSegment.coordinates}
             lineColor={activityTraceColor}
-            casingColor={theme.surfaceElevated}
+            casingColor={mapPresentation.routeCasingColor}
+            lineWidth={mapPresentation.routeWidth}
+            casingWidth={mapPresentation.routeCasingWidth}
+            casingOpacity={mapPresentation.routeCasingOpacity}
+            emissiveStrength={mapPresentation.emissiveStrength}
             reduceMotion={reduceMotion}
             animateInitial={animateInitialConfirmedEdge}
             targetTimestamp={activeTailTimestamp}
@@ -1032,7 +1143,11 @@ export function HikingMap({
             id="track-active"
             coordinates={activeConfirmedSegment.coordinates}
             lineColor={activityTraceColor}
-            casingColor={theme.surfaceElevated}
+            casingColor={mapPresentation.routeCasingColor}
+            lineWidth={mapPresentation.routeWidth}
+            casingWidth={mapPresentation.routeCasingWidth}
+            casingOpacity={mapPresentation.routeCasingOpacity}
+            emissiveStrength={mapPresentation.emissiveStrength}
           />
         ) : null}
 
@@ -1061,6 +1176,7 @@ export function HikingMap({
             >
               <LineLayer
                 id="approach-line-layer"
+                slot="top"
                 style={{
                   lineColor: Colors.severityCaution,
                   lineWidth: 5,
@@ -1126,6 +1242,30 @@ export function HikingMap({
             </View>
           </PointAnnotation>
         ))}
+
+        {/* Render current position after route/markers so it always wins the
+            visual stack. A warm mineral core distinguishes the user from both
+            Hike and Run geometry without introducing a neon fitness skin. */}
+        {(simulatorEnabled || (!realUserLocationActive && trackingStatus === 'paused')) && userPos ? (
+          <ShapeSource
+            id={simulatorEnabled ? 'activity-simulator-puck' : 'activity-paused-puck'}
+            shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: [userPos.lng, userPos.lat] }, properties: {} } as any}
+          >
+            <CircleLayer id="activity-user-puck-halo" slot="top" style={{ circleRadius: 15, circleColor: mapPresentation.puckHaloColor, circleOpacity: 0.24, circleEmissiveStrength: mapPresentation.emissiveStrength }} />
+            <CircleLayer id="activity-user-puck-ring" slot="top" style={{ circleRadius: 9, circleColor: mapPresentation.puckRingColor, circleEmissiveStrength: mapPresentation.emissiveStrength }} />
+            <CircleLayer id="activity-user-puck-core" slot="top" style={{ circleRadius: 5.5, circleColor: mapPresentation.puckCoreColor, circleEmissiveStrength: mapPresentation.emissiveStrength }} />
+          </ShapeSource>
+        ) : realUserLocationActive ? (
+          <UserLocationComponent
+            visible={true}
+            renderMode="normal"
+            onUpdate={activitySimulatorBuildCapable ? handleRealUserLocationUpdate : undefined}
+          >
+            <CircleLayer id="activity-real-user-puck-halo" slot="top" style={{ circleRadius: 15, circleColor: mapPresentation.puckHaloColor, circleOpacity: 0.24, circleEmissiveStrength: mapPresentation.emissiveStrength }} />
+            <CircleLayer id="activity-real-user-puck-ring" slot="top" style={{ circleRadius: 9, circleColor: mapPresentation.puckRingColor, circleEmissiveStrength: mapPresentation.emissiveStrength }} />
+            <CircleLayer id="activity-real-user-puck-core" slot="top" style={{ circleRadius: 5.5, circleColor: mapPresentation.puckCoreColor, circleEmissiveStrength: mapPresentation.emissiveStrength }} />
+          </UserLocationComponent>
+        ) : null}
       </MapView>
       {/* R114/O22 Bug 4: first-load overlay. Sits over the still-loading
           map until Mapbox reports mapFirstRender. On slow networks (China
@@ -1135,9 +1275,9 @@ export function HikingMap({
           below takes priority so we don't double-message. */}
       {!mapFirstRender && !isOffline && (
         <View style={mapStyles.mapLoadingOverlay} pointerEvents="none">
-          <View style={mapStyles.mapLoadingCard}>
-            <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={mapStyles.mapLoadingText}>Loading map…</Text>
+          <View style={[mapStyles.mapLoadingCard, { backgroundColor: theme.mapOverlay }] }>
+            <ActivityIndicator size="small" color={theme.primary} />
+            <Text style={[mapStyles.mapLoadingText, { color: theme.foreground }]}>Loading map…</Text>
           </View>
         </View>
       )}
@@ -1147,10 +1287,10 @@ export function HikingMap({
           tells the user "the map is offline but we're still tracking". */}
       {isOffline && (
         <View style={mapStyles.offlineOverlay} pointerEvents="box-none">
-          <View style={mapStyles.offlineCard}>
-            <Text style={mapStyles.offlineTitle}>No connection</Text>
-            <Text style={mapStyles.offlineBody}>
-              The map can't load without internet. Your activity is still being tracked — the map will fill in when you're back online.
+          <View style={[mapStyles.offlineCard, { backgroundColor: theme.mapOverlay, borderColor: theme.border }] }>
+            <Text style={[mapStyles.offlineTitle, { color: theme.foreground }]}>Map offline</Text>
+            <Text style={[mapStyles.offlineBody, { color: theme.foregroundSecondary }] }>
+              Your activity is still being recorded. The map will fill in when you're back online.
             </Text>
           </View>
         </View>

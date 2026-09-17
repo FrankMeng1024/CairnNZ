@@ -7,11 +7,19 @@ import {
   type SimulatorAccuracyPreset,
   type SimulatorAltitudeMode,
   type SimulatorCoordinate,
+  type SimulatorDebugPoint,
+  type SimulatorObservationMode,
   type SimulatorSignal,
   type SimulatorSpeedPreset,
   type SimulatorTimeScale,
   type SimulatorWaypoint,
 } from './types';
+import {
+  RAW_GPS_MAX_TIME_SCALE,
+  createRawGpsModelState,
+  sanitizeRawGpsModelState,
+  type RawGpsModelState,
+} from './rawGpsObservationModel';
 import { resolveSimulatorContinuityLock } from './simulatorContinuity';
 import type { UnfinishedActivityRecord } from '../activity/activityRegistry';
 
@@ -19,6 +27,7 @@ const STORAGE_VERSION = 1;
 // A walking Directions geometry is intentionally kept as a bounded queue.
 // This is persisted Debug input, never a CairnNZ Route object.
 export const MAX_SIMULATOR_AUTOPILOT_POINTS = 256;
+export const MAX_SIMULATOR_DIAGNOSTIC_POINTS = 512;
 export const QA_SESSION_MAX_AGE_MS = 6 * 60 * 60 * 1_000;
 const DEFAULT_COORDINATE: SimulatorCoordinate = { lat: -45.0312, lng: 168.6626 };
 const keyFor = (userId: string) => `@cairn:activity_simulator:v1:${userId}`;
@@ -43,6 +52,13 @@ export interface SimulatorGeneratedSample {
   bearingDegrees: number;
   joystickMagnitude: number;
   effectiveVirtualElapsedMs: number;
+  observationMode?: SimulatorObservationMode;
+  groundTruthLat?: number;
+  groundTruthLng?: number;
+  accuracyM?: number;
+  errorEastM?: number;
+  errorNorthM?: number;
+  outlier?: boolean;
 }
 
 export interface SimulatorMapDiagnostics {
@@ -86,6 +102,11 @@ interface PersistedSimulatorState {
   batchSequence: number;
   clockLimitReached: boolean;
   deterministicSeed: number;
+  observationMode: SimulatorObservationMode;
+  diagnosticsVisible: boolean;
+  rawGpsModelState: RawGpsModelState | null;
+  groundTruthTrail: SimulatorDebugPoint[];
+  rawGpsTrail: SimulatorDebugPoint[];
 }
 
 export interface ActivitySimulatorState extends PersistedSimulatorState {
@@ -118,6 +139,10 @@ export interface ActivitySimulatorState extends PersistedSimulatorState {
   setCustomAccuracy: (accuracyM: number | null) => boolean;
   setSignal: (signal: SimulatorSignal) => void;
   setTimeScale: (timeScale: SimulatorTimeScale) => boolean;
+  setObservationMode: (mode: SimulatorObservationMode) => boolean;
+  setDiagnosticsVisible: (visible: boolean) => void;
+  setDeterministicSeed: (seed: number) => boolean;
+  setRawGpsModelState: (state: RawGpsModelState | null) => void;
   setJoystickActive: (active: boolean) => void;
   setJoystick: (bearingDegrees: number, magnitude: number) => void;
   releaseJoystick: () => void;
@@ -182,6 +207,11 @@ function defaults(userId: string | null): ActivitySimulatorState {
     batchSequence: 0,
     clockLimitReached: false,
     deterministicSeed: 1,
+    observationMode: 'clean-path',
+    diagnosticsVisible: false,
+    rawGpsModelState: null,
+    groundTruthTrail: [],
+    rawGpsTrail: [],
     hydratedUserId: userId,
     expanded: false,
     pickerMode: null,
@@ -240,6 +270,11 @@ function persistedSnapshot(state: ActivitySimulatorState): PersistedSimulatorSta
     batchSequence: state.batchSequence,
     clockLimitReached: state.clockLimitReached,
     deterministicSeed: state.deterministicSeed,
+    observationMode: state.observationMode,
+    diagnosticsVisible: state.diagnosticsVisible,
+    rawGpsModelState: state.rawGpsModelState,
+    groundTruthTrail: state.groundTruthTrail.slice(-MAX_SIMULATOR_DIAGNOSTIC_POINTS),
+    rawGpsTrail: state.rawGpsTrail.slice(-MAX_SIMULATOR_DIAGNOSTIC_POINTS),
   };
 }
 
@@ -290,6 +325,29 @@ function sanitizePersisted(value: unknown): Partial<PersistedSimulatorState> {
           : [];
       })
     : [];
+  const debugTrail = (value: unknown): SimulatorDebugPoint[] => Array.isArray(value)
+    ? value.slice(-MAX_SIMULATOR_DIAGNOSTIC_POINTS).flatMap((point, index) => {
+        if (!point || typeof point !== 'object') return [];
+        const candidate = point as Partial<SimulatorDebugPoint>;
+        const validated = validateCoordinate(Number(candidate.lat), Number(candidate.lng));
+        const t = Number(candidate.t);
+        const sequence = Number(candidate.sequence);
+        if (!validated.ok || !Number.isFinite(t) || !Number.isFinite(sequence)) return [];
+        const accuracyM = Number(candidate.accuracyM);
+        return [{
+          ...validated.coordinate,
+          t,
+          sequence: Math.max(0, Math.floor(sequence || index)),
+          ...(Number.isFinite(accuracyM) ? { accuracyM } : {}),
+        }];
+      })
+    : [];
+  const deterministicSeed = Number.isFinite(Number(raw.deterministicSeed))
+    ? Math.floor(Number(raw.deterministicSeed))
+    : 1;
+  const observationMode: SimulatorObservationMode = raw.observationMode === 'raw-gps'
+    ? 'raw-gps'
+    : 'clean-path';
   return {
     enabled: raw.enabled === true,
     // A legacy v1 origin was a default value, not evidence that a tester
@@ -341,7 +399,14 @@ function sanitizePersisted(value: unknown): Partial<PersistedSimulatorState> {
     sampleSequence: Number.isFinite(sampleSequence) ? Math.max(0, Math.floor(sampleSequence)) : 0,
     batchSequence: Number.isFinite(batchSequence) ? Math.max(0, Math.floor(batchSequence)) : 0,
     clockLimitReached: raw.clockLimitReached === true,
-    deterministicSeed: Number.isFinite(Number(raw.deterministicSeed)) ? Math.floor(Number(raw.deterministicSeed)) : 1,
+    deterministicSeed,
+    observationMode,
+    diagnosticsVisible: raw.diagnosticsVisible === true,
+    rawGpsModelState: observationMode === 'raw-gps'
+      ? sanitizeRawGpsModelState(raw.rawGpsModelState, deterministicSeed, Number.isFinite(virtualTimestampMs) ? virtualTimestampMs : 0)
+      : null,
+    groundTruthTrail: debugTrail(raw.groundTruthTrail),
+    rawGpsTrail: debugTrail(raw.rawGpsTrail),
   };
 }
 
@@ -419,6 +484,10 @@ const actions = {
       mapSelection: null,
       waypoints: [],
       autopilotActive: false,
+      rawGpsModelState: null,
+      groundTruthTrail: [],
+      rawGpsTrail: [],
+      lastGeneratedSample: null,
       lastFailure: null,
     });
     scheduleSimulatorPersistence();
@@ -430,7 +499,14 @@ const actions = {
       useActivitySimulatorStore.setState({ lastFailure: result.reason });
       return false;
     }
-    useActivitySimulatorStore.setState({ current: result.coordinate, lastFailure: null });
+    useActivitySimulatorStore.setState({
+      current: result.coordinate,
+      rawGpsModelState: null,
+      groundTruthTrail: [],
+      rawGpsTrail: [],
+      lastGeneratedSample: null,
+      lastFailure: null,
+    });
     scheduleSimulatorPersistence();
     return true;
   },
@@ -512,9 +588,68 @@ const actions = {
       useActivitySimulatorStore.setState({ lastFailure: 'Time scale must be 1×, 2×, 5×, 10×, 30×, 60×, or 120×.' });
       return false;
     }
+    if (
+      useActivitySimulatorStore.getState().observationMode === 'raw-gps'
+      && timeScale > RAW_GPS_MAX_TIME_SCALE
+    ) {
+      useActivitySimulatorStore.setState({
+        lastFailure: `Raw GPS supports up to ${RAW_GPS_MAX_TIME_SCALE}× so calibrated cadence remains bounded.`,
+      });
+      return false;
+    }
     useActivitySimulatorStore.setState({ timeScale, lastFailure: null });
     scheduleSimulatorPersistence();
     return true;
+  },
+  setObservationMode(observationMode: SimulatorObservationMode): boolean {
+    const state = useActivitySimulatorStore.getState();
+    if (state.boundActivityClientId) {
+      useActivitySimulatorStore.setState({ lastFailure: 'Finish or discard the Activity before changing SIM MODE.' });
+      return false;
+    }
+    useActivitySimulatorStore.setState({
+      observationMode,
+      timeScale: observationMode === 'raw-gps' && state.timeScale > RAW_GPS_MAX_TIME_SCALE
+        ? RAW_GPS_MAX_TIME_SCALE
+        : state.timeScale,
+      rawGpsModelState: null,
+      groundTruthTrail: [],
+      rawGpsTrail: [],
+      lastGeneratedSample: null,
+      lastFailure: null,
+    });
+    scheduleSimulatorPersistence();
+    return true;
+  },
+  setDiagnosticsVisible(diagnosticsVisible: boolean) {
+    useActivitySimulatorStore.setState({ diagnosticsVisible });
+    scheduleSimulatorPersistence();
+  },
+  setDeterministicSeed(seed: number): boolean {
+    const state = useActivitySimulatorStore.getState();
+    if (state.boundActivityClientId) {
+      useActivitySimulatorStore.setState({ lastFailure: 'Finish or discard the Activity before changing the Raw GPS seed.' });
+      return false;
+    }
+    if (!Number.isFinite(seed)) {
+      useActivitySimulatorStore.setState({ lastFailure: 'Seed must be a whole number.' });
+      return false;
+    }
+    const deterministicSeed = (Math.trunc(seed) >>> 0) || 1;
+    useActivitySimulatorStore.setState({
+      deterministicSeed,
+      rawGpsModelState: null,
+      groundTruthTrail: [],
+      rawGpsTrail: [],
+      lastGeneratedSample: null,
+      lastFailure: null,
+    });
+    scheduleSimulatorPersistence();
+    return true;
+  },
+  setRawGpsModelState(rawGpsModelState: RawGpsModelState | null) {
+    useActivitySimulatorStore.setState({ rawGpsModelState });
+    scheduleSimulatorPersistence();
   },
   setJoystickActive(joystickActive: boolean) {
     useActivitySimulatorStore.setState({ joystickActive });
@@ -596,6 +731,11 @@ const actions = {
       autopilotActive: false,
       pickerMode: null,
       waypoints: [],
+      rawGpsModelState: state.observationMode === 'raw-gps'
+        ? createRawGpsModelState(state.deterministicSeed, virtualTimestampMs)
+        : null,
+      groundTruthTrail: [],
+      rawGpsTrail: [],
       lastFailure: null,
     });
     scheduleSimulatorPersistence();
@@ -651,6 +791,13 @@ const actions = {
       lastAcceptedSample: resumingSameActivity ? current.lastAcceptedSample : null,
       lastRejectionReason: resumingSameActivity ? current.lastRejectionReason : null,
       lastDecision: resumingSameActivity ? current.lastDecision : null,
+      rawGpsModelState: resumingSameActivity
+        ? current.rawGpsModelState
+        : current.observationMode === 'raw-gps'
+          ? createRawGpsModelState(current.deterministicSeed, startedAt)
+          : null,
+      groundTruthTrail: resumingSameActivity ? current.groundTruthTrail : [],
+      rawGpsTrail: resumingSameActivity ? current.rawGpsTrail : [],
       lastFailure: resumingSameActivity ? current.lastFailure : null,
     });
     scheduleSimulatorPersistence();
@@ -682,12 +829,35 @@ const actions = {
         lastAcceptedSample: null,
         lastRejectionReason: null,
         lastDecision: null,
+        rawGpsModelState: null,
+        groundTruthTrail: [],
+        rawGpsTrail: [],
       } : {}),
     });
     scheduleSimulatorPersistence();
   },
   recordGeneratedSample(lastGeneratedSample: SimulatorGeneratedSample) {
-    useActivitySimulatorStore.setState({ lastGeneratedSample });
+    const state = useActivitySimulatorStore.getState();
+    const groundTruthPoint: SimulatorDebugPoint = {
+      lat: lastGeneratedSample.groundTruthLat ?? lastGeneratedSample.lat,
+      lng: lastGeneratedSample.groundTruthLng ?? lastGeneratedSample.lng,
+      t: lastGeneratedSample.atMs,
+      sequence: lastGeneratedSample.sequence,
+    };
+    const rawPoint: SimulatorDebugPoint = {
+      lat: lastGeneratedSample.lat,
+      lng: lastGeneratedSample.lng,
+      t: lastGeneratedSample.atMs,
+      sequence: lastGeneratedSample.sequence,
+      ...(lastGeneratedSample.accuracyM != null ? { accuracyM: lastGeneratedSample.accuracyM } : {}),
+    };
+    useActivitySimulatorStore.setState({
+      lastGeneratedSample,
+      groundTruthTrail: [...state.groundTruthTrail, groundTruthPoint].slice(-MAX_SIMULATOR_DIAGNOSTIC_POINTS),
+      rawGpsTrail: lastGeneratedSample.observationMode === 'raw-gps'
+        ? [...state.rawGpsTrail, rawPoint].slice(-MAX_SIMULATOR_DIAGNOSTIC_POINTS)
+        : [],
+    });
   },
   recordDecision(lastDecision: SimulatorDecision) {
     useActivitySimulatorStore.setState({
@@ -760,6 +930,7 @@ const actions = {
   | 'setEnabled' | 'setExpanded' | 'setPickerMode' | 'setOrigin' | 'setCurrent' | 'setMapSelection'
   | 'setSpeedPreset' | 'setCustomSpeed' | 'setAltitude' | 'setAltitudeMode'
   | 'setVerticalRate' | 'setAccuracyPreset' | 'setCustomAccuracy' | 'setSignal' | 'setTimeScale'
+  | 'setObservationMode' | 'setDiagnosticsVisible' | 'setDeterministicSeed' | 'setRawGpsModelState'
   | 'setJoystickActive' | 'setJoystick' | 'releaseJoystick' | 'replaceWaypoints' | 'enqueueWaypoint'
   | 'moveToWaypoint' | 'stopAutopilot' | 'restoreRuntimeTail' | 'setRuntimePosition' | 'shiftWaypoint'
   | 'bindActivity' | 'unbindActivity' | 'recordGeneratedSample' | 'recordDecision'

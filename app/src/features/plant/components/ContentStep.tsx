@@ -27,6 +27,8 @@ import { Colors, Spacing, Radius, FontSize } from '../../../components/tokens';
 import { MarkerType } from '../../../config/markerTypes';
 import { BackButton } from '../../../components/BackButton';
 import { MarkForm } from '../../marks/components/MarkForm';
+import { Icon } from '../../../components/Icon';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
 
 interface Props {
   initialTitle: string;
@@ -43,17 +45,20 @@ interface Props {
     voiceMs: number | null;
   }) => void;
   onBack: () => void;
+  activityLocation?: boolean;
 }
 
 export function ContentStep({
   initialTitle,
   initialText,
   initialVisibility,
-  initialType = 'danger',
+  initialType = 'cairn',
   submitting = false,
   onSubmit,
   onBack,
+  activityLocation = false,
 }: Props) {
+  const theme = useVisualTheme();
   const [type, setType] = useState<MarkerType>(initialType);
   const [title, setTitle] = useState(initialTitle);
   const [text, setText] = useState(initialText);
@@ -78,14 +83,30 @@ export function ContentStep({
                 ContentStep is a full-screen form, not a map overlay, so
                 the frosted pill diverged from the Auth reference. */}
             <BackButton variant="inline" onPress={() => { Keyboard.dismiss(); onBack(); }} />
-            <Text style={styles.title}>Leave a mark</Text>
+            <Text style={[styles.title, { color: theme.foreground }]}>Leave a Cairn</Text>
           </View>
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: 16 }}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.sub}>A few words, and a photo if you'd like.</Text>
+            <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>A trace for this place. Add a note now or come back later.</Text>
+
+            {activityLocation ? (
+              <TouchableOpacity
+                style={[styles.locationTrust, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={onBack}
+                accessibilityRole="button"
+                accessibilityLabel="Using Activity location. Adjust location"
+              >
+                <Icon name="MapPin" size={16} color={theme.primary} strokeWidth={2.2} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.locationTrustTitle, { color: theme.foreground }]}>Using your Activity location</Text>
+                  <Text style={[styles.locationTrustBody, { color: theme.foregroundSecondary }]}>Trusted recorded position · Tap to adjust</Text>
+                </View>
+                <Icon name="ChevronRight" size={16} color={theme.iconInactive} />
+              </TouchableOpacity>
+            ) : null}
 
             {/* R114/O24 (2026-08-12): autoFocus="title" removed — user
                 requested no page ever pop the keyboard automatically on
@@ -105,11 +126,13 @@ export function ContentStep({
               autoFocus={null}
               titleMaxChars={ContentConfig.titleMaxChars}
               noteMaxChars={ContentConfig.textMaxChars}
+              showTypePicker={false}
+              showVisibilityPicker={false}
             />
 
             {__DEV__ && (
-              <View style={styles.voiceBox}>
-                <Text style={styles.voiceTodo}>Voice memo (dev-only preview — coming in a later release)</Text>
+              <View style={[styles.voiceBox, { backgroundColor: theme.surface, borderColor: theme.border }] }>
+                <Text style={[styles.voiceTodo, { color: theme.foregroundSecondary }]}>Voice memo (dev-only preview — coming in a later release)</Text>
               </View>
             )}
           </ScrollView>
@@ -126,7 +149,7 @@ export function ContentStep({
               </Text>
             )}
             <TouchableOpacity
-              style={[styles.primary, !canSubmit && styles.primaryDisabled]}
+              style={[styles.primary, { backgroundColor: theme.primary }, !canSubmit && styles.primaryDisabled]}
               disabled={!canSubmit}
               onPress={() => {
                 Keyboard.dismiss();
@@ -143,7 +166,7 @@ export function ContentStep({
               accessibilityLabel={submitting ? 'Planting' : 'Plant Cairn'}
               accessibilityState={{ disabled: !canSubmit }}
             >
-              <Text style={styles.primaryText}>{submitting ? 'Planting…' : 'Plant Cairn'}</Text>
+              <Text style={[styles.primaryText, { color: theme.onPrimary }]}>{submitting ? 'Planting…' : 'Plant Cairn'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -178,6 +201,19 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginBottom: Spacing.md,
   },
+  locationTrust: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: Radius.button,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  locationTrustTitle: { fontSize: FontSize.caption, fontWeight: '700' },
+  locationTrustBody: { fontSize: FontSize.small, marginTop: 2 },
   // Concept alignment (2026-08-16): voice memo box gets an info-blue
   // tone (water blue) per Plant-2 concept — subtle blue-ink card that
   // reads as a preview/dev-callout distinct from primary form fields.

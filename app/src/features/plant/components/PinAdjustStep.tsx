@@ -450,8 +450,10 @@ export function PinAdjustStep({
           styleURL={mapStyle === 'satellite' ? SATELLITE_STYLE : getStandardStyleURL()}
           compassEnabled={false}
           scaleBarEnabled={false}
-          attributionEnabled={false}
-          logoEnabled={false}
+          attributionEnabled
+          logoEnabled
+          logoPosition={{ bottom: 8, left: 8 }}
+          attributionPosition={{ bottom: 8, right: 8 }}
           // v297: disable ALL native zoom gestures. The +/- buttons
           // are the only zoom path, and they call setCamera with an
           // explicit centerCoordinate locked to the current pin —

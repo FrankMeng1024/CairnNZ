@@ -107,11 +107,15 @@ describe('runPreview finally contract (v6.3 R1v3)', () => {
     matchSegmentMock.mockResolvedValue({
       ok: true,
       matchedPoints: useRouteEditStore.getState().brushStrokes[0].points,
+      segments: [{
+        points: useRouteEditStore.getState().brushStrokes[0].points,
+        confidence: 0.9,
+      }],
       confidence: 0.9,
       durationMs: 50,
     });
     const r = await useRouteEditStore.getState().runPreview();
-    expect(r.ok).toBe(true);
+    expect(r).toEqual({ ok: true });
     expect(useRouteEditStore.getState().isComputing).toBe(false);
   });
 
@@ -155,6 +159,10 @@ describe('runPreview finally contract (v6.3 R1v3)', () => {
       return {
         ok: true,
         matchedPoints: useRouteEditStore.getState().brushStrokes[0].points,
+        segments: [{
+          points: useRouteEditStore.getState().brushStrokes[0].points,
+          confidence: 0.9,
+        }],
         confidence: 0.9,
         durationMs: 50,
       };

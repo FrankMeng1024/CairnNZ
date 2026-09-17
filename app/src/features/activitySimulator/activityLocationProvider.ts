@@ -92,6 +92,7 @@ export function activateSimulatorProvider(
       segmentId: sample.segmentId,
       segmentStartReason: sample.segmentStartReason,
       source: 'simulator',
+      simulatorObservationMode: sample.observationMode,
     }, sample.timestamp);
   if (resume) {
     // A new JS process has no in-memory engine lease. Rebind the persisted

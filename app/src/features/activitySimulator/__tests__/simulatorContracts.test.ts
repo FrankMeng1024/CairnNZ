@@ -89,9 +89,32 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(tracking).toContain('shouldStartNewSegment({');
     expect(engine).not.toContain('newSegmentId(');
     expect(engine).not.toContain('shouldStartNewSegment');
-    expect(engine).toContain('poorSimulatorAccuracyMeters(sequence)');
+    expect(engine).toContain('poorSimulatorAccuracyMeters(currentState.sampleSequence + 1)');
+    expect(engine).toContain('advanceRawGpsModel({');
     expect(engine).toContain("state.signal === 'lost'");
     expect(engine).toContain("state.signal === 'frozen'");
+  });
+
+  test('dual-mode source boundary preserves Clean Path and gives Raw GPS production continuity', () => {
+    const panel = read('src/features/activitySimulator/ActivitySimulatorPanel.tsx');
+    const provider = read('src/features/activitySimulator/activityLocationProvider.ts');
+    const tracking = read('src/store/useTrackingStore.ts');
+    const map = read('src/screens/HikingMap.tsx');
+    const hike = read('src/screens/HikingScreen.tsx');
+    const run = read('src/screens/RunningScreen.tsx');
+    expect(panel).toContain('SIM MODE');
+    expect(panel).toContain('Clean Path');
+    expect(panel).toContain('Raw GPS');
+    expect(panel).toContain('Product');
+    expect(panel).toContain('Diagnostic');
+    expect(provider).toContain('simulatorObservationMode: sample.observationMode');
+    expect(tracking).toContain("owned.simulatorObservationMode === 'raw-gps'");
+    expect(tracking).toContain('!isSimulatorSample || isRawGpsSimulatorSample');
+    expect(tracking).toContain('isSimulatorSample && !isRawGpsSimulatorSample');
+    expect(map).toContain('activity-simulator-ground-truth-source');
+    expect(map).toContain('activity-simulator-raw-gps-source');
+    expect(hike).toContain("simulatorObservationMode === 'raw-gps'");
+    expect(run).toContain("simulatorObservationMode === 'raw-gps'");
   });
 
   test('manual reacquisition and rollback preserve central segment/metric authority', () => {
@@ -159,7 +182,8 @@ describe('Activity Simulator integration and safety contracts', () => {
 
   test('map matching is derived independently per real segment with truthful raw fallback', () => {
     const tracking = read('src/store/useTrackingStore.ts');
-    expect(tracking).toContain('const sourceSegments = segmentTrace(s.trackPoints).segments');
+    expect(tracking).toContain('const canonicalSegments = segmentTrace(s.trackPoints).segments');
+    expect(tracking).toContain('const sourceSegments = canonicalSegments');
     expect(tracking).toContain('const snappedSegments: TrackPoint[][] = sourceSegments.map(segment => segment)');
     expect(tracking).toContain('snappedTrackPoints = hikeSource');
     expect(tracking).toContain('preserveTrustedRouteEndpoints(canonicalInput, snapRes.points)');
@@ -300,6 +324,8 @@ describe('Activity Simulator integration and safety contracts', () => {
       coordinateSource: 'simulator',
       debugMode: true,
       simulatorEnabled: true,
+      simulatorMode: 'clean-path',
+      simulatorSeed: 1,
       providerSource: 'simulator',
       trackingStatus: 'tracking',
       fields: {},
@@ -488,13 +514,15 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(run).not.toContain("setMapLoadState('unavailable')");
   });
 
-  test('Settings exposes an independent Simulator toggle and locks it during an owned Activity', () => {
+  test('Debug—not normal Settings—owns Simulator authorization and Activity locking', () => {
     const settings = read('src/screens/SettingsScreen.tsx');
-    expect(settings).toContain('label="Debug mode"');
-    expect(settings).toContain('label="Activity Simulator"');
-    expect(settings).toContain('testID="activity-simulator-toggle"');
-    expect(settings).toContain('disabled={simulatorContinuity.locked}');
-    expect(settings).toContain('simulatorContinuity.reason');
+    const debug = read('src/screens/DebugScreen.tsx');
+    expect(settings).not.toContain('Activity Simulator');
+    expect(settings).not.toContain('debug-mode-toggle');
+    expect(debug).toContain('testID="debug-mode-toggle"');
+    expect(debug).toContain('testID="activity-simulator-toggle"');
+    expect(debug).toContain('disabled={!debugMode || simulatorContinuity.locked}');
+    expect(debug).toContain('simulatorContinuity.reason');
   });
 
   test('no-start setup preserves real map display while keeping setup controls visible', () => {
@@ -559,7 +587,7 @@ describe('Activity Simulator integration and safety contracts', () => {
     const hike = read('src/screens/HikingScreen.tsx');
     const run = read('src/screens/RunningScreen.tsx');
     expect(panel).toContain('([1, 2, 5, 10, 30, 60, 120] as SimulatorTimeScale[])');
-    expect(panel).toContain('SIM · Replay {timeScale}×');
+    expect(panel).toContain("SIM · {observationMode === 'raw-gps' ? 'RAW GPS' : 'CLEAN'} · {timeScale}×");
     expect(panel).toContain("normal: '正常', poor: '较差', lost: '丢失', frozen: '卡住'");
     expect(hike).toContain("locationProviderSource === 'simulator'");
     expect(hike).toContain("simulatorSignal === 'poor' ? 'warning'");

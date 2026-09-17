@@ -250,6 +250,15 @@ export function buildStandardConfig(theme: MapTheme): StandardConfig {
   };
 }
 
+/** Activity is an operational instrument: retain road/place/trail context,
+ * but suppress POI chatter that competes with the route and current position. */
+export function buildActivityStandardConfig(theme: MapTheme): StandardConfig {
+  return {
+    ...buildStandardConfig(theme),
+    showPointOfInterestLabels: false,
+  };
+}
+
 /**
  * R21-v3 v4b (2026-08-30) — subset config for Mapbox Standard-Satellite
  * style. Standard-Satellite supports ONLY: lightPreset, showPlaceLabels,

@@ -329,7 +329,8 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
     const state = useTrackingStore.getState();
     expect(state.trackPointsRaw).toHaveLength(feed.length);
     expect(state.trackPoints).toHaveLength(3);
-    expect(state.trackPointsSmoothed).toHaveLength(3);
+    expect(state.trackPointsSmoothed.length).toBeLessThanOrEqual(state.trackPoints.length);
+    expect(state.trackPointsSmoothed).toHaveLength(2);
     expect(state.distanceM).toBeGreaterThan(9);
     expect(state.distanceM).toBeLessThan(11);
     expect(decisions.slice(3).every(decision => decision.accepted === false)).toBe(true);
@@ -497,6 +498,85 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
     expect(decision).toMatchObject({ accepted: false, reason: 'poor-accuracy' });
     expect(useTrackingStore.getState().trackPoints).toHaveLength(0);
     expect(useTrackingStore.getState().trackPointsRaw).toHaveLength(1);
+  });
+
+  it('routes Raw GPS through physical continuity while Clean Path keeps exact Simulator acceptance', async () => {
+    const rawSessionId = 'raw-continuity-activity';
+    useTrackingStore.setState({
+      sessionId: rawSessionId,
+      liveOwnerGeneration: 'raw-generation',
+      liveOwnerAcceptAfterMs: 1,
+      currentSegmentId: 'raw-segment',
+    });
+    const rawSample = (eastM: number, extra: Record<string, unknown> = {}) => {
+      const { destinationPoint } = require('../src/features/activitySimulator/geodesy');
+      return sample({
+        ...destinationPoint({ lat: 0, lng: 0 }, 90, eastM),
+        clientActivityId: rawSessionId,
+        ownerGeneration: 'raw-generation',
+        simulatorObservationMode: 'raw-gps',
+        accuracy: 14,
+        speed: 0,
+        ...extra,
+      });
+    };
+
+    expect(await useTrackingStore.getState().addTrackPoint(rawSample(0), 1_000))
+      .toMatchObject({ accepted: true });
+    const uncertain = await useTrackingStore.getState().addTrackPoint(rawSample(3.5), 2_000);
+    expect(uncertain).toMatchObject({ accepted: false, reason: 'physical-continuity-quarantine' });
+    expect(useTrackingStore.getState()).toMatchObject({
+      realCandidatePending: true,
+      realCanonicalDecisionReason: 'possible-stationary-jitter',
+    });
+    expect(useTrackingStore.getState().trackPointsRaw).toHaveLength(2);
+    expect(useTrackingStore.getState().trackPoints).toHaveLength(1);
+    await useTrackingStore.getState().pauseTracking();
+  });
+
+  it('keeps a calibrated Raw GPS stationary cloud from becoming journey distance', async () => {
+    const { advanceRawGpsModel, createRawGpsModelState } = require('../src/features/activitySimulator/rawGpsObservationModel');
+    const origin = { lat: -45.0312, lng: 168.6626 };
+    const rawSessionId = 'raw-stationary-activity';
+    const epoch = 1_800_000_000_000;
+    useTrackingStore.setState({
+      sessionId: rawSessionId,
+      liveOwnerGeneration: 'raw-stationary-generation',
+      liveOwnerAcceptAfterMs: epoch,
+      currentSegmentId: 'raw-stationary-segment',
+    });
+    let model = createRawGpsModelState(550059, epoch);
+    let emitted = 0;
+    for (let second = 0; second <= 180; second += 1) {
+      const result = advanceRawGpsModel({
+        state: model,
+        groundTruth: origin,
+        timestampMs: epoch + second * 1_000,
+        trueSpeedMps: 0,
+        trueCourseDegrees: -1,
+        signal: 'normal',
+        observationAllowed: true,
+      });
+      model = result.state;
+      if (!result.observation) continue;
+      emitted += 1;
+      await useTrackingStore.getState().addTrackPoint(sample({
+        ...result.observation.coordinate,
+        accuracy: result.observation.accuracyM,
+        speed: result.observation.speedMps,
+        course: result.observation.courseDegrees,
+        clientActivityId: rawSessionId,
+        ownerGeneration: 'raw-stationary-generation',
+        simulatorObservationMode: 'raw-gps',
+      }), epoch + second * 1_000);
+    }
+    const state = useTrackingStore.getState();
+    expect(emitted).toBeGreaterThan(35);
+    expect(state.trackPointsRaw.length).toBe(emitted);
+    expect(state.trackPoints.length).toBeLessThan(8);
+    expect(state.distanceM).toBeLessThan(8);
+    expect(state.trackPointsSmoothed.length).toBeLessThanOrEqual(state.trackPoints.length);
+    await useTrackingStore.getState().pauseTracking();
   });
 
   it('fences stale Real callbacks from a Simulator Activity', async () => {
@@ -915,6 +995,27 @@ describe('useTrackingStore — P0 operation guards', () => {
       startError: 'initialization-failed',
     });
     expect(persistBackgroundContext).toHaveBeenLastCalledWith(null, false);
+  });
+
+  it('coalesces five rapid Resume taps into one truthful source transition', async () => {
+    useTrackingStore.setState({
+      status: 'paused',
+      transitionState: 'idle',
+      sessionId: 'resume-single-flight',
+      ownerUserId: 'tracking-test-user',
+      startedAt: 1,
+      activityMode: 'running',
+      liveOwnerGeneration: 'old-generation',
+      liveOwnerAcceptAfterMs: 1,
+      currentSegmentId: 'old-segment',
+    });
+
+    const attempts = Array.from({ length: 5 }, () => useTrackingStore.getState().resumeTracking());
+    expect(useTrackingStore.getState()).toMatchObject({ status: 'paused', transitionState: 'resuming' });
+    await expect(Promise.all(attempts)).resolves.toEqual([true, true, true, true, true]);
+    expect(mockLocation.watchPositionAsync).toHaveBeenCalledTimes(1);
+    expect(useTrackingStore.getState()).toMatchObject({ status: 'tracking', transitionState: 'idle' });
+    expect(useTrackingStore.getState().activeDurationStartedAtMs).not.toBeNull();
   });
 
   it('rejects a native sample older than the current ownership boundary', async () => {

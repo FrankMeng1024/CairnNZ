@@ -51,6 +51,8 @@ export interface SimulatorLogEvent {
   coordinateSource: 'simulator' | 'real' | 'none';
   debugMode: boolean;
   simulatorEnabled: boolean;
+  simulatorMode: 'clean-path' | 'raw-gps';
+  simulatorSeed: number;
   providerSource: 'real' | 'simulator';
   trackingStatus: 'idle' | 'requesting' | 'tracking' | 'paused';
   fields: Record<string, unknown>;
@@ -95,6 +97,9 @@ const CRITICAL_EVENT_NAMES = new Set([
   'debug_mode_off',
   'simulator_setting_changed',
   'simulator_setting_rejected',
+  'simulator_observation_mode_set',
+  'simulator_seed_set',
+  'simulator_seed_rejected',
   'qa_session_started',
   'qa_session_ended',
   'hike_opened',
@@ -576,6 +581,8 @@ export function appendSimulatorLog(
       ?? (category.startsWith('SIM_') || providerSource === 'simulator' ? 'simulator' : 'none'),
     debugMode,
     simulatorEnabled: simulator.enabled,
+    simulatorMode: simulator.observationMode,
+    simulatorSeed: simulator.deterministicSeed,
     providerSource,
     trackingStatus,
     fields: sanitizeSimulatorLogFields(fields),

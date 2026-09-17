@@ -32,6 +32,8 @@ import {
   restoreRecoverableActivity,
   type RecoverableActivity,
 } from '../features/activity/activityRecovery';
+import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
+import { useDistance } from '../utils/distanceFormat';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -55,9 +57,6 @@ const COUNTRY_AREA_KM2: Record<string, number> = {
   'ZA': 1221037,
 };
 
-function formatDistanceKm(meters: number): string {
-  return (meters / 1000).toFixed(1) + ' km';
-}
 function formatDuration(secs: number): string {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
@@ -75,6 +74,7 @@ function formatRelativeDay(startedAt: number | string): string {
 
 export function HomeScreen() {
   const nav = useNavigation<Nav>();
+  const distance = useDistance();
   const user = useAppStore(s => s.user);
   const sessions = useSessionStore(s => s.sessions);
   const memoryPointCount = useMemoryStore(s => s.points.length);
@@ -87,13 +87,10 @@ export function HomeScreen() {
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
   const [country, setCountry] = useState<{ name: string; code: string } | null>(null);
   const [showPercent, setShowPercent] = useState(false);
-  // R21 (2026-08-17 user "在settings里添加一个 可以隐藏首页的探索百分比的设置"):
-  // when Settings toggle is off, hide the % swap icon and force km² display.
-  const showExplorationPercent = useSettingsStore(s => s.showExplorationPercent);
-  // R21 (2026-08-17 user "debug模式开启的时候展示出来"): gate the top-right
-  // DEV cycler on debugMode instead of __DEV__ so it appears on production
-  // builds after 5-tap Settings unlock.
+  // Internal QA has an explicit build-gated owner. Normal production builds
+  // cannot discover or authorize it through user Settings.
   const debugMode = useSettingsStore(s => s.debugMode);
+  const qaToolsAvailable = activitySimulatorBuildCapable || (typeof __DEV__ !== 'undefined' && __DEV__);
   const hikingIconCandidate = useWeatherStore(s => s.hikingIconCandidate);
   const runningIconCandidate = useWeatherStore(s => s.runningIconCandidate);
 
@@ -233,19 +230,20 @@ export function HomeScreen() {
   // "here's an old completed hike" when there's an in-progress session.
   const topUnfinished = unfinishedActivity;
   const showUnfinished = !!topUnfinished;
+  const formatActivityDistance = (meters: number) => `${distance.format(meters, 1)} ${distance.unit}`;
 
   const lastHikeTitle = showUnfinished
     ? (topUnfinished.activityMode === 'running' ? 'Unfinished Run' : 'Unfinished Hike')
     : (lastHike?.name || 'Recent hike');
   const lastHikeMeta = showUnfinished
-    ? `${formatDistanceKm(topUnfinished.distanceM)} · ${formatDuration(topUnfinished.durationS)} · ${formatRelativeDay(topUnfinished.startedAt)}`
+    ? `${formatActivityDistance(topUnfinished.distanceM)} · ${formatDuration(topUnfinished.durationS)} · ${formatRelativeDay(topUnfinished.startedAt)}`
     : (lastHike
-    ? `${formatDistanceKm(lastHike.distanceM || 0)} · ${formatDuration(lastHike.durationS || 0)} · ${formatRelativeDay(lastHike.startedAt)}`
+    ? `${formatActivityDistance(lastHike.distanceM || 0)} · ${formatDuration(lastHike.durationS || 0)} · ${formatRelativeDay(lastHike.startedAt)}`
     : '');
   const lastHikeDetails = showUnfinished
     ? ['Interrupted', 'Resume', formatRelativeDay(topUnfinished.startedAt)]
     : (lastHike
-      ? [formatDistanceKm(lastHike.distanceM || 0), formatDuration(lastHike.durationS || 0), formatRelativeDay(lastHike.startedAt)]
+      ? [formatActivityDistance(lastHike.distanceM || 0), formatDuration(lastHike.durationS || 0), formatRelativeDay(lastHike.startedAt)]
       : []);
 
   const initial = ((user?.name ?? user?.email ?? '?').charAt(0) || '?').toUpperCase();
@@ -324,8 +322,8 @@ export function HomeScreen() {
             exploredKm2={exploredKm2}
             countryName={country?.name}
             percentOfCountry={percentOfCountry ?? undefined}
-            showPercent={showExplorationPercent && showPercent}
-            onToggleUnit={showExplorationPercent ? () => setShowPercent(v => !v) : undefined}
+            showPercent={showPercent}
+            onToggleUnit={() => setShowPercent(v => !v)}
             lastHikeTitle={lastHikeTitle}
             lastHikeMeta={lastHikeMeta}
             lastHikeDetails={lastHikeDetails}
@@ -349,13 +347,25 @@ export function HomeScreen() {
             hikingIconCandidate={debugMode ? hikingIconCandidate : null}
             runningIconCandidate={debugMode ? runningIconCandidate : null}
           />
-          {/* DEV-only weather cycler — top-right circular button.
-              TODO: LAUNCH_GATE — remove this block before App Store. */}
-          {/* R21 (2026-08-17 user "homepage右上角有一个dev...debug模式开启的时候展示出来"):
-              gate DEV menu on Settings debugMode (unlocked via 5-tap on
-              About Cairn) instead of __DEV__. Ships on production builds
-              but hidden until user opts in via Settings. */}
-          {debugMode && (
+          {qaToolsAvailable && !debugMode ? (
+            <TouchableOpacity
+              testID="internal-qa-entry"
+              onPress={() => nav.navigate('Debug')}
+              style={{
+                position: 'absolute', right: 20, top: 56,
+                minWidth: 42, height: 34, borderRadius: 17,
+                paddingHorizontal: 9,
+                backgroundColor: 'rgba(255,255,255,0.74)',
+                alignItems: 'center', justifyContent: 'center',
+                borderWidth: 1, borderColor: 'rgba(33,54,44,0.15)',
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Open internal QA tools"
+            >
+              <Text style={{ fontSize: 10, fontWeight: '900', color: '#21362C', letterSpacing: 0.5 }}>QA</Text>
+            </TouchableOpacity>
+          ) : null}
+          {qaToolsAvailable && debugMode && (
             <View style={{ position: 'absolute', right: 20, top: 56 }}>
               <TouchableOpacity
                 onPress={() => setDevMenuOpen(v => !v)}
@@ -492,6 +502,16 @@ export function HomeScreen() {
                       </TouchableOpacity>
                     ))}
                   </View>
+                  <TouchableOpacity
+                    testID="open-debug-tools"
+                    onPress={() => {
+                      setDevMenuOpen(false);
+                      nav.navigate('Debug');
+                    }}
+                    style={{ marginTop: 6, paddingVertical: 8, alignItems: 'center', borderRadius: 8, backgroundColor: 'rgba(33,54,44,0.10)' }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#21362C' }}>Open Debug tools</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>

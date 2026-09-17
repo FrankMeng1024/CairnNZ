@@ -792,6 +792,26 @@ export function MemoryScreen() {
             (用户 v375 反馈: 之前的 fixed-position 占位空白难看)。 */}
         <MemoryScopeToggle onPickPress={() => setPickModalOpen(true)} />
       </View>
+      <TouchableOpacity
+        testID="memory-all-cairns-entry"
+        style={[
+          styles.allCairnsEntry,
+          {
+            top: insets.top + 72,
+            backgroundColor: theme.mapOverlay,
+            borderColor: theme.borderStrong,
+            shadowColor: theme.shadow,
+          },
+        ]}
+        onPress={() => nav.navigate('AllCairns')}
+        activeOpacity={0.86}
+        accessibilityRole="button"
+        accessibilityLabel="Open All Cairns"
+      >
+        <Icon name="MapPin" size={16} color={theme.iconActive} strokeWidth={2} />
+        <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>All Cairns</Text>
+        <Icon name="ChevronRight" size={14} color={theme.iconInactive} strokeWidth={2} />
+      </TouchableOpacity>
 
       {/* v352 zoom-flicker fix: render MemoryMap with persistentCoord
           (last-rendered coord, kept in ref across re-renders) instead of
@@ -1188,6 +1208,23 @@ const styles = StyleSheet.create({
     // to right via space-between. Both pill-shaped so they balance visually.
     justifyContent: 'space-between',
   },
+  allCairnsEntry: {
+    position: 'absolute',
+    left: 12,
+    zIndex: 12,
+    minHeight: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  allCairnsEntryText: { fontSize: 12, fontWeight: '700' },
   // Concept-aligned empty state (2026-08-16 sleep-run redesign):
   //   - Centered vertically on paper background
   //   - Title: 18px, dark textPrimary, weight 500

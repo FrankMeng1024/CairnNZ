@@ -100,6 +100,39 @@ describe('Activity Simulator user-scoped recovery state', () => {
     expect(actions.setTimeScale(3 as any)).toBe(false);
   });
 
+  test('persists explicit dual-mode, diagnostics and deterministic seed configuration', async () => {
+    await hydrateActivitySimulatorForUser('account-a');
+    const actions = useActivitySimulatorStore.getState();
+    expect(actions.setObservationMode('raw-gps')).toBe(true);
+    expect(actions.setDeterministicSeed(550055)).toBe(true);
+    actions.setDiagnosticsVisible(true);
+    expect(actions.setTimeScale(30)).toBe(false);
+    expect(actions.setTimeScale(10)).toBe(true);
+    await persistActivitySimulatorNow();
+
+    await hydrateActivitySimulatorForUser(null);
+    await hydrateActivitySimulatorForUser('account-a');
+    expect(useActivitySimulatorStore.getState()).toMatchObject({
+      observationMode: 'raw-gps',
+      deterministicSeed: 550055,
+      diagnosticsVisible: true,
+      timeScale: 10,
+    });
+  });
+
+  test('mode and seed changes are locked while an Activity owns the Simulator source', async () => {
+    await hydrateActivitySimulatorForUser('account-a');
+    const actions = useActivitySimulatorStore.getState();
+    actions.bindActivity('account-a', 'activity-a', 1_000);
+    expect(actions.setObservationMode('raw-gps')).toBe(false);
+    expect(actions.setDeterministicSeed(77)).toBe(false);
+    expect(useActivitySimulatorStore.getState()).toMatchObject({
+      observationMode: 'clean-path',
+      deterministicSeed: 1,
+      lastFailure: expect.stringContaining('Finish or discard'),
+    });
+  });
+
   test('requires an explicit start point for a fresh account', async () => {
     await hydrateActivitySimulatorForUser('account-a');
     expect(useActivitySimulatorStore.getState()).toMatchObject({ enabled: false, startConfigured: false });

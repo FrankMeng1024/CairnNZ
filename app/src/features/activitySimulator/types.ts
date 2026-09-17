@@ -1,6 +1,7 @@
 import type { ActivityMode } from '../../store/useSessionStore';
 
 export type ActivityLocationSource = 'real' | 'simulator';
+export type SimulatorObservationMode = 'clean-path' | 'raw-gps';
 export type SimulatorSignal = 'normal' | 'poor' | 'lost' | 'frozen';
 export type SimulatorAccuracyPreset = 'good' | 'normal' | 'poor';
 export type SimulatorSpeedPreset = 'slow' | 'walk' | 'brisk' | 'hike' | 'run' | 'custom';
@@ -14,6 +15,12 @@ export interface SimulatorCoordinate {
 
 export interface SimulatorWaypoint extends SimulatorCoordinate {
   id: string;
+}
+
+export interface SimulatorDebugPoint extends SimulatorCoordinate {
+  t: number;
+  sequence: number;
+  accuracyM?: number;
 }
 
 export interface SimulatorActivityLease {

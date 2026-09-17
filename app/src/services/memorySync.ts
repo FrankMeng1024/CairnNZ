@@ -42,10 +42,11 @@ let pullAbortController: AbortController | null = null;
 /** Epoch token, bumped on every detach/reset. */
 let epoch = 0;
 let pendingBurstStartedAt: number | null = null;
-let syncMetrics = { pushRequests: 0, pushedPoints: 0 };
+let authBlocked = false;
+let syncMetrics = { pushRequests: 0, pushedPoints: 0, authBlocked: false };
 
 export function resetMemorySyncMetrics(): void {
-  syncMetrics = { pushRequests: 0, pushedPoints: 0 };
+  syncMetrics = { pushRequests: 0, pushedPoints: 0, authBlocked };
 }
 
 export function getMemorySyncMetrics(): typeof syncMetrics {
@@ -338,6 +339,7 @@ function sameContent(a: VisitedPoint[], b: VisitedPoint[]): boolean {
 }
 
 async function pushPendingPoints(): Promise<void> {
+  if (authBlocked) return;
   if (pushRunning || pullRunning) {
     schedulePush(PUSH_DEBOUNCE_MS);
     return;
@@ -392,6 +394,13 @@ async function pushPendingPoints(): Promise<void> {
       backoffUntil = 0;
       pendingBurstStartedAt = pending.length > MAX_BATCH ? Date.now() : null;
       if (pending.length > MAX_BATCH) schedulePush(0);
+    } else if (res.status === 401) {
+      // A final 401 after authenticatedFetch's own refresh path is not a
+      // transient network error. Preserve local evidence and wait for a real
+      // authentication transition instead of waking the radio every 15s.
+      authBlocked = true;
+      syncMetrics.authBlocked = true;
+      pendingBurstStartedAt = null;
     } else {
       serverError = true;
     }
@@ -413,6 +422,7 @@ async function pushPendingPoints(): Promise<void> {
 }
 
 function schedulePush(delayMs = PUSH_DEBOUNCE_MS): void {
+  if (authBlocked) return;
   const now = Date.now();
   if (pendingBurstStartedAt === null) pendingBurstStartedAt = now;
   const maxWaitRemaining = Math.max(0, pendingBurstStartedAt + PUSH_MAX_WAIT_MS - now);
@@ -442,6 +452,8 @@ export function attachMemorySync(userId: string): void {
     userId, from: fromEpoch, to: epoch, prev_active: activeUserId,
   });
   activeUserId = userId;
+  authBlocked = false;
+  syncMetrics.authBlocked = false;
   let lastUnsyncedCount = useMemoryStore.getState()._unsyncedCount;
   unsubscribe = useMemoryStore.subscribe((s) => {
     const u = s._unsyncedCount;
@@ -472,6 +484,8 @@ export function detachMemorySync(): void {
     unsubscribe = null;
   }
   activeUserId = null;
+  authBlocked = false;
+  syncMetrics.authBlocked = false;
   backoffUntil = 0;
   pendingBurstStartedAt = null;
   pushRunning = false;
@@ -485,6 +499,15 @@ export async function pushMemoryNow(): Promise<void> {
     pushTimer = null;
   }
   await pushPendingPoints();
+}
+
+/** Resume a 401-paused Memory outbox only after authentication is known good. */
+export function notifyMemoryAuthRefreshed(userId: string): void {
+  if (!userId || userId !== activeUserId || !authBlocked) return;
+  authBlocked = false;
+  syncMetrics.authBlocked = false;
+  backoffUntil = 0;
+  if (useMemoryStore.getState()._unsyncedCount > 0) schedulePush(0);
 }
 
 /** Force-clear memory on the server.

@@ -1,12 +1,9 @@
 /**
  * useSettingsStore — App-wide user preferences (persisted via MMKV).
  *
- * O12 (2026-07-27): trimmed to real-consumer settings only:
- *   - units (new): 'metric' | 'imperial' — powers formatDistance util
- *   - nightMode: dark theme toggle (Phase 4 audit)
- *   - hapticFeedback: gates Haptics.selectionAsync() call sites (Phase 2)
- *   - debugMode: unlocked via 5-tap on About Cairn row — reveals Developer section
- *   - debugAnnotationFabVisible / telemetry*: kept for real-device debug workflow
+ * Normal Settings owns only durable app-wide preferences. Contextual map
+ * compatibility and internal QA fields remain persisted here temporarily but
+ * are never surfaced by the user-facing Settings product.
  *
  * Removed in O12 (were placebo toggles with zero runtime consumers):
  *   - tripSharing, voiceBroadcasts, dangerAlerts, routeDeviation, broadcastEnabled
@@ -24,7 +21,6 @@ import type { ForegroundDistanceFilterM } from '../features/activity/locationCad
 export type UnitsPref = 'metric' | 'imperial';
 // O18 HIST-09: user-selectable date format. Default 'dmy' (DD/MM/YYYY, NZ/UK style).
 // 'mdy' = MM/DD/YYYY (US), 'ymd' = YYYY-MM-DD (ISO).
-export type DateFormatPref = 'dmy' | 'mdy' | 'ymd';
 // O18 MAP-01: user-selectable map layer (outdoors vs satellite).
 // Default 'outdoors' — matches existing getPrimaryMapStyle() behaviour.
 export type MapLayerPref = 'outdoors' | 'satellite';
@@ -35,28 +31,15 @@ export type AppearancePref = ScenicAppearancePref;
 interface Settings {
   // Preferences
   units: UnitsPref;
-  dateFormat: DateFormatPref;
+  // Contextual map state is retained for compatibility with existing map
+  // screens; it is not a normal Settings row.
   mapLayer: MapLayerPref;
-  nightMode: boolean;
   hapticFeedback: boolean;
   // Sunny time family: Auto / Day / Sunset / Night.
   appearance: AppearancePref;
 
-  // Route following (added when Cairn gained turn-by-turn navigation).
-  // Naming: NOT `voiceBroadcasts` / `routeDeviation` — those are in REMOVED_KEYS
-  // above and would be stripped on hydrate. New names deliberately avoid the collision.
-  voiceGuidance: boolean;                // TTS turn-by-turn cues while following a route
-  offRouteThresholdM: number;            // deviation distance that triggers off-route banner + voice
-
-  // R21 (2026-08-17 user "在settings里添加一个 可以隐藏首页的探索百分比的设置
-  // 防止压力太大 默认开 用户可以选"): hide the "% of country" toggle icon on
-  // Home. Default true (feature visible). When false, Home only shows km² and
-  // hides the swap icon. Settings shows a demo when user turns OFF so they
-  // understand what they're hiding (first-time users have no data to see it).
-  showExplorationPercent: boolean;
-
   // Debug / Telemetry (real-device test)
-  debugMode: boolean;                    // master switch — 5-tap on About Cairn to unlock
+  debugMode: boolean;                    // internal/dev Debug-screen master switch
   debugAnnotationFabVisible: boolean;    // show the floating L4 annotation button
   telemetryUploadEnabled: boolean;       // auto-upload session JSON to backend
   telemetryWifiOnly: boolean;            // only upload over WiFi (avoid cellular)
@@ -73,18 +56,15 @@ const STORAGE_KEY = 'cairn_settings';
 const REMOVED_KEYS = [
   'tripSharing', 'voiceBroadcasts', 'dangerAlerts', 'routeDeviation', 'broadcastEnabled',
   'soundEffects', 'edgeWarningGlow', 'shareAfterAdd', 'locationShare',
+  'dateFormat', 'nightMode', 'voiceGuidance', 'offRouteThresholdM',
+  'showExplorationPercent',
 ] as const;
 
 const DEFAULTS: Settings = {
   units: 'metric',       // NZ default — user can switch in Settings
-  dateFormat: 'dmy',     // NZ default — DD/MM/YYYY
   mapLayer: 'outdoors',  // default map style (topographic-ish)
-  nightMode: false,
   hapticFeedback: true,
   appearance: 'auto',    // R21 (2026-08-17): default follows local time
-  voiceGuidance: true,   // on by default — matches user expectation for a nav app
-  offRouteThresholdM: 50, // 50m — user-chosen "更宽松" band for GPS-noisy trails
-  showExplorationPercent: true, // R21 (2026-08-17): default on — visible on Home
   debugMode: false,
   debugAnnotationFabVisible: true,
   telemetryUploadEnabled: true,
@@ -120,7 +100,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       debugLogger.setEnabled(Boolean(value));
       // Debug Mode is intentionally independent from Activity Simulator.
       // Internal capability + Debug Mode + an explicit Simulator toggle are
-      // all required; discovering the five-tap gesture is not sufficient.
+      // all required; normal Settings has no Debug entry or unlock gesture.
     }
   },
 
@@ -175,9 +155,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         if (migrated.units !== 'metric' && migrated.units !== 'imperial') {
           delete migrated.units;
         }
-        if (migrated.dateFormat !== 'dmy' && migrated.dateFormat !== 'mdy' && migrated.dateFormat !== 'ymd') {
-          delete migrated.dateFormat;
-        }
         if (migrated.mapLayer !== 'outdoors' && migrated.mapLayer !== 'satellite') {
           delete migrated.mapLayer;
         }
@@ -198,20 +175,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           mutated = true;
         }
         const boolFields = [
-          'nightMode', 'hapticFeedback', 'voiceGuidance', 'debugMode',
+          'hapticFeedback', 'debugMode',
           'debugAnnotationFabVisible', 'telemetryUploadEnabled', 'telemetryWifiOnly',
-          'showExplorationPercent',
         ] as const;
         for (const k of boolFields) {
           if (k in migrated && typeof migrated[k] !== 'boolean') {
             delete migrated[k];
-          }
-        }
-        // offRouteThresholdM: number 0..500 (defensive band)
-        if ('offRouteThresholdM' in migrated) {
-          const v = migrated.offRouteThresholdM;
-          if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 500) {
-            delete migrated.offRouteThresholdM;
           }
         }
         if (
@@ -256,14 +225,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 function pick(state: SettingsState): Settings {
   return {
     units: state.units,
-    dateFormat: state.dateFormat,
     mapLayer: state.mapLayer,
-    nightMode: state.nightMode,
     hapticFeedback: state.hapticFeedback,
     appearance: state.appearance,
-    voiceGuidance: state.voiceGuidance,
-    offRouteThresholdM: state.offRouteThresholdM,
-    showExplorationPercent: state.showExplorationPercent,
     debugMode: state.debugMode,
     debugAnnotationFabVisible: state.debugAnnotationFabVisible,
     telemetryUploadEnabled: state.telemetryUploadEnabled,

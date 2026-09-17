@@ -14,8 +14,7 @@
 export const TITLE_BODY_SEP = '\u001E';
 
 export function encodeTitleBody(title: string, body: string): string {
-  if (!title) return body;
-  if (!body) return title;
+  if (!title && !body) return '';
   return `${title}${TITLE_BODY_SEP}${body}`;
 }
 
@@ -26,8 +25,23 @@ export function splitTitleBody(note: string): { title: string; body: string } {
   if (sepIdx !== -1) {
     return { title: note.slice(0, sepIdx), body: note.slice(sepIdx + 1) };
   }
-  // Note has no separator: it's either title-only OR body-only. Don't
-  // promote a body's first line to a title — that's the data-loss bug
-  // the previous '\n' split caused. Treat the whole thing as title.
-  return { title: note, body: '' };
+  // Records written before the explicit title/body wire format contain a
+  // body only. Keep every character in the note field; future saves add the
+  // separator so the ambiguity does not continue.
+  return { title: '', body: note };
+}
+
+/** Give a quick, content-free Cairn a stable rediscovery name. */
+export function cairnDisplayTitle(
+  title: string,
+  body: string,
+  createdAt: number,
+): string {
+  const explicit = title.trim();
+  if (explicit) return explicit;
+  const bodyLead = body.trim().split(/\r?\n/, 1)[0];
+  if (bodyLead) return bodyLead.slice(0, 30);
+  const date = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' })
+    .format(new Date(createdAt));
+  return `Cairn · ${date}`;
 }

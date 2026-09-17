@@ -7,9 +7,10 @@
  *   A. 及时反馈类 (Like/Report) — 前端立即变,后端异步补
  *   B. 数据落地类 (Hike/Marker) — 站在地点创造数据,必须存
  *   C. 跟随宿主类 (Memory) — 跟着 session payload 走,无独立离线状态
- *   D. 纯在线类 (Edit/Delete/Route/Auth) — 无网禁用 + 提示
+ *   D. 纯在线类 (Auth and server-owned mutations) — 无网禁用 + 提示
  *
- * 这个工厂只服务 A + B 两类。C 类跟宿主走,D 类用 useOnlineOnly hook。
+ * Route creation is a B-class durable entity; later server-owned mutations
+ * can still remain online-only. This factory serves A + B classes.
  *
  * 存储契约:
  *   - 每个 entity 一个 AsyncStorage key (storageKey)
@@ -38,7 +39,7 @@ import networkMonitor from './networkMonitor';
 
 export type SyncState = 'pending' | 'syncing' | 'synced' | 'failed';
 
-interface OfflineEntry<T> {
+export interface OfflineEntry<T> {
   /** 前端生成 uuid, 也作为后端 idempotency key */
   localId: string;
   /** Immutable owner captured before the first async boundary. */
@@ -50,6 +51,10 @@ interface OfflineEntry<T> {
   attempts: number;
   lastTriedAt?: number;
   lastError?: string;
+  /** Machine-readable server outcome retained for truthful retry decisions. */
+  lastErrorCode?: string;
+  /** Increments when accepted local content changes during an in-flight sync. */
+  revision?: number;
 }
 
 interface OfflineEntityConfig<T, Server> {
@@ -101,6 +106,14 @@ interface OfflineEntity<T> {
   subscribe: (cb: (entries: OfflineEntry<T>[]) => void) => () => void;
   /** 单条状态读 (UI 单卡片用)。 */
   getEntry: (localId: string) => Promise<OfflineEntry<T> | null>;
+  /** Update the durable payload for a locally-created entity before sync. */
+  updateLocal: (
+    localId: string,
+    update: (data: T) => T,
+    ownerId?: string,
+  ) => Promise<boolean>;
+  /** Clear a hard-failure backoff and explicitly retry one retained row. */
+  retry: (localId: string, ownerId?: string) => Promise<boolean>;
 }
 
 /**
@@ -249,6 +262,7 @@ export function createOfflineEntity<T, Server = unknown>(
       savedAt,
       syncState: 'pending',
       attempts: 0,
+      revision: 0,
     };
     // v423 C2 fix: read-modify-write 包 withLock, 防止与 drain 的 write(remaining)
     // 并发覆盖. 若锁内 write throw (B1), 让异常传出让 addMarker catch.
@@ -282,6 +296,55 @@ export function createOfflineEntity<T, Server = unknown>(
       await write(ownerId, next);
       crashLogger.breadcrumb(`offlineEntity:discard kind=${kind} localId=${localId.slice(0, 8)}`);
     });
+  }
+
+  async function updateLocal(
+    localId: string,
+    update: (data: T) => T,
+    requestedOwnerId?: string,
+  ): Promise<boolean> {
+    const ownerId = String(requestedOwnerId ?? captureOwnerId());
+    if (config.captureOwnerId && !ownerId) throw new Error('offline_entity_owner_required');
+    return withLock(async () => {
+      const q = await read(ownerId);
+      let changed = false;
+      const next = q.map((entry) => {
+        if (entry.localId !== localId) return entry;
+        changed = true;
+        return {
+          ...entry,
+          data: update(entry.data),
+          revision: (entry.revision ?? 0) + 1,
+          syncState: 'pending' as SyncState,
+        };
+      });
+      if (changed) await write(ownerId, next);
+      return changed;
+    });
+  }
+
+  async function retry(localId: string, requestedOwnerId?: string): Promise<boolean> {
+    const ownerId = String(requestedOwnerId ?? captureOwnerId());
+    if (config.captureOwnerId && !ownerId) throw new Error('offline_entity_owner_required');
+    const changed = await withLock(async () => {
+      const q = await read(ownerId);
+      let found = false;
+      const next = q.map((entry) => {
+        if (entry.localId !== localId) return entry;
+        found = true;
+        const {
+          lastTriedAt: _lastTriedAt,
+          lastError: _lastError,
+          lastErrorCode: _lastErrorCode,
+          ...rest
+        } = entry;
+        return { ...rest, attempts: 0, syncState: 'pending' as SyncState };
+      });
+      if (found) await write(ownerId, next);
+      return found;
+    });
+    if (changed) void drainAllEntities();
+    return changed;
   }
 
   async function drain(): Promise<{ synced: number; failed: number; remaining: number }> {
@@ -350,6 +413,7 @@ export function createOfflineEntity<T, Server = unknown>(
           entry.attempts += 1;
           entry.lastTriedAt = Date.now();
           entry.lastError = String(err?.message ?? err).slice(0, 120);
+          entry.lastErrorCode = typeof err?.code === 'string' ? err.code : undefined;
 
           if (isAuthError(err)) {
             entry.syncState = 'failed';
@@ -382,13 +446,19 @@ export function createOfflineEntity<T, Server = unknown>(
         const fresh = await read(ownerId);
         const kept = fresh.filter((e) => {
           const r = results.get(e.localId);
+          const processedEntry = q.find((qe) => qe.localId === e.localId);
+          const superseded = r === 'drop'
+            && processedEntry
+            && (e.revision ?? 0) !== (processedEntry.revision ?? 0);
           // 未处理的 (新加入的) 保留; keep 也保留; drop 删除.
-          return r !== 'drop';
+          return r !== 'drop' || Boolean(superseded);
         });
         // 用本轮更新过的 entry 覆盖 (attempts / lastTriedAt / syncState)
         const merged = kept.map((e) => {
           const processedEntry = q.find((qe) => qe.localId === e.localId);
-          return processedEntry && results.get(e.localId) === 'keep' ? processedEntry : e;
+          return processedEntry && results.get(e.localId) === 'keep'
+            ? { ...e, ...processedEntry, data: e.data, revision: e.revision }
+            : e;
         });
         await write(ownerId, merged);
         return merged;
@@ -420,6 +490,8 @@ export function createOfflineEntity<T, Server = unknown>(
     discard,
     subscribe,
     getEntry,
+    updateLocal,
+    retry,
   };
 
   registry.add({ kind, drain });

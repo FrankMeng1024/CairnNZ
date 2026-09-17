@@ -7,11 +7,14 @@
  * cannot be rendered at the same time.
  */
 export type TrackingStatus = 'idle' | 'requesting' | 'tracking' | 'paused';
+export type ActivityTransitionState = 'idle' | 'resuming' | 'pausing' | 'finishing';
 
 export type ActivityOperationalState =
   | 'ready'
   | 'starting'
   | 'tracking'
+  | 'resuming'
+  | 'pausing'
   | 'paused'
   | 'finishing'
   | 'recovery'
@@ -20,6 +23,7 @@ export type ActivityOperationalState =
 
 export interface ActivityOperationalInput {
   trackingStatus: TrackingStatus;
+  transitionState?: ActivityTransitionState;
   isFinishing?: boolean;
   hasRecovery?: boolean;
   hasCompletedSummary?: boolean;
@@ -28,12 +32,15 @@ export interface ActivityOperationalInput {
 
 export function deriveActivityOperationalState({
   trackingStatus,
+  transitionState = 'idle',
   isFinishing = false,
   hasRecovery = false,
   hasCompletedSummary = false,
   hasStartError = false,
 }: ActivityOperationalInput): ActivityOperationalState {
-  if (isFinishing) return 'finishing';
+  if (isFinishing || transitionState === 'finishing') return 'finishing';
+  if (transitionState === 'resuming') return 'resuming';
+  if (transitionState === 'pausing') return 'pausing';
   if (trackingStatus === 'requesting') return 'starting';
   if (trackingStatus === 'tracking') return 'tracking';
   if (trackingStatus === 'paused') return 'paused';
@@ -44,7 +51,8 @@ export function deriveActivityOperationalState({
 }
 
 export function isActivitySessionVisible(state: ActivityOperationalState): boolean {
-  return state === 'tracking' || state === 'paused' || state === 'finishing';
+  return state === 'tracking' || state === 'resuming' || state === 'pausing'
+    || state === 'paused' || state === 'finishing';
 }
 
 export function canStartActivity(state: ActivityOperationalState): boolean {
@@ -52,6 +60,6 @@ export function canStartActivity(state: ActivityOperationalState): boolean {
 }
 
 export function canFinishActivity(state: ActivityOperationalState): boolean {
-  return state === 'tracking' || state === 'paused';
+  // Location/source recovery is never an end-Activity gate.
+  return state === 'tracking' || state === 'resuming' || state === 'pausing' || state === 'paused';
 }
-

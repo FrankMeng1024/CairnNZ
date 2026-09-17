@@ -14,16 +14,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated, Easing, ScrollView,
-  Platform, TextInput, KeyboardAvoidingView, Keyboard, Linking,
+  Platform, TextInput, KeyboardAvoidingView, Keyboard, Linking, Alert,
 } from 'react-native';
 import { haptic } from '../services/hapticService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useFocusEffect, useIsFocused, CommonActions } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect, useIsFocused, CommonActions } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { useAppStore } from '../store/useAppStore';
 import { useRouteStore } from '../store/useRouteStore';
+import { routeMatchesIdentity } from '../features/route/routeContracts';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { getCurrentRegion } from '../config/regions';
 import { formatDuration } from '../utils/geo';
@@ -41,6 +42,7 @@ import {
 } from '../features/activity/activityOperationalState';
 import { saveEligibility } from '../features/activity/activityContracts';
 import { deriveActivityLocationHealth } from '../features/activity/activityLocationHealth';
+import { deriveLivePace } from '../features/activity/livePace';
 import {
   findRecoverableActivity,
   restoreRecoverableActivity,
@@ -104,9 +106,15 @@ export function RunningScreen() {
   const simulatorOwnerUserId = useAppStore((s) => s.user?.id ?? null);
   const simulatorHydratedUserId = useActivitySimulatorStore((s) => s.hydratedUserId);
   const nav = useNavigation<Nav>();
+  const entryRoute = useRoute<any>();
+  const requestedRouteId = entryRoute.params?.routeId as string | undefined;
   const isFocused = useIsFocused();
   const routes = useRouteStore(s => s.routes);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
+  const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
+  const activityRouteReference = useRouteStore(s => s.activityRouteReference);
+  const captureActivityRouteReference = useRouteStore(s => s.captureActivityRouteReference);
+  const clearActivityRouteReference = useRouteStore(s => s.clearActivityRouteReference);
   const [unfinishedRun, setUnfinishedRun] = useState<RecoverableActivity | null>(null);
   const [unfinishedResolutionRequested, setUnfinishedResolutionRequested] = useState(false);
   // R21 (2026-08-18): dark theme parity with Hiking. Run tray + top pills
@@ -114,6 +122,7 @@ export function RunningScreen() {
   const runTheme = useVisualTheme();
   const debugMode = useSettingsStore(state => state.debugMode);
   const simulatorEnabled = useActivitySimulatorStore(state => state.enabled);
+  const simulatorObservationMode = useActivitySimulatorStore(state => state.observationMode);
   const simulatorStartConfigured = useActivitySimulatorStore(state => state.startConfigured);
   const simulatorPosition = useActivitySimulatorStore(state => state.current);
   const simulatorSignal = useActivitySimulatorStore(state => state.signal);
@@ -147,7 +156,7 @@ export function RunningScreen() {
   const runRecenterImperativeRef = useRef<(() => void) | null>(null);
   // O18 ONB-04: shared permission-denied modal state.
   const [permissionDeniedVisible, setPermissionDeniedVisible] = useState(false);
-  const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<string | null>(requestedRouteId ?? null);
   const [showRoutePicker, setShowRoutePicker] = useState(false);
   // foregroundGranted gates UserLocation rendering on the pre-start map.
   // Without this, Mapbox UserLocation silently fails (no blue dot) and the
@@ -163,6 +172,17 @@ export function RunningScreen() {
   const [permissionBlocked, setPermissionBlocked] = useState(false);
   const routePickerSlide = useRef(new Animated.Value(300)).current;
   const routePickerOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => { void loadRoutes(); }, [loadRoutes]);
+  useEffect(() => {
+    if (!requestedRouteId) return;
+    setSelectedRoute(requestedRouteId);
+  }, [requestedRouteId]);
+  useEffect(() => {
+    const selected = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+    if (!selected || selected.points.length >= 2) return;
+    void loadRouteDetail(selected.id).catch(() => {});
+  }, [loadRouteDetail, routes, selectedRoute]);
   // Sleep-run 2026-08-16 rev-2: lock concept dropped. R1 is now just a
   // clean map + polyline + top stats bar; R2 is a persistent 3-button
   // tray (Pause / Cairn / Done) that no longer requires a double-tap
@@ -174,7 +194,9 @@ export function RunningScreen() {
   // and transitions to R4.
   const [showSaveSheet, setShowSaveSheet] = useState(false);
   const [pendingName, setPendingName] = useState('');
-  const finishPausedBySheet = useRef(false);
+  /** Finish confirmation is transactional: opening it never changes the
+   * recording lifecycle; Cancel therefore preserves this exact state. */
+  const finishLifecycleBeforeSheet = useRef<'tracking' | 'paused' | null>(null);
   const saveSheetSlide = useRef(new Animated.Value(300)).current;
   const saveSheetOpacity = useRef(new Animated.Value(0)).current;
 
@@ -195,6 +217,7 @@ export function RunningScreen() {
     status,
   );
   const isFinishing = useTrackingStore(s => s.isFinishing);
+  const transitionState = useTrackingStore(s => s.transitionState);
   const startError = useTrackingStore(s => s.startError);
   const durationS = useTrackingStore(s => s.durationS);
   const distanceM = useTrackingStore(s => s.distanceM);
@@ -236,7 +259,10 @@ export function RunningScreen() {
   // O18 RUN-02: signal-lost detection (parity with Hiking §566).
   const trackPoints = useTrackingStore(s => s.trackPoints);
   const trackPointsSmoothed = useTrackingStore(s => s.trackPointsSmoothed);
-  const liveTrackPoints = locationProviderSource === 'real' ? trackPointsSmoothed : trackPoints;
+  const liveTrackPoints = locationProviderSource === 'real'
+    || (locationProviderSource === 'simulator' && simulatorObservationMode === 'raw-gps')
+    ? trackPointsSmoothed
+    : trackPoints;
   // v116/v118: too-short modal hooks. v118 changed Alert → TooShortSheet
   // and the session is now preserved on too-short stops.
   const lastStopReason = useTrackingStore(s => s.lastStopReason);
@@ -250,6 +276,7 @@ export function RunningScreen() {
 
   const operationalState = deriveActivityOperationalState({
     trackingStatus: status,
+    transitionState,
     isFinishing,
     hasRecovery: unfinishedRun !== null,
     hasCompletedSummary: false,
@@ -267,8 +294,6 @@ export function RunningScreen() {
     }, { coordinateSource: 'none' });
     return () => appendSimulatorLog('SCREEN', 'run_closed', {}, { coordinateSource: 'none' });
   }, [isFocused]);
-
-  useEffect(() => { loadRoutes(); }, []);
 
   // The writer stores both modes under one global unfinished-Activity rule.
   // Discover that record even when it is a Hike: attempting to Start Run must
@@ -379,7 +404,7 @@ export function RunningScreen() {
     closeRoutePicker();
   };
 
-  const selectedRouteName = routes.find(r => r.id === selectedRoute)?.name ?? 'Free Run';
+  const selectedRouteName = routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Run';
 
   useFocusEffect(React.useCallback(() => {
     setRunFollowUser(true);
@@ -399,15 +424,13 @@ export function RunningScreen() {
   // R2 action tray (Pause / Cairn / Done) is always visible.
 
   // Save-name sheet lifecycle. Opens on Done tap, closes on Save or Cancel.
-  const openSaveSheet = async () => {
-    // Freeze GPS, active time and metrics before naming/review. If this run
-    // was already manually paused, cancelling the sheet must leave it paused.
-    finishPausedBySheet.current = useTrackingStore.getState().status === 'tracking';
-    if (finishPausedBySheet.current) await pauseTracking();
-    const frozen = useTrackingStore.getState();
-    // Evaluate completion only after the pause fence has durably committed
-    // every accepted point. A too-short run remains recoverable and can resume.
-    if (!saveEligibility(frozen.trackPoints, frozen.distanceM).eligible) {
+  const openSaveSheet = () => {
+    const current = useTrackingStore.getState();
+    if (current.isFinishing) return;
+    finishLifecycleBeforeSheet.current = current.status === 'tracking' ? 'tracking' : 'paused';
+    // Confirmation is not Pause. Recording, timing and location recovery keep
+    // their existing truth until the user confirms Finish.
+    if (!saveEligibility(current.trackPoints, current.distanceM).eligible) {
       setShowTooShortConfirmRun(true);
       return;
     }
@@ -417,15 +440,14 @@ export function RunningScreen() {
       Animated.timing(saveSheetOpacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.ease), useNativeDriver: true }),
     ]).start();
   };
-  const closeSaveSheet = (then?: () => void, restoreRecording = true) => {
+  const closeSaveSheet = (then?: () => void) => {
     Keyboard.dismiss();
     Animated.parallel([
       Animated.timing(saveSheetSlide, { toValue: 300, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(saveSheetOpacity, { toValue: 0, duration: 180, easing: Easing.in(Easing.ease), useNativeDriver: true }),
     ]).start(() => {
       setShowSaveSheet(false);
-      if (restoreRecording && finishPausedBySheet.current) resumeTracking();
-      finishPausedBySheet.current = false;
+      finishLifecycleBeforeSheet.current = null;
       then?.();
     });
   };
@@ -437,8 +459,14 @@ export function RunningScreen() {
       return;
     }
     setActivityMode('running');
+    if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
+      Alert.alert('Route unavailable', 'This Route is not ready on this device yet.');
+      return;
+    }
+    if (!selectedRoute) clearActivityRouteReference();
     const started = await startTracking();
     if (!started) {
+      clearActivityRouteReference();
       const authoritative = await findRecoverableActivity('running');
       if (authoritative) {
         setUnfinishedRun(authoritative);
@@ -466,7 +494,24 @@ export function RunningScreen() {
     // 'View Activity' can navigate to MapHistory.
     const capturedId = useTrackingStore.getState().sessionId;
     const trimmed = name && name.trim().length > 0 ? name.trim() : undefined;
-    const saved = await stopTracking(trimmed);
+    let detailOpenedFromBase = false;
+    const openCommittedDetail = (committedId: string) => {
+      if (!useAppStore.getState().isLoggedIn || detailOpenedFromBase) return;
+      detailOpenedFromBase = true;
+      setPendingName('');
+      nav.dispatch(
+        CommonActions.reset({
+          index: 2,
+          routes: [
+            { name: 'Home' },
+            { name: 'Routes', params: { initialTab: 'activities' } },
+            { name: 'MapHistory', params: { sessionId: committedId } },
+          ],
+        }),
+      );
+    };
+    const saved = await stopTracking(trimmed, openCommittedDetail);
+    if (detailOpenedFromBase) return;
     const stillTracking = useTrackingStore.getState().status !== 'idle';
     const stopReason = useTrackingStore.getState().lastStopReason;
     if (saved && !stillTracking && capturedId) {
@@ -580,11 +625,13 @@ export function RunningScreen() {
   const signalLostFor = signalLost ? realLocationHealth.sourceAgeMs ?? 0 : 0;
   const signalLostMin = Math.floor(signalLostFor / 60_000);
   const gpsFixHealthy = status === 'tracking' && locationAvailable && lastTrackT !== null
-    && realLocationHealth.sourceHealth === 'fresh'
+    && (realLocationHealth.sourceHealth === 'fresh' || realMotionState === 'probably-stationary')
     && !signalLost && !canonicalDegraded;
   const simulatorGpsActive = status === 'tracking' && locationProviderSource === 'simulator';
   const gpsStatusLabel = simulatorGpsActive
     ? `SIM · ${{ normal: 'Good', poor: 'Poor', lost: 'Lost', frozen: 'Frozen' }[simulatorSignal]}`
+    : transitionState === 'resuming'
+      ? 'Restoring GPS'
     : status === 'paused'
       ? 'GPS held'
       : signalLost
@@ -601,7 +648,8 @@ export function RunningScreen() {
       : simulatorSignal === 'poor' ? 'warning'
         : simulatorSignal === 'lost' ? 'danger'
           : 'info'
-    : status === 'paused' ? 'muted'
+    : transitionState === 'resuming' ? 'warning'
+      : status === 'paused' ? 'muted'
       : signalLost ? 'danger'
         : canonicalDegraded ? 'warning'
         : gpsFixHealthy ? 'healthy'
@@ -638,11 +686,13 @@ export function RunningScreen() {
   // stat row is responsible for rendering the unit via StatItem.label.
   const paceUnit = dist.imperial ? '/mi' : '/km';
   const paceDisplay = (() => {
-    if (!locationAvailable || distanceM < 10) return '--';
-    // For imperial: seconds per mile (1609.344 m). For metric: seconds per km (1000 m).
-    const secPerUnit = dist.imperial
-      ? durationS / (distanceM / 1609.344)
-      : durationS / (distanceM / 1000);
+    const live = deriveLivePace({
+      points: trackPoints,
+      nowMs: freshnessNow,
+      recording: status === 'tracking',
+    });
+    if (live.secondsPerKm == null) return '--';
+    const secPerUnit = dist.imperial ? live.secondsPerKm * 1.609344 : live.secondsPerKm;
     const paceMin = Math.floor(secPerUnit / 60);
     const paceSec = Math.round(secPerUnit % 60);
     return `${paceMin}'${String(paceSec).padStart(2, '0')}"`;
@@ -650,11 +700,19 @@ export function RunningScreen() {
 
   // One native Mapbox owner spans pre-start and Tracking. Activity/provider
   // transitions update layers and camera targets; they never replace the map.
+  const activeRoute = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+  const plannedRoutePoints = isActivitySessionVisible(operationalState) && activityRouteReference
+    ? activityRouteReference.points
+    : (activeRoute?.points ?? []);
   const runMapSurface = (
     <View key="run-map-surface" style={StyleSheet.absoluteFillObject}>
       <HikingMap
         markers={[]}
         trackPoints={liveTrackPoints}
+        plannedRoutePoints={plannedRoutePoints}
+        routeStart={plannedRoutePoints.length > 0
+          ? { lat: plannedRoutePoints[0].lat, lng: plannedRoutePoints[0].lng }
+          : null}
         onMarkerPress={() => {}}
         userPos={mapDisplayPosition}
         trackStartVariant={isActivitySessionVisible(operationalState) ? 'run' : null}
@@ -700,7 +758,7 @@ export function RunningScreen() {
           mode="run"
           safeBottom={insets.bottom}
           routeName={selectedRouteName}
-          routeDescription={selectedRoute ? 'Follow a saved route' : 'Run freely without a planned route'}
+          routeDescription={selectedRoute ? 'This Route is shown on the map for reference.' : 'Run freely without a planned route'}
           readinessLabel={simulatorLocationAuthoritative
             ? 'Simulator origin ready'
             : permissionBlocked
@@ -855,6 +913,8 @@ export function RunningScreen() {
         mode="run"
         phase={operationalState === 'finishing'
           ? 'finishing'
+          : operationalState === 'resuming' ? 'paused'
+            : operationalState === 'pausing' ? 'tracking'
           : operationalState === 'paused' ? 'paused' : 'tracking'}
         safeTop={insets.top}
         gpsLabel={gpsStatusLabel}
@@ -876,6 +936,8 @@ export function RunningScreen() {
           mode="run"
           phase={operationalState === 'finishing'
             ? 'finishing'
+            : operationalState === 'resuming' ? 'resuming'
+              : operationalState === 'pausing' ? 'pausing'
             : status === 'paused' ? 'paused' : 'tracking'}
           safeBottom={insets.bottom}
           backgroundWarning={backgroundTrackingWarning}
@@ -888,7 +950,7 @@ export function RunningScreen() {
           onCairn={() => { void handlePlantCairn(); }}
           onFinish={() => {
             haptic.impact('medium');
-            void openSaveSheet();
+            openSaveSheet();
           }}
         />
       ) : null}
@@ -943,14 +1005,14 @@ export function RunningScreen() {
                   // preserves the user's chosen name across a too-short
                   // TooShortSheet resolution.
                   const name = pendingName;
-                  closeSaveSheet(() => { void handleStop(name); }, false);
+                  closeSaveSheet(() => { void handleStop(name); });
                 }}
               />
               <TouchableOpacity
                 style={[runStyles.saveSheetBtn, { backgroundColor: runTheme.primary }]}
                 onPress={() => {
                   const name = pendingName;
-                  closeSaveSheet(() => { void handleStop(name); }, false);
+                  closeSaveSheet(() => { void handleStop(name); });
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Finish run and view activity"

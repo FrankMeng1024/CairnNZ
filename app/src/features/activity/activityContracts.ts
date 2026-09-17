@@ -168,6 +168,92 @@ export function shouldStartNewSegment(args: {
   return implausibleMovement || longAndSpatiallyUncertain;
 }
 
+export interface SegmentProvenanceResolution {
+  /** Null means the caller must allocate a new segment identifier. */
+  segmentId: string | null;
+  startsNewSegment: boolean;
+  startReason?: SegmentStartReason;
+  ignoredStaleIncoming: boolean;
+}
+
+/**
+ * Reconcile asynchronous foreground/background provenance without allowing a
+ * late callback from an older provider context to move canonical truth back
+ * into an earlier segment. A provider may introduce a different segment only
+ * with an explicit boundary reason; physical continuity classification remains
+ * the fallback authority when no durable boundary exists.
+ */
+export function resolveSegmentProvenance(args: {
+  tailSegmentId: string | null;
+  currentSegmentId: string | null;
+  incomingSegmentId?: string;
+  incomingStartReason?: SegmentStartReason;
+  pendingStartReason?: SegmentStartReason;
+  physicalGap: boolean;
+}): SegmentProvenanceResolution {
+  const incumbent = args.currentSegmentId ?? args.tailSegmentId;
+  // The first accepted point establishes provenance. There is no earlier
+  // canonical segment for an asynchronous callback to regress into.
+  if (args.tailSegmentId === null) {
+    return {
+      segmentId: args.incomingSegmentId ?? incumbent,
+      startsNewSegment: false,
+      startReason: args.incomingStartReason,
+      ignoredStaleIncoming: false,
+    };
+  }
+  const incomingDiffersFromIncumbent = Boolean(
+    args.incomingSegmentId
+    && incumbent
+    && args.incomingSegmentId !== incumbent,
+  );
+  const explicitIncomingBoundary = Boolean(
+    args.incomingStartReason
+    && (args.tailSegmentId === null || args.incomingSegmentId !== args.tailSegmentId),
+  );
+
+  if (explicitIncomingBoundary) {
+    // If the provider supplies a durable reason but no identifier, the
+    // caller must allocate one. Reusing the incumbent would label a boundary
+    // while silently preserving the old segment.
+    const segmentId = args.incomingSegmentId ?? null;
+    return {
+      segmentId,
+      startsNewSegment: Boolean(args.tailSegmentId),
+      startReason: args.incomingStartReason,
+      ignoredStaleIncoming: false,
+    };
+  }
+
+  if (args.pendingStartReason && args.currentSegmentId) {
+    return {
+      segmentId: args.currentSegmentId,
+      startsNewSegment: Boolean(
+        args.tailSegmentId && args.currentSegmentId !== args.tailSegmentId,
+      ),
+      startReason: args.pendingStartReason,
+      ignoredStaleIncoming: incomingDiffersFromIncumbent,
+    };
+  }
+
+  if (args.physicalGap) {
+    return {
+      segmentId: null,
+      startsNewSegment: true,
+      startReason: 'gps-reacquired',
+      ignoredStaleIncoming: incomingDiffersFromIncumbent,
+    };
+  }
+
+  return {
+    segmentId: incomingDiffersFromIncumbent
+      ? incumbent
+      : (args.incomingSegmentId ?? incumbent),
+    startsNewSegment: false,
+    ignoredStaleIncoming: incomingDiffersFromIncumbent,
+  };
+}
+
 export function segmentTrace(points: ReadonlyArray<TrackPoint>): SegmentedTrace {
   const segments: SegmentedTrackPoint[][] = [];
   const gaps: GapConnector[] = [];

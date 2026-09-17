@@ -1,4 +1,5 @@
 import {
+  buildBaseFinalGeometry,
   cleanCanonicalGeometry,
   evaluateCorridorEvidence,
   evaluateLateralOffsetEvidence,
@@ -145,6 +146,31 @@ describe('O50 pedestrian geometry modes', () => {
     expect(result.stats.sections.some(section => section.geometryMode === 'A_PEDESTRIAN_NETWORK')).toBe(true);
   });
 
+  test('strong corridor with uncertain sidewalk side becomes weak-same-corridor reconstruction', async () => {
+    const canonical = Array.from({ length: 18 }, (_unused, index) => (
+      point(index * 8, index % 2 === 0 ? -3 : 3, index, 14)
+    ));
+    global.fetch = jest.fn(async () => mapMatchingResponse(canonical, 0, 'Ordinary Road')) as any;
+    const result = await reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: 'pk.test',
+      directionsFallback: false,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.weakSameCorridorSectionCount).toBeGreaterThan(0);
+    expect(result.stats.sections.some(section => (
+      section.state === 'NETWORK_WEAK_SAME_CORRIDOR'
+      && section.geometryMode === 'D_WEAK_SAME_CORRIDOR'
+      && section.decision === 'refined'
+    ))).toBe(true);
+    // The two exact canonical endpoints remain truth anchors; the reconstructed
+    // corridor between them should no longer oscillate between sidewalk sides.
+    const corridorInterior = result.points.slice(1, -1);
+    const lateralRangeM = Math.max(...corridorInterior.map(sample => sample.lat))
+      - Math.min(...corridorInterior.map(sample => sample.lat));
+    expect(lateralRangeM * METRES_PER_DEGREE).toBeLessThan(2);
+  });
+
   test('ambiguous parallel-road support falls back to canonical-derived Mode C', async () => {
     const canonical = line(0, 100, 8, 12);
     global.fetch = jest.fn(async () => mapMatchingResponse(canonical, 0, 'Parallel Road', 2)) as any;
@@ -225,6 +251,92 @@ describe('O50 pedestrian geometry modes', () => {
 });
 
 describe('O50 free/off-network cleanup product contracts', () => {
+  test('straight 1–5 m urban wobble becomes a nearly straight consumer route', () => {
+    const canonical = Array.from({ length: 61 }, (_unused, index) => (
+      point(index * 4, Math.sin(index * 1.4) * 4.6, index, 14)
+    ));
+    const base = buildBaseFinalGeometry(canonical);
+    expect(base.diagnostics.corridorClass).toBe('simple');
+    expect(base.points.length).toBeLessThan(canonical.length / 2);
+    expect(geometryLength(base.points) / geometryLength([canonical[0], canonical.at(-1)!])).toBeLessThan(1.05);
+  });
+
+  test('gentle bend is smooth while a real 90 degree corner remains anchored', () => {
+    const bend = Array.from({ length: 41 }, (_unused, index) => {
+      const angle = (Math.PI / 3) * index / 40;
+      return point(Math.sin(angle) * 100, (1 - Math.cos(angle)) * 100, index, 12);
+    });
+    const bendBase = buildBaseFinalGeometry(bend);
+    expect(bendBase.points.length).toBeLessThan(bend.length);
+    expect(geometryLength(bendBase.points) / geometryLength(bend)).toBeGreaterThan(0.96);
+
+    const corner = [
+      ...line(0, 60, 0, 13),
+      ...Array.from({ length: 13 }, (_unused, index) => point(60, index * 5, index + 13)).slice(1),
+    ];
+    const cornerBase = buildBaseFinalGeometry(corner);
+    expect(cornerBase.points.some(sample => geometryLength([sample, point(60, 0)]) < 1)).toBe(true);
+  });
+
+  test('stationary cloud and stop jitter do not become spaghetti or a fake spur', () => {
+    const cloud = Array.from({ length: 30 }, (_unused, index) => (
+      point(Math.sin(index * 2.1) * 5, Math.cos(index * 1.7) * 5, index, 14)
+    ));
+    const cloudBase = buildBaseFinalGeometry(cloud);
+    expect(cloudBase.diagnostics.stationaryCloudCollapsed).toBe(true);
+    expect(cloudBase.points).toHaveLength(2);
+
+    const before = line(0, 40, 0, 9);
+    const stop = Array.from({ length: 8 }, (_unused, index) => point(40 + Math.sin(index) * 2, Math.cos(index) * 2, index + 9, 14));
+    const after = line(40, 90, 0, 11).map((sample, index) => ({ ...sample, t: point(0, 0, index + 17).t }));
+    const stopped = buildBaseFinalGeometry([...before, ...stop, ...after]);
+    expect(Math.max(...stopped.points.map(sample => Math.abs((sample.lat - BASE_LAT) * METRES_PER_DEGREE)))).toBeLessThan(5);
+  });
+
+  test('Base Final removes an uncertainty-sized same-corridor micro-spur', () => {
+    const canonical = [
+      point(-20, 0, 0, 12), point(-10, 0, 1, 12), point(0, 0, 2, 12),
+      point(2, 3, 3, 12), point(4, 7, 4, 12), point(2, 3, 5, 12),
+      point(0.5, 0.3, 6, 12), point(10, 0, 7, 12), point(20, 0, 8, 12),
+    ];
+    const base = buildBaseFinalGeometry(canonical);
+    expect(base.diagnostics.removedMicroExcursionCount).toBe(1);
+    expect(base.diagnostics.maximumRemovedExcursionDepthM).toBeGreaterThan(6);
+    expect(Math.max(...base.points.map(sample => (
+      (sample.lat - BASE_LAT) * METRES_PER_DEGREE
+    )))).toBeLessThan(1);
+  });
+
+  test('Base Final preserves a larger same-corridor excursion beyond the ambiguity fuse', () => {
+    const canonical = [
+      point(-20, 0, 0, 12), point(-10, 0, 1, 12), point(0, 0, 2, 12),
+      point(4, 7, 3, 12), point(7, 15, 4, 12), point(4, 7, 5, 12),
+      point(0.5, 0.3, 6, 12), point(10, 0, 7, 12), point(20, 0, 8, 12),
+    ];
+    const base = buildBaseFinalGeometry(canonical);
+    expect(base.diagnostics.removedMicroExcursionCount).toBe(0);
+    expect(Math.max(...base.points.map(sample => (
+      (sample.lat - BASE_LAT) * METRES_PER_DEGREE
+    )))).toBeGreaterThan(10);
+  });
+
+  test('offline Base Final reports uncertainty and complexity without network calls', async () => {
+    const canonical = [
+      point(0, 0, 0, 18), point(20, 0, 1, 18), point(2, 8, 2, 18),
+      point(22, 16, 3, 18), point(4, 24, 4, 18), point(24, 32, 5, 18),
+    ];
+    const result = await reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: '',
+      directionsFallback: false,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.algorithmVersion).toBe('pedestrian-final-v2-base');
+    expect(result.stats.mapMatchingRequestCount).toBe(0);
+    expect(result.stats.baseFinalDiagnostics.effectiveUncertaintyM).toBe(18);
+    expect(result.stats.baseFinalDiagnostics.corridorClass).toBe('complex');
+  });
+
   test('diagonal road crossing removes harmless wobble without changing anchors', () => {
     const crossing = Array.from({ length: 15 }, (_unused, index) => (
       point(index * 3, index * 2 + (index % 2 ? 0.55 : -0.55), index)

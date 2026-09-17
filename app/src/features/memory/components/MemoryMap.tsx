@@ -145,8 +145,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   //
   // v380 review (round 2): primary signal = FogLayer.onFogReady (fixed in
   // round 1 to fire for zero-points users too). Belt-and-suspenders: a 2s
-  // timer covers the `useH3Fog=false` settings path where FogLayer returns
-  // null and never fires.
+  // timer still protects Mapbox/layer readiness failures.
   const [fogReady, setFogReady] = useState(false);
   // v389: gate on (fogReady AND memory points have arrived OR 2s timeout)
   // — first-entry "Mystery flash" was caused by rendering CairnPinsLayer

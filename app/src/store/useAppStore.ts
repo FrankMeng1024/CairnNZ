@@ -175,6 +175,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     crashLogger.breadcrumb('logout:sessions_cleared');
     useMarkerStore.getState().clearMarkers();
     crashLogger.breadcrumb('logout:markers_cleared');
+    try {
+      // Friends' former device-global cache cannot be allowed to flash under
+      // another account on a shared device. The backend remains authoritative.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useFriendStore } = require('./useFriendStore');
+      useFriendStore.setState({ friends: [] });
+      await storage.removeItem('cairn_friends');
+      crashLogger.breadcrumb('logout:friends_cleared');
+    } catch { /* friend state is non-blocking during sign-out */ }
     // Detach while the outgoing user's in-memory snapshot is still present.
     // detachMemoryPersistence snapshots synchronously before its first await;
     // clearing the store first used to overwrite Account A's durable Memory
@@ -191,8 +200,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useMemoryStore } = require('../features/memory/store/useMemoryStore');
       useMemoryStore.getState().resetForUserSwitch();
+      await storage.removeItem('cairn_last_fix_v1');
       crashLogger.breadcrumb('logout:memory_reset');
     } catch { /* swallow — memoryStore may not be initialized on cold-boot logout */ }
+    // Passive exploration is privacy-sensitive. Never carry an outgoing
+    // account's opt-in into the next account on a shared device.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useMemorySettingsStore } = require('../features/memory/store/useMemorySettingsStore');
+      useMemorySettingsStore.getState().reset();
+      crashLogger.breadcrumb('logout:passive_exploration_reset');
+    } catch { /* default-off remains the safe fallback */ }
     // Hide the emergency Save payload from the signed-out UI, but preserve
     // its per-user durable copy. Logout is not account deletion; the original
     // owner may need to resume recovery after signing in again.
@@ -244,6 +262,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       // 也不 auto-login，marker 存在意义消失。保留读取只为把老 marker
       // 清干净。
       crashLogger.breadcrumb('hydrate:start');
+      try {
+        // Account deletion is server-owned. If the app was killed after the
+        // server acknowledgement but before device cleanup completed, finish
+        // that owner-scoped cleanup before any token or account can hydrate.
+        const { resumeScheduledDeletedAccountLocalPurge } = await import('../services/accountLocalData');
+        await resumeScheduledDeletedAccountLocalPurge();
+      } catch (error) {
+        crashLogger.breadcrumb(`hydrate:account_purge_retry_failed ${String(error).slice(0, 80)}`);
+      }
       try {
         await storage.setItem(STORAGE_KEY_LOGOUT_MARKER, '');
       } catch { /* swallow */ }

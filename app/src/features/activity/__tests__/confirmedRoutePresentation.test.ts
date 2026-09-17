@@ -76,6 +76,7 @@ describe('confirmed route presentation', () => {
     expect(state.latestUpdatePayloadBytes).toBeLessThanOrEqual(MAX_LIVE_ROUTE_HEAD_POINTS * 16);
   });
 
+
   it('preserves explicit gaps, U-turns and repeated traversal incrementally', () => {
     const points = [
       point(0, 1_000, 'a'), point(10, 2_000, 'a'), point(0, 3_000, 'a'),

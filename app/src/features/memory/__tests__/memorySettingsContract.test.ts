@@ -9,7 +9,6 @@ describe('passive exploration settings migration', () => {
       recordMode: 'always',
       showFriendOverlay: true,
       firstVisitDone: true,
-      useH3Fog: true,
     });
     const setItem = jest.fn(async (_key: string, value: string) => { raw = value; });
     jest.doMock('../../../store/storage', () => ({
@@ -23,14 +22,35 @@ describe('passive exploration settings migration', () => {
     await useMemorySettingsStore.getState().hydrate();
     expect(useMemorySettingsStore.getState()).toMatchObject({
       foregroundAutoUnlockEnabled: false,
-      recordMode: 'session-only',
     });
+    expect(useMemorySettingsStore.getState()).not.toHaveProperty('recordMode');
+    expect(useMemorySettingsStore.getState()).not.toHaveProperty('showFriendOverlay');
 
     useMemorySettingsStore.getState().set('foregroundAutoUnlockEnabled', true);
     await Promise.resolve();
     expect(JSON.parse(raw)).toMatchObject({
       foregroundAutoUnlockEnabled: true,
-      passiveExplorationContractVersion: 1,
+      passiveExplorationContractVersion: 3,
     });
+  });
+
+  test('a post-consent payload keeps the explicit foreground preference but drops legacy controls', async () => {
+    const raw = JSON.stringify({
+      passiveExplorationContractVersion: 1,
+      foregroundAutoUnlockEnabled: true,
+      recordMode: 'always',
+      showFriendOverlay: true,
+      firstVisitDone: false,
+    });
+    jest.doMock('../../../store/storage', () => ({
+      storage: { getItem: jest.fn(async () => raw), setItem: jest.fn(async () => undefined) },
+    }));
+
+    const { useMemorySettingsStore } = require('../store/useMemorySettingsStore');
+    await useMemorySettingsStore.getState().hydrate();
+    expect(useMemorySettingsStore.getState().foregroundAutoUnlockEnabled).toBe(true);
+    expect(useMemorySettingsStore.getState()).not.toHaveProperty('recordMode');
+    expect(useMemorySettingsStore.getState()).not.toHaveProperty('showFriendOverlay');
+    expect(useMemorySettingsStore.getState()).not.toHaveProperty('useH3Fog');
   });
 });

@@ -39,4 +39,43 @@ describe('Memory server reconciliation', () => {
     expect(state.replacePoints).toHaveBeenCalledWith([unsynced], true);
     expect(state.points).toEqual([unsynced]);
   });
+
+  test('a final 401 pauses push retries until authentication is refreshed', async () => {
+    jest.useFakeTimers();
+    const pending = { lat: -41, lng: 174, ts: 1_000, cid: 'offline', synced: false };
+    const state: any = {
+      points: [pending],
+      _unsyncedCount: 1,
+      bumpInFlight: jest.fn(),
+      applyServerEchoForPushAligned: jest.fn(),
+    };
+    jest.doMock('../store/useMemoryStore', () => ({
+      useMemoryStore: {
+        getState: () => state,
+        subscribe: jest.fn(() => jest.fn()),
+      },
+    }));
+    const authenticatedFetch = jest.fn(async () => ({
+      ok: false,
+      status: 401,
+      headers: { get: () => null },
+      json: async () => ({}),
+    }));
+    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch }));
+    jest.doMock('../../../services/bootDiagnostics', () => ({ markBootPhase: jest.fn() }));
+    jest.doMock('../../../services/appLog', () => ({ log: jest.fn() }));
+
+    const memorySync = require('../../../services/memorySync');
+    memorySync.attachMemorySync('account-a');
+    await memorySync.pushMemoryNow();
+    await memorySync.pushMemoryNow();
+    expect(authenticatedFetch).toHaveBeenCalledTimes(1);
+    expect(memorySync.getMemorySyncMetrics().authBlocked).toBe(true);
+
+    memorySync.notifyMemoryAuthRefreshed('account-a');
+    await memorySync.pushMemoryNow();
+    expect(authenticatedFetch).toHaveBeenCalledTimes(2);
+    memorySync.detachMemorySync();
+    jest.useRealTimers();
+  });
 });

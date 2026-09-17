@@ -72,6 +72,12 @@ await page.evaluate(() => {
     effectiveVirtualElapsedMs: 0,
     batchSequence: 0,
     clockLimitReached: false,
+    deterministicSeed: 550055,
+    observationMode: 'clean-path',
+    diagnosticsVisible: false,
+    rawGpsModelState: null,
+    groundTruthTrail: [],
+    rawGpsTrail: [],
     lastDecision: null,
     lastFailure: null,
   });
@@ -100,6 +106,12 @@ const originAction = page.getByTestId('activity-simulator-start-here');
 await originAction.waitFor({ state: 'visible', timeout: 15_000 });
 const originCardBox = await originAction.locator('..').boundingBox();
 const originPicker = await shot('hike-origin-picker');
+const cleanModeInitiallySelected = await page.getByText('Exact deterministic position', { exact: true }).isVisible();
+await page.getByRole('button', { name: 'Raw GPS' }).click();
+await page.waitForFunction(() => globalThis.__cairnStores.useActivitySimulatorStore.getState().observationMode === 'raw-gps');
+const rawModePicker = await shot('hike-origin-picker-raw-gps');
+const rawModeSelectableBeforeStart = await page.getByText(/Realistic GPS · seed \d+/).isVisible()
+  && await page.evaluate(() => globalThis.__cairnStores.useActivitySimulatorStore.getState().observationMode === 'raw-gps');
 await originAction.click();
 await page.waitForFunction(() => globalThis.__cairnStores.useActivitySimulatorStore.getState().startConfigured === true);
 const originSelected = await page.evaluate(() => globalThis.__cairnStores.useActivitySimulatorStore.getState().origin);
@@ -145,6 +157,18 @@ await page.evaluate(() => {
     batchSequence: 60,
     clockLimitReached: false,
     sampleSequence: 42,
+    deterministicSeed: 550055,
+    observationMode: 'raw-gps',
+    diagnosticsVisible: true,
+    rawGpsModelState: null,
+    groundTruthTrail: [
+      { lat: -45.03125, lng: 168.6622, t: virtualNow - 20_000, sequence: 40 },
+      { lat: -45.0312, lng: 168.6626, t: virtualNow, sequence: 42 },
+    ],
+    rawGpsTrail: [
+      { lat: -45.03127, lng: 168.66222, t: virtualNow - 20_000, sequence: 40, accuracyM: 12 },
+      { lat: -45.03118, lng: 168.66264, t: virtualNow, sequence: 42, accuracyM: 15 },
+    ],
     lastDecision: { accepted: true, reason: 'accepted', sequence: 42, atMs: now, segmentId: 'sim-segment-a', memoryCommitted: true },
   });
   globalThis.__cairnStores.useTrackingStore.setState({
@@ -198,6 +222,12 @@ await runtimePanel.getByText('更多').click();
 const diagnostics = page.getByTestId('activity-simulator-native-diagnostics');
 await diagnostics.scrollIntoViewIfNeeded();
 const diagnosticsReachable = await diagnostics.isVisible();
+const realisticProfileVisible = await page.getByText(/RAW GPS · REALISTIC/).isVisible();
+const productDiagnosticToggleVisible = await page.getByRole('button', { name: 'Product' }).isVisible()
+  && await page.getByRole('button', { name: 'Diagnostic' }).isVisible();
+const rawScaleBound = await page.getByRole('button', { name: '120×' }).isDisabled();
+const modeLockedDuringActivity = await page.getByRole('button', { name: 'Clean Path' }).isDisabled()
+  && await page.getByRole('button', { name: 'Raw GPS' }).isDisabled();
 const runExpanded = await shot('run-active-expanded');
 
 await page.evaluate(() => globalThis.__cairnStores.useSettingsStore.getState().saveAll({ debugMode: false }));
@@ -216,6 +246,8 @@ const assertions = {
   independentToggleKeepsDebugOn: independentToggleSnapshot.debugMode === true
     && independentToggleSnapshot.simulatorEnabled === false,
   simulatorToggleOffHidesOverlay: simulatorElementsWithToggleOff === 0,
+  cleanModeInitiallySelected,
+  rawModeSelectableBeforeStart,
   originPickerVisibleBeforeStart: Boolean(originCardBox && originCardBox.y > 300),
   distantOriginSelected: Math.abs(originSelected.lat - -45.0312) < 0.000001
     && Math.abs(originSelected.lng - 168.6626) < 0.000001,
@@ -225,6 +257,10 @@ const assertions = {
   runtimeControlsReachable,
   maxReplayScaleVisible,
   diagnosticsReachable,
+  realisticProfileVisible,
+  productDiagnosticToggleVisible,
+  rawScaleBound,
+  modeLockedDuringActivity,
   runTriggerLowerLeft: Boolean(runTriggerBox && runTriggerBox.x < mapCenter.x && runTriggerBox.y > 300),
   joystickOnRight: Boolean(runJoystickBox && runJoystickBox.x > mapCenter.x),
   joystickClearOfMapCenter: !contains(runJoystickBox, mapCenter),
@@ -237,7 +273,8 @@ if (Object.values(assertions).some(value => !value)) {
 }
 
 const tiles = [
-  ['HIKE · VIRTUAL ORIGIN', originPicker],
+  ['HIKE · CLEAN PATH', originPicker],
+  ['HIKE · RAW GPS', rawModePicker],
   ['SETTINGS · INDEPENDENT TOGGLE', settingsToggle],
   ['RUN ACTIVE · COLLAPSED', runActive],
   ['RUN ACTIVE · CONTROLS', runExpandedDefault],

@@ -338,7 +338,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // priority, coherent Finish intent, and expanded Activity visual-state QA.
 // O52 (2026-09-12): one-metre foreground/background precision intent, one
 // Activity location authority, append-only durability, and bounded hot paths.
-export const OTA_VERSION = 'O52';
+// O53 (2026-09-13): Trails personal journey library — Activities and Routes,
+// scalable retrieval, exception-only sync recovery, and truthful Route use.
+// O54 (2026-09-13): Activity lifecycle, fail-safe Finish, foreground puck,
+// causal Live/consumer Final reconstruction, and real recent-movement pace.
+// O55 (2026-09-13): calibrated dual-mode Activity Simulator — exact Clean
+// Path plus seeded, correlated Raw GPS observations and diagnostic overlays.
+// O57 (2026-09-16): Activity Detail convergence candidate — identity, metrics,
+// chosen Final display, explicit Cairns, truthful mutations, and Route handoff.
+// O58 (2026-09-17): authoritative Own Cairn Detail plus owner-scoped personal
+// All Cairns retrieval, durable words/delete truth, and stable identity.
+// O59 (2026-09-17): authoritative Own Route Detail, truthful existing-draft
+// editing, durable Activity origin, and explicit Hike/Run pre-start handoff.
+export const OTA_VERSION = 'O59';
 
 
 type OtaState =

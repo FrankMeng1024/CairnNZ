@@ -1,16 +1,15 @@
 /**
  * PlantScreen — GPS-based plant flow (no AR).
  *
- * 3 steps, each in its own component so iteration is independent:
+ * Standalone Plant uses three steps; an active Activity with a fresh trusted
+ * fix enters directly at content and lets the user adjust if needed:
  *   Step 1 (GpsLockStep)    — 5s GPS sample with progress + accuracy live
  *   Step 2 (PinAdjustStep)  — Mapbox satellite mini-map, draggable pin
- *   Step 3 (ContentStep)    — title / text / voice (UI stub) / visibility
+ *   Step 3 (ContentStep)    — optional name/note and durable commit
  *
  * On Plant Cairn (final commit):
  *   1. Write the marker via useMarkerStore.addMarker (existing API)
- *   2. Trigger memoryStore.recordCircleUnlock to clear fog around the
- *      planted spot (UnlockConfig.radiusMeters)
- *   3. Navigate back
+ *   2. Return to the active Activity, or open Cairn detail when standalone
  *
  * Title encoding: the marker model only has a single `note` field, so
  * we encode title/body using a Record Separator character (\u001E,
@@ -19,10 +18,8 @@
  * Migrating the marker schema to add a real `title` column is deferred
  * to v0.2.7 and tracked there.
  *
- * Commit failure: if addMarker throws (network error, etc.), we surface
- * an Alert and STAY on the content step. Previously a `try/finally
- * nav.goBack()` swallowed errors and left the user with no plant and
- * no message.
+ * Plant is locally durable and does not reveal Memory. Sync is a separate
+ * state with an explicit retry path in Cairn detail.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -33,10 +30,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useMarkerStore, MarkerPermission } from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
-import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 // v422 offline-first: 使 Plant flow 明确告知用户是否离线保存
 import networkMonitor from '../services/networkMonitor';
-import { MemoryColors } from '../features/memory/config/memoryConfig';
 import { MarkerType } from '../config/markerTypes';
 import { GpsLockStep } from '../features/plant/components/GpsLockStep';
 import { PinAdjustStep } from '../features/plant/components/PinAdjustStep';
@@ -46,6 +41,7 @@ import { encodeTitleBody } from '../features/plant/services/noteEncoding';
 import { log } from '../services/appLog';
 import { haptic } from '../services/hapticService';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { useTrackingStore } from '../store/useTrackingStore';
 
 type Step = 'gps' | 'pin' | 'content';
 
@@ -70,10 +66,9 @@ interface PlantDraft {
   visibility: MarkerPermission;
 }
 
-// v299 N6: default to 'danger' per user request — "默认是 danger".
-// Most common plant scenario is flagging a hazard; this saves the
-// user from selecting it every time.
-const DEFAULT_TYPE = 'danger';
+// Plant v1 is a personal place trace. Hazard/water/junction reporting is a
+// separate social/field-report decision and is not the moving default.
+const DEFAULT_TYPE = 'cairn';
 
 /** AsyncStorage key for a failed-plant draft, scoped by user. */
 function draftKey(uid: string): string {
@@ -103,6 +98,30 @@ const INITIAL_DRAFT: PlantDraft = {
   visibility: defaultVisibility(),
 };
 
+function resolveInitialPlantContext(): { step: Step; draft: PlantDraft; fromActivity: boolean } {
+  try {
+    const tracking = useTrackingStore.getState();
+    const active = tracking.status === 'tracking' || tracking.status === 'paused';
+    const coordinate = tracking.lastCoordinate;
+    const ageMs = Date.now() - (tracking.lastCoordinateTime ?? 0);
+    if (active && tracking.locationAvailable && coordinate && ageMs >= 0 && ageMs <= 30_000) {
+      return {
+        step: 'content',
+        fromActivity: true,
+        draft: {
+          ...INITIAL_DRAFT,
+          gpsLat: coordinate.lat,
+          gpsLng: coordinate.lng,
+          lat: coordinate.lat,
+          lng: coordinate.lng,
+          accuracyM: coordinate.accuracy ?? null,
+        },
+      };
+    }
+  } catch { /* standalone Plant starts with the bounded GPS flow */ }
+  return { step: 'gps', draft: INITIAL_DRAFT, fromActivity: false };
+}
+
 export function PlantScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const addMarker = useMarkerStore((s) => s.addMarker);
@@ -113,8 +132,9 @@ export function PlantScreen() {
   // O1: recordCircleUnlock selector removed (v351 stopped calling it, dead ref
   // triggered re-render every time useMemoryStore changed)
   const userId = useAppStore((s) => s.user?.id ?? '');
-  const [step, setStep] = useState<Step>('gps');
-  const [draft, setDraft] = useState<PlantDraft>(INITIAL_DRAFT);
+  const [initialContext] = useState(resolveInitialPlantContext);
+  const [step, setStep] = useState<Step>(initialContext.step);
+  const [draft, setDraft] = useState<PlantDraft>(initialContext.draft);
   const [submitting, setSubmitting] = useState(false);
   // v299: success modal removed. PlantScreen.commit now navigates
   // directly to MarkerDetailScreen.
@@ -183,22 +203,8 @@ export function PlantScreen() {
           voiceMemoDurationMs: final.voiceMs ?? undefined,
         } as any);
         log('plant.commit_ok', { id: created?.id });
-        // v351: removed recordCircleUnlock — planting a cairn no longer
-        // unlocks fog around the plant location. User feedback: "I planted
-        // 8 cairns, those plant points became fog reveal circles around
-        // my current location which I don't want — only hikes should
-        // unlock fog."
-        // Pre-v351 PlantScreen.tsx:180 called
-        // recordCircleUnlock(lat, lng, UnlockConfig.radiusMeters=25, ...)
-        // which writes a single VisitedPoint per plant into
-        // useMemoryStore.points. Those points then get turf.buffer'd by
-        // FogLayer into a corridor — visually a lumpy circle around each
-        // planted cairn. Pin still drops via addMarker; only the fog
-        // reveal side effect is removed.
-        // Server-side cleanup of legacy plant-origin points is a separate
-        // one-off SQL operation (delete from memory_points where
-        // client_id NOT LIKE 'migration-%').
-        // recordCircleUnlock(final.lat, final.lng, UnlockConfig.radiusMeters, Date.now());
+        // Plant owns the durable Cairn object only. Movement/exploration is
+        // the sole authority for Memory, so this commit never reveals fog.
         // K3 fix: clear any previously saved draft on successful commit.
         try {
           const { storage } = await import('../store/storage');
@@ -229,7 +235,11 @@ export function PlantScreen() {
             );
           }
           await new Promise<void>((r) => setTimeout(r, 250));
-          nav.replace('MarkerDetail', { markerId: created.id });
+          if (initialContext.fromActivity && nav.canGoBack()) {
+            nav.goBack();
+          } else {
+            nav.replace('MarkerDetail', { markerId: created.id });
+          }
         } else {
           // Defensive fallback — never expected; addMarker contract
           // says it returns a Marker, but if persistence is mocked or
@@ -269,7 +279,7 @@ export function PlantScreen() {
         Alert.alert("Couldn't plant this cairn", body, [{ text: 'OK' }]);
       }
     },
-    [addMarker, userId, nav, submitting]
+    [addMarker, userId, nav, submitting, initialContext.fromActivity]
   );
 
   const onContentSubmit = (payload: {
@@ -328,6 +338,7 @@ export function PlantScreen() {
             initialText={draft.text}
             initialVisibility={draft.visibility}
             initialType={draft.type}
+            activityLocation={initialContext.fromActivity}
             submitting={submitting}
             onSubmit={onContentSubmit}
             onBack={() => setStep('pin')}
@@ -341,6 +352,6 @@ export function PlantScreen() {
 }
 
 const styles = StyleSheet.create({
-  root:      { flex: 1, backgroundColor: MemoryColors.cream },
+  root:      { flex: 1 },
   container: { flex: 1, padding: 20 },
 });

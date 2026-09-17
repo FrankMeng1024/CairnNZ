@@ -1,0 +1,337 @@
+const mockAsyncStorage = new Map<string, string>();
+const mockMarkerCache = new Map<string, string>();
+const mockAuthenticatedFetch = jest.fn();
+const mockTombstoneMarker = jest.fn(async (..._args: unknown[]) => undefined);
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: {
+    getItem: jest.fn(async (key: string) => mockAsyncStorage.get(key) ?? null),
+    setItem: jest.fn(async (key: string, value: string) => { mockAsyncStorage.set(key, value); }),
+    removeItem: jest.fn(async (key: string) => { mockAsyncStorage.delete(key); }),
+  },
+}));
+jest.mock('react-native', () => ({
+  AppState: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) },
+}));
+jest.mock('../../services/networkMonitor', () => ({
+  __esModule: true,
+  default: { onChange: jest.fn(() => () => {}) },
+}));
+jest.mock('../../services/crashLogger', () => ({ crashLogger: { breadcrumb: jest.fn() } }));
+jest.mock('../../services/debugLogger', () => ({ debugLogger: { log: jest.fn() } }));
+jest.mock('../storage', () => ({
+  storage: {
+    getItem: jest.fn(async (key: string) => mockMarkerCache.get(key) ?? null),
+    setItem: jest.fn(async (key: string, value: string) => { mockMarkerCache.set(key, value); }),
+    removeItem: jest.fn(async (key: string) => { mockMarkerCache.delete(key); }),
+  },
+}));
+jest.mock('../../services/markerTombstones', () => ({
+  isMarkerTombstoned: jest.fn(async () => false),
+  listMarkerTombstones: jest.fn(async () => []),
+  tombstoneMarker: (...args: unknown[]) => mockTombstoneMarker(...args),
+}));
+jest.mock('../useTrackingStore', () => ({
+  useTrackingStore: { getState: () => ({ status: 'idle', sessionId: null }) },
+}));
+jest.mock('../../services/apiService', () => ({
+  authenticatedFetch: (...args: unknown[]) => mockAuthenticatedFetch(...args),
+}));
+
+import { useMarkerStore } from '../useMarkerStore';
+import { offlineMarkers } from '../../services/markerOfflineEntities';
+
+const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+describe('Cairn create acknowledgement ordering', () => {
+  beforeEach(() => {
+    mockAsyncStorage.clear();
+    mockMarkerCache.clear();
+    mockTombstoneMarker.mockClear();
+    mockAuthenticatedFetch.mockReset();
+    mockAuthenticatedFetch.mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({ id: 42, user_id: 'owner-a' }),
+    });
+    useMarkerStore.setState({
+      userId: 'owner-a',
+      markers: [],
+      libraryRemoteMarkers: [],
+      libraryQuery: '',
+      libraryNextCursor: null,
+      libraryHasMore: false,
+      libraryCoverage: 'not-loaded',
+      libraryLoading: false,
+      libraryError: null,
+    });
+  });
+
+  test('a fast server acknowledgement cannot duplicate or downgrade the local Cairn', async () => {
+    const created = await useMarkerStore.getState().addMarker({
+      type: 'cairn',
+      regionCode: 'nz',
+      lat: -43.595,
+      lng: 170.142,
+      note: '',
+      authorId: 'local',
+      permission: 'personal',
+    });
+    await settle();
+
+    expect(useMarkerStore.getState().markers).toHaveLength(1);
+    expect(useMarkerStore.getState().markers[0]).toMatchObject({
+      id: created.id,
+      clientCairnId: created.id,
+      serverCairnId: '42',
+      syncState: 'synced',
+      synced: true,
+    });
+  });
+
+  test('synced edit becomes visible only after the server accepts it', async () => {
+    const created = await useMarkerStore.getState().addMarker({
+      type: 'cairn',
+      regionCode: 'nz',
+      lat: -43.595,
+      lng: 170.142,
+      note: 'Old words',
+      authorId: 'local',
+      permission: 'personal',
+    });
+    await settle();
+    let accept!: (value: any) => void;
+    mockAuthenticatedFetch.mockImplementationOnce(() => new Promise(resolve => { accept = resolve; }));
+    const saving = useMarkerStore.getState().updateMarker(created.id, { note: 'New words' });
+    expect(useMarkerStore.getState().markers[0].note).toBe('Old words');
+    accept({ ok: true, status: 200, json: async () => ({}) });
+    await saving;
+    expect(useMarkerStore.getState().markers[0].note).toBe('New words');
+  });
+
+  test('pending edit rewrites the durable create payload during an in-flight acknowledgement', async () => {
+    let acceptCreate!: (value: any) => void;
+    mockAuthenticatedFetch.mockImplementationOnce(() => new Promise(resolve => { acceptCreate = resolve; }));
+    const created = await useMarkerStore.getState().addMarker({
+      type: 'cairn',
+      regionCode: 'nz',
+      lat: -43.595,
+      lng: 170.142,
+      note: '',
+      authorId: 'local',
+      permission: 'personal',
+    });
+    await settle();
+    await useMarkerStore.getState().updateMarker(created.id, { note: 'Durable later words' });
+    await expect(offlineMarkers.getEntry(created.id)).resolves.toMatchObject({
+      data: { text: 'Durable later words' },
+      revision: 1,
+    });
+    acceptCreate({
+      ok: true,
+      status: 201,
+      json: async () => ({ id: 42, user_id: 'owner-a' }),
+    });
+    await settle();
+    await settle();
+    expect(useMarkerStore.getState().markers[0]).toMatchObject({
+      id: created.id,
+      note: 'Durable later words',
+      serverCairnId: '42',
+      syncState: 'pending',
+    });
+  });
+
+  test('failed synced edit preserves accepted content for a retained UI draft', async () => {
+    const created = await useMarkerStore.getState().addMarker({
+      type: 'cairn',
+      regionCode: 'nz',
+      lat: -43.595,
+      lng: 170.142,
+      note: 'Accepted words',
+      authorId: 'local',
+      permission: 'personal',
+    });
+    await settle();
+    mockAuthenticatedFetch.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
+    await expect(useMarkerStore.getState().updateMarker(created.id, { note: 'Draft words' })).rejects.toThrow();
+    expect(useMarkerStore.getState().markers[0].note).toBe('Accepted words');
+  });
+
+  test('an account switch drops a late accepted edit response from the new account projection', async () => {
+    const created = await useMarkerStore.getState().addMarker({
+      type: 'cairn',
+      regionCode: 'nz',
+      lat: -43.595,
+      lng: 170.142,
+      note: 'Owner A',
+      authorId: 'local',
+      permission: 'personal',
+    });
+    await settle();
+    let accept!: (value: any) => void;
+    mockAuthenticatedFetch.mockImplementationOnce(() => new Promise(resolve => { accept = resolve; }));
+    const saving = useMarkerStore.getState().updateMarker(created.id, { note: 'Late A edit' });
+    useMarkerStore.setState({
+      userId: 'owner-b',
+      markers: [{
+        id: 'owner-b-cairn',
+        clientCairnId: 'owner-b-cairn',
+        type: 'cairn',
+        regionCode: 'nz',
+        lat: -42,
+        lng: 171,
+        note: 'Owner B',
+        authorId: 'owner-b',
+        createdAt: 2,
+        permission: 'personal',
+      }],
+    });
+    accept({ ok: true, status: 200, json: async () => ({}) });
+    await expect(saving).rejects.toThrow('cairn_owner_changed_after_save');
+    expect(useMarkerStore.getState().markers).toHaveLength(1);
+    expect(useMarkerStore.getState().markers[0].note).toBe('Owner B');
+  });
+
+  test('modern deletion commits a tombstone and reports an unacknowledged server delete as queued', async () => {
+    const created = await useMarkerStore.getState().addMarker({
+      type: 'cairn',
+      regionCode: 'nz',
+      lat: -43.595,
+      lng: 170.142,
+      note: '',
+      authorId: 'local',
+      permission: 'personal',
+    });
+    await settle();
+    mockAuthenticatedFetch.mockRejectedValueOnce(new Error('offline'));
+    await expect(useMarkerStore.getState().deleteMarker(created.id)).resolves.toEqual({ remoteState: 'queued' });
+    expect(mockTombstoneMarker).toHaveBeenCalledWith('owner-a', created.id);
+    expect(useMarkerStore.getState().markers).toEqual([]);
+  });
+
+  test('a durable tombstone still removes a Cairn when pending-row cleanup must retry', async () => {
+    useMarkerStore.setState({
+      userId: 'owner-a',
+      markers: [{
+        id: '2b8297a2-5fa7-4d42-b194-4a9965f8e2ea',
+        clientCairnId: '2b8297a2-5fa7-4d42-b194-4a9965f8e2ea',
+        localId: '2b8297a2-5fa7-4d42-b194-4a9965f8e2ea',
+        type: 'cairn',
+        regionCode: 'nz',
+        lat: -43.5,
+        lng: 170.1,
+        note: '',
+        authorId: 'owner-a',
+        createdAt: 1,
+        permission: 'personal',
+        synced: false,
+        syncState: 'pending',
+      }],
+    });
+    const discard = jest.spyOn(offlineMarkers, 'discard').mockRejectedValueOnce(new Error('storage busy'));
+
+    await expect(useMarkerStore.getState().deleteMarker('2b8297a2-5fa7-4d42-b194-4a9965f8e2ea'))
+      .resolves.toEqual({ remoteState: 'queued' });
+    expect(mockTombstoneMarker).toHaveBeenCalled();
+    expect(useMarkerStore.getState().markers).toEqual([]);
+
+    discard.mockRestore();
+  });
+
+  test('legacy server-only deletion failure keeps the Cairn visible', async () => {
+    useMarkerStore.setState({
+      userId: 'owner-a',
+      markers: [{
+        id: '77',
+        serverCairnId: '77',
+        type: 'cairn',
+        regionCode: 'nz',
+        lat: -43.5,
+        lng: 170.1,
+        note: '',
+        authorId: 'owner-a',
+        createdAt: 1,
+        permission: 'personal',
+        synced: true,
+      }],
+    });
+    mockAuthenticatedFetch.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+    await expect(useMarkerStore.getState().deleteMarker('77')).rejects.toThrow('HTTP 500');
+    expect(useMarkerStore.getState().markers).toHaveLength(1);
+  });
+
+  test('owner-library pages join the one persisted projection used by Detail', async () => {
+    mockAuthenticatedFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        markers: [{
+          id: 91,
+          client_cairn_id: 'cairn-owned-91',
+          user_id: 'owner-a',
+          type: 'cairn',
+          text: 'Library words',
+          lat: -43.51,
+          lng: 170.11,
+          permission: 'personal',
+          created_at: '2026-09-10T01:00:00.000Z',
+        }],
+        has_more: false,
+        next_cursor: null,
+      }),
+    });
+
+    await useMarkerStore.getState().loadCairnLibrary({ reset: true });
+
+    expect(mockAuthenticatedFetch).toHaveBeenCalledWith('/api/markers/library?limit=40');
+    expect(useMarkerStore.getState()).toMatchObject({
+      libraryCoverage: 'complete',
+      libraryHasMore: false,
+    });
+    expect(useMarkerStore.getState().markers).toEqual([
+      expect.objectContaining({
+        id: 'cairn-owned-91',
+        clientCairnId: 'cairn-owned-91',
+        serverCairnId: '91',
+        note: 'Library words',
+      }),
+    ]);
+    expect(JSON.parse(mockMarkerCache.get('cairn_markers_v026_owner-a') ?? '[]')).toEqual([
+      expect.objectContaining({ id: 'cairn-owned-91', serverCairnId: '91' }),
+    ]);
+  });
+
+  test('an old backend is disclosed as partial without erasing local Cairns', async () => {
+    useMarkerStore.setState({
+      markers: [{
+        id: 'local-cairn',
+        clientCairnId: 'local-cairn',
+        type: 'cairn',
+        regionCode: 'nz',
+        lat: -43.5,
+        lng: 170.1,
+        note: '',
+        authorId: 'owner-a',
+        createdAt: 1,
+        permission: 'personal',
+        synced: false,
+        syncState: 'pending',
+      }],
+    });
+    mockAuthenticatedFetch
+      .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [] });
+
+    await useMarkerStore.getState().loadCairnLibrary({ reset: true });
+
+    expect(useMarkerStore.getState()).toMatchObject({
+      libraryCoverage: 'partial',
+      libraryError: 'server-upgrade-required',
+    });
+    expect(useMarkerStore.getState().markers).toEqual([
+      expect.objectContaining({ id: 'local-cairn', syncState: 'pending' }),
+    ]);
+  });
+});

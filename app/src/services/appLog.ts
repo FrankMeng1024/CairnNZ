@@ -35,6 +35,7 @@
 
 import { AppState, Platform } from 'react-native';
 import { API_BASE_URL } from '../config/api';
+import { sanitizeTelemetryEventForUpload } from './telemetryPrivacy';
 
 const ENDPOINT = '/api/edit-diag';
 const FLUSH_DEBOUNCE_MS = 3_000;
@@ -96,7 +97,17 @@ function scheduleFlush() {
  */
 export function log(tag: string, ctx?: Record<string, any>): void {
   ensureAppStateListener();
-  queue.push({ tag, ts: Date.now(), session_id: SESSION_ID, ctx, device: DEVICE });
+  // Universal operational logs are never a synthetic-GPS export surface.
+  // Fail private before data enters the in-memory queue: coordinates,
+  // credentials, email addresses, and account identifiers are stripped.
+  const safe = sanitizeTelemetryEventForUpload({ ctx });
+  queue.push({
+    tag,
+    ts: Date.now(),
+    session_id: SESSION_ID,
+    ctx: safe.ctx as Record<string, any> | undefined,
+    device: DEVICE,
+  });
   if (queue.length > QUEUE_MAX) {
     queue.splice(0, queue.length - QUEUE_MAX);
   }

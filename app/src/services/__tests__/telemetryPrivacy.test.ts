@@ -48,6 +48,7 @@ describe('Internal QA telemetry privacy boundary', () => {
         coordinateSource: 'none',
         accessToken: 'do-not-upload',
         apiKey: 'also-private',
+        userId: 'account-42',
         message: 'Bearer abc.def.ghi user qa@example.test?token=private&api_key=hidden',
       }),
       'not-json',
@@ -60,5 +61,6 @@ describe('Internal QA telemetry privacy boundary', () => {
     expect(lines[0]).not.toContain('token=private');
     expect(lines[0]).not.toContain('also-private');
     expect(lines[0]).not.toContain('api_key=hidden');
+    expect(lines[0]).not.toContain('account-42');
   });
 });

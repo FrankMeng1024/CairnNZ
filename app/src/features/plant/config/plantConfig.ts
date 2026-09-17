@@ -49,8 +49,8 @@ export const ContentConfig = {
   titleMaxChars: 30,
   textMaxChars: 200,
   voiceMaxSeconds: 30,
-  /** Cairn must have at least one of: title, text, voice. */
-  requireAtLeastOneContent: true,
+  /** A location is the durable Cairn; words may be added after movement. */
+  requireAtLeastOneContent: false,
 } as const;
 
 // ── Visibility default ────────────────────────────────────────────────

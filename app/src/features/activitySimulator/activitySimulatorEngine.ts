@@ -3,12 +3,18 @@ import { appendSimulatorLog } from './simulatorLog';
 import { persistActivitySimulatorNow, simulatorAccuracyMeters, useActivitySimulatorStore } from './useActivitySimulatorStore';
 import type { SimulatorActivityLease, SimulatorSignal } from './types';
 import { advanceSimulatorClock } from './simulatorTime';
+import {
+  RAW_GPS_MAX_TIME_SCALE,
+  advanceRawGpsModel,
+  createRawGpsModelState,
+} from './rawGpsObservationModel';
 
 export const SIMULATOR_SAMPLE_INTERVAL_MS = 1_000;
 // Acceleration is represented by ordered canonical evidence, not one giant
 // leap per wall tick. Ten virtual seconds keeps 30x at three samples and 120x
 // at twelve samples during a normal 1 Hz tick, avoiding sparse Memory geometry.
 export const SIMULATOR_MAX_VIRTUAL_SAMPLE_INTERVAL_MS = 10_000;
+export const RAW_GPS_VIRTUAL_SAMPLE_INTERVAL_MS = 1_000;
 // A 120x normal timer tick becomes twelve ordered ten-second canonical
 // samples. If JS was suspended, do not replay more than this in one turn:
 // delayed wall time is Debug wait-time noise, not missing Activity movement.
@@ -47,6 +53,12 @@ export interface SimulatorCanonicalSample {
   segmentStartReason?: 'gps-reacquired';
   source: 'simulator';
   sequence: number;
+  observationMode: 'clean-path' | 'raw-gps';
+  groundTruthLat: number;
+  groundTruthLng: number;
+  errorEastM?: number;
+  errorNorthM?: number;
+  outlier?: boolean;
 }
 
 export interface SimulatorPipelineDecision {
@@ -106,6 +118,7 @@ class ActivitySimulatorEngine {
       timeScale: useActivitySimulatorStore.getState().timeScale,
       effectiveVirtualElapsed: 0,
       deterministicSeed: useActivitySimulatorStore.getState().deterministicSeed,
+      observationMode: useActivitySimulatorStore.getState().observationMode,
     }, {
       userId: lease.ownerUserId,
       clientActivityId: lease.clientActivityId,
@@ -239,9 +252,13 @@ class ActivitySimulatorEngine {
     try {
       const state = useActivitySimulatorStore.getState();
       const previousWall = this.lastTickWallMs ?? nowMs;
+      const rawGpsMode = state.observationMode === 'raw-gps';
+      const maximumVirtualAdvanceMs = rawGpsMode
+        ? RAW_GPS_VIRTUAL_SAMPLE_INTERVAL_MS * SIMULATOR_MAX_SAMPLES_PER_TICK
+        : SIMULATOR_MAX_VIRTUAL_ADVANCE_PER_TICK_MS;
       const wallElapsedCapMs = Math.min(
         MAX_WALL_ELAPSED_TICK_MS,
-        SIMULATOR_MAX_VIRTUAL_ADVANCE_PER_TICK_MS / Math.max(1, state.timeScale),
+        maximumVirtualAdvanceMs / Math.max(1, state.timeScale),
       );
       const elapsedWallMs = Math.max(0, Math.min(wallElapsedCapMs, nowMs - previousWall));
       this.lastTickWallMs = nowMs;
@@ -252,6 +269,9 @@ class ActivitySimulatorEngine {
       // lifecycle while the ordinary pre-Activity map is in use.
       if (!activityBound) return;
       const effectiveTimeScale = state.timeScale;
+      if (rawGpsMode && effectiveTimeScale > RAW_GPS_MAX_TIME_SCALE) {
+        throw new Error('raw_gps_time_scale_bound_exceeded');
+      }
       const activityStartedAtMs = state.virtualActivityStartedAtMs ?? (state.virtualTimestampMs || nowMs);
       const clock = advanceSimulatorClock({
         activityStartedAtMs,
@@ -269,7 +289,9 @@ class ActivitySimulatorEngine {
       const elapsedVirtualMs = clock.appliedVirtualElapsedMs;
       const sampleCount = Math.max(
         1,
-        Math.ceil(elapsedVirtualMs / SIMULATOR_MAX_VIRTUAL_SAMPLE_INTERVAL_MS),
+        Math.ceil(elapsedVirtualMs / (rawGpsMode
+          ? RAW_GPS_VIRTUAL_SAMPLE_INTERVAL_MS
+          : SIMULATOR_MAX_VIRTUAL_SAMPLE_INTERVAL_MS)),
       );
       if (sampleCount > SIMULATOR_MAX_SAMPLES_PER_TICK) {
         throw new Error('simulator_sample_burst_bound_exceeded');
@@ -282,7 +304,10 @@ class ActivitySimulatorEngine {
       for (let sampleIndex = 1; sampleIndex <= sampleCount; sampleIndex += 1) {
         const stepVirtualMs = sampleIndex === sampleCount
           ? remainingVirtualMs
-          : Math.min(SIMULATOR_MAX_VIRTUAL_SAMPLE_INTERVAL_MS, remainingVirtualMs);
+          : Math.min(
+              rawGpsMode ? RAW_GPS_VIRTUAL_SAMPLE_INTERVAL_MS : SIMULATOR_MAX_VIRTUAL_SAMPLE_INTERVAL_MS,
+              remainingVirtualMs,
+            );
         remainingVirtualMs -= stepVirtualMs;
         consumedVirtualMs += stepVirtualMs;
 
@@ -364,6 +389,26 @@ class ActivitySimulatorEngine {
           }, { virtualTimestamp: virtualTimestampMs });
         }
 
+        if (rawGpsMode) {
+          await this.emitSample({
+            state,
+            current,
+            groundTruth: current,
+            altitudeM,
+            moving,
+            magnitude,
+            bearing,
+            virtualTimestampMs,
+            effectiveTimeScale,
+            effectiveVirtualElapsedMs,
+            batchSequence: nextBatchSequence,
+            batchSampleIndex: sampleIndex,
+            batchSampleCount: sampleCount,
+            observationAllowed: state.signal !== 'lost' && shouldPublish,
+            forceObservation: forceSample,
+          });
+          continue;
+        }
         if (state.signal === 'lost') {
           this.frozenReportedPosition = null;
           continue;
@@ -383,6 +428,7 @@ class ActivitySimulatorEngine {
         await this.emitSample({
           state,
           current: reported,
+          groundTruth: current,
           altitudeM: state.signal === 'frozen' && this.frozenReportedPosition
             ? this.frozenReportedPosition.altitudeM
             : altitudeM,
@@ -395,6 +441,8 @@ class ActivitySimulatorEngine {
           batchSequence: nextBatchSequence,
           batchSampleIndex: sampleIndex,
           batchSampleCount: sampleCount,
+          observationAllowed: true,
+          forceObservation: forceSample,
         });
       }
 
@@ -417,6 +465,7 @@ class ActivitySimulatorEngine {
   private async emitSample(args: {
     state: ReturnType<typeof useActivitySimulatorStore.getState>;
     current: { lat: number; lng: number };
+    groundTruth: { lat: number; lng: number };
     altitudeM: number;
     moving: boolean;
     magnitude: number;
@@ -427,17 +476,52 @@ class ActivitySimulatorEngine {
     batchSequence: number;
     batchSampleIndex: number;
     batchSampleCount: number;
+    observationAllowed: boolean;
+    forceObservation: boolean;
   }): Promise<void> {
+    const currentState = useActivitySimulatorStore.getState();
+    let emittedCoordinate = args.current;
+    let accuracy = args.state.signal === 'poor'
+      ? poorSimulatorAccuracyMeters(currentState.sampleSequence + 1)
+      : simulatorAccuracyMeters(args.state);
+    let speed = args.moving ? args.state.speedKmh / 3.6 * args.magnitude : 0;
+    let course = args.bearing;
+    let errorEastM: number | undefined;
+    let errorNorthM: number | undefined;
+    let outlier: boolean | undefined;
+    if (args.state.observationMode === 'raw-gps') {
+      const rawState = currentState.rawGpsModelState
+        ?? createRawGpsModelState(currentState.deterministicSeed, args.virtualTimestampMs);
+      const step = advanceRawGpsModel({
+        state: rawState,
+        groundTruth: args.groundTruth,
+        timestampMs: args.virtualTimestampMs,
+        trueSpeedMps: speed,
+        trueCourseDegrees: args.bearing,
+        signal: args.state.signal,
+        observationAllowed: args.observationAllowed,
+        forceObservation: args.forceObservation,
+      });
+      useActivitySimulatorStore.getState().setRawGpsModelState(step.state);
+      if (!step.observation) return;
+      emittedCoordinate = step.observation.coordinate;
+      accuracy = step.observation.accuracyM;
+      speed = step.observation.speedMps;
+      course = step.observation.courseDegrees;
+      errorEastM = step.observation.errorEastM;
+      errorNorthM = step.observation.errorNorthM;
+      outlier = step.observation.outlier;
+    } else if (!args.observationAllowed) {
+      return;
+    }
     const sequence = useActivitySimulatorStore.getState().sampleSequence + 1;
     const sample: SimulatorCanonicalSample = {
-      lat: args.current.lat,
-      lng: args.current.lng,
+      lat: emittedCoordinate.lat,
+      lng: emittedCoordinate.lng,
       alt: args.altitudeM,
-      accuracy: args.state.signal === 'poor'
-        ? poorSimulatorAccuracyMeters(sequence)
-        : simulatorAccuracyMeters(args.state),
-      speed: args.moving ? args.state.speedKmh / 3.6 * args.magnitude : 0,
-      course: args.bearing,
+      accuracy,
+      speed,
+      course,
       timestamp: args.virtualTimestampMs,
       clientActivityId: this.lease?.clientActivityId,
       ownerGeneration: this.lease?.ownerGeneration,
@@ -445,6 +529,12 @@ class ActivitySimulatorEngine {
       segmentStartReason: this.lease?.segmentStartReason,
       source: 'simulator',
       sequence,
+      observationMode: args.state.observationMode,
+      groundTruthLat: args.groundTruth.lat,
+      groundTruthLng: args.groundTruth.lng,
+      errorEastM,
+      errorNorthM,
+      outlier,
     };
     useActivitySimulatorStore.setState({ sampleSequence: sequence });
     useActivitySimulatorStore.getState().recordGeneratedSample({
@@ -455,6 +545,13 @@ class ActivitySimulatorEngine {
       bearingDegrees: sample.course,
       joystickMagnitude: args.magnitude,
       effectiveVirtualElapsedMs: args.effectiveVirtualElapsedMs,
+      observationMode: sample.observationMode,
+      groundTruthLat: sample.groundTruthLat,
+      groundTruthLng: sample.groundTruthLng,
+      accuracyM: sample.accuracy,
+      errorEastM: sample.errorEastM,
+      errorNorthM: sample.errorNorthM,
+      outlier: sample.outlier,
     });
     appendSimulatorLog('SIM_SAMPLE', 'simulator_sample_generated', {
       sequence,
@@ -475,6 +572,13 @@ class ActivitySimulatorEngine {
       batchSequence: args.batchSequence,
       batchSampleIndex: args.batchSampleIndex,
       batchSampleCount: args.batchSampleCount,
+      observationMode: sample.observationMode,
+      deterministicSeed: currentState.deterministicSeed,
+      groundTruthLat: sample.groundTruthLat,
+      groundTruthLng: sample.groundTruthLng,
+      errorEastM: sample.errorEastM ?? 0,
+      errorNorthM: sample.errorNorthM ?? 0,
+      outlier: sample.outlier ?? false,
     }, { virtualTimestamp: sample.timestamp });
     if (sequence === 1) {
       appendSimulatorLog('PROVIDER', 'simulator_first_sample_generated', {

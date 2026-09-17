@@ -60,6 +60,11 @@ describe('Activity Simulator location evidence engine', () => {
       batchSequence: 0,
       clockLimitReached: false,
       deterministicSeed: 1,
+      observationMode: 'clean-path',
+      diagnosticsVisible: false,
+      rawGpsModelState: null,
+      groundTruthTrail: [],
+      rawGpsTrail: [],
       lastDecision: null,
       lastFailure: null,
     });
@@ -126,6 +131,57 @@ describe('Activity Simulator location evidence engine', () => {
     expect(samples).toHaveLength(2);
     expect(samples[1].speed).toBe(0);
     expect(distanceMeters(samples[0], samples[1])).toBe(0);
+  });
+
+  test('Raw GPS keeps stationary ground truth fixed while emitting drifting observations', async () => {
+    const samples: SimulatorCanonicalSample[] = [];
+    useActivitySimulatorStore.setState({
+      observationMode: 'raw-gps',
+      deterministicSeed: 550059,
+      rawGpsModelState: null,
+    });
+    bind(samples);
+    await activitySimulatorEngine.tick(now, true);
+    for (let second = 1; second <= 30; second += 1) {
+      await activitySimulatorEngine.tick(now + second * 1_000);
+    }
+    expect(useActivitySimulatorStore.getState().current).toEqual(ORIGIN);
+    expect(samples.length).toBeGreaterThan(5);
+    expect(samples.length).toBeLessThan(31);
+    expect(samples.every(sample => sample.observationMode === 'raw-gps')).toBe(true);
+    expect(samples.every(sample => sample.groundTruthLat === ORIGIN.lat && sample.groundTruthLng === ORIGIN.lng)).toBe(true);
+    expect(samples.some(sample => distanceMeters(ORIGIN, sample) > 1)).toBe(true);
+    expect(new Set(samples.map(sample => sample.accuracy.toFixed(3))).size).toBeGreaterThan(2);
+  });
+
+  test('Raw GPS Pause halts truth and Resume emits only the new lifecycle segment', async () => {
+    const samples: SimulatorCanonicalSample[] = [];
+    useActivitySimulatorStore.setState({
+      observationMode: 'raw-gps',
+      deterministicSeed: 77,
+      rawGpsModelState: null,
+    });
+    bind(samples);
+    useActivitySimulatorStore.getState().setJoystick(90, 1);
+    await activitySimulatorEngine.tick(now + 1_000);
+    const truthBeforePause = useActivitySimulatorStore.getState().current;
+    activitySimulatorEngine.pauseActivity();
+    await activitySimulatorEngine.tick(now + 20_000);
+    expect(useActivitySimulatorStore.getState().current).toEqual(truthBeforePause);
+
+    activitySimulatorEngine.resumeActivity(
+      { ...LEASE, ownerGeneration: 'owner-resumed', segmentId: 'segment-resumed' },
+      async sample => {
+        samples.push(sample);
+        return { accepted: true, reason: 'accepted', segmentId: sample.segmentId };
+      },
+    );
+    await activitySimulatorEngine.tick(now + 20_001, true);
+    expect(samples.at(-1)).toMatchObject({
+      observationMode: 'raw-gps',
+      ownerGeneration: 'owner-resumed',
+      segmentId: 'segment-resumed',
+    });
   });
 
   test('stationary pre-start runtime stays quiescent instead of churning map position', async () => {

@@ -85,7 +85,11 @@ async function authedFetch(path: string): Promise<Response> {
 // fetchDeepest
 // -----------------------------------------------------------------------
 export async function fetchDeepest(lat: number, lng: number): Promise<DeepestResponse> {
-  const key = `hierarchy:deepest:${DEEPEST_CACHE_VERSION}:${lat.toFixed(2)},${lng.toFixed(2)}`;
+  // Hierarchy responses include account-owned unlock state. Scope caches to
+  // the signed-in user so a shared device cannot paint the previous account's
+  // progress.
+  const owner = String(require('../../../store/useAppStore').useAppStore.getState().user?.id ?? 'guest');
+  const key = `hierarchy:deepest:${DEEPEST_CACHE_VERSION}:${owner}:${lat.toFixed(2)},${lng.toFixed(2)}`;
   try {
     const cached = await AsyncStorage.getItem(key);
     if (cached) {
@@ -118,7 +122,8 @@ export async function fetchPanelData(
   hereCityId: string | null,
   hereCountryId: string | null,
 ): Promise<PanelData | null> {
-  const cacheKey = `hierarchy:panel:${PANEL_CACHE_VERSION}:${titleId}:${hereCityId ?? '_'}:${hereCountryId ?? '_'}`;
+  const owner = String(require('../../../store/useAppStore').useAppStore.getState().user?.id ?? 'guest');
+  const cacheKey = `hierarchy:panel:${PANEL_CACHE_VERSION}:${owner}:${titleId}:${hereCityId ?? '_'}:${hereCountryId ?? '_'}`;
   try {
     const cached = await AsyncStorage.getItem(cacheKey);
     if (cached) {

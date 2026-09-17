@@ -43,6 +43,8 @@ import type { MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
+const WEB_MAPBOX_AVAILABLE = MAPBOX_ACCESS_TOKEN.trim().startsWith('pk.')
+  && MAPBOX_ACCESS_TOKEN.trim().length >= 40;
 
 // ── camelCase → kebab-case for Mapbox GL paint properties ─────────────
 function paintToKebab(style: Record<string, any> | undefined): Record<string, any> {
@@ -455,6 +457,9 @@ export function makeWebMapboxAdapter() {
     // web shim renders nothing so callers can still `<Mapbox.StyleImport>`
     // unconditionally.
     StyleImport: NoopComponent,
-    available: true,
+    // A mounted canvas without a usable token is not a working map. Let
+    // callers show their explicit unavailable state instead of treating a
+    // blank Web rectangle as evidence that Mapbox rendered successfully.
+    available: WEB_MAPBOX_AVAILABLE,
   };
 }

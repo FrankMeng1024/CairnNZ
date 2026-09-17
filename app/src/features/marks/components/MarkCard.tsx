@@ -26,7 +26,7 @@ import { Icon, type IconName } from '../../../components/Icon';
 import { PressBtn } from '../../../components/PressBtn';
 import { MARKER_META } from '../../../data/mockData';
 import type { Marker, MarkerPermission } from '../../../store/useMarkerStore';
-import { splitTitleBody } from '../../plant/services/noteEncoding';
+import { cairnDisplayTitle, splitTitleBody } from '../../plant/services/noteEncoding';
 
 interface Props {
   marker: Marker;
@@ -49,9 +49,7 @@ export function MarkCard({ marker, distance, onPress }: Props) {
   // R114 §9.4: title fallback rules — never leak "No note yet" when body has content;
   // never leak U+001E; match MarkerDetailScreen.titleEmpty copy ("Untitled cairn").
   const titleFallback = !title && !body;
-  const displayTitle = title
-    ? title
-    : (body ? body.slice(0, 30) : 'Untitled cairn');
+  const displayTitle = cairnDisplayTitle(title, body, marker.createdAt);
   const typeIcon: IconName = ((meta as any).iconName as IconName) ?? 'Flag';
 
   return (
