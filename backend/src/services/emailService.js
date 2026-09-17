@@ -156,7 +156,7 @@ async function sendAccountDeletionConfirmation(toEmail, name, restoreDeadline) {
     from: `"Cairn" <${process.env.EMAIL_FROM}>`,
     to: toEmail,
     subject: 'Your Cairn account is scheduled for deletion',
-    text: `Hi ${name.split(' ')[0]},\n\nWe've received a request to delete your Cairn account. Your account and all its data will be permanently removed on ${restoreDeadline}.\n\nIf you change your mind, sign in to Cairn before that date and tap "Restore my account" — no data is lost until the deadline.\n\nIf you didn't request this, sign in immediately and tap Restore.\n\n— The Cairn Team`,
+    text: `Hi ${name.split(' ')[0]},\n\nWe've received a request to delete your Cairn account. Your server-backed account data will be permanently removed on ${restoreDeadline}. Cairn clears account data stored on the requesting device immediately, including any unsynced device-only data.\n\nIf you change your mind, sign in to Cairn before that date and tap "Restore my account" to restore the server-backed account data.\n\nIf you didn't request this, sign in immediately and tap Restore.\n\n— The Cairn Team`,
     html: `
       <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#faf7f2;">
         <div style="text-align:center;margin-bottom:32px;">
@@ -178,7 +178,7 @@ async function sendAccountDeletionConfirmation(toEmail, name, restoreDeadline) {
             2. Tap <strong>Restore my account</strong> when prompted
           </p>
           <p style="margin:0;font-size:13px;color:#9b9b9b;">
-            Nothing is lost until the deadline.
+            Server-backed data remains restorable until the deadline. Account data on the requesting device, including unsynced device-only data, is cleared immediately.
           </p>
         </div>
         <p style="margin:24px 0 0;font-size:12px;color:#b0b0b0;text-align:center;">

@@ -111,6 +111,8 @@ app.use('/api/account', require('./routes/account'));
 app.use('/api/markers', require('./routes/markers'));
 app.use('/api/memory', require('./routes/memory'));
 app.use('/api/memory-subscriptions', require('./routes/memory-subscriptions'));
+app.use('/api/friend-sharing', require('./routes/friend-sharing'));
+app.use('/api/friend-content', require('./routes/friend-content'));
 app.use('/api/circle', require('./routes/circle'));
 app.use('/api/hide', require('./routes/hide'));
 app.use('/api/telemetry', require('./routes/telemetry'));
@@ -175,6 +177,7 @@ async function start() {
       'notification_log',     // migration 022
       'user_push_prefs',      // migration 024
       'data_exports',         // migration 023
+      'feedback_messages',    // migration 035
     ];
     const missingCols = [];
     for (const [table, col] of requiredCols) {
@@ -205,6 +208,9 @@ async function start() {
       'fk_data_exports_user',
       'fk_blocked_blocker',
       'fk_blocked_blocked',
+      'fk_feedback_user',
+      'fk_telemetry_owner',
+      'fk_unlocked_regions_user',
     ];
     const missingFks = [];
     for (const fk of requiredFks) {

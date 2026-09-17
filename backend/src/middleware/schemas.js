@@ -34,7 +34,7 @@ const markerCreate = Joi.object({
   client_cairn_id: clientUuid,
   origin_activity_client_id: clientUuid.allow(null),
   type: Joi.string().valid(
-    'cairn', 'danger', 'water', 'junction', 'scenic', 'supply',
+    'cairn', 'danger', 'water', 'junction', 'hut', 'scenic', 'supply',
     'shelter', 'hazard', 'note', 'free'
   ).required(),
   text: Joi.string().max(250).allow(''),
@@ -58,7 +58,7 @@ const markerCreate = Joi.object({
 
 const markerUpdate = Joi.object({
   type: Joi.string().valid(
-    'cairn', 'danger', 'water', 'junction', 'scenic', 'supply',
+    'cairn', 'danger', 'water', 'junction', 'hut', 'scenic', 'supply',
     'shelter', 'hazard', 'note', 'free'
   ),
   text: Joi.string().max(250).allow(''),
@@ -134,6 +134,10 @@ const memoryPointObjInline = Joi.object({
   alt: alt,
   ts: Joi.number().integer().min(0).required(),
   cid: Joi.string().min(1).max(128).allow(null),
+  evidence_source: Joi.string().valid('activity_real', 'passive_real', 'historical_unknown'),
+  source_activity_client_id: clientUuid.allow(null),
+  horizontal_accuracy_m: Joi.number().min(0).max(1000).allow(null),
+  continuity_state: Joi.string().valid('accepted', 'gap', 'unknown'),
 });
 
 const sessionSave = Joi.object({
@@ -202,6 +206,7 @@ const waypointObj = Joi.object({
 }).unknown(true); // Allow other UI-only fields (icon, id) — server ignores.
 
 const routeCreate = Joi.object({
+  client_route_id: clientUuid,
   name: Joi.string().min(1).max(100).required(),
   points: Joi.array().items(pointObj).min(2).max(10000).required(),
   waypoints: Joi.array().items(waypointObj).max(500).allow(null),
@@ -216,6 +221,7 @@ const routeCreate = Joi.object({
   // only while that completed Activity still exists for this owner.
   source_activity_client_id: clientUuid,
   source_session_id: Joi.number().integer().min(1),
+  origin_gap_reconnected: Joi.boolean(),
 });
 
 const routeUpdate = Joi.object({
@@ -339,6 +345,10 @@ const memoryPointObj = Joi.object({
   alt: alt,
   ts: Joi.number().integer().min(0).required(),
   cid: Joi.string().min(1).max(128).allow(null),
+  evidence_source: Joi.string().valid('activity_real', 'passive_real', 'historical_unknown'),
+  source_activity_client_id: clientUuid.allow(null),
+  horizontal_accuracy_m: Joi.number().min(0).max(1000).allow(null),
+  continuity_state: Joi.string().valid('accepted', 'gap', 'unknown'),
 });
 
 const memoryPoints = Joi.object({

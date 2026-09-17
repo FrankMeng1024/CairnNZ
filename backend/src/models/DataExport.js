@@ -17,14 +17,16 @@
  *     "meta": { rowCounts }
  *   }
  *
- * Download link is emailed rather than attached — avoids the Gmail 25 MB
- * attachment cap for power users with 10k+ hikes / memory points.
+ * The app polls export status and exposes a short-lived download link once
+ * the file is ready. Email is a secondary ready notification, never the
+ * authority for whether the export completed.
  */
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
 const crypto = require('crypto');
 const pool = require('../config/db');
+const { sendDataExportReady } = require('../services/emailService');
 
 const EXPORT_DIR = process.env.EXPORT_DIR || '/tmp/cairn-exports';
 const EXPORT_TTL_MS = 24 * 60 * 60 * 1000;  // 24h download window
@@ -39,36 +41,26 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-// Kick off a new export. Returns the row id + download token so the caller
-// can email a link immediately. If an in-flight export exists for this user
-// (queued or building), returns the existing row.
+// Kick off a new export. If an in-flight or still-valid ready export exists,
+// return it so repeated taps cannot create duplicate work.
 async function request(userId) {
   const [existing] = await pool.execute(
     `SELECT id, status, download_token, expires_at FROM data_exports
-     WHERE user_id = ? AND status IN ('queued', 'building', 'ready') LIMIT 1`,
+     WHERE user_id = ?
+       AND (status IN ('queued', 'building')
+         OR (status = 'ready' AND expires_at > UTC_TIMESTAMP()))
+     ORDER BY id DESC LIMIT 1`,
     [userId],
   );
   if (existing.length > 0) return { existing: true, ...existing[0] };
 
   const token = generateToken();
-  // Sprint 6 R92 BUG-3: let the DB compute expires_at as UTC seconds
-  // from now. Pre-fix, `new Date(Date.now() + EXPORT_TTL_MS)` was sent
-  // as a JS Date to mysql2 which reformatted it via the pool's
-  // configured timezone (default 'local'). On any host whose local TZ
-  // != DB session TZ, the stored DATETIME drifts by that offset — the
-  // effective TTL becomes 24h ± offset. The read path (isExpired)
-  // already uses UTC_TIMESTAMP(); this makes the write path symmetric.
-  const ttlSec = Math.floor(EXPORT_TTL_MS / 1000);
   const [result] = await pool.execute(
     `INSERT INTO data_exports (user_id, status, download_token, expires_at)
-     VALUES (?, 'queued', ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? SECOND))`,
-    [userId, token, ttlSec],
+     VALUES (?, 'queued', ?, NULL)`,
+    [userId, token],
   );
-  // Return the expected expiresAt as a JS Date for API-response purposes.
-  // Small drift vs the DB's actual value (<1s) is fine — clients use this
-  // only for display, not for enforcement.
-  const expiresAt = new Date(Date.now() + EXPORT_TTL_MS);
-  return { existing: false, id: result.insertId, status: 'queued', download_token: token, expires_at: expiresAt };
+  return { existing: false, id: result.insertId, status: 'queued', download_token: token, expires_at: null };
 }
 
 // Cron / worker loop — build every queued row. In prod this runs every
@@ -124,8 +116,11 @@ async function buildPending({ batchSize = 5 } = {}) {
       const size = Buffer.byteLength(json, 'utf8');
       try {
         await pool.execute(
-          `UPDATE data_exports SET status='ready', file_path=?, size_bytes=?, built_at=CURRENT_TIMESTAMP WHERE id=?`,
-          [filePath, size, row.id],
+          `UPDATE data_exports
+              SET status='ready', file_path=?, size_bytes=?, built_at=CURRENT_TIMESTAMP,
+                  expires_at=DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? SECOND)
+            WHERE id=?`,
+          [filePath, size, Math.floor(EXPORT_TTL_MS / 1000), row.id],
         );
       } catch (updateErr) {
         // Sprint 6 round-39 R39B1: if the status='ready' UPDATE fails
@@ -133,6 +128,24 @@ async function buildPending({ batchSize = 5 } = {}) {
         // orphan file with no DB reference. Rethrow so the outer catch
         // unlinks the file before marking the row 'failed'.
         throw updateErr;
+      }
+      // Notify only after the bundle is genuinely ready. Email failure does
+      // not invalidate the in-app download path or turn a valid export into a
+      // failed one.
+      try {
+        const publicBase = process.env.PUBLIC_API_BASE_URL || 'https://api.yiiling.cn';
+        if (/^https:\/\//i.test(publicBase)) {
+          const [owners] = await pool.execute(
+            'SELECT email, name FROM users WHERE id = ? LIMIT 1',
+            [row.user_id],
+          );
+          if (owners[0]) {
+            const url = `${publicBase.replace(/\/$/, '')}/api/account/export/${row.download_token}`;
+            await sendDataExportReady(owners[0].email, owners[0].name, url);
+          }
+        }
+      } catch (emailError) {
+        console.error('[export/ready-email]', emailError.message);
       }
       built += 1;
     } catch (err) {
@@ -178,6 +191,8 @@ async function buildBundle(userId) {
   const CAP_MEMORY   = 200000;
   const CAP_ROUTES   = 5000;
   const CAP_FRIENDS  = 5000;
+  const CAP_FEEDBACK = 5000;
+  const CAP_REGIONS  = 100000;
 
   // Sprint 6 round-15 R15B5 + round-16 R16F5: `sessions` table was
   // deprecated in O1 (2026-07-26). Swallow ER_NO_SUCH_TABLE only —
@@ -251,6 +266,22 @@ async function buildBundle(userId) {
   );
   bundle.notifications = notifications;
 
+  const [feedback] = await pool.execute(
+    `SELECT id, kind, message, app_version, created_at
+       FROM feedback_messages
+      WHERE user_id = ? ORDER BY id DESC LIMIT ${CAP_FEEDBACK + 1}`,
+    [userId],
+  );
+  bundle.feedback = feedback;
+
+  const [unlockedRegions] = await pool.execute(
+    `SELECT region_id, unlocked_at
+       FROM unlocked_regions
+      WHERE user_id = ? ORDER BY unlocked_at DESC LIMIT ${CAP_REGIONS + 1}`,
+    [userId],
+  );
+  bundle.unlockedRegions = unlockedRegions;
+
   bundle.meta = {
     rowCounts: {
       sessions: Math.min(sessions.length, CAP_SESSIONS),
@@ -259,6 +290,8 @@ async function buildBundle(userId) {
       routes: Math.min(routes.length, CAP_ROUTES),
       friends: Math.min(friends.length, CAP_FRIENDS),
       notifications: notifications.length,
+      feedback: Math.min(feedback.length, CAP_FEEDBACK),
+      unlockedRegions: Math.min(unlockedRegions.length, CAP_REGIONS),
     },
     // Sprint 6 R15B4 + R16F6: caller-visible signal that the cap was
     // reached. We fetched LIMIT CAP+1, so `> CAP` = server truncated,
@@ -271,6 +304,8 @@ async function buildBundle(userId) {
       memoryPoints: memory.length       > CAP_MEMORY,
       routes:       routes.length       > CAP_ROUTES,
       friends:      friends.length      > CAP_FRIENDS,
+      feedback:     feedback.length     > CAP_FEEDBACK,
+      unlockedRegions: unlockedRegions.length > CAP_REGIONS,
     },
   };
   // Sprint 6 R16F6: drop the CAP+1 sentinel row before serializing so
@@ -280,6 +315,8 @@ async function buildBundle(userId) {
   if (bundle.meta.truncated.memoryPoints) bundle.memoryPoints = bundle.memoryPoints.slice(0, CAP_MEMORY);
   if (bundle.meta.truncated.routes)       bundle.routes       = bundle.routes.slice(0, CAP_ROUTES);
   if (bundle.meta.truncated.friends)      bundle.friends      = bundle.friends.slice(0, CAP_FRIENDS);
+  if (bundle.meta.truncated.feedback)     bundle.feedback     = bundle.feedback.slice(0, CAP_FEEDBACK);
+  if (bundle.meta.truncated.unlockedRegions) bundle.unlockedRegions = bundle.unlockedRegions.slice(0, CAP_REGIONS);
   return bundle;
 }
 

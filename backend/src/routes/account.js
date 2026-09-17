@@ -2,9 +2,10 @@
  * Account routes — /api/account
  *
  * Batch 6.7 GDPR data export:
- *   POST   /api/account/export           — request an export (queues + emails link)
+ *   POST   /api/account/export           — request an export
  *   GET    /api/account/exports          — my export history
  *   GET    /api/account/export/:token    — download the JSON bundle
+ *   POST   /api/account/feedback         — durable acknowledged feedback
  *
  * The download endpoint is UNAUTHENTICATED so a plain HTTPS URL works in
  * email. Security via the 64-hex-char random token (2^256 space) + 24h
@@ -13,12 +14,19 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
-const path = require('path');
 const fs = require('fs');
 const router = express.Router();
 const authenticate = require('../middleware/authenticate');
 const DataExport = require('../models/DataExport');
-const { sendDataExportReady } = require('../services/emailService');
+const pool = require('../config/db');
+
+function publicDownloadUrl(token) {
+  const publicBase = process.env.PUBLIC_API_BASE_URL || 'https://api.yiiling.cn';
+  const secure = /^https:\/\//i.test(publicBase);
+  const loopback = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(?:\/|$)/i.test(publicBase);
+  if (!secure && !loopback) return null;
+  return `${publicBase.replace(/\/$/, '')}/api/account/export/${token}`;
+}
 
 // Sprint 6 review C1 fix: rate-limit the unauthenticated download route
 // to blunt token-brute and timing side-channel attacks. 30 req / min / IP
@@ -46,6 +54,49 @@ const exportRequestLimiter = rateLimit({
   message: { error: 'Too many export requests. Please wait an hour.' },
 });
 
+const feedbackLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 12,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => req.user?.userId ? `feedback:${req.user.userId}` : ipKeyGenerator(req, res),
+  message: { error: 'Too many feedback attempts. Please try again later.' },
+});
+
+router.post('/feedback', authenticate, feedbackLimiter, async (req, res) => {
+  const submissionId = String(req.body?.client_submission_id || '').trim().toLowerCase();
+  const kind = String(req.body?.kind || '').trim().toLowerCase();
+  const message = String(req.body?.message || '').trim();
+  const appVersion = req.body?.app_version == null ? null : String(req.body.app_version).trim().slice(0, 32);
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(submissionId)) {
+    return res.status(400).json({ error: 'Invalid submission identifier.' });
+  }
+  if (!['feedback', 'bug'].includes(kind)) {
+    return res.status(400).json({ error: 'Choose feedback or bug report.' });
+  }
+  if (message.length < 3 || message.length > 2000) {
+    return res.status(400).json({ error: 'Feedback must be between 3 and 2,000 characters.' });
+  }
+
+  try {
+    const [result] = await pool.execute(
+      `INSERT INTO feedback_messages
+         (user_id, client_submission_id, kind, message, app_version)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+      [req.user.userId, submissionId, kind, message, appVersion || null],
+    );
+    const duplicate = result.affectedRows !== 1;
+    return res.status(200).json({
+      acknowledged: true,
+      submission_id: submissionId,
+      duplicate,
+    });
+  } catch (err) {
+    console.error('[account/feedback]', err);
+    return res.status(500).json({ error: 'Feedback could not be delivered. Please try again.' });
+  }
+});
+
 // Authed routes
 router.post('/export', authenticate, exportRequestLimiter, async (req, res) => {
   try {
@@ -57,45 +108,12 @@ router.post('/export', authenticate, exportRequestLimiter, async (req, res) => {
         console.error('[export/inline-build]', err.message)
       );
     });
-    // Email the (eventual) link. Client also gets the token so they can
-    // poll status / show a download button without waiting for the email.
-    try {
-      // Sprint 6 R49: Host-header injection fix. Pre-fix, the fallback
-      // `${req.protocol}://${req.get('host')}` was user-controlled —
-      // attacker POSTs /export with header `Host: attacker.com` → email
-      // link points to https://attacker.com/api/account/export/<real-token>
-      // → victim clicks → attacker's access log captures the download
-      // token, then attacker retrieves the victim's data from the real
-      // backend at api.yiiling.cn.
-      //
-      // Fix: use ONLY env-configured PUBLIC_API_BASE_URL. If unset,
-      // fall back to the hardcoded production URL (api.yiiling.cn per
-      // app/src/config/api.ts) — never trust the Host header. Dev
-      // environments should set PUBLIC_API_BASE_URL to override.
-      const publicBase = process.env.PUBLIC_API_BASE_URL || 'https://api.yiiling.cn';
-      if (!/^https?:\/\//i.test(publicBase)) {
-        console.error('[account/export] PUBLIC_API_BASE_URL malformed — must start with http:// or https://');
-      } else {
-        const url = `${publicBase.replace(/\/$/, '')}/api/account/export/${result.download_token}`;
-        const [rows] = await require('../config/db').execute(
-          'SELECT email, name FROM users WHERE id = ? LIMIT 1',
-          [req.user.userId],
-        );
-        if (rows[0]) {
-          sendDataExportReady(rows[0].email, rows[0].name, url).catch(err =>
-            console.error('[email] export ready send failed:', err.message)
-          );
-        }
-      }
-    } catch (err) {
-      console.error('[export/email]', err.message);
-    }
     return res.json({
       message: result.existing
         ? 'You already have an export in progress.'
-        : 'Export requested. We\'ll email you when it\'s ready.',
+        : 'Export requested. You can return here to download it when it is ready.',
       status: result.status,
-      download_token: result.download_token,
+      download_url: result.status === 'ready' ? publicDownloadUrl(result.download_token) : null,
       expires_at: result.expires_at,
     });
   } catch (err) {
@@ -106,7 +124,6 @@ router.post('/export', authenticate, exportRequestLimiter, async (req, res) => {
 
 router.get('/exports', authenticate, async (req, res) => {
   try {
-    const pool = require('../config/db');
     // Sprint 6 review M2: expose error_msg on the history endpoint so
     // users have visibility into WHY an export failed (previously they
     // saw status='failed' with no diagnostic and retried into infinity).
@@ -119,19 +136,22 @@ router.get('/exports', authenticate, async (req, res) => {
     // as R53/R54 (500-handler err.message leaks). Fix: map internal
     // messages to user-friendly categories.
     const [rows] = await pool.execute(
-      `SELECT id, status, size_bytes, requested_at, built_at, expires_at, sent_at, error_msg
+      `SELECT id, status, size_bytes, requested_at, built_at, expires_at, sent_at,
+              error_msg, download_token
        FROM data_exports WHERE user_id = ? ORDER BY id DESC LIMIT 20`,
       [req.user.userId],
     );
     const sanitized = rows.map((r) => {
-      if (!r.error_msg) return { ...r, error_msg: null };
+      const download_url = r.status === 'ready' ? publicDownloadUrl(r.download_token) : null;
+      const base = { ...r, download_token: undefined, download_url };
+      if (!r.error_msg) return { ...base, error_msg: null };
       const raw = String(r.error_msg).toLowerCase();
       // Only surface a stable, user-actionable category.
       let category = 'internal_error';
       if (raw.includes('no space') || raw.includes('enospc')) category = 'server_disk_full';
       else if (raw.includes('timeout')) category = 'timeout';
       else if (raw.includes('too large') || raw.includes('too many rows')) category = 'too_much_data';
-      return { ...r, error_msg: category };
+      return { ...base, error_msg: category };
     });
     return res.json(sanitized);
   } catch (err) {

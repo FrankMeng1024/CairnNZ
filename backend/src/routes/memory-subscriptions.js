@@ -27,6 +27,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
+const { currentMemoryGrant } = require('../services/friendAuthorization');
 
 router.use(authenticate);
 
@@ -52,6 +53,10 @@ router.post('/', async (req, res) => {
   }
 
   try {
+    const grant = await currentMemoryGrant(pool, friendId, userId);
+    if (!grant) {
+      return res.status(404).json({ error: 'Memory source not available' });
+    }
     await pool.execute(
       'INSERT INTO memory_subscriptions (user_id, friend_id) VALUES (?, ?)',
       [userId, friendId]
@@ -110,10 +115,20 @@ router.get('/', async (req, res) => {
       // in the list with cached name — user would then hit /circle/fog
       // and see nothing new from them, wondering why. Better UX to
       // drop the subscription entry entirely.
-      `SELECT ms.friend_id, u.name AS friend_name, ms.subscribed_at
+      `SELECT ms.friend_id, u.name AS friend_name, ms.subscribed_at,
+              g.authorization_version
          FROM memory_subscriptions ms
          JOIN users u ON u.id = ms.friend_id AND u.deleted_at IS NULL
+         JOIN memory_share_grants g
+           ON g.owner_id = ms.friend_id AND g.viewer_id = ms.user_id AND g.status = 'active'
+         JOIN memory_share_policies p ON p.owner_id = g.owner_id AND p.enabled = 1
+         JOIN friendship_episodes e ON e.id = g.friendship_episode_id AND e.ended_at IS NULL
         WHERE ms.user_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM blocked_users b
+             WHERE (b.blocker_id = ms.user_id AND b.blocked_id = ms.friend_id)
+                OR (b.blocker_id = ms.friend_id AND b.blocked_id = ms.user_id)
+          )
         ORDER BY ms.subscribed_at ASC`,
       [userId]
     );

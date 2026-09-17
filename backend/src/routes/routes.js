@@ -12,6 +12,7 @@ const express = require('express');
 const router = express.Router();
 const Route = require('../models/Route');
 const authenticate = require('../middleware/authenticate');
+const idempotency = require('../middleware/idempotency');
 const { isClientWriteable, PERMISSION } = require('../constants/permission');
 const { validateBody } = require('../middleware/validate');
 const schemas = require('../middleware/schemas');
@@ -19,20 +20,11 @@ const schemas = require('../middleware/schemas');
 router.use(authenticate);
 
 // ── POST /api/routes ────────────────────────────────────────────────────────
-router.post('/', validateBody(schemas.route.create), async (req, res) => {
+router.post('/', validateBody(schemas.route.create), idempotency, async (req, res) => {
   const {
     name, description, points, waypoints, distance_m, elevation_gain_m, permission,
-    source_activity_client_id, source_session_id,
+    client_route_id, source_activity_client_id, source_session_id, origin_gap_reconnected,
   } = req.body;
-
-  // v120 debug: dump body shape so we can see exactly why JSON.stringify
-  // produces "[object Object],[object Object]" in storage.
-  console.log('[routes/create] body keys:', Object.keys(req.body));
-  console.log('[routes/create] points isArray:', Array.isArray(points), 'len:', points?.length);
-  if (Array.isArray(points) && points[0]) {
-    console.log('[routes/create] points[0]:', JSON.stringify(points[0]));
-    console.log('[routes/create] points[0] type:', typeof points[0]);
-  }
 
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     return res.status(400).json({ error: 'name is required.' });
@@ -67,19 +59,51 @@ router.post('/', validateBody(schemas.route.create), async (req, res) => {
       distanceM: distance_m ?? 0,
       elevationGainM: elevation_gain_m ?? 0,
       permission, // already validated above; Route.create defaults undefined → 'personal'
+      clientRouteId: client_route_id,
       sourceActivityClientId: source_activity_client_id,
       sourceSessionId: source_session_id,
+      originGapReconnected: origin_gap_reconnected,
     });
     const route = await Route.findByIdAndUser(id, req.user.userId);
     return res.status(201).json({ route });
   } catch (err) {
-    if (err.code === 'SOURCE_ACTIVITY_NOT_FOUND') {
+    if (err.code === 'SOURCE_ACTIVITY_NOT_FOUND' || err.code === 'SOURCE_ACTIVITY_NOT_READY') {
       return res.status(409).json({
-        error: 'Source Activity no longer exists or has not completed syncing.',
+        error: 'Source Activity has not completed syncing.',
         code: err.code,
       });
     }
+    if (err.code === 'SOURCE_ACTIVITY_DELETED') {
+      return res.status(410).json({ error: 'Source Activity no longer exists.', code: err.code });
+    }
+    if (err.code === 'SOURCE_ACTIVITY_UNAUTHORIZED') {
+      return res.status(403).json({ error: 'Source Activity is not available to this account.', code: err.code });
+    }
+    if (err.code === 'ROUTE_TOMBSTONED') {
+      return res.status(409).json({ error: err.message, code: err.code });
+    }
     console.error('[routes/create]', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// Stable client identity lets a durable local delete win over an in-flight or
+// response-lost create without relying on a transient server id.
+router.delete('/client/:clientRouteId', async (req, res) => {
+  const clientRouteId = String(req.params.clientRouteId || '');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRouteId)) {
+    return res.status(400).json({ error: 'Invalid client Route ID.' });
+  }
+  try {
+    const deleted = await Route.deleteByClientId(clientRouteId, req.user.userId);
+    return res.json({
+      ok: true,
+      deleted: deleted > 0,
+      code: deleted > 0 ? 'ROUTE_DELETED' : 'ROUTE_ALREADY_ABSENT',
+      client_route_id: clientRouteId,
+    });
+  } catch (err) {
+    console.error('[routes/delete-client]', err.message);
     return res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -156,8 +180,14 @@ router.delete('/:id', async (req, res) => {
 
   try {
     const affected = await Route.delete(id, req.user.userId);
-    if (affected === 0) return res.status(404).json({ error: 'Route not found.' });
-    return res.json({ message: 'Route deleted.' });
+    if (affected === 0) {
+      return res.status(404).json({
+        error: 'Route not found.',
+        code: 'ROUTE_NOT_FOUND',
+        route_id: id,
+      });
+    }
+    return res.json({ message: 'Route deleted.', code: 'ROUTE_DELETED', route_id: id });
   } catch (err) {
     console.error('[routes/delete]', err.message);
     return res.status(500).json({ error: 'Server error.' });

@@ -27,11 +27,10 @@ const {
 const { validateBody } = require('../middleware/validate');
 const schemas = require('../middleware/schemas');
 
-// AUTH-2 (2026-08-11) TEST-MODE: Delete-account cooling-off period. Users
-// can restore their soft-deleted account for this long. Cron authSweep
-// hard-deletes rows past this window (see cron/authSweep.js findHardDeleteCandidates).
-// TODO: LAUNCH_GATE — revert RESTORE_GRACE_MS = 7 * 24 * 60 * 60 * 1000 before app store launch.
-const RESTORE_GRACE_MS = 5 * 60 * 1000; // 5 minutes for testing (prod = 7 days)
+// Account deletion is deliberately recoverable for seven days. The API copy,
+// restore SQL, confirmation email, and hard-delete sweep all derive from this
+// single production contract.
+const RESTORE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const router = express.Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -943,8 +942,7 @@ router.post('/password-reset/verify', authLimiter, validateBody(schemas.auth.pas
 
 // ── DELETE /api/auth/account (O18 AUTH-01) ─────────────────────────────────
 // Soft-delete: sets users.deleted_at. Cron sweep hard-deletes after
-// RESTORE_GRACE_MS (currently 5 min TEST-MODE — see LAUNCH_GATE TODO
-// at top of file; prod = 7 days).
+// RESTORE_GRACE_MS (seven days).
 // User can restore during grace period via POST /account/restore. Also
 // revokes the current jti so the token is immediately unusable.
 //
@@ -965,15 +963,11 @@ router.delete('/account', authenticate, deleteAccountLimiter, async (req, res) =
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'Account not found.' });
 
-    // Idempotent: already deleted → return existing deadline.
-    let deletedAtIso;
-    if (user.deleted_at) {
-      deletedAtIso = new Date(user.deleted_at).toISOString();
-    } else {
-      await User.softDelete(user.id);
-      const updated = await User.findById(user.id);
-      deletedAtIso = new Date(updated.deleted_at).toISOString();
-    }
+    // Persist the deletion schedule and revoke every issued session as one
+    // atomic account-state transition. Repeated requests retain deleted_at.
+    const deletedAt = await User.scheduleDeletion(user.id);
+    if (!deletedAt) return res.status(404).json({ error: 'Account not found.' });
+    const deletedAtIso = deletedAt.toISOString();
 
     const restoreDeadline = new Date(new Date(deletedAtIso).getTime() + RESTORE_GRACE_MS);
 
@@ -982,7 +976,7 @@ router.delete('/account', authenticate, deleteAccountLimiter, async (req, res) =
       console.error('[email] deletion confirmation failed:', err.message)
     );
 
-    // Revoke current jti so the client is signed out immediately.
+    // Also revoke the current jti for defense in depth.
     if (req.user.jti) {
       const expUnixMs = req.user.exp ? req.user.exp * 1000 : Date.now() + 30 * 24 * 60 * 60 * 1000;
       await TokenBlacklist.revoke(req.user.jti, req.user.userId, new Date(expUnixMs)).catch(err =>
@@ -1013,7 +1007,6 @@ router.delete('/account', authenticate, deleteAccountLimiter, async (req, res) =
 // ── POST /api/auth/account/restore (O18 AUTH-01) ──────────────────────────
 // Undoes soft-delete during grace period. After RESTORE_GRACE_MS the cron
 // sweep has already hard-deleted the row; this returns 404 in that case.
-// TEST-MODE grace window is 5 minutes (LAUNCH_GATE TODO — prod = 7 days).
 // Called from the restore modal which is triggered by hint: 'pending_deletion'
 // on login. Token in Authorization header is the one just issued by /login,
 // which is still valid because auth middleware allows it (row exists, jti

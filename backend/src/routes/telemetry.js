@@ -195,11 +195,12 @@ router.post('/sessions', uploadLimiter, requireUploadAuth, async (req, res) => {
     // ALL fields update on conflict, since later upload may have richer metadata.
     await pool.execute(
       `INSERT INTO telemetry_sessions
-         (session_id, device_model, device_os, os_version, app_version, build_number,
+         (owner_user_id, session_id, device_model, device_os, os_version, app_version, build_number,
           started_at, ended_at, duration_ms, events_count, raw_size_bytes,
           activity_mode, raw_jsonl, upload_source)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
+         owner_user_id = COALESCE(owner_user_id, VALUES(owner_user_id)),
          device_model = VALUES(device_model),
          device_os = VALUES(device_os),
          os_version = VALUES(os_version),
@@ -215,6 +216,7 @@ router.post('/sessions', uploadLimiter, requireUploadAuth, async (req, res) => {
          uploaded_at = CURRENT_TIMESTAMP,
          upload_source = 'retry'`,
       [
+        req.user?.userId || null,
         sessionId,
         deviceInfo.model || null,
         deviceInfo.os || null,

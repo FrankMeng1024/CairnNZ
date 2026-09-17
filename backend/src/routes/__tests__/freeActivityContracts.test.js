@@ -157,24 +157,6 @@ test('completed Activity rename is authenticated, validated and rejects deleted 
   assert.match(model, /async renameCompleted[\s\S]*finalized_at IS NOT NULL/);
 });
 
-test('Activity-derived Route creation is serialized against source deletion', () => {
-  const schemas = require('../../middleware/schemas');
-  const routeSchema = schemas.route.create.validate({
-    name: 'From Activity',
-    points: [{ lat: -45, lng: 168 }, { lat: -45.001, lng: 168.001 }],
-    source_activity_client_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  });
-  assert.equal(routeSchema.error, undefined);
-  const routes = read('src/routes/routes.js');
-  const model = read('src/models/Route.js');
-  assert.match(routes, /source_activity_client_id/);
-  assert.match(routes, /SOURCE_ACTIVITY_NOT_FOUND/);
-  const guardedCreate = model.slice(model.indexOf('if (!sourceActivityClientId'));
-  assert.ok(guardedCreate.indexOf('SELECT id FROM users WHERE id = ? FOR UPDATE') < guardedCreate.indexOf('SELECT id FROM sessions'));
-  assert.ok(guardedCreate.indexOf('SELECT id FROM sessions') < guardedCreate.indexOf('const [result] = await insert(conn)'));
-  assert.match(guardedCreate, /finalized_at IS NOT NULL/);
-});
-
 test('Activity Save acknowledges committed source rows before derived Memory attribution', () => {
   const sessions = read('src/routes/sessions.js');
   const save = sessions.slice(sessions.indexOf("router.patch('/:id/save'"), sessions.indexOf("router.delete('/client/:clientActivityId'"));
@@ -195,4 +177,26 @@ test('supported Memory reset transaction clears points and derived regions only'
   assert.match(wipe, /DELETE FROM memory_points WHERE user_id = \?/);
   assert.match(wipe, /conn\.commit/);
   assert.doesNotMatch(wipe, /DELETE FROM (sessions|markers|routes|users)/);
+});
+
+test('Activity-derived Route creation is serialized against source deletion', () => {
+  const schemas = require('../../middleware/schemas');
+  const routeSchema = schemas.route.create.validate({
+    name: 'From Activity',
+    points: [{ lat: -45, lng: 168 }, { lat: -45.001, lng: 168.001 }],
+    source_activity_client_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  });
+  assert.equal(routeSchema.error, undefined);
+  const routes = read('src/routes/routes.js');
+  const model = read('src/models/Route.js');
+  assert.match(routes, /router\.post\('\/', validateBody\(schemas\.route\.create\), idempotency/);
+  assert.match(routes, /source_activity_client_id/);
+  assert.match(routes, /SOURCE_ACTIVITY_NOT_FOUND/);
+  const guardedCreate = model.slice(model.indexOf('async create'), model.indexOf('async findByUser'));
+  const userLock = guardedCreate.indexOf('SELECT id FROM users WHERE id = ? FOR UPDATE');
+  const sourceLock = guardedCreate.indexOf('SELECT id, client_activity_id, route_points FROM sessions');
+  const insert = guardedCreate.indexOf('INSERT INTO routes');
+  assert.ok(userLock >= 0 && sourceLock > userLock);
+  assert.ok(insert > sourceLock);
+  assert.match(guardedCreate, /finalized_at IS NOT NULL/);
 });

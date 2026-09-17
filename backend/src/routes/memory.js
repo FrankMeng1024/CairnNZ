@@ -99,7 +99,20 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
     const cid = (typeof p.cid === 'string' && p.cid.length > 0 && p.cid.length <= 36)
       ? p.cid
       : deterministicCid(userId, p.ts, p.lat, p.lng);
-    rows.push([userId, p.lat, p.lng, p.ts, cid]);
+    const evidenceSource = ['activity_real', 'passive_real', 'historical_unknown'].includes(p.evidence_source)
+      ? p.evidence_source
+      : 'historical_unknown';
+    const sourceActivityClientId = evidenceSource === 'activity_real' && typeof p.source_activity_client_id === 'string'
+      ? p.source_activity_client_id
+      : null;
+    const horizontalAccuracyM = Number.isFinite(p.horizontal_accuracy_m) ? p.horizontal_accuracy_m : null;
+    const continuityState = ['accepted', 'gap', 'unknown'].includes(p.continuity_state)
+      ? p.continuity_state
+      : 'unknown';
+    rows.push([
+      userId, p.lat, p.lng, p.ts, cid, evidenceSource,
+      sourceActivityClientId, horizontalAccuracyM, continuityState,
+    ]);
     echo.push({ batch_index: i, ts: p.ts, cid });
   }
 
@@ -117,7 +130,20 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
     // just need any expression so MySQL doesn't error on the conflict.
     // Then we SELECT the affected cids to confirm what really landed.
     await pool.query(
-      'INSERT INTO memory_points (user_id, lat, lng, ts, client_id) VALUES ? ON DUPLICATE KEY UPDATE client_id = VALUES(client_id)',
+      `INSERT INTO memory_points
+         (user_id, lat, lng, ts, client_id, evidence_source,
+          source_activity_client_id, horizontal_accuracy_m, continuity_state)
+       VALUES ?
+       ON DUPLICATE KEY UPDATE
+         evidence_source = CASE
+           WHEN VALUES(evidence_source) = 'activity_real' THEN 'activity_real'
+           WHEN evidence_source = 'historical_unknown' AND VALUES(evidence_source) = 'passive_real' THEN 'passive_real'
+           ELSE evidence_source END,
+         source_activity_client_id = COALESCE(VALUES(source_activity_client_id), source_activity_client_id),
+         horizontal_accuracy_m = COALESCE(VALUES(horizontal_accuracy_m), horizontal_accuracy_m),
+         continuity_state = CASE
+           WHEN VALUES(continuity_state) = 'accepted' THEN 'accepted'
+           ELSE continuity_state END`,
       [rows]
     );
     // memory_points is already committed. Region attribution is a derived,
@@ -181,7 +207,9 @@ router.get('/points', authenticate, async (req, res) => {
   const limit = Math.max(1, Math.min(10000, Number.isFinite(requested) ? requested : 5000));
   try {
     const [rows] = await pool.query(
-      `SELECT lat, lng, ts, client_id FROM memory_points
+      `SELECT lat, lng, ts, client_id, evidence_source, source_activity_client_id,
+              horizontal_accuracy_m, continuity_state
+       FROM memory_points
        WHERE user_id = ?
          AND ts <= ?
          AND ((ts > ?) OR (ts = ? AND client_id > ?))
@@ -195,6 +223,10 @@ router.get('/points', authenticate, async (req, res) => {
         lng: Number(r.lng),
         ts: Number(r.ts),
         cid: r.client_id,
+        evidence_source: r.evidence_source || 'historical_unknown',
+        source_activity_client_id: r.source_activity_client_id || null,
+        horizontal_accuracy_m: r.horizontal_accuracy_m === null ? null : Number(r.horizontal_accuracy_m),
+        continuity_state: r.continuity_state || 'unknown',
       })),
     });
   } catch (err) {

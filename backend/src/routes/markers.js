@@ -25,6 +25,11 @@ const abuseSignals = require('../utils/abuseSignals');
 const { isClientWriteable, PERMISSION } = require('../constants/permission');
 const { validateBody } = require('../middleware/validate');
 const schemas = require('../middleware/schemas');
+const {
+  buildOwnedCairnLibraryQuery,
+  decodeCursor,
+  encodeCursor,
+} = require('../services/ownedCairnLibrary');
 
 router.use(authenticate);
 
@@ -129,6 +134,49 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ── Paginated owner library ────────────────────────────────────────────────
+// GET /api/markers/library?limit=40&cursor=...&q=...
+// This is owner-only by construction: the authenticated user id is the first
+// SQL predicate and no user id is accepted from the client. Search runs over
+// the owner's whole server history before pagination. The legacy GET / route
+// remains unchanged for existing clients.
+router.get('/library', async (req, res) => {
+  const limitRaw = Number(req.query.limit ?? 40);
+  const limit = Number.isInteger(limitRaw) ? Math.min(100, Math.max(1, limitRaw)) : NaN;
+  const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 80) : '';
+  if (!Number.isFinite(limit)) return res.status(400).json({ error: 'Invalid limit.' });
+
+  let cursor = null;
+  try {
+    cursor = decodeCursor(req.query.cursor);
+  } catch {
+    return res.status(400).json({ error: 'Invalid cursor.' });
+  }
+
+  try {
+    const built = buildOwnedCairnLibraryQuery({
+      userId: req.user.userId,
+      limit,
+      query,
+      cursor,
+    });
+    const [rows] = await pool.execute(built.sql, built.values);
+    const hasMore = rows.length > limit;
+    const markers = hasMore ? rows.slice(0, limit) : rows;
+    const last = markers[markers.length - 1];
+    return res.json({
+      markers,
+      has_more: hasMore,
+      next_cursor: hasMore && last ? encodeCursor(last) : null,
+      scope: 'all_owned_history',
+      query_scope: query ? 'all_owned_history' : null,
+    });
+  } catch (err) {
+    console.error('[markers/library]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── Get Public markers within bbox (strangers' marks for Memory tab) ────────
 // GET /api/markers/public?bbox=lat1,lng1,lat2,lng2
 //   bbox corners: (lat1,lng1) = SW, (lat2,lng2) = NE
@@ -138,6 +186,11 @@ router.get('/', async (req, res) => {
 //   - Anonymous: no author info returned (v4 §10 design)
 //   - Max 50 results, ordered by created_at DESC
 router.get('/public', async (req, res) => {
+  return res.status(410).json({
+    error: 'Public discovery is not available in this release.',
+    code: 'PUBLIC_DISCOVERY_DEFERRED',
+  });
+  /* istanbul ignore next -- retained temporarily as historical migration context */
   try {
     const { bbox } = req.query;
     if (!bbox || typeof bbox !== 'string') {
@@ -274,26 +327,68 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
     );
     const [storedRows] = await conn.execute(
       `SELECT id, user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
-              type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at
+              type, text, lat, lng, alt, permission, audience_epoch, audience_changed_at,
+              approximate, public_snapshot, created_at
        FROM markers WHERE id = ? AND user_id = ? FOR UPDATE`,
       [result.insertId, req.user.userId],
     );
     const stored = storedRows[0];
     if (!stored) throw new Error('Cairn reconciliation row missing.');
     if (client_cairn_id) {
-      const sameFacts =
+      const sameImmutableFacts =
         stored.client_cairn_id === client_cairn_id &&
         (stored.origin_activity_client_id ?? null) === (origin_activity_client_id ?? null) &&
-        stored.type === type && stored.text === (text || '') &&
         Number(stored.lat) === Number(lat) && Number(stored.lng) === Number(lng) &&
-        (stored.alt == null ? null : Number(stored.alt)) === (alt == null ? null : Number(alt)) &&
-        stored.permission === perm && Boolean(stored.approximate) === Boolean(approx);
-      if (!sameFacts) {
+        (stored.alt == null ? null : Number(stored.alt)) === (alt == null ? null : Number(alt));
+      if (!sameImmutableFacts) {
         const mismatch = new Error('Cairn client identity was reused for different facts.');
         mismatch.code = 'CAIRN_IDENTITY_MISMATCH';
         throw mismatch;
       }
+      // A pending local Cairn may be enriched while its first create request
+      // is in flight. Replaying the same owner-scoped business identity keeps
+      // immutable place/provenance, but is allowed to converge supported
+      // content instead of rejecting the newer durable payload.
+      const contentChanged =
+        stored.type !== type
+        || stored.text !== (text || '')
+        || stored.permission !== perm
+        || Boolean(stored.approximate) !== Boolean(approx);
+      if (contentChanged) {
+        const permissionChanged = stored.permission !== perm;
+        if (permissionChanged) {
+          await conn.execute(
+            `UPDATE marker_audience_epochs SET ends_at = UTC_TIMESTAMP(3)
+              WHERE marker_id = ? AND audience_epoch = ? AND ends_at IS NULL`,
+            [stored.id, stored.audience_epoch],
+          );
+        }
+        await conn.execute(
+          `UPDATE markers
+           SET type = ?, text = ?, permission = ?, approximate = ?,
+               audience_epoch = audience_epoch + ?,
+               audience_changed_at = CASE WHEN ? = 1 THEN UTC_TIMESTAMP(3) ELSE audience_changed_at END,
+               updated_at = NOW()
+           WHERE id = ? AND user_id = ?`,
+          [type, text || '', perm, approx, permissionChanged ? 1 : 0,
+            permissionChanged ? 1 : 0, stored.id, req.user.userId],
+        );
+        if (permissionChanged) stored.audience_epoch = Number(stored.audience_epoch) + 1;
+        stored.type = type;
+        stored.text = text || '';
+        stored.permission = perm;
+        stored.approximate = approx;
+      }
     }
+    await conn.execute(
+      `INSERT IGNORE INTO marker_audience_epochs
+         (marker_id, owner_id, audience_epoch, visibility, starts_at)
+       SELECT id, user_id, audience_epoch,
+              CASE WHEN permission = 'group' THEN 'group' ELSE 'personal' END,
+              audience_changed_at
+         FROM markers WHERE id = ? AND user_id = ?`,
+      [stored.id, req.user.userId],
+    );
     await conn.commit();
     res.status(201).json({
       id: stored.id,
@@ -325,16 +420,22 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
 
 // ── Update marker ───────────────────────────────────────────────────────────
 router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
+  const conn = await pool.getConnection();
   try {
     const { text, permission, type } = req.body;
     const markerId = req.params.id;
 
     // Verify ownership AND fetch current state for snapshot logic.
-    const [existing] = await pool.execute(
-      'SELECT id, type, lat, lng, text, permission, public_snapshot FROM markers WHERE id = ? AND user_id = ?',
+    await conn.beginTransaction();
+    const [existing] = await conn.execute(
+      `SELECT id, type, lat, lng, text, permission, audience_epoch, public_snapshot
+         FROM markers WHERE id = ? AND user_id = ? FOR UPDATE`,
       [markerId, req.user.userId]
     );
-    if (existing.length === 0) return res.status(404).json({ error: 'Marker not found' });
+    if (existing.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Marker not found' });
+    }
     const current = existing[0];
 
     const updates = [];
@@ -345,30 +446,45 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
       // (was the stale ['danger','scenic','supply','junction','free']).
       const validTypes = ['danger', 'junction', 'water', 'hut', 'cairn'];
       if (!validTypes.includes(type)) {
+        await conn.rollback();
         return res.status(400).json({ error: 'Invalid type' });
       }
       updates.push('type = ?');
       values.push(type);
     }
     if (text !== undefined) {
-      if (text.length > 250) return res.status(400).json({ error: 'Text max 250 characters' });
+      if (text.length > 250) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Text max 250 characters' });
+      }
       updates.push('text = ?');
       values.push(text);
     }
     if (permission !== undefined) {
       // v4 H1: client can never set permission='public'.
       if (permission === PERMISSION.PUBLIC) {
+        await conn.rollback();
         return res.status(400).json({
           error: "permission='public' is not allowed for client writes",
         });
       }
       if (!isClientWriteable(permission)) {
+        await conn.rollback();
         return res.status(400).json({ error: 'Invalid permission' });
       }
       const dbPerm =
         permission === PERMISSION.FRIEND ? PERMISSION.GROUP_LEGACY : permission;
       updates.push('permission = ?');
       values.push(dbPerm);
+      if (dbPerm !== current.permission) {
+        await conn.execute(
+          `UPDATE marker_audience_epochs SET ends_at = UTC_TIMESTAMP(3)
+            WHERE marker_id = ? AND audience_epoch = ? AND ends_at IS NULL`,
+          [markerId, current.audience_epoch],
+        );
+        updates.push('audience_epoch = audience_epoch + 1');
+        updates.push('audience_changed_at = UTC_TIMESTAMP(3)');
+      }
 
       // v300 snapshot branch was: "first transition to public → snapshot".
       // Under v4 H1 this branch is unreachable from a client PATCH because
@@ -376,23 +492,39 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
       // honest about what client paths can do.
     }
 
-    if (updates.length === 0) return res.status(400).json({ error: 'No updates provided' });
+    if (updates.length === 0) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'No updates provided' });
+    }
 
     updates.push('updated_at = NOW()');
     values.push(markerId, req.user.userId);
 
-    await pool.execute(
+    await conn.execute(
       `UPDATE markers SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`,
       values
     );
+    await conn.execute(
+      `INSERT IGNORE INTO marker_audience_epochs
+         (marker_id, owner_id, audience_epoch, visibility, starts_at)
+       SELECT id, user_id, audience_epoch,
+              CASE WHEN permission = 'group' THEN 'group' ELSE 'personal' END,
+              audience_changed_at
+         FROM markers WHERE id = ? AND user_id = ?`,
+      [markerId, req.user.userId],
+    );
+    await conn.commit();
 
     // BUG-006 fix: echo user_id on update too. Updating a mark currently
     // does not refresh client-side authorId — but to keep response shape
     // consistent across POST/PUT/GET, include user_id here as well.
     res.json({ message: 'Marker updated', user_id: req.user.userId, id: Number(markerId) });
   } catch (err) {
+    try { await conn.rollback(); } catch { /* noop */ }
     console.error('[markers/update]', err.message);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
   }
 });
 
@@ -411,6 +543,14 @@ router.delete('/client/:clientCairnId', async (req, res) => {
        VALUES (?, ?) ON DUPLICATE KEY UPDATE deleted_at = deleted_at`,
       [req.user.userId, clientCairnId],
     );
+    const [ownedRows] = await conn.execute(
+      `SELECT id FROM markers WHERE user_id = ? AND client_cairn_id = ? FOR UPDATE`,
+      [req.user.userId, clientCairnId],
+    );
+    if (ownedRows[0]) {
+      await conn.execute('DELETE FROM friend_cairn_encounters WHERE marker_id = ?', [ownedRows[0].id]);
+      await conn.execute('DELETE FROM marker_audience_epochs WHERE marker_id = ?', [ownedRows[0].id]);
+    }
     const [result] = await conn.execute(
       `DELETE FROM markers WHERE user_id = ? AND client_cairn_id = ?`,
       [req.user.userId, clientCairnId],
@@ -447,6 +587,8 @@ router.delete('/:id', async (req, res) => {
         [req.user.userId, rows[0].client_cairn_id],
       );
     }
+    await conn.execute('DELETE FROM friend_cairn_encounters WHERE marker_id = ?', [req.params.id]);
+    await conn.execute('DELETE FROM marker_audience_epochs WHERE marker_id = ?', [req.params.id]);
     await conn.execute(
       'DELETE FROM markers WHERE id = ? AND user_id = ?',
       [req.params.id, req.user.userId],

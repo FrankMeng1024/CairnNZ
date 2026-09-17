@@ -12,6 +12,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const pool = require('../config/db');
+const { sanitizeQaEvent } = require('../utils/qaTelemetryPrivacy');
 // O1: authenticate 死 require (manual JWT parse in the handler)
 
 const router = express.Router();
@@ -86,7 +87,13 @@ router.post('/', limiter, express.json({ limit: '2mb' }), async (req, res) => {
       const ts = Number.isFinite(rawTs) && rawTs >= 0 ? rawTs : Date.now();
       const rawSeq = item.seq == null ? 0 : Number(item.seq);
       const seq = Number.isFinite(rawSeq) && rawSeq >= 0 ? rawSeq : 0;
-      const ctx = item.ctx ? JSON.stringify(item.ctx).slice(0, 1024) : '';
+      // Older clients may not have performed the current client-side scrub.
+      // Treat this generic operational channel as real/unknown evidence and
+      // fail private at the server boundary too.
+      const safeCtx = item.ctx
+        ? sanitizeQaEvent({ coordinateSource: 'real', fields: item.ctx }).fields
+        : undefined;
+      const ctx = safeCtx ? JSON.stringify(safeCtx).slice(0, 1024) : '';
       values.push('(?, ?, ?, ?, ?, ?, ?, ?)');
       params.push(userId, session_id, tag, 'log', seq, ts, 'ok', ctx);
     }

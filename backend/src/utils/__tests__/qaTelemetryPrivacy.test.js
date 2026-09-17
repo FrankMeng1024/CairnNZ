@@ -18,6 +18,7 @@ test('synthetic coordinates survive while credential-shaped data is removed', ()
       lng: 168.6626,
       coordinates: [168.6626, -45.0312],
       password: 'never-store-this',
+      userId: 'account-42',
       nested: { authorization: 'Bearer secret', accuracyM: 5 },
       message: 'user qa@example.invalid Bearer abc.def.ghi',
     },
@@ -28,7 +29,7 @@ test('synthetic coordinates survive while credential-shaped data is removed', ()
   assert.equal(safe.fields.password, undefined);
   assert.equal(safe.fields.nested.authorization, undefined);
   assert.equal(safe.fields.nested.accuracyM, 5);
-  assert.doesNotMatch(JSON.stringify(safe), /qa@example|abc\.def\.ghi|never-store-this/);
+  assert.doesNotMatch(JSON.stringify(safe), /qa@example|abc\.def\.ghi|never-store-this|account-42/);
 });
 
 test('real and unknown coordinate-shaped data is removed recursively', () => {

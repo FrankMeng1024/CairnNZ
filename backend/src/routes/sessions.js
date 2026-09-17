@@ -424,14 +424,26 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
         const cid = (typeof p.cid === 'string' && p.cid.length > 0 && p.cid.length <= 36)
           ? p.cid
           : deterministicCid(userId, p.ts, p.lat, p.lng);
-        validRows.push([userId, p.lat, p.lng, p.ts, cid]);
+        validRows.push([
+          userId, p.lat, p.lng, p.ts, cid, 'activity_real',
+          rows[0].client_activity_id ?? client_activity_id ?? null,
+          Number.isFinite(p.horizontal_accuracy_m) ? p.horizontal_accuracy_m : null,
+          p.continuity_state === 'gap' ? 'gap' : 'accepted',
+        ]);
       }
       const CHUNK = 50;
       for (let i = 0; i < validRows.length; i += CHUNK) {
         const slice = validRows.slice(i, i + CHUNK);
         await conn.query(
-          `INSERT INTO memory_points (user_id, lat, lng, ts, client_id) VALUES ?
-           ON DUPLICATE KEY UPDATE client_id=VALUES(client_id)`,
+          `INSERT INTO memory_points
+             (user_id, lat, lng, ts, client_id, evidence_source,
+              source_activity_client_id, horizontal_accuracy_m, continuity_state)
+           VALUES ?
+           ON DUPLICATE KEY UPDATE
+             evidence_source='activity_real',
+             source_activity_client_id=COALESCE(VALUES(source_activity_client_id), source_activity_client_id),
+             horizontal_accuracy_m=COALESCE(VALUES(horizontal_accuracy_m), horizontal_accuracy_m),
+             continuity_state=VALUES(continuity_state)`,
           [slice],
         );
         accepted += slice.length;

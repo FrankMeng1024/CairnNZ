@@ -92,45 +92,36 @@ async function getFriendIds(viewerId) {
 router.get('/markers', async (req, res) => {
   const viewerId = req.user.userId;
   try {
-    // v376 fix: Markers are gated on mutual friendship, NOT memory subscription.
-    // See getFriendIds rationale.
-    const friendIds = await getFriendIds(viewerId);
-    if (friendIds.length === 0) {
-      return res.json({ markers: [] });
-    }
-
-    // Build placeholder list ?,?,? for IN(...) — mysql2 doesn't expand arrays
-    // automatically when using pool.execute() prepared statements.
-    const placeholders = friendIds.map(() => '?').join(',');
-
-    // Filter: marker belongs to subscribed friend AND permission is shared tier
-    // AND viewer has NOT hidden this marker.
-    // Legacy 'group' included alongside 'friend' for markers ENUM.
-    // Sprint 6 R47: filter soft-deleted authors so a friend pending
-    // hard-delete stops appearing in the shared feed with their cached
-    // name. Their account is going away; showing their content is
-    // stale UX. Mirror of R37 fix on friends.js list endpoints.
-    // Sprint 6 R75: cap /circle/markers at 5000. Pathological friend
-    // with 10k+ markers would otherwise dominate the shared feed. Same
-    // class as R73 marker list cap.
     const sql = `
       SELECT m.id, m.user_id, m.type, m.text, m.lat, m.lng, m.alt,
              m.permission, m.approximate, m.created_at, m.updated_at,
              u.name AS author_name
-        FROM markers m
+        FROM friend_cairn_encounters encounter
+        JOIN markers m ON m.id = encounter.marker_id
+                      AND m.user_id = encounter.author_id
+                      AND m.audience_epoch = encounter.audience_epoch
+        JOIN friendship_episodes episode
+          ON episode.id = encounter.friendship_episode_id AND episode.ended_at IS NULL
+        JOIN friends f ON f.user_id = encounter.viewer_id AND f.friend_id = encounter.author_id
         JOIN users  u  ON u.id = m.user_id AND u.deleted_at IS NULL
    LEFT JOIN hidden_items h
           ON h.user_id   = ?
          AND h.item_type = 'mark'
          AND h.item_id   = m.id
-       WHERE m.user_id IN (${placeholders})
-         AND m.permission IN ('friend','group','public')
+       WHERE encounter.viewer_id = ?
+         AND encounter.hidden_at IS NULL
+         AND m.permission = 'group'
          AND m.status = 'healthy'
          AND h.user_id IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM blocked_users b
+            WHERE (b.blocker_id = encounter.viewer_id AND b.blocked_id = encounter.author_id)
+               OR (b.blocker_id = encounter.author_id AND b.blocked_id = encounter.viewer_id)
+         )
     ORDER BY m.created_at DESC
     LIMIT 5000`;
 
-    const [markers] = await pool.execute(sql, [viewerId, ...friendIds]);
+    const [markers] = await pool.execute(sql, [viewerId, viewerId]);
 
     // Normalize 'group' → 'friend' on the client wire so the UI never sees legacy.
     // Public marks from friends remain 'public' (per v4: anonymous display still
@@ -138,7 +129,8 @@ router.get('/markers', async (req, res) => {
     const out = markers.map((m) => ({
       ...m,
       permission: normalize(m.permission),
-      author_name: m.permission === 'public' ? null : m.author_name,
+      author_name: m.author_name,
+      read_only: true,
     }));
     return res.json({ markers: out });
   } catch (err) {
@@ -151,8 +143,6 @@ router.get('/markers', async (req, res) => {
 router.get('/routes', async (req, res) => {
   const viewerId = req.user.userId;
   try {
-    // v376 fix: Routes are gated on mutual friendship, NOT memory subscription.
-    // See getFriendIds rationale.
     const friendIds = await getFriendIds(viewerId);
     if (friendIds.length === 0) {
       return res.json({ routes: [] });
@@ -161,7 +151,7 @@ router.get('/routes', async (req, res) => {
 
     // Sprint 6 R47: same soft-deleted filter as /circle/markers above.
     const sql = `
-      SELECT r.id, r.user_id, r.name, r.description, r.points, r.distance_m,
+      SELECT r.id, r.user_id, r.name, r.description, r.distance_m,
              r.elevation_gain_m, r.permission, r.created_at, r.updated_at,
              u.name AS author_name
         FROM routes r
@@ -171,16 +161,20 @@ router.get('/routes', async (req, res) => {
          AND h.item_type = 'route'
          AND h.item_id   = r.id
        WHERE r.user_id IN (${placeholders})
-         AND r.permission IN ('friend','public')
+         AND r.permission = 'friend'
          AND h.user_id IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM blocked_users b
+            WHERE (b.blocker_id = ? AND b.blocked_id = r.user_id)
+               OR (b.blocker_id = r.user_id AND b.blocked_id = ?)
+         )
     ORDER BY r.created_at DESC
     LIMIT 1000`;
 
-    const [routes] = await pool.execute(sql, [viewerId, ...friendIds]);
-    // Public routes anonymized (parity with markers).
+    const [routes] = await pool.execute(sql, [viewerId, ...friendIds, viewerId, viewerId]);
     const out = routes.map((r) => ({
       ...r,
-      author_name: r.permission === 'public' ? null : r.author_name,
+      read_only: true,
     }));
     return res.json({ routes: out });
   } catch (err) {
@@ -198,70 +192,11 @@ router.get('/routes', async (req, res) => {
 // will be upgraded to return GeoJSON polygons in a future Sprint without
 // changing its path.
 router.get('/fog', async (req, res) => {
-  const viewerId = req.user.userId;
-  try {
-    const friendIds = await getSubscribedFriendIds(viewerId);
-    if (friendIds.length === 0) {
-      return res.json({ friend_points: [] });
-    }
-    const placeholders = friendIds.map(() => '?').join(',');
-
-    // Sprint 6 round-35 R35B1+B2: fog was silently broken for any friend
-    // with > ~10 memory_points. MySQL's default group_concat_max_len=1024
-    // causes JSON_ARRAYAGG to truncate at 1024 bytes → invalid JSON blob
-    // → JSON.parse throws → 500 for the whole /fog request. Real prod
-    // data shows heavy users have 500-700+ memory_points each (~54KB
-    // aggregated JSON) — every subscription to such a user was breaking.
-    //
-    // Fix: get a dedicated connection, bump group_concat_max_len to 16MB
-    // for this session only (doesn't affect other pool users), and cap
-    // points-per-friend at MAX_POINTS_PER_FRIEND via a subquery ORDER BY
-    // ts DESC LIMIT. The cap protects against sim-walker abuse producing
-    // 500k+ rows for a single friend.
-    // Sprint 6 R71: use per-friend ROW_NUMBER window function instead
-    // of a global LIMIT. Pre-fix, `LIMIT MAX_POINTS_PER_FRIEND * friendIds.length`
-    // was a GLOBAL cap across all friends' points after ORDER BY ts DESC.
-    // Consequence: if 1 friend has 100k points and 4 have 10 each, the
-    // subquery could pull 100k rows all from friend #1 (their points are
-    // newest), and friends #2-5 get zero — even though each user's cap
-    // is 20k. Fairness broken.
-    //
-    // Fix: ROW_NUMBER() PARTITION BY user_id ORDER BY ts DESC, then
-    // filter rn <= 20000. MySQL 8 supports window functions natively.
-    // Now each friend gets up to MAX_POINTS_PER_FRIEND of THEIR OWN
-    // newest points, independent of the others' density.
-    const MAX_POINTS_PER_FRIEND = 20000;
-    const conn = await pool.getConnection();
-    let rows;
-    try {
-      await conn.execute('SET SESSION group_concat_max_len = 16777216');
-      const sql = `
-        SELECT sub.user_id AS friend_id,
-               JSON_ARRAYAGG(JSON_OBJECT('lat', sub.lat, 'lng', sub.lng, 'ts', sub.ts)) AS points
-          FROM (
-            SELECT user_id, lat, lng, ts,
-                   ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY ts DESC) AS rn
-              FROM memory_points
-             WHERE user_id IN (${placeholders})
-          ) sub
-         WHERE sub.rn <= ${MAX_POINTS_PER_FRIEND}
-      GROUP BY sub.user_id`;
-      [rows] = await conn.execute(sql, friendIds);
-    } finally {
-      conn.release();
-    }
-    // mysql2 returns JSON_ARRAYAGG as a parsed array on JSON-typed columns,
-    // but JSON_OBJECT inside JSON_ARRAYAGG sometimes comes back as a string
-    // depending on driver version. Normalize both shapes.
-    const out = rows.map((r) => ({
-      friend_id: r.friend_id,
-      points: typeof r.points === 'string' ? JSON.parse(r.points) : r.points,
-    }));
-    return res.json({ friend_points: out });
-  } catch (err) {
-    console.error('[circle/fog]', err.message);
-    return res.status(500).json({ error: 'Server error' });
-  }
+  return res.status(410).json({
+    error: 'Raw friend Memory is no longer available.',
+    code: 'FRIEND_MEMORY_PROJECTION_REQUIRED',
+    replacement: '/api/friend-sharing/projections',
+  });
 });
 
 module.exports = router;

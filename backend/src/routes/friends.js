@@ -23,6 +23,12 @@ const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { validateBody } = require('../middleware/validate');
 const schemas = require('../middleware/schemas');
+const {
+  ensureFriendshipEpisode,
+  provisionFriendshipGrants,
+  closeFriendshipEpisode,
+  currentMemoryGrant,
+} = require('../services/friendAuthorization');
 
 // All routes require auth
 router.use(authenticate);
@@ -321,6 +327,17 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
          ON DUPLICATE KEY UPDATE created_at = created_at`,
         [req.user.userId, request.from_user_id, request.from_user_id, req.user.userId],
       );
+      const friendshipEpisode = await ensureFriendshipEpisode(
+        conn,
+        req.user.userId,
+        request.from_user_id,
+      );
+      await provisionFriendshipGrants(
+        conn,
+        req.user.userId,
+        request.from_user_id,
+        friendshipEpisode,
+      );
       await conn.execute(
         // Sprint 6 round-14 R14B7: set resolved_at so authSweep purge
         // uses the actual resolution time, not creation time.
@@ -518,13 +535,25 @@ router.delete('/:id', async (req, res) => {
     // client marks the friend as removed locally, then rehydrates and
     // sees the row still present. Also serves as a weak existence oracle
     // via response-timing correlated with UNIQUE key lookup.
-    const [result] = await pool.execute(
-      'DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)',
-      [req.user.userId, friendId, friendId, req.user.userId]
-    );
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Friendship not found' });
+    const conn = await pool.getConnection();
+    let removed = false;
+    try {
+      await conn.beginTransaction();
+      await closeFriendshipEpisode(conn, req.user.userId, friendId, 'unfriended');
+      const [result] = await conn.execute(
+        'DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)',
+        [req.user.userId, friendId, friendId, req.user.userId],
+      );
+      removed = result.affectedRows > 0;
+      if (!removed) await conn.rollback();
+      else await conn.commit();
+    } catch (error) {
+      try { await conn.rollback(); } catch { /* noop */ }
+      throw error;
+    } finally {
+      conn.release();
     }
+    if (!removed) return res.status(404).json({ error: 'Friendship not found' });
     res.json({ message: 'Friend removed' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -554,37 +583,29 @@ router.get('/:id/profile', async (req, res) => {
     );
     if (users.length === 0) return res.status(404).json({ error: 'Profile not available' });
 
-    const [friendCountRows] = await pool.execute(
-      'SELECT COUNT(*) AS n FROM friends WHERE user_id = ?',
-      [targetId],
-    );
-    const [hikeCountRows] = await pool.execute(
-      // Sprint 6 round-4 review R4B8: use `finalized_at IS NOT NULL` as
-      // the source of truth for "completed hike". Pre-fix, an OR'd
-      // `distance_m > 0` also counted in-progress unfinalized sessions
-      // (e.g. sim-walker rows), inflating a friend's hike count.
-      `SELECT COUNT(*) AS n FROM sessions
-       WHERE user_id = ?
-         AND finalized_at IS NOT NULL`,
-      [targetId],
-    );
-    const [placesRows] = await pool.execute(
-      'SELECT COUNT(*) AS n FROM memory_points WHERE user_id = ?',
-      [targetId],
-    );
     const [cairnsRows] = await pool.execute(
-      'SELECT COUNT(*) AS n FROM markers WHERE user_id = ?',
+      `SELECT COUNT(*) AS n
+         FROM friend_cairn_encounters encounter
+         JOIN markers marker ON marker.id = encounter.marker_id
+        WHERE encounter.viewer_id = ? AND encounter.author_id = ?
+          AND encounter.hidden_at IS NULL AND marker.permission = 'group'`,
+      [req.user.userId, targetId],
+    );
+    const [routesRows] = await pool.execute(
+      `SELECT COUNT(*) AS n FROM routes WHERE user_id = ? AND permission = 'friend'`,
       [targetId],
     );
+    const memoryGrant = await currentMemoryGrant(pool, targetId, req.user.userId);
     return res.json({
       id: users[0].id,
       name: users[0].name,
       email: users[0].email,
       memberSince: users[0].created_at,
-      friendCount: friendCountRows[0]?.n ?? 0,
-      hikeCount: hikeCountRows[0]?.n ?? 0,
-      placesExplored: placesRows[0]?.n ?? 0,
-      cairnsPlanted: cairnsRows[0]?.n ?? 0,
+      permittedContent: {
+        encounteredCairns: Number(cairnsRows[0]?.n ?? 0),
+        sharedRoutes: Number(routesRows[0]?.n ?? 0),
+        memoryAvailable: Boolean(memoryGrant),
+      },
     });
   } catch (err) {
     console.error('[friends/profile]', err.message);
@@ -625,6 +646,7 @@ router.post('/:id/block', async (req, res) => {
             OR (user_id = ? AND friend_id = ?)`,
         [req.user.userId, targetId, targetId, req.user.userId],
       );
+      await closeFriendshipEpisode(conn, req.user.userId, targetId, 'blocked');
       // Cancel any pending requests either direction.
       await conn.execute(
         `UPDATE friend_requests SET status = 'rejected', resolved_at = NOW()

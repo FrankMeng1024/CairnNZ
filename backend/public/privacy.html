@@ -25,24 +25,24 @@
 </head>
 <body>
   <h1>Cairn — Privacy Policy</h1>
-  <div class="meta">Last updated: 27 July 2026 · Cairn hiking companion app</div>
+  <div class="meta">Last updated: 14 September 2026 · Cairn hiking companion app</div>
 
   <p>This policy explains what data Cairn collects, how we use it, and the rights you have. It applies to the Cairn mobile app and the accounts you create in it. If anything below is unclear, email <a href="mailto:privacy@cairnapp.nz">privacy@cairnapp.nz</a>.</p>
 
   <h2>1. What we collect</h2>
   <ul>
-    <li><strong>Account data</strong>: name and email you provide when you sign up, plus a hashed password. If you sign in with Google or Apple, we receive the same information from those providers.</li>
-    <li><strong>Location data</strong>: GPS coordinates recorded while you are actively tracking a hike or run. We do not collect background location outside of an active session unless you explicitly enable it.</li>
-    <li><strong>Content you create</strong>: hikes, cairns (map markers), notes, and photos you attach to markers.</li>
-    <li><strong>Device diagnostics</strong>: crash logs and error breadcrumbs, tied to your account, only when you have opted in via Settings.</li>
-    <li><strong>Feedback and support</strong>: whatever you send via the in-app "Send feedback" form.</li>
+    <li><strong>Account data</strong>: the name and email associated with your account, your sign-in provider, and a hashed password when you use Cairn email sign-in. Cairn never stores your plain-text password.</li>
+    <li><strong>Location and Activity data</strong>: GPS observations, routes, distance, duration and related records while you record a Hike or Run. With your separate permission, Cairn can also use foreground location to update exploration while the app is open and no Activity is recording.</li>
+    <li><strong>Content you create</strong>: Activities, Routes, Cairns (map markers), notes, marker media, Memory points and derived explored regions.</li>
+    <li><strong>Reliability diagnostics</strong>: limited app, device, crash and event information used to diagnose failures. Diagnostic uploads remove credential-shaped values and precise coordinates from real-location events before sending. Separately gated internal QA tools may upload labelled synthetic test evidence.</li>
+    <li><strong>Feedback and support</strong>: the message, category, app version and delivery identifier you send through Cairn feedback or support.</li>
   </ul>
 
   <h2>2. How we use it</h2>
   <ul>
     <li>To provide the core features of the app — showing your hikes, syncing across devices, letting you plant and rediscover cairns.</li>
-    <li>To share your hikes and cairns with people you have explicitly added as friends. Nothing you record is shared publicly by default.</li>
-    <li>To improve the app: aggregated, anonymised counts of feature usage and crash traces.</li>
+    <li>To apply the visibility choices attached to Cairns, Activities and Routes and to support friend features.</li>
+    <li>To diagnose crashes, failed sync, Activity recording defects and other reliability problems.</li>
     <li>To reply to you when you contact us.</li>
   </ul>
 
@@ -50,19 +50,18 @@
   <ul>
     <li>We do not sell your data.</li>
     <li>We do not use your location or hikes for advertising.</li>
-    <li>We do not share your data with third parties except (a) the providers that run our servers (Alibaba Cloud) and analytics, (b) if legally required, or (c) with your explicit consent.</li>
+    <li>We do not share your data except with service providers needed to operate Cairn, when required by law, or when you direct Cairn to share it.</li>
   </ul>
 
   <h2>4. Where your data lives</h2>
-  <p>Cairn's servers run in Alibaba Cloud (Shanghai region). Your data is stored in a MySQL database and object storage bucket in the same region. Transport is over HTTPS. Passwords are hashed with bcrypt before storage.</p>
+  <p>Cairn's servers run in Alibaba Cloud's Shanghai region. Account and product data is stored in Cairn's database and object storage. Transport to Cairn services uses HTTPS and passwords owned by Cairn are hashed with bcrypt. Where Cairn offers road-aware route reconstruction, the relevant route coordinates may be sent directly to Mapbox to request candidate map geometry; Cairn remains responsible for deciding whether that geometry represents the journey.</p>
 
   <h2>5. Your rights</h2>
   <ul>
-    <li><strong>View</strong>: everything Cairn holds about you is visible in the app.</li>
-    <li><strong>Correct</strong>: edit your name, email, and password in Settings.</li>
-    <li><strong>Reset</strong>: use "Reset my map memory" in Settings to clear location history.</li>
-    <li><strong>Delete</strong>: use "Delete account" in Settings. This opens an email to <a href="mailto:privacy@cairnapp.nz">privacy@cairnapp.nz</a> that we will action within 5 business days.</li>
-    <li><strong>Export</strong>: email us to request a copy of your data.</li>
+    <li><strong>Access and export</strong>: request a JSON copy from Settings, follow its preparation status there, and use the download link when it is ready. Ready links expire after 24 hours.</li>
+    <li><strong>Correct</strong>: edit your display name and, for Cairn password accounts, change your password in Settings. Account email is not currently changeable in the app; contact support if it is wrong.</li>
+    <li><strong>Delete exploration history</strong>: remove Memory points and derived explored regions while keeping Activities, Routes and Cairns.</li>
+    <li><strong>Delete account</strong>: request deletion in Settings. Cairn disables the account and its existing sessions immediately. You can restore server-backed data by signing in during the next seven days. After that, Cairn permanently deletes the account and account-owned product data, exports, feedback and account-linked diagnostics. Account data on the requesting device is cleared when the request succeeds; unsynced device-only data cannot be restored.</li>
   </ul>
 
   <h2>6. Children</h2>

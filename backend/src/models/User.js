@@ -7,7 +7,33 @@
  */
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const fs = require('fs');
 const pool = require('../config/db');
+
+const ACCOUNT_DELETION_GRACE_MINUTES = 7 * 24 * 60;
+
+const OPTIONAL_OWNED_COLUMNS = [
+  ['memory_points', 'user_id'],
+  ['debug_events_v2', 'user_id'],
+  ['app_logs', 'user_id'],
+];
+
+async function deleteOptionalOwnedRows(conn, table, column, userId) {
+  const allowed = OPTIONAL_OWNED_COLUMNS.some(([candidateTable, candidateColumn]) => (
+    candidateTable === table && candidateColumn === column
+  ));
+  if (!allowed) throw new Error('unsafe_optional_owned_table');
+  const [present] = await conn.execute(
+    `SELECT 1 AS present
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+      LIMIT 1`,
+    [table, column],
+  );
+  if (present.length > 0) {
+    await conn.execute(`DELETE FROM ${table} WHERE ${column} = ?`, [userId]);
+  }
+}
 
 // O18 AUTH-06: normalize Joi.isoDate() input (which accepts full ISO datetime
 // like '1995-01-01T00:00:00.000Z') down to the 'YYYY-MM-DD' string MySQL's
@@ -99,14 +125,39 @@ async function setOnboardingDone(userId, at) {
   );
 }
 
-// O18 AUTH-01: schedule the account for hard-delete via the cron sweep.
-// Idempotent — a second call within grace period keeps the original
-// deleted_at (cron uses the earliest timestamp).
-async function softDelete(userId) {
-  await pool.execute(
-    'UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL',
-    [userId]
-  );
+// Schedule deletion and invalidate every issued JWT in the same transaction.
+// Repeated requests retain the original deletion timestamp while rotating the
+// token version again, so no session can regain authority by racing a retry.
+async function scheduleDeletion(userId) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [result] = await conn.execute(
+      `UPDATE users
+          SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP),
+              token_version = token_version + 1
+        WHERE id = ?`,
+      [userId]
+    );
+    if (result.affectedRows !== 1) {
+      await conn.rollback();
+      return null;
+    }
+    const [rows] = await conn.execute(
+      'SELECT deleted_at FROM users WHERE id = ? FOR UPDATE',
+      [userId]
+    );
+    if (!rows[0]?.deleted_at) {
+      throw new Error('Account deletion timestamp was not persisted.');
+    }
+    await conn.commit();
+    return new Date(rows[0].deleted_at);
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 }
 
 // O18 AUTH-01: undo a soft-delete. Restore is only valid within grace
@@ -117,15 +168,7 @@ async function softDelete(userId) {
 // after soft-delete, silently bypassing the 7-day policy. Now: SQL
 // itself refuses the UPDATE if deleted_at is older than 7 days.
 // Caller (auth.js /account/restore) already handles affectedRows === 0.
-// AUTH-2 (2026-08-11) TEST-MODE: gate switched from `INTERVAL 7 DAY`
-// to `INTERVAL ? MINUTE` (parameterized) to match the cooling-off period
-// controlled by a single call-site constant (auth.js RESTORE_GRACE_MS).
-// Caller (auth.js /account/restore) passes graceMinutes derived from
-// RESTORE_GRACE_MS. Consolidating the 5-min literal into one place per
-// 4-eyes review — LAUNCH_GATE is now a single revert.
-// TODO: LAUNCH_GATE — revert to `INTERVAL ? DAY` + graceDays default = 7
-// before app store launch (or keep MINUTE and pass 10080 = 7*24*60).
-async function restoreDeleted(userId, graceMinutes = 5) {
+async function restoreDeleted(userId, graceMinutes = ACCOUNT_DELETION_GRACE_MINUTES) {
   const [result] = await pool.execute(
     `UPDATE users SET deleted_at = NULL
       WHERE id = ?
@@ -154,10 +197,7 @@ async function bumpTokenVersion(userId) {
 // are pending-delete simultaneously (mass event / migration), the DB
 // returns 100k rows and Node holds them all briefly before slicing.
 // Query-side LIMIT bounds memory usage upstream.
-// AUTH-2 (2026-08-11) TEST-MODE: findHardDeleteCandidates + hardDelete
-// use MINUTES not DAYS during the 5-minute cooling-off test window.
-// TODO: LAUNCH_GATE — revert to `INTERVAL ? DAY` + `INTERVAL 7 DAY` before app store launch.
-async function findHardDeleteCandidates(graceMinutes = 5) {
+async function findHardDeleteCandidates(graceMinutes = ACCOUNT_DELETION_GRACE_MINUTES) {
   const [rows] = await pool.execute(
     'SELECT id FROM users WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL ? MINUTE) LIMIT 1000',
     [graceMinutes]
@@ -174,16 +214,82 @@ async function findHardDeleteCandidates(graceMinutes = 5) {
 // the row's deleted_at is now NULL, hardDelete blindly kills the row
 // anyway. Now: gate the DELETE on the grace window — if the row was
 // restored inside the window, DELETE finds nothing (correct).
-// AUTH-2 (2026-08-11) TEST-MODE: gate switched from `INTERVAL 7 DAY`
-// to `INTERVAL ? MINUTE` (parameterized) — cron passes graceMinutes.
-// TODO: LAUNCH_GATE — revert to `INTERVAL ? DAY` + pass graceDays=7
-// before app store launch (or keep MINUTE and pass 10080).
-async function hardDelete(userId, graceMinutes = 5) {
-  const [result] = await pool.execute(
-    'DELETE FROM users WHERE id = ? AND deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)',
-    [userId, graceMinutes]
-  );
-  return result.affectedRows > 0;
+async function hardDelete(userId, graceMinutes = ACCOUNT_DELETION_GRACE_MINUTES) {
+  const conn = await pool.getConnection();
+  let exportPaths = [];
+  try {
+    await conn.beginTransaction();
+    // Lock and re-check the grace condition in the same transaction as the
+    // purge. A concurrent restore therefore wins cleanly or waits; it can
+    // never race between an eligibility SELECT and the final DELETE.
+    const [eligible] = await conn.execute(
+      `SELECT id, email FROM users
+        WHERE id = ?
+          AND deleted_at IS NOT NULL
+          AND deleted_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)
+        FOR UPDATE`,
+      [userId, graceMinutes],
+    );
+    if (!eligible[0]) {
+      await conn.rollback();
+      return false;
+    }
+
+    const email = String(eligible[0].email || '').toLowerCase();
+    const [exports] = await conn.execute(
+      'SELECT file_path FROM data_exports WHERE user_id = ? AND file_path IS NOT NULL',
+      [userId],
+    );
+    exportPaths = exports.map((row) => row.file_path).filter(Boolean);
+
+    // These historical/diagnostic tables either predate FK ownership or are
+    // intentionally nullable. Delete explicit account-owned references before
+    // the users row; all normal product tables then cascade from users.
+    await conn.execute('DELETE FROM unlocked_regions WHERE user_id = ?', [userId]);
+    await conn.execute('DELETE FROM idempotency_keys WHERE user_id = ?', [userId]);
+    await conn.execute('DELETE FROM abuse_signals WHERE user_id = ?', [userId]);
+    for (const [table, column] of OPTIONAL_OWNED_COLUMNS) {
+      await deleteOptionalOwnedRows(conn, table, column, userId);
+    }
+    await conn.execute('DELETE FROM telemetry_sessions WHERE owner_user_id = ?', [userId]);
+    // An actor's notification copy can contain their display name in title or
+    // body. Delete it instead of relying on actor_user_id SET NULL.
+    await conn.execute('DELETE FROM notification_log WHERE actor_user_id = ?', [userId]);
+    await conn.execute('DELETE FROM password_reset_email_events WHERE user_id = ?', [userId]);
+    if (email) {
+      await conn.execute('DELETE FROM password_reset_codes WHERE email = ?', [email]);
+      await conn.execute('DELETE FROM pending_registrations WHERE email = ?', [email]);
+    }
+
+    // File storage is outside MySQL. A hard deletion is successful only when
+    // its export files are already absent; otherwise roll the transaction back
+    // and let the sweep retry rather than orphaning personal data on disk.
+    await Promise.all(exportPaths.map((filePath) =>
+      fs.promises.unlink(filePath).catch((error) => {
+        if (error?.code !== 'ENOENT') throw error;
+      })
+    ));
+
+    const [result] = await conn.execute(
+      `DELETE FROM users
+        WHERE id = ?
+          AND deleted_at IS NOT NULL
+          AND deleted_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
+      [userId, graceMinutes],
+    );
+    if (result.affectedRows !== 1) {
+      await conn.rollback();
+      return false;
+    }
+    await conn.commit();
+  } catch (error) {
+    try { await conn.rollback(); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    conn.release();
+  }
+
+  return true;
 }
 
 async function hashPassword(plain) {
@@ -303,7 +409,7 @@ module.exports = {
   findByEmail, findById, createUser, createOAuthUser, setPassword,
   hashPassword, comparePassword, toPublic,
   // O18 batch 6.3
-  setDateOfBirth, softDelete, restoreDeleted, findHardDeleteCandidates, hardDelete,
+  setDateOfBirth, scheduleDeletion, restoreDeleted, findHardDeleteCandidates, hardDelete,
   bumpTokenVersion,
   // R114/O22 STORY-73006 (H2)
   setOnboardingDone,
