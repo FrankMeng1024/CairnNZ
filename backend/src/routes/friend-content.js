@@ -149,7 +149,9 @@ router.post('/encounters/verify', async (req, res) => {
                 evidence.source_activity_client_id
            FROM (
              SELECT witness.id, witness.first_lat AS lat, witness.first_lng AS lng,
-                    witness.first_observed_at_ms AS ts, witness.evidence_source,
+                    witness.first_observed_at_ms AS ts,
+                    CAST(witness.evidence_source AS CHAR CHARACTER SET utf8mb4)
+                      COLLATE utf8mb4_unicode_ci AS evidence_source,
                     witness.source_activity_client_id,
                     'presence_witness' AS evidence_kind
                FROM memory_presence_witnesses witness
@@ -158,7 +160,9 @@ router.post('/encounters/verify', async (req, res) => {
                 AND witness.horizontal_accuracy_m <= ?
              UNION ALL
              SELECT witness.id, witness.lat, witness.lng,
-                    witness.observed_at_ms AS ts, witness.evidence_source,
+                    witness.observed_at_ms AS ts,
+                    CAST(witness.evidence_source AS CHAR CHARACTER SET utf8mb4)
+                      COLLATE utf8mb4_unicode_ci AS evidence_source,
                     witness.source_activity_client_id,
                     'presence_witness' AS evidence_kind
                FROM memory_presence_witnesses witness
@@ -168,7 +172,9 @@ router.post('/encounters/verify', async (req, res) => {
                 AND witness.observed_at_ms > witness.first_observed_at_ms
              UNION ALL
              SELECT point.id, point.lat, point.lng, point.ts,
-                    point.evidence_source, point.source_activity_client_id,
+                    CAST(point.evidence_source AS CHAR CHARACTER SET utf8mb4)
+                      COLLATE utf8mb4_unicode_ci AS evidence_source,
+                    point.source_activity_client_id,
                     'legacy_coverage' AS evidence_kind
                FROM memory_points point
               WHERE point.user_id = ?
