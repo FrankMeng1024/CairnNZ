@@ -5,6 +5,12 @@ const crypto = require('crypto');
 const CELL_SIZE_M = 200;
 const MASK_RADIUS_M = 250;
 const EARTH_RADIUS_M = 6378137;
+const GROUND_EARTH_RADIUS_M = 6371008.8;
+// Cell edges are at most 200 EPSG:3857 metres. Across the NZ latitude
+// range, a local tangent-plane distance over a cell plus a 250 m mask has
+// sub-metre spherical approximation error. This explicit margin makes the
+// privacy predicate conservative at the numerical boundary.
+const MASK_DISTANCE_TOLERANCE_M = 1;
 
 function toMercator(lat, lng) {
   const clampedLat = Math.max(-85.05112878, Math.min(85.05112878, Number(lat)));
@@ -40,15 +46,39 @@ function cellPolygon(cell) {
   return [[sw.lng, sw.lat], [se.lng, se.lat], [ne.lng, ne.lat], [nw.lng, nw.lat], [sw.lng, sw.lat]];
 }
 
+function normalizedLongitudeDeltaDegrees(lng, originLng) {
+  return ((Number(lng) - Number(originLng) + 540) % 360) - 180;
+}
+
+/**
+ * Minimum ground distance from a point to the cell's geographic rectangle.
+ *
+ * The grid itself remains EPSG:3857 for stable cell identities. Privacy is
+ * different: its promised radius is a ground distance. Each small cell is
+ * projected into a local tangent plane centred on the protected point, with
+ * wrapped longitude deltas for the antimeridian. We compare the closest point
+ * on that rectangle using spherical ground metres, never Mercator metres.
+ */
+function minimumGroundDistanceToCellMeters(cell, point) {
+  const ring = cellPolygon(cell).slice(0, 4);
+  const latitudes = ring.map(coordinate => Number(coordinate[1]));
+  const longitudeDeltas = ring.map(coordinate => normalizedLongitudeDeltaDegrees(coordinate[0], point.lng));
+  const minLat = Math.min(...latitudes);
+  const maxLat = Math.max(...latitudes);
+  const minLngDelta = Math.min(...longitudeDeltas);
+  const maxLngDelta = Math.max(...longitudeDeltas);
+  const closestLat = Math.max(minLat, Math.min(maxLat, Number(point.lat)));
+  const closestLngDelta = Math.max(minLngDelta, Math.min(maxLngDelta, 0));
+  const radians = Math.PI / 180;
+  const northM = (closestLat - Number(point.lat)) * radians * GROUND_EARTH_RADIUS_M;
+  const eastM = closestLngDelta * radians * GROUND_EARTH_RADIUS_M
+    * Math.cos(Number(point.lat) * radians);
+  return Math.hypot(eastM, northM);
+}
+
 function cellIntersectsMask(cell, mask) {
-  const point = toMercator(mask.lat, mask.lng);
-  const minX = cell.x * CELL_SIZE_M;
-  const minY = cell.y * CELL_SIZE_M;
-  const maxX = minX + CELL_SIZE_M;
-  const maxY = minY + CELL_SIZE_M;
-  const closestX = Math.max(minX, Math.min(maxX, point.x));
-  const closestY = Math.max(minY, Math.min(maxY, point.y));
-  return Math.hypot(point.x - closestX, point.y - closestY) <= Math.max(MASK_RADIUS_M, Number(mask.radius_m || 0));
+  const radiusM = Math.max(MASK_RADIUS_M, Number(mask.radius_m || 0));
+  return minimumGroundDistanceToCellMeters(cell, mask) <= radiusM + MASK_DISTANCE_TOLERANCE_M;
 }
 
 async function deriveFriendProjection(db, ownerId, viewerId, grant) {
@@ -116,7 +146,14 @@ async function deriveFriendProjection(db, ownerId, viewerId, grant) {
     source_friend_id: String(ownerId),
     authorization_version: Number(grant.authorization_version),
     projection_version: projectionVersion,
+    // Kept for older clients. This is the EPSG:3857 grid interval, not a
+    // claim that every returned cell edge spans 200 ground metres.
     cell_size_m: CELL_SIZE_M,
+    cell_size_basis: 'EPSG:3857_projected_grid',
+    grid_cell_size_mercator_m: CELL_SIZE_M,
+    mask_radius_ground_m: MASK_RADIUS_M,
+    mask_distance_tolerance_m: MASK_DISTANCE_TOLERANCE_M,
+    mask_distance_model: 'local_tangent_ground_distance',
     cells: sortedCells.map(cell => ({
       id: cell.id,
       polygon: cellPolygon(cell),
@@ -124,4 +161,13 @@ async function deriveFriendProjection(db, ownerId, viewerId, grant) {
   };
 }
 
-module.exports = { CELL_SIZE_M, MASK_RADIUS_M, cellFor, cellPolygon, cellIntersectsMask, deriveFriendProjection };
+module.exports = {
+  CELL_SIZE_M,
+  MASK_RADIUS_M,
+  MASK_DISTANCE_TOLERANCE_M,
+  cellFor,
+  cellPolygon,
+  minimumGroundDistanceToCellMeters,
+  cellIntersectsMask,
+  deriveFriendProjection,
+};

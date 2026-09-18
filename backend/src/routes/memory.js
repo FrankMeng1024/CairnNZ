@@ -57,13 +57,11 @@ const pointsLimiter = rateLimit({
  */
 router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.points), async (req, res) => {
   const userId = req.user.userId;
-  const { points } = req.body;
+  const points = Array.isArray(req.body?.points) ? req.body.points : [];
+  const presenceWitnesses = Array.isArray(req.body?.presence_witnesses) ? req.body.presence_witnesses : [];
 
-  if (!Array.isArray(points)) {
-    return res.status(400).json({ error: 'points must be an array' });
-  }
-  if (points.length === 0) {
-    return res.json({ points: [] });
+  if (points.length === 0 && presenceWitnesses.length === 0) {
+    return res.json({ points: [], presence_witnesses: [] });
   }
   if (points.length > 1000) {
     return res.status(400).json({ error: 'batch too large (max 1000 points)' });
@@ -116,8 +114,41 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
     echo.push({ batch_index: i, ts: p.ts, cid });
   }
 
-  if (rows.length === 0) {
-    return res.json({ points: [] });
+  const presenceRows = [];
+  const presenceEcho = [];
+  for (const witness of presenceWitnesses) {
+    const firstObservedAtMs = Number(witness?.first_observed_at_ms);
+    const observedAtMs = Number(witness?.observed_at_ms);
+    const source = witness?.evidence_source;
+    const sourceActivityClientId = source === 'activity_real'
+      && typeof witness?.source_activity_client_id === 'string'
+      ? witness.source_activity_client_id
+      : null;
+    if (!Number.isFinite(firstObservedAtMs) || !Number.isInteger(firstObservedAtMs)
+      || !Number.isFinite(observedAtMs) || !Number.isInteger(observedAtMs)
+      || firstObservedAtMs <= 0 || observedAtMs < firstObservedAtMs || observedAtMs > tsUpperBound
+      || !['activity_real', 'passive_real'].includes(source)
+      || (source === 'activity_real' && !sourceActivityClientId)
+      || witness?.continuity_state !== 'accepted') continue;
+    presenceRows.push([
+      userId,
+      witness.cid,
+      witness.first_lat,
+      witness.first_lng,
+      firstObservedAtMs,
+      witness.lat,
+      witness.lng,
+      observedAtMs,
+      source,
+      sourceActivityClientId,
+      witness.horizontal_accuracy_m,
+      'accepted',
+    ]);
+    presenceEcho.push({ cid: witness.cid, observed_at_ms: observedAtMs });
+  }
+
+  if (rows.length === 0 && presenceRows.length === 0) {
+    return res.json({ points: [], presence_witnesses: [] });
   }
 
   try {
@@ -129,8 +160,9 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
     // The ON DUPLICATE clause is a no-op (`client_id=client_id`) — we
     // just need any expression so MySQL doesn't error on the conflict.
     // Then we SELECT the affected cids to confirm what really landed.
-    await pool.query(
-      `INSERT INTO memory_points
+    if (rows.length > 0) {
+      await pool.query(
+        `INSERT INTO memory_points
          (user_id, lat, lng, ts, client_id, evidence_source,
           source_activity_client_id, horizontal_accuracy_m, continuity_state)
        VALUES ?
@@ -144,12 +176,15 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
          continuity_state = CASE
            WHEN VALUES(continuity_state) = 'accepted' THEN 'accepted'
            ELSE continuity_state END`,
-      [rows]
-    );
+        [rows]
+      );
+    }
     // memory_points is already committed. Region attribution is a derived,
     // idempotent projection and must not block the source upload response.
-    const tsList = rows.map((r) => r[3]); // rows[i] = [user_id, lat, lng, ts, client_id]
-    scheduleMemoryAttribution(pool, userId, Math.min(...tsList), Math.max(...tsList));
+    if (rows.length > 0) {
+      const tsList = rows.map((r) => r[3]); // rows[i] = [user_id, lat, lng, ts, client_id]
+      scheduleMemoryAttribution(pool, userId, Math.min(...tsList), Math.max(...tsList));
+    }
     // Confirm storage by selecting back the cids we just inserted.
     const validEcho = echo.filter((e) => e !== null);
     const cidList = validEcho.map((e) => e.cid);
@@ -165,9 +200,40 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
       if (e === null) return null;
       return confirmedSet.has(e.cid) ? e : null;
     });
+    if (presenceRows.length > 0) {
+      await pool.query(
+        `INSERT INTO memory_presence_witnesses
+           (user_id, client_id, first_lat, first_lng, first_observed_at_ms,
+            lat, lng, observed_at_ms, evidence_source, source_activity_client_id,
+            horizontal_accuracy_m, continuity_state)
+         VALUES ?
+         ON DUPLICATE KEY UPDATE
+           first_lat = IF(VALUES(first_observed_at_ms) < first_observed_at_ms, VALUES(first_lat), first_lat),
+           first_lng = IF(VALUES(first_observed_at_ms) < first_observed_at_ms, VALUES(first_lng), first_lng),
+           first_observed_at_ms = LEAST(first_observed_at_ms, VALUES(first_observed_at_ms)),
+           lat = IF(VALUES(observed_at_ms) > observed_at_ms, VALUES(lat), lat),
+           lng = IF(VALUES(observed_at_ms) > observed_at_ms, VALUES(lng), lng),
+           horizontal_accuracy_m = IF(
+             VALUES(observed_at_ms) > observed_at_ms,
+             VALUES(horizontal_accuracy_m),
+             horizontal_accuracy_m
+           ),
+           observed_at_ms = GREATEST(observed_at_ms, VALUES(observed_at_ms))`,
+        [presenceRows],
+      );
+    }
+    const presenceCids = presenceEcho.map(entry => entry.cid);
+    const [confirmedPresenceRows] = presenceCids.length > 0
+      ? await pool.query(
+        'SELECT client_id FROM memory_presence_witnesses WHERE user_id = ? AND client_id IN (?)',
+        [userId, presenceCids],
+      )
+      : [[]];
+    const confirmedPresence = new Set(confirmedPresenceRows.map(row => row.client_id));
+    const finalPresenceEcho = presenceEcho.filter(entry => confirmedPresence.has(entry.cid));
     // O1: dropped accepted/duplicates/rejected — client 只用 points echo,
     // 三个数字纯 debug 遗留(memorySync 从不 read)。
-    return res.json({ points: finalEcho });
+    return res.json({ points: finalEcho, presence_witnesses: finalPresenceEcho });
   } catch (err) {
     console.error('[memory/points:insert]', err.message);
     return res.status(500).json({ error: 'Server error' });
@@ -268,10 +334,15 @@ router.delete('/points', authenticate, wipeLimiter, async (req, res) => {
       'DELETE FROM memory_points WHERE user_id = ?',
       [userId]
     );
+    const [presenceResult] = await conn.query(
+      'DELETE FROM memory_presence_witnesses WHERE user_id = ?',
+      [userId]
+    );
     await conn.commit();
     scheduleMemoryProjectionReset(pool, userId);
     return res.json({
       deleted: result.affectedRows ?? 0,
+      presence_witnesses_deleted: presenceResult.affectedRows ?? 0,
       unlocked_regions_deleted: regionsResult.affectedRows ?? 0,
     });
   } catch (err) {

@@ -355,8 +355,21 @@ const memoryPoints = Joi.object({
   // O1 batch 27 revert: 恢复 max=5000。POST /api/memory/points client 侧
   // MAX_BATCH=500 所以真实 batch 不会 >500,但 initial reveal 或 backfill
   // 可能一次 push 数千点,1000 太紧。
-  points: Joi.array().items(memoryPointObj).min(1).max(5000).required(),
-});
+  points: Joi.array().items(memoryPointObj).max(5000),
+  presence_witnesses: Joi.array().items(Joi.object({
+    cid: clientUuid.required(),
+    first_lat: lat.required(),
+    first_lng: lng.required(),
+    first_observed_at_ms: Joi.number().integer().min(1).required(),
+    lat: lat.required(),
+    lng: lng.required(),
+    observed_at_ms: Joi.number().integer().min(1).required(),
+    evidence_source: Joi.string().valid('activity_real', 'passive_real').required(),
+    source_activity_client_id: clientUuid.allow(null),
+    horizontal_accuracy_m: Joi.number().min(0).max(1000).required(),
+    continuity_state: Joi.string().valid('accepted').required(),
+  })).max(1000),
+}).or('points', 'presence_witnesses');
 
 module.exports = {
   marker: {

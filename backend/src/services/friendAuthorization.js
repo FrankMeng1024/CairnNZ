@@ -140,7 +140,8 @@ async function authorizedFriendCairn(db, viewerId, markerId, { includeHidden = f
     `SELECT m.id, m.user_id, m.type, m.text, m.lat, m.lng, m.alt,
             m.permission, m.approximate, m.created_at, m.updated_at,
             m.audience_epoch, u.name AS author_name,
-            encounter.created_at AS encountered_at, encounter.opened_at, encounter.hidden_at
+            encounter.created_at AS encountered_at, encounter.opened_at, encounter.hidden_at,
+            episode.id AS friendship_episode_id
        FROM friend_cairn_encounters encounter
        JOIN markers m
          ON m.id = encounter.marker_id
@@ -169,9 +170,14 @@ async function authorizedFriendRoute(db, viewerId, routeId, { includeHidden = fa
   const [rows] = await db.execute(
     `SELECT r.id, r.user_id, r.name, r.description, r.points, r.waypoints,
             r.distance_m, r.elevation_gain_m, r.permission, r.audience_epoch,
-            r.created_at, r.updated_at, u.name AS author_name
+            r.created_at, r.updated_at, u.name AS author_name,
+            episode.id AS friendship_episode_id
        FROM routes r
        JOIN friends f ON f.user_id = ? AND f.friend_id = r.user_id
+       JOIN friendship_episodes episode
+         ON episode.user_low_id = LEAST(f.user_id, f.friend_id)
+        AND episode.user_high_id = GREATEST(f.user_id, f.friend_id)
+        AND episode.ended_at IS NULL
        JOIN users u ON u.id = r.user_id AND u.deleted_at IS NULL
        LEFT JOIN hidden_items hidden
          ON hidden.user_id = ? AND hidden.item_type = 'route' AND hidden.item_id = r.id

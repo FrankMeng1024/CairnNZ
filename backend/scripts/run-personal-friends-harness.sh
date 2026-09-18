@@ -46,7 +46,12 @@ done
 
 DB_PORT="$(docker port "$CONTAINER" 3306/tcp | sed -E 's/.*:([0-9]+)$/\1/' | head -1)"
 docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$SCRIPT_DIR/personal-friends-harness/current-schema-fixture.sql"
-for migration in 035_settings_correctness.sql 036_route_origin_identity.sql 037_personal_friends_v1.sql; do
+for migration in \
+  035_settings_correctness.sql \
+  036_route_origin_identity.sql \
+  037_personal_friends_v1.sql \
+  038_memory_presence_witnesses.sql \
+  039_borrowed_route_terminal_ack.sql; do
   docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/$migration"
 done
 

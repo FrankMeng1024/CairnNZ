@@ -47,12 +47,14 @@ async function becomeFriends(requester, recipient) {
   await api(recipient, '/api/friends/accept', { method: 'POST', body: { requestId: Number(request.id) }, expected: 200 });
 }
 
-async function completeActivity(actor, { lat, lng, mode = 'hiking', pointCount = 7 }) {
+async function completeActivity(actor, {
+  lat, lng, mode = 'hiking', pointCount = 7, includeCoverage = true, lngStep = 0.003,
+}) {
   const clientActivityId = crypto.randomUUID();
   const startedAt = Date.now() + 1000;
   const points = Array.from({ length: pointCount }, (_, index) => ({
     lat,
-    lng: lng + index * 0.003,
+    lng: lng + index * lngStep,
     t: startedAt + index * 30_000,
     acc: 8,
   }));
@@ -76,11 +78,28 @@ async function completeActivity(actor, { lat, lng, mode = 'hiking', pointCount =
       name: `${actor.label} synthetic ${mode}`,
       route_points: points,
       route_points_raw: points,
-      memory_points: memory,
+      memory_points: includeCoverage ? memory : [],
     },
     expected: 200,
   });
-  assert.equal(save.body.memory.accepted, pointCount);
+  assert.equal(save.body.memory.accepted, includeCoverage ? pointCount : 0);
+  const witnesses = points.map((point) => ({
+    cid: crypto.randomUUID(),
+    first_lat: point.lat,
+    first_lng: point.lng,
+    first_observed_at_ms: point.t,
+    lat: point.lat,
+    lng: point.lng,
+    observed_at_ms: point.t,
+    evidence_source: 'activity_real',
+    source_activity_client_id: clientActivityId,
+    horizontal_accuracy_m: 8,
+    continuity_state: 'accepted',
+  }));
+  const presence = await api(actor, '/api/memory/points', {
+    method: 'POST', body: { presence_witnesses: witnesses }, expected: 200,
+  });
+  assert.equal(presence.body.presence_witnesses.length, pointCount);
   return { clientActivityId, sessionId: Number(start.body.id), points };
 }
 
@@ -114,10 +133,50 @@ async function main() {
     const [schemaRows] = await admin.query(
       `SELECT table_name FROM information_schema.tables
         WHERE table_schema=DATABASE() AND table_name IN
-          ('friendship_episodes','memory_share_grants','friend_cairn_encounters','shared_route_leases')`,
+          ('friendship_episodes','memory_share_grants','friend_cairn_encounters',
+           'shared_route_leases','memory_presence_witnesses')`,
     );
-    assert.equal(schemaRows.length, 4);
-    pass('DEP-01.schema', '035/036/037 applied on MySQL 8 and core 037 tables exist');
+    assert.equal(schemaRows.length, 5);
+    pass('DEP-01.schema', '035-039 applied on disposable MySQL 8 and additive presence/lease columns exist');
+
+    const returnLat = -45.031;
+    const returnLng = 168.662;
+    const firstReturnAt = Date.now() - 4 * 24 * 60 * 60 * 1000;
+    const laterReturnAt = Date.now() - 24 * 60 * 60 * 1000;
+    const returnCoverageCid = crypto.randomUUID();
+    const returnWitnessA = crypto.randomUUID();
+    const returnWitnessB = crypto.randomUUID();
+    const returnUpload = await api(actors.B, '/api/memory/points', {
+      method: 'POST',
+      body: {
+        points: [{
+          lat: returnLat, lng: returnLng, ts: firstReturnAt, cid: returnCoverageCid,
+          evidence_source: 'passive_real', horizontal_accuracy_m: 8, continuity_state: 'accepted',
+        }],
+        presence_witnesses: [{
+          cid: returnWitnessA, first_lat: returnLat, first_lng: returnLng,
+          first_observed_at_ms: firstReturnAt, lat: returnLat, lng: returnLng,
+          observed_at_ms: firstReturnAt, evidence_source: 'passive_real',
+          source_activity_client_id: null, horizontal_accuracy_m: 8, continuity_state: 'accepted',
+        }, {
+          cid: returnWitnessB, first_lat: returnLat, first_lng: returnLng,
+          first_observed_at_ms: laterReturnAt, lat: returnLat, lng: returnLng,
+          observed_at_ms: laterReturnAt, evidence_source: 'passive_real',
+          source_activity_client_id: null, horizontal_accuracy_m: 8, continuity_state: 'accepted',
+        }],
+      },
+      expected: 200,
+    });
+    assert.equal(returnUpload.body.presence_witnesses.length, 2);
+    const [[returnCounts]] = await admin.execute(
+      `SELECT
+         (SELECT COUNT(*) FROM memory_points WHERE user_id=? AND lat=? AND lng=?) AS coverage_n,
+         (SELECT COUNT(*) FROM memory_presence_witnesses WHERE user_id=? AND first_lat=? AND first_lng=?) AS presence_n`,
+      [actors.B.id, returnLat, returnLng, actors.B.id, returnLat, returnLng],
+    );
+    assert.equal(Number(returnCounts.coverage_n), 1);
+    assert.equal(Number(returnCounts.presence_n), 2);
+    pass('PF-R3.presence-return', 'same-place later-day presence stores two immutable witnesses alongside one exploration-coverage row');
 
     const [historicalPublicMarker] = await admin.execute(
       `INSERT INTO markers (user_id,type,text,lat,lng,permission,created_at,updated_at)
@@ -194,7 +253,9 @@ async function main() {
     const markerId = String(markerCreate.body.id);
     const beforeEvidence = await api(actors.B, '/api/friend-content/encounters/verify', { method: 'POST', body: {}, expected: 200 });
     assert.equal(beforeEvidence.body.encountered_marker_ids.includes(markerId), false);
-    await completeActivity(actors.B, { lat: -43.5321, lng: 172.6362, pointCount: 3 });
+    await completeActivity(actors.B, {
+      lat: -43.5321, lng: 172.6362, pointCount: 3, includeCoverage: false, lngStep: 0.00005,
+    });
     const encounter = await api(actors.B, '/api/friend-content/encounters/verify', { method: 'POST', body: {}, expected: 200 });
     assert.equal(encounter.body.encountered_marker_ids.includes(markerId), true);
     await api(actors.B, '/api/friend-content/encounters/verify', { method: 'POST', body: {}, expected: 200 });
@@ -203,8 +264,16 @@ async function main() {
       [actors.B.id, markerId],
     );
     assert.equal(Number(encounterCount.n), 1);
+    const [[encounterEvidence]] = await actorConnections.B.execute(
+      'SELECT evidence_kind,evidence_source FROM friend_cairn_encounters WHERE viewer_id=? AND marker_id=?',
+      [actors.B.id, markerId],
+    );
+    assert.equal(encounterEvidence.evidence_kind, 'presence_witness');
+    assert.equal(encounterEvidence.evidence_source, 'activity_real');
     const friendCairn = await api(actors.B, `/api/friend-content/cairns/${markerId}`, { expected: 200 });
     assert.equal(friendCairn.body.cairn.read_only, true);
+    assert.match(friendCairn.body.cairn.resource_revision, /^[0-9a-f]{64}$/);
+    assert.match(friendCairn.body.cairn.authorization_revision, /^friendship:/);
     await api(actors.D, `/api/friend-content/cairns/${markerId}`, { expected: 404 });
     await api(actors.B, `/api/markers/${markerId}`, { method: 'PUT', body: { text: 'viewer mutation' }, expected: 404 });
     pass('FR-10/FR-11.encounter', 'prospective canonical real evidence creates one idempotent encounter; non-friend denied and viewer cannot mutate');
@@ -218,6 +287,8 @@ async function main() {
     const routeId = String(routeCreate.body.route.id);
     const routeDetail = await api(actors.B, `/api/friend-content/routes/${routeId}`, { expected: 200 });
     assert.equal(routeDetail.body.route.read_only, true);
+    assert.match(routeDetail.body.route.resource_revision, /^[0-9a-f]{64}$/);
+    assert.match(routeDetail.body.route.authorization_revision, /^friendship:/);
     await api(actors.D, `/api/friend-content/routes/${routeId}`, { expected: 404 });
     const lease = await api(actors.B, `/api/friend-content/routes/${routeId}/lease`, { method: 'POST', body: {}, expected: 201 });
     await api(actors.A, `/api/routes/${routeId}`, { method: 'PUT', body: { permission: 'personal' }, expected: 200 });
@@ -233,17 +304,64 @@ async function main() {
     });
     const secondRouteId = String(secondRoute.body.route.id);
     const activeLease = await api(actors.B, `/api/friend-content/routes/${secondRouteId}/lease`, { method: 'POST', body: {}, expected: 201 });
+    assert.equal(activeLease.body.route.description, undefined);
+    assert.equal(activeLease.body.route.waypoints, undefined);
+    const activeActivityId = crypto.randomUUID();
     await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}/start`, {
-      method: 'POST', body: { client_activity_id: crypto.randomUUID() }, expected: 200,
+      method: 'POST', body: { client_activity_id: activeActivityId }, expected: 200,
+    });
+    await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}/start`, {
+      method: 'POST', body: { client_activity_id: activeActivityId }, expected: 200,
     });
     await api(actors.A, `/api/routes/${secondRouteId}`, { method: 'PUT', body: { permission: 'personal' }, expected: 200 });
     await api(actors.B, `/api/friend-content/routes/${secondRouteId}`, { expected: 404 });
     const safety = await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}`, { expected: 200 });
     assert.equal(safety.body.safety_snapshot, true);
     assert.ok(safety.body.route.points.length >= 2);
-    await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}/end`, { method: 'POST', body: {}, expected: 200 });
+    assert.equal(safety.body.route.description, undefined);
+    assert.equal(safety.body.route.waypoints, undefined);
+    const terminalBody = {
+      client_activity_id: activeActivityId, terminal: 'finished', ended_at_ms: Date.now(),
+    };
+    await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}/end`, {
+      method: 'POST', body: terminalBody, expected: 200,
+    });
+    const duplicateEnd = await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}/end`, {
+      method: 'POST', body: terminalBody, expected: 200,
+    });
+    assert.equal(duplicateEnd.body.idempotent, true);
+    const [[terminalRow]] = await admin.execute(
+      `SELECT start_acknowledged_at,end_acknowledged_at,terminal_reason
+         FROM shared_route_leases WHERE id=?`,
+      [activeLease.body.lease_id],
+    );
+    assert.ok(terminalRow.start_acknowledged_at);
+    assert.ok(terminalRow.end_acknowledged_at);
+    assert.equal(terminalRow.terminal_reason, 'finished');
     await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}`, { expected: 404 });
-    pass('FR-12.route-reference', 'pre-start revoke denies use; active immutable geometry survives revoke only until explicit Activity end');
+
+    const offlineRoute = await api(actors.A, '/api/routes', {
+      method: 'POST', body: {
+        client_route_id: crypto.randomUUID(), name: 'Issued offline use', permission: 'friend',
+        points: activityA.points, waypoints: [], distance_m: 1470, elevation_gain_m: 42,
+      }, expected: 201,
+    });
+    const offlineRouteId = String(offlineRoute.body.route.id);
+    const offlineLease = await api(actors.B, `/api/friend-content/routes/${offlineRouteId}/lease`, { method: 'POST', body: {}, expected: 201 });
+    const offlineStartedAt = Date.now();
+    await api(actors.A, `/api/routes/${offlineRouteId}`, { method: 'PUT', body: { permission: 'personal' }, expected: 200 });
+    const offlineActivityId = crypto.randomUUID();
+    await api(actors.B, `/api/friend-content/route-leases/${offlineLease.body.lease_id}/start`, {
+      method: 'POST',
+      body: { client_activity_id: offlineActivityId, started_at_ms: offlineStartedAt },
+      expected: 200,
+    });
+    await api(actors.B, `/api/friend-content/route-leases/${offlineLease.body.lease_id}/end`, {
+      method: 'POST',
+      body: { client_activity_id: offlineActivityId, terminal: 'discarded', ended_at_ms: Date.now() },
+      expected: 200,
+    });
+    pass('FR-12.route-reference', 'connected revoke denies new use; an in-window issued offline use binds one Activity, retains only minimal geometry, and terminal ACK is idempotent');
 
     const [[firstGrant]] = await admin.execute(
       `SELECT grant_epoch FROM memory_share_grants WHERE owner_id=? AND viewer_id=? ORDER BY id ASC LIMIT 1`,
