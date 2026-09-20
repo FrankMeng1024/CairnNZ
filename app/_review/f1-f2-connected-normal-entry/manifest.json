@@ -1,0 +1,135 @@
+{
+  "schema": "cairnnz.f1-f2.connected-normal-entry.loaded-web.v1",
+  "generatedAt": "2026-09-20T04:57:38.921Z",
+  "candidateFingerprint": {
+    "algorithm": "sha256",
+    "digest": "ad38683552f1f35d2ea973d306796ca589acca8f0117e8aaff3939d39d36e40a",
+    "fileCount": 639,
+    "scope": [
+      "app/src",
+      "app/scripts",
+      "app/package.json",
+      "app/package-lock.json",
+      "backend/src",
+      "backend/scripts",
+      "backend/package.json",
+      "backend/package-lock.json"
+    ]
+  },
+  "verdict": "FAIL",
+  "evidenceBoundary": {
+    "renderer": "Loaded Expo Web at mobile viewport",
+    "fixtureApis": true,
+    "fixtureMapMatching": true,
+    "realApiOrMysql": false,
+    "nativeOrPhysicalDevice": false,
+    "nativeGpsOrFieldEvidence": false,
+    "actualHandlersAndNavigation": true,
+    "note": "The matching response is deterministic synthetic geometry; the real RouteEditor Beautify/Apply/Save handlers consume it."
+  },
+  "environment": {
+    "baseUrl": "http://127.0.0.1:8081",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "locale": "en-NZ",
+    "timezone": "Pacific/Auckland",
+    "qaNamespace": "f1-f2-52371",
+    "fixtureUserId": "9902",
+    "fixtureUserEmail": "f1-f2-52371@example.invalid",
+    "browserProfileDir": "/var/folders/lq/z8p65nfs3c5bxyxyyp9784th0000gn/T/cairn-f1-f2-52371-chrome-profile"
+  },
+  "source": {
+    "authority": "O55 R-GPS-02",
+    "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+    "seed": 550202,
+    "origin": {
+      "lat": -41.2865,
+      "lng": 174.7762
+    },
+    "speedKmh": 4.68,
+    "physicalPauseSeconds": 8,
+    "localVerticesM": [
+      [
+        0,
+        0
+      ],
+      [
+        70,
+        12
+      ],
+      [
+        86,
+        48
+      ],
+      [
+        48,
+        48
+      ],
+      [
+        65,
+        48
+      ],
+      [
+        110,
+        48
+      ]
+    ]
+  },
+  "flow": [],
+  "stages": [],
+  "identities": {},
+  "api": {
+    "requestCount": 0,
+    "startedClientActivityId": null,
+    "savedActivityClientId": null,
+    "markerCreateClientId": null,
+    "markerOriginActivityClientId": null,
+    "routeCreateClientId": null,
+    "routeSourceActivityClientId": null,
+    "routeUpdateCount": 0,
+    "fixtureMatchingCalls": 0
+  },
+  "assertions": {
+    "loadedJourneyCompleted": false,
+    "noUnexpectedApiRequests": true,
+    "runtimeClean": false
+  },
+  "failed": [
+    "loadedJourneyCompleted",
+    "runtimeClean"
+  ],
+  "terminalError": {
+    "step": "boot",
+    "message": "page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:8081/\nCall log:\n\u001b[2m  - navigating to \"http://127.0.0.1:8081/\", waiting until \"domcontentloaded\"\u001b[22m\n",
+    "stack": "page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:8081/\nCall log:\n\u001b[2m  - navigating to \"http://127.0.0.1:8081/\", waiting until \"domcontentloaded\"\u001b[22m\n\n    at runLoadedJourney (/Users/mzm/Desktop/cairn/CairnNZ/app/scripts/f1-f2-connected-normal-entry-qa.mjs:739:16)\n    at async file:///Users/mzm/Desktop/cairn/CairnNZ/app/scripts/f1-f2-connected-normal-entry-qa.mjs:128:3"
+  },
+  "runtimeErrors": [
+    "requestfailed [boot] GET document http://127.0.0.1:8081/: net::ERR_CONNECTION_REFUSED"
+  ],
+  "networkDiagnostics": {
+    "externalRequests": [],
+    "unexpectedExternalRequests": [],
+    "unexpectedApiRequests": [],
+    "failedRequests": [
+      {
+        "at": "2026-09-20T04:57:40.939Z",
+        "step": "boot",
+        "method": "GET",
+        "resourceType": "document",
+        "url": "http://127.0.0.1:8081/",
+        "error": "net::ERR_CONNECTION_REFUSED"
+      }
+    ],
+    "httpErrors": []
+  },
+  "consoleNotes": [],
+  "captures": [],
+  "artifacts": {
+    "trace": "trace.zip",
+    "requests": "requests.json",
+    "networkDiagnostics": "network-diagnostics.json",
+    "runtimeErrors": "runtime-errors.txt"
+  }
+}

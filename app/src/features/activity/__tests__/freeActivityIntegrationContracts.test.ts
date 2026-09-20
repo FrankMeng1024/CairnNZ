@@ -53,6 +53,20 @@ describe('Free Activity integration contracts', () => {
     expect(modal).toContain('disabled={data.saveEligible === false}');
   });
 
+  test('borrowed friend Route geometry is durable only for unfinished Activity recovery', () => {
+    const store = read('src/store/useTrackingStore.ts');
+    const registry = read('src/features/activity/activityRegistry.ts');
+    const recovery = read('src/features/activity/activityRecovery.ts');
+    expect(store).toContain('borrowedRouteReference: captureBorrowedRouteForRecovery()');
+    expect(registry).toContain('borrowedRouteReference?: ActivityRouteReference');
+    expect(recovery).toContain('publishRecoveredBorrowedRoute(activity.borrowedRouteReference)');
+    expect(recovery).toContain('publishRecoveredBorrowedRoute();');
+    expect(store).toContain("await clearActivityRouteReferenceAfterTerminal('finished')");
+    expect(store).toContain("await clearActivityRouteReferenceAfterTerminal('discarded')");
+    expect(store).toContain('clearActivityRouteReferenceForAccountBoundary()');
+    expect(store).toContain('await finalizeBorrowedRouteUse(reference.borrowedUse, terminal)');
+  });
+
   test('a failed durable completion remains paused and explains that Save did not complete', () => {
     const source = read('src/store/useTrackingStore.ts');
     const failure = source.slice(
@@ -267,7 +281,7 @@ describe('Free Activity integration contracts', () => {
     expect(source).toContain('const sourceSegments = canonicalSegments');
     expect(source).toContain('const snapRes = await reconstructPedestrianFinalRoute(canonicalInput');
     expect(source).toContain('for (const point of s.trackPoints)');
-    expect(source).toContain("source: 'activity'");
+    expect(source).toContain("'simulator_test' : 'activity_real'");
     expect(source).not.toContain('for (const point of finalDisplayTrackPoints)');
   });
 
@@ -370,10 +384,12 @@ describe('Free Activity integration contracts', () => {
   test('committed Cairn outbox includes stable identity provenance before UI cache', () => {
     const source = read('src/store/useMarkerStore.ts');
     const payload = source.indexOf('const payload: MarkerCreatePayload');
-    const durableSave = source.indexOf('await offlineMarkers.saveLocal(payload)', payload);
-    const cacheWrite = source.indexOf('storage.setItem(storageKey(s.userId)', durableSave);
+    const durableSave = source.indexOf('await offlineMarkers.saveLocal(payload, ownerId)', payload);
+    const cacheWrite = source.indexOf('storage.setItem(storageKey(ownerId)', durableSave);
+    expect(payload).toBeGreaterThan(-1);
+    expect(durableSave).toBeGreaterThan(payload);
+    expect(cacheWrite).toBeGreaterThan(durableSave);
     expect(source.slice(payload, durableSave)).toContain('originActivityClientId: activeActivityClientId');
-    expect(durableSave).toBeLessThan(cacheWrite);
   });
 
   test('movement owns Memory evidence and Plant cannot reveal unexplored terrain', () => {
@@ -484,6 +500,13 @@ describe('Free Activity integration contracts', () => {
     const cairn = read('src/services/markerOfflineEntities.ts');
     expect(activity).not.toMatch(/attemptCount\s*[>=]{1,2}\s*8[\s\S]{0,120}removePending/);
     expect(cairn).toContain('retainOnPermanentFailure: true');
+  });
+
+  test('Cairn outbox sends only the strict marker API fields', () => {
+    const cairn = read('src/services/markerOfflineEntities.ts');
+    expect(cairn).toContain('never spread');
+    expect(cairn).toContain('type, text, lat, lng, alt, permission, approximate, originActivityClientId');
+    expect(cairn).not.toContain('...marker,');
   });
 
   test('Activity Detail renders real segments with true gaps disconnected', () => {

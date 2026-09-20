@@ -16,6 +16,7 @@ import {
   Alert, Animated, Easing, Linking,
 } from 'react-native';
 import { haptic } from '../services/hapticService';
+import { uuidv4 } from '../services/offlineQueue';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { useNavigation, useRoute, CommonActions, useFocusEffect, useIsFocused } from '@react-navigation/native';
@@ -26,6 +27,10 @@ import { useTrackingStore } from '../store/useTrackingStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { useRouteStore } from '../store/useRouteStore';
 import { routeMatchesIdentity } from '../features/route/routeContracts';
+import {
+  authorizeBorrowedRouteStart,
+  finalizeBorrowedRouteUse,
+} from '../features/friends/services/friendContent';
 import { getCurrentRegion } from '../config/regions';
 import { formatDuration, haversineM } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
@@ -118,6 +123,8 @@ export function HikingScreen() {
   const nav = useNavigation<Nav>();
   const entryRoute = useRoute<any>();
   const requestedRouteId = entryRoute.params?.routeId as string | undefined;
+  const sharedRouteLease = entryRoute.params?.sharedRouteLease as any;
+  const sharedRouteKey = sharedRouteLease ? `shared:${sharedRouteLease.leaseId}` : null;
   const isFocused = useIsFocused();
   useFocusEffect(
     React.useCallback(() => {
@@ -303,13 +310,14 @@ export function HikingScreen() {
   // avoids racing with useTrackingStore.stopTracking's own lastStopReason
   // pathway and always shows the confirmation sheet before any teardown.
   const [showTooShortConfirm, setShowTooShortConfirm] = useState(false);
-  const [selectedRoute, setSelectedRoute] = useState<string | null>(requestedRouteId ?? null);
+  const [selectedRoute, setSelectedRoute] = useState<string | null>(sharedRouteKey ?? requestedRouteId ?? null);
 
   const routes = useRouteStore(s => s.routes);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
   const activityRouteReference = useRouteStore(s => s.activityRouteReference);
   const captureActivityRouteReference = useRouteStore(s => s.captureActivityRouteReference);
+  const captureExternalActivityRouteReference = useRouteStore(s => s.captureExternalActivityRouteReference);
   const clearActivityRouteReference = useRouteStore(s => s.clearActivityRouteReference);
   const isTracking = status === 'tracking';
   // v120: paused state behaves like tracking for layout purposes (the
@@ -343,6 +351,9 @@ export function HikingScreen() {
     if (!requestedRouteId) return;
     setSelectedRoute(requestedRouteId);
   }, [requestedRouteId]);
+  useEffect(() => {
+    if (sharedRouteKey) setSelectedRoute(sharedRouteKey);
+  }, [sharedRouteKey]);
   useEffect(() => {
     const selected = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
     if (!selected || selected.points.length >= 2) return;
@@ -610,14 +621,40 @@ export function HikingScreen() {
       setUnfinishedResolutionRequested(true);
       return;
     }
-    if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
+    const usingSharedRoute = Boolean(sharedRouteLease && selectedRoute === sharedRouteKey);
+    let requestedActivityId: string | undefined;
+    let borrowedUse: Awaited<ReturnType<typeof authorizeBorrowedRouteStart>>['identity'] | undefined;
+    if (usingSharedRoute) {
+      requestedActivityId = uuidv4();
+      try {
+        borrowedUse = (await authorizeBorrowedRouteStart(sharedRouteLease, requestedActivityId)).identity;
+      } catch (error: any) {
+        Alert.alert(
+          'Shared Route unavailable',
+          error?.code === 'expired'
+            ? 'The offline use authorization has expired. Connect and reopen this Route from your friend.'
+            : 'Connect and reopen this Route from your friend before starting.',
+        );
+        return;
+      }
+      captureExternalActivityRouteReference({
+        routeId: `friend:${sharedRouteLease.routeId}:${sharedRouteLease.leaseId}`,
+        name: sharedRouteLease.name,
+        points: sharedRouteLease.points,
+        distanceM: sharedRouteLease.distanceM,
+        elevationGainM: sharedRouteLease.elevationGainM,
+        capturedAt: Date.now(),
+        borrowedUse,
+      });
+    } else if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
       Alert.alert('Route unavailable', 'This Route is not ready on this device yet.');
       return;
     }
     if (!selectedRoute) clearActivityRouteReference();
-    const started = await startTracking();
+    const started = await startTracking(requestedActivityId);
     if (!started) {
       clearActivityRouteReference();
+      if (borrowedUse) await finalizeBorrowedRouteUse(borrowedUse, 'discarded').catch(() => {});
       const authoritative = await findRecoverableActivity('hiking');
       if (authoritative) {
         setUnfinished(authoritative);
@@ -872,7 +909,9 @@ export function HikingScreen() {
     closeRoutePicker();
   };
 
-  const selectedRouteName = routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Hike';
+  const selectedRouteName = sharedRouteLease && selectedRoute === sharedRouteKey
+    ? sharedRouteLease.name
+    : routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Hike';
 
   // v412: 两个 return 分支 (phase='select' early return + Phase 2 主 return) 都需要挂
   // UnfinishedRecoveryModal, 抽成一个 node 避免复制粘贴导致 onContinue/onDiscard 逻辑分叉。
@@ -966,7 +1005,7 @@ export function HikingScreen() {
   const activeRoute = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
   const routePolyline = activitySessionVisible && activityRouteReference
     ? activityRouteReference.points
-    : (activeRoute?.points ?? []);
+    : (sharedRouteLease && selectedRoute === sharedRouteKey ? sharedRouteLease.points : (activeRoute?.points ?? []));
   const hikeMapSurface = (
     <HikingMap
       key="hike-map-surface"

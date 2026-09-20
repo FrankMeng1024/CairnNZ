@@ -3,6 +3,10 @@ const mockOrder: string[] = [];
 jest.mock('../../../store/useTrackingStore', () => ({
   useTrackingStore: { setState: jest.fn(), getState: jest.fn() },
 }));
+const mockRouteSetState = jest.fn();
+jest.mock('../../../store/useRouteStore', () => ({
+  useRouteStore: { setState: mockRouteSetState },
+}));
 jest.mock('../../../services/hikeTrackWriter', () => ({
   discardActiveHike: jest.fn(async () => { mockOrder.push('journal-delete'); }),
   listActiveHikes: jest.fn(async () => []),
@@ -83,9 +87,10 @@ describe('Activity journal as crash-recoverable Memory intent', () => {
       lng: 174,
       atMs: 1_000,
       ownerUserId: 'account-a',
-      source: 'reconciliation',
+      source: 'activity_real',
     }));
     expect(mockOrder).toEqual(['fence', 'memory', 'memory-flush', 'tombstone', 'pending-delete', 'journal-delete']);
+    expect(mockRouteSetState).toHaveBeenCalledWith({ activityRouteReference: null });
   });
 
   test('Memory persistence failure preserves the recoverable Activity journal', async () => {

@@ -66,7 +66,21 @@ export interface PendingHike {
       segment_id?: string;
       segment_start_reason?: PendingSegmentStartReason;
     }>;
-    memory_points: Array<{ lat: number; lng: number; ts: number; cid?: string }>;
+    route_points_canonical: Array<{
+      lat: number;
+      lng: number;
+      t: number;
+      segment_id?: string;
+      segment_start_reason?: PendingSegmentStartReason;
+    }>;
+    memory_points: Array<{
+      lat: number; lng: number; ts: number; cid?: string;
+      evidence_source?: 'activity_real' | 'passive_real' | 'historical_unknown';
+      source_activity_client_id?: string;
+      source_segment_id?: string;
+      horizontal_accuracy_m?: number;
+      continuity_state?: 'accepted' | 'gap' | 'unknown';
+    }>;
   };
   createdAt: number;
   lastAttemptAt: number | null;

@@ -171,6 +171,35 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
     expect(useTrackingStore.getState().trackPoints).toHaveLength(1);
   });
 
+  it('M-LIVE-01 commits real Memory from the accepted-point handler before Finish or a server Activity ID', async () => {
+    const recordMemoryEvidence = require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence;
+    const callsBefore = recordMemoryEvidence.mock.calls.length;
+
+    const decision = await useTrackingStore.getState().addTrackPoint({
+      lat: -45.0312,
+      lng: 168.6626,
+      accuracy: 6,
+      speed: 1.2,
+      source: 'foreground',
+      clientActivityId: '11111111-1111-4111-8111-111111111111',
+      ownerGeneration: 'test-owner-generation',
+    }, 1_000);
+
+    expect(decision).toMatchObject({ accepted: true, memoryCommitted: true });
+    expect(useTrackingStore.getState()).toMatchObject({
+      status: 'tracking',
+      remoteSessionId: null,
+    });
+    expect(recordMemoryEvidence.mock.calls.length).toBe(callsBefore + 1);
+    expect(recordMemoryEvidence).toHaveBeenLastCalledWith(expect.objectContaining({
+      source: 'activity_real',
+      ownerUserId: 'tracking-test-user',
+      sourceActivityClientId: '11111111-1111-4111-8111-111111111111',
+      atMs: 1_000,
+      continuityState: 'accepted',
+    }));
+  });
+
   it('skips a duplicate fix with same timestamp at same coords (the 3× bug)', async () => {
     await useTrackingStore.getState().addTrackPoint({ lat: 1, lng: 2 }, 1000);
     await useTrackingStore.getState().addTrackPoint({ lat: 1, lng: 2 }, 1000);
@@ -296,7 +325,7 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
     expect(state.distanceM).toBeLessThan(40);
     const memoryCalls = require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence.mock.calls
       .map((call: any[]) => call[0])
-      .filter((item: any) => item.source === 'activity');
+      .filter((item: any) => item.source === 'activity_real');
     expect(memoryCalls.slice(-fixes.length).map((item: any) => item.lat)).toEqual(fixes.map(item => item.lat));
   });
 
@@ -482,14 +511,14 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
     seedSimulatorActivity();
   });
 
-  it('journals an accepted Simulator sample and commits Memory through normal authorities', async () => {
+  it('journals an accepted Simulator sample into the isolated QA Memory realm', async () => {
     const decision = await useTrackingStore.getState().addTrackPoint(sample(), 1_000);
     expect(decision).toMatchObject({ accepted: true, reason: 'accepted', memoryCommitted: true });
     expect(require('../src/services/hikeTrackWriter').appendHikePoint).toHaveBeenCalledWith(
       expect.objectContaining({ src: 'sim', clientActivityId: 'simulator-activity' }),
     );
     expect(require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'activity', ownerUserId: 'tracking-test-user' }),
+      expect.objectContaining({ source: 'simulator_test', ownerUserId: 'tracking-test-user' }),
     );
   });
 
@@ -739,7 +768,7 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
     }
     const activityEvidenceTimes = recordMemoryEvidence.mock.calls
       .map((call: any[]) => call[0])
-      .filter((args: any) => args.source === 'activity')
+      .filter((args: any) => args.source === 'simulator_test')
       .map((args: any) => args.atMs);
     expect(activityEvidenceTimes).toEqual([...activityEvidenceTimes].sort((a, b) => a - b));
     expect(new Set(activityEvidenceTimes).size).toBe(activityEvidenceTimes.length);
@@ -1060,5 +1089,30 @@ describe('useTrackingStore — P0 operation guards', () => {
     }, 2_000);
     expect(useTrackingStore.getState()).toMatchObject({ status: 'idle', sessionId: null });
     expect(useTrackingStore.getState().trackPoints).toHaveLength(0);
+  });
+
+  it('scopes a late Cairn link to the exact initiating Activity generation', () => {
+    useTrackingStore.setState({
+      status: 'tracking',
+      sessionId: 'activity-s2',
+      ownerUserId: 'tracking-test-user',
+      liveOwnerGeneration: 'generation-s2',
+      markerIds: [],
+    });
+    const lateS1Link = (useTrackingStore.getState().linkMarker as any)('cairn-s1', {
+      ownerUserId: 'tracking-test-user',
+      clientActivityId: 'activity-s1',
+      ownerGeneration: 'generation-s1',
+    });
+    expect(lateS1Link).toBe(false);
+    expect(useTrackingStore.getState().markerIds).toEqual([]);
+
+    const currentS2Link = (useTrackingStore.getState().linkMarker as any)('cairn-s2', {
+      ownerUserId: 'tracking-test-user',
+      clientActivityId: 'activity-s2',
+      ownerGeneration: 'generation-s2',
+    });
+    expect(currentS2Link).toBe(true);
+    expect(useTrackingStore.getState().markerIds).toEqual(['cairn-s2']);
   });
 });

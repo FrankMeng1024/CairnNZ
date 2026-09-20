@@ -1,0 +1,2017 @@
+[
+  {
+    "at": "2026-09-20T04:34:10.520Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878850476,
+          "tag": "boot.navigator_module_loaded",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 2
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:10.534Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878850485,
+          "tag": "boot.module_loaded",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 11,
+            "ota": "O60"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:10.535Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878850488,
+          "tag": "boot.after_webbrowser_init",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:10.536Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878850489,
+          "tag": "boot.before_initMapbox",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 15
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:10.537Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878850491,
+          "tag": "boot.after_mapbox_init",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 17
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:10.538Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878850493,
+          "tag": "boot.before_register_bg_task",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 19
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:10.539Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878850502,
+          "tag": "boot.after_register_bg_task",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 28
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.274Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853522,
+          "tag": "boot.render_wait_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3048
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.446Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853602,
+          "tag": "boot.ue_main_enter",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3128
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.450Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853604,
+          "tag": "boot.ue_main_before_crashlogger_install",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3130
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.453Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853605,
+          "tag": "boot.after_crashlogger_install",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3131
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.453Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853606,
+          "tag": "boot.after_ar_removal_noop",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3132
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.454Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853609,
+          "tag": "boot.ue_main_before_hydrate_settings",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3135
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.455Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853610,
+          "tag": "boot.ue_main_after_hydrate_settings",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3136
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.456Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853612,
+          "tag": "boot.ue_main_before_memorysettings_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3138
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.456Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853618,
+          "tag": "boot.ue_main_after_memorysettings_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3144
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.457Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853619,
+          "tag": "boot.ue_main_before_app_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3145
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.458Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853622,
+          "tag": "boot.ue_main_after_app_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3148
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.459Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853623,
+          "tag": "boot.ue_main_before_debuglogger_configure",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3149
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.467Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853624,
+          "tag": "boot.ue_main_after_debuglogger_configure",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3150
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.476Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853626,
+          "tag": "boot.ue_main_before_networkmonitor_start",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3152
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.477Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853627,
+          "tag": "boot.ue_main_after_networkmonitor_start",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3153
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.477Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853629,
+          "tag": "boot.ue_main_before_telemetry_uploader_init",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3155
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.491Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853634,
+          "tag": "boot.ue_main_after_telemetry_uploader_init",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3160
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.526Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853636,
+          "tag": "boot.ue_main_before_audio_ducking",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3162
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.556Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853648,
+          "tag": "boot.ue_main_after_audio_ducking",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3174
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.556Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853651,
+          "tag": "boot.ue_main_before_offline_queue",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3177
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.557Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853655,
+          "tag": "boot.ue_main_before_getflags",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3181
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.568Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853656,
+          "tag": "boot.ue_main_after_getflags",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3182
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.571Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853657,
+          "tag": "boot.ue_main_before_route_cleanup_iife",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3183
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.571Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853658,
+          "tag": "boot.ue_main_route_cleanup_iife_enter",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3184
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.573Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853661,
+          "tag": "boot.ue_main_before_appstate_listener",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3187
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.574Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853666,
+          "tag": "boot.ue_main_exit",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3192
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.585Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853669,
+          "tag": "boot.boot_complete",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3195,
+            "ota": "O60"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.585Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853672,
+          "tag": "boot.render_wait_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3198
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:15.586Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878853708,
+          "tag": "boot.render_wait_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 3234
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:16.258Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878855954,
+          "tag": "boot.render_wait_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 5480
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:16.556Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878856462,
+          "tag": "boot.ota_runtime_info",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 5988,
+            "updateId": "embedded",
+            "channel": "",
+            "runtimeVersion": "",
+            "ota_version": "O60",
+            "emergency": false,
+            "launch_ms": null
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:19.704Z",
+    "step": "boot",
+    "method": "GET",
+    "pathname": "/api/markers",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T04:34:20.556Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860092,
+          "tag": "boot.render_after_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9618
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.573Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860093,
+          "tag": "boot.render_after_fonts",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9619
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.574Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860094,
+          "tag": "boot.render_about_to_mount_root",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9620
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.587Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860102,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9628,
+            "isLoggedIn": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.593Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860104,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9630
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.594Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860140,
+          "tag": "boot.auth_screen_render_start",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9666
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.596Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860147,
+          "tag": "boot.auth_screen_after_splash_refs",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9673
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.599Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860151,
+          "tag": "boot.auth_screen_after_all_state",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9677
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.600Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860221,
+          "tag": "boot.auth_view_effect",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9747,
+            "view": "splash"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.601Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860233,
+          "tag": "boot.navigation_container_ready",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9759,
+            "isLoggedIn": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.603Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860257,
+          "tag": "boot.auth_screen_render_start",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9783
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.605Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860259,
+          "tag": "boot.auth_screen_after_splash_refs",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9785
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:20.606Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860269,
+          "tag": "boot.auth_screen_after_all_state",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9795
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.052Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860938,
+          "tag": "boot.render_after_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10464
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.054Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860941,
+          "tag": "boot.render_after_fonts",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10467
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.057Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860942,
+          "tag": "boot.render_about_to_mount_root",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10468
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.058Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860944,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10470,
+            "isLoggedIn": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.058Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860946,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10472
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.066Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878860993,
+          "tag": "boot.memhydrate_entry",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10519
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.067Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861001,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10527,
+            "isLoggedIn": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.069Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861002,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10528
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.069Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861014,
+          "tag": "boot.render_after_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10540
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.071Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861019,
+          "tag": "boot.render_after_fonts",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10545
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.071Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861020,
+          "tag": "boot.render_about_to_mount_root",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10546
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.072Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861021,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10547,
+            "isLoggedIn": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.077Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861023,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10549
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.079Z",
+    "step": "boot",
+    "method": "GET",
+    "pathname": "/api/public-cairns/capabilities",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T04:34:21.080Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861037,
+          "tag": "boot.pull_memory_entry",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10563,
+            "reconcile": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.086Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861041,
+          "tag": "boot.pull_memory_before_fetch",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10567,
+            "page": 0
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.094Z",
+    "step": "boot",
+    "method": "GET",
+    "pathname": "/api/memory/points",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T04:34:21.143Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861140,
+          "tag": "boot.pull_memory_after_fetch",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10666,
+            "page": 0,
+            "ok": true,
+            "status": 200
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.282Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861223,
+          "tag": "boot.pull_memory_after_parse",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10749,
+            "page": 0,
+            "n": 0
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.285Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861224,
+          "tag": "boot.pull_memory_pages_done",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10750,
+            "total": 0,
+            "aborted": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.286Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861224,
+          "tag": "boot.replacepoints_entry",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10750,
+            "points_n": 0
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.287Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861225,
+          "tag": "boot.replacepoints_after_set",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10751
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.402Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861333,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10859,
+            "isLoggedIn": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:21.404Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878861333,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 10859
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:22.301Z",
+    "step": "home-to-hike",
+    "method": "GET",
+    "pathname": "/api/routes",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T04:34:22.486Z",
+    "step": "home-to-hike",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "api.req",
+          "ts": 1789878859254,
+          "session_id": "mu9bnjnw-j4sky2fv",
+          "ctx": {
+            "id": "s1ftqm",
+            "method": "GET",
+            "path": "/api/markers",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.req",
+          "ts": 1789878861035,
+          "session_id": "mu9bnjnw-j4sky2fv",
+          "ctx": {
+            "id": "b3jtpe",
+            "method": "GET",
+            "path": "/api/public-cairns/capabilities",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory_sync.attach_epoch_bump",
+          "ts": 1789878861037,
+          "session_id": "mu9bnjnw-j4sky2fv",
+          "ctx": {
+            "from": 0,
+            "to": 1,
+            "prev_active": null
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.req",
+          "ts": 1789878861042,
+          "session_id": "mu9bnjnw-j4sky2fv",
+          "ctx": {
+            "id": "wscde8",
+            "method": "GET",
+            "path": "/api/memory/points?after_ts=0&after_cid=&until=1789878861041&limit=10000",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "o41.pull_memory_reconcile_server_empty",
+          "ts": 1789878861224,
+          "session_id": "mu9bnjnw-j4sky2fv",
+          "ctx": {
+            "local_n": 0,
+            "unsynced_n": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.req",
+          "ts": 1789878862291,
+          "session_id": "mu9bnjnw-j4sky2fv",
+          "ctx": {
+            "id": "3obn50",
+            "method": "GET",
+            "path": "/api/routes",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:22.640Z",
+    "step": "home-to-hike",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878862542,
+          "tag": "boot.render_after_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 12068
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:22.655Z",
+    "step": "home-to-hike",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878862542,
+          "tag": "boot.render_after_fonts",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 12068
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:22.656Z",
+    "step": "home-to-hike",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878862543,
+          "tag": "boot.render_about_to_mount_root",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 12069
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:22.657Z",
+    "step": "home-to-hike",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878862545,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 12071,
+            "isLoggedIn": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:22.657Z",
+    "step": "home-to-hike",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878862546,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 12072
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:22.658Z",
+    "step": "home-to-hike",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878862606,
+          "tag": "boot.render_after_hydrate",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 12132
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:22.658Z",
+    "step": "home-to-hike",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878862607,
+          "tag": "boot.render_after_fonts",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 12133
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:34:22.660Z",
+    "step": "home-to-hike",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789878862608,
+          "tag": "boot.render_about_to_mount_root",
+          "session_id": "boot-mu9bnjxm-riemgb",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 12134
+          }
+        }
+      ]
+    }
+  }
+]

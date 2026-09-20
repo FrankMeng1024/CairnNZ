@@ -1,14 +1,32 @@
-import { useMemoryStore } from '../store/useMemoryStore';
-import { ensureMemoryPersistenceForUser, flushMemoryNow } from './memoryPersistence';
+import { MemoryEvidenceSource, useMemoryStore } from '../store/useMemoryStore';
+import {
+  ensureMemoryPersistenceForUser,
+  flushMemoryNow,
+  flushSyntheticMemoryNow,
+} from './memoryPersistence';
 import { attachMemorySync } from '../../../services/memorySync';
 
-export type MemoryEvidenceSource = 'activity' | 'passive' | 'cairn' | 'reconciliation';
-
 let commitTail: Promise<void> = Promise.resolve();
-let evidenceMetrics = { calls: 0, mutations: 0, deduplicated: 0, batchFlushes: 0 };
+let evidenceMetrics = {
+  calls: 0,
+  mutations: 0,
+  coverageMutations: 0,
+  presenceMutations: 0,
+  metadataMutations: 0,
+  deduplicated: 0,
+  batchFlushes: 0,
+};
 
 export function resetMemoryEvidenceMetrics(): void {
-  evidenceMetrics = { calls: 0, mutations: 0, deduplicated: 0, batchFlushes: 0 };
+  evidenceMetrics = {
+    calls: 0,
+    mutations: 0,
+    coverageMutations: 0,
+    presenceMutations: 0,
+    metadataMutations: 0,
+    deduplicated: 0,
+    batchFlushes: 0,
+  };
 }
 
 export function getMemoryEvidenceMetrics(): typeof evidenceMetrics {
@@ -30,14 +48,30 @@ export function recordMemoryEvidence(args: {
   source: MemoryEvidenceSource;
   ownerUserId?: string;
   durability?: 'immediate' | 'deferred';
-}): Promise<{ committed: boolean; deduplicated: boolean }> {
+  sourceActivityClientId?: string;
+  sourceSegmentId?: string;
+  horizontalAccuracyM?: number;
+  continuityState?: 'accepted' | 'gap' | 'unknown';
+}): Promise<{
+  committed: boolean;
+  deduplicated: boolean;
+  coverageChanged: boolean;
+  presenceChanged: boolean;
+  metadataChanged: boolean;
+}> {
   // Capture ownership at invocation, before this operation waits behind an
   // earlier commit. Reading the active user from inside commitTail allowed an
   // Account A callback to be attributed to Account B after a fast switch.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { useAppStore } = require('../../../store/useAppStore');
   const ownerUserId = String(args.ownerUserId ?? useAppStore.getState().user?.id ?? '');
-  let result = { committed: false, deduplicated: false };
+  let result = {
+    committed: false,
+    deduplicated: false,
+    coverageChanged: false,
+    presenceChanged: false,
+    metadataChanged: false,
+  };
   const run = commitTail.then(async () => {
     evidenceMetrics.calls += 1;
     // MemoryScreen is intentionally lazy, but explicit Activity/Cairn evidence
@@ -50,19 +84,40 @@ export function recordMemoryEvidence(args: {
     if (String(useAppStore.getState().user?.id ?? '') !== ownerUserId) {
       throw new Error('memory_owner_changed');
     }
-    attachMemorySync(ownerUserId);
+    if (args.source !== 'simulator_test') attachMemorySync(ownerUserId);
     const store = useMemoryStore.getState();
-    const before = store.points.length;
-    store.recordPoint(args.lat, args.lng, args.atMs ?? Date.now());
-    const after = useMemoryStore.getState().points.length;
-    if (after === before) {
+    const before = args.source === 'simulator_test' ? store.testPoints.length : store.points.length;
+    const mutation = store.recordPoint(args.lat, args.lng, args.atMs ?? Date.now(), {
+      source: args.source,
+      sourceActivityClientId: args.sourceActivityClientId,
+      sourceSegmentId: args.sourceSegmentId,
+      horizontalAccuracyM: args.horizontalAccuracyM,
+      continuityState: args.continuityState,
+    });
+    const afterState = useMemoryStore.getState();
+    const after = args.source === 'simulator_test' ? afterState.testPoints.length : afterState.points.length;
+    const coverageChanged = mutation?.coverageChanged ?? after > before;
+    const presenceChanged = mutation?.presenceChanged ?? false;
+    const metadataChanged = mutation?.metadataChanged ?? false;
+    if (!coverageChanged && !presenceChanged && !metadataChanged) {
       evidenceMetrics.deduplicated += 1;
-      result = { committed: true, deduplicated: true };
+      result = {
+        committed: true,
+        deduplicated: true,
+        coverageChanged: false,
+        presenceChanged: false,
+        metadataChanged: false,
+      };
       return;
     }
     evidenceMetrics.mutations += 1;
-    if (args.source !== 'activity' && args.durability !== 'deferred') await flushMemoryNow();
-    result = { committed: true, deduplicated: false };
+    if (coverageChanged) evidenceMetrics.coverageMutations += 1;
+    if (presenceChanged) evidenceMetrics.presenceMutations += 1;
+    if (metadataChanged) evidenceMetrics.metadataMutations += 1;
+    if (args.source !== 'activity_real' && args.source !== 'simulator_test' && args.durability !== 'deferred') {
+      await flushMemoryNow({ coverage: coverageChanged, presence: presenceChanged || metadataChanged });
+    }
+    result = { committed: true, deduplicated: false, coverageChanged, presenceChanged, metadataChanged };
   });
   commitTail = run.catch(() => {});
   return run.then(() => result);
@@ -70,9 +125,10 @@ export function recordMemoryEvidence(args: {
 
 /** Commit one durable snapshot after a deferred, journal-backed batch. */
 export function flushRecordedMemoryEvidence(): Promise<void> {
-  const run = commitTail.then(() => {
+  const run = commitTail.then(async () => {
     evidenceMetrics.batchFlushes += 1;
-    return flushMemoryNow();
+    await flushMemoryNow();
+    await flushSyntheticMemoryNow();
   });
   commitTail = run.catch(() => {});
   return run;

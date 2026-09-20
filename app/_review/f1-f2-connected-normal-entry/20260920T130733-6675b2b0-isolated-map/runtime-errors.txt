@@ -1,0 +1,2 @@
+http [prefinish-memory] 501 GET fetch https://api.mapbox.com/map-sessions/v1?sku=101rHXn4Xr7E1&access_token=[redacted]
+console [prefinish-memory] https://api.mapbox.com/map-sessions/v1?sku=101rHXn4Xr7E1&access_token=[redacted]:0:0: Failed to load resource: the server responded with a status of 501 (Not Implemented)

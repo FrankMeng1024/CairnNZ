@@ -12,10 +12,11 @@
  * doesn't follow centerCoordinate prop updates after first mount.
  */
 
-import React, { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { StyleSheet, View, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
+import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { MemoryColors } from '../config/memoryConfig';
 import { FogLayer } from './FogLayer';
 // O1: MemoryFogBurstOverlay deleted (v303 Skia burst overlay, replaced by
@@ -69,12 +70,15 @@ interface Props {
    * gates for hiding the loading overlay.
    */
   onMapFullyReady?: () => void;
+  /** The map renderer is not present; the parent must retire its loading veil. */
+  onMapUnavailable?: () => void;
   /**
    * v359: fired when FogLayer first computes a fog shape with holes
    * (corridor cutouts from GPS data). Used by MemoryScreen as the
    * second gate for hiding the loading overlay.
    */
   onFogReady?: () => void;
+  onFogUnavailable?: () => void;
   /**
    * v424: fly camera to arbitrary center+zoom, driven by HierarchyPanel
    * region selection. Prop-based so parent controls timing. Bumping
@@ -97,7 +101,7 @@ export type MemoryMapHandle = {
 };
 
 export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
-  { centerLat, centerLng, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onFogReady, strangerMarks, flyToTarget },
+  { centerLat, centerLng, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogReady, onFogUnavailable, strangerMarks, flyToTarget },
   ref,
 ) {
   const theme = useVisualTheme();
@@ -105,7 +109,17 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const memoryResolvedMapStyle = getMapStyleForTheme('outdoors', memoryMapTheme);
   const memoryLightPreset = themeToStandardPreset(memoryMapTheme);
   const Mapbox = getMapbox();
-  const allMarkers = useMarkerStore((s) => s.markers);
+  const ownMarkers = useMarkerStore((s) => s.markers);
+  const friendMarkers = useMarkerStore((s) => s.circleMarkers);
+  const memoryScope = useMemoryScopeStore((s) => s.scope);
+  const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
+  const allMarkers = useMemo(() => {
+    if (memoryScope === 'self') return ownMarkers;
+    if (memoryScope === 'friend') {
+      return friendMarkers.filter(marker => String(marker.authorId) === String(selectedFriendId));
+    }
+    return [...ownMarkers, ...friendMarkers];
+  }, [friendMarkers, memoryScope, ownMarkers, selectedFriendId]);
   const mapViewRef = useRef<any>(null);
 
   // v447: expose getCurrentCenter so parent can pull the true current
@@ -267,6 +281,10 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   // (or onDidFinishLoadingMap as backup — ref guard prevents duplicate).
   const [mapFirstRender, setMapFirstRender] = useState(false);
 
+  useEffect(() => {
+    if (!Mapbox.available) onMapUnavailable?.();
+  }, [Mapbox.available, onMapUnavailable]);
+
   // v336: when recenterToken bumps, fly the camera back to the current
   // GPS coord WITHOUT remounting Camera (the old cameraKey strategy
   // caused a one-frame fog reset on every tap). setCamera on the same
@@ -325,7 +343,13 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   // lifetime.
 
   if (!Mapbox.available) {
-    return <View style={[styles.webStub, { backgroundColor: theme.background }]} />;
+    return (
+      <View style={[styles.webStub, { backgroundColor: theme.background }]}>
+        <Icon name="Map" size={24} color={theme.iconInactive} strokeWidth={1.8} />
+        <Text style={[styles.webStubTitle, { color: theme.foreground }]}>Map unavailable</Text>
+        <Text style={[styles.webStubText, { color: theme.foregroundSecondary }]}>Your saved Memory is still available.</Text>
+      </View>
+    );
   }
   const { MapView, Camera, UserLocation, CircleLayer, StyleImport } = Mapbox as any;
 
@@ -519,7 +543,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
         <FogLayer userCenter={{ lat: centerLat, lng: centerLng }} onFogReady={() => {
           setFogReady(true);
           onFogReady?.();
-        }} />
+        }} onFogUnavailable={onFogUnavailable} />
         {/* Memory is territory and accumulated place history, not another
             activity-detail route viewer. The explored fog cut-outs carry the
             journey evidence; a literal polyline here duplicated Trails and
@@ -561,7 +585,9 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
-  webStub: { flex: 1, backgroundColor: MemoryColors.cream },
+  webStub: { flex: 1, backgroundColor: MemoryColors.cream, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  webStubTitle: { marginTop: 10, fontSize: 18, fontWeight: '700' },
+  webStubText: { marginTop: 6, fontSize: 14, lineHeight: 20, textAlign: 'center' },
   mapLoadingOverlay: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,

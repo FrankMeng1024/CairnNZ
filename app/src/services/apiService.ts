@@ -31,14 +31,23 @@ interface AuthFetchOptions extends RequestInit {
   /** When true, a 401 response does NOT trigger logout. Use for queued
    *  retries where a transient 401 should not boot the user. */
   skipLogoutOn401?: boolean;
+  /** Fail before network dispatch if token ownership changed while an action
+   * awaited durable local work. Used by identity-sensitive mutations. */
+  expectedUserId?: string;
 }
 
 export async function authenticatedFetch(
   path: string,
   options: AuthFetchOptions = {}
 ): Promise<Response> {
-  const { skipLogoutOn401, ...fetchOptions } = options;
+  const { skipLogoutOn401, expectedUserId, ...fetchOptions } = options;
   const token = await getToken();
+  if (expectedUserId !== undefined
+    && String(useAppStore.getState().user?.id ?? '') !== String(expectedUserId)) {
+    const error = new Error('authenticated_fetch_account_changed');
+    (error as any).code = 'ACCOUNT_CHANGED';
+    throw error;
+  }
 
   // O18 SAF-07 (2026-07-29): user reported "network request failed" on
   // hike upload AND direct upload — the fetch() throw path was previously
@@ -149,11 +158,12 @@ export async function authenticatedFetch(
     }
 
     // Rule 4: hard signal, but tracking active → defer logout.
-    // O1 batch 37: sessionExpired was set here for deferred reauth surfacing, but
-    // 0 screens ever read it, so the deferred signal was never actionable. We now
-    // simply return without logging out (tracking continues; next app resume handles it).
+    // Preserve the deferred re-auth signal while the Activity continues. The
+    // next safe foreground/auth boundary can surface it without interrupting
+    // recording.
     const tracking = useTrackingStore.getState().status;
     if (tracking === 'tracking' || tracking === 'paused') {
+      useAppStore.getState().setSessionExpired(true);
       crashLogger.breadcrumb(`revoke:401_during_tracking_deferred path=${path}`);
       return res;
     }

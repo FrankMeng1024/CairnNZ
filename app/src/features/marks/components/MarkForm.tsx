@@ -35,7 +35,7 @@ export interface MarkFormProps {
 
   // Mode & config
   mode: 'create' | 'edit';
-  /** When true the Anyone chip is rendered but disabled (v1: public hidden). */
+  /** When true the deferred public option is omitted from the v1 author UI. */
   disableVisibilityPublic?: boolean;
   /** Edit mode = true; create mode = false. */
   showLocationLockedNotice?: boolean;
@@ -193,28 +193,35 @@ export function MarkForm(props: MarkFormProps) {
       <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Who can see this</Text>
       <View style={styles.visRow}>
         <VisChip
-          label="Just me"
+          label="Only me"
           iconName="Lock"
           active={visibility === 'personal'}
           activeTone="neutral"
           onPress={() => { haptic.selection(); onVisibilityChange('personal'); }}
         />
         <VisChip
-          label="Friends"
+          label="Friends can discover"
           iconName="Users"
           active={visibility === 'group'}
           activeTone="primary"
           onPress={() => { haptic.selection(); onVisibilityChange('group'); }}
         />
-        <VisChip
-          label="Anyone"
-          iconName="Globe"
-          active={visibility === 'public'}
-          activeTone="info"
-          disabled={disableVisibilityPublic}
-          onPress={() => { haptic.selection(); onVisibilityChange('public'); }}
-        />
+        {!disableVisibilityPublic ? (
+          <VisChip
+            label="Public"
+            iconName="Globe"
+            active={visibility === 'public'}
+            activeTone="info"
+            onPress={() => { haptic.selection(); onVisibilityChange('public'); }}
+          />
+        ) : null}
       </View>
+      {visibility === 'group' ? (
+        <Text style={[styles.visibilityHelp, { color: theme.foregroundSecondary }]}>Friends can discover this when they pass nearby. No notification is sent.</Text>
+      ) : null}
+      {visibility === 'public' ? (
+        <Text style={[styles.visibilityHelp, { color: theme.foregroundSecondary }]}>After review, people who genuinely pass nearby may discover this exact text version.</Text>
+      ) : null}
       </> : null}
 
       {/* LOCATION LOCKED — edit mode only. */}
@@ -346,6 +353,11 @@ const styles = StyleSheet.create({
   visRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
+  },
+  visibilityHelp: {
+    marginTop: Spacing.sm,
+    fontSize: FontSize.caption,
+    lineHeight: 18,
   },
   visChip: {
     flex: 1,

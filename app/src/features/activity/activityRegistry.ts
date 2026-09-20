@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ActivityMode } from '../../store/useSessionStore';
 import type { SegmentStartReason } from './activityContracts';
 import type { ActivityLocationSource } from '../activitySimulator/types';
+import type { ActivityRouteReference } from '../route/routeContracts';
 
 export type ActivityLifecycle = 'unfinished' | 'completed_local' | 'discarded';
 export type ActivitySyncState = 'pending' | 'syncing' | 'sync_error' | 'synced';
@@ -22,6 +23,12 @@ export interface UnfinishedActivityRecord {
   nextSegmentStartReason?: SegmentStartReason;
   /** Local diagnostic/recovery metadata; never changes server Activity shape. */
   locationProviderSource?: ActivityLocationSource;
+  /**
+   * Immutable geometry from a previously authorized friend Route. This is
+   * retained only while this Activity is unfinished so process recovery does
+   * not erase the hiker's sole safety reference mid-outing.
+   */
+  borrowedRouteReference?: ActivityRouteReference;
   lifecycle: 'unfinished';
 }
 

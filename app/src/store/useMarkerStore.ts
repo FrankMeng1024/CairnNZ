@@ -40,6 +40,12 @@ let markerHydrateInFlightUserId: string | null = null;
 // state. Pre-fix, logout during a slow hydrate let the hydrate's
 // storage-read resurrect the just-cleared markers a few ms later.
 let markerHydrateGeneration = 0;
+// Circle discovery is account-scoped even though its loading flag lives in
+// one global store. Track the initiating viewer and generation separately so
+// an older account cannot hold the single-flight guard or publish into the
+// next account after logout/switch.
+let markerCircleLoadGeneration = 0;
+let markerCircleLoadUserId: string | null = null;
 
 export type MarkerPermission = 'personal' | 'group' | 'public';
 
@@ -59,6 +65,10 @@ export interface Marker {
   /** Last accepted content mutation when the backend supplies it. */
   updatedAt?: number;
   permission: MarkerPermission;
+  publicState?: 'not_public' | 'pending' | 'published' | 'rejected' | 'suspended' | 'withdrawn';
+  publicationEpoch?: number;
+  contentRevision?: number;
+  publicSubmissionCode?: string;
   sessionId?: string;      // legacy alias
   originActivityClientId?: string | null;
   synced?: boolean;        // true = exists in backend, false = local-only
@@ -103,6 +113,29 @@ export interface Marker {
   localId?: string;
 }
 
+/** Exact live Activity identity captured by the initiating UI before any
+ * asynchronous marker persistence. The generation prevents an old S1 caller
+ * from being mistaken for a newly started Activity that reuses the screen. */
+export interface CairnActivityContext {
+  ownerUserId: string;
+  clientActivityId: string;
+  ownerGeneration: string;
+}
+
+export type MarkerCreateInput = Omit<Marker, 'id' | 'createdAt'> & {
+  activityContext?: CairnActivityContext | null;
+};
+
+/** `addMarker` rejects only before local durability. Once the owner-scoped
+ * outbox accepts the row, callers always receive this result—even if another
+ * account replaced the visible projection while the write awaited. */
+export interface MarkerCreateResult {
+  state: 'durably-accepted';
+  ownerId: string;
+  projection: 'current' | 'owner-changed' | 'projection-failed';
+  marker: Marker;
+}
+
 // v0.2.6: bumped from 'cairn_markers' → 'cairn_markers_v026'.
 // Reason: title/body wire format changed (now uses U+001E separator
 // instead of '\n' join), and v0.2.6 ships fresh — server-side markers
@@ -136,6 +169,9 @@ function fromBackend(row: {
   author_name?: string | null;
   client_cairn_id?: string | null;
   origin_activity_client_id?: string | null;
+  public_state?: Marker['publicState'];
+  publication_epoch?: number | string | null;
+  content_revision?: number | string | null;
 }): Marker {
   // v300: backend may return public_snapshot as either a parsed object
   // (mysql2 JSON columns auto-parse) or a JSON string (some drivers /
@@ -166,6 +202,9 @@ function fromBackend(row: {
     createdAt: new Date(row.created_at).getTime(),
     updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : undefined,
     permission: (row.permission as MarkerPermission) || 'personal',
+    publicState: row.public_state,
+    publicationEpoch: row.publication_epoch == null ? undefined : Number(row.publication_epoch),
+    contentRevision: row.content_revision == null ? undefined : Number(row.content_revision),
     synced: true,
     approximate: row.approximate === true || row.approximate === 1 || false,
     publicSnapshot,
@@ -212,7 +251,7 @@ interface MarkerState {
   libraryCoverage: CairnLibraryCoverage;
   libraryLoading: boolean;
   libraryError: 'unavailable' | 'server-upgrade-required' | null;
-  addMarker: (marker: Omit<Marker, 'id' | 'createdAt'>) => Promise<Marker>;
+  addMarker: (marker: MarkerCreateInput) => Promise<MarkerCreateResult>;
   updateMarker: (id: string, updates: Partial<Omit<Marker, 'id' | 'createdAt'>>) => Promise<void>;
   retryMarkerSync: (id: string) => Promise<void>;
   deleteMarker: (id: string) => Promise<CairnDeleteResult>;
@@ -260,33 +299,27 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     //   3. drain 成功后 ackHandler 把 localId → server id, syncState='synced'
     //   4. drain 硬失败 (4xx) → failHandler 标 syncState='failed', 用户手动重试
     //   5. drain 软失败 (5xx/网络) → 保留 pending, 网络恢复时 daemon 再试
-    // v300: if marker is born public, snapshot immediately. Backend
-    // does the same on POST so the server row will agree.
-    const publicSnapshot = data.permission === 'public'
-      ? {
-          type: data.type,
-          lat: data.lat,
-          lng: data.lng,
-          note: data.note,
-          snapshottedAt: Date.now(),
-        }
-      : null;
-
     // 存 offlineMarkers entity, 拿到 localId (= idempotency key).
     // v423 B1 fix: saveLocal 现在会在 AsyncStorage 满 / hydrate 未完成时 throw.
     // 我们 catch 并向用户报"存不下", 不让 marker 在内存里假成功.
-    // Capture provenance at the commit boundary itself. Full Plant does not
-    // need to thread Activity state through navigation, and Quick Cairn may
-    // still pass the legacy sessionId alias. Only a genuinely unfinished
-    // live/paused Activity is authoritative.
+    const { activityContext, ...markerData } = data;
     let activeActivityClientId: string | null = data.originActivityClientId ?? data.sessionId ?? null;
-    try {
-      const { useTrackingStore } = require('./useTrackingStore');
-      const tracking = useTrackingStore.getState();
-      if ((tracking.status === 'tracking' || tracking.status === 'paused') && tracking.sessionId) {
-        activeActivityClientId = tracking.sessionId;
-      }
-    } catch { /* standalone Plant remains valid with null provenance */ }
+    if (activityContext) {
+      let exactActivityIsCurrent = false;
+      try {
+        const { useTrackingStore } = require('./useTrackingStore');
+        const tracking = useTrackingStore.getState();
+        exactActivityIsCurrent = (
+          (tracking.status === 'tracking' || tracking.status === 'paused')
+          && tracking.ownerUserId === activityContext.ownerUserId
+          && tracking.sessionId === activityContext.clientActivityId
+          && tracking.liveOwnerGeneration === activityContext.ownerGeneration
+          && ownerId === activityContext.ownerUserId
+        );
+      } catch { /* an unavailable Activity store cannot authorize provenance */ }
+      if (!exactActivityIsCurrent) throw new Error('marker_activity_changed_before_commit');
+      activeActivityClientId = activityContext.clientActivityId;
+    }
     const payload: MarkerCreatePayload = {
       userId: ownerId,
       type: data.type,
@@ -322,7 +355,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     }
 
     const marker: Marker = {
-      ...data,
+      ...markerData,
       id: localId,       // 前端立即用 localId 作 id, ack 后被替换
       clientCairnId: localId,
       originActivityClientId: activeActivityClientId,
@@ -330,26 +363,32 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       createdAt: Date.now(),
       synced: false,
       syncState: 'pending',
-      publicSnapshot,
+      publicSnapshot: null,
+      publicState: data.permission === 'public' ? 'not_public' : undefined,
     };
+    let projection: MarkerCreateResult['projection'] = 'current';
     if (String(get().userId ?? '') !== ownerId) {
-      // The durable A-owned outbox row is intentionally retained.  A will
-      // rebuild its placeholder on the next hydrate; it must never be
-      // projected into the account that replaced A while this save awaited.
-      throw new Error('marker_owner_changed_after_commit');
+      // The durable A-owned outbox row is intentionally retained. A will
+      // rebuild its placeholder on its next hydrate; B sees no A projection.
+      projection = 'owner-changed';
+    } else {
+      try {
+        set((s) => {
+          if (String(s.userId ?? '') !== ownerId) return s;
+          // A very fast acknowledgement may already have materialized the
+          // same stable client identity. Never append a second placeholder.
+          if (s.markers.some(existing => (
+            existing.clientCairnId === localId || existing.id === localId
+          ))) return s;
+          const next = [...s.markers, marker];
+          storage.setItem(storageKey(ownerId), JSON.stringify(next));
+          return { markers: next };
+        });
+      } catch (projectionError) {
+        projection = 'projection-failed';
+        crashLogger.breadcrumb(`marker:projection_failed err=${String(projectionError).slice(0, 80)}`);
+      }
     }
-    set((s) => {
-      if (String(s.userId ?? '') !== ownerId) return s;
-      // A very fast acknowledgement may already have materialized the same
-      // stable client identity. Never append a second pending placeholder or
-      // downgrade the acknowledged row.
-      if (s.markers.some(existing => (
-        existing.clientCairnId === localId || existing.id === localId
-      ))) return s;
-      const next = [...s.markers, marker];
-      storage.setItem(storageKey(ownerId), JSON.stringify(next));
-      return { markers: next };
-    });
     try {
       // Local-only simulator diagnostics; never sent through appLog.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -390,40 +429,35 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     } catch {/* never throw on log */}
 
     // Debug logger: marker_placed
-    debugLogger.log({
-      ts: Date.now(),
-      event: 'marker_placed',
-      marker_id: localId,
-      type: String(data.type),
-      lat: data.lat,
-      lon: data.lng,
-      accuracy_m: null,
-      text_length: (data.note ?? '').length,
-      permission: (data.permission ?? 'personal') as 'personal' | 'group' | 'public',
-    });
+    try {
+      debugLogger.log({
+        ts: Date.now(),
+        event: 'marker_placed',
+        marker_id: localId,
+        type: String(data.type),
+        lat: data.lat,
+        lon: data.lng,
+        accuracy_m: null,
+        text_length: (data.note ?? '').length,
+        permission: (data.permission ?? 'personal') as 'personal' | 'group' | 'public',
+      });
+    } catch { /* diagnostics cannot turn a durable acceptance into failure */ }
 
     // 返回本地 marker. 调用方 (Plant flow) 立即可导航到 MarkerDetail — 那里
     // 通过 offlineMarkers.subscribe 显示 SyncBadge 让用户看到同步进度。
-    return marker;
+    return {
+      state: 'durably-accepted',
+      ownerId,
+      projection,
+      marker,
+    };
   },
 
   updateMarker: async (id, updates) => {
     const ownerId = String(get().userId ?? '');
     const original = get().markers.find((marker) => cairnMatchesIdentity(marker, id));
     if (!original || !ownerId) throw new Error('cairn_not_found');
-    const patchMarker = (marker: Marker, updatedAt: number): Marker => {
-      let publicSnapshot = marker.publicSnapshot;
-      if (updates.permission === 'public' && publicSnapshot == null) {
-        publicSnapshot = {
-          type: updates.type ?? marker.type,
-          lat: marker.lat,
-          lng: marker.lng,
-          note: updates.note ?? marker.note,
-          snapshottedAt: Date.now(),
-        };
-      }
-      return { ...marker, ...updates, publicSnapshot, updatedAt };
-    };
+    const patchMarker = (marker: Marker, updatedAt: number): Marker => ({ ...marker, ...updates, updatedAt });
 
     // Sync to backend (text, permission, type are updatable). Backend
     // mirrors the same publicSnapshot-on-first-public logic so a stale
@@ -454,6 +488,13 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
         body: JSON.stringify(backendUpdates),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json().catch(() => null);
+      if (result?.public_state) {
+        updates.publicState = result.public_state;
+        updates.publicationEpoch = Number(result.publication_epoch ?? original.publicationEpoch ?? 0);
+        updates.contentRevision = Number(result.content_revision ?? original.contentRevision ?? 1);
+        updates.publicSubmissionCode = result.public_submission?.code;
+      }
     }
 
     if (String(get().userId ?? '') !== ownerId) throw new Error('cairn_owner_changed_after_save');
@@ -643,6 +684,8 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     // during a slow hydrate resurrected the just-cleared markers when
     // the hydrate's storage-read completed after clearMarkers ran.
     markerHydrateGeneration += 1;
+    markerCircleLoadGeneration += 1;
+    markerCircleLoadUserId = null;
     // Logout/user switch hides this user's data but deliberately preserves
     // its user-scoped cache and committed outbox for a later matching login.
     // BUG-010 fix: also reset cross-session slices so a logout/login
@@ -656,6 +699,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       markers: [],
       userId: null,
       circleMarkers: [],
+      loadingCircle: false,
       hidingIds: [],
       publicMarkers: [],
       loadingPublic: false,
@@ -743,13 +787,34 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     // resurrecting the just-hidden mark. Snapshot ensures the hide ids
     // captured at the moment of the fetch are honoured regardless of when
     // their POST finally settles.
-    if (get().loadingCircle) return;
+    const capturedUserId = String(get().userId ?? '');
+    if (!capturedUserId) {
+      set({ loadingCircle: false });
+      return;
+    }
+    if (get().loadingCircle && markerCircleLoadUserId === capturedUserId) return;
+    const generationAtStart = markerCircleLoadGeneration + 1;
+    markerCircleLoadGeneration = generationAtStart;
+    markerCircleLoadUserId = capturedUserId;
+    const stillOwnsLoad = () => (
+      markerCircleLoadGeneration === generationAtStart
+      && String(get().userId ?? '') === capturedUserId
+    );
     const hidingSnapshot = new Set(get().hidingIds);
     set({ loadingCircle: true });
     try {
+      // The client never downloads a catalogue of undiscovered friend Cairns.
+      // Ask the server to derive eligible encounters from authoritative real
+      // Memory evidence, then fetch only the resulting read-authorized facts.
+      await authenticatedFetch('/api/friend-content/encounters/verify', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }).catch(() => null);
+      if (!stillOwnsLoad()) return;
       const res = await authenticatedFetch('/api/circle/markers');
-      if (!res.ok) { set({ loadingCircle: false }); return; }
+      if (!res.ok) return;
       const data = await res.json();
+      if (!stillOwnsLoad()) return;
       const rows: any[] = Array.isArray(data?.markers) ? data.markers : [];
       const allCircle: Marker[] = rows.map(fromBackend);
       // Apply both the start-of-fetch snapshot AND any new hides queued
@@ -760,9 +825,20 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       const circle = effective.size === 0
         ? allCircle
         : allCircle.filter((m) => !effective.has(m.id));
-      set({ circleMarkers: circle, loadingCircle: false });
+      set((state) => (
+        markerCircleLoadGeneration === generationAtStart
+        && String(state.userId ?? '') === capturedUserId
+          ? { circleMarkers: circle }
+          : {}
+      ));
     } catch {
-      set({ loadingCircle: false });
+      // The current generation's loading state is cleared in finally. Older
+      // generations must not touch a newer account's request state.
+    } finally {
+      if (markerCircleLoadGeneration === generationAtStart) {
+        markerCircleLoadUserId = null;
+        set({ loadingCircle: false });
+      }
     }
   },
 
@@ -780,7 +856,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       const res = await authenticatedFetch(
         `/api/markers/public?bbox=${lat1},${lng1},${lat2},${lng2}`,
       );
-      if (!res.ok) { set({ loadingPublic: false }); return; }
+      if (!res.ok) { set({ publicMarkers: [], loadingPublic: false }); return; }
       const data = await res.json();
       const rows: any[] = Array.isArray(data?.markers) ? data.markers : [];
       // Backend returns id, type, lat, lng, created_at (anonymous).
@@ -917,8 +993,11 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       // to overwrite below either way.)
       const prevUserId = get().userId;
       if (prevUserId && prevUserId !== userId) {
+        markerCircleLoadGeneration += 1;
+        markerCircleLoadUserId = null;
         set({
           circleMarkers: [],
+          loadingCircle: false,
           hidingIds: [],
           libraryRemoteMarkers: [],
           libraryQuery: '',
@@ -1086,6 +1165,10 @@ setMarkerCreateAckHandler(
             authorId: serverAuthorId ?? existing.authorId,
             synced: !supersededWhileSyncing,
             syncState: (supersededWhileSyncing ? 'pending' : 'synced') as SyncState,
+            publicState: server.public_state ?? server.public_submission?.state ?? existing.publicState,
+            publicationEpoch: server.publication_epoch == null ? existing.publicationEpoch : Number(server.publication_epoch),
+            contentRevision: server.content_revision == null ? existing.contentRevision : Number(server.content_revision),
+            publicSubmissionCode: server.public_submission?.code ?? existing.publicSubmissionCode,
           }
         : {
             id: localId,
@@ -1106,6 +1189,10 @@ setMarkerCreateAckHandler(
             synced: !supersededWhileSyncing,
             syncState: (supersededWhileSyncing ? 'pending' : 'synced') as SyncState,
             publicSnapshot: null,
+            publicState: server.public_state ?? server.public_submission?.state,
+            publicationEpoch: server.publication_epoch == null ? undefined : Number(server.publication_epoch),
+            contentRevision: server.content_revision == null ? undefined : Number(server.content_revision),
+            publicSubmissionCode: server.public_submission?.code,
           };
       const next = existing
         ? snapshot.markers.map((m) => {

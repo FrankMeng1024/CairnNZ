@@ -303,7 +303,19 @@ interface SaveHikeAtomicPayload {
     v_acc?: number | null; speed_mps?: number | null; course_deg?: number | null; raw_ordinal?: number;
     segment_id?: string; segment_start_reason?: string;
   }>;
-  memory_points: Array<{ lat: number; lng: number; ts: number; cid?: string }>;
+  route_points_canonical: Array<{
+    lat: number; lng: number; t: number; alt?: number | null; acc?: number | null;
+    v_acc?: number | null; speed_mps?: number | null; course_deg?: number | null; raw_ordinal?: number;
+    segment_id?: string; segment_start_reason?: string;
+  }>;
+  memory_points: Array<{
+    lat: number; lng: number; ts: number; cid?: string;
+    evidence_source?: 'activity_real' | 'passive_real' | 'historical_unknown';
+    source_activity_client_id?: string;
+    source_segment_id?: string;
+    horizontal_accuracy_m?: number;
+    continuity_state?: 'accepted' | 'gap' | 'unknown';
+  }>;
 }
 
 interface SaveHikeAtomicResult {
@@ -322,6 +334,7 @@ export function normalizeActivitySavePayloadTimestamps(
     ...payload,
     route_points: normalizeActivityPointTimestamps(payload.route_points),
     route_points_raw: normalizeActivityPointTimestamps(payload.route_points_raw),
+    route_points_canonical: normalizeActivityPointTimestamps(payload.route_points_canonical),
     memory_points: payload.memory_points.map(point => ({
       ...point,
       ts: integerEpoch(point.ts),

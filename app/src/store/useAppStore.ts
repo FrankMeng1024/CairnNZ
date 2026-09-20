@@ -171,6 +171,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch { /* iapService import failed — silent */ }
     set({ isLoggedIn: false, user: null });
     crashLogger.breadcrumb('logout:state_cleared');
+    try {
+      // Fence same-account late shared-content reads before any logout cleanup.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../features/friends/services/friendContent').resetFriendContentForAccountBoundary();
+    } catch { /* cache module may not have been loaded */ }
     useSessionStore.getState().clearSessions();
     crashLogger.breadcrumb('logout:sessions_cleared');
     useMarkerStore.getState().clearMarkers();

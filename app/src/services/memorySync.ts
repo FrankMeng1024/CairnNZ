@@ -18,7 +18,11 @@
  */
 
 import { authenticatedFetch } from './apiService';
-import { useMemoryStore, VisitedPoint } from '../features/memory/store/useMemoryStore';
+import {
+  MemoryPresenceWitness,
+  useMemoryStore,
+  VisitedPoint,
+} from '../features/memory/store/useMemoryStore';
 
 const PUSH_DEBOUNCE_MS = 30_000;
 const PUSH_MAX_WAIT_MS = 60_000;
@@ -43,10 +47,10 @@ let pullAbortController: AbortController | null = null;
 let epoch = 0;
 let pendingBurstStartedAt: number | null = null;
 let authBlocked = false;
-let syncMetrics = { pushRequests: 0, pushedPoints: 0, authBlocked: false };
+let syncMetrics = { pushRequests: 0, pushedPoints: 0, pushedPresenceWitnesses: 0, authBlocked: false };
 
 export function resetMemorySyncMetrics(): void {
-  syncMetrics = { pushRequests: 0, pushedPoints: 0, authBlocked };
+  syncMetrics = { pushRequests: 0, pushedPoints: 0, pushedPresenceWitnesses: 0, authBlocked };
 }
 
 export function getMemorySyncMetrics(): typeof syncMetrics {
@@ -61,6 +65,11 @@ interface ServerPoint {
   lng: number;
   ts: number;
   cid: string;
+  evidence_source?: 'activity_real' | 'passive_real' | 'historical_unknown';
+  source_activity_client_id?: string | null;
+  source_segment_id?: string | null;
+  horizontal_accuracy_m?: number | null;
+  continuity_state?: 'accepted' | 'gap' | 'unknown';
 }
 
 interface EchoEntry {
@@ -230,6 +239,13 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
 
   const serverPoints: VisitedPoint[] = accumulated.map((p) => ({
     lat: p.lat, lng: p.lng, ts: p.ts, cid: p.cid, synced: true,
+    evidenceSource: p.evidence_source === 'activity_real' || p.evidence_source === 'passive_real'
+      ? p.evidence_source
+      : 'historical_unknown',
+    sourceActivityClientId: p.source_activity_client_id ?? undefined,
+    sourceSegmentId: p.source_segment_id ?? undefined,
+    horizontalAccuracyM: typeof p.horizontal_accuracy_m === 'number' ? p.horizontal_accuracy_m : undefined,
+    continuityState: p.continuity_state ?? 'unknown',
   }));
   const serverCidSet = new Set(serverPoints.map((p) => p.cid));
   const serverGeoTsSet = new Set(
@@ -334,6 +350,10 @@ function sameContent(a: VisitedPoint[], b: VisitedPoint[]): boolean {
     if (a[i].synced !== b[i].synced) return false;
     if (a[i].ts !== b[i].ts) return false;
     if (a[i].lat !== b[i].lat || a[i].lng !== b[i].lng) return false;
+    if (a[i].evidenceSource !== b[i].evidenceSource) return false;
+    if (a[i].sourceActivityClientId !== b[i].sourceActivityClientId) return false;
+    if (a[i].horizontalAccuracyM !== b[i].horizontalAccuracyM) return false;
+    if (a[i].continuityState !== b[i].continuityState) return false;
   }
   return true;
 }
@@ -363,14 +383,17 @@ async function pushPendingPoints(): Promise<void> {
   }
   const myEpoch = epoch;
   const myUserId = activeUserId;
-  const allPoints = useMemoryStore.getState().points;
+  const memoryState = useMemoryStore.getState();
+  const allPoints = memoryState.points;
   const pending = allPoints.filter((p) => !p.synced);
-  if (pending.length === 0) {
+  const pendingPresence = (memoryState.presenceWitnesses ?? []).filter((witness) => !witness.synced);
+  if (pending.length === 0 && pendingPresence.length === 0) {
     pendingBurstStartedAt = null;
     return;
   }
 
   const batch = pending.slice(0, MAX_BATCH);
+  const presenceBatch: MemoryPresenceWitness[] = pendingPresence.slice(0, MAX_BATCH);
   pushRunning = true;
   pushAbortController = new AbortController();
   const myCtrl = pushAbortController;
@@ -379,11 +402,35 @@ async function pushPendingPoints(): Promise<void> {
   try {
     syncMetrics.pushRequests += 1;
     syncMetrics.pushedPoints += batch.length;
+    syncMetrics.pushedPresenceWitnesses += presenceBatch.length;
     const res = await fetchWithTimeout('/api/memory/points', {
       method: 'POST',
       body: JSON.stringify({
-        points: batch.map((p) => p.cid ? ({ lat: p.lat, lng: p.lng, ts: p.ts, cid: p.cid })
-                                       : ({ lat: p.lat, lng: p.lng, ts: p.ts })),
+        points: batch.map((p) => ({
+          lat: p.lat,
+          lng: p.lng,
+          ts: p.ts,
+          ...(p.cid ? { cid: p.cid } : {}),
+          evidence_source: p.evidenceSource,
+          source_activity_client_id: p.sourceActivityClientId,
+          source_segment_id: p.sourceSegmentId,
+          horizontal_accuracy_m: p.horizontalAccuracyM,
+          continuity_state: p.continuityState,
+        })),
+        presence_witnesses: presenceBatch.map((witness) => ({
+          cid: witness.cid,
+          first_lat: witness.firstLat,
+          first_lng: witness.firstLng,
+          first_observed_at_ms: witness.firstObservedAtMs,
+          lat: witness.lat,
+          lng: witness.lng,
+          observed_at_ms: witness.observedAtMs,
+          evidence_source: witness.evidenceSource,
+          source_activity_client_id: witness.sourceActivityClientId,
+          source_segment_id: witness.sourceSegmentId,
+          horizontal_accuracy_m: witness.horizontalAccuracyM,
+          continuity_state: witness.continuityState,
+        })),
       }),
     }, myCtrl);
     if (myEpoch !== epoch || myUserId !== activeUserId) return;
@@ -391,9 +438,14 @@ async function pushPendingPoints(): Promise<void> {
       const body = await res.json().catch(() => null);
       const echo: Array<EchoEntry | null> = Array.isArray(body?.points) ? body.points : [];
       useMemoryStore.getState().applyServerEchoForPushAligned(batch, echo);
+      const acceptedPresenceCids = (Array.isArray(body?.presence_witnesses) ? body.presence_witnesses : [])
+        .map((entry: any) => String(entry?.cid ?? ''))
+        .filter(Boolean);
+      useMemoryStore.getState().markPresenceWitnessesSynced(presenceBatch, acceptedPresenceCids);
       backoffUntil = 0;
-      pendingBurstStartedAt = pending.length > MAX_BATCH ? Date.now() : null;
-      if (pending.length > MAX_BATCH) schedulePush(0);
+      const hasMore = pending.length > MAX_BATCH || pendingPresence.length > MAX_BATCH;
+      pendingBurstStartedAt = hasMore ? Date.now() : null;
+      if (hasMore) schedulePush(0);
     } else if (res.status === 401) {
       // A final 401 after authenticatedFetch's own refresh path is not a
       // transient network error. Preserve local evidence and wait for a real
@@ -454,13 +506,14 @@ export function attachMemorySync(userId: string): void {
   activeUserId = userId;
   authBlocked = false;
   syncMetrics.authBlocked = false;
-  let lastUnsyncedCount = useMemoryStore.getState()._unsyncedCount;
+  let lastUnsyncedCount = useMemoryStore.getState()._unsyncedCount
+    + (useMemoryStore.getState()._unsyncedPresenceCount ?? 0);
   unsubscribe = useMemoryStore.subscribe((s) => {
-    const u = s._unsyncedCount;
+    const u = s._unsyncedCount + (s._unsyncedPresenceCount ?? 0);
     if (u > lastUnsyncedCount) schedulePush();
     lastUnsyncedCount = u;
   });
-  if (useMemoryStore.getState()._unsyncedCount > 0) {
+  if (useMemoryStore.getState()._unsyncedCount + (useMemoryStore.getState()._unsyncedPresenceCount ?? 0) > 0) {
     schedulePush(PUSH_DEBOUNCE_MS);
   }
 }
@@ -507,7 +560,7 @@ export function notifyMemoryAuthRefreshed(userId: string): void {
   authBlocked = false;
   syncMetrics.authBlocked = false;
   backoffUntil = 0;
-  if (useMemoryStore.getState()._unsyncedCount > 0) schedulePush(0);
+  if (useMemoryStore.getState()._unsyncedCount + (useMemoryStore.getState()._unsyncedPresenceCount ?? 0) > 0) schedulePush(0);
 }
 
 /** Force-clear memory on the server.
@@ -528,9 +581,11 @@ export function notifyMemoryAuthRefreshed(userId: string): void {
  * The DELETE still uses its own controller — the abort above only stops
  * the earlier operations, not this new one.
  */
-export async function deleteAllMemoryFromServer(): Promise<boolean> {
+export async function deleteAllMemoryFromServer(expectedUserId: string): Promise<boolean> {
+  if (!expectedUserId || activeUserId !== expectedUserId) return false;
   // (1) invalidate any in-flight push/pull results
   epoch += 1;
+  const deleteEpoch = epoch;
   // (2) cancel any debounced push scheduled to fire imminently
   if (pushTimer) {
     clearTimeout(pushTimer);
@@ -548,8 +603,22 @@ export async function deleteAllMemoryFromServer(): Promise<boolean> {
   // (4) issue the DELETE
   const ctrl = new AbortController();
   try {
-    const res = await fetchWithTimeout('/api/memory/points', { method: 'DELETE' }, ctrl);
-    if (res.ok) {
+    const res = await fetchWithTimeout('/api/memory/points', {
+      method: 'DELETE',
+      expectedUserId,
+    }, ctrl);
+    // The response belongs to the initiating account only. A detach/attach or
+    // account switch must never clear the process-global store hydrated for a
+    // newer owner.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const appState = require('../store/useAppStore').useAppStore.getState();
+    const liveOwnerId = appState.isLoggedIn && appState.user?.id
+      ? String(appState.user.id)
+      : null;
+    if (res.ok
+      && deleteEpoch === epoch
+      && activeUserId === expectedUserId
+      && liveOwnerId === expectedUserId) {
       // (5) local clear
       useMemoryStore.getState().clearAll();
       return true;

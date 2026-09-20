@@ -183,10 +183,11 @@ export interface FriendProfile {
   name: string;
   email: string;
   memberSince: string | null;
-  friendCount: number;
-  hikeCount: number;
-  placesExplored: number;
-  cairnsPlanted: number;
+  permittedContent: {
+    encounteredCairns: number;
+    sharedRoutes: number;
+    memoryAvailable: boolean;
+  };
 }
 
 export async function fetchFriendProfile(friendId: number | string): Promise<FriendProfile | null> {
@@ -207,6 +208,15 @@ export async function fetchFriendProfile(friendId: number | string): Promise<Fri
 export async function removeFriendAPI(
   friendId: number | string,
 ): Promise<{ success: boolean; error?: string }> {
+  // Invalidate source-bound async work at intent time. If the server removal
+  // fails, only a later authorized read may restore the borrowed data.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
+    void useFriendMemoryStore.getState().purgeFriend(friendId);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    void require('../features/friends/services/friendContent').purgeFriendContent(friendId);
+  } catch { /* store may not be loaded */ }
   // Optimistic local remove
   const prev = useFriendStore.getState().friends;
   useFriendStore.setState({ friends: prev.filter((f) => f.id !== String(friendId)) });
@@ -218,6 +228,18 @@ export async function removeFriendAPI(
       const data = await res.json().catch(() => ({}));
       return { success: false, error: (data as any).error || 'Remove failed' };
     }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
+      await useFriendMemoryStore.getState().purgeFriend(friendId);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      await require('../features/friends/services/friendContent').purgeFriendContent(friendId);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useMarkerStore } = require('./useMarkerStore');
+      useMarkerStore.setState((state: any) => ({
+        circleMarkers: state.circleMarkers.filter((marker: any) => String(marker.userId) !== String(friendId)),
+      }));
+    } catch { /* server revocation remains authoritative */ }
     return { success: true };
   } catch (err: any) {
     useFriendStore.setState({ friends: prev });
@@ -239,10 +261,25 @@ export async function blockUser(
   targetId: number | string,
   reason?: string,
 ): Promise<{ success: boolean; error?: string }> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { useAppStore } = require('./useAppStore');
+  const viewerId = String(useAppStore.getState().user?.id ?? '');
+  if (!viewerId) return { success: false, error: 'Account unavailable' };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
+    void useFriendMemoryStore.getState().purgeFriend(targetId);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    void require('../features/friends/services/friendContent').purgeFriendContent(targetId);
+  } catch { /* store may not be loaded */ }
+  if (String(useAppStore.getState().user?.id ?? '') !== viewerId) {
+    return { success: false, error: 'Account changed' };
+  }
   try {
     const res = await authenticatedFetch(`/api/friends/${targetId}/block`, {
       method: 'POST',
       body: JSON.stringify(reason ? { reason } : {}),
+      expectedUserId: viewerId,
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -252,6 +289,18 @@ export async function blockUser(
     try {
       await useFriendStore.getState().loadFriendsFromBackend();
     } catch { /* silent */ }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
+      await useFriendMemoryStore.getState().purgeFriend(targetId);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      await require('../features/friends/services/friendContent').purgeFriendContent(targetId);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useMarkerStore } = require('./useMarkerStore');
+      useMarkerStore.setState((state: any) => ({
+        circleMarkers: state.circleMarkers.filter((marker: any) => String(marker.userId) !== String(targetId)),
+      }));
+    } catch { /* server revocation remains authoritative */ }
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error' };
@@ -259,10 +308,22 @@ export async function blockUser(
 }
 
 export async function unblockUser(targetId: number | string): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { useAppStore } = require('./useAppStore');
+  const viewerId = String(useAppStore.getState().user?.id ?? '');
+  if (!viewerId) return false;
   try {
     const res = await authenticatedFetch(`/api/friends/${targetId}/block`, {
       method: 'DELETE',
+      expectedUserId: viewerId,
     });
+    if (res.ok && String(useAppStore.getState().user?.id ?? '') === viewerId) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        await require('../features/public/services/publicCairns').usePublicCairnStore
+          .getState().allowAuthorAfterUnblock(String(targetId));
+      } catch { /* public namespace may not be hydrated */ }
+    }
     return res.ok;
   } catch {
     return false;

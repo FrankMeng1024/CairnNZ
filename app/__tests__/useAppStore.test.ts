@@ -126,7 +126,7 @@ describe('useAppStore.hydrate', () => {
       expect(state.hydrated).toBe(true);
     });
 
-    it('v405: valid JWT cold-boot → attachMemorySync 被调用 (happy path 修复 1)', async () => {
+    it('O41: valid JWT cold-boot delegates Memory initialization to the authenticated app lifecycle', async () => {
       const realUser = { id: '4', name: 'Frank', email: 'f@example.com' };
       setupMocks(() => realUser);
       const memSync = require('../src/services/memorySync');
@@ -135,14 +135,12 @@ describe('useAppStore.hydrate', () => {
 
       await useAppStore.getState().hydrate();
 
-      // 铁证: hydrate 里必须先 hydrateMemoryForUser 再 attachMemorySync,
-      // 否则 AsyncStorage 里悬挂的 unsynced points 无法被 subscriber 捕获。
-      expect(memPersist.hydrateMemoryForUser).toHaveBeenCalledWith('4');
-      expect(memSync.attachMemorySync).toHaveBeenCalledWith('4');
-      // Verify order: hydrate 先于 attach (通过调用序号)
-      const hydrateOrder = memPersist.hydrateMemoryForUser.mock.invocationCallOrder[0];
-      const attachOrder = memSync.attachMemorySync.mock.invocationCallOrder[0];
-      expect(hydrateOrder).toBeLessThan(attachOrder);
+      // O41 moved the shared Memory authority to AppRoot's authenticated-user
+      // effect so every login path is covered. The cold-boot hydrator must not
+      // start a competing persistence or sync owner.
+      expect(useAppStore.getState()).toMatchObject({ isLoggedIn: true, user: realUser });
+      expect(memPersist.hydrateMemoryForUser).not.toHaveBeenCalled();
+      expect(memSync.attachMemorySync).not.toHaveBeenCalled();
     });
 
     it('v405: logout → detachMemorySync + detachMemoryPersistence 双清 (避免旧 userId 泄漏)', async () => {

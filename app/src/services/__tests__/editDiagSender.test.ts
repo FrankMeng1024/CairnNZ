@@ -11,7 +11,6 @@ import {
   flushQueue,
   _resetForTesting,
   _peekQueueLength,
-  MAX_QUEUE_SIZE,
 } from '../editDiagSender';
 
 const realFetch = global.fetch;
@@ -56,11 +55,11 @@ describe('editDiagSender — sendEditDiag basic enqueue', () => {
 });
 
 describe('editDiagSender — bounded queue', () => {
-  test('queue caps at MAX_QUEUE_SIZE; oldest dropped on overflow', async () => {
-    for (let i = 0; i < MAX_QUEUE_SIZE + 5; i++) {
+  test('queue caps at 50 events; oldest dropped on overflow', async () => {
+    for (let i = 0; i < 55; i++) {
       sendEditDiag('brush_preview_started', { stroke_count: i });
     }
-    expect(_peekQueueLength()).toBe(MAX_QUEUE_SIZE);
+    expect(_peekQueueLength()).toBe(50);
   });
 });
 

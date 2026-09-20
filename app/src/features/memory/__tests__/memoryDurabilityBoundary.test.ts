@@ -30,7 +30,7 @@ describe('Memory durable ownership boundary', () => {
     }));
 
     const { recordMemoryEvidence } = require('../services/recordMemoryEvidence');
-    const commit = recordMemoryEvidence({ lat: -41, lng: 174, atMs: 1_000, source: 'activity' });
+    const commit = recordMemoryEvidence({ lat: -41, lng: 174, atMs: 1_000, source: 'activity_real' });
     for (let tick = 0; tick < 10 && ensureMemoryPersistenceForUser.mock.calls.length === 0; tick += 1) {
       await Promise.resolve();
     }

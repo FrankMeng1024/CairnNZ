@@ -43,6 +43,56 @@ export interface VisitedPoint {
   cid: string;
   /** True iff successfully uploaded to server. */
   synced?: boolean;
+  /** Why this point exists. `simulator_test` is valid only in testPoints. */
+  evidenceSource: PersonalMemoryEvidenceSource | 'simulator_test';
+  /** Stable Activity identity used by the server to prove completed-Activity sharing. */
+  sourceActivityClientId?: string;
+  /** Canonical source segment; a recording gap starts a distinct context. */
+  sourceSegmentId?: string;
+  /** Accuracy captured at observation time; absent for historical rows. */
+  horizontalAccuracyM?: number;
+  /** Direct-observation continuity classification. */
+  continuityState?: 'accepted' | 'gap' | 'unknown';
+}
+
+/**
+ * Bounded time-qualified evidence, separate from exploration geometry.
+ * `first*` is immutable; the latest fields may advance within the same
+ * source context so a later accepted observation is not lost to spatial
+ * coverage dedupe. This is not a visit counter or a reconstructed journey.
+ */
+export interface MemoryPresenceWitness {
+  cid: string;
+  firstLat: number;
+  firstLng: number;
+  firstObservedAtMs: number;
+  lat: number;
+  lng: number;
+  observedAtMs: number;
+  evidenceSource: 'activity_real' | 'passive_real';
+  sourceActivityClientId?: string;
+  sourceSegmentId?: string;
+  horizontalAccuracyM: number;
+  continuityState: 'accepted';
+  synced?: boolean;
+}
+
+export interface MemoryMutationResult {
+  accepted: boolean;
+  coverageChanged: boolean;
+  presenceChanged: boolean;
+  metadataChanged: boolean;
+}
+
+export type PersonalMemoryEvidenceSource = 'activity_real' | 'passive_real' | 'historical_unknown';
+export type MemoryEvidenceSource = PersonalMemoryEvidenceSource | 'simulator_test';
+
+export interface MemoryEvidenceMetadata {
+  source: MemoryEvidenceSource;
+  sourceActivityClientId?: string;
+  sourceSegmentId?: string;
+  horizontalAccuracyM?: number;
+  continuityState?: 'accepted' | 'gap' | 'unknown';
 }
 
 interface SyncState {
@@ -54,10 +104,16 @@ interface SyncState {
 
 interface MemoryState {
   points: VisitedPoint[];
+  presenceWitnesses: MemoryPresenceWitness[];
+  /** Explicitly isolated QA realm. Rendered only by the labeled Debug Raw GPS
+   * authority; never synchronized or shared as Personal Memory. */
+  testPoints: VisitedPoint[];
   /** Spatial bucket index for fast isExplored. Internal — null = rebuild on use. */
   _bucketIndex: Map<string, VisitedPoint[]> | null;
   /** Bumped on geometry mutations. FogLayer keys its memo on this. */
   geometryVersion: number;
+  /** Changes only for presence, never drives Fog geometry. */
+  presenceVersion: number;
   // O1: recentUnlocks removed — v303 Skia burst overlay 已在 v346 native
   // fog 上线后被替代,MemoryFogBurstOverlay 已删。原来是"dead-writer"(每
   // 次 recordPoint push 但无消费者),现在字段和 push 全清。
@@ -74,11 +130,12 @@ interface MemoryState {
    * mutation. Always equals points.filter(p => !p.synced).length.
    */
   _unsyncedCount: number;
+  _unsyncedPresenceCount: number;
   initialRevealDone: boolean;
   syncState: SyncState;
 
   /** Record one GPS point as visited. Idempotent. */
-  recordPoint: (lat: number, lng: number, atMs?: number) => void;
+  recordPoint: (lat: number, lng: number, atMs?: number, metadata?: MemoryEvidenceMetadata) => MemoryMutationResult;
 
   /** Read API — is this lat/lng within `unlockRadius` of any visited point? */
   isExplored: (lat: number, lng: number) => boolean;
@@ -107,8 +164,13 @@ interface MemoryState {
    */
   applyServerEchoForPushAligned: (batch: VisitedPoint[], echo: Array<{ batch_index?: number; ts?: number; cid?: string } | null>) => void;
 
+  markPresenceWitnessesSynced: (batch: MemoryPresenceWitness[], acceptedCids: string[]) => void;
+
   /** Replace all points (called by persistence on hydrate / by sync on download). */
   replacePoints: (points: VisitedPoint[], initialRevealDone: boolean) => void;
+  /** Restore the account-bound synthetic QA realm without touching Personal Memory. */
+  replaceTestPoints: (points: VisitedPoint[]) => void;
+  replacePresenceWitnesses: (witnesses: MemoryPresenceWitness[]) => void;
 
   /** Clear all memory. */
   clearAll: () => void;
@@ -131,6 +193,16 @@ interface MemoryState {
 
 const CULL_THRESHOLD_M = UnlockConfig.radiusMeters * 0.5;
 const CULL_THRESHOLD_SQ = CULL_THRESHOLD_M * CULL_THRESHOLD_M;
+export const PRESENCE_REFRESH_MS = 15_000;
+export const MAX_PRESENCE_WITNESSES = 4_096;
+export const MAX_ENCOUNTER_ACCURACY_M = 50;
+
+const NO_MUTATION: MemoryMutationResult = {
+  accepted: false,
+  coverageChanged: false,
+  presenceChanged: false,
+  metadataChanged: false,
+};
 
 function distanceSqMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const dLat = (a.lat - b.lat) * 111_000;
@@ -188,6 +260,44 @@ function buildBucketIndex(points: VisitedPoint[]): Map<string, VisitedPoint[]> {
   return idx;
 }
 
+function qualifiesForPresence(metadata: MemoryEvidenceMetadata): metadata is MemoryEvidenceMetadata & {
+  source: 'activity_real' | 'passive_real';
+  horizontalAccuracyM: number;
+  continuityState: 'accepted';
+} {
+  return (metadata.source === 'activity_real' || metadata.source === 'passive_real')
+    && metadata.continuityState === 'accepted'
+    && Number.isFinite(metadata.horizontalAccuracyM)
+    && Number(metadata.horizontalAccuracyM) >= 0
+    && Number(metadata.horizontalAccuracyM) <= MAX_ENCOUNTER_ACCURACY_M
+    && (metadata.source !== 'activity_real'
+      || (typeof metadata.sourceActivityClientId === 'string' && metadata.sourceActivityClientId.length > 0
+        && typeof metadata.sourceSegmentId === 'string' && metadata.sourceSegmentId.length > 0));
+}
+
+function samePresenceContext(witness: MemoryPresenceWitness, metadata: MemoryEvidenceMetadata, ts: number): boolean {
+  if (witness.evidenceSource !== metadata.source) return false;
+  if (metadata.source === 'activity_real') {
+    return witness.sourceActivityClientId === metadata.sourceActivityClientId
+      && witness.sourceSegmentId === metadata.sourceSegmentId;
+  }
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.floor(witness.firstObservedAtMs / dayMs) === Math.floor(ts / dayMs);
+}
+
+function pruneSyncedPresence(witnesses: MemoryPresenceWitness[]): MemoryPresenceWitness[] {
+  if (witnesses.length <= MAX_PRESENCE_WITNESSES) return witnesses;
+  const overflow = witnesses.length - MAX_PRESENCE_WITNESSES;
+  const removable = new Set(
+    witnesses
+      .filter(witness => witness.synced)
+      .sort((a, b) => a.observedAtMs - b.observedAtMs)
+      .slice(0, overflow)
+      .map(witness => witness.cid),
+  );
+  return removable.size > 0 ? witnesses.filter(witness => !removable.has(witness.cid)) : witnesses;
+}
+
 /**
  * Generate a uuid v4 string. Lightweight implementation — Hermes-safe,
  * no external dep.
@@ -202,59 +312,148 @@ function uuidv4(): string {
 
 export const useMemoryStore = create<MemoryState>((set, get) => ({
   points: [],
+  presenceWitnesses: [],
+  testPoints: [],
   _bucketIndex: null,
   geometryVersion: 0,
+  presenceVersion: 0,
   _unsyncedCount: 0,
+  _unsyncedPresenceCount: 0,
   initialRevealDone: false,
   syncState: { inFlightCount: 0, lastSyncAt: 0 },
   lastWatcherFix: null,
 
-  recordPoint: (lat, lng, atMs = Date.now()) => {
-    if (!isFinite(lat) || !isFinite(lng)) return;
+  recordPoint: (lat, lng, atMs = Date.now(), metadata = { source: 'historical_unknown' }) => {
+    if (!isFinite(lat) || !isFinite(lng)) return NO_MUTATION;
     // O17 D-MEM-03: reject non-positive / non-finite timestamps at boundary.
     // Prevents negative ts (some legacy replay paths pass 0 or NaN) from
     // corrupting bucket dedupe + deterministic-cid hash.
-    if (!(atMs > 0) || !Number.isFinite(atMs)) return;
+    if (!(atMs > 0) || !Number.isFinite(atMs)) return NO_MUTATION;
     // M6 fix (v0.2.6.3): force ts to integer at the boundary so server
     // and client agree on the deterministic-cid hash input. Fractional
     // ts breaks echo lookup → infinite retry.
     const ts = Math.floor(atMs);
-    const points = get().points;
+    const isTestEvidence = metadata.source === 'simulator_test';
+    const points = isTestEvidence ? get().testPoints : get().points;
     // O1: CULL 从 slice(-32) 改成走 bucket index 全量查 (9-cell sweep).
     // 之前 32-tail scan 在长 hike 后段的邻近点 dedup 失败 → 服务器 UNIQUE
     // 拦不住 (每个 uuid 不同),同一 cell 存多份。走 bucket index O(1) 查
     // 附近所有已 recordPoint 的点,同 12.5m 内 skip。
-    const idxRef = get()._bucketIndex ?? buildBucketIndex(points);
+    const idxRef = isTestEvidence ? buildBucketIndex(points) : (get()._bucketIndex ?? buildBucketIndex(points));
     const targetBuckets = computeBucketsForRadius({ lat, lng });
+    let spatialDuplicate = false;
     for (const k of targetBuckets) {
       const bucketPts = idxRef.get(k);
       if (!bucketPts) continue;
       for (const p of bucketPts) {
-        if (distanceSqMeters({ lat, lng }, p) < CULL_THRESHOLD_SQ) return;
+        if (distanceSqMeters({ lat, lng }, p) >= CULL_THRESHOLD_SQ) continue;
+        spatialDuplicate = true;
+        break;
+      }
+      if (spatialDuplicate) break;
+    }
+    let coverageChanged = false;
+    let newPoints = points;
+    let newPoint: VisitedPoint | null = null;
+    if (!spatialDuplicate) {
+      newPoint = {
+        lat,
+        lng,
+        ts,
+        cid: uuidv4(),
+        synced: false,
+        evidenceSource: metadata.source,
+        sourceActivityClientId: metadata.sourceActivityClientId,
+        sourceSegmentId: metadata.sourceSegmentId,
+        horizontalAccuracyM: metadata.horizontalAccuracyM,
+        continuityState: metadata.continuityState ?? 'unknown',
+      };
+      newPoints = [...points, newPoint];
+      coverageChanged = true;
+    }
+    if (isTestEvidence) {
+      if (coverageChanged) set({ testPoints: newPoints });
+      return { accepted: true, coverageChanged, presenceChanged: false, metadataChanged: false };
+    }
+    let nextPresence = get().presenceWitnesses;
+    let presenceChanged = false;
+    if (qualifiesForPresence(metadata)) {
+      let matchIndex = -1;
+      for (let index = nextPresence.length - 1; index >= 0; index -= 1) {
+        const witness = nextPresence[index];
+        if (!samePresenceContext(witness, metadata, ts)) continue;
+        if (distanceSqMeters({ lat, lng }, witness) < CULL_THRESHOLD_SQ) {
+          matchIndex = index;
+          break;
+        }
+      }
+      if (matchIndex >= 0) {
+        const existing = nextPresence[matchIndex];
+        if (ts > existing.observedAtMs && ts - existing.observedAtMs >= PRESENCE_REFRESH_MS) {
+          nextPresence = nextPresence.map((witness, index) => index === matchIndex ? {
+            ...witness,
+            lat,
+            lng,
+            observedAtMs: ts,
+            horizontalAccuracyM: Number(metadata.horizontalAccuracyM),
+            synced: false,
+          } : witness);
+          presenceChanged = true;
+        }
+      } else {
+        nextPresence = pruneSyncedPresence([...nextPresence, {
+          cid: uuidv4(),
+          firstLat: lat,
+          firstLng: lng,
+          firstObservedAtMs: ts,
+          lat,
+          lng,
+          observedAtMs: ts,
+          evidenceSource: metadata.source,
+          sourceActivityClientId: metadata.sourceActivityClientId,
+          sourceSegmentId: metadata.sourceSegmentId,
+          horizontalAccuracyM: Number(metadata.horizontalAccuracyM),
+          continuityState: 'accepted',
+          synced: false,
+        }]);
+        presenceChanged = true;
       }
     }
-    const newPoint: VisitedPoint = { lat, lng, ts, cid: uuidv4(), synced: false };
-    const newPoints = [...points, newPoint];
-    // The bucket index is internal and never a render selector. Mutate this
-    // derived index in place so a new explored increment does not clone every
-    // historical bucket; the public points array remains immutable.
-    const idx = idxRef;
-    const k = bucketKey(lat, lng);
-    const arr = idx.get(k);
-    if (arr) arr.push(newPoint);
-    else idx.set(k, [newPoint]);
-    // O1: recentUnlocks push removed — Skia burst overlay 死了不需要 feed
-    set({
-      points: newPoints,
-      _bucketIndex: idx,
-      geometryVersion: get().geometryVersion + 1,
-      _unsyncedCount: get()._unsyncedCount + 1,
-    });
-    // v305 OTA: dual-write to H3 cell store, AFTER setState so the two
-    // stores update in the same JS tick — FogLayer (subscribed to
-    // cellVersion) will see both stores consistent on next render.
-    // Done last so any throw above doesn't desync.
-    useH3VisitedStore.getState().addPointToCells(lat, lng, ts);
+
+    if (coverageChanged && newPoint) {
+      // The bucket index is internal and never a render selector. Mutate this
+      // derived index in place so a new explored increment does not clone every
+      // historical bucket; the public points array remains immutable.
+      const idx = idxRef;
+      const k = bucketKey(lat, lng);
+      const arr = idx.get(k);
+      if (arr) arr.push(newPoint);
+      else idx.set(k, [newPoint]);
+      set({
+        points: newPoints,
+        _bucketIndex: idx,
+        geometryVersion: get().geometryVersion + 1,
+        _unsyncedCount: get()._unsyncedCount + 1,
+        ...(presenceChanged ? {
+          presenceWitnesses: nextPresence,
+          presenceVersion: get().presenceVersion + 1,
+          _unsyncedPresenceCount: nextPresence.reduce((count, witness) => count + (witness.synced ? 0 : 1), 0),
+        } : {}),
+      });
+      useH3VisitedStore.getState().addPointToCells(lat, lng, ts);
+    } else if (presenceChanged) {
+      set({
+        presenceWitnesses: nextPresence,
+        presenceVersion: get().presenceVersion + 1,
+        _unsyncedPresenceCount: nextPresence.reduce((count, witness) => count + (witness.synced ? 0 : 1), 0),
+      });
+    }
+    return {
+      accepted: true,
+      coverageChanged,
+      presenceChanged,
+      metadataChanged: presenceChanged && !coverageChanged,
+    };
   },
 
   /**
@@ -370,6 +569,28 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     });
   },
 
+  markPresenceWitnessesSynced: (batch, acceptedCids) => {
+    if (batch.length === 0 || acceptedCids.length === 0) return;
+    const accepted = new Set(acceptedCids);
+    const sentVersion = new Map(batch.map(witness => [witness.cid, witness.observedAtMs]));
+    let changed = 0;
+    const witnesses = get().presenceWitnesses.map((witness) => {
+      if (!accepted.has(witness.cid)
+        || witness.synced
+        || sentVersion.get(witness.cid) !== witness.observedAtMs) return witness;
+      changed += 1;
+      return { ...witness, synced: true };
+    });
+    if (changed === 0) return;
+    const bounded = pruneSyncedPresence(witnesses);
+    set({
+      presenceWitnesses: bounded,
+      presenceVersion: get().presenceVersion + 1,
+      _unsyncedPresenceCount: bounded.reduce((count, witness) => count + (witness.synced ? 0 : 1), 0),
+      syncState: { ...get().syncState, lastSyncAt: Date.now() },
+    });
+  },
+
   // O1: applyServerEchoForPush (M11 legacy) removed — memorySync uses
   // the Aligned variant only, and grep confirms 0 external callers.
 
@@ -429,12 +650,40 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     }
   },
 
+  replaceTestPoints: (points) => {
+    set({
+      testPoints: points,
+      geometryVersion: get().geometryVersion + 1,
+    });
+  },
+
+  replacePresenceWitnesses: (witnesses) => {
+    const bounded = pruneSyncedPresence(witnesses
+      .filter(witness => qualifiesForPresence({
+        source: witness.evidenceSource,
+        sourceActivityClientId: witness.sourceActivityClientId,
+        sourceSegmentId: witness.sourceSegmentId,
+        horizontalAccuracyM: witness.horizontalAccuracyM,
+        continuityState: witness.continuityState,
+      }))
+      .sort((a, b) => a.firstObservedAtMs - b.firstObservedAtMs));
+    set({
+      presenceWitnesses: bounded,
+      presenceVersion: get().presenceVersion + 1,
+      _unsyncedPresenceCount: bounded.reduce((count, witness) => count + (witness.synced ? 0 : 1), 0),
+    });
+  },
+
   clearAll: () => {
     set({
       points: [],
+      presenceWitnesses: [],
+      testPoints: [],
       _bucketIndex: null,
       geometryVersion: get().geometryVersion + 1,
+      presenceVersion: get().presenceVersion + 1,
       _unsyncedCount: 0,
+      _unsyncedPresenceCount: 0,
       initialRevealDone: false,
       lastWatcherFix: null,
       // N1 fix (v0.2.6.3): reset syncState too. Otherwise a logout
@@ -488,9 +737,13 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   resetForUserSwitch: () => {
     set({
       points: [],
+      presenceWitnesses: [],
+      testPoints: [],
       _bucketIndex: null,
       geometryVersion: get().geometryVersion + 1,
+      presenceVersion: get().presenceVersion + 1,
       _unsyncedCount: 0,
+      _unsyncedPresenceCount: 0,
       initialRevealDone: false,
       syncState: { inFlightCount: 0, lastSyncAt: 0 },
       lastWatcherFix: null,

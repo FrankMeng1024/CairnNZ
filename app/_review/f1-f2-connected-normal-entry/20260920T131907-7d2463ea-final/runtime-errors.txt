@@ -1,0 +1,2 @@
+http [normal-finish-commit] 501 GET fetch https://api.mapbox.com/directions/v5/mapbox/walking/174.777208,-41.286070;174.776777,-41.286096?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=[redacted]
+console [normal-finish-commit] https://api.mapbox.com/directions/v5/mapbox/walking/174.777208,-41.286070;174.776777,-41.286096?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=[redacted]:0:0: Failed to load resource: the server responded with a status of 501 (Not Implemented)

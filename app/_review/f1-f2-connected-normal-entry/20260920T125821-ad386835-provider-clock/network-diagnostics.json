@@ -1,0 +1,43 @@
+{
+  "namespace": "f1f2-ad386835-20260920t125821",
+  "externalRequests": [
+    {
+      "at": "2026-09-20T04:59:44.492Z",
+      "step": "boot",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=-41.2865&longitude=174.7762&localityLanguage=en",
+      "action": "fixture-reverse-geocode-wellington"
+    },
+    {
+      "at": "2026-09-20T04:59:44.505Z",
+      "step": "boot",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=-41.2865&longitude=174.7762&current=temperature_2m,weathercode&daily=sunrise,sunset&forecast_days=1&timeformat=unixtime&timezone=auto",
+      "action": "fixture-weather-wellington"
+    }
+  ],
+  "unexpectedExternalRequests": [],
+  "unexpectedApiRequests": [
+    {
+      "at": "2026-09-20T05:00:01.941Z",
+      "step": "prefinish-memory",
+      "method": "POST",
+      "pathname": "/api/friend-content/encounters/verify",
+      "query": "",
+      "body": {}
+    }
+  ],
+  "failedRequests": [],
+  "httpErrors": [
+    {
+      "at": "2026-09-20T05:00:01.957Z",
+      "step": "prefinish-memory",
+      "status": 501,
+      "method": "POST",
+      "resourceType": "fetch",
+      "url": "https://api.yiiling.cn/api/friend-content/encounters/verify"
+    }
+  ]
+}

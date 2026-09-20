@@ -34,6 +34,7 @@ import { RouteEditorScreen } from '../screens/RouteEditorScreen';
 import { DebugScreen } from '../screens/DebugScreen';
 import { PlantScreen } from '../screens/PlantScreen';
 import { FriendsScreen } from '../screens/FriendsScreen';
+import { FriendContentScreen } from '../screens/FriendContentScreen';
 import { FriendsPreviewScreen } from '../screens/FriendsPreviewScreen';
 import { HomePreviewScreen } from '../screens/HomePreviewScreen';
 import { HikingPreviewScreen } from '../screens/HikingPreviewScreen';
@@ -45,6 +46,7 @@ import { MarkDetailDevPreviewScreen } from '../features/marks/dev/MarkDetailDevP
 import { Gate1IconSheetScreen } from '../screens/Gate1IconSheetScreen';
 import { MarkerDetailScreen } from '../screens/MarkerDetailScreen';
 import { AllCairnsScreen } from '../screens/AllCairnsScreen';
+import { PublicCairnDetailScreen } from '../screens/PublicCairnDetailScreen';
 import { OnboardingModal, hasCompletedOnboarding } from '../features/onboarding/OnboardingModal';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useAppStore } from '../store/useAppStore';
@@ -52,6 +54,13 @@ import { useAppStore } from '../store/useAppStore';
 // nav gate. Real login flow only.
 import { markBootPhase } from '../services/bootDiagnostics';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import type { SharedRouteLaunchData } from '../features/friends/services/friendContent';
+import {
+  drainBorrowedRouteTerminalOutbox,
+  retryPendingFriendContentActions,
+} from '../features/friends/services/friendContent';
+import { usePublicCairnStore } from '../features/public/services/publicCairns';
+import networkMonitor from '../services/networkMonitor';
 
 // v302: mark immediately after all transitive imports above resolved.
 // If app dies between `render_about_to_mount_root` (App.tsx) and
@@ -61,8 +70,8 @@ markBootPhase('navigator_module_loaded');
 export type RootStackParamList = {
   Auth: undefined;
   Home: undefined;
-  Hiking: { recoverClientActivityId?: string; routeId?: string } | undefined;
-  Running: { recoverClientActivityId?: string; routeId?: string } | undefined;
+  Hiking: { recoverClientActivityId?: string; routeId?: string; sharedRouteLease?: SharedRouteLaunch } | undefined;
+  Running: { recoverClientActivityId?: string; routeId?: string; sharedRouteLease?: SharedRouteLaunch } | undefined;
   MapHistory: { sessionId?: string; routeId?: string; qaReviewClone?: 'almost-done-v1' } | undefined;
   Routes: { initialTab?: 'routes' | 'activities' } | undefined;
   RouteEditor: {
@@ -76,6 +85,8 @@ export type RootStackParamList = {
   MarkerDetail: { markerId: string };
   AllCairns: undefined;
   Friends: undefined;
+  FriendContent: { friendId: string; friendName: string };
+  PublicCairnDetail: { cairnId: string };
   /** dev-only preview: renders the auto-generated FriendsScreen from spec.json.
    *  Query param 'state' picks which of F0-F6 to render. */
   FriendsPreview: { state?: string } | undefined;
@@ -102,11 +113,27 @@ export type RootStackParamList = {
   Gate1IconSheet: undefined;
 };
 
+export type SharedRouteLaunch = SharedRouteLaunchData;
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
   const { isLoggedIn, user } = useAppStore();
   const visualTheme = useVisualTheme();
+  React.useEffect(() => {
+    if (!isLoggedIn || !user?.id) {
+      usePublicCairnStore.getState().clearForAccountBoundary();
+      return;
+    }
+    void retryPendingFriendContentActions();
+    void drainBorrowedRouteTerminalOutbox();
+    void usePublicCairnStore.getState().initialize(String(user.id));
+  }, [isLoggedIn, user?.id]);
+  React.useEffect(() => networkMonitor.onChange(state => {
+    if (state.state === 'online' && usePublicCairnStore.getState().enabled) {
+      void usePublicCairnStore.getState().refreshScene();
+    }
+  }), []);
   markBootPhase('navigator_body_running', { isLoggedIn: !!isLoggedIn });
 
   // v312 anchor: just before NavigationContainer JSX. If we see this
@@ -202,6 +229,7 @@ export function RootNavigator() {
               stores.useMemoryStore = require('../features/memory/store/useMemoryStore').useMemoryStore;
               stores.useMemorySettingsStore = require('../features/memory/store/useMemorySettingsStore').useMemorySettingsStore;
               stores.useMarkerStore = require('../store/useMarkerStore').useMarkerStore;
+              stores.usePublicCairnStore = require('../features/public/services/publicCairns').usePublicCairnStore;
             } catch { /* ignore */ }
             (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = stores;
           }
@@ -236,6 +264,8 @@ export function RootNavigator() {
             <Stack.Screen name="MarkerDetail" component={MarkerDetailScreen} />
             <Stack.Screen name="AllCairns" component={AllCairnsScreen} />
             <Stack.Screen name="Friends"     component={FriendsScreen} />
+            <Stack.Screen name="FriendContent" component={FriendContentScreen} />
+            <Stack.Screen name="PublicCairnDetail" component={PublicCairnDetailScreen} />
             {__DEV__ && <Stack.Screen name="FriendsPreview" component={FriendsPreviewScreen} />}
             {__DEV__ && <Stack.Screen name="HomePreview" component={HomePreviewScreen} />}
             {__DEV__ && <Stack.Screen name="HikingPreview" component={HikingPreviewScreen} />}

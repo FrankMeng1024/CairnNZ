@@ -26,6 +26,7 @@ import { useMemoryScopeStore, type MemoryScope } from '../store/useMemoryScopeSt
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
+import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 
 interface Props {
   /** When provided, a Pick icon is shown as a third segment that
@@ -39,14 +40,15 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
   const theme = useVisualTheme();
   const scope = useMemoryScopeStore((s) => s.scope);
   const setScope = useMemoryScopeStore((s) => s.setScope);
+  const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
 
   // v376: third-segment expand animation. Width grows from 0→44 and
   // opacity 0→1 when scope flips to friends. Reverses on flip back.
-  const expand = useRef(new Animated.Value(scope === 'friends' ? 1 : 0)).current;
+  const expand = useRef(new Animated.Value(scope === 'self' ? 0 : 1)).current;
 
   useEffect(() => {
     Animated.timing(expand, {
-      toValue: scope === 'friends' ? 1 : 0,
+      toValue: scope === 'self' ? 0 : 1,
       duration: 220,
       easing: Easing.out(Easing.cubic),
       // width animation requires JS driver (layout prop).
@@ -58,8 +60,9 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
   const expandOpacity = expand;
 
   const opts: { id: MemoryScope; label: string }[] = [
-    { id: 'mine', label: 'Mine' },
-    { id: 'friends', label: 'Friends' },
+    { id: 'self', label: 'Mine' },
+    { id: 'combined', label: 'Together' },
+    { id: 'friend', label: 'Friend' },
   ];
 
   return (
@@ -70,7 +73,15 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
           <TouchableOpacity
             key={o.id}
             style={[styles.segment, active && styles.segmentActive, active ? { backgroundColor: theme.surface } : null]}
-            onPress={() => setScope(o.id)}
+            onPress={() => {
+              if (o.id !== 'friend') {
+                setScope(o.id);
+                return;
+              }
+              const selected = subscriptions[0];
+              if (selected) setScope('friend', String(selected.friend_id));
+              else onPickPress?.();
+            }}
             activeOpacity={0.7}
             testID={`memory-scope-${o.id}`}
           >
@@ -85,11 +96,11 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
         <Animated.View style={{ width: expandWidth, opacity: expandOpacity, overflow: 'hidden' }}>
           <TouchableOpacity
             style={styles.pickSegment}
-            onPress={() => { if (scope === 'friends') onPickPress(); }}
-            disabled={scope !== 'friends'}
+            onPress={() => { if (scope !== 'self') onPickPress(); }}
+            disabled={scope === 'self'}
             activeOpacity={0.7}
-            accessibilityElementsHidden={scope !== 'friends'}
-            importantForAccessibility={scope === 'friends' ? 'yes' : 'no-hide-descendants'}
+            accessibilityElementsHidden={scope === 'self'}
+            importantForAccessibility={scope !== 'self' ? 'yes' : 'no-hide-descendants'}
             testID="memory-scope-pick"
           >
             <Icon name="Users" size={16} color={theme.iconActive} strokeWidth={2.2} />

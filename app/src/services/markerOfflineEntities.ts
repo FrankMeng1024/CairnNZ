@@ -148,9 +148,20 @@ export const offlineMarkers = createOfflineEntity<MarkerCreatePayload, MarkerCre
       err.status = 503;
       throw err;
     }
-    const { originActivityClientId, ...marker } = data;
+    // MarkerCreatePayload also contains durable client-only ownership and
+    // presentation metadata. The API uses a strict schema, so never spread
+    // the outbox entity across this boundary.
+    const {
+      type, text, lat, lng, alt, permission, approximate, originActivityClientId,
+    } = data;
     return fetchOrThrow('/api/markers', 'POST', {
-      ...marker,
+      type,
+      text,
+      lat,
+      lng,
+      ...(alt === undefined ? {} : { alt }),
+      permission,
+      approximate,
       client_cairn_id: localId,
       origin_activity_client_id: originActivityClientId ?? null,
       client_op_id: localId,

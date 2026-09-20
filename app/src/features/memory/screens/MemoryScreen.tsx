@@ -16,13 +16,15 @@
  *       per 5 seconds.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Animated, InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { useNavigation, useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useMemoryStore } from '../store/useMemoryStore';
+import { useSettingsStore } from '../../../store/useSettingsStore';
+import { useActivitySimulatorStore } from '../../activitySimulator/useActivitySimulatorStore';
 import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
@@ -33,11 +35,12 @@ import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap, type MemoryMapHandle } from '../components/MemoryMap';
 import { MemoryScopeToggle } from '../components/MemoryScopeToggle';
 import { MemoryFriendPickModal } from '../components/MemoryFriendPickModal';
+import { MemorySharingSheet } from '../components/MemorySharingSheet';
 import { PaywallSheet } from '../components/PaywallSheet';
 import { BackButton } from '../../../components/BackButton';
 import { Icon } from '../../../components/Icon';
 import { CairnIcon } from '../../../components/CairnIcon';
-import { Colors } from '../../../components/tokens';
+import { Colors, Radius } from '../../../components/tokens';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { log, flushNow as flushLogsNow } from '../../../services/appLog';
 // v322: ForegroundUnlockManager moved here from App root. Mounts only
@@ -50,6 +53,8 @@ import { ForegroundUnlockManager } from '../components/ForegroundUnlockManager';
 import { ModalCard } from '../../../components/ModalCard';
 import { AppButton } from '../../../components/AppButton';
 import { useMarkerStore } from '../../../store/useMarkerStore';
+import { useAppStore } from '../../../store/useAppStore';
+import { usePublicCairnStore } from '../../public/services/publicCairns';
 // v427: async hierarchy from /api/hierarchy (world-wide data)
 import { fetchDeepest } from '../services/hierarchyService';
 // v424 hierarchy panel
@@ -131,6 +136,28 @@ export function MemoryScreen() {
   const watcherFix = useMemoryStore((s) => s.lastWatcherFix);
   const initialDone = useMemoryStore((s) => s.initialRevealDone);
   const memoryPoints = useMemoryStore((s) => s.points);
+  const syntheticTestPoints = useMemoryStore((s) => s.testPoints);
+  const presenceWitnesses = useMemoryStore((s) => s.presenceWitnesses);
+  const debugMode = useSettingsStore((s) => s.debugMode);
+  const simulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
+  const simulatorObservationMode = useActivitySimulatorStore((s) => s.observationMode);
+  const syntheticQaAuthority = debugMode
+    && simulatorEnabled
+    && simulatorObservationMode === 'raw-gps';
+  const memoryEvidenceContext = useMemo(() => {
+    const times = (syntheticQaAuthority
+      ? syntheticTestPoints.map(point => Number(point.ts))
+      : presenceWitnesses.length > 0
+      ? presenceWitnesses.flatMap(witness => [witness.firstObservedAtMs, witness.observedAtMs])
+      : memoryPoints.map(point => Number(point.ts)))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
+    if (times.length === 0) return null;
+    return {
+      first: new Date(times[0]).toLocaleDateString(),
+      last: new Date(times[times.length - 1]).toLocaleDateString(),
+    };
+  }, [memoryPoints, presenceWitnesses, syntheticQaAuthority, syntheticTestPoints]);
   const firstVisitDone = useMemorySettingsStore((s) => s.firstVisitDone);
   const settingsHydrated = useMemorySettingsStore((s) => s.hydrated);
   const setSetting = useMemorySettingsStore((s) => s.set);
@@ -190,13 +217,23 @@ export function MemoryScreen() {
   // Sprint 70 STORY-00540 + 542: 5-friend pick modal + paywall when 6+.
   const [pickModalOpen, setPickModalOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [sharingOpen, setSharingOpen] = useState(false);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
-  const setScope = useMemoryScopeStore((s) => s.setScope);
   const [fogReady, setFogReady] = useState(false);
+  const [fogUnavailable, setFogUnavailable] = useState(false);
   // v413: friend memory 加载 — Memory 页 mount + subscribed friends 变化时拉 /api/circle/fog
   const subscriptionsCount = useMemorySubscriptionsStore((s) => s.subscriptions.length);
   const loadSubs = useMemorySubscriptionsStore((s) => s.load);
-  const loadFriendFog = useFriendMemoryStore((s) => s.loadFriendFog);
+  const loadFriendProjections = useFriendMemoryStore((s) => s.loadSelectedProjections);
+  const hydrateFriendProjections = useFriendMemoryStore((s) => s.hydrate);
+  const friendProjectionError = useFriendMemoryStore((s) => s.error);
+  const userId = useAppStore((s) => s.user?.id ?? null);
+  const publicEnabled = usePublicCairnStore((s) => s.enabled);
+  const publicEntries = usePublicCairnStore((s) => s.entries);
+  const publicNewlySurfacedId = usePublicCairnStore((s) => s.newlySurfacedId);
+  const publicError = usePublicCairnStore((s) => s.error);
+  const presentPublicCairn = usePublicCairnStore((s) => s.present);
+  const loadCircleMarkers = useMarkerStore((s) => s.loadCircleMarkers);
   // Bug-5 fix: pre-load friend list on Memory mount so friend picker always
   // has data immediately (previously required visiting Friends tab first).
   const loadFriendsFromBackend = useFriendStore((s) => s.loadFriendsFromBackend);
@@ -215,9 +252,12 @@ export function MemoryScreen() {
     const now = Date.now();
     if (now - lastFriendLoadRef.current < 30_000) return;
     lastFriendLoadRef.current = now;
-    void loadSubs();
-    void loadFriendFog();
-  }, [loadSubs, loadFriendFog, loadFriendsFromBackend]);
+    void (async () => {
+      if (userId) await hydrateFriendProjections(String(userId));
+      await loadSubs();
+      await Promise.all([loadFriendProjections(), loadCircleMarkers()]);
+    })();
+  }, [hydrateFriendProjections, loadCircleMarkers, loadFriendProjections, loadSubs, loadFriendsFromBackend, userId]);
   // Track previous subscriptions count to detect changes when picker closes.
   const prevSubsCountRef = useRef(0);
   useEffect(() => {
@@ -246,7 +286,7 @@ export function MemoryScreen() {
       InteractionManager.runAfterInteractions(() => {
         const fetchStart = Date.now();
         log('memory.picker_close.fetch_start', { queued_ms: fetchStart - startTs });
-        loadFriendFog().then(() => {
+        Promise.all([loadFriendProjections(), loadCircleMarkers()]).then(() => {
           const fetchDone = Date.now();
           log('memory.picker_close.fetch_done', { fetch_ms: fetchDone - fetchStart, total_ms: fetchDone - startTs });
           if (friendFogToastTimerRef.current) clearTimeout(friendFogToastTimerRef.current);
@@ -261,29 +301,20 @@ export function MemoryScreen() {
         now: subscriptionsCount,
       });
     }
-  }, [subscriptionsCount, loadFriendFog]);
+  }, [subscriptionsCount, loadCircleMarkers, loadFriendProjections]);
 
-  // R2: public stranger markers. Subscribe to the store slice and provide
-  // a debounced loader triggered whenever the map camera center changes.
-  const publicMarkers = useMarkerStore((s) => s.publicMarkers);
-  const loadPublicMarkers = useMarkerStore((s) => s.loadPublicMarkers);
-  const publicLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleCameraCenter = useCallback(
     (lat: number, lng: number) => {
       cameraCenterRef.current = { lat, lng };
-      // Debounce: only fire 2s after the user stops panning.
-      if (publicLoadTimerRef.current) clearTimeout(publicLoadTimerRef.current);
-      publicLoadTimerRef.current = setTimeout(() => {
-        void loadPublicMarkers(lat, lng);
-      }, 2000);
     },
-    [loadPublicMarkers],
+    [],
   );
-  // Cleanup debounce timer on unmount.
-  useEffect(() => {
-    return () => {
-      if (publicLoadTimerRef.current) clearTimeout(publicLoadTimerRef.current);
-    };
+  const handleMapUnavailable = useCallback(() => {
+    log('memory.map_renderer_unavailable', {});
+    // The fallback is a completed, usable state. It has no fog renderer, so
+    // satisfy both presentation gates without claiming geometry was drawn.
+    setMapReady(true);
+    setFogReady(true);
   }, []);
   // v363: user-dismissed banner state. When user taps the X close on
   // the slow-network banner, hide it for the rest of this Memory tab
@@ -555,7 +586,7 @@ export function MemoryScreen() {
       const now = Date.now();
       // Reset scope to 'mine' on every focus — per product spec, social
       // view is a deliberate switch, not a persistent default.
-      useMemoryScopeStore.getState().setScope('mine');
+      useMemoryScopeStore.getState().setScope('self');
       // S3 fix: debounce map remount separately. Cheap to keep the
       // map mounted across rapid back-and-forth; expensive to tear
       // it down and reload Mapbox tiles.
@@ -572,6 +603,9 @@ export function MemoryScreen() {
       if (now - lastRefetchAtRef.current >= FOCUS_REFETCH_DEBOUNCE_MS) {
         lastRefetchAtRef.current = now;
         setRefetchToken((n) => n + 1);
+      }
+      if (usePublicCairnStore.getState().enabled) {
+        void usePublicCairnStore.getState().refreshScene();
       }
       // v303 OTA 三修:JS heartbeat — 500ms 一次的 log,证明 JS thread alive
       // (用户报"卡 15s 期间 log 也没上传" → heartbeat 帮我们看到 freeze 区间)。
@@ -812,6 +846,43 @@ export function MemoryScreen() {
         <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>All Cairns</Text>
         <Icon name="ChevronRight" size={14} color={theme.iconInactive} strokeWidth={2} />
       </TouchableOpacity>
+      <TouchableOpacity
+        testID="memory-sharing-entry"
+        style={[
+          styles.sharingEntry,
+          {
+            top: insets.top + 72,
+            backgroundColor: theme.mapOverlay,
+            borderColor: theme.borderStrong,
+            shadowColor: theme.shadow,
+          },
+        ]}
+        onPress={() => setSharingOpen(true)}
+        activeOpacity={0.86}
+        accessibilityRole="button"
+        accessibilityLabel="Open Memory sharing"
+      >
+        <Icon name="Users" size={15} color={theme.iconActive} strokeWidth={2} />
+        <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>Sharing</Text>
+      </TouchableOpacity>
+      <View
+        testID="memory-evidence-context"
+        pointerEvents="none"
+        style={[styles.evidenceContext, { top: insets.top + 120, backgroundColor: theme.mapOverlay, borderColor: theme.borderStrong }]}
+      >
+        <Text style={[styles.evidenceContextTitle, { color: theme.foreground }]}>
+          {syntheticQaAuthority ? 'Raw GPS test Memory' : 'Personal Memory'}
+        </Text>
+        <Text style={[styles.evidenceContextText, { color: theme.foregroundSecondary }]}>
+          {syntheticQaAuthority
+            ? memoryEvidenceContext
+              ? `Isolated synthetic evidence · first accepted ${memoryEvidenceContext.first} · latest ${memoryEvidenceContext.last}`
+              : 'Isolated synthetic evidence · no accepted movement yet.'
+            : memoryEvidenceContext
+            ? `Explored places saved · first recorded ${memoryEvidenceContext.first} · latest movement ${memoryEvidenceContext.last}`
+            : 'Your explored places will appear as you move.'}
+        </Text>
+      </View>
 
       {/* v352 zoom-flicker fix: render MemoryMap with persistentCoord
           (last-rendered coord, kept in ref across re-renders) instead of
@@ -835,20 +906,14 @@ export function MemoryScreen() {
             log('v359.map_fully_ready_cb', {});
             setMapReady(true);
           }}
+          onMapUnavailable={handleMapUnavailable}
           onFogReady={() => {
             log('v359.fog_ready_cb', {});
             _fogEverReady = true;
+            setFogUnavailable(false);
             setFogReady(true);
           }}
-          // BUG-008 fix (Sprint 71 post-review round 2): close the
-          // strangerMarks prop chain with an explicit empty list. F5
-          // STORY-00543 follow-up will add a loadPublicMarksBbox action
-          // and populate this prop. Closing the prop chain now means F5
-          // only needs to populate the source, not also touch MemoryMap.
-          // Without this, CairnPinsLayer's strangerMarks defaulted to
-          // undefined and Sprint 70 STORY-00543's visual layer was
-          // structurally inert — caught by Devil's Advocate round 2.
-          strangerMarks={publicMarkers}
+          onFogUnavailable={() => setFogUnavailable(true)}
           key={`map-${mountKey}`}
         />
       ) : failReason === 'permission' ? (
@@ -1080,6 +1145,63 @@ export function MemoryScreen() {
         </View>
       )}
 
+      {friendProjectionError === 'offline' && memoryScope !== 'self' ? (
+        <View style={[styles.slowBanner, { top: insets.top + 8, left: 80, right: 12 }]}>
+          <Icon name="CloudOff" size={13} color={theme.iconInactive} strokeWidth={2.2} />
+          <Text style={[styles.slowBannerText, { marginLeft: 6 }]} numberOfLines={1}>
+            Connect to refresh shared content
+          </Text>
+        </View>
+      ) : null}
+
+      {fogUnavailable ? (
+        <TouchableOpacity
+          style={[styles.slowBanner, { top: insets.top + 212, left: 80, right: 12, zIndex: 14 }]}
+          onPress={handleRetryLoad}
+          accessibilityRole="button"
+          accessibilityLabel="Retry Memory map details"
+        >
+          <Icon name="RotateCcw" size={13} color={theme.iconInactive} strokeWidth={2.2} />
+          <Text style={[styles.slowBannerText, { marginLeft: 6 }]} numberOfLines={1}>
+            Map details unavailable · Tap to retry
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {publicEnabled && !syntheticQaAuthority && publicEntries.length > 0 ? (() => {
+        const entry = publicEntries.find(item => item.id === publicNewlySurfacedId) ?? publicEntries[0];
+        return (
+          <TouchableOpacity
+            testID={`public-cairn-card-${entry.id}`}
+            style={[styles.publicCard, { backgroundColor: theme.sheetSurface, borderColor: theme.borderStrong, shadowColor: theme.shadow }]}
+            onPress={() => {
+              void presentPublicCairn(entry.id);
+              nav.navigate('PublicCairnDetail', { cairnId: entry.id });
+            }}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel={`Open Public Cairn from ${entry.author.name}`}
+          >
+            <View style={[styles.publicCardIcon, { backgroundColor: theme.controlSelected }]}>
+              <Icon name="Globe" size={17} color={theme.primary} strokeWidth={2.2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.publicCardEyebrow, { color: theme.foregroundSecondary }]}>FOUND NEARBY</Text>
+              <Text style={[styles.publicCardTitle, { color: theme.foreground }]}>A Public Cairn</Text>
+              <Text style={[styles.publicCardAuthor, { color: theme.foregroundSecondary }]} numberOfLines={1}>Left by {entry.author.name}</Text>
+            </View>
+            <Icon name="ChevronRight" size={17} color={theme.iconInactive} />
+          </TouchableOpacity>
+        );
+      })() : null}
+
+      {publicEnabled && !syntheticQaAuthority && publicEntries.length === 0 && publicError === 'offline' ? (
+        <View style={[styles.publicOffline, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}>
+          <Icon name="CloudOff" size={13} color={theme.iconInactive} />
+          <Text style={[styles.publicOfflineText, { color: theme.foregroundSecondary }]}>Connect to check nearby Public Cairns</Text>
+        </View>
+      ) : null}
+
       <ModalCard visible={showHint && isMemoryFocused} onDismiss={dismissHint} testID="memory-unlock-guidance">
           <View>
             <Text style={[styles.hintTitle, { color: theme.foreground }]}>Walk to unlock your memory</Text>
@@ -1106,6 +1228,7 @@ export function MemoryScreen() {
         }}
       />
       <PaywallSheet visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
+      <MemorySharingSheet visible={sharingOpen} onClose={() => setSharingOpen(false)} />
 
       {/* v434: Hierarchy popover — 2-layer tree (World → Country → City).
           Fetches panel data from /api/hierarchy/panel. */}
@@ -1225,6 +1348,52 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   allCairnsEntryText: { fontSize: 12, fontWeight: '700' },
+  sharingEntry: {
+    position: 'absolute',
+    right: 12,
+    zIndex: 12,
+    minHeight: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  evidenceContext: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    zIndex: 11,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  evidenceContextTitle: { fontSize: 12, fontWeight: '700' },
+  evidenceContextText: { fontSize: 11, lineHeight: 16, marginTop: 2 },
+  publicCard: {
+    position: 'absolute', left: 16, right: 16, bottom: 24, zIndex: 30,
+    minHeight: 76, borderWidth: 1, borderRadius: Radius.card,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+    shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 6,
+  },
+  publicCardIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  publicCardEyebrow: { fontSize: 9, fontWeight: '800', letterSpacing: 1.1 },
+  publicCardTitle: { fontSize: 16, fontWeight: '700', marginTop: 2 },
+  publicCardAuthor: { fontSize: 11, marginTop: 2 },
+  publicOffline: {
+    position: 'absolute', left: 48, right: 48, bottom: 28, zIndex: 25,
+    minHeight: 38, borderWidth: 1, borderRadius: Radius.pill,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    paddingHorizontal: 12,
+  },
+  publicOfflineText: { fontSize: 11, fontWeight: '600' },
   // Concept-aligned empty state (2026-08-16 sleep-run redesign):
   //   - Centered vertically on paper background
   //   - Title: 18px, dark textPrimary, weight 500

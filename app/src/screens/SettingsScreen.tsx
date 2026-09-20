@@ -96,6 +96,8 @@ function Row({
   testID,
   destructive = false,
   external = false,
+  disabled = false,
+  busy = false,
 }: {
   icon: IconName;
   title: string;
@@ -105,6 +107,8 @@ function Row({
   testID?: string;
   destructive?: boolean;
   external?: boolean;
+  disabled?: boolean;
+  busy?: boolean;
 }) {
   const theme = useVisualTheme();
   const body = (
@@ -127,8 +131,10 @@ function Row({
     <Pressable
       testID={testID}
       accessibilityRole="button"
+      accessibilityState={{ disabled, busy }}
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.recordPressed }]}
+      style={({ pressed }) => [styles.row, disabled && styles.disabled, pressed && { backgroundColor: theme.recordPressed }]}
     >
       {body}
     </Pressable>
@@ -190,6 +196,11 @@ function providerSummary(hasPassword: boolean | undefined, providers: string[] |
   return 'Checking sign-in method…';
 }
 
+function currentOwnerId(): string | null {
+  const state = useAppStore.getState();
+  return state.isLoggedIn && state.user?.id ? String(state.user.id) : null;
+}
+
 export function SettingsScreen() {
   const navigation = useNavigation();
   const theme = useVisualTheme();
@@ -216,6 +227,7 @@ export function SettingsScreen() {
 
   const user = useAppStore((state) => state.user);
   const isLoggedIn = useAppStore((state) => state.isLoggedIn);
+  const renderedOwnerId = isLoggedIn && user?.id ? String(user.id) : null;
   const setUser = useAppStore((state) => state.setUser);
   const appLogout = useAppStore((state) => state.logout);
   const units = useSettingsStore((state) => state.units);
@@ -235,6 +247,7 @@ export function SettingsScreen() {
   const [nameDraft, setNameDraft] = useState('');
   const [nameError, setNameError] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
+  const [nameOwnerId, setNameOwnerId] = useState<string | null>(null);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [nextPassword, setNextPassword] = useState('');
@@ -260,6 +273,20 @@ export function SettingsScreen() {
   const feedbackFlight = useRef(false);
   const exportFlight = useRef(false);
   const deleteFlight = useRef(false);
+  const memoryDeleteFlight = useRef(false);
+  const memoryDeleteGeneration = useRef(0);
+  const priorRenderedOwnerId = useRef(renderedOwnerId);
+  const profileRefreshGeneration = useRef(0);
+
+  useEffect(() => {
+    if (priorRenderedOwnerId.current === renderedOwnerId) return;
+    priorRenderedOwnerId.current = renderedOwnerId;
+    // The old owner's request may still settle, but its local busy state and
+    // single-flight lock must not become the newly rendered account's state.
+    memoryDeleteGeneration.current += 1;
+    memoryDeleteFlight.current = false;
+    setMemoryDeleting(false);
+  }, [renderedOwnerId]);
 
   const refreshPermission = useCallback(async () => {
     try {
@@ -273,10 +300,13 @@ export function SettingsScreen() {
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    if (!isLoggedIn) return;
+    const ownerId = currentOwnerId();
+    if (!isLoggedIn || !ownerId) return;
+    const generation = ++profileRefreshGeneration.current;
     setProfileLoading(true);
     const fresh = await getMe();
-    if (fresh) setUser(fresh);
+    if (generation !== profileRefreshGeneration.current) return;
+    if (fresh && String(fresh.id) === ownerId && currentOwnerId() === ownerId) setUser(fresh);
     setProfileLoading(false);
   }, [isLoggedIn, setUser]);
 
@@ -497,6 +527,7 @@ export function SettingsScreen() {
             title="Edit name"
             detail="Change how your name appears in Cairn"
             onPress={() => {
+              setNameOwnerId(currentOwnerId());
               setNameDraft(user?.name || '');
               setNameError('');
               setNameOpen(true);
@@ -667,16 +698,30 @@ export function SettingsScreen() {
                   text: 'Delete history',
                   style: 'destructive',
                   onPress: () => void (async () => {
+                    if (memoryDeleteFlight.current) return;
+                    const ownerId = currentOwnerId();
+                    if (!ownerId) return;
+                    memoryDeleteFlight.current = true;
+                    const generation = ++memoryDeleteGeneration.current;
                     setMemoryDeleting(true);
-                    const ok = await deleteAllMemoryFromServer();
-                    setMemoryDeleting(false);
-                    Alert.alert(ok ? 'Exploration history deleted' : 'Could not delete history', ok
-                      ? 'Your Activities, Routes and Cairns were not changed.'
-                      : 'Nothing was removed. Check your connection and try again.');
+                    try {
+                      const ok = await deleteAllMemoryFromServer(ownerId);
+                      if (generation !== memoryDeleteGeneration.current || currentOwnerId() !== ownerId) return;
+                      Alert.alert(ok ? 'Exploration history deleted' : 'Could not delete history', ok
+                        ? 'Your Activities, Routes and Cairns were not changed.'
+                        : 'Nothing was removed. Check your connection and try again.');
+                    } finally {
+                      if (generation === memoryDeleteGeneration.current) {
+                        memoryDeleteFlight.current = false;
+                        setMemoryDeleting(false);
+                      }
+                    }
                   })(),
                 },
               ],
             )}
+            disabled={memoryDeleting}
+            busy={memoryDeleting}
             testID="settings-delete-exploration"
           />
           {memoryDeleting ? <ActivityIndicator style={styles.inlineLoader} color={theme.destructive} /> : null}
@@ -800,7 +845,7 @@ export function SettingsScreen() {
       </SafeAreaView>
 
       <ModalCard visible={nameOpen} onDismiss={() => !nameSaving && setNameOpen(false)} dismissible={!nameSaving} testID="settings-name-modal">
-        <ModalCardHeader title="Edit name" body="This is how your name appears in Cairn." onClose={() => setNameOpen(false)} />
+        <ModalCardHeader title="Edit name" body="This is how your name appears in Cairn." onClose={nameSaving ? undefined : () => setNameOpen(false)} />
         <TextField
           label="Name"
           value={nameDraft}
@@ -814,12 +859,22 @@ export function SettingsScreen() {
           <PrimaryButton
             label="Save"
             loading={nameSaving}
-            disabled={!nameDraft.trim()}
+            disabled={!nameDraft.trim() || !nameOwnerId || currentOwnerId() !== nameOwnerId}
             onPress={() => void (async () => {
+              const ownerId = nameOwnerId;
+              if (!ownerId || currentOwnerId() !== ownerId) {
+                setNameError('The signed-in account changed. Close this draft and try again.');
+                return;
+              }
               setNameSaving(true);
               const result = await patchName(nameDraft.trim());
-              if (result.user) {
-                setUser(user ? { ...user, ...result.user } : result.user);
+              const currentUser = useAppStore.getState().user;
+              if (currentOwnerId() !== ownerId || !currentUser) {
+                setNameSaving(false);
+                return;
+              }
+              if (result.user && String(result.user.id) === ownerId) {
+                setUser({ ...currentUser, ...result.user });
                 setNameOpen(false);
               } else setNameError(result.error || 'Name could not be saved.');
               setNameSaving(false);

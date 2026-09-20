@@ -104,11 +104,20 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(detail).not.toContain('>points</Text>');
   });
 
-  test('Hike and Run receive a selected Route reference without auto-start or follower activation', () => {
+  test('Hike and Run select the Route pre-start and capture its recording reference only inside Start', () => {
     for (const source of [hike, run]) {
       expect(source).toContain('captureActivityRouteReference(selectedRoute)');
       expect(source).toContain('This Route is shown on the map for reference.');
       expect(source).not.toContain('setFollowingRoute(');
+      const startHandler = Math.max(
+        source.indexOf('async function handleStart()'),
+        source.indexOf('const handleStartHike = async () =>'),
+      );
+      const capture = source.indexOf('captureActivityRouteReference(selectedRoute)', startHandler);
+      const startTracking = source.indexOf('await startTracking(', capture);
+      expect(startHandler).toBeGreaterThanOrEqual(0);
+      expect(capture).toBeGreaterThan(startHandler);
+      expect(startTracking).toBeGreaterThan(capture);
     }
     expect(detail).toContain("nav.navigate('Running', { routeId: ready.id })");
     expect(detail).toContain("nav.navigate('Hiking', { routeId: ready.id })");

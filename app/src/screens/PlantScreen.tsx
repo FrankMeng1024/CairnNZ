@@ -22,13 +22,17 @@
  * state with an explicit retry path in Cairn detail.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { useMarkerStore, MarkerPermission } from '../store/useMarkerStore';
+import {
+  useMarkerStore,
+  MarkerPermission,
+  type CairnActivityContext,
+} from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
 // v422 offline-first: 使 Plant flow 明确告知用户是否离线保存
 import networkMonitor from '../services/networkMonitor';
@@ -37,11 +41,19 @@ import { GpsLockStep } from '../features/plant/components/GpsLockStep';
 import { PinAdjustStep } from '../features/plant/components/PinAdjustStep';
 import { ContentStep } from '../features/plant/components/ContentStep';
 import { VisibilityConfig } from '../features/plant/config/plantConfig';
+import { usePublicCairnStore } from '../features/public/services/publicCairns';
 import { encodeTitleBody } from '../features/plant/services/noteEncoding';
 import { log } from '../services/appLog';
 import { haptic } from '../services/hapticService';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useTrackingStore } from '../store/useTrackingStore';
+import { activityFreshnessNow } from '../features/activitySimulator/simulatorTime';
+import { getCurrentRegion } from '../config/regions';
+import { storage } from '../store/storage';
+import {
+  executeCairnCommit,
+  type CairnCommitGate,
+} from '../features/cairns/cairnCommitBoundary';
 
 type Step = 'gps' | 'pin' | 'content';
 
@@ -98,16 +110,44 @@ const INITIAL_DRAFT: PlantDraft = {
   visibility: defaultVisibility(),
 };
 
-function resolveInitialPlantContext(): { step: Step; draft: PlantDraft; fromActivity: boolean } {
+type PlantActivityTrackingContext = Pick<
+  ReturnType<typeof useTrackingStore.getState>,
+  | 'status'
+  | 'locationProviderSource'
+  | 'locationAvailable'
+  | 'lastCoordinate'
+  | 'lastCoordinateTime'
+  | 'sessionId'
+  | 'ownerUserId'
+  | 'liveOwnerGeneration'
+>;
+
+export function resolveInitialPlantContext(
+  trackingOverride?: PlantActivityTrackingContext,
+): { step: Step; draft: PlantDraft; fromActivity: boolean; activityContext: CairnActivityContext | null } {
   try {
-    const tracking = useTrackingStore.getState();
+    const tracking = trackingOverride ?? useTrackingStore.getState();
     const active = tracking.status === 'tracking' || tracking.status === 'paused';
     const coordinate = tracking.lastCoordinate;
-    const ageMs = Date.now() - (tracking.lastCoordinateTime ?? 0);
-    if (active && tracking.locationAvailable && coordinate && ageMs >= 0 && ageMs <= 30_000) {
+    const ageMs = activityFreshnessNow(tracking.locationProviderSource) - (tracking.lastCoordinateTime ?? 0);
+    if (
+      active
+      && tracking.locationAvailable
+      && coordinate
+      && tracking.sessionId
+      && tracking.ownerUserId
+      && tracking.liveOwnerGeneration
+      && ageMs >= 0
+      && ageMs <= 30_000
+    ) {
       return {
         step: 'content',
         fromActivity: true,
+        activityContext: {
+          ownerUserId: tracking.ownerUserId,
+          clientActivityId: tracking.sessionId,
+          ownerGeneration: tracking.liveOwnerGeneration,
+        },
         draft: {
           ...INITIAL_DRAFT,
           gpsLat: coordinate.lat,
@@ -119,7 +159,7 @@ function resolveInitialPlantContext(): { step: Step; draft: PlantDraft; fromActi
       };
     }
   } catch { /* standalone Plant starts with the bounded GPS flow */ }
-  return { step: 'gps', draft: INITIAL_DRAFT, fromActivity: false };
+  return { step: 'gps', draft: INITIAL_DRAFT, fromActivity: false, activityContext: null };
 }
 
 export function PlantScreen() {
@@ -136,8 +176,12 @@ export function PlantScreen() {
   const [step, setStep] = useState<Step>(initialContext.step);
   const [draft, setDraft] = useState<PlantDraft>(initialContext.draft);
   const [submitting, setSubmitting] = useState(false);
+  const commitGateRef = useRef<CairnCommitGate>({ current: null });
+  const mountedRef = useRef(true);
+  const publicEnabled = usePublicCairnStore((state) => state.enabled);
   // v299: success modal removed. PlantScreen.commit now navigates
   // directly to MarkerDetailScreen.
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   /**
    * K3 fix (v0.2.6.3): on mount, hydrate any failed-plant draft from
@@ -150,7 +194,6 @@ export function PlantScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const { storage } = await import('../store/storage');
         const raw = await storage.getItem(draftKey(userId));
         if (cancelled || !raw) return;
         const parsed = JSON.parse(raw) as PlantDraft;
@@ -185,101 +228,117 @@ export function PlantScreen() {
   const commit = useCallback(
     async (final: PlantDraft) => {
       if (final.lat == null || final.lng == null) return;
-      if (submitting) return;          // belt-and-suspenders
-      log('plant.commit_attempt', { hasTitle: !!final.title, textLen: final.text.length, vis: final.visibility });
-      setSubmitting(true);
-      try {
-        const created = await addMarker({
-          type: final.type,
-          lat: final.lat,
-          lng: final.lng,
-          note: encodeTitleBody(final.title, final.text),
-          authorId: userId,
-          permission: final.visibility,
-          regionCode: '',
-          gpsAgeS: 0,
-          approximate: false,
-          voiceMemoUri: final.voiceUri ?? undefined,
-          voiceMemoDurationMs: final.voiceMs ?? undefined,
-        } as any);
-        log('plant.commit_ok', { id: created?.id });
-        // Plant owns the durable Cairn object only. Movement/exploration is
-        // the sole authority for Memory, so this commit never reveals fog.
-        // K3 fix: clear any previously saved draft on successful commit.
-        try {
-          const { storage } = await import('../store/storage');
-          await storage.removeItem(draftKey(userId));
-        } catch { /* best-effort */ }
-        setSubmitting(false);
-        // v299 N7: instead of an auto-dismiss success modal, push the
-        // user straight to the read-only MarkerDetailScreen. Same screen
-        // is reused for the Flags tab tap (RoutesScreen). Use `replace`
-        // so the navigation back stack is: Home → MarkerDetail (no
-        // intermediate Plant flow tombstone the user would Back through).
-        //
-        // v418 ceremony: fire a success haptic + short 250ms delay before
-        // navigating so users physically feel "cairn planted" instead of
-        // an instant flash of a new screen. Non-blocking (haptics is fire-
-        // and-forget) so total added latency = 250ms of visible pause on
-        // step 3 UI, which reads as "committing…" rather than a jerk.
-        if (created?.id) {
+      const activityContext = initialContext.activityContext;
+      const initiatingOwnerId = userId;
+      const ownerIsCurrent = () => (
+        mountedRef.current
+        && String(useAppStore.getState().user?.id ?? '') === initiatingOwnerId
+        && String(useMarkerStore.getState().userId ?? '') === initiatingOwnerId
+      );
+      const contextIsCurrent = () => {
+        if (!ownerIsCurrent()) return false;
+        if (!activityContext) return true;
+        const tracking = useTrackingStore.getState();
+        return (
+          (tracking.status === 'tracking' || tracking.status === 'paused')
+          && tracking.ownerUserId === activityContext.ownerUserId
+          && tracking.sessionId === activityContext.clientActivityId
+          && tracking.liveOwnerGeneration === activityContext.ownerGeneration
+        );
+      };
+
+      if (!contextIsCurrent()) {
+        if (activityContext && ownerIsCurrent()) {
+          Alert.alert(
+            "Couldn't plant this cairn",
+            'The Activity changed while Plant was open. Return to the current Activity and try again.',
+            [{ text: 'OK' }],
+          );
+        }
+        return;
+      }
+
+      return executeCairnCommit({
+        gate: commitGateRef.current,
+        isContextCurrent: contextIsCurrent,
+        onLockChange: locked => {
+          if (ownerIsCurrent()) setSubmitting(locked);
+        },
+        commit: () => {
+          log('plant.commit_attempt', { hasTitle: !!final.title, textLen: final.text.length, vis: final.visibility });
+          return addMarker({
+            type: final.type,
+            lat: final.lat!,
+            lng: final.lng!,
+            note: encodeTitleBody(final.title, final.text),
+            authorId: initiatingOwnerId,
+            permission: final.visibility,
+            regionCode: getCurrentRegion().code,
+            gpsAgeS: 0,
+            approximate: false,
+            voiceMemoUri: final.voiceUri ?? undefined,
+            voiceMemoDurationMs: final.voiceMs ?? undefined,
+            activityContext,
+          });
+        },
+        onPreCommitFailure: async (error, contextCurrent) => {
+          log('plant.commit_failed', { msg: String((error as any)?.message ?? error).slice(0, 200) });
+          // The write was not accepted, so retain exactly one owner-scoped
+          // draft. Account/activity changes suppress only stale UI feedback.
+          try {
+            await storage.setItem(draftKey(initiatingOwnerId), JSON.stringify(final));
+          } catch { /* best-effort */ }
+          if (!contextCurrent || !contextIsCurrent()) return;
+          const raw = String((error as any)?.message ?? '').toLowerCase();
+          let body: string;
+          if (raw.includes('rate') && raw.includes('limit')) {
+            body = 'You are creating cairns very quickly. Wait a minute and try again.';
+          } else if (raw.includes('too close') || raw.includes('duplicate')) {
+            body = 'There is already a cairn near here. Try a different spot.';
+          } else if (raw.includes('unauthor') || raw.includes('401')) {
+            body = 'Your session expired. Sign in again and your draft will be waiting.';
+          } else if (raw.includes('network') || raw.includes('fetch')) {
+            body = 'Your draft is saved. We\'ll try again once you have signal.';
+          } else {
+            body = 'Your draft is saved — try again in a moment.';
+          }
+          Alert.alert("Couldn't plant this cairn", body, [{ text: 'OK' }]);
+        },
+        // Plant owns the durable Cairn object only. Movement remains the sole
+        // Memory authority. Clear A's retry draft even if B is now visible.
+        onCommitted: async result => {
+          log('plant.commit_ok', { id: result.marker.id, projection: result.projection });
+          try {
+            await storage.removeItem(draftKey(initiatingOwnerId));
+          } catch { /* best-effort */ }
+        },
+        onCommittedCurrent: async result => {
           try { haptic.notification('success'); } catch { /* silent */ }
-          // v422: 若离线保存, 弹一次性 Alert 让用户知道 "已存本地, 联网自动上传".
-          // 有网时不弹 (Haptic + 无缝跳转足以传达成功).
           const isOnline = networkMonitor.getState()?.state === 'online';
           if (!isOnline) {
             Alert.alert(
-              'Cairn planted (offline)',
+              'Cairn saved offline',
               "Saved locally. We'll upload it as soon as you're back online.",
               [{ text: 'OK' }],
             );
           }
-          await new Promise<void>((r) => setTimeout(r, 250));
+          await new Promise<void>((resolve) => setTimeout(resolve, 250));
+          if (!contextIsCurrent()) return;
           if (initialContext.fromActivity && nav.canGoBack()) {
             nav.goBack();
           } else {
-            nav.replace('MarkerDetail', { markerId: created.id });
+            nav.replace('MarkerDetail', { markerId: result.marker.id });
           }
-        } else {
-          // Defensive fallback — never expected; addMarker contract
-          // says it returns a Marker, but if persistence is mocked or
-          // the id field is empty, just go home rather than navigate
-          // to a broken detail page.
-          if (nav.canGoBack()) nav.goBack();
-        }
-        return;
-      } catch (e: any) {
-        log('plant.commit_failed', { msg: String(e?.message ?? e).slice(0, 200) });
-        // Stay on the content step so the user can retry without
-        // re-entering everything. No silent failure.
-        try {
-          const { storage } = await import('../store/storage');
-          await storage.setItem(draftKey(userId), JSON.stringify(final));
-        } catch {
-          // Best-effort — can't help if storage itself is broken.
-        }
-        setSubmitting(false);
-        // O18 VER-05: map known backend error codes to human copy so a
-        // permanent failure (rate limited / duplicate / too close) isn't
-        // presented as "try again in a moment" — which invites the user
-        // into an infinite retry loop.
-        const raw = String(e?.message ?? '').toLowerCase();
-        let body: string;
-        if (raw.includes('rate') && raw.includes('limit')) {
-          body = 'You are creating cairns very quickly. Wait a minute and try again.';
-        } else if (raw.includes('too close') || raw.includes('duplicate')) {
-          body = 'There is already a cairn near here. Try a different spot.';
-        } else if (raw.includes('unauthor') || raw.includes('401')) {
-          body = 'Your session expired. Sign in again and your draft will be waiting.';
-        } else if (raw.includes('network') || raw.includes('fetch')) {
-          body = 'Your draft is saved. We\'ll try again once you have signal.';
-        } else {
-          body = 'Your draft is saved — try again in a moment.';
-        }
-        Alert.alert("Couldn't plant this cairn", body, [{ text: 'OK' }]);
-      }
+        },
+        onPostCommitFailure: error => {
+          log('plant.post_commit_effect_failed', { msg: String((error as any)?.message ?? error).slice(0, 200) });
+        },
+        // A durable full-Plant submit is terminal. A navigation/unmount race
+        // must not reopen the button and mint a duplicate Cairn.
+        releaseOnCommittedCurrent: false,
+      });
     },
-    [addMarker, userId, nav, submitting, initialContext.fromActivity]
+    [addMarker, userId, nav, initialContext]
   );
 
   const onContentSubmit = (payload: {
@@ -340,6 +399,7 @@ export function PlantScreen() {
             initialType={draft.type}
             activityLocation={initialContext.fromActivity}
             submitting={submitting}
+            publicEnabled={publicEnabled}
             onSubmit={onContentSubmit}
             onBack={() => setStep('pin')}
           />

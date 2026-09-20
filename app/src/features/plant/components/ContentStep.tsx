@@ -22,7 +22,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { MarkerPermission } from '../../../store/useMarkerStore';
-import { ContentConfig, VisibilityConfig } from '../config/plantConfig';
+import { ContentConfig } from '../config/plantConfig';
 import { Colors, Spacing, Radius, FontSize } from '../../../components/tokens';
 import { MarkerType } from '../../../config/markerTypes';
 import { BackButton } from '../../../components/BackButton';
@@ -46,6 +46,7 @@ interface Props {
   }) => void;
   onBack: () => void;
   activityLocation?: boolean;
+  publicEnabled?: boolean;
 }
 
 export function ContentStep({
@@ -57,6 +58,7 @@ export function ContentStep({
   onSubmit,
   onBack,
   activityLocation = false,
+  publicEnabled = false,
 }: Props) {
   const theme = useVisualTheme();
   const [type, setType] = useState<MarkerType>(initialType);
@@ -121,20 +123,15 @@ export function ContentStep({
               onNoteChange={setText}
               onVisibilityChange={setVisibility}
               mode="create"
-              disableVisibilityPublic={!VisibilityConfig.enablePublicOption}
+              disableVisibilityPublic={!publicEnabled}
               showLocationLockedNotice={false}
               autoFocus={null}
               titleMaxChars={ContentConfig.titleMaxChars}
               noteMaxChars={ContentConfig.textMaxChars}
               showTypePicker={false}
-              showVisibilityPicker={false}
+              showVisibilityPicker
             />
 
-            {__DEV__ && (
-              <View style={[styles.voiceBox, { backgroundColor: theme.surface, borderColor: theme.border }] }>
-                <Text style={[styles.voiceTodo, { color: theme.foregroundSecondary }]}>Voice memo (dev-only preview — coming in a later release)</Text>
-              </View>
-            )}
           </ScrollView>
 
           <View style={styles.bottomBar}>
@@ -143,9 +140,9 @@ export function ContentStep({
                 The "frozen forever" hint only matters if Public is offered, so suppress
                 it when the public option is disabled. Kept conditional so v1.1+ revert is
                 a one-line config flip without re-touching this component. */}
-            {VisibilityConfig.enablePublicOption && (
+            {publicEnabled && visibility === 'public' && (
               <Text style={styles.permanentHint}>
-                Once shared publicly, what others see is frozen forever.
+                Public requires useful text, a completed Activity at this place, and review of this exact version.
               </Text>
             )}
             <TouchableOpacity

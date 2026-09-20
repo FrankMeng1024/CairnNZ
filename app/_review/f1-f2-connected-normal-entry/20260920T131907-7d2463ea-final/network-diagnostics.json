@@ -1,0 +1,90 @@
+{
+  "namespace": "f1f2-7d2463ea-20260920t131907",
+  "externalRequests": [
+    {
+      "at": "2026-09-20T05:20:53.335Z",
+      "step": "boot",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=-41.2865&longitude=174.7762&current=temperature_2m,weathercode&daily=sunrise,sunset&forecast_days=1&timeformat=unixtime&timezone=auto",
+      "action": "fixture-weather-wellington"
+    },
+    {
+      "at": "2026-09-20T05:20:53.339Z",
+      "step": "boot",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=-41.2865&longitude=174.7762&localityLanguage=en",
+      "action": "fixture-reverse-geocode-wellington"
+    },
+    {
+      "at": "2026-09-20T05:21:10.164Z",
+      "step": "prefinish-memory",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/styles/v1/mapbox/outdoors-v12?access_token=[redacted]",
+      "action": "fixture-mapbox-empty-style"
+    },
+    {
+      "at": "2026-09-20T05:21:10.725Z",
+      "step": "prefinish-memory",
+      "method": "POST",
+      "resourceType": "fetch",
+      "url": "https://events.mapbox.com/events/v2?access_token=[redacted]",
+      "action": "fixture-mapbox-events-empty"
+    },
+    {
+      "at": "2026-09-20T05:21:10.729Z",
+      "step": "prefinish-memory",
+      "method": "POST",
+      "resourceType": "fetch",
+      "url": "https://events.mapbox.com/events/v2?access_token=[redacted]",
+      "action": "fixture-mapbox-events-empty"
+    },
+    {
+      "at": "2026-09-20T05:21:10.830Z",
+      "step": "prefinish-memory",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/map-sessions/v1?sku=1014cNlqEshV3&access_token=[redacted]",
+      "action": "fixture-mapbox-session-no-content"
+    },
+    {
+      "at": "2026-09-20T05:21:42.619Z",
+      "step": "normal-finish-commit",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/matching/v5/mapbox/walking/174.776203,-41.286490;174.776200,-41.286483;174.776262,-41.286478;174.776352,-41.286444;174.776523,-41.286451;174.776557,-41.286441;174.776608,-41.286439;174.776679,-41.286459;174.776725,-41.286471;174.776918,-41.286459;174.776894,-41.286431;174.776953,-41.286423;174.776993,-41.286393;174.777038,-41.286365;174.777065,-41.286335;174.777102,-41.286313;174.777134,-41.286296;174.777194,-41.286243;174.777172,-41.286220;174.777259,-41.286072;174.777231,-41.286050;174.777208,-41.286070;174.777167,-41.286084;174.777109,-41.286083?geometries=geojson&overview=full&steps=true&tidy=false&radiuses=12;12;13;15;15;13;14;13;14;13;14;13;11;14;17;12;12;14;12;13;12;14;12;12&timestamps=1789838397;1789838398;1789838400;1789838408;1789838423;1789838424;1789838426;1789838431;1789838434;1789838445;1789838446;1789838447;1789838449;1789838457;1789838459;1789838461;1789838462;1789838469;1789838470;1789838480;1789838490;1789838492;1789838494;1789838497&access_token=[redacted]",
+      "action": "fixture-map-matching"
+    },
+    {
+      "at": "2026-09-20T05:21:42.620Z",
+      "step": "normal-finish-commit",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/matching/v5/mapbox/walking/174.777231,-41.286050;174.777208,-41.286070;174.777167,-41.286084;174.777109,-41.286083;174.777065,-41.286069;174.776998,-41.286068;174.776798,-41.286107;174.776777,-41.286096;174.776718,-41.286130;174.776786,-41.286116;174.776881,-41.286097;174.776952,-41.286069;174.777019,-41.286101;174.777042,-41.286075;174.777146,-41.286087;174.777195,-41.286075;174.777252,-41.286061?geometries=geojson&overview=full&steps=true&tidy=false&radiuses=12;14;12;12;14;15;17;17;16;15;14;12;15;14;13;15;13&timestamps=1789838490;1789838492;1789838494;1789838497;1789838502;1789838507;1789838512;1789838513;1789838516;1789838522;1789838528;1789838531;1789838535;1789838538;1789838546;1789838549;1789838551&access_token=[redacted]",
+      "action": "fixture-map-matching"
+    },
+    {
+      "at": "2026-09-20T05:21:42.639Z",
+      "step": "normal-finish-commit",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/directions/v5/mapbox/walking/174.777208,-41.286070;174.776777,-41.286096?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=[redacted]",
+      "action": "unexpected-mapbox-request"
+    }
+  ],
+  "unexpectedExternalRequests": [],
+  "unexpectedApiRequests": [],
+  "failedRequests": [],
+  "httpErrors": [
+    {
+      "at": "2026-09-20T05:21:42.675Z",
+      "step": "normal-finish-commit",
+      "status": 501,
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/directions/v5/mapbox/walking/174.777208,-41.286070;174.776777,-41.286096?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=[redacted]"
+    }
+  ]
+}

@@ -17,6 +17,7 @@ import {
   Platform, TextInput, KeyboardAvoidingView, Keyboard, Linking, Alert,
 } from 'react-native';
 import { haptic } from '../services/hapticService';
+import { uuidv4 } from '../services/offlineQueue';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect, useIsFocused, CommonActions } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -25,7 +26,11 @@ import { useTrackingStore } from '../store/useTrackingStore';
 import { useAppStore } from '../store/useAppStore';
 import { useRouteStore } from '../store/useRouteStore';
 import { routeMatchesIdentity } from '../features/route/routeContracts';
-import { useMarkerStore } from '../store/useMarkerStore';
+import {
+  authorizeBorrowedRouteStart,
+  finalizeBorrowedRouteUse,
+} from '../features/friends/services/friendContent';
+import { useMarkerStore, type CairnActivityContext } from '../store/useMarkerStore';
 import { getCurrentRegion } from '../config/regions';
 import { formatDuration } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
@@ -63,6 +68,11 @@ import { appendSimulatorLog } from '../features/activitySimulator/simulatorLog';
 import { useSimulatorKeepAwake } from '../features/activitySimulator/useSimulatorKeepAwake';
 import { resolveSimulatorControlsVisible, resolveSimulatorMapState } from '../features/activitySimulator/simulatorMapState';
 import { HikingMap } from './HikingMap';
+import {
+  executeCairnCommit,
+  resetCairnCommitForNewContext,
+  type CairnCommitGate,
+} from '../features/cairns/cairnCommitBoundary';
 import {
   ActivityControlDock,
   ActivityRecenterButton,
@@ -108,12 +118,15 @@ export function RunningScreen() {
   const nav = useNavigation<Nav>();
   const entryRoute = useRoute<any>();
   const requestedRouteId = entryRoute.params?.routeId as string | undefined;
+  const sharedRouteLease = entryRoute.params?.sharedRouteLease as any;
+  const sharedRouteKey = sharedRouteLease ? `shared:${sharedRouteLease.leaseId}` : null;
   const isFocused = useIsFocused();
   const routes = useRouteStore(s => s.routes);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
   const activityRouteReference = useRouteStore(s => s.activityRouteReference);
   const captureActivityRouteReference = useRouteStore(s => s.captureActivityRouteReference);
+  const captureExternalActivityRouteReference = useRouteStore(s => s.captureExternalActivityRouteReference);
   const clearActivityRouteReference = useRouteStore(s => s.clearActivityRouteReference);
   const [unfinishedRun, setUnfinishedRun] = useState<RecoverableActivity | null>(null);
   const [unfinishedResolutionRequested, setUnfinishedResolutionRequested] = useState(false);
@@ -156,7 +169,7 @@ export function RunningScreen() {
   const runRecenterImperativeRef = useRef<(() => void) | null>(null);
   // O18 ONB-04: shared permission-denied modal state.
   const [permissionDeniedVisible, setPermissionDeniedVisible] = useState(false);
-  const [selectedRoute, setSelectedRoute] = useState<string | null>(requestedRouteId ?? null);
+  const [selectedRoute, setSelectedRoute] = useState<string | null>(sharedRouteKey ?? requestedRouteId ?? null);
   const [showRoutePicker, setShowRoutePicker] = useState(false);
   // foregroundGranted gates UserLocation rendering on the pre-start map.
   // Without this, Mapbox UserLocation silently fails (no blue dot) and the
@@ -178,6 +191,9 @@ export function RunningScreen() {
     if (!requestedRouteId) return;
     setSelectedRoute(requestedRouteId);
   }, [requestedRouteId]);
+  useEffect(() => {
+    if (sharedRouteKey) setSelectedRoute(sharedRouteKey);
+  }, [sharedRouteKey]);
   useEffect(() => {
     const selected = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
     if (!selected || selected.points.length >= 2) return;
@@ -246,6 +262,8 @@ export function RunningScreen() {
     void refreshBackgroundLocationPermission();
   }, [isFocused, refreshBackgroundLocationPermission, simulatorLocationAuthoritative, status]);
   const sessionId = useTrackingStore(s => s.sessionId);
+  const activityOwnerUserId = useTrackingStore(s => s.ownerUserId);
+  const liveOwnerGeneration = useTrackingStore(s => s.liveOwnerGeneration);
   const linkMarker = useTrackingStore(s => s.linkMarker);
   const setActivityMode = useTrackingStore(s => s.setActivityMode);
   // O12: settings-aware distance/pace formatting.
@@ -273,6 +291,15 @@ export function RunningScreen() {
   // the unlock-protected plant button. Only relevant in the unlocked
   // running state — in pre-/post-run states this stays null.
   const [plantToast, setPlantToast] = useState<string | null>(null);
+  const [quickCairnInFlight, setQuickCairnInFlight] = useState(false);
+  const quickCairnGateRef = useRef<CairnCommitGate>({ current: null });
+  const mountedRef = useRef(true);
+
+  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    resetCairnCommitForNewContext(quickCairnGateRef.current, setQuickCairnInFlight);
+    setPlantToast(null);
+  }, [activityOwnerUserId, liveOwnerGeneration, sessionId]);
 
   const operationalState = deriveActivityOperationalState({
     trackingStatus: status,
@@ -404,7 +431,9 @@ export function RunningScreen() {
     closeRoutePicker();
   };
 
-  const selectedRouteName = routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Run';
+  const selectedRouteName = sharedRouteLease && selectedRoute === sharedRouteKey
+    ? sharedRouteLease.name
+    : routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Run';
 
   useFocusEffect(React.useCallback(() => {
     setRunFollowUser(true);
@@ -459,14 +488,40 @@ export function RunningScreen() {
       return;
     }
     setActivityMode('running');
-    if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
+    const usingSharedRoute = Boolean(sharedRouteLease && selectedRoute === sharedRouteKey);
+    let requestedActivityId: string | undefined;
+    let borrowedUse: Awaited<ReturnType<typeof authorizeBorrowedRouteStart>>['identity'] | undefined;
+    if (usingSharedRoute) {
+      requestedActivityId = uuidv4();
+      try {
+        borrowedUse = (await authorizeBorrowedRouteStart(sharedRouteLease, requestedActivityId)).identity;
+      } catch (error: any) {
+        Alert.alert(
+          'Shared Route unavailable',
+          error?.code === 'expired'
+            ? 'The offline use authorization has expired. Connect and reopen this Route from your friend.'
+            : 'Connect and reopen this Route from your friend before starting.',
+        );
+        return;
+      }
+      captureExternalActivityRouteReference({
+        routeId: `friend:${sharedRouteLease.routeId}:${sharedRouteLease.leaseId}`,
+        name: sharedRouteLease.name,
+        points: sharedRouteLease.points,
+        distanceM: sharedRouteLease.distanceM,
+        elevationGainM: sharedRouteLease.elevationGainM,
+        capturedAt: Date.now(),
+        borrowedUse,
+      });
+    } else if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
       Alert.alert('Route unavailable', 'This Route is not ready on this device yet.');
       return;
     }
     if (!selectedRoute) clearActivityRouteReference();
-    const started = await startTracking();
+    const started = await startTracking(requestedActivityId);
     if (!started) {
       clearActivityRouteReference();
+      if (borrowedUse) await finalizeBorrowedRouteUse(borrowedUse, 'discarded').catch(() => {});
       const authoritative = await findRecoverableActivity('running');
       if (authoritative) {
         setUnfinishedRun(authoritative);
@@ -544,56 +599,96 @@ export function RunningScreen() {
   // hazard broadcast. A hazard mid-run should be an explicit choice via
   // PlantScreen, not the default.
   async function handlePlantCairn() {
-    const freshnessNow = locationProviderSource === 'simulator'
+    const trackingAtPress = useTrackingStore.getState();
+    const activityContext: CairnActivityContext | null = (
+      (trackingAtPress.status === 'tracking' || trackingAtPress.status === 'paused')
+      && trackingAtPress.sessionId
+      && trackingAtPress.ownerUserId
+      && trackingAtPress.liveOwnerGeneration
+    ) ? {
+      ownerUserId: trackingAtPress.ownerUserId,
+      clientActivityId: trackingAtPress.sessionId,
+      ownerGeneration: trackingAtPress.liveOwnerGeneration,
+    } : null;
+    const contextIsCurrent = () => {
+      if (!mountedRef.current || !activityContext) return false;
+      if (String(useAppStore.getState().user?.id ?? '') !== activityContext.ownerUserId) return false;
+      if (String(useMarkerStore.getState().userId ?? '') !== activityContext.ownerUserId) return false;
+      const current = useTrackingStore.getState();
+      return (
+        (current.status === 'tracking' || current.status === 'paused')
+        && current.ownerUserId === activityContext.ownerUserId
+        && current.sessionId === activityContext.clientActivityId
+        && current.liveOwnerGeneration === activityContext.ownerGeneration
+      );
+    };
+    if (!activityContext || !contextIsCurrent()) return;
+
+    const freshnessNow = trackingAtPress.locationProviderSource === 'simulator'
       ? simulatorVirtualTimestamp
-      : activityFreshnessNow(locationProviderSource);
-    const acceptedFixIsFresh = lastCoordinate
-      && useTrackingStore.getState().lastCoordinateTime !== null
-      && freshnessNow - Number(useTrackingStore.getState().lastCoordinateTime) <= 30_000;
-    if (!acceptedFixIsFresh || (locationProviderSource === 'simulator' && simulatorSignal === 'lost')) {
+      : activityFreshnessNow(trackingAtPress.locationProviderSource);
+    const acceptedFixIsFresh = trackingAtPress.lastCoordinate
+      && trackingAtPress.lastCoordinateTime !== null
+      && freshnessNow - Number(trackingAtPress.lastCoordinateTime) <= 30_000;
+    if (!acceptedFixIsFresh || (trackingAtPress.locationProviderSource === 'simulator' && simulatorSignal === 'lost')) {
       // Should be rare — locked mode keeps GPS active. Don't throw,
       // just bail out silently with a haptic to acknowledge press.
       haptic.notification('warning');
       setPlantToast('Current GPS location unavailable');
-      setTimeout(() => setPlantToast(null), 2000);
+      setTimeout(() => {
+        if (contextIsCurrent()) setPlantToast(null);
+      }, 2000);
       return;
     }
-    haptic.impact('heavy');
-    const region = getCurrentRegion();
-    try {
-      const marker = await addMarker({
-        // Fix 6: quick-plant defaults to a personal cairn (type=cairn +
-        // permission=personal) — the 灰色石堆图标 in CONCEPT_TRUTH §Cairn
-        // Markers. This is the "worth stopping for" private marker on the
-        // user's own map, not a hazard broadcast. Users who want to flag
-        // hazards go through PlantScreen to pick the type deliberately.
-        // MarkerType is one of danger|junction|water|hut|cairn (see
-        // src/config/markerTypes.ts); 'personal' is a permission value
-        // not a type value — separating them here matches the schema.
-        type: 'cairn',
-        regionCode: region.code,
-        lat: lastCoordinate.lat,
-        lng: lastCoordinate.lng,
-        note: '',
-        authorId: 'local',
-        permission: 'personal',
-        sessionId: sessionId ?? undefined,
-      });
-      appendSimulatorLog('ACTIVITY_STATE', 'run_quick_cairn_location_selected', {
-        locationSource: locationProviderSource === 'simulator' ? 'last-canonically-accepted-simulator' : 'last-canonically-accepted-real',
-        acceptedFixTimestamp: useTrackingStore.getState().lastCoordinateTime,
-      }, {
-        clientActivityId: sessionId,
-        coordinateSource: locationProviderSource === 'simulator' ? 'simulator' : 'real',
-        virtualTimestamp: locationProviderSource === 'simulator' ? simulatorVirtualTimestamp : null,
-      });
-      if (sessionId) linkMarker(marker.id);
-      setPlantToast('Cairn planted');
-      setTimeout(() => setPlantToast(null), 1500);
-    } catch {
-      setPlantToast('Failed to plant cairn');
-      setTimeout(() => setPlantToast(null), 2000);
-    }
+    await executeCairnCommit({
+      gate: quickCairnGateRef.current,
+      isContextCurrent: contextIsCurrent,
+      onLockChange: locked => {
+        if (contextIsCurrent()) setQuickCairnInFlight(locked);
+      },
+      commit: () => {
+        haptic.impact('heavy');
+        const region = getCurrentRegion();
+        return addMarker({
+          type: 'cairn',
+          regionCode: region.code,
+          lat: trackingAtPress.lastCoordinate!.lat,
+          lng: trackingAtPress.lastCoordinate!.lng,
+          note: '',
+          authorId: activityContext.ownerUserId,
+          permission: 'personal',
+          originActivityClientId: activityContext.clientActivityId,
+          activityContext,
+        });
+      },
+      onCommittedCurrent: result => {
+        // This second exact check closes the narrow completion-to-link race.
+        if (!linkMarker(result.marker.id, activityContext)) return;
+        appendSimulatorLog('ACTIVITY_STATE', 'run_quick_cairn_location_selected', {
+          locationSource: trackingAtPress.locationProviderSource === 'simulator'
+            ? 'last-canonically-accepted-simulator'
+            : 'last-canonically-accepted-real',
+          acceptedFixTimestamp: trackingAtPress.lastCoordinateTime,
+        }, {
+          userId: activityContext.ownerUserId,
+          clientActivityId: activityContext.clientActivityId,
+          coordinateSource: trackingAtPress.locationProviderSource === 'simulator' ? 'simulator' : 'real',
+          virtualTimestamp: trackingAtPress.locationProviderSource === 'simulator' ? simulatorVirtualTimestamp : null,
+        });
+        setPlantToast('Cairn saved');
+        setTimeout(() => {
+          if (contextIsCurrent()) setPlantToast(null);
+        }, 1500);
+      },
+      onPreCommitFailure: (_error, contextCurrent) => {
+        if (!contextCurrent) return;
+        setPlantToast('Failed to plant cairn');
+        setTimeout(() => {
+          if (contextIsCurrent()) setPlantToast(null);
+        }, 2000);
+      },
+      releaseOnCommittedCurrent: true,
+    });
   }
 
   // Sleep-run 2026-08-16 rev-2: activeRouteName was rendered under the
@@ -676,8 +771,8 @@ export function RunningScreen() {
   if (plantToast) {
     runNotices.push({
       label: plantToast,
-      tone: plantToast === 'Cairn planted' ? 'healthy' : 'warning',
-      icon: plantToast === 'Cairn planted' ? 'Flag' : 'TriangleAlert',
+      tone: plantToast === 'Cairn saved' ? 'healthy' : 'warning',
+      icon: plantToast === 'Cairn saved' ? 'Flag' : 'TriangleAlert',
     });
   }
   // Pace: min/km (or min/mi if imperial) — seconds per meter → minutes per unit
@@ -703,7 +798,7 @@ export function RunningScreen() {
   const activeRoute = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
   const plannedRoutePoints = isActivitySessionVisible(operationalState) && activityRouteReference
     ? activityRouteReference.points
-    : (activeRoute?.points ?? []);
+    : (sharedRouteLease && selectedRoute === sharedRouteKey ? sharedRouteLease.points : (activeRoute?.points ?? []));
   const runMapSurface = (
     <View key="run-map-surface" style={StyleSheet.absoluteFillObject}>
       <HikingMap
@@ -941,7 +1036,7 @@ export function RunningScreen() {
             : status === 'paused' ? 'paused' : 'tracking'}
           safeBottom={insets.bottom}
           backgroundWarning={backgroundTrackingWarning}
-          cairnDisabled={!locationAvailable}
+          cairnDisabled={!locationAvailable || quickCairnInFlight}
           onPauseResume={() => {
             haptic.impact('light');
             if (status === 'paused') void resumeTracking();

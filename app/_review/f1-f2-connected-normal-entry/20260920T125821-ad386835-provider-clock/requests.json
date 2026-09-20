@@ -1,0 +1,3861 @@
+[
+  {
+    "at": "2026-09-20T04:59:29.859Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880369829,
+          "tag": "boot.navigator_module_loaded",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 2
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:29.860Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880369832,
+          "tag": "boot.module_loaded",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 5,
+            "ota": "O60"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:29.881Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880369833,
+          "tag": "boot.after_webbrowser_init",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 6
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:29.882Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880369833,
+          "tag": "boot.before_initMapbox",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 6
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:29.883Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880369834,
+          "tag": "boot.after_mapbox_init",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 7
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:29.883Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880369835,
+          "tag": "boot.before_register_bg_task",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 8
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:29.884Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880369838,
+          "tag": "boot.after_register_bg_task",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 11
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.776Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371478,
+          "tag": "boot.render_wait_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1651
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.813Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371518,
+          "tag": "boot.ue_main_enter",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1691
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.814Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371520,
+          "tag": "boot.ue_main_before_crashlogger_install",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1693
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.815Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371521,
+          "tag": "boot.after_crashlogger_install",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1694
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.815Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371522,
+          "tag": "boot.after_ar_removal_noop",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1695
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.816Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371523,
+          "tag": "boot.ue_main_before_hydrate_settings",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1696
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.816Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371524,
+          "tag": "boot.ue_main_after_hydrate_settings",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1697
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.817Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371525,
+          "tag": "boot.ue_main_before_memorysettings_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1698
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.817Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371526,
+          "tag": "boot.ue_main_after_memorysettings_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1699
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.818Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371527,
+          "tag": "boot.ue_main_before_app_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1700
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.818Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371529,
+          "tag": "boot.ue_main_after_app_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1702
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.819Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371530,
+          "tag": "boot.ue_main_before_debuglogger_configure",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1703
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.820Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371531,
+          "tag": "boot.ue_main_after_debuglogger_configure",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1704
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.820Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371532,
+          "tag": "boot.ue_main_before_networkmonitor_start",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1705
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.821Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371534,
+          "tag": "boot.ue_main_after_networkmonitor_start",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1707
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.822Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371535,
+          "tag": "boot.ue_main_before_telemetry_uploader_init",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1708
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.822Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371536,
+          "tag": "boot.ue_main_after_telemetry_uploader_init",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1709
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.824Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371537,
+          "tag": "boot.ue_main_before_audio_ducking",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1710
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.836Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371544,
+          "tag": "boot.ue_main_after_audio_ducking",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1717
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.836Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371546,
+          "tag": "boot.ue_main_before_offline_queue",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1719
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.837Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371548,
+          "tag": "boot.ue_main_before_getflags",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1721
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.837Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371549,
+          "tag": "boot.ue_main_after_getflags",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1722
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.841Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371550,
+          "tag": "boot.ue_main_before_route_cleanup_iife",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1723
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.847Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371550,
+          "tag": "boot.ue_main_route_cleanup_iife_enter",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1723
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.848Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371552,
+          "tag": "boot.ue_main_before_appstate_listener",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1725
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.848Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371552,
+          "tag": "boot.ue_main_exit",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1725
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.849Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371553,
+          "tag": "boot.boot_complete",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1726,
+            "ota": "O60"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.849Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371555,
+          "tag": "boot.render_wait_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1728
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:32.850Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880371564,
+          "tag": "boot.render_wait_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 1737
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:37.527Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880377519,
+          "tag": "boot.render_wait_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 7692
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:39.219Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880379213,
+          "tag": "boot.ota_runtime_info",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 9386,
+            "updateId": "embedded",
+            "channel": "",
+            "runtimeVersion": "",
+            "ota_version": "O60",
+            "emergency": false,
+            "launch_ms": null
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:42.599Z",
+    "step": "boot",
+    "method": "GET",
+    "pathname": "/api/markers",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T04:59:43.230Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383109,
+          "tag": "boot.render_after_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13282
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:43.231Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383115,
+          "tag": "boot.render_after_fonts",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13288
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:43.233Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383116,
+          "tag": "boot.render_about_to_mount_root",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13289
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:43.233Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383122,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13295,
+            "isLoggedIn": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:43.234Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383126,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13299
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:43.235Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383191,
+          "tag": "boot.auth_screen_render_start",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13364
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:43.235Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383195,
+          "tag": "boot.auth_screen_after_splash_refs",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13368
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:43.236Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383196,
+          "tag": "boot.auth_screen_after_all_state",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13369
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:43.287Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383277,
+          "tag": "boot.auth_view_effect",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13450,
+            "view": "splash"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:43.308Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383287,
+          "tag": "boot.navigation_container_ready",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13460,
+            "isLoggedIn": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.225Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383697,
+          "tag": "boot.auth_screen_render_start",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13870
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.253Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383697,
+          "tag": "boot.auth_screen_after_splash_refs",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13870
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.254Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880383698,
+          "tag": "boot.auth_screen_after_all_state",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 13871
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.411Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384309,
+          "tag": "boot.render_after_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14482
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.412Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384310,
+          "tag": "boot.render_after_fonts",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14483
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.413Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384311,
+          "tag": "boot.render_about_to_mount_root",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14484
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.414Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384313,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14486,
+            "isLoggedIn": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.416Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384314,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14487
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.416Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384350,
+          "tag": "boot.memhydrate_entry",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14523
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.418Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384354,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14527,
+            "isLoggedIn": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.419Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384359,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14532
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.420Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384367,
+          "tag": "boot.render_after_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14540
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.437Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384368,
+          "tag": "boot.render_after_fonts",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14541
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.441Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384369,
+          "tag": "boot.render_about_to_mount_root",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14542
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.442Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384370,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14543,
+            "isLoggedIn": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.451Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384371,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14544
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.452Z",
+    "step": "boot",
+    "method": "GET",
+    "pathname": "/api/public-cairns/capabilities",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T04:59:44.467Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384384,
+          "tag": "boot.pull_memory_entry",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14557,
+            "reconcile": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.469Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384385,
+          "tag": "boot.pull_memory_before_fetch",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14558,
+            "page": 0
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.475Z",
+    "step": "boot",
+    "method": "GET",
+    "pathname": "/api/memory/points",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T04:59:44.529Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384498,
+          "tag": "boot.pull_memory_after_fetch",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14671,
+            "page": 0,
+            "ok": true,
+            "status": 200
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.530Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384499,
+          "tag": "boot.pull_memory_after_parse",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14672,
+            "page": 0,
+            "n": 0
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.531Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384500,
+          "tag": "boot.pull_memory_pages_done",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14673,
+            "total": 0,
+            "aborted": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.532Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384501,
+          "tag": "boot.replacepoints_entry",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14674,
+            "points_n": 0
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.533Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384502,
+          "tag": "boot.replacepoints_after_set",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14675
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.726Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384659,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14832,
+            "isLoggedIn": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:44.728Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880384659,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 14832
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:45.284Z",
+    "step": "boot",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "api.req",
+          "ts": 1789880382275,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "wq1y71",
+            "method": "GET",
+            "path": "/api/markers",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.req",
+          "ts": 1789880384381,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "iu5pk2",
+            "method": "GET",
+            "path": "/api/public-cairns/capabilities",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory_sync.attach_epoch_bump",
+          "ts": 1789880384383,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "from": 0,
+            "to": 1,
+            "prev_active": null
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.req",
+          "ts": 1789880384386,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "uypiu0",
+            "method": "GET",
+            "path": "/api/memory/points?after_ts=0&after_cid=&until=1789880384385&limit=10000",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "o41.pull_memory_reconcile_server_empty",
+          "ts": 1789880384501,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "local_n": 0,
+            "unsynced_n": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:45.656Z",
+    "step": "home-to-hike",
+    "method": "GET",
+    "pathname": "/api/routes",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T04:59:45.851Z",
+    "step": "simulator-enable-fresh-entry",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880385781,
+          "tag": "boot.render_after_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 15954
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:45.858Z",
+    "step": "simulator-enable-fresh-entry",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880385782,
+          "tag": "boot.render_after_fonts",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 15955
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:45.858Z",
+    "step": "simulator-enable-fresh-entry",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880385783,
+          "tag": "boot.render_about_to_mount_root",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 15956
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:45.859Z",
+    "step": "simulator-enable-fresh-entry",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880385783,
+          "tag": "boot.navigator_body_running",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 15956,
+            "isLoggedIn": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:45.859Z",
+    "step": "simulator-enable-fresh-entry",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880385784,
+          "tag": "boot.navigator_before_jsx",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 15957
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:45.860Z",
+    "step": "simulator-enable-fresh-entry",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880385830,
+          "tag": "boot.render_after_hydrate",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 16003
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:45.860Z",
+    "step": "simulator-enable-fresh-entry",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880385831,
+          "tag": "boot.render_after_fonts",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 16004
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:45.861Z",
+    "step": "simulator-enable-fresh-entry",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880385832,
+          "tag": "boot.render_about_to_mount_root",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 16005
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:48.654Z",
+    "step": "simulator-configure-r-gps-02",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "api.req",
+          "ts": 1789880385649,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "mmrt2n",
+            "method": "GET",
+            "path": "/api/routes",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:49.142Z",
+    "step": "normal-start",
+    "method": "POST",
+    "pathname": "/api/sessions/start",
+    "body": {
+      "type": "hiking",
+      "start_time": "2026-09-19T16:58:49.114Z",
+      "client_activity_id": "107528a1-d42d-420f-9b38-3daefc07ac76",
+      "client_op_id": "107528a1-d42d-420f-9b38-3daefc07ac76"
+    }
+  },
+  {
+    "at": "2026-09-20T04:59:52.238Z",
+    "step": "snapshot:after-normal-start",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "api.req",
+          "ts": 1789880389133,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "c43irr",
+            "method": "POST",
+            "path": "/api/sessions/start",
+            "bodyBytes": 171
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:00.836Z",
+    "step": "normal-plant-commit",
+    "method": "POST",
+    "pathname": "/api/markers",
+    "body": {
+      "type": "cairn",
+      "text": "Turn and return\u001ePrivate Cairn planted from the connected R-GPS-02 Activity.",
+      "lat": -41.28611553085479,
+      "lng": 174.77746681195595,
+      "permission": "personal",
+      "approximate": false,
+      "client_cairn_id": "30bcf264-51e6-4122-b6f0-15e9b5257a36",
+      "origin_activity_client_id": "107528a1-d42d-420f-9b38-3daefc07ac76",
+      "client_op_id": "30bcf264-51e6-4122-b6f0-15e9b5257a36"
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.661Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401447,
+          "tag": "boot.memory_screen_render_start",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31620
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.666Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401470,
+          "tag": "boot.fgum_render_enter",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31643
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.689Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401494,
+          "tag": "boot.fgum_user_effect_enter",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31667,
+            "hasUserId": true,
+            "isLoggedIn": true,
+            "effective": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.691Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401497,
+          "tag": "boot.fgum_hasuser_scheduled",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31670
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.692Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401503,
+          "tag": "boot.memory_screen_render_start",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31676
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.694Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401505,
+          "tag": "boot.fgum_render_enter",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31678
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.696Z",
+    "step": "prefinish-memory",
+    "method": "GET",
+    "pathname": "/api/friends",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T05:00:01.698Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401527,
+          "tag": "boot.memory_screen_render_start",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31700
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.698Z",
+    "step": "prefinish-memory",
+    "method": "GET",
+    "pathname": "/api/memory-subscriptions",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T05:00:01.729Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401543,
+          "tag": "boot.memory_screen_render_start",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31716
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.730Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401546,
+          "tag": "boot.fgum_render_enter",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31719
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.732Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401577,
+          "tag": "boot.memory_screen_render_start",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31750
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.735Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401579,
+          "tag": "boot.fgum_render_enter",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31752
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.736Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401600,
+          "tag": "boot.memory_screen_render_start",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31773
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.737Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401602,
+          "tag": "boot.fgum_render_enter",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31775
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.799Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401740,
+          "tag": "boot.fgum_hasuser_interaction_done",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31913
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.801Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401742,
+          "tag": "boot.fgum_hasuser_async_enter",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31915
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.802Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401744,
+          "tag": "boot.fgum_hasuser_before_hydrate_h3",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31917
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.803Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401745,
+          "tag": "boot.h3hydrate_entry",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31918
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.804Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401746,
+          "tag": "boot.h3hydrate_after_getitem",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31919,
+            "raw_len": -1
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.805Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401749,
+          "tag": "boot.h3hydrate_exit",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31922
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.806Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880401749,
+          "tag": "boot.fgum_hasuser_after_hydrate_h3",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 31922
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.838Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "plant.commit_attempt",
+          "ts": 1789880400790,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "hasTitle": true,
+            "textLen": 59,
+            "vis": "personal"
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "v422.addmarker_enter",
+          "ts": 1789880400802,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "permission": "personal",
+            "type": "cairn",
+            "localId": "30bcf264"
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "plant.commit_ok",
+          "ts": 1789880400818,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "30bcf264-51e6-4122-b6f0-15e9b5257a36"
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.req",
+          "ts": 1789880400818,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "rvid6l",
+            "method": "POST",
+            "path": "/api/markers",
+            "bodyBytes": 378
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "v357.memory_screen_render",
+          "ts": 1789880401469,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "render_n": 1,
+            "persistentCoord_set": false,
+            "points_n": 0,
+            "mountKey": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "v357.tab_focus_entry",
+          "ts": 1789880401501,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "points_n": 0,
+            "mountKey_pre": 0,
+            "ms_since_last_mount": -1,
+            "threshold_ms": 300000,
+            "will_bump": true
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.tab_focus",
+          "ts": 1789880401501,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "points": 0,
+            "initialDone": false,
+            "settingsHydrated": true,
+            "mountKey": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "v357.mountKey_bumped",
+          "ts": 1789880401504,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "from": 0,
+            "to": 1
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "v357.memory_screen_render",
+          "ts": 1789880401504,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "render_n": 2,
+            "persistentCoord_set": false,
+            "points_n": 0,
+            "mountKey": 1
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.req",
+          "ts": 1789880401526,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "rn1m3t",
+            "method": "GET",
+            "path": "/api/friends",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "v357.memory_screen_render",
+          "ts": 1789880401528,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "render_n": 3,
+            "persistentCoord_set": false,
+            "points_n": 0,
+            "mountKey": 1
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.req",
+          "ts": 1789880401530,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "r0sgk3",
+            "method": "GET",
+            "path": "/api/memory-subscriptions",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.gps_fix_ok",
+          "ts": 1789880401543,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "accuracy": 16
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "v357.memory_screen_render",
+          "ts": 1789880401544,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "render_n": 4,
+            "persistentCoord_set": true,
+            "points_n": 0,
+            "mountKey": 1
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.map_renderer_unavailable",
+          "ts": 1789880401577,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {},
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.coord_changed",
+          "ts": 1789880401577,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "prev": "null",
+            "next": "[coordinates-redacted]",
+            "has_watcher": false,
+            "watcher_age_ms": null,
+            "watcher_fresh": false,
+            "has_oneshot": true,
+            "fail_reason": null
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "v357.memory_screen_render",
+          "ts": 1789880401578,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "render_n": 5,
+            "persistentCoord_set": true,
+            "points_n": 0,
+            "mountKey": 1
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "v360.overlay_both_ready_fadeout",
+          "ts": 1789880401599,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {},
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "v357.memory_screen_render",
+          "ts": 1789880401600,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "render_n": 6,
+            "persistentCoord_set": true,
+            "points_n": 0,
+            "mountKey": 1
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.req",
+          "ts": 1789880401769,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "vt0ufy",
+            "method": "GET",
+            "path": "/api/friend-sharing/sources",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.841Z",
+    "step": "prefinish-memory",
+    "method": "GET",
+    "pathname": "/api/friend-sharing/sources",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T05:00:01.940Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/friend-sharing/projections",
+    "body": {
+      "friend_ids": []
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:01.941Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/friend-content/encounters/verify",
+    "body": {}
+  },
+  {
+    "at": "2026-09-20T05:00:01.962Z",
+    "step": "prefinish-memory",
+    "method": "GET",
+    "pathname": "/api/circle/markers",
+    "body": null
+  },
+  {
+    "at": "2026-09-20T05:00:02.051Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880402026,
+          "tag": "boot.memory_screen_render_start",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 32199
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:02.054Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "ts": 1789880402028,
+          "tag": "boot.fgum_render_enter",
+          "session_id": "boot-mu9ck49v-ejmegc",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          },
+          "ctx": {
+            "ms_since_session_start": 32201
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:04.869Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "api.req",
+          "ts": 1789880401864,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "445ocj",
+            "method": "POST",
+            "path": "/api/friend-sharing/projections",
+            "bodyBytes": 17
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.req",
+          "ts": 1789880401866,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "2re052",
+            "method": "POST",
+            "path": "/api/friend-content/encounters/verify",
+            "bodyBytes": 2
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.err_status",
+          "ts": 1789880401951,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "2re052",
+            "method": "POST",
+            "path": "/api/friend-content/encounters/verify",
+            "status": 501,
+            "elapsedMs": 85,
+            "bodyPreview": "{\"error\":\"unexpected_api_request\",\"namespace\":\"f1f2-ad386835-20260920t125821\",\"method\":\"POST\",\"pathname\":\"/api/friend-content/encounters/verify\"}"
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "api.req",
+          "ts": 1789880401951,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "id": "w5da59",
+            "method": "GET",
+            "path": "/api/circle/markers",
+            "bodyBytes": 0
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880402002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.first_visit_hint_dismissed",
+          "ts": 1789880402026,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "v357.memory_screen_render",
+          "ts": 1789880402027,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "render_n": 7,
+            "persistentCoord_set": true,
+            "points_n": 0,
+            "mountKey": 1
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880402502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 1001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880403003,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 1502
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880403502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 2001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880404003,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 2502
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880404502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 3001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:08.008Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880405003,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 3502
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880405504,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 4003
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880406002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 4501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880406502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 5001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880407003,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 5502
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880407503,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 6002
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880408002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 6501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:11.507Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880408503,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 7002
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880409002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 7501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880409503,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 8002
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880410003,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 8502
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880410502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 9001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880411003,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 9502
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880411503,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 10002
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:15.008Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880412002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 10501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880412503,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 11002
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880413001,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 11500
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880413503,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 12002
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880414002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 12501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880414501,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 13000
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880415002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 13501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:18.506Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880415502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 14001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880416002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 14501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880416503,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 15002
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880417002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 15501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880417504,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 16002
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880418002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 16501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880418501,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 17000
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:22.007Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880419002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 17501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880419504,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 18003
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880420002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 18501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880420503,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 19002
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880421001,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 19500
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880421502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 20001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880422003,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 20502
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:25.509Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880422504,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 21003
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880423004,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 21503
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880423504,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 22003
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880424002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 22501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880424502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 23001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880425002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 23501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880425501,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 24000
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:29.004Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880426001,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 24500
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880426501,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 25000
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880427003,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 25502
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880427502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 26001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880428002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 26501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880428503,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 27002
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880429001,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 27500
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "at": "2026-09-20T05:00:32.505Z",
+    "step": "prefinish-memory",
+    "method": "POST",
+    "pathname": "/api/edit-diag",
+    "body": {
+      "kind": "app_log",
+      "events": [
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880429502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 28001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880430002,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 28501
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880430502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 29001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880431003,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 29502
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880431503,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 30002
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880432003,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 30502
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        },
+        {
+          "tag": "memory.js_heartbeat",
+          "ts": 1789880432502,
+          "session_id": "mu9ck45e-ydwmhjd1",
+          "ctx": {
+            "elapsed_ms": 31001
+          },
+          "device": {
+            "platform": "web",
+            "version": "0.0.0"
+          }
+        }
+      ]
+    }
+  }
+]

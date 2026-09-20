@@ -56,8 +56,10 @@ export function PassiveMemoryRecorder() {
             lat: sample.lat,
             lng: sample.lng,
             atMs: sample.timestamp,
-            source: 'passive',
+            source: 'simulator_test',
             ownerUserId: String(userId),
+            horizontalAccuracyM: sample.accuracy,
+            continuityState: 'accepted',
           }).then(result => {
             appendSimulatorLog('MEMORY_EVIDENCE', 'passive_memory_evidence_committed', {
               committed: result.committed,
@@ -89,7 +91,9 @@ export function PassiveMemoryRecorder() {
           lat: location.coords.latitude,
           lng: location.coords.longitude,
           atMs,
-          source: 'passive',
+          source: 'passive_real',
+          horizontalAccuracyM: accuracy ?? undefined,
+          continuityState: 'accepted',
         });
       });
       if (cancelled) watcher.remove();

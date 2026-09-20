@@ -77,6 +77,38 @@ describe('bounded durable Activity registry', () => {
     expect(registry.completed[0]).toMatchObject({ clientActivityId: id, syncState: 'pending' });
   });
 
+  test('borrowed Route geometry survives unfinished recovery and is dropped at completion', async () => {
+    const id = '43434343-4343-4343-8343-434343434343';
+    await registerUnfinishedActivity({
+      ...unfinished('user-borrowed-route', id),
+      borrowedRouteReference: {
+        routeId: 'friend:route-7:lease-9',
+        name: 'Shared ridge line',
+        points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
+        distanceM: 140,
+        elevationGainM: 8,
+        capturedAt: 123,
+      },
+    });
+    expect((await getUnfinishedActivity('user-borrowed-route'))?.borrowedRouteReference).toMatchObject({
+      routeId: 'friend:route-7:lease-9',
+      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
+    });
+
+    await completeActivity({
+      clientActivityId: id,
+      serverActivityId: null,
+      userId: 'user-borrowed-route',
+      activityMode: 'hiking',
+      startedAt: 100,
+      endedAt: 200,
+      lifecycle: 'completed_local',
+      syncState: 'pending',
+    });
+    expect(await getUnfinishedActivity('user-borrowed-route')).toBeNull();
+    expect(JSON.stringify(await getActivityRegistry('user-borrowed-route'))).not.toContain('Shared ridge line');
+  });
+
   test('late Start acknowledgement maps a completed-local Activity without marking it synced', async () => {
     const id = '45454545-4545-4545-8545-454545454545';
     await completeActivity({

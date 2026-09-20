@@ -27,11 +27,13 @@ describe('Activity API timestamp boundary', () => {
       name: 'Walk',
       route_points: [{ lat: -41, lng: 174, t: 1_000.9 }],
       route_points_raw: [{ lat: -41, lng: 174, t: 2_000.4 }],
+      route_points_canonical: [{ lat: -41, lng: 174, t: 2_500.8, segment_id: 'segment-a' }],
       memory_points: [{ lat: -41, lng: 174, ts: 3_000.7 }],
     });
 
     expect(normalized.route_points[0].t).toBe(1_000);
     expect(normalized.route_points_raw[0].t).toBe(2_000);
+    expect(normalized.route_points_canonical[0].t).toBe(2_500);
     expect(normalized.memory_points[0].ts).toBe(3_000);
   });
 });

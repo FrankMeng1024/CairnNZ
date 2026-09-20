@@ -26,7 +26,7 @@
  */
 
 import { storage } from '../../../store/storage';
-import { useMemoryStore, VisitedPoint } from '../store/useMemoryStore';
+import { MemoryPresenceWitness, useMemoryStore, VisitedPoint } from '../store/useMemoryStore';
 import {
   hasMemoryHydrateFailedBefore,
   markMemoryHydrateInProgress,
@@ -46,6 +46,10 @@ import {
 // the key forces a fresh pull from server which now contains 413 points
 // for user 4 (vs 367 in v355) including the 46 points for the "back" hike.
 const STORAGE_KEY_PREFIX = 'cairn:memory:tiles:v5:';
+const PRESENCE_STORAGE_KEY_PREFIX = 'cairn:memory:presence:v1:';
+// Debug Raw GPS evidence is durable for reproducible QA, but its separate key
+// and store collection prevent it from entering Personal sync or sharing.
+const SYNTHETIC_STORAGE_KEY_PREFIX = 'cairn:memory:synthetic:v1:';
 const DEBOUNCE_MS = 3_000;
 /**
  * Hard cap on how long a flush can be deferred. Without this, every GPS
@@ -56,6 +60,10 @@ const MAX_WAIT_MS = 15_000;
 
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
+let presenceFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let presenceMaxWaitTimer: ReturnType<typeof setTimeout> | null = null;
+let syntheticFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let syntheticMaxWaitTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribe: (() => void) | null = null;
 let currentUserId: string | null = null;
 let persistenceState: 'detached' | 'hydrating' | 'writable' | 'blocked' = 'detached';
@@ -64,10 +72,24 @@ let persistenceState: 'detached' | 'hydrating' | 'writable' | 'blocked' = 'detac
  * this and bail out, so concurrent user switches can't corrupt state.
  */
 let generation = 0;
-let persistenceMetrics = { writes: 0, bytes: 0, totalWriteMs: 0, maxWriteMs: 0 };
+let persistenceMetrics = {
+  writes: 0,
+  coverageWrites: 0,
+  presenceWrites: 0,
+  bytes: 0,
+  totalWriteMs: 0,
+  maxWriteMs: 0,
+};
 
 export function resetMemoryPersistenceMetrics(): void {
-  persistenceMetrics = { writes: 0, bytes: 0, totalWriteMs: 0, maxWriteMs: 0 };
+  persistenceMetrics = {
+    writes: 0,
+    coverageWrites: 0,
+    presenceWrites: 0,
+    bytes: 0,
+    totalWriteMs: 0,
+    maxWriteMs: 0,
+  };
 }
 
 export function getMemoryPersistenceMetrics(): typeof persistenceMetrics {
@@ -88,26 +110,140 @@ interface SerializedPoint {
   s: 0 | 1;
   /** cid (uuid v4 or sha1-derived). v3 schema; absent in v2. */
   c?: string;
+  /** Evidence source: activity, passive, or historical/unknown. */
+  e?: 'a' | 'p' | 'h';
+  /** Stable client Activity identity. */
+  i?: string;
+  /** Stable canonical segment identity. */
+  g?: string;
+  /** Horizontal accuracy in metres. */
+  h?: number;
+  /** Continuity: accepted, gap, unknown. */
+  n?: 'a' | 'g' | 'u';
 }
 
-interface SerializedMemoryV3 {
-  v: 3 | 2;
+interface SerializedMemoryV4 {
+  v: 4 | 3 | 2;
   points: SerializedPoint[];
   initialRevealDone: boolean;
 }
 
-function serialize(points: VisitedPoint[], initialRevealDone: boolean): SerializedMemoryV3 {
+interface SerializedPresenceV1 {
+  v: 1;
+  witnesses: Array<{
+    c: string;
+    fa: number;
+    fo: number;
+    ft: number;
+    a: number;
+    o: number;
+    t: number;
+    e: 'a' | 'p';
+    i?: string;
+    g?: string;
+    h: number;
+    s: 0 | 1;
+  }>;
+}
+
+interface SerializedSyntheticV1 {
+  v: 1;
+  provenance: 'simulator_test';
+  points: Array<{
+    a: number;
+    o: number;
+    t: number;
+    c: string;
+    i?: string;
+    g?: string;
+    h?: number;
+    n: 'a' | 'g' | 'u';
+  }>;
+}
+
+function serialize(points: VisitedPoint[], initialRevealDone: boolean): SerializedMemoryV4 {
   return {
-    v: 3,
+    v: 4,
     points: points.map((p) => ({
       a: p.lat,
       o: p.lng,
       t: p.ts,
       s: p.synced ? 1 : 0,
       c: p.cid,
+      e: p.evidenceSource === 'activity_real' ? 'a' : p.evidenceSource === 'passive_real' ? 'p' : 'h',
+      i: p.sourceActivityClientId,
+      g: p.sourceSegmentId,
+      h: p.horizontalAccuracyM,
+      n: p.continuityState === 'accepted' ? 'a' : p.continuityState === 'gap' ? 'g' : 'u',
     })),
     initialRevealDone,
   };
+}
+
+function serializePresence(witnesses: MemoryPresenceWitness[]): SerializedPresenceV1 {
+  return {
+    v: 1,
+    witnesses: witnesses.map(witness => ({
+      c: witness.cid,
+      fa: witness.firstLat,
+      fo: witness.firstLng,
+      ft: witness.firstObservedAtMs,
+      a: witness.lat,
+      o: witness.lng,
+      t: witness.observedAtMs,
+      e: witness.evidenceSource === 'activity_real' ? 'a' : 'p',
+      i: witness.sourceActivityClientId,
+      g: witness.sourceSegmentId,
+      h: witness.horizontalAccuracyM,
+      s: witness.synced ? 1 : 0,
+    })),
+  };
+}
+
+function serializeSynthetic(points: VisitedPoint[]): SerializedSyntheticV1 {
+  return {
+    v: 1,
+    provenance: 'simulator_test',
+    points: points.map(point => ({
+      a: point.lat,
+      o: point.lng,
+      t: point.ts,
+      c: point.cid,
+      i: point.sourceActivityClientId,
+      g: point.sourceSegmentId,
+      h: point.horizontalAccuracyM,
+      n: point.continuityState === 'accepted' ? 'a' : point.continuityState === 'gap' ? 'g' : 'u',
+    })),
+  };
+}
+
+function deserializeSynthetic(raw: string): VisitedPoint[] | null {
+  try {
+    const parsed = JSON.parse(raw) as SerializedSyntheticV1;
+    if (parsed.v !== 1 || parsed.provenance !== 'simulator_test' || !Array.isArray(parsed.points)) return null;
+    return parsed.points.map(point => {
+      if (![point.a, point.o, point.t].every(Number.isFinite)
+        || point.a < -90 || point.a > 90 || point.o < -180 || point.o > 180
+        || point.t <= 0 || typeof point.c !== 'string' || point.c.length === 0
+        || (point.n !== 'a' && point.n !== 'g' && point.n !== 'u')) {
+        throw new Error('invalid_synthetic_memory_point');
+      }
+      return {
+        lat: point.a,
+        lng: point.o,
+        ts: point.t,
+        cid: point.c,
+        synced: false,
+        evidenceSource: 'simulator_test' as const,
+        sourceActivityClientId: typeof point.i === 'string' && point.i.length > 0 ? point.i : undefined,
+        sourceSegmentId: typeof point.g === 'string' && point.g.length > 0 ? point.g : undefined,
+        horizontalAccuracyM: typeof point.h === 'number' && Number.isFinite(point.h) ? point.h : undefined,
+        continuityState: point.n === 'a' ? 'accepted' as const : point.n === 'g' ? 'gap' as const : 'unknown' as const,
+      };
+    });
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -128,15 +264,16 @@ function legacyDeterministicCid(_lat: number, _lng: number, _ts: number): string
 
 function deserialize(raw: string): { points: VisitedPoint[]; initialRevealDone: boolean } | null {
   try {
-    const parsed = JSON.parse(raw) as SerializedMemoryV3;
-    if ((parsed.v !== 2 && parsed.v !== 3) || !Array.isArray(parsed.points)) return null;
+    const parsed = JSON.parse(raw) as SerializedMemoryV4;
+    if ((parsed.v !== 2 && parsed.v !== 3 && parsed.v !== 4) || !Array.isArray(parsed.points)) return null;
     const points: VisitedPoint[] = [];
     for (const p of parsed.points) {
       if (typeof p?.a !== 'number' || typeof p?.o !== 'number') return null;
       if (!isFinite(p.a) || p.a < -90 || p.a > 90 || !isFinite(p.o) || p.o < -180 || p.o > 180) return null;
       if (typeof p.t !== 'number' || !Number.isFinite(p.t) || p.t <= 0) return null;
       if (p.s !== 0 && p.s !== 1) return null;
-      if (parsed.v === 3 && (typeof p.c !== 'string' || p.c.length === 0)) return null;
+      if ((parsed.v === 3 || parsed.v === 4) && (typeof p.c !== 'string' || p.c.length === 0)) return null;
+      if (parsed.v === 4 && p.e !== 'a' && p.e !== 'p' && p.e !== 'h') return null;
       const ts = p.t;
       const cid = (typeof p.c === 'string' && p.c.length > 0)
         ? p.c
@@ -147,6 +284,11 @@ function deserialize(raw: string): { points: VisitedPoint[]; initialRevealDone: 
         ts,
         cid,
         synced: p.s === 1,
+        evidenceSource: p.e === 'a' ? 'activity_real' : p.e === 'p' ? 'passive_real' : 'historical_unknown',
+        sourceActivityClientId: typeof p.i === 'string' && p.i.length > 0 ? p.i : undefined,
+        sourceSegmentId: typeof p.g === 'string' && p.g.length > 0 ? p.g : undefined,
+        horizontalAccuracyM: typeof p.h === 'number' && Number.isFinite(p.h) ? p.h : undefined,
+        continuityState: p.n === 'a' ? 'accepted' : p.n === 'g' ? 'gap' : 'unknown',
       });
     }
     return { points, initialRevealDone: Boolean(parsed.initialRevealDone) };
@@ -155,8 +297,53 @@ function deserialize(raw: string): { points: VisitedPoint[]; initialRevealDone: 
   }
 }
 
+function deserializePresence(raw: string): MemoryPresenceWitness[] | null {
+  try {
+    const parsed = JSON.parse(raw) as SerializedPresenceV1;
+    if (parsed.v !== 1 || !Array.isArray(parsed.witnesses)) return null;
+    const witnesses: MemoryPresenceWitness[] = [];
+    for (const value of parsed.witnesses) {
+      if (typeof value?.c !== 'string' || value.c.length === 0 || value.c.length > 36) return null;
+      if (![value.fa, value.fo, value.a, value.o].every(Number.isFinite)) return null;
+      if (value.fa < -90 || value.fa > 90 || value.a < -90 || value.a > 90
+        || value.fo < -180 || value.fo > 180 || value.o < -180 || value.o > 180) return null;
+      if (!Number.isFinite(value.ft) || value.ft <= 0
+        || !Number.isFinite(value.t) || value.t < value.ft) return null;
+      if ((value.e !== 'a' && value.e !== 'p') || (value.s !== 0 && value.s !== 1)) return null;
+      if (!Number.isFinite(value.h) || value.h < 0 || value.h > 50) return null;
+      if (value.e === 'a' && (typeof value.i !== 'string' || value.i.length === 0)) return null;
+      witnesses.push({
+        cid: value.c,
+        firstLat: value.fa,
+        firstLng: value.fo,
+        firstObservedAtMs: value.ft,
+        lat: value.a,
+        lng: value.o,
+        observedAtMs: value.t,
+        evidenceSource: value.e === 'a' ? 'activity_real' : 'passive_real',
+        sourceActivityClientId: value.e === 'a' ? value.i : undefined,
+        sourceSegmentId: value.e === 'a' && typeof value.g === 'string' && value.g.length > 0 ? value.g : undefined,
+        horizontalAccuracyM: value.h,
+        continuityState: 'accepted',
+        synced: value.s === 1,
+      });
+    }
+    return witnesses;
+  } catch {
+    return null;
+  }
+}
+
 function storageKey(userId: string): string {
   return `${STORAGE_KEY_PREFIX}${userId}`;
+}
+
+function presenceStorageKey(userId: string): string {
+  return `${PRESENCE_STORAGE_KEY_PREFIX}${userId}`;
+}
+
+function syntheticStorageKey(userId: string): string {
+  return `${SYNTHETIC_STORAGE_KEY_PREFIX}${userId}`;
 }
 
 function clearTimers(): void {
@@ -167,6 +354,22 @@ function clearTimers(): void {
   if (maxWaitTimer) {
     clearTimeout(maxWaitTimer);
     maxWaitTimer = null;
+  }
+  if (presenceFlushTimer) {
+    clearTimeout(presenceFlushTimer);
+    presenceFlushTimer = null;
+  }
+  if (presenceMaxWaitTimer) {
+    clearTimeout(presenceMaxWaitTimer);
+    presenceMaxWaitTimer = null;
+  }
+  if (syntheticFlushTimer) {
+    clearTimeout(syntheticFlushTimer);
+    syntheticFlushTimer = null;
+  }
+  if (syntheticMaxWaitTimer) {
+    clearTimeout(syntheticMaxWaitTimer);
+    syntheticMaxWaitTimer = null;
   }
 }
 
@@ -191,6 +394,32 @@ async function flush(userId: string, snapshot: { points: VisitedPoint[]; initial
   await storage.setItem(storageKey(userId), serialized, { strict: true });
   const elapsedMs = Math.max(0, Date.now() - startedAt);
   persistenceMetrics.writes += 1;
+  persistenceMetrics.coverageWrites += 1;
+  persistenceMetrics.bytes += serialized.length;
+  persistenceMetrics.totalWriteMs += elapsedMs;
+  persistenceMetrics.maxWriteMs = Math.max(persistenceMetrics.maxWriteMs, elapsedMs);
+}
+
+async function flushPresence(userId: string, witnesses: MemoryPresenceWitness[]): Promise<void> {
+  if (!userId) return;
+  const serialized = JSON.stringify(serializePresence(witnesses));
+  const startedAt = Date.now();
+  await storage.setItem(presenceStorageKey(userId), serialized, { strict: true });
+  const elapsedMs = Math.max(0, Date.now() - startedAt);
+  persistenceMetrics.writes += 1;
+  persistenceMetrics.presenceWrites += 1;
+  persistenceMetrics.bytes += serialized.length;
+  persistenceMetrics.totalWriteMs += elapsedMs;
+  persistenceMetrics.maxWriteMs = Math.max(persistenceMetrics.maxWriteMs, elapsedMs);
+}
+
+async function flushSynthetic(userId: string, points: VisitedPoint[]): Promise<void> {
+  if (!userId) return;
+  const serialized = JSON.stringify(serializeSynthetic(points));
+  const startedAt = Date.now();
+  await storage.setItem(syntheticStorageKey(userId), serialized, { strict: true });
+  const elapsedMs = Math.max(0, Date.now() - startedAt);
+  persistenceMetrics.writes += 1;
   persistenceMetrics.bytes += serialized.length;
   persistenceMetrics.totalWriteMs += elapsedMs;
   persistenceMetrics.maxWriteMs = Math.max(persistenceMetrics.maxWriteMs, elapsedMs);
@@ -202,6 +431,8 @@ async function flush(userId: string, snapshot: { points: VisitedPoint[]; initial
  * every 1 m mutation.
  */
 let latestSnapshotUserId: string | null = null;
+let latestPresenceSnapshotUserId: string | null = null;
+let latestSyntheticSnapshotUserId: string | null = null;
 
 function scheduleFlush(): void {
   const userIdAtSchedule = currentUserId;
@@ -239,17 +470,102 @@ function scheduleFlush(): void {
   }
 }
 
+function schedulePresenceFlush(): void {
+  const userIdAtSchedule = currentUserId;
+  if (!userIdAtSchedule || persistenceState !== 'writable') return;
+  latestPresenceSnapshotUserId = userIdAtSchedule;
+
+  const flushLatestOwnedPresence = () => {
+    if (latestPresenceSnapshotUserId !== userIdAtSchedule || currentUserId !== userIdAtSchedule) return;
+    const witnesses = useMemoryStore.getState().presenceWitnesses.slice();
+    void flushPresence(userIdAtSchedule, witnesses).catch(() => {});
+  };
+
+  if (presenceFlushTimer) clearTimeout(presenceFlushTimer);
+  presenceFlushTimer = setTimeout(() => {
+    presenceFlushTimer = null;
+    if (presenceMaxWaitTimer) {
+      clearTimeout(presenceMaxWaitTimer);
+      presenceMaxWaitTimer = null;
+    }
+    flushLatestOwnedPresence();
+  }, DEBOUNCE_MS);
+
+  if (!presenceMaxWaitTimer) {
+    presenceMaxWaitTimer = setTimeout(() => {
+      presenceMaxWaitTimer = null;
+      if (presenceFlushTimer) {
+        clearTimeout(presenceFlushTimer);
+        presenceFlushTimer = null;
+      }
+      flushLatestOwnedPresence();
+    }, MAX_WAIT_MS);
+  }
+}
+
+function scheduleSyntheticFlush(): void {
+  const userIdAtSchedule = currentUserId;
+  if (!userIdAtSchedule || persistenceState !== 'writable') return;
+  latestSyntheticSnapshotUserId = userIdAtSchedule;
+  const flushLatest = () => {
+    if (latestSyntheticSnapshotUserId !== userIdAtSchedule || currentUserId !== userIdAtSchedule) return;
+    void flushSynthetic(userIdAtSchedule, useMemoryStore.getState().testPoints.slice()).catch(() => {});
+  };
+  if (syntheticFlushTimer) clearTimeout(syntheticFlushTimer);
+  syntheticFlushTimer = setTimeout(() => {
+    syntheticFlushTimer = null;
+    if (syntheticMaxWaitTimer) {
+      clearTimeout(syntheticMaxWaitTimer);
+      syntheticMaxWaitTimer = null;
+    }
+    flushLatest();
+  }, DEBOUNCE_MS);
+  if (!syntheticMaxWaitTimer) {
+    syntheticMaxWaitTimer = setTimeout(() => {
+      syntheticMaxWaitTimer = null;
+      if (syntheticFlushTimer) {
+        clearTimeout(syntheticFlushTimer);
+        syntheticFlushTimer = null;
+      }
+      flushLatest();
+    }, MAX_WAIT_MS);
+  }
+}
+
 /**
  * Force an immediate synchronous-flush request. Used on AppState
  * background and on logout to guarantee durability.
  */
-export async function flushMemoryNow(): Promise<void> {
+export async function flushMemoryNow(options: { coverage?: boolean; presence?: boolean } = {}): Promise<void> {
   const userId = currentUserId;
   if (!userId) return;
   if (persistenceState !== 'writable') throw new Error('memory_persistence_unavailable');
   clearTimers();
   const state = useMemoryStore.getState();
-  await flush(userId, { points: state.points.slice(), initialRevealDone: state.initialRevealDone });
+  const writeCoverage = options.coverage ?? (options.presence === undefined);
+  const writePresence = options.presence ?? (options.coverage === undefined);
+  if (writeCoverage) {
+    await flush(userId, { points: state.points.slice(), initialRevealDone: state.initialRevealDone });
+  }
+  if (writePresence) {
+    await flushPresence(userId, (state.presenceWitnesses ?? []).slice());
+  }
+}
+
+/** Force the isolated Debug Raw GPS realm to disk without touching Personal Memory. */
+export async function flushSyntheticMemoryNow(): Promise<void> {
+  const userId = currentUserId;
+  if (!userId) return;
+  if (persistenceState !== 'writable') throw new Error('memory_persistence_unavailable');
+  if (syntheticFlushTimer) {
+    clearTimeout(syntheticFlushTimer);
+    syntheticFlushTimer = null;
+  }
+  if (syntheticMaxWaitTimer) {
+    clearTimeout(syntheticMaxWaitTimer);
+    syntheticMaxWaitTimer = null;
+  }
+  await flushSynthetic(userId, useMemoryStore.getState().testPoints.slice());
 }
 
 /** Attach the durable local Memory authority on first product write. */
@@ -302,8 +618,12 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
     block('memory_hydration_gate_write_failed');
   }
   let raw: string | null = null;
+  let rawPresence: string | null = null;
+  let rawSynthetic: string | null = null;
   try {
     raw = await storage.getItem(storageKey(userId));
+    rawPresence = await storage.getItem(presenceStorageKey(userId));
+    rawSynthetic = await storage.getItem(syntheticStorageKey(userId));
   } catch {
     block('memory_hydration_read_failed');
   }
@@ -338,14 +658,37 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
     );
   }
 
+  if (rawPresence !== null) {
+    const MAX_PRESENCE_RAW_BYTES = 750_000;
+    if (rawPresence.length > MAX_PRESENCE_RAW_BYTES) {
+      block('memory_presence_hydration_payload_too_large');
+    }
+    const witnesses = deserializePresence(rawPresence);
+    if (!witnesses) {
+      persistenceState = 'blocked';
+      throw new Error('memory_presence_hydration_corrupt_or_partial');
+    }
+    useMemoryStore.getState().replacePresenceWitnesses(witnesses);
+  }
+
+  // Synthetic QA data is disposable and never an authority for Personal
+  // Memory. A corrupt/obsolete QA payload is ignored instead of blocking the
+  // user's real Memory hydration.
+  if (rawSynthetic !== null && rawSynthetic.length <= 500_000) {
+    const decodedSynthetic = deserializeSynthetic(rawSynthetic);
+    if (decodedSynthetic) useMemoryStore.getState().replaceTestPoints(decodedSynthetic);
+  }
+
   await markMemoryHydrateSuccess();
   if (myGeneration !== generation) return;
   persistenceState = 'writable';
   unsubscribe = useMemoryStore.subscribe((next, previous) => {
     // Sync counters/status are UI state, not durable exploration mutations.
-    // Do not re-arm a full Memory snapshot for those unrelated updates.
-    if (next.points === previous.points && next.initialRevealDone === previous.initialRevealDone) return;
-    scheduleFlush();
+    // Presence has its own bounded record so a non-spatial update never
+    // serializes lifetime exploration geometry.
+    if (next.points !== previous.points || next.initialRevealDone !== previous.initialRevealDone) scheduleFlush();
+    if (next.presenceWitnesses !== previous.presenceWitnesses) schedulePresenceFlush();
+    if (next.testPoints !== previous.testPoints) scheduleSyntheticFlush();
   });
 }
 
@@ -367,10 +710,16 @@ export async function detachMemoryPersistence(invalidateInFlight = true): Promis
     // OLD user's content even if a concurrent clearAll runs after.
     const state = useMemoryStore.getState();
     const snapshot = { points: state.points.slice(), initialRevealDone: state.initialRevealDone };
+    const presenceSnapshot = (state.presenceWitnesses ?? []).slice();
+    const syntheticSnapshot = state.testPoints.slice();
     currentUserId = null;
     const shouldFlush = persistenceState === 'writable';
     persistenceState = 'detached';
-    if (shouldFlush) await flush(userId, snapshot);
+    if (shouldFlush) {
+      await flush(userId, snapshot);
+      await flushPresence(userId, presenceSnapshot);
+      await flushSynthetic(userId, syntheticSnapshot);
+    }
   } else {
     persistenceState = 'detached';
   }

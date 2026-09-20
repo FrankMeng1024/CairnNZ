@@ -2,6 +2,13 @@ const mockAsyncStorage = new Map<string, string>();
 const mockMarkerCache = new Map<string, string>();
 const mockAuthenticatedFetch = jest.fn();
 const mockTombstoneMarker = jest.fn(async (..._args: unknown[]) => undefined);
+let mockTrackingState: Record<string, unknown> = {
+  status: 'idle',
+  sessionId: null,
+  ownerUserId: null,
+  liveOwnerGeneration: null,
+  locationProviderSource: 'real',
+};
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
@@ -33,7 +40,7 @@ jest.mock('../../services/markerTombstones', () => ({
   tombstoneMarker: (...args: unknown[]) => mockTombstoneMarker(...args),
 }));
 jest.mock('../useTrackingStore', () => ({
-  useTrackingStore: { getState: () => ({ status: 'idle', sessionId: null }) },
+  useTrackingStore: { getState: () => mockTrackingState },
 }));
 jest.mock('../../services/apiService', () => ({
   authenticatedFetch: (...args: unknown[]) => mockAuthenticatedFetch(...args),
@@ -55,6 +62,13 @@ describe('Cairn create acknowledgement ordering', () => {
       status: 201,
       json: async () => ({ id: 42, user_id: 'owner-a' }),
     });
+    mockTrackingState = {
+      status: 'idle',
+      sessionId: null,
+      ownerUserId: null,
+      liveOwnerGeneration: null,
+      locationProviderSource: 'real',
+    };
     useMarkerStore.setState({
       userId: 'owner-a',
       markers: [],
@@ -69,7 +83,7 @@ describe('Cairn create acknowledgement ordering', () => {
   });
 
   test('a fast server acknowledgement cannot duplicate or downgrade the local Cairn', async () => {
-    const created = await useMarkerStore.getState().addMarker({
+    const created = (await useMarkerStore.getState().addMarker({
       type: 'cairn',
       regionCode: 'nz',
       lat: -43.595,
@@ -77,7 +91,7 @@ describe('Cairn create acknowledgement ordering', () => {
       note: '',
       authorId: 'local',
       permission: 'personal',
-    });
+    })).marker;
     await settle();
 
     expect(useMarkerStore.getState().markers).toHaveLength(1);
@@ -90,8 +104,150 @@ describe('Cairn create acknowledgement ordering', () => {
     });
   });
 
+  test('reports a durable A-owned acceptance without projecting or throwing after an A-to-B switch', async () => {
+    const originalSaveLocal = offlineMarkers.saveLocal.bind(offlineMarkers);
+    let durableLocalId: string | null = null;
+    let releaseReturn!: () => void;
+    const returnGate = new Promise<void>(resolve => { releaseReturn = resolve; });
+    const saveSpy = jest.spyOn(offlineMarkers, 'saveLocal').mockImplementation(async (...args) => {
+      const saved = await originalSaveLocal(...args);
+      durableLocalId = saved.localId;
+      await returnGate;
+      return saved;
+    });
+
+    const committing = useMarkerStore.getState().addMarker({
+      type: 'cairn',
+      regionCode: 'nz',
+      lat: -43.595,
+      lng: 170.142,
+      note: '',
+      authorId: 'owner-a',
+      permission: 'personal',
+    } as any);
+    await settle();
+    useMarkerStore.setState({
+      userId: 'owner-b',
+      markers: [{
+        id: 'owner-b-cairn',
+        clientCairnId: 'owner-b-cairn',
+        type: 'cairn',
+        regionCode: 'nz',
+        lat: -42,
+        lng: 171,
+        note: 'Owner B',
+        authorId: 'owner-b',
+        createdAt: 2,
+        permission: 'personal',
+      }],
+    });
+    releaseReturn();
+
+    await expect(committing).resolves.toMatchObject({
+      state: 'durably-accepted',
+      ownerId: 'owner-a',
+      projection: 'owner-changed',
+      marker: { authorId: 'owner-a', permission: 'personal' },
+    });
+    expect(useMarkerStore.getState().markers.map(marker => marker.id)).toEqual(['owner-b-cairn']);
+    expect(durableLocalId).toEqual(expect.any(String));
+    saveSpy.mockRestore();
+  });
+
+  test('never replaces an explicitly captured S1 origin with current S2', async () => {
+    mockTrackingState = {
+      status: 'tracking',
+      sessionId: 'activity-s2',
+      ownerUserId: 'owner-a',
+      liveOwnerGeneration: 'generation-s2',
+      locationProviderSource: 'real',
+    };
+
+    await expect(useMarkerStore.getState().addMarker({
+      type: 'cairn',
+      regionCode: 'nz',
+      lat: -43.595,
+      lng: 170.142,
+      note: '',
+      authorId: 'owner-a',
+      permission: 'personal',
+      activityContext: {
+        ownerUserId: 'owner-a',
+        clientActivityId: 'activity-s1',
+        ownerGeneration: 'generation-s1',
+      },
+    } as any)).rejects.toThrow('marker_activity_changed_before_commit');
+    expect([...mockAsyncStorage.keys()].some(key => key.includes('offline_markers'))).toBe(false);
+  });
+
+  test('preserves captured S1 provenance when S2 starts while the durable write awaits', async () => {
+    mockTrackingState = {
+      status: 'tracking',
+      sessionId: 'activity-s1',
+      ownerUserId: 'owner-a',
+      liveOwnerGeneration: 'generation-s1',
+      locationProviderSource: 'real',
+    };
+    const originalSaveLocal = offlineMarkers.saveLocal.bind(offlineMarkers);
+    let releaseReturn!: () => void;
+    const returnGate = new Promise<void>(resolve => { releaseReturn = resolve; });
+    const saveSpy = jest.spyOn(offlineMarkers, 'saveLocal').mockImplementation(async (...args) => {
+      const saved = await originalSaveLocal(...args);
+      await returnGate;
+      return saved;
+    });
+    const committing = useMarkerStore.getState().addMarker({
+      type: 'cairn',
+      regionCode: 'nz',
+      lat: -43.595,
+      lng: 170.142,
+      note: '',
+      authorId: 'owner-a',
+      permission: 'personal',
+      activityContext: {
+        ownerUserId: 'owner-a',
+        clientActivityId: 'activity-s1',
+        ownerGeneration: 'generation-s1',
+      },
+    });
+    await settle();
+    mockTrackingState = {
+      ...mockTrackingState,
+      sessionId: 'activity-s2',
+      liveOwnerGeneration: 'generation-s2',
+    };
+    releaseReturn();
+
+    await expect(committing).resolves.toMatchObject({
+      state: 'durably-accepted',
+      marker: { originActivityClientId: 'activity-s1' },
+    });
+    saveSpy.mockRestore();
+  });
+
+  test('standalone create does not inherit an unrelated current Activity', async () => {
+    mockTrackingState = {
+      status: 'tracking',
+      sessionId: 'unrelated-activity',
+      ownerUserId: 'owner-a',
+      liveOwnerGeneration: 'unrelated-generation',
+      locationProviderSource: 'real',
+    };
+    const result: any = await useMarkerStore.getState().addMarker({
+      type: 'cairn',
+      regionCode: 'nz',
+      lat: -43.595,
+      lng: 170.142,
+      note: '',
+      authorId: 'owner-a',
+      permission: 'personal',
+    });
+
+    expect(result.marker.originActivityClientId).toBeNull();
+  });
+
   test('synced edit becomes visible only after the server accepts it', async () => {
-    const created = await useMarkerStore.getState().addMarker({
+    const created = (await useMarkerStore.getState().addMarker({
       type: 'cairn',
       regionCode: 'nz',
       lat: -43.595,
@@ -99,7 +255,7 @@ describe('Cairn create acknowledgement ordering', () => {
       note: 'Old words',
       authorId: 'local',
       permission: 'personal',
-    });
+    })).marker;
     await settle();
     let accept!: (value: any) => void;
     mockAuthenticatedFetch.mockImplementationOnce(() => new Promise(resolve => { accept = resolve; }));
@@ -113,7 +269,7 @@ describe('Cairn create acknowledgement ordering', () => {
   test('pending edit rewrites the durable create payload during an in-flight acknowledgement', async () => {
     let acceptCreate!: (value: any) => void;
     mockAuthenticatedFetch.mockImplementationOnce(() => new Promise(resolve => { acceptCreate = resolve; }));
-    const created = await useMarkerStore.getState().addMarker({
+    const created = (await useMarkerStore.getState().addMarker({
       type: 'cairn',
       regionCode: 'nz',
       lat: -43.595,
@@ -121,7 +277,7 @@ describe('Cairn create acknowledgement ordering', () => {
       note: '',
       authorId: 'local',
       permission: 'personal',
-    });
+    })).marker;
     await settle();
     await useMarkerStore.getState().updateMarker(created.id, { note: 'Durable later words' });
     await expect(offlineMarkers.getEntry(created.id)).resolves.toMatchObject({
@@ -144,7 +300,7 @@ describe('Cairn create acknowledgement ordering', () => {
   });
 
   test('failed synced edit preserves accepted content for a retained UI draft', async () => {
-    const created = await useMarkerStore.getState().addMarker({
+    const created = (await useMarkerStore.getState().addMarker({
       type: 'cairn',
       regionCode: 'nz',
       lat: -43.595,
@@ -152,7 +308,7 @@ describe('Cairn create acknowledgement ordering', () => {
       note: 'Accepted words',
       authorId: 'local',
       permission: 'personal',
-    });
+    })).marker;
     await settle();
     mockAuthenticatedFetch.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
     await expect(useMarkerStore.getState().updateMarker(created.id, { note: 'Draft words' })).rejects.toThrow();
@@ -160,7 +316,7 @@ describe('Cairn create acknowledgement ordering', () => {
   });
 
   test('an account switch drops a late accepted edit response from the new account projection', async () => {
-    const created = await useMarkerStore.getState().addMarker({
+    const created = (await useMarkerStore.getState().addMarker({
       type: 'cairn',
       regionCode: 'nz',
       lat: -43.595,
@@ -168,7 +324,7 @@ describe('Cairn create acknowledgement ordering', () => {
       note: 'Owner A',
       authorId: 'local',
       permission: 'personal',
-    });
+    })).marker;
     await settle();
     let accept!: (value: any) => void;
     mockAuthenticatedFetch.mockImplementationOnce(() => new Promise(resolve => { accept = resolve; }));
@@ -195,7 +351,7 @@ describe('Cairn create acknowledgement ordering', () => {
   });
 
   test('modern deletion commits a tombstone and reports an unacknowledged server delete as queued', async () => {
-    const created = await useMarkerStore.getState().addMarker({
+    const created = (await useMarkerStore.getState().addMarker({
       type: 'cairn',
       regionCode: 'nz',
       lat: -43.595,
@@ -203,7 +359,7 @@ describe('Cairn create acknowledgement ordering', () => {
       note: '',
       authorId: 'local',
       permission: 'personal',
-    });
+    })).marker;
     await settle();
     mockAuthenticatedFetch.mockRejectedValueOnce(new Error('offline'));
     await expect(useMarkerStore.getState().deleteMarker(created.id)).resolves.toEqual({ remoteState: 'queued' });

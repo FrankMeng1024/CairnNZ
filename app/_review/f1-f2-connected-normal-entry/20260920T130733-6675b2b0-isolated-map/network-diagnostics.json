@@ -1,0 +1,66 @@
+{
+  "namespace": "f1f2-6675b2b0-20260920t130733",
+  "externalRequests": [
+    {
+      "at": "2026-09-20T05:08:56.130Z",
+      "step": "boot",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=-41.2865&longitude=174.7762&current=temperature_2m,weathercode&daily=sunrise,sunset&forecast_days=1&timeformat=unixtime&timezone=auto",
+      "action": "fixture-weather-wellington"
+    },
+    {
+      "at": "2026-09-20T05:08:56.157Z",
+      "step": "boot",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=-41.2865&longitude=174.7762&localityLanguage=en",
+      "action": "fixture-reverse-geocode-wellington"
+    },
+    {
+      "at": "2026-09-20T05:09:11.765Z",
+      "step": "prefinish-memory",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/styles/v1/mapbox/outdoors-v12?access_token=[redacted]",
+      "action": "fixture-mapbox-empty-style"
+    },
+    {
+      "at": "2026-09-20T05:09:12.280Z",
+      "step": "prefinish-memory",
+      "method": "POST",
+      "resourceType": "fetch",
+      "url": "https://events.mapbox.com/events/v2?access_token=[redacted]",
+      "action": "fixture-mapbox-events-empty"
+    },
+    {
+      "at": "2026-09-20T05:09:12.289Z",
+      "step": "prefinish-memory",
+      "method": "POST",
+      "resourceType": "fetch",
+      "url": "https://events.mapbox.com/events/v2?access_token=[redacted]",
+      "action": "fixture-mapbox-events-empty"
+    },
+    {
+      "at": "2026-09-20T05:09:12.444Z",
+      "step": "prefinish-memory",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/map-sessions/v1?sku=101rHXn4Xr7E1&access_token=[redacted]",
+      "action": "unexpected-mapbox-request"
+    }
+  ],
+  "unexpectedExternalRequests": [],
+  "unexpectedApiRequests": [],
+  "failedRequests": [],
+  "httpErrors": [
+    {
+      "at": "2026-09-20T05:09:12.476Z",
+      "step": "prefinish-memory",
+      "status": 501,
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/map-sessions/v1?sku=101rHXn4Xr7E1&access_token=[redacted]"
+    }
+  ]
+}

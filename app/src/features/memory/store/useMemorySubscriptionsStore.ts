@@ -19,9 +19,18 @@ interface MemorySubscription {
   subscribed_at?: string;
 }
 
+export interface AvailableMemorySource {
+  friend_id: string;
+  friend_name: string;
+  selected: boolean;
+  authorization_version: number;
+  effective_at: string;
+}
+
 interface State {
   limit: number;        // server-side memory_subscription_limit (default 5)
   subscriptions: MemorySubscription[];
+  availableSources: AvailableMemorySource[];
   loading: boolean;
   error: string | null;
   /** Last raw HTTP status from a mutation, for UI to map 409 → paywall trigger. */
@@ -42,6 +51,7 @@ interface State {
 export const useMemorySubscriptionsStore = create<State>((set, get) => ({
   limit: 5,
   subscriptions: [],
+  availableSources: [],
   loading: false,
   error: null,
   // O1 batch 37: lastMutationStatus removed
@@ -75,6 +85,8 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       }
       if (!res.ok) { set({ loading: false, error: `HTTP ${res.status}` }); return; }
       const data = await res.json();
+      const sourcesResponse = await authenticatedFetch('/api/friend-sharing/sources');
+      const sourcesBody = sourcesResponse.ok ? await sourcesResponse.json() : { sources: [] };
       // Re-check viewer after the json() await — another potential yield point.
       const viewerAfterJson: string | null = useMarkerStore.getState().userId;
       if (viewerAfterJson !== viewerAtStart) {
@@ -84,6 +96,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       set({
         limit: data.limit ?? 5,
         subscriptions: Array.isArray(data.subscriptions) ? data.subscriptions : [],
+        availableSources: Array.isArray(sourcesBody.sources) ? sourcesBody.sources : [],
         loading: false,
       });
     } catch (e: any) {
@@ -111,6 +124,10 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
           subscribed_at: new Date().toISOString(),
         };
         set({ subscriptions: [...get().subscriptions, newSub] });
+        set({
+          availableSources: get().availableSources.map(source =>
+            Number(source.friend_id) === friendId ? { ...source, selected: true } : source),
+        });
       }
       return res.status;
     } catch {
@@ -119,12 +136,23 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
   },
 
   unsubscribe: async (friendId) => {
+    // Fence the removal intent before yielding to the network. A failed
+    // DELETE leaves the server subscription intact, but an older request can
+    // no longer repopulate it; only a deliberate later fresh read may do so.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useFriendMemoryStore } = require('./useFriendMemoryStore');
+    const purge = useFriendMemoryStore.getState().purgeFriend(friendId);
     try {
       const res = await authenticatedFetch(`/api/memory-subscriptions/${friendId}`, {
         method: 'DELETE',
       });
       if (res.ok) {
         set({ subscriptions: get().subscriptions.filter((s) => s.friend_id !== friendId) });
+        set({
+          availableSources: get().availableSources.map(source =>
+            Number(source.friend_id) === friendId ? { ...source, selected: false } : source),
+        });
+        await purge;
       }
       return res.status;
     } catch {
@@ -139,6 +167,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     set({
       limit: 5,
       subscriptions: [],
+      availableSources: [],
       loading: false,
       error: null,
       // O1 batch 37: lastMutationStatus removed

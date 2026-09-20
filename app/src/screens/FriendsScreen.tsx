@@ -855,18 +855,30 @@ export function FriendsScreen() {
               <View style={[s.profileStats, { borderColor: theme.borderSubtle }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.placesExplored}</Text>
+                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.permittedContent.encounteredCairns}</Text>
                     <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>
-                      {profileData.placesExplored === 1 ? 'place explored' : 'places explored'}
+                      {profileData.permittedContent.encounteredCairns === 1 ? 'encountered Cairn' : 'encountered Cairns'}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.cairnsPlanted}</Text>
+                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.permittedContent.sharedRoutes}</Text>
                     <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>
-                      {profileData.cairnsPlanted === 1 ? 'cairn planted' : 'cairns planted'}
+                      {profileData.permittedContent.sharedRoutes === 1 ? 'shared Route' : 'shared Routes'}
                     </Text>
                   </View>
                 </View>
+                <Text style={[s.cardMeta, { color: theme.foregroundSecondary, textAlign: 'center', marginTop: Spacing.md }]}>
+                  {profileData.permittedContent.memoryAvailable ? 'Memory sharing is available' : 'No shared Memory layer'}
+                </Text>
+                <PrimaryButton
+                  label="Open shared content"
+                  onPress={() => {
+                    const target = profileFriend;
+                    closeProfile();
+                    nav.navigate('FriendContent', { friendId: target.id, friendName: target.name });
+                  }}
+                  style={{ marginTop: Spacing.md }}
+                />
               </View>
             ) : (
               <StateSurface

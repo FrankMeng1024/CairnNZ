@@ -20,8 +20,8 @@
  */
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, ActivityIndicator, Animated, Easing } from 'react-native';
-import { useFriendStore } from '../../../store/useFriendStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
+import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
@@ -36,7 +36,7 @@ interface Props {
 
 export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
   const theme = useVisualTheme();
-  const friends = useFriendStore((s) => s.friends);
+  const sources = useMemorySubscriptionsStore((s) => s.availableSources);
   const subs = useMemorySubscriptionsStore((s) => s.subscriptions);
   const limit = useMemorySubscriptionsStore((s) => s.limit);
   const loading = useMemorySubscriptionsStore((s) => s.loading);
@@ -44,6 +44,8 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
   const subscribe = useMemorySubscriptionsStore((s) => s.subscribe);
   const unsubscribe = useMemorySubscriptionsStore((s) => s.unsubscribe);
   const isSubscribed = useMemorySubscriptionsStore((s) => s.isSubscribed);
+  const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
+  const setScope = useMemoryScopeStore((s) => s.setScope);
 
   // UX-E fix: Animated values for smooth slide + backdrop fade matching
   // Hiking choose-a-route. Mount Modal in 'fade' mode (instant) and own
@@ -97,6 +99,7 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
   const onTap = async (friendId: number) => {
     if (isSubscribed(friendId)) {
       await unsubscribe(friendId);
+      if (String(friendId) === selectedFriendId) setScope('combined');
       return;
     }
     if (atCap) {
@@ -137,24 +140,28 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
 
           {loading ? (
             <View style={styles.loadingBox}><ActivityIndicator color={theme.primary} /></View>
-          ) : friends.length === 0 ? (
-            <Text style={[styles.emptyHint, { color: theme.muted }]}>No friends yet. Add a friend in the Friends tab first.</Text>
+          ) : sources.length === 0 ? (
+            <Text style={[styles.emptyHint, { color: theme.muted }]}>No shared Memory is available yet. Friends choose whether new completed Activities can appear here.</Text>
           ) : (
             <FlatList
-              data={friends}
-              keyExtractor={(f) => String(f.id)}
+              data={sources}
+              keyExtractor={(f) => String(f.friend_id)}
               renderItem={({ item }) => {
-                const subscribed = isSubscribed(Number(item.id));
+                const friendId = Number(item.friend_id);
+                const subscribed = isSubscribed(friendId);
                 const locked = !subscribed && atCap;
                 return (
                   <TouchableOpacity
                     style={[styles.row, subscribed && { backgroundColor: theme.surface }]}
-                    onPress={() => onTap(Number(item.id))}
-                    testID={`memory-friend-row-${item.id}`}
+                    onPress={() => onTap(friendId)}
+                    onLongPress={() => subscribed && setScope('friend', String(friendId))}
+                    testID={`memory-friend-row-${item.friend_id}`}
                   >
                     <View style={styles.rowMain}>
-                      <Text style={[styles.rowName, { color: theme.foreground }]}>{item.name || item.email}</Text>
-                      {item.email && item.email !== item.name ? <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>{item.email}</Text> : null}
+                      <Text style={[styles.rowName, { color: theme.foreground }]}>{item.friend_name}</Text>
+                      <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>
+                        {subscribed ? 'Shown in Together · hold for this friend only' : 'New completed Activities only'}
+                      </Text>
                     </View>
                     {subscribed ? (
                       <Icon name="Check" size={18} color={Colors.success} strokeWidth={2.5} />

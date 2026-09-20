@@ -47,7 +47,9 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
 
   test('Detail edits only supported content and preserves drafts on failure or close', () => {
     expect(detail).toContain('showTypePicker={false}');
-    expect(detail).toContain('showVisibilityPicker={false}');
+    expect(detail).toContain('showVisibilityPicker');
+    expect(detail).toContain('disableVisibilityPublic');
+    expect(detail).toContain('permission: editPermission');
     expect(detail).toContain('Your draft is still here so you can try again.');
     expect(detail).toContain('Discard changes?');
     expect(detail).toContain('disabled={!editDirty}');

@@ -1,0 +1,154 @@
+{
+  "schema": "cairnnz.f1-f2.connected-normal-entry.loaded-web.v1",
+  "generatedAt": "2026-09-20T09:06:40.312Z",
+  "candidateFingerprint": {
+    "algorithm": "sha256",
+    "digest": "7980dfc670f170d5d9fa9ff662b0f0c351044e443af956a597c72966fe580234",
+    "fileCount": 645,
+    "scope": [
+      "app/src",
+      "app/scripts",
+      "app/package.json",
+      "app/package-lock.json",
+      "backend/src",
+      "backend/scripts",
+      "backend/package.json",
+      "backend/package-lock.json"
+    ]
+  },
+  "verdict": "FAIL",
+  "evidenceBoundary": {
+    "renderer": "Loaded Expo Web at mobile viewport",
+    "fixtureApis": true,
+    "fixtureMapMatching": true,
+    "realApiOrMysql": false,
+    "nativeOrPhysicalDevice": false,
+    "nativeGpsOrFieldEvidence": false,
+    "actualHandlersAndNavigation": true,
+    "note": "Matching and walking-Directions responses are deterministic synthetic Final/Route geometry; Memory remains derived from accepted R-GPS evidence. The real RouteEditor Beautify/Apply/Save handlers consume the matching fixture."
+  },
+  "environment": {
+    "baseUrl": "http://127.0.0.1:8087",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "locale": "en-NZ",
+    "timezone": "Pacific/Auckland",
+    "qaNamespace": "f1f2-7980dfc6-20260920t1706",
+    "fixtureUserId": "9941",
+    "fixtureUserEmail": "f1f2-7980dfc6-20260920t1706@example.invalid",
+    "browserProfileDir": "/tmp/cairn-f1f2-7980dfc6-20260920t1706-profile"
+  },
+  "source": {
+    "authority": "O55 R-GPS-02",
+    "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+    "seed": 550202,
+    "origin": {
+      "lat": -41.2865,
+      "lng": 174.7762
+    },
+    "speedKmh": 4.68,
+    "physicalPauseSeconds": 8,
+    "localVerticesM": [
+      [
+        0,
+        0
+      ],
+      [
+        70,
+        12
+      ],
+      [
+        86,
+        48
+      ],
+      [
+        48,
+        48
+      ],
+      [
+        65,
+        48
+      ],
+      [
+        110,
+        48
+      ]
+    ]
+  },
+  "flow": [
+    {
+      "at": "2026-09-20T09:06:59.455Z",
+      "step": "home-to-hike-prestart",
+      "handler": "Home Hiking control"
+    }
+  ],
+  "stages": [],
+  "identities": {},
+  "api": {
+    "requestCount": 83,
+    "startedClientActivityId": "ac8bc720-e72d-4e81-a3ba-0071efe611c9",
+    "savedActivityClientId": null,
+    "markerCreateClientId": null,
+    "markerOriginActivityClientId": null,
+    "routeCreateClientId": null,
+    "routeSourceActivityClientId": null,
+    "routeUpdateCount": 0,
+    "fixtureMatchingCalls": 0,
+    "fixtureDirectionsCalls": 0,
+    "fixtureDirectionsCallSteps": []
+  },
+  "assertions": {
+    "loadedJourneyCompleted": false,
+    "noUnexpectedApiRequests": true,
+    "runtimeClean": true
+  },
+  "failed": [
+    "loadedJourneyCompleted"
+  ],
+  "terminalError": {
+    "step": "normal-start",
+    "message": "page.waitForFunction: Timeout 30000ms exceeded.",
+    "stack": "page.waitForFunction: Timeout 30000ms exceeded.\n    at runLoadedJourney (/Users/mzm/Desktop/cairn/CairnNZ/app/scripts/f1-f2-connected-normal-entry-qa.mjs:1210:16)\n    at async file:///Users/mzm/Desktop/cairn/CairnNZ/app/scripts/f1-f2-connected-normal-entry-qa.mjs:533:3"
+  },
+  "runtimeErrors": [],
+  "networkDiagnostics": {
+    "externalRequests": [
+      {
+        "at": "2026-09-20T09:06:58.211Z",
+        "step": "boot",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=-41.2865&longitude=174.7762&localityLanguage=en",
+        "action": "fixture-reverse-geocode-wellington"
+      },
+      {
+        "at": "2026-09-20T09:06:58.213Z",
+        "step": "boot",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.open-meteo.com/v1/forecast?latitude=-41.2865&longitude=174.7762&current=temperature_2m,weathercode&daily=sunrise,sunset&forecast_days=1&timeformat=unixtime&timezone=auto",
+        "action": "fixture-weather-wellington"
+      }
+    ],
+    "unexpectedExternalRequests": [],
+    "unexpectedApiRequests": [],
+    "failedRequests": [],
+    "httpErrors": []
+  },
+  "consoleNotes": [],
+  "captures": [
+    {
+      "name": "hike-prestart-r-gps-02",
+      "file": "01-hike-prestart-r-gps-02.png",
+      "route": "Hiking"
+    }
+  ],
+  "artifacts": {
+    "trace": "trace.zip",
+    "requests": "requests.json",
+    "networkDiagnostics": "network-diagnostics.json",
+    "runtimeErrors": "runtime-errors.txt"
+  }
+}

@@ -304,6 +304,7 @@ interface RouteStore {
   setFollowingRoute: (id: string | null) => void;
   activityRouteReference: ActivityRouteReference | null;
   captureActivityRouteReference: (id: string | null) => ActivityRouteReference | null;
+  captureExternalActivityRouteReference: (reference: ActivityRouteReference) => ActivityRouteReference;
   clearActivityRouteReference: () => void;
 
   // Load from backend
@@ -358,6 +359,15 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     const route = get().routes.find(item => routeMatchesIdentity(item, id));
     if (!route || route.points.length < 2) return null;
     const snapshot = cloneActivityRouteReference(route);
+    set({ activityRouteReference: snapshot });
+    return snapshot;
+  },
+  captureExternalActivityRouteReference: (reference) => {
+    const snapshot: ActivityRouteReference = {
+      ...reference,
+      points: reference.points.map(point => ({ ...point })),
+      capturedAt: Date.now(),
+    };
     set({ activityRouteReference: snapshot });
     return snapshot;
   },

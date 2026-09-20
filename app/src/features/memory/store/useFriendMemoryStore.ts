@@ -1,151 +1,335 @@
-/**
- * useFriendMemoryStore — v413 friend memory 渲染 union
- *
- * 产品语义 (用户口述, 2026-07-08):
- * - Memory 页永远显示 union(self ∪ subscribed_friends) 的解锁 fog
- * - 未订阅任何 friend = 只看自己
- * - 订阅 friend X = fog 立即扩展 (显示 X 走过的地方也解锁)
- * - 取消订阅 X = fog 立即回缩 (借来的解锁还回去)
- * - 多 friend 订阅 = union (重叠不加成)
- * - 反选不动 self.points, 只是纯前端 render 层临时 merge
- *
- * 架构:
- * - "enabled" 的真源 = useMemorySubscriptionsStore.subscriptions (已存 DB)
- * - 此 store 只负责: (a) 缓存 friend memory points (GET /api/circle/fog),
- *   (b) 提供 getEnabledFriendPoints() 供 FogLayer / CairnPinsLayer union
- * - unsubscribe (DB 删) → subscriptions 变 → getEnabledFriendPoints 返回变 → fog 回缩
- *
- * 数据流:
- * 1. Memory 页 mount / 或 subscriptions 变化 → loadFriendFog() 拉 /api/circle/fog
- * 2. friendMemory[friendId] = points 存本地
- * 3. FogLayer / CairnPinsLayer union self.points + subscribed_friends 的 points
- * 4. subscribe/unsubscribe 走 useMemorySubscriptionsStore (它写 DB)
- */
 import { create } from 'zustand';
 import { authenticatedFetch } from '../../../services/apiService';
+import { storage } from '../../../store/storage';
 
-interface FriendMemoryPoint {
-  lat: number;
-  lng: number;
-  ts: number;
+export interface FriendProjectionCell {
+  id: string;
+  polygon: Array<[number, number]>;
+  sourceFriendId?: string;
+  authorizationVersion?: number;
+  projectionVersion?: string;
+}
+
+export interface FriendProjection {
+  friendId: string;
+  authorizationVersion: number;
+  projectionVersion: string;
+  cellSizeM: number;
+  cells: FriendProjectionCell[];
+  serverAuthorizedAtMs: number;
+  authorizationExpiresAtMs: number;
+}
+
+interface PersistedCache {
+  v: 1;
+  userId: string;
+  savedAtMs: number;
+  lastObservedWallClockMs: number;
+  projections: Record<string, FriendProjection>;
 }
 
 interface FriendMemoryState {
-  /**
-   * Map<friendId, points[]>. Server 返回的每个 subscribed friend 的 memory_points.
-   * Load 时覆盖; 幂等.
-   */
-  friendMemory: Record<string, FriendMemoryPoint[]>;
-
-  /** 递增版本号, 供 FogLayer / CairnPinsLayer useMemo 依赖数组用. */
+  userId: string | null;
+  projections: Record<string, FriendProjection>;
   version: number;
-
   loading: boolean;
-  // O1 batch 37: loadError removed — written internally but 0 external readers.
-
-  /**
-   * 从 backend 拉 GET /api/circle/fog, 填充 friendMemory.
-   * Server 返回 shape: { friend_points: [{ friend_id, points: [{lat,lng,ts}] }] }.
-   */
-  loadFriendFog: () => Promise<void>;
-
-  /**
-   * 返回当前 subscribed friends 的所有 points (flat array).
-   * "谁 subscribed" 从 useMemorySubscriptionsStore 拉, 保持真源单一.
-   */
-  getEnabledFriendPoints: () => FriendMemoryPoint[];
-
-  /** 用户切换 / 登出时清空. */
+  error: 'offline' | 'unavailable' | null;
+  lastObservedWallClockMs: number;
+  hydrate: (userId: string) => Promise<void>;
+  loadSelectedProjections: () => Promise<void>;
+  /** Synchronously fence in-flight work for a source without changing product selection. */
+  invalidateFriend: (friendId: string | number) => void;
+  purgeFriend: (friendId: string | number, expectedUserId?: string) => Promise<void>;
+  getVisibleCells: (friendId?: string | null) => FriendProjectionCell[];
   reset: () => void;
 }
 
+const CACHE_PREFIX = 'cairn:friend-memory-projections:v1:';
+const MAX_CACHE_AGE_MS = 24 * 60 * 60 * 1000;
+let hydrationSequence = 0;
+let accountGeneration = 0;
+let requestSequence = 0;
+let activeLoadCount = 0;
+let persistenceTail: Promise<void> = Promise.resolve();
+const sourceGenerations = new Map<string, number>();
+const latestSourceRequests = new Map<string, number>();
+
+function cacheKey(userId: string) {
+  return `${CACHE_PREFIX}${userId}`;
+}
+
+function validProjection(value: any, now: number): value is FriendProjection {
+  return value
+    && typeof value.friendId === 'string'
+    && Number.isInteger(value.authorizationVersion)
+    && typeof value.projectionVersion === 'string'
+    && Number.isFinite(value.serverAuthorizedAtMs)
+    && Number.isFinite(value.authorizationExpiresAtMs)
+    && value.authorizationExpiresAtMs > now
+    && value.authorizationExpiresAtMs - value.serverAuthorizedAtMs <= MAX_CACHE_AGE_MS
+    && Array.isArray(value.cells)
+    && value.cells.every((cell: any) => typeof cell?.id === 'string'
+      && Array.isArray(cell?.polygon)
+      && cell.polygon.every((coordinate: any) => Array.isArray(coordinate)
+        && coordinate.length === 2
+        && Number.isFinite(coordinate[0])
+        && Number.isFinite(coordinate[1])));
+}
+
+function sourceGeneration(friendId: string): number {
+  return sourceGenerations.get(friendId) ?? 0;
+}
+
+function invalidateSource(friendId: string): void {
+  sourceGenerations.set(friendId, sourceGeneration(friendId) + 1);
+  latestSourceRequests.delete(friendId);
+}
+
+/**
+ * Serialize writes to one durable cache. A purge is enqueued after any write
+ * already touching storage, so even a slow older setItem must complete before
+ * the authoritative purged snapshot overwrites it. Normal writes also carry
+ * the account generation that produced them and are skipped after a switch.
+ */
+function persist(state: FriendMemoryState, options?: { authoritative?: boolean }): Promise<void> {
+  if (!state.userId) return Promise.resolve();
+  const generationAtSchedule = accountGeneration;
+  const payload: PersistedCache = {
+    v: 1,
+    userId: state.userId,
+    savedAtMs: Date.now(),
+    lastObservedWallClockMs: state.lastObservedWallClockMs,
+    projections: state.projections,
+  };
+  const serialized = JSON.stringify(payload);
+  const write = persistenceTail.catch(() => {}).then(async () => {
+    if (!options?.authoritative && generationAtSchedule !== accountGeneration) return;
+    await storage.setItem(cacheKey(payload.userId), serialized, { strict: true });
+  });
+  persistenceTail = write.catch(() => {});
+  return write;
+}
+
 export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
-  friendMemory: {},
+  userId: null,
+  projections: {},
   version: 0,
   loading: false,
+  error: null,
+  lastObservedWallClockMs: 0,
 
-  loadFriendFog: async () => {
-    if (get().loading) return;
-    set({ loading: true });
+  hydrate: async (userId) => {
+    const hydrateRequest = ++hydrationSequence;
+    accountGeneration += 1;
+    const hydrateAccountGeneration = accountGeneration;
+    sourceGenerations.clear();
+    latestSourceRequests.clear();
+    const now = Date.now();
+    let projections: Record<string, FriendProjection> = {};
+    let lastObservedWallClockMs = now;
     try {
-      const res = await authenticatedFetch('/api/circle/fog', { method: 'GET' });
-      if (!res.ok) {
-        throw new Error(`circle/fog HTTP ${res.status}`);
+      const raw = await storage.getItem(cacheKey(userId));
+      if (raw) {
+        const parsed = JSON.parse(raw) as PersistedCache;
+        const clockRolledBack = parsed.v !== 1
+          || parsed.userId !== userId
+          || now < Number(parsed.savedAtMs)
+          || now < Number(parsed.lastObservedWallClockMs);
+        if (!clockRolledBack && parsed.projections && typeof parsed.projections === 'object') {
+          projections = Object.fromEntries(
+            Object.entries(parsed.projections).filter(([, projection]) => validProjection(projection, now)),
+          );
+          lastObservedWallClockMs = Math.max(now, Number(parsed.lastObservedWallClockMs) || 0);
+        }
       }
-      const data = await res.json();
-      const arr = Array.isArray(data?.friend_points) ? data.friend_points : [];
-      const next: Record<string, FriendMemoryPoint[]> = {};
-      for (const entry of arr) {
-        if (entry == null || entry.friend_id == null) continue;
-        const fid = String(entry.friend_id);
-        const pts = Array.isArray(entry.points) ? entry.points : [];
-        next[fid] = pts.map((p: any) => ({
-          lat: Number(p.lat),
-          lng: Number(p.lng),
-          ts: Number(p.ts) || 0,
-        })).filter((p: { lat: number; lng: number; ts: number }) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    } catch {
+      projections = {};
+    }
+    if (hydrateRequest !== hydrationSequence || hydrateAccountGeneration !== accountGeneration) return;
+    set({ userId, projections, lastObservedWallClockMs, version: get().version + 1, loading: false, error: null });
+  },
+
+  loadSelectedProjections: async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useAppStore } = require('../../../store/useAppStore');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useMemorySubscriptionsStore } = require('./useMemorySubscriptionsStore');
+    const userId = String(useAppStore.getState().user?.id ?? '');
+    if (!userId) return;
+    if (get().userId !== userId) await get().hydrate(userId);
+    if (get().userId !== userId) return;
+    const selectedIds: number[] = useMemorySubscriptionsStore.getState().subscriptions
+      .map((subscription: { friend_id: number }) => Number(subscription.friend_id))
+      .filter(Number.isInteger);
+    const thisRequest = ++requestSequence;
+    const requestAccountGeneration = accountGeneration;
+    const capturedSourceGenerations = new Map<string, number>();
+    for (const id of selectedIds.map(String)) {
+      capturedSourceGenerations.set(id, sourceGeneration(id));
+      latestSourceRequests.set(id, thisRequest);
+    }
+    const now = Date.now();
+    if (now < get().lastObservedWallClockMs) {
+      set({ projections: {}, version: get().version + 1, lastObservedWallClockMs: now });
+      await persist(get()).catch(() => {});
+    }
+    activeLoadCount += 1;
+    set({ loading: true, error: null, lastObservedWallClockMs: Math.max(now, get().lastObservedWallClockMs) });
+    try {
+      const response = await authenticatedFetch('/api/friend-sharing/projections', {
+        method: 'POST',
+        body: JSON.stringify({ friend_ids: selectedIds }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const body = await response.json();
+      if (String(useAppStore.getState().user?.id ?? '') !== userId
+        || get().userId !== userId
+        || requestAccountGeneration !== accountGeneration) return;
+      const currentSubscriptionState = useMemorySubscriptionsStore.getState();
+      const currentlySelected = new Set<number>(
+        currentSubscriptionState.subscriptions
+          .map((subscription: { friend_id: number }) => Number(subscription.friend_id))
+          .filter(Number.isInteger),
+      );
+      const currentAuthorizationVersions = new Map<string, number>(
+        (Array.isArray(currentSubscriptionState.availableSources) ? currentSubscriptionState.availableSources : [])
+          .map((source: { friend_id: string; authorization_version: number }) => [
+            String(source.friend_id),
+            Number(source.authorization_version),
+          ]),
+      );
+      const next = { ...get().projections };
+      for (const revokedId of Array.isArray(body?.revoked_friend_ids) ? body.revoked_friend_ids : []) {
+        const friendId = String(revokedId);
+        if (capturedSourceGenerations.get(friendId) !== sourceGeneration(friendId)
+          || latestSourceRequests.get(friendId) !== thisRequest) continue;
+        invalidateSource(friendId);
+        delete next[friendId];
+      }
+      const receivedAt = Date.now();
+      for (const incoming of Array.isArray(body?.projections) ? body.projections : []) {
+        const friendId = String(incoming?.source_friend_id ?? '');
+        const serverAuthorizedAtMs = Date.parse(incoming?.server_authorized_at);
+        const parsedExpiry = Date.parse(incoming?.authorization_expires_at);
+        const candidate: FriendProjection = {
+          friendId,
+          authorizationVersion: Number(incoming?.authorization_version),
+          projectionVersion: String(incoming?.projection_version ?? ''),
+          cellSizeM: Number(incoming?.cell_size_m),
+          cells: (Array.isArray(incoming?.cells) ? incoming.cells : []).map((cell: any) => ({
+            id: String(cell.id),
+            polygon: cell.polygon,
+          })),
+          serverAuthorizedAtMs,
+          authorizationExpiresAtMs: Math.min(parsedExpiry, serverAuthorizedAtMs + MAX_CACHE_AGE_MS),
+        };
+        if (!friendId || !validProjection(candidate, receivedAt)) continue;
+        if (!currentlySelected.has(Number(friendId))) continue;
+        if (capturedSourceGenerations.get(friendId) !== sourceGeneration(friendId)) continue;
+        if (latestSourceRequests.get(friendId) !== thisRequest) continue;
+        const currentAuthorizationVersion = currentAuthorizationVersions.get(friendId);
+        if (Number.isFinite(currentAuthorizationVersion)
+          && candidate.authorizationVersion < Number(currentAuthorizationVersion)) continue;
+        const existing = next[friendId];
+        const isNewer = !existing
+          || candidate.authorizationVersion > existing.authorizationVersion
+          || (candidate.authorizationVersion === existing.authorizationVersion
+            && candidate.serverAuthorizedAtMs >= existing.serverAuthorizedAtMs);
+        if (isNewer) next[friendId] = candidate;
+      }
+      const selected = new Set([...currentlySelected].map(String));
+      for (const friendId of Object.keys(next)) {
+        if (!selected.has(friendId) || !validProjection(next[friendId], receivedAt)) delete next[friendId];
       }
       set({
-        friendMemory: next,
-        loading: false,
+        projections: next,
         version: get().version + 1,
+        loading: activeLoadCount <= 1 ? false : true,
+        error: null,
+        lastObservedWallClockMs: Math.max(receivedAt, get().lastObservedWallClockMs),
       });
-    } catch (err: any) {
+      await persist(get());
+    } catch {
+      if (String(useAppStore.getState().user?.id ?? '') !== userId
+        || get().userId !== userId
+        || requestAccountGeneration !== accountGeneration) return;
+      const currentTime = Date.now();
+      const retained = Object.fromEntries(
+        Object.entries(get().projections).filter(([, projection]) => validProjection(projection, currentTime)),
+      );
       set({
-        loading: false,
-        // O1 batch 37: loadError removed
+        projections: retained,
+        version: get().version + 1,
+        loading: activeLoadCount <= 1 ? false : true,
+        error: 'offline',
+        lastObservedWallClockMs: Math.max(currentTime, get().lastObservedWallClockMs),
       });
+      await persist(get()).catch(() => {});
+    } finally {
+      activeLoadCount = Math.max(0, activeLoadCount - 1);
+      if (requestAccountGeneration === accountGeneration && get().userId === userId) {
+        set({ loading: activeLoadCount > 0 });
+      }
     }
   },
 
-  getEnabledFriendPoints: () => {
-    // "enabled" = subscriptions store 里的 friend ids
-    // 通过 require 避 module cycle
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { useMemorySubscriptionsStore } = require('./useMemorySubscriptionsStore');
-    const subs = useMemorySubscriptionsStore.getState().subscriptions;
-    const friendMem = get().friendMemory;
-    const out: FriendMemoryPoint[] = [];
-    for (const s of subs) {
-      const pts = friendMem[String(s.friend_id)];
-      if (pts) out.push(...pts);
+  invalidateFriend: (friendId) => {
+    invalidateSource(String(friendId));
+  },
+
+  purgeFriend: async (friendId, expectedUserId) => {
+    if (expectedUserId && get().userId !== expectedUserId) return;
+    invalidateSource(String(friendId));
+    const next = { ...get().projections };
+    delete next[String(friendId)];
+    set({ projections: next, version: get().version + 1 });
+    await persist(get(), { authoritative: true }).catch(() => {});
+  },
+
+  getVisibleCells: (friendId) => {
+    const now = Date.now();
+    if (now < get().lastObservedWallClockMs) {
+      set({ projections: {}, version: get().version + 1, lastObservedWallClockMs: now });
+      void persist(get()).catch(() => {});
+      return [];
     }
-    return out;
+    const current = get().projections;
+    const retained = Object.fromEntries(
+      Object.entries(current).filter(([, projection]) => validProjection(projection, now)),
+    );
+    if (Object.keys(retained).length !== Object.keys(current).length) {
+      set({ projections: retained, version: get().version + 1, lastObservedWallClockMs: Math.max(now, get().lastObservedWallClockMs) });
+      void persist(get()).catch(() => {});
+    }
+    const selected = friendId
+      ? [retained[friendId]].filter(Boolean)
+      : Object.values(retained);
+    const cells = new Map<string, FriendProjectionCell>();
+    for (const projection of selected) {
+      if (!validProjection(projection, now)) continue;
+      for (const cell of projection.cells) cells.set(`${projection.friendId}:${cell.id}`, {
+        ...cell,
+        sourceFriendId: projection.friendId,
+        authorizationVersion: projection.authorizationVersion,
+        projectionVersion: projection.projectionVersion,
+      });
+    }
+    return [...cells.values()];
   },
 
   reset: () => {
+    hydrationSequence += 1;
+    accountGeneration += 1;
+    activeLoadCount = 0;
+    sourceGenerations.clear();
+    latestSourceRequests.clear();
     set({
-      friendMemory: {},
-      version: 0,
-      loading: false,
-      // O1 batch 37: loadError removed
+    userId: null,
+    projections: {},
+    version: get().version + 1,
+    loading: false,
+    error: null,
+    lastObservedWallClockMs: 0,
     });
   },
 }));
-
-/**
- * 订阅 useMemorySubscriptionsStore 变化, 触发 version bump 让 FogLayer 重算.
- * 这是 store-to-store 桥梁: subscribe/unsubscribe → subscriptions 变 →
- * bump version → FogLayer useMemo 重算 → fog 回缩/扩展.
- *
- * 注意: 只 bump version, 不 refetch (friend memory 已 cache 在 friendMemory).
- * 这样 unsubscribe 后 fog 立即变化, 不等网络. subscribe 需要 refetch 拿新 friend
- * points → 在 UI 层显式调 loadFriendFog() (见 MemoryScreen).
- */
-if (typeof globalThis !== 'undefined') {
-  // 延迟 require 避 module cycle
-  setTimeout(() => {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { useMemorySubscriptionsStore } = require('./useMemorySubscriptionsStore');
-      let lastSubsRef = useMemorySubscriptionsStore.getState().subscriptions;
-      useMemorySubscriptionsStore.subscribe((state: any) => {
-        if (state.subscriptions !== lastSubsRef) {
-          lastSubsRef = state.subscriptions;
-          const fm = useFriendMemoryStore.getState();
-          useFriendMemoryStore.setState({ version: fm.version + 1 });
-        }
-      });
-    } catch {/* ignore module init race */}
-  }, 0);
-}

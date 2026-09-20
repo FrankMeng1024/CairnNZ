@@ -34,14 +34,10 @@ export function splitTitleBody(note: string): { title: string; body: string } {
 /** Give a quick, content-free Cairn a stable rediscovery name. */
 export function cairnDisplayTitle(
   title: string,
-  body: string,
-  createdAt: number,
+  _body: string,
+  _createdAt: number,
 ): string {
   const explicit = title.trim();
-  if (explicit) return explicit;
-  const bodyLead = body.trim().split(/\r?\n/, 1)[0];
-  if (bodyLead) return bodyLead.slice(0, 30);
-  const date = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' })
-    .format(new Date(createdAt));
-  return `Cairn · ${date}`;
+  if (explicit) return title;
+  return 'A moment here';
 }

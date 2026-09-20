@@ -13,6 +13,8 @@
     "verify:activity:gps": "node scripts/verify-activity.mjs --gate=gps",
     "verify:activity:core": "node scripts/verify-activity.mjs --gate=core",
     "verify:full": "node scripts/verify-activity.mjs --gate=full",
+    "test:public:focused": "jest src/features/public/__tests__/publicCairnCache.test.ts --runInBand",
+    "qa:public:web": "node scripts/public-pilot-qa.mjs",
     "eas-build-pre-install": "if [ \"$EAS_BUILD_PLATFORM\" = \"ios\" ]; then echo '=== R103: downloading Metal Toolchain (Xcode 26 on-demand component) ==='; xcodebuild -downloadComponent MetalToolchain; xcodebuild -showComponent metalToolchain; echo '=== Metal Toolchain download done ==='; fi"
   },
   "jest": {
@@ -26,6 +28,9 @@
       "**/src/services/v025/**/*.test.[jt]s?(x)",
       "**/src/store/v025/**/*.test.[jt]s?(x)",
       "**/src/screens/v025/**/*.test.[jt]s?(x)"
+    ],
+    "testPathIgnorePatterns": [
+      "<rootDir>/tests/"
     ],
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?expo(nent)?|@expo(nent)?/.*|expo-location|expo-speech|react-native|@react-native(/.*)?|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|kdbush))"

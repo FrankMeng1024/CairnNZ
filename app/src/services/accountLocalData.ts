@@ -11,6 +11,7 @@ import {
 import { deleteExtras } from './LocalRouteExtras';
 import { clearSimulatorLogs } from '../features/activitySimulator/simulatorLog';
 import { debugLogger } from './debugLogger';
+import { purgeFogDisplayCache } from '../features/memory/services/fogDisplayCache';
 
 const SCHEDULED_PURGE_KEY = '@cairn:account-deletion-local-purge:v1';
 const SECURE_SCHEDULED_PURGE_KEY = 'cairn_account_deletion_local_purge_v1';
@@ -126,6 +127,9 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
   )));
   await Promise.all(routeIds.map((routeId) => deleteExtras(routeId)));
   await clearSimulatorLogs(owner).catch(() => undefined);
+  // Fence deferred/chunked precise-geometry writes before the broad key sweep;
+  // otherwise an in-flight cache write could recreate data after deletion.
+  await purgeFogDisplayCache(owner);
   // Generic pre-O56 debug logs were not owner-scoped. Once the current
   // logger has ended during logout, removing the legacy set is the only
   // privacy-safe deletion behavior; Debug configuration itself is retained.
@@ -141,7 +145,15 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
     `@cairn:activity_registry:v1:${owner}`,
     `@cairn:activity_simulator:v1:${owner}`,
     `cairn:memory:tiles:v5:${owner}`,
+    `cairn:memory:presence:v1:${owner}`,
     `cairn:memory:h3:v2:${owner}`,
+    `cairn:memory:fog-display:v1:${owner}`,
+    `cairn:memory:fog-display:v2:${owner}`,
+    `cairn:memory:fog-display:v3:${owner}`,
+    `cairn:friend-content:v2:${owner}`,
+    `cairn:public-cairns:v1:${owner}`,
+    `cairn:friend-memory-projections:v1:${owner}`,
+    `cairn:memory:synthetic:v1:${owner}`,
     `cairn_onboarding_v1_done_${owner}`,
     `cairn:plant:draft:v3:${owner}`,
     `cairn_saf01_payload:${owner}`,
@@ -163,6 +175,7 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
     `cairn_trackpoints_${owner}_`,
     `@cairn:activity_simulator_logs:v1:${owner}:`,
     `@cairn:activity_simulator_upload:v1:${owner}:`,
+    `cairn:memory:fog-display:v3:${owner}:chunk:`,
     'cairn_apple_name_',
   ];
   const keys = await AsyncStorage.getAllKeys();

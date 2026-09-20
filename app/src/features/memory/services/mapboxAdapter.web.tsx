@@ -113,6 +113,13 @@ export function MapView({
   const mapRef = useRef<MapRef | null>(null);
   const loadingStartedRef = useRef(false);
 
+  useEffect(() => () => {
+    const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (typeof window !== 'undefined' && (window as any).__cairnMap === inner) {
+      delete (window as any).__cairnMap;
+    }
+  }, []);
+
   useEffect(() => {
     if (loadingStartedRef.current) return;
     loadingStartedRef.current = true;

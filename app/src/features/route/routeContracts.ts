@@ -1,4 +1,5 @@
 import type { Route, RoutePoint } from '../../store/useRouteStore';
+import type { BorrowedRouteUseIdentity } from '../friends/services/friendContent';
 
 export type RouteCreationOrigin = 'activity' | 'manual' | 'legacy_unknown';
 
@@ -9,6 +10,8 @@ export interface ActivityRouteReference {
   distanceM: number;
   elevationGainM: number;
   capturedAt: number;
+  /** Present only for an immutable, previously authorized friend reference. */
+  borrowedUse?: BorrowedRouteUseIdentity;
 }
 
 export function routeIdentityKeys(route: Pick<Route, 'id' | 'remoteId' | 'clientRouteId'>): string[] {

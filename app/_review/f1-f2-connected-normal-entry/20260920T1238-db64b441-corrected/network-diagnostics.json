@@ -1,0 +1,25 @@
+{
+  "namespace": "f1f2-20260920T1238-db64b441",
+  "externalRequests": [
+    {
+      "at": "2026-09-20T04:40:25.154Z",
+      "step": "boot",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=-41.2865&longitude=174.7762&localityLanguage=en",
+      "action": "fixture-reverse-geocode-wellington"
+    },
+    {
+      "at": "2026-09-20T04:40:25.156Z",
+      "step": "boot",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=-41.2865&longitude=174.7762&current=temperature_2m,weathercode&daily=sunrise,sunset&forecast_days=1&timeformat=unixtime&timezone=auto",
+      "action": "fixture-weather-wellington"
+    }
+  ],
+  "unexpectedExternalRequests": [],
+  "unexpectedApiRequests": [],
+  "failedRequests": [],
+  "httpErrors": []
+}

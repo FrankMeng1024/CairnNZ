@@ -142,8 +142,9 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(sampler).toContain("locationSource: 'last-canonically-accepted-simulator'");
     expect(provider).toContain('tracking.lastCoordinate');
     expect(provider).toContain('tracking.lastCoordinateTime');
-    expect(running).toContain("locationProviderSource === 'simulator' && simulatorSignal === 'lost'");
-    expect(running).toContain("locationSource: locationProviderSource === 'simulator' ? 'last-canonically-accepted-simulator'");
+    expect(running).toContain("trackingAtPress.locationProviderSource === 'simulator' && simulatorSignal === 'lost'");
+    expect(running).toContain("locationSource: trackingAtPress.locationProviderSource === 'simulator'");
+    expect(running).toContain("? 'last-canonically-accepted-simulator'");
   });
 
   test('Cairn provenance/offline commit and Activity/passive Memory use shared authorities', () => {
@@ -152,8 +153,9 @@ describe('Activity Simulator integration and safety contracts', () => {
     const passive = read('src/features/memory/components/PassiveMemoryRecorder.tsx');
     expect(markers.indexOf('await offlineMarkers.saveLocal')).toBeLessThan(markers.indexOf("appendSimulatorLog('CAIRN_COMMIT'"));
     expect(markers).toContain('originActivityClientId: activeActivityClientId');
-    expect(tracking).toContain("source: 'activity'");
-    expect(passive).toContain("source: 'passive'");
+    expect(tracking).toContain("'simulator_test' : 'activity_real'");
+    expect(passive).toContain("source: 'simulator_test'");
+    expect(passive).toContain("source: 'passive_real'");
     expect(passive).toContain("status !== 'idle'");
     expect(passive).toContain('MAX_ACCEPTABLE_HORIZONTAL_ACCURACY_M');
   });

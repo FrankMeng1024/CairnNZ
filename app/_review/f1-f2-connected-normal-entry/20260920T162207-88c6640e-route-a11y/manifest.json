@@ -1,0 +1,5518 @@
+{
+  "schema": "cairnnz.f1-f2.connected-normal-entry.loaded-web.v1",
+  "generatedAt": "2026-09-20T08:23:42.113Z",
+  "candidateFingerprint": {
+    "algorithm": "sha256",
+    "digest": "88c6640ed41e54d72eb47a2ee084b5233a10d7956710d38973d1e0967797ef74",
+    "fileCount": 644,
+    "scope": [
+      "app/src",
+      "app/scripts",
+      "app/package.json",
+      "app/package-lock.json",
+      "backend/src",
+      "backend/scripts",
+      "backend/package.json",
+      "backend/package-lock.json"
+    ]
+  },
+  "verdict": "FAIL",
+  "evidenceBoundary": {
+    "renderer": "Loaded Expo Web at mobile viewport",
+    "fixtureApis": true,
+    "fixtureMapMatching": true,
+    "realApiOrMysql": false,
+    "nativeOrPhysicalDevice": false,
+    "nativeGpsOrFieldEvidence": false,
+    "actualHandlersAndNavigation": true,
+    "note": "Matching and walking-Directions responses are deterministic synthetic Final/Route geometry; Memory remains derived from accepted R-GPS evidence. The real RouteEditor Beautify/Apply/Save handlers consume the matching fixture."
+  },
+  "environment": {
+    "baseUrl": "http://127.0.0.1:8087",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "locale": "en-NZ",
+    "timezone": "Pacific/Auckland",
+    "qaNamespace": "f1f2-88c6640e-20260920t162207",
+    "fixtureUserId": "9925",
+    "fixtureUserEmail": "f1f2-88c6640e-20260920t162207@example.invalid",
+    "browserProfileDir": "/tmp/cairn-f1f2-88c6640e-20260920t162207-profile"
+  },
+  "source": {
+    "authority": "O55 R-GPS-02",
+    "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+    "seed": 550202,
+    "origin": {
+      "lat": -41.2865,
+      "lng": 174.7762
+    },
+    "speedKmh": 4.68,
+    "physicalPauseSeconds": 8,
+    "localVerticesM": [
+      [
+        0,
+        0
+      ],
+      [
+        70,
+        12
+      ],
+      [
+        86,
+        48
+      ],
+      [
+        48,
+        48
+      ],
+      [
+        65,
+        48
+      ],
+      [
+        110,
+        48
+      ]
+    ]
+  },
+  "flow": [
+    {
+      "at": "2026-09-20T08:24:19.585Z",
+      "step": "home-to-hike-prestart",
+      "handler": "Home Hiking control"
+    },
+    {
+      "at": "2026-09-20T08:24:23.530Z",
+      "step": "normal-start",
+      "handler": "Hike Start button"
+    },
+    {
+      "at": "2026-09-20T08:24:29.789Z",
+      "step": "raw-gps-leg-1",
+      "handler": "activitySimulatorEngine.tick through production observation pipeline"
+    },
+    {
+      "at": "2026-09-20T08:24:32.742Z",
+      "step": "raw-gps-leg-2",
+      "handler": "activitySimulatorEngine.tick through production observation pipeline"
+    },
+    {
+      "at": "2026-09-20T08:24:34.353Z",
+      "step": "physical-pause",
+      "handler": "8 stationary one-second truth ticks"
+    },
+    {
+      "at": "2026-09-20T08:24:35.341Z",
+      "step": "raw-gps-leg-3",
+      "handler": "activitySimulatorEngine.tick through production observation pipeline"
+    },
+    {
+      "at": "2026-09-20T08:24:35.823Z",
+      "step": "raw-gps-leg-4",
+      "handler": "activitySimulatorEngine.tick through production observation pipeline"
+    },
+    {
+      "at": "2026-09-20T08:24:36.967Z",
+      "step": "raw-gps-leg-5",
+      "handler": "activitySimulatorEngine.tick through production observation pipeline"
+    },
+    {
+      "at": "2026-09-20T08:24:37.218Z",
+      "step": "pause",
+      "handler": "Hike Pause control"
+    },
+    {
+      "at": "2026-09-20T08:24:37.551Z",
+      "step": "resume",
+      "handler": "Hike Resume control"
+    },
+    {
+      "at": "2026-09-20T08:24:37.702Z",
+      "step": "hike-to-plant",
+      "handler": "live Hike Plant a Cairn control"
+    },
+    {
+      "at": "2026-09-20T08:24:38.494Z",
+      "step": "plant-return-same-recording",
+      "handler": "Plant commit handler goBack"
+    },
+    {
+      "at": "2026-09-20T08:25:11.565Z",
+      "step": "live-memory-before-finish",
+      "handler": "Home Memory tab while Activity remains active"
+    },
+    {
+      "at": "2026-09-20T08:25:13.437Z",
+      "step": "finish-to-same-activity-detail",
+      "handler": "Finish & view activity handler"
+    },
+    {
+      "at": "2026-09-20T08:25:13.930Z",
+      "step": "activity-route-edit-ready-and-applied",
+      "handler": "enabled RouteEditor Apply to draft UI control"
+    },
+    {
+      "at": "2026-09-20T08:25:14.630Z",
+      "step": "activity-save-as-route-edited",
+      "handler": "Activity Save as Route > Beautify > Apply > Save Route"
+    },
+    {
+      "at": "2026-09-20T08:25:26.146Z",
+      "step": "cold-reload-created-route",
+      "handler": "page.reload to a new JS realm before Trails reopen"
+    },
+    {
+      "at": "2026-09-20T08:25:26.786Z",
+      "step": "home-trails-reopen-route",
+      "handler": "cold Home > Trails > Routes > stable route row"
+    },
+    {
+      "at": "2026-09-20T08:25:27.276Z",
+      "step": "reopened-route-edit-ready-and-applied",
+      "handler": "enabled RouteEditor Apply to draft UI control"
+    },
+    {
+      "at": "2026-09-20T08:25:27.910Z",
+      "step": "reopened-route-edit-save",
+      "handler": "Route Detail Edit > Beautify > Apply > Save Route"
+    },
+    {
+      "at": "2026-09-20T08:25:28.816Z",
+      "step": "use-route-hike-idle",
+      "handler": "Route Detail Use Route > Hike"
+    },
+    {
+      "at": "2026-09-20T08:25:29.862Z",
+      "step": "use-route-run-idle",
+      "handler": "Route Detail Use Route > Run"
+    }
+  ],
+  "stages": [
+    {
+      "stage": "after-normal-start",
+      "observedAt": 1789892663551,
+      "currentRoute": "Hiking",
+      "tracking": {
+        "status": "tracking",
+        "transitionState": "idle",
+        "sessionId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+        "provider": "simulator",
+        "rawCount": 1,
+        "acceptedCount": 1,
+        "distanceM": 0,
+        "lastCoordinate": {
+          "lat": -41.28648976048198,
+          "lng": 174.77620259840512,
+          "alt": 0,
+          "accuracy": 11.53062517973629,
+          "speed": 0,
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "ownerGeneration": "00dd5ef5-cbe5-4631-9b97-5341910e06b5",
+          "segmentId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb:1789849403033:cd0da231",
+          "source": "simulator",
+          "simulatorObservationMode": "raw-gps"
+        },
+        "lastCoordinateTime": 1789849403107
+      },
+      "simulator": {
+        "seed": 550202,
+        "observationMode": "raw-gps",
+        "timeScale": 1,
+        "rawTrailCount": 1,
+        "truthTrailCount": 1,
+        "rawTrail": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "accuracyM": 11.53062517973629,
+            "timestamp": 1789849403107
+          }
+        ],
+        "truthTrail": [
+          {
+            "lat": -41.2865,
+            "lng": 174.77620000000002
+          }
+        ]
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 1,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "not-memory",
+        "mapLoaded": false,
+        "sourcePresent": false,
+        "geometryType": null,
+        "polygonCount": 0,
+        "innerRingCount": 0,
+        "evidencePointCount": 0,
+        "contentSignature": "",
+        "geometryRevision": "",
+        "geometry": null,
+        "geometryHash": null
+      },
+      "sessions": [],
+      "markers": [],
+      "route": null,
+      "activityRouteReference": null
+    },
+    {
+      "stage": "r-gps-02-complete-prefinish",
+      "observedAt": 1789892676985,
+      "currentRoute": "Hiking",
+      "tracking": {
+        "status": "tracking",
+        "transitionState": "idle",
+        "sessionId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+        "provider": "simulator",
+        "rawCount": 74,
+        "acceptedCount": 37,
+        "distanceM": 219.9562732346402,
+        "lastCoordinate": {
+          "lat": -41.28606115025808,
+          "lng": 174.7772515684852,
+          "alt": 12.166666666666684,
+          "accuracy": 12.577940696466708,
+          "speed": 1.7179533668497657,
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "ownerGeneration": "00dd5ef5-cbe5-4631-9b97-5341910e06b5",
+          "segmentId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb:1789849403033:cd0da231",
+          "source": "simulator",
+          "simulatorObservationMode": "raw-gps"
+        },
+        "lastCoordinateTime": 1789849557107
+      },
+      "simulator": {
+        "seed": 550202,
+        "observationMode": "raw-gps",
+        "timeScale": 1,
+        "rawTrailCount": 74,
+        "truthTrailCount": 74,
+        "rawTrail": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "accuracyM": 11.53062517973629,
+            "timestamp": 1789849403107
+          },
+          {
+            "lat": -41.28648290550041,
+            "lng": 174.7762001832856,
+            "accuracyM": 11.820679714568703,
+            "timestamp": 1789849404107
+          },
+          {
+            "lat": -41.28647817569692,
+            "lng": 174.7762621702292,
+            "accuracyM": 13.498896351367197,
+            "timestamp": 1789849406107
+          },
+          {
+            "lat": -41.286444407250166,
+            "lng": 174.77635230204942,
+            "accuracyM": 14.996105473495888,
+            "timestamp": 1789849414107
+          },
+          {
+            "lat": -41.28644797654177,
+            "lng": 174.77635564312436,
+            "accuracyM": 12.656180141162759,
+            "timestamp": 1789849415107
+          },
+          {
+            "lat": -41.28648720547004,
+            "lng": 174.77636945610448,
+            "accuracyM": 13.034410871007275,
+            "timestamp": 1789849416107
+          },
+          {
+            "lat": -41.286478060879155,
+            "lng": 174.77644647803731,
+            "accuracyM": 15.719155911426398,
+            "timestamp": 1789849421107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "accuracyM": 15.344508292294691,
+            "timestamp": 1789849429107
+          },
+          {
+            "lat": -41.286440873176666,
+            "lng": 174.7765572114523,
+            "accuracyM": 12.905012658104631,
+            "timestamp": 1789849430107
+          },
+          {
+            "lat": -41.286439513175864,
+            "lng": 174.7766076550272,
+            "accuracyM": 13.867651210133417,
+            "timestamp": 1789849432107
+          },
+          {
+            "lat": -41.28643457571323,
+            "lng": 174.77658620367424,
+            "accuracyM": 15.004483353276436,
+            "timestamp": 1789849435107
+          },
+          {
+            "lat": -41.28645908916482,
+            "lng": 174.77667879461717,
+            "accuracyM": 13.140597973409944,
+            "timestamp": 1789849437107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "accuracyM": 13.688268976577483,
+            "timestamp": 1789849440107
+          },
+          {
+            "lat": -41.286464644553746,
+            "lng": 174.7767487457263,
+            "accuracyM": 13.87167023674238,
+            "timestamp": 1789849441107
+          },
+          {
+            "lat": -41.28646292276447,
+            "lng": 174.7767743322272,
+            "accuracyM": 13.389276706207333,
+            "timestamp": 1789849442107
+          },
+          {
+            "lat": -41.286463272588165,
+            "lng": 174.7768036069349,
+            "accuracyM": 15.165374974918473,
+            "timestamp": 1789849445107
+          },
+          {
+            "lat": -41.286443324305715,
+            "lng": 174.77680556380335,
+            "accuracyM": 14.284046329580484,
+            "timestamp": 1789849446107
+          },
+          {
+            "lat": -41.286448037373084,
+            "lng": 174.77682222821795,
+            "accuracyM": 16.013967985378233,
+            "timestamp": 1789849447107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "accuracyM": 13.477269806307751,
+            "timestamp": 1789849451107
+          },
+          {
+            "lat": -41.286430588964066,
+            "lng": 174.77689426120514,
+            "accuracyM": 13.791737782083402,
+            "timestamp": 1789849452107
+          },
+          {
+            "lat": -41.28642286961632,
+            "lng": 174.7769527666071,
+            "accuracyM": 12.859846452888283,
+            "timestamp": 1789849453107
+          },
+          {
+            "lat": -41.286410242653616,
+            "lng": 174.77695713847947,
+            "accuracyM": 12.25162588964766,
+            "timestamp": 1789849454107
+          },
+          {
+            "lat": -41.286392636723335,
+            "lng": 174.7769934257998,
+            "accuracyM": 11.392174724724871,
+            "timestamp": 1789849455107
+          },
+          {
+            "lat": -41.28639587162664,
+            "lng": 174.77701406314168,
+            "accuracyM": 15.648796456290832,
+            "timestamp": 1789849458107
+          },
+          {
+            "lat": -41.286393312400996,
+            "lng": 174.77701127387922,
+            "accuracyM": 13.307938773261732,
+            "timestamp": 1789849459107
+          },
+          {
+            "lat": -41.286365241239956,
+            "lng": 174.77703756367396,
+            "accuracyM": 13.574201454091886,
+            "timestamp": 1789849463107
+          },
+          {
+            "lat": -41.28636202557419,
+            "lng": 174.77705251678935,
+            "accuracyM": 13.169126389663393,
+            "timestamp": 1789849464107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "accuracyM": 16.685873495896665,
+            "timestamp": 1789849465107
+          },
+          {
+            "lat": -41.286330877466234,
+            "lng": 174.77708080408058,
+            "accuracyM": 14.765185716390668,
+            "timestamp": 1789849466107
+          },
+          {
+            "lat": -41.28631292828762,
+            "lng": 174.77710176448386,
+            "accuracyM": 12.449781201630016,
+            "timestamp": 1789849467107
+          },
+          {
+            "lat": -41.286296050132,
+            "lng": 174.7771335132653,
+            "accuracyM": 12.44820673505206,
+            "timestamp": 1789849468107
+          },
+          {
+            "lat": -41.28630807287673,
+            "lng": 174.77712915985262,
+            "accuracyM": 14.142984060290587,
+            "timestamp": 1789849469107
+          },
+          {
+            "lat": -41.28631785351412,
+            "lng": 174.77715123367557,
+            "accuracyM": 14.083223943593751,
+            "timestamp": 1789849470107
+          },
+          {
+            "lat": -41.286321053764105,
+            "lng": 174.77715962391392,
+            "accuracyM": 16.52729183774974,
+            "timestamp": 1789849471107
+          },
+          {
+            "lat": -41.28624342328474,
+            "lng": 174.77719405119285,
+            "accuracyM": 14.440997782144674,
+            "timestamp": 1789849475107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "accuracyM": 12.350000204077267,
+            "timestamp": 1789849476107
+          },
+          {
+            "lat": -41.28622819664927,
+            "lng": 174.7771794123645,
+            "accuracyM": 15.171505016488936,
+            "timestamp": 1789849477107
+          },
+          {
+            "lat": -41.28623220953918,
+            "lng": 174.7771923467592,
+            "accuracyM": 14.799210248832466,
+            "timestamp": 1789849478107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "accuracyM": 12.886834099938781,
+            "timestamp": 1789849486107
+          },
+          {
+            "lat": -41.2860668421891,
+            "lng": 174.77728082207364,
+            "accuracyM": 13.922629765172216,
+            "timestamp": 1789849489107
+          },
+          {
+            "lat": -41.28604692744127,
+            "lng": 174.77727628936452,
+            "accuracyM": 13.062383274825834,
+            "timestamp": 1789849493107
+          },
+          {
+            "lat": -41.28602033784017,
+            "lng": 174.77724402548176,
+            "accuracyM": 13.382852620324805,
+            "timestamp": 1789849495107
+          },
+          {
+            "lat": -41.286050053349214,
+            "lng": 174.77723082842863,
+            "accuracyM": 12.387196673055367,
+            "timestamp": 1789849496107
+          },
+          {
+            "lat": -41.28606973369319,
+            "lng": 174.77720806168043,
+            "accuracyM": 13.95103078530753,
+            "timestamp": 1789849498107
+          },
+          {
+            "lat": -41.28608391319571,
+            "lng": 174.77716709600168,
+            "accuracyM": 11.790267461328193,
+            "timestamp": 1789849500107
+          },
+          {
+            "lat": -41.28606205676121,
+            "lng": 174.7771667771775,
+            "accuracyM": 13.02997360232848,
+            "timestamp": 1789849501107
+          },
+          {
+            "lat": -41.28608257015984,
+            "lng": 174.7771085388356,
+            "accuracyM": 11.79271393935716,
+            "timestamp": 1789849503107
+          },
+          {
+            "lat": -41.2860866660539,
+            "lng": 174.77713185813923,
+            "accuracyM": 14.941366270465204,
+            "timestamp": 1789849505107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "accuracyM": 13.982137117080086,
+            "timestamp": 1789849508107
+          },
+          {
+            "lat": -41.28606808292058,
+            "lng": 174.77699803695737,
+            "accuracyM": 15.151907059444426,
+            "timestamp": 1789849513107
+          },
+          {
+            "lat": -41.28606949428534,
+            "lng": 174.7768874951721,
+            "accuracyM": 15.538450756337594,
+            "timestamp": 1789849514107
+          },
+          {
+            "lat": -41.28605253458608,
+            "lng": 174.77685607528758,
+            "accuracyM": 15.117548485704658,
+            "timestamp": 1789849515107
+          },
+          {
+            "lat": -41.28609890136143,
+            "lng": 174.77680849807302,
+            "accuracyM": 17.426871601589202,
+            "timestamp": 1789849516107
+          },
+          {
+            "lat": -41.28610753588614,
+            "lng": 174.77680806914486,
+            "accuracyM": 16.148496293819125,
+            "timestamp": 1789849517107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "accuracyM": 16.61592784337565,
+            "timestamp": 1789849518107
+          },
+          {
+            "lat": -41.286096199346346,
+            "lng": 174.7767771994769,
+            "accuracyM": 16.57688798036679,
+            "timestamp": 1789849519107
+          },
+          {
+            "lat": -41.286113430437894,
+            "lng": 174.7767604372243,
+            "accuracyM": 16.546121290070204,
+            "timestamp": 1789849521107
+          },
+          {
+            "lat": -41.2861299683615,
+            "lng": 174.77671839447555,
+            "accuracyM": 15.806105726003567,
+            "timestamp": 1789849522107
+          },
+          {
+            "lat": -41.2861161420534,
+            "lng": 174.77670276567005,
+            "accuracyM": 15.446682547675186,
+            "timestamp": 1789849523107
+          },
+          {
+            "lat": -41.28611561573925,
+            "lng": 174.7767864568027,
+            "accuracyM": 14.537784614405574,
+            "timestamp": 1789849528107
+          },
+          {
+            "lat": -41.28610157122836,
+            "lng": 174.77683198002137,
+            "accuracyM": 14.36412744125813,
+            "timestamp": 1789849529107
+          },
+          {
+            "lat": -41.286092555120824,
+            "lng": 174.77679769184056,
+            "accuracyM": 13.676387646022272,
+            "timestamp": 1789849530107
+          },
+          {
+            "lat": -41.28609695978784,
+            "lng": 174.77688057098305,
+            "accuracyM": 13.867243297815524,
+            "timestamp": 1789849534107
+          },
+          {
+            "lat": -41.28609633353903,
+            "lng": 174.7768904013684,
+            "accuracyM": 13.336649161246962,
+            "timestamp": 1789849535107
+          },
+          {
+            "lat": -41.28606882656768,
+            "lng": 174.77695236839634,
+            "accuracyM": 11.705649632811394,
+            "timestamp": 1789849537107
+          },
+          {
+            "lat": -41.28610133555988,
+            "lng": 174.7770186638087,
+            "accuracyM": 15.090154981034619,
+            "timestamp": 1789849541107
+          },
+          {
+            "lat": -41.286075465337795,
+            "lng": 174.7770415006487,
+            "accuracyM": 13.918299308024908,
+            "timestamp": 1789849544107
+          },
+          {
+            "lat": -41.286086459071626,
+            "lng": 174.77705215194908,
+            "accuracyM": 15.500089587889473,
+            "timestamp": 1789849546107
+          },
+          {
+            "lat": -41.28608254583573,
+            "lng": 174.7770746686126,
+            "accuracyM": 13.678379750336942,
+            "timestamp": 1789849548107
+          },
+          {
+            "lat": -41.28608679749514,
+            "lng": 174.77714582590875,
+            "accuracyM": 13.495649368397647,
+            "timestamp": 1789849552107
+          },
+          {
+            "lat": -41.28609043346991,
+            "lng": 174.777161972959,
+            "accuracyM": 15.07141399733366,
+            "timestamp": 1789849554107
+          },
+          {
+            "lat": -41.28607520541856,
+            "lng": 174.7771948982986,
+            "accuracyM": 15.030963831457031,
+            "timestamp": 1789849555107
+          },
+          {
+            "lat": -41.28606115025808,
+            "lng": 174.7772515684852,
+            "accuracyM": 12.577940696466708,
+            "timestamp": 1789849557107
+          },
+          {
+            "lat": -41.28605966809401,
+            "lng": 174.77725504469845,
+            "accuracyM": 12.63658728060746,
+            "timestamp": 1789849558107
+          }
+        ],
+        "truthTrail": [
+          {
+            "lat": -41.2865,
+            "lng": 174.77620000000002
+          },
+          {
+            "lat": -41.28649802466956,
+            "lng": 174.7762153351033
+          },
+          {
+            "lat": -41.28649407400259,
+            "lng": 174.77624600530703
+          },
+          {
+            "lat": -41.2864782712533,
+            "lng": 174.77636868608488
+          },
+          {
+            "lat": -41.286476295900485,
+            "lng": 174.77638402117793
+          },
+          {
+            "lat": -41.28647432054563,
+            "lng": 174.77639935627008
+          },
+          {
+            "lat": -41.28646444374083,
+            "lng": 174.7764760317167
+          },
+          {
+            "lat": -41.286448640747345,
+            "lng": 174.77659871238313
+          },
+          {
+            "lat": -41.286446665364004,
+            "lng": 174.77661404746232
+          },
+          {
+            "lat": -41.28644271459121,
+            "lng": 174.77664471761773
+          },
+          {
+            "lat": -41.286436788416786,
+            "lng": 174.7766907228439
+          },
+          {
+            "lat": -41.286432837623636,
+            "lng": 174.7767213929901
+          },
+          {
+            "lat": -41.28642691141867,
+            "lng": 174.77676739820242
+          },
+          {
+            "lat": -41.28642493601293,
+            "lng": 174.77678273327138
+          },
+          {
+            "lat": -41.28642296060517,
+            "lng": 174.7767980683393
+          },
+          {
+            "lat": -41.286417034369684,
+            "lng": 174.77684407353763
+          },
+          {
+            "lat": -41.28641505895378,
+            "lng": 174.77685940860192
+          },
+          {
+            "lat": -41.28641308353585,
+            "lng": 174.7768747436653
+          },
+          {
+            "lat": -41.28640518184378,
+            "lng": 174.77693608390928
+          },
+          {
+            "lat": -41.28640320641568,
+            "lng": 174.776951418968
+          },
+          {
+            "lat": -41.28640123098554,
+            "lng": 174.7769667540258
+          },
+          {
+            "lat": -41.28639925555336,
+            "lng": 174.7769820890826
+          },
+          {
+            "lat": -41.286397280119154,
+            "lng": 174.77699742413847
+          },
+          {
+            "lat": -41.286381519135226,
+            "lng": 174.77704315881806
+          },
+          {
+            "lat": -41.28637083561111,
+            "lng": 174.7770494778655
+          },
+          {
+            "lat": -41.28632810151122,
+            "lng": 174.7770747540344
+          },
+          {
+            "lat": -41.286317417985366,
+            "lng": 174.77708107307149
+          },
+          {
+            "lat": -41.28630673445918,
+            "lng": 174.77708739210652
+          },
+          {
+            "lat": -41.28629605093265,
+            "lng": 174.7770937111395
+          },
+          {
+            "lat": -41.286285367405775,
+            "lng": 174.77710003017046
+          },
+          {
+            "lat": -41.286274683878545,
+            "lng": 174.77710634919924
+          },
+          {
+            "lat": -41.286264000350975,
+            "lng": 174.77711266822598
+          },
+          {
+            "lat": -41.286253316823064,
+            "lng": 174.77711898725067
+          },
+          {
+            "lat": -41.286242633294805,
+            "lng": 174.77712530627332
+          },
+          {
+            "lat": -41.286199899178314,
+            "lng": 174.77715058234298
+          },
+          {
+            "lat": -41.28618921564833,
+            "lng": 174.77715690135528
+          },
+          {
+            "lat": -41.286178532117994,
+            "lng": 174.77716322036542
+          },
+          {
+            "lat": -41.28616784858732,
+            "lng": 174.77716953937352
+          },
+          {
+            "lat": -41.28608238032947,
+            "lng": 174.77722009136414
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.28606881066553,
+            "lng": 174.77721255874178
+          },
+          {
+            "lat": -41.28606881071831,
+            "lng": 174.77718144136531
+          },
+          {
+            "lat": -41.286068810762714,
+            "lng": 174.77715032398885
+          },
+          {
+            "lat": -41.28606881078178,
+            "lng": 174.77713476530062
+          },
+          {
+            "lat": -41.2860688108136,
+            "lng": 174.77710364792415
+          },
+          {
+            "lat": -41.28606881083706,
+            "lng": 174.77707253054768
+          },
+          {
+            "lat": -41.28606881085654,
+            "lng": 174.77702585448299
+          },
+          {
+            "lat": -41.286068810847105,
+            "lng": 174.77694806104182
+          },
+          {
+            "lat": -41.28606881083893,
+            "lng": 174.7769325023536
+          },
+          {
+            "lat": -41.28606881082865,
+            "lng": 174.77691694366536
+          },
+          {
+            "lat": -41.286068810816296,
+            "lng": 174.77690138497712
+          },
+          {
+            "lat": -41.286068810801844,
+            "lng": 174.7768858262889
+          },
+          {
+            "lat": -41.286068810785295,
+            "lng": 174.77687026760066
+          },
+          {
+            "lat": -41.28606881076665,
+            "lng": 174.77685470891242
+          },
+          {
+            "lat": -41.28606881072308,
+            "lng": 174.77682359153596
+          },
+          {
+            "lat": -41.28606881069815,
+            "lng": 174.77680803284773
+          },
+          {
+            "lat": -41.286068810671125,
+            "lng": 174.7767924741595
+          },
+          {
+            "lat": -41.28606881067395,
+            "lng": 174.77683606773712
+          },
+          {
+            "lat": -41.286068810678195,
+            "lng": 174.77685162642535
+          },
+          {
+            "lat": -41.28606881068036,
+            "lng": 174.7768671851136
+          },
+          {
+            "lat": -41.28606881066805,
+            "lng": 174.77692941986652
+          },
+          {
+            "lat": -41.286068810659735,
+            "lng": 174.77694497855475
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.7769770654994
+          },
+          {
+            "lat": -41.2860688107641,
+            "lng": 174.77703930025234
+          },
+          {
+            "lat": -41.286068810838174,
+            "lng": 174.77708597631704
+          },
+          {
+            "lat": -41.286068810877076,
+            "lng": 174.7771170936935
+          },
+          {
+            "lat": -41.28606881090761,
+            "lng": 174.77714821106997
+          },
+          {
+            "lat": -41.28606881094353,
+            "lng": 174.7772104458229
+          },
+          {
+            "lat": -41.286068810948926,
+            "lng": 174.77724156319937
+          },
+          {
+            "lat": -41.28606881094847,
+            "lng": 174.7772571218876
+          },
+          {
+            "lat": -41.2860688109413,
+            "lng": 174.77728823926407
+          },
+          {
+            "lat": -41.286068810934566,
+            "lng": 174.7773037979523
+          }
+        ]
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 9,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "cid": "5b7d6d90-4c89-4745-8666-9867c66196fd",
+            "ts": 1789849429107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "cid": "567abffc-d1ee-4e55-9f05-50d405f8b4da",
+            "ts": 1789849440107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "cid": "070fcdbd-357d-43e4-8828-3bb55d72af45",
+            "ts": 1789849451107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "cid": "495d9e9a-493c-4812-8898-4fd24966227a",
+            "ts": 1789849465107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "cid": "e6515bc2-045e-4f32-b6f2-12014d2fa704",
+            "ts": 1789849476107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "cid": "4b19596a-9ea1-43dd-9dcc-d589e8b3b72d",
+            "ts": 1789849486107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "cid": "f75fb13b-0734-47c8-821e-98cc2b78ca94",
+            "ts": 1789849508107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "cid": "2a8b5e48-712c-49cf-9bd1-7ceedc611e62",
+            "ts": 1789849518107
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "not-memory",
+        "mapLoaded": false,
+        "sourcePresent": false,
+        "geometryType": null,
+        "polygonCount": 0,
+        "innerRingCount": 0,
+        "evidencePointCount": 0,
+        "contentSignature": "",
+        "geometryRevision": "",
+        "geometry": null,
+        "geometryHash": null
+      },
+      "sessions": [],
+      "markers": [],
+      "route": null,
+      "activityRouteReference": null
+    },
+    {
+      "stage": "after-plant-returned-to-recording",
+      "observedAt": 1789892678520,
+      "currentRoute": "Hiking",
+      "tracking": {
+        "status": "tracking",
+        "transitionState": "idle",
+        "sessionId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+        "provider": "simulator",
+        "rawCount": 75,
+        "acceptedCount": 38,
+        "distanceM": 219.9562732346402,
+        "lastCoordinate": {
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "alt": 13.333333333333359,
+          "accuracy": 15.87826256719752,
+          "speed": 0,
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "ownerGeneration": "4df2e753-7166-4941-98bc-3611a3f2af74",
+          "segmentId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb:1789892677355:2db42f8c",
+          "source": "simulator",
+          "simulatorObservationMode": "raw-gps"
+        },
+        "lastCoordinateTime": 1789849571139
+      },
+      "simulator": {
+        "seed": 550202,
+        "observationMode": "raw-gps",
+        "timeScale": 1,
+        "rawTrailCount": 75,
+        "truthTrailCount": 75,
+        "rawTrail": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "accuracyM": 11.53062517973629,
+            "timestamp": 1789849403107
+          },
+          {
+            "lat": -41.28648290550041,
+            "lng": 174.7762001832856,
+            "accuracyM": 11.820679714568703,
+            "timestamp": 1789849404107
+          },
+          {
+            "lat": -41.28647817569692,
+            "lng": 174.7762621702292,
+            "accuracyM": 13.498896351367197,
+            "timestamp": 1789849406107
+          },
+          {
+            "lat": -41.286444407250166,
+            "lng": 174.77635230204942,
+            "accuracyM": 14.996105473495888,
+            "timestamp": 1789849414107
+          },
+          {
+            "lat": -41.28644797654177,
+            "lng": 174.77635564312436,
+            "accuracyM": 12.656180141162759,
+            "timestamp": 1789849415107
+          },
+          {
+            "lat": -41.28648720547004,
+            "lng": 174.77636945610448,
+            "accuracyM": 13.034410871007275,
+            "timestamp": 1789849416107
+          },
+          {
+            "lat": -41.286478060879155,
+            "lng": 174.77644647803731,
+            "accuracyM": 15.719155911426398,
+            "timestamp": 1789849421107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "accuracyM": 15.344508292294691,
+            "timestamp": 1789849429107
+          },
+          {
+            "lat": -41.286440873176666,
+            "lng": 174.7765572114523,
+            "accuracyM": 12.905012658104631,
+            "timestamp": 1789849430107
+          },
+          {
+            "lat": -41.286439513175864,
+            "lng": 174.7766076550272,
+            "accuracyM": 13.867651210133417,
+            "timestamp": 1789849432107
+          },
+          {
+            "lat": -41.28643457571323,
+            "lng": 174.77658620367424,
+            "accuracyM": 15.004483353276436,
+            "timestamp": 1789849435107
+          },
+          {
+            "lat": -41.28645908916482,
+            "lng": 174.77667879461717,
+            "accuracyM": 13.140597973409944,
+            "timestamp": 1789849437107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "accuracyM": 13.688268976577483,
+            "timestamp": 1789849440107
+          },
+          {
+            "lat": -41.286464644553746,
+            "lng": 174.7767487457263,
+            "accuracyM": 13.87167023674238,
+            "timestamp": 1789849441107
+          },
+          {
+            "lat": -41.28646292276447,
+            "lng": 174.7767743322272,
+            "accuracyM": 13.389276706207333,
+            "timestamp": 1789849442107
+          },
+          {
+            "lat": -41.286463272588165,
+            "lng": 174.7768036069349,
+            "accuracyM": 15.165374974918473,
+            "timestamp": 1789849445107
+          },
+          {
+            "lat": -41.286443324305715,
+            "lng": 174.77680556380335,
+            "accuracyM": 14.284046329580484,
+            "timestamp": 1789849446107
+          },
+          {
+            "lat": -41.286448037373084,
+            "lng": 174.77682222821795,
+            "accuracyM": 16.013967985378233,
+            "timestamp": 1789849447107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "accuracyM": 13.477269806307751,
+            "timestamp": 1789849451107
+          },
+          {
+            "lat": -41.286430588964066,
+            "lng": 174.77689426120514,
+            "accuracyM": 13.791737782083402,
+            "timestamp": 1789849452107
+          },
+          {
+            "lat": -41.28642286961632,
+            "lng": 174.7769527666071,
+            "accuracyM": 12.859846452888283,
+            "timestamp": 1789849453107
+          },
+          {
+            "lat": -41.286410242653616,
+            "lng": 174.77695713847947,
+            "accuracyM": 12.25162588964766,
+            "timestamp": 1789849454107
+          },
+          {
+            "lat": -41.286392636723335,
+            "lng": 174.7769934257998,
+            "accuracyM": 11.392174724724871,
+            "timestamp": 1789849455107
+          },
+          {
+            "lat": -41.28639587162664,
+            "lng": 174.77701406314168,
+            "accuracyM": 15.648796456290832,
+            "timestamp": 1789849458107
+          },
+          {
+            "lat": -41.286393312400996,
+            "lng": 174.77701127387922,
+            "accuracyM": 13.307938773261732,
+            "timestamp": 1789849459107
+          },
+          {
+            "lat": -41.286365241239956,
+            "lng": 174.77703756367396,
+            "accuracyM": 13.574201454091886,
+            "timestamp": 1789849463107
+          },
+          {
+            "lat": -41.28636202557419,
+            "lng": 174.77705251678935,
+            "accuracyM": 13.169126389663393,
+            "timestamp": 1789849464107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "accuracyM": 16.685873495896665,
+            "timestamp": 1789849465107
+          },
+          {
+            "lat": -41.286330877466234,
+            "lng": 174.77708080408058,
+            "accuracyM": 14.765185716390668,
+            "timestamp": 1789849466107
+          },
+          {
+            "lat": -41.28631292828762,
+            "lng": 174.77710176448386,
+            "accuracyM": 12.449781201630016,
+            "timestamp": 1789849467107
+          },
+          {
+            "lat": -41.286296050132,
+            "lng": 174.7771335132653,
+            "accuracyM": 12.44820673505206,
+            "timestamp": 1789849468107
+          },
+          {
+            "lat": -41.28630807287673,
+            "lng": 174.77712915985262,
+            "accuracyM": 14.142984060290587,
+            "timestamp": 1789849469107
+          },
+          {
+            "lat": -41.28631785351412,
+            "lng": 174.77715123367557,
+            "accuracyM": 14.083223943593751,
+            "timestamp": 1789849470107
+          },
+          {
+            "lat": -41.286321053764105,
+            "lng": 174.77715962391392,
+            "accuracyM": 16.52729183774974,
+            "timestamp": 1789849471107
+          },
+          {
+            "lat": -41.28624342328474,
+            "lng": 174.77719405119285,
+            "accuracyM": 14.440997782144674,
+            "timestamp": 1789849475107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "accuracyM": 12.350000204077267,
+            "timestamp": 1789849476107
+          },
+          {
+            "lat": -41.28622819664927,
+            "lng": 174.7771794123645,
+            "accuracyM": 15.171505016488936,
+            "timestamp": 1789849477107
+          },
+          {
+            "lat": -41.28623220953918,
+            "lng": 174.7771923467592,
+            "accuracyM": 14.799210248832466,
+            "timestamp": 1789849478107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "accuracyM": 12.886834099938781,
+            "timestamp": 1789849486107
+          },
+          {
+            "lat": -41.2860668421891,
+            "lng": 174.77728082207364,
+            "accuracyM": 13.922629765172216,
+            "timestamp": 1789849489107
+          },
+          {
+            "lat": -41.28604692744127,
+            "lng": 174.77727628936452,
+            "accuracyM": 13.062383274825834,
+            "timestamp": 1789849493107
+          },
+          {
+            "lat": -41.28602033784017,
+            "lng": 174.77724402548176,
+            "accuracyM": 13.382852620324805,
+            "timestamp": 1789849495107
+          },
+          {
+            "lat": -41.286050053349214,
+            "lng": 174.77723082842863,
+            "accuracyM": 12.387196673055367,
+            "timestamp": 1789849496107
+          },
+          {
+            "lat": -41.28606973369319,
+            "lng": 174.77720806168043,
+            "accuracyM": 13.95103078530753,
+            "timestamp": 1789849498107
+          },
+          {
+            "lat": -41.28608391319571,
+            "lng": 174.77716709600168,
+            "accuracyM": 11.790267461328193,
+            "timestamp": 1789849500107
+          },
+          {
+            "lat": -41.28606205676121,
+            "lng": 174.7771667771775,
+            "accuracyM": 13.02997360232848,
+            "timestamp": 1789849501107
+          },
+          {
+            "lat": -41.28608257015984,
+            "lng": 174.7771085388356,
+            "accuracyM": 11.79271393935716,
+            "timestamp": 1789849503107
+          },
+          {
+            "lat": -41.2860866660539,
+            "lng": 174.77713185813923,
+            "accuracyM": 14.941366270465204,
+            "timestamp": 1789849505107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "accuracyM": 13.982137117080086,
+            "timestamp": 1789849508107
+          },
+          {
+            "lat": -41.28606808292058,
+            "lng": 174.77699803695737,
+            "accuracyM": 15.151907059444426,
+            "timestamp": 1789849513107
+          },
+          {
+            "lat": -41.28606949428534,
+            "lng": 174.7768874951721,
+            "accuracyM": 15.538450756337594,
+            "timestamp": 1789849514107
+          },
+          {
+            "lat": -41.28605253458608,
+            "lng": 174.77685607528758,
+            "accuracyM": 15.117548485704658,
+            "timestamp": 1789849515107
+          },
+          {
+            "lat": -41.28609890136143,
+            "lng": 174.77680849807302,
+            "accuracyM": 17.426871601589202,
+            "timestamp": 1789849516107
+          },
+          {
+            "lat": -41.28610753588614,
+            "lng": 174.77680806914486,
+            "accuracyM": 16.148496293819125,
+            "timestamp": 1789849517107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "accuracyM": 16.61592784337565,
+            "timestamp": 1789849518107
+          },
+          {
+            "lat": -41.286096199346346,
+            "lng": 174.7767771994769,
+            "accuracyM": 16.57688798036679,
+            "timestamp": 1789849519107
+          },
+          {
+            "lat": -41.286113430437894,
+            "lng": 174.7767604372243,
+            "accuracyM": 16.546121290070204,
+            "timestamp": 1789849521107
+          },
+          {
+            "lat": -41.2861299683615,
+            "lng": 174.77671839447555,
+            "accuracyM": 15.806105726003567,
+            "timestamp": 1789849522107
+          },
+          {
+            "lat": -41.2861161420534,
+            "lng": 174.77670276567005,
+            "accuracyM": 15.446682547675186,
+            "timestamp": 1789849523107
+          },
+          {
+            "lat": -41.28611561573925,
+            "lng": 174.7767864568027,
+            "accuracyM": 14.537784614405574,
+            "timestamp": 1789849528107
+          },
+          {
+            "lat": -41.28610157122836,
+            "lng": 174.77683198002137,
+            "accuracyM": 14.36412744125813,
+            "timestamp": 1789849529107
+          },
+          {
+            "lat": -41.286092555120824,
+            "lng": 174.77679769184056,
+            "accuracyM": 13.676387646022272,
+            "timestamp": 1789849530107
+          },
+          {
+            "lat": -41.28609695978784,
+            "lng": 174.77688057098305,
+            "accuracyM": 13.867243297815524,
+            "timestamp": 1789849534107
+          },
+          {
+            "lat": -41.28609633353903,
+            "lng": 174.7768904013684,
+            "accuracyM": 13.336649161246962,
+            "timestamp": 1789849535107
+          },
+          {
+            "lat": -41.28606882656768,
+            "lng": 174.77695236839634,
+            "accuracyM": 11.705649632811394,
+            "timestamp": 1789849537107
+          },
+          {
+            "lat": -41.28610133555988,
+            "lng": 174.7770186638087,
+            "accuracyM": 15.090154981034619,
+            "timestamp": 1789849541107
+          },
+          {
+            "lat": -41.286075465337795,
+            "lng": 174.7770415006487,
+            "accuracyM": 13.918299308024908,
+            "timestamp": 1789849544107
+          },
+          {
+            "lat": -41.286086459071626,
+            "lng": 174.77705215194908,
+            "accuracyM": 15.500089587889473,
+            "timestamp": 1789849546107
+          },
+          {
+            "lat": -41.28608254583573,
+            "lng": 174.7770746686126,
+            "accuracyM": 13.678379750336942,
+            "timestamp": 1789849548107
+          },
+          {
+            "lat": -41.28608679749514,
+            "lng": 174.77714582590875,
+            "accuracyM": 13.495649368397647,
+            "timestamp": 1789849552107
+          },
+          {
+            "lat": -41.28609043346991,
+            "lng": 174.777161972959,
+            "accuracyM": 15.07141399733366,
+            "timestamp": 1789849554107
+          },
+          {
+            "lat": -41.28607520541856,
+            "lng": 174.7771948982986,
+            "accuracyM": 15.030963831457031,
+            "timestamp": 1789849555107
+          },
+          {
+            "lat": -41.28606115025808,
+            "lng": 174.7772515684852,
+            "accuracyM": 12.577940696466708,
+            "timestamp": 1789849557107
+          },
+          {
+            "lat": -41.28605966809401,
+            "lng": 174.77725504469845,
+            "accuracyM": 12.63658728060746,
+            "timestamp": 1789849558107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "accuracyM": 15.87826256719752,
+            "timestamp": 1789849571139
+          }
+        ],
+        "truthTrail": [
+          {
+            "lat": -41.2865,
+            "lng": 174.77620000000002
+          },
+          {
+            "lat": -41.28649802466956,
+            "lng": 174.7762153351033
+          },
+          {
+            "lat": -41.28649407400259,
+            "lng": 174.77624600530703
+          },
+          {
+            "lat": -41.2864782712533,
+            "lng": 174.77636868608488
+          },
+          {
+            "lat": -41.286476295900485,
+            "lng": 174.77638402117793
+          },
+          {
+            "lat": -41.28647432054563,
+            "lng": 174.77639935627008
+          },
+          {
+            "lat": -41.28646444374083,
+            "lng": 174.7764760317167
+          },
+          {
+            "lat": -41.286448640747345,
+            "lng": 174.77659871238313
+          },
+          {
+            "lat": -41.286446665364004,
+            "lng": 174.77661404746232
+          },
+          {
+            "lat": -41.28644271459121,
+            "lng": 174.77664471761773
+          },
+          {
+            "lat": -41.286436788416786,
+            "lng": 174.7766907228439
+          },
+          {
+            "lat": -41.286432837623636,
+            "lng": 174.7767213929901
+          },
+          {
+            "lat": -41.28642691141867,
+            "lng": 174.77676739820242
+          },
+          {
+            "lat": -41.28642493601293,
+            "lng": 174.77678273327138
+          },
+          {
+            "lat": -41.28642296060517,
+            "lng": 174.7767980683393
+          },
+          {
+            "lat": -41.286417034369684,
+            "lng": 174.77684407353763
+          },
+          {
+            "lat": -41.28641505895378,
+            "lng": 174.77685940860192
+          },
+          {
+            "lat": -41.28641308353585,
+            "lng": 174.7768747436653
+          },
+          {
+            "lat": -41.28640518184378,
+            "lng": 174.77693608390928
+          },
+          {
+            "lat": -41.28640320641568,
+            "lng": 174.776951418968
+          },
+          {
+            "lat": -41.28640123098554,
+            "lng": 174.7769667540258
+          },
+          {
+            "lat": -41.28639925555336,
+            "lng": 174.7769820890826
+          },
+          {
+            "lat": -41.286397280119154,
+            "lng": 174.77699742413847
+          },
+          {
+            "lat": -41.286381519135226,
+            "lng": 174.77704315881806
+          },
+          {
+            "lat": -41.28637083561111,
+            "lng": 174.7770494778655
+          },
+          {
+            "lat": -41.28632810151122,
+            "lng": 174.7770747540344
+          },
+          {
+            "lat": -41.286317417985366,
+            "lng": 174.77708107307149
+          },
+          {
+            "lat": -41.28630673445918,
+            "lng": 174.77708739210652
+          },
+          {
+            "lat": -41.28629605093265,
+            "lng": 174.7770937111395
+          },
+          {
+            "lat": -41.286285367405775,
+            "lng": 174.77710003017046
+          },
+          {
+            "lat": -41.286274683878545,
+            "lng": 174.77710634919924
+          },
+          {
+            "lat": -41.286264000350975,
+            "lng": 174.77711266822598
+          },
+          {
+            "lat": -41.286253316823064,
+            "lng": 174.77711898725067
+          },
+          {
+            "lat": -41.286242633294805,
+            "lng": 174.77712530627332
+          },
+          {
+            "lat": -41.286199899178314,
+            "lng": 174.77715058234298
+          },
+          {
+            "lat": -41.28618921564833,
+            "lng": 174.77715690135528
+          },
+          {
+            "lat": -41.286178532117994,
+            "lng": 174.77716322036542
+          },
+          {
+            "lat": -41.28616784858732,
+            "lng": 174.77716953937352
+          },
+          {
+            "lat": -41.28608238032947,
+            "lng": 174.77722009136414
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.28606881066553,
+            "lng": 174.77721255874178
+          },
+          {
+            "lat": -41.28606881071831,
+            "lng": 174.77718144136531
+          },
+          {
+            "lat": -41.286068810762714,
+            "lng": 174.77715032398885
+          },
+          {
+            "lat": -41.28606881078178,
+            "lng": 174.77713476530062
+          },
+          {
+            "lat": -41.2860688108136,
+            "lng": 174.77710364792415
+          },
+          {
+            "lat": -41.28606881083706,
+            "lng": 174.77707253054768
+          },
+          {
+            "lat": -41.28606881085654,
+            "lng": 174.77702585448299
+          },
+          {
+            "lat": -41.286068810847105,
+            "lng": 174.77694806104182
+          },
+          {
+            "lat": -41.28606881083893,
+            "lng": 174.7769325023536
+          },
+          {
+            "lat": -41.28606881082865,
+            "lng": 174.77691694366536
+          },
+          {
+            "lat": -41.286068810816296,
+            "lng": 174.77690138497712
+          },
+          {
+            "lat": -41.286068810801844,
+            "lng": 174.7768858262889
+          },
+          {
+            "lat": -41.286068810785295,
+            "lng": 174.77687026760066
+          },
+          {
+            "lat": -41.28606881076665,
+            "lng": 174.77685470891242
+          },
+          {
+            "lat": -41.28606881072308,
+            "lng": 174.77682359153596
+          },
+          {
+            "lat": -41.28606881069815,
+            "lng": 174.77680803284773
+          },
+          {
+            "lat": -41.286068810671125,
+            "lng": 174.7767924741595
+          },
+          {
+            "lat": -41.28606881067395,
+            "lng": 174.77683606773712
+          },
+          {
+            "lat": -41.286068810678195,
+            "lng": 174.77685162642535
+          },
+          {
+            "lat": -41.28606881068036,
+            "lng": 174.7768671851136
+          },
+          {
+            "lat": -41.28606881066805,
+            "lng": 174.77692941986652
+          },
+          {
+            "lat": -41.286068810659735,
+            "lng": 174.77694497855475
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.7769770654994
+          },
+          {
+            "lat": -41.2860688107641,
+            "lng": 174.77703930025234
+          },
+          {
+            "lat": -41.286068810838174,
+            "lng": 174.77708597631704
+          },
+          {
+            "lat": -41.286068810877076,
+            "lng": 174.7771170936935
+          },
+          {
+            "lat": -41.28606881090761,
+            "lng": 174.77714821106997
+          },
+          {
+            "lat": -41.28606881094353,
+            "lng": 174.7772104458229
+          },
+          {
+            "lat": -41.286068810948926,
+            "lng": 174.77724156319937
+          },
+          {
+            "lat": -41.28606881094847,
+            "lng": 174.7772571218876
+          },
+          {
+            "lat": -41.2860688109413,
+            "lng": 174.77728823926407
+          },
+          {
+            "lat": -41.286068810934566,
+            "lng": 174.7773037979523
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.7775150339221
+          }
+        ]
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 10,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "cid": "5b7d6d90-4c89-4745-8666-9867c66196fd",
+            "ts": 1789849429107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "cid": "567abffc-d1ee-4e55-9f05-50d405f8b4da",
+            "ts": 1789849440107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "cid": "070fcdbd-357d-43e4-8828-3bb55d72af45",
+            "ts": 1789849451107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "cid": "495d9e9a-493c-4812-8898-4fd24966227a",
+            "ts": 1789849465107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "cid": "e6515bc2-045e-4f32-b6f2-12014d2fa704",
+            "ts": 1789849476107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "cid": "4b19596a-9ea1-43dd-9dcc-d589e8b3b72d",
+            "ts": 1789849486107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "cid": "f75fb13b-0734-47c8-821e-98cc2b78ca94",
+            "ts": 1789849508107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "cid": "2a8b5e48-712c-49cf-9bd1-7ceedc611e62",
+            "ts": 1789849518107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "cid": "5f528b25-a83e-404f-98bb-4ab8322e5b7d",
+            "ts": 1789849571139
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "not-memory",
+        "mapLoaded": false,
+        "sourcePresent": false,
+        "geometryType": null,
+        "polygonCount": 0,
+        "innerRingCount": 0,
+        "evidencePointCount": 0,
+        "contentSignature": "",
+        "geometryRevision": "",
+        "geometry": null,
+        "geometryHash": null
+      },
+      "sessions": [],
+      "markers": [
+        {
+          "id": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "clientCairnId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "serverCairnId": "7301",
+          "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "permission": "personal",
+          "note": "Turn and return\u001ePrivate Cairn planted from the connected R-GPS-02 Activity.",
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "syncState": "synced"
+        }
+      ],
+      "route": null,
+      "activityRouteReference": null
+    },
+    {
+      "stage": "live-memory-before-finish",
+      "observedAt": 1789892711471,
+      "currentRoute": "Memory",
+      "tracking": {
+        "status": "tracking",
+        "transitionState": "idle",
+        "sessionId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+        "provider": "simulator",
+        "rawCount": 75,
+        "acceptedCount": 38,
+        "distanceM": 219.9562732346402,
+        "lastCoordinate": {
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "alt": 13.333333333333359,
+          "accuracy": 15.87826256719752,
+          "speed": 0,
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "ownerGeneration": "4df2e753-7166-4941-98bc-3611a3f2af74",
+          "segmentId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb:1789892677355:2db42f8c",
+          "source": "simulator",
+          "simulatorObservationMode": "raw-gps"
+        },
+        "lastCoordinateTime": 1789849571139
+      },
+      "simulator": {
+        "seed": 550202,
+        "observationMode": "raw-gps",
+        "timeScale": 1,
+        "rawTrailCount": 75,
+        "truthTrailCount": 75,
+        "rawTrail": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "accuracyM": 11.53062517973629,
+            "timestamp": 1789849403107
+          },
+          {
+            "lat": -41.28648290550041,
+            "lng": 174.7762001832856,
+            "accuracyM": 11.820679714568703,
+            "timestamp": 1789849404107
+          },
+          {
+            "lat": -41.28647817569692,
+            "lng": 174.7762621702292,
+            "accuracyM": 13.498896351367197,
+            "timestamp": 1789849406107
+          },
+          {
+            "lat": -41.286444407250166,
+            "lng": 174.77635230204942,
+            "accuracyM": 14.996105473495888,
+            "timestamp": 1789849414107
+          },
+          {
+            "lat": -41.28644797654177,
+            "lng": 174.77635564312436,
+            "accuracyM": 12.656180141162759,
+            "timestamp": 1789849415107
+          },
+          {
+            "lat": -41.28648720547004,
+            "lng": 174.77636945610448,
+            "accuracyM": 13.034410871007275,
+            "timestamp": 1789849416107
+          },
+          {
+            "lat": -41.286478060879155,
+            "lng": 174.77644647803731,
+            "accuracyM": 15.719155911426398,
+            "timestamp": 1789849421107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "accuracyM": 15.344508292294691,
+            "timestamp": 1789849429107
+          },
+          {
+            "lat": -41.286440873176666,
+            "lng": 174.7765572114523,
+            "accuracyM": 12.905012658104631,
+            "timestamp": 1789849430107
+          },
+          {
+            "lat": -41.286439513175864,
+            "lng": 174.7766076550272,
+            "accuracyM": 13.867651210133417,
+            "timestamp": 1789849432107
+          },
+          {
+            "lat": -41.28643457571323,
+            "lng": 174.77658620367424,
+            "accuracyM": 15.004483353276436,
+            "timestamp": 1789849435107
+          },
+          {
+            "lat": -41.28645908916482,
+            "lng": 174.77667879461717,
+            "accuracyM": 13.140597973409944,
+            "timestamp": 1789849437107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "accuracyM": 13.688268976577483,
+            "timestamp": 1789849440107
+          },
+          {
+            "lat": -41.286464644553746,
+            "lng": 174.7767487457263,
+            "accuracyM": 13.87167023674238,
+            "timestamp": 1789849441107
+          },
+          {
+            "lat": -41.28646292276447,
+            "lng": 174.7767743322272,
+            "accuracyM": 13.389276706207333,
+            "timestamp": 1789849442107
+          },
+          {
+            "lat": -41.286463272588165,
+            "lng": 174.7768036069349,
+            "accuracyM": 15.165374974918473,
+            "timestamp": 1789849445107
+          },
+          {
+            "lat": -41.286443324305715,
+            "lng": 174.77680556380335,
+            "accuracyM": 14.284046329580484,
+            "timestamp": 1789849446107
+          },
+          {
+            "lat": -41.286448037373084,
+            "lng": 174.77682222821795,
+            "accuracyM": 16.013967985378233,
+            "timestamp": 1789849447107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "accuracyM": 13.477269806307751,
+            "timestamp": 1789849451107
+          },
+          {
+            "lat": -41.286430588964066,
+            "lng": 174.77689426120514,
+            "accuracyM": 13.791737782083402,
+            "timestamp": 1789849452107
+          },
+          {
+            "lat": -41.28642286961632,
+            "lng": 174.7769527666071,
+            "accuracyM": 12.859846452888283,
+            "timestamp": 1789849453107
+          },
+          {
+            "lat": -41.286410242653616,
+            "lng": 174.77695713847947,
+            "accuracyM": 12.25162588964766,
+            "timestamp": 1789849454107
+          },
+          {
+            "lat": -41.286392636723335,
+            "lng": 174.7769934257998,
+            "accuracyM": 11.392174724724871,
+            "timestamp": 1789849455107
+          },
+          {
+            "lat": -41.28639587162664,
+            "lng": 174.77701406314168,
+            "accuracyM": 15.648796456290832,
+            "timestamp": 1789849458107
+          },
+          {
+            "lat": -41.286393312400996,
+            "lng": 174.77701127387922,
+            "accuracyM": 13.307938773261732,
+            "timestamp": 1789849459107
+          },
+          {
+            "lat": -41.286365241239956,
+            "lng": 174.77703756367396,
+            "accuracyM": 13.574201454091886,
+            "timestamp": 1789849463107
+          },
+          {
+            "lat": -41.28636202557419,
+            "lng": 174.77705251678935,
+            "accuracyM": 13.169126389663393,
+            "timestamp": 1789849464107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "accuracyM": 16.685873495896665,
+            "timestamp": 1789849465107
+          },
+          {
+            "lat": -41.286330877466234,
+            "lng": 174.77708080408058,
+            "accuracyM": 14.765185716390668,
+            "timestamp": 1789849466107
+          },
+          {
+            "lat": -41.28631292828762,
+            "lng": 174.77710176448386,
+            "accuracyM": 12.449781201630016,
+            "timestamp": 1789849467107
+          },
+          {
+            "lat": -41.286296050132,
+            "lng": 174.7771335132653,
+            "accuracyM": 12.44820673505206,
+            "timestamp": 1789849468107
+          },
+          {
+            "lat": -41.28630807287673,
+            "lng": 174.77712915985262,
+            "accuracyM": 14.142984060290587,
+            "timestamp": 1789849469107
+          },
+          {
+            "lat": -41.28631785351412,
+            "lng": 174.77715123367557,
+            "accuracyM": 14.083223943593751,
+            "timestamp": 1789849470107
+          },
+          {
+            "lat": -41.286321053764105,
+            "lng": 174.77715962391392,
+            "accuracyM": 16.52729183774974,
+            "timestamp": 1789849471107
+          },
+          {
+            "lat": -41.28624342328474,
+            "lng": 174.77719405119285,
+            "accuracyM": 14.440997782144674,
+            "timestamp": 1789849475107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "accuracyM": 12.350000204077267,
+            "timestamp": 1789849476107
+          },
+          {
+            "lat": -41.28622819664927,
+            "lng": 174.7771794123645,
+            "accuracyM": 15.171505016488936,
+            "timestamp": 1789849477107
+          },
+          {
+            "lat": -41.28623220953918,
+            "lng": 174.7771923467592,
+            "accuracyM": 14.799210248832466,
+            "timestamp": 1789849478107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "accuracyM": 12.886834099938781,
+            "timestamp": 1789849486107
+          },
+          {
+            "lat": -41.2860668421891,
+            "lng": 174.77728082207364,
+            "accuracyM": 13.922629765172216,
+            "timestamp": 1789849489107
+          },
+          {
+            "lat": -41.28604692744127,
+            "lng": 174.77727628936452,
+            "accuracyM": 13.062383274825834,
+            "timestamp": 1789849493107
+          },
+          {
+            "lat": -41.28602033784017,
+            "lng": 174.77724402548176,
+            "accuracyM": 13.382852620324805,
+            "timestamp": 1789849495107
+          },
+          {
+            "lat": -41.286050053349214,
+            "lng": 174.77723082842863,
+            "accuracyM": 12.387196673055367,
+            "timestamp": 1789849496107
+          },
+          {
+            "lat": -41.28606973369319,
+            "lng": 174.77720806168043,
+            "accuracyM": 13.95103078530753,
+            "timestamp": 1789849498107
+          },
+          {
+            "lat": -41.28608391319571,
+            "lng": 174.77716709600168,
+            "accuracyM": 11.790267461328193,
+            "timestamp": 1789849500107
+          },
+          {
+            "lat": -41.28606205676121,
+            "lng": 174.7771667771775,
+            "accuracyM": 13.02997360232848,
+            "timestamp": 1789849501107
+          },
+          {
+            "lat": -41.28608257015984,
+            "lng": 174.7771085388356,
+            "accuracyM": 11.79271393935716,
+            "timestamp": 1789849503107
+          },
+          {
+            "lat": -41.2860866660539,
+            "lng": 174.77713185813923,
+            "accuracyM": 14.941366270465204,
+            "timestamp": 1789849505107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "accuracyM": 13.982137117080086,
+            "timestamp": 1789849508107
+          },
+          {
+            "lat": -41.28606808292058,
+            "lng": 174.77699803695737,
+            "accuracyM": 15.151907059444426,
+            "timestamp": 1789849513107
+          },
+          {
+            "lat": -41.28606949428534,
+            "lng": 174.7768874951721,
+            "accuracyM": 15.538450756337594,
+            "timestamp": 1789849514107
+          },
+          {
+            "lat": -41.28605253458608,
+            "lng": 174.77685607528758,
+            "accuracyM": 15.117548485704658,
+            "timestamp": 1789849515107
+          },
+          {
+            "lat": -41.28609890136143,
+            "lng": 174.77680849807302,
+            "accuracyM": 17.426871601589202,
+            "timestamp": 1789849516107
+          },
+          {
+            "lat": -41.28610753588614,
+            "lng": 174.77680806914486,
+            "accuracyM": 16.148496293819125,
+            "timestamp": 1789849517107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "accuracyM": 16.61592784337565,
+            "timestamp": 1789849518107
+          },
+          {
+            "lat": -41.286096199346346,
+            "lng": 174.7767771994769,
+            "accuracyM": 16.57688798036679,
+            "timestamp": 1789849519107
+          },
+          {
+            "lat": -41.286113430437894,
+            "lng": 174.7767604372243,
+            "accuracyM": 16.546121290070204,
+            "timestamp": 1789849521107
+          },
+          {
+            "lat": -41.2861299683615,
+            "lng": 174.77671839447555,
+            "accuracyM": 15.806105726003567,
+            "timestamp": 1789849522107
+          },
+          {
+            "lat": -41.2861161420534,
+            "lng": 174.77670276567005,
+            "accuracyM": 15.446682547675186,
+            "timestamp": 1789849523107
+          },
+          {
+            "lat": -41.28611561573925,
+            "lng": 174.7767864568027,
+            "accuracyM": 14.537784614405574,
+            "timestamp": 1789849528107
+          },
+          {
+            "lat": -41.28610157122836,
+            "lng": 174.77683198002137,
+            "accuracyM": 14.36412744125813,
+            "timestamp": 1789849529107
+          },
+          {
+            "lat": -41.286092555120824,
+            "lng": 174.77679769184056,
+            "accuracyM": 13.676387646022272,
+            "timestamp": 1789849530107
+          },
+          {
+            "lat": -41.28609695978784,
+            "lng": 174.77688057098305,
+            "accuracyM": 13.867243297815524,
+            "timestamp": 1789849534107
+          },
+          {
+            "lat": -41.28609633353903,
+            "lng": 174.7768904013684,
+            "accuracyM": 13.336649161246962,
+            "timestamp": 1789849535107
+          },
+          {
+            "lat": -41.28606882656768,
+            "lng": 174.77695236839634,
+            "accuracyM": 11.705649632811394,
+            "timestamp": 1789849537107
+          },
+          {
+            "lat": -41.28610133555988,
+            "lng": 174.7770186638087,
+            "accuracyM": 15.090154981034619,
+            "timestamp": 1789849541107
+          },
+          {
+            "lat": -41.286075465337795,
+            "lng": 174.7770415006487,
+            "accuracyM": 13.918299308024908,
+            "timestamp": 1789849544107
+          },
+          {
+            "lat": -41.286086459071626,
+            "lng": 174.77705215194908,
+            "accuracyM": 15.500089587889473,
+            "timestamp": 1789849546107
+          },
+          {
+            "lat": -41.28608254583573,
+            "lng": 174.7770746686126,
+            "accuracyM": 13.678379750336942,
+            "timestamp": 1789849548107
+          },
+          {
+            "lat": -41.28608679749514,
+            "lng": 174.77714582590875,
+            "accuracyM": 13.495649368397647,
+            "timestamp": 1789849552107
+          },
+          {
+            "lat": -41.28609043346991,
+            "lng": 174.777161972959,
+            "accuracyM": 15.07141399733366,
+            "timestamp": 1789849554107
+          },
+          {
+            "lat": -41.28607520541856,
+            "lng": 174.7771948982986,
+            "accuracyM": 15.030963831457031,
+            "timestamp": 1789849555107
+          },
+          {
+            "lat": -41.28606115025808,
+            "lng": 174.7772515684852,
+            "accuracyM": 12.577940696466708,
+            "timestamp": 1789849557107
+          },
+          {
+            "lat": -41.28605966809401,
+            "lng": 174.77725504469845,
+            "accuracyM": 12.63658728060746,
+            "timestamp": 1789849558107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "accuracyM": 15.87826256719752,
+            "timestamp": 1789849571139
+          }
+        ],
+        "truthTrail": [
+          {
+            "lat": -41.2865,
+            "lng": 174.77620000000002
+          },
+          {
+            "lat": -41.28649802466956,
+            "lng": 174.7762153351033
+          },
+          {
+            "lat": -41.28649407400259,
+            "lng": 174.77624600530703
+          },
+          {
+            "lat": -41.2864782712533,
+            "lng": 174.77636868608488
+          },
+          {
+            "lat": -41.286476295900485,
+            "lng": 174.77638402117793
+          },
+          {
+            "lat": -41.28647432054563,
+            "lng": 174.77639935627008
+          },
+          {
+            "lat": -41.28646444374083,
+            "lng": 174.7764760317167
+          },
+          {
+            "lat": -41.286448640747345,
+            "lng": 174.77659871238313
+          },
+          {
+            "lat": -41.286446665364004,
+            "lng": 174.77661404746232
+          },
+          {
+            "lat": -41.28644271459121,
+            "lng": 174.77664471761773
+          },
+          {
+            "lat": -41.286436788416786,
+            "lng": 174.7766907228439
+          },
+          {
+            "lat": -41.286432837623636,
+            "lng": 174.7767213929901
+          },
+          {
+            "lat": -41.28642691141867,
+            "lng": 174.77676739820242
+          },
+          {
+            "lat": -41.28642493601293,
+            "lng": 174.77678273327138
+          },
+          {
+            "lat": -41.28642296060517,
+            "lng": 174.7767980683393
+          },
+          {
+            "lat": -41.286417034369684,
+            "lng": 174.77684407353763
+          },
+          {
+            "lat": -41.28641505895378,
+            "lng": 174.77685940860192
+          },
+          {
+            "lat": -41.28641308353585,
+            "lng": 174.7768747436653
+          },
+          {
+            "lat": -41.28640518184378,
+            "lng": 174.77693608390928
+          },
+          {
+            "lat": -41.28640320641568,
+            "lng": 174.776951418968
+          },
+          {
+            "lat": -41.28640123098554,
+            "lng": 174.7769667540258
+          },
+          {
+            "lat": -41.28639925555336,
+            "lng": 174.7769820890826
+          },
+          {
+            "lat": -41.286397280119154,
+            "lng": 174.77699742413847
+          },
+          {
+            "lat": -41.286381519135226,
+            "lng": 174.77704315881806
+          },
+          {
+            "lat": -41.28637083561111,
+            "lng": 174.7770494778655
+          },
+          {
+            "lat": -41.28632810151122,
+            "lng": 174.7770747540344
+          },
+          {
+            "lat": -41.286317417985366,
+            "lng": 174.77708107307149
+          },
+          {
+            "lat": -41.28630673445918,
+            "lng": 174.77708739210652
+          },
+          {
+            "lat": -41.28629605093265,
+            "lng": 174.7770937111395
+          },
+          {
+            "lat": -41.286285367405775,
+            "lng": 174.77710003017046
+          },
+          {
+            "lat": -41.286274683878545,
+            "lng": 174.77710634919924
+          },
+          {
+            "lat": -41.286264000350975,
+            "lng": 174.77711266822598
+          },
+          {
+            "lat": -41.286253316823064,
+            "lng": 174.77711898725067
+          },
+          {
+            "lat": -41.286242633294805,
+            "lng": 174.77712530627332
+          },
+          {
+            "lat": -41.286199899178314,
+            "lng": 174.77715058234298
+          },
+          {
+            "lat": -41.28618921564833,
+            "lng": 174.77715690135528
+          },
+          {
+            "lat": -41.286178532117994,
+            "lng": 174.77716322036542
+          },
+          {
+            "lat": -41.28616784858732,
+            "lng": 174.77716953937352
+          },
+          {
+            "lat": -41.28608238032947,
+            "lng": 174.77722009136414
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.28606881066553,
+            "lng": 174.77721255874178
+          },
+          {
+            "lat": -41.28606881071831,
+            "lng": 174.77718144136531
+          },
+          {
+            "lat": -41.286068810762714,
+            "lng": 174.77715032398885
+          },
+          {
+            "lat": -41.28606881078178,
+            "lng": 174.77713476530062
+          },
+          {
+            "lat": -41.2860688108136,
+            "lng": 174.77710364792415
+          },
+          {
+            "lat": -41.28606881083706,
+            "lng": 174.77707253054768
+          },
+          {
+            "lat": -41.28606881085654,
+            "lng": 174.77702585448299
+          },
+          {
+            "lat": -41.286068810847105,
+            "lng": 174.77694806104182
+          },
+          {
+            "lat": -41.28606881083893,
+            "lng": 174.7769325023536
+          },
+          {
+            "lat": -41.28606881082865,
+            "lng": 174.77691694366536
+          },
+          {
+            "lat": -41.286068810816296,
+            "lng": 174.77690138497712
+          },
+          {
+            "lat": -41.286068810801844,
+            "lng": 174.7768858262889
+          },
+          {
+            "lat": -41.286068810785295,
+            "lng": 174.77687026760066
+          },
+          {
+            "lat": -41.28606881076665,
+            "lng": 174.77685470891242
+          },
+          {
+            "lat": -41.28606881072308,
+            "lng": 174.77682359153596
+          },
+          {
+            "lat": -41.28606881069815,
+            "lng": 174.77680803284773
+          },
+          {
+            "lat": -41.286068810671125,
+            "lng": 174.7767924741595
+          },
+          {
+            "lat": -41.28606881067395,
+            "lng": 174.77683606773712
+          },
+          {
+            "lat": -41.286068810678195,
+            "lng": 174.77685162642535
+          },
+          {
+            "lat": -41.28606881068036,
+            "lng": 174.7768671851136
+          },
+          {
+            "lat": -41.28606881066805,
+            "lng": 174.77692941986652
+          },
+          {
+            "lat": -41.286068810659735,
+            "lng": 174.77694497855475
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.7769770654994
+          },
+          {
+            "lat": -41.2860688107641,
+            "lng": 174.77703930025234
+          },
+          {
+            "lat": -41.286068810838174,
+            "lng": 174.77708597631704
+          },
+          {
+            "lat": -41.286068810877076,
+            "lng": 174.7771170936935
+          },
+          {
+            "lat": -41.28606881090761,
+            "lng": 174.77714821106997
+          },
+          {
+            "lat": -41.28606881094353,
+            "lng": 174.7772104458229
+          },
+          {
+            "lat": -41.286068810948926,
+            "lng": 174.77724156319937
+          },
+          {
+            "lat": -41.28606881094847,
+            "lng": 174.7772571218876
+          },
+          {
+            "lat": -41.2860688109413,
+            "lng": 174.77728823926407
+          },
+          {
+            "lat": -41.286068810934566,
+            "lng": 174.7773037979523
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.7775150339221
+          }
+        ]
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 10,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "cid": "5b7d6d90-4c89-4745-8666-9867c66196fd",
+            "ts": 1789849429107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "cid": "567abffc-d1ee-4e55-9f05-50d405f8b4da",
+            "ts": 1789849440107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "cid": "070fcdbd-357d-43e4-8828-3bb55d72af45",
+            "ts": 1789849451107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "cid": "495d9e9a-493c-4812-8898-4fd24966227a",
+            "ts": 1789849465107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "cid": "e6515bc2-045e-4f32-b6f2-12014d2fa704",
+            "ts": 1789849476107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "cid": "4b19596a-9ea1-43dd-9dcc-d589e8b3b72d",
+            "ts": 1789849486107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "cid": "f75fb13b-0734-47c8-821e-98cc2b78ca94",
+            "ts": 1789849508107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "cid": "2a8b5e48-712c-49cf-9bd1-7ceedc611e62",
+            "ts": 1789849518107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "cid": "5f528b25-a83e-404f-98bb-4ab8322e5b7d",
+            "ts": 1789849571139
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "mounted-memory",
+        "mapLoaded": true,
+        "sourcePresent": true,
+        "geometryType": "Polygon",
+        "polygonCount": 1,
+        "innerRingCount": 5,
+        "evidencePointCount": 10,
+        "contentSignature": "9925|qa-raw-gps-isolated|memory-fog-geodesic-v2|10|0|ca530067",
+        "geometryRevision": "memory-fog-geodesic-v2",
+        "geometryHash": "c148f261362f9878cbcdcd3ab93f7ebc7c1227fdd44612add881feb6b7d8f1a8"
+      },
+      "sessions": [],
+      "markers": [
+        {
+          "id": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "clientCairnId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "serverCairnId": "7301",
+          "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "permission": "personal",
+          "note": "Turn and return\u001ePrivate Cairn planted from the connected R-GPS-02 Activity.",
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "syncState": "synced"
+        }
+      ],
+      "route": null,
+      "activityRouteReference": null
+    },
+    {
+      "stage": "same-recording-immediately-before-finish",
+      "observedAt": 1789892712009,
+      "currentRoute": "Hiking",
+      "tracking": {
+        "status": "tracking",
+        "transitionState": "idle",
+        "sessionId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+        "provider": "simulator",
+        "rawCount": 75,
+        "acceptedCount": 38,
+        "distanceM": 219.9562732346402,
+        "lastCoordinate": {
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "alt": 13.333333333333359,
+          "accuracy": 15.87826256719752,
+          "speed": 0,
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "ownerGeneration": "4df2e753-7166-4941-98bc-3611a3f2af74",
+          "segmentId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb:1789892677355:2db42f8c",
+          "source": "simulator",
+          "simulatorObservationMode": "raw-gps"
+        },
+        "lastCoordinateTime": 1789849571139
+      },
+      "simulator": {
+        "seed": 550202,
+        "observationMode": "raw-gps",
+        "timeScale": 1,
+        "rawTrailCount": 75,
+        "truthTrailCount": 75,
+        "rawTrail": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "accuracyM": 11.53062517973629,
+            "timestamp": 1789849403107
+          },
+          {
+            "lat": -41.28648290550041,
+            "lng": 174.7762001832856,
+            "accuracyM": 11.820679714568703,
+            "timestamp": 1789849404107
+          },
+          {
+            "lat": -41.28647817569692,
+            "lng": 174.7762621702292,
+            "accuracyM": 13.498896351367197,
+            "timestamp": 1789849406107
+          },
+          {
+            "lat": -41.286444407250166,
+            "lng": 174.77635230204942,
+            "accuracyM": 14.996105473495888,
+            "timestamp": 1789849414107
+          },
+          {
+            "lat": -41.28644797654177,
+            "lng": 174.77635564312436,
+            "accuracyM": 12.656180141162759,
+            "timestamp": 1789849415107
+          },
+          {
+            "lat": -41.28648720547004,
+            "lng": 174.77636945610448,
+            "accuracyM": 13.034410871007275,
+            "timestamp": 1789849416107
+          },
+          {
+            "lat": -41.286478060879155,
+            "lng": 174.77644647803731,
+            "accuracyM": 15.719155911426398,
+            "timestamp": 1789849421107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "accuracyM": 15.344508292294691,
+            "timestamp": 1789849429107
+          },
+          {
+            "lat": -41.286440873176666,
+            "lng": 174.7765572114523,
+            "accuracyM": 12.905012658104631,
+            "timestamp": 1789849430107
+          },
+          {
+            "lat": -41.286439513175864,
+            "lng": 174.7766076550272,
+            "accuracyM": 13.867651210133417,
+            "timestamp": 1789849432107
+          },
+          {
+            "lat": -41.28643457571323,
+            "lng": 174.77658620367424,
+            "accuracyM": 15.004483353276436,
+            "timestamp": 1789849435107
+          },
+          {
+            "lat": -41.28645908916482,
+            "lng": 174.77667879461717,
+            "accuracyM": 13.140597973409944,
+            "timestamp": 1789849437107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "accuracyM": 13.688268976577483,
+            "timestamp": 1789849440107
+          },
+          {
+            "lat": -41.286464644553746,
+            "lng": 174.7767487457263,
+            "accuracyM": 13.87167023674238,
+            "timestamp": 1789849441107
+          },
+          {
+            "lat": -41.28646292276447,
+            "lng": 174.7767743322272,
+            "accuracyM": 13.389276706207333,
+            "timestamp": 1789849442107
+          },
+          {
+            "lat": -41.286463272588165,
+            "lng": 174.7768036069349,
+            "accuracyM": 15.165374974918473,
+            "timestamp": 1789849445107
+          },
+          {
+            "lat": -41.286443324305715,
+            "lng": 174.77680556380335,
+            "accuracyM": 14.284046329580484,
+            "timestamp": 1789849446107
+          },
+          {
+            "lat": -41.286448037373084,
+            "lng": 174.77682222821795,
+            "accuracyM": 16.013967985378233,
+            "timestamp": 1789849447107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "accuracyM": 13.477269806307751,
+            "timestamp": 1789849451107
+          },
+          {
+            "lat": -41.286430588964066,
+            "lng": 174.77689426120514,
+            "accuracyM": 13.791737782083402,
+            "timestamp": 1789849452107
+          },
+          {
+            "lat": -41.28642286961632,
+            "lng": 174.7769527666071,
+            "accuracyM": 12.859846452888283,
+            "timestamp": 1789849453107
+          },
+          {
+            "lat": -41.286410242653616,
+            "lng": 174.77695713847947,
+            "accuracyM": 12.25162588964766,
+            "timestamp": 1789849454107
+          },
+          {
+            "lat": -41.286392636723335,
+            "lng": 174.7769934257998,
+            "accuracyM": 11.392174724724871,
+            "timestamp": 1789849455107
+          },
+          {
+            "lat": -41.28639587162664,
+            "lng": 174.77701406314168,
+            "accuracyM": 15.648796456290832,
+            "timestamp": 1789849458107
+          },
+          {
+            "lat": -41.286393312400996,
+            "lng": 174.77701127387922,
+            "accuracyM": 13.307938773261732,
+            "timestamp": 1789849459107
+          },
+          {
+            "lat": -41.286365241239956,
+            "lng": 174.77703756367396,
+            "accuracyM": 13.574201454091886,
+            "timestamp": 1789849463107
+          },
+          {
+            "lat": -41.28636202557419,
+            "lng": 174.77705251678935,
+            "accuracyM": 13.169126389663393,
+            "timestamp": 1789849464107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "accuracyM": 16.685873495896665,
+            "timestamp": 1789849465107
+          },
+          {
+            "lat": -41.286330877466234,
+            "lng": 174.77708080408058,
+            "accuracyM": 14.765185716390668,
+            "timestamp": 1789849466107
+          },
+          {
+            "lat": -41.28631292828762,
+            "lng": 174.77710176448386,
+            "accuracyM": 12.449781201630016,
+            "timestamp": 1789849467107
+          },
+          {
+            "lat": -41.286296050132,
+            "lng": 174.7771335132653,
+            "accuracyM": 12.44820673505206,
+            "timestamp": 1789849468107
+          },
+          {
+            "lat": -41.28630807287673,
+            "lng": 174.77712915985262,
+            "accuracyM": 14.142984060290587,
+            "timestamp": 1789849469107
+          },
+          {
+            "lat": -41.28631785351412,
+            "lng": 174.77715123367557,
+            "accuracyM": 14.083223943593751,
+            "timestamp": 1789849470107
+          },
+          {
+            "lat": -41.286321053764105,
+            "lng": 174.77715962391392,
+            "accuracyM": 16.52729183774974,
+            "timestamp": 1789849471107
+          },
+          {
+            "lat": -41.28624342328474,
+            "lng": 174.77719405119285,
+            "accuracyM": 14.440997782144674,
+            "timestamp": 1789849475107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "accuracyM": 12.350000204077267,
+            "timestamp": 1789849476107
+          },
+          {
+            "lat": -41.28622819664927,
+            "lng": 174.7771794123645,
+            "accuracyM": 15.171505016488936,
+            "timestamp": 1789849477107
+          },
+          {
+            "lat": -41.28623220953918,
+            "lng": 174.7771923467592,
+            "accuracyM": 14.799210248832466,
+            "timestamp": 1789849478107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "accuracyM": 12.886834099938781,
+            "timestamp": 1789849486107
+          },
+          {
+            "lat": -41.2860668421891,
+            "lng": 174.77728082207364,
+            "accuracyM": 13.922629765172216,
+            "timestamp": 1789849489107
+          },
+          {
+            "lat": -41.28604692744127,
+            "lng": 174.77727628936452,
+            "accuracyM": 13.062383274825834,
+            "timestamp": 1789849493107
+          },
+          {
+            "lat": -41.28602033784017,
+            "lng": 174.77724402548176,
+            "accuracyM": 13.382852620324805,
+            "timestamp": 1789849495107
+          },
+          {
+            "lat": -41.286050053349214,
+            "lng": 174.77723082842863,
+            "accuracyM": 12.387196673055367,
+            "timestamp": 1789849496107
+          },
+          {
+            "lat": -41.28606973369319,
+            "lng": 174.77720806168043,
+            "accuracyM": 13.95103078530753,
+            "timestamp": 1789849498107
+          },
+          {
+            "lat": -41.28608391319571,
+            "lng": 174.77716709600168,
+            "accuracyM": 11.790267461328193,
+            "timestamp": 1789849500107
+          },
+          {
+            "lat": -41.28606205676121,
+            "lng": 174.7771667771775,
+            "accuracyM": 13.02997360232848,
+            "timestamp": 1789849501107
+          },
+          {
+            "lat": -41.28608257015984,
+            "lng": 174.7771085388356,
+            "accuracyM": 11.79271393935716,
+            "timestamp": 1789849503107
+          },
+          {
+            "lat": -41.2860866660539,
+            "lng": 174.77713185813923,
+            "accuracyM": 14.941366270465204,
+            "timestamp": 1789849505107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "accuracyM": 13.982137117080086,
+            "timestamp": 1789849508107
+          },
+          {
+            "lat": -41.28606808292058,
+            "lng": 174.77699803695737,
+            "accuracyM": 15.151907059444426,
+            "timestamp": 1789849513107
+          },
+          {
+            "lat": -41.28606949428534,
+            "lng": 174.7768874951721,
+            "accuracyM": 15.538450756337594,
+            "timestamp": 1789849514107
+          },
+          {
+            "lat": -41.28605253458608,
+            "lng": 174.77685607528758,
+            "accuracyM": 15.117548485704658,
+            "timestamp": 1789849515107
+          },
+          {
+            "lat": -41.28609890136143,
+            "lng": 174.77680849807302,
+            "accuracyM": 17.426871601589202,
+            "timestamp": 1789849516107
+          },
+          {
+            "lat": -41.28610753588614,
+            "lng": 174.77680806914486,
+            "accuracyM": 16.148496293819125,
+            "timestamp": 1789849517107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "accuracyM": 16.61592784337565,
+            "timestamp": 1789849518107
+          },
+          {
+            "lat": -41.286096199346346,
+            "lng": 174.7767771994769,
+            "accuracyM": 16.57688798036679,
+            "timestamp": 1789849519107
+          },
+          {
+            "lat": -41.286113430437894,
+            "lng": 174.7767604372243,
+            "accuracyM": 16.546121290070204,
+            "timestamp": 1789849521107
+          },
+          {
+            "lat": -41.2861299683615,
+            "lng": 174.77671839447555,
+            "accuracyM": 15.806105726003567,
+            "timestamp": 1789849522107
+          },
+          {
+            "lat": -41.2861161420534,
+            "lng": 174.77670276567005,
+            "accuracyM": 15.446682547675186,
+            "timestamp": 1789849523107
+          },
+          {
+            "lat": -41.28611561573925,
+            "lng": 174.7767864568027,
+            "accuracyM": 14.537784614405574,
+            "timestamp": 1789849528107
+          },
+          {
+            "lat": -41.28610157122836,
+            "lng": 174.77683198002137,
+            "accuracyM": 14.36412744125813,
+            "timestamp": 1789849529107
+          },
+          {
+            "lat": -41.286092555120824,
+            "lng": 174.77679769184056,
+            "accuracyM": 13.676387646022272,
+            "timestamp": 1789849530107
+          },
+          {
+            "lat": -41.28609695978784,
+            "lng": 174.77688057098305,
+            "accuracyM": 13.867243297815524,
+            "timestamp": 1789849534107
+          },
+          {
+            "lat": -41.28609633353903,
+            "lng": 174.7768904013684,
+            "accuracyM": 13.336649161246962,
+            "timestamp": 1789849535107
+          },
+          {
+            "lat": -41.28606882656768,
+            "lng": 174.77695236839634,
+            "accuracyM": 11.705649632811394,
+            "timestamp": 1789849537107
+          },
+          {
+            "lat": -41.28610133555988,
+            "lng": 174.7770186638087,
+            "accuracyM": 15.090154981034619,
+            "timestamp": 1789849541107
+          },
+          {
+            "lat": -41.286075465337795,
+            "lng": 174.7770415006487,
+            "accuracyM": 13.918299308024908,
+            "timestamp": 1789849544107
+          },
+          {
+            "lat": -41.286086459071626,
+            "lng": 174.77705215194908,
+            "accuracyM": 15.500089587889473,
+            "timestamp": 1789849546107
+          },
+          {
+            "lat": -41.28608254583573,
+            "lng": 174.7770746686126,
+            "accuracyM": 13.678379750336942,
+            "timestamp": 1789849548107
+          },
+          {
+            "lat": -41.28608679749514,
+            "lng": 174.77714582590875,
+            "accuracyM": 13.495649368397647,
+            "timestamp": 1789849552107
+          },
+          {
+            "lat": -41.28609043346991,
+            "lng": 174.777161972959,
+            "accuracyM": 15.07141399733366,
+            "timestamp": 1789849554107
+          },
+          {
+            "lat": -41.28607520541856,
+            "lng": 174.7771948982986,
+            "accuracyM": 15.030963831457031,
+            "timestamp": 1789849555107
+          },
+          {
+            "lat": -41.28606115025808,
+            "lng": 174.7772515684852,
+            "accuracyM": 12.577940696466708,
+            "timestamp": 1789849557107
+          },
+          {
+            "lat": -41.28605966809401,
+            "lng": 174.77725504469845,
+            "accuracyM": 12.63658728060746,
+            "timestamp": 1789849558107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "accuracyM": 15.87826256719752,
+            "timestamp": 1789849571139
+          }
+        ],
+        "truthTrail": [
+          {
+            "lat": -41.2865,
+            "lng": 174.77620000000002
+          },
+          {
+            "lat": -41.28649802466956,
+            "lng": 174.7762153351033
+          },
+          {
+            "lat": -41.28649407400259,
+            "lng": 174.77624600530703
+          },
+          {
+            "lat": -41.2864782712533,
+            "lng": 174.77636868608488
+          },
+          {
+            "lat": -41.286476295900485,
+            "lng": 174.77638402117793
+          },
+          {
+            "lat": -41.28647432054563,
+            "lng": 174.77639935627008
+          },
+          {
+            "lat": -41.28646444374083,
+            "lng": 174.7764760317167
+          },
+          {
+            "lat": -41.286448640747345,
+            "lng": 174.77659871238313
+          },
+          {
+            "lat": -41.286446665364004,
+            "lng": 174.77661404746232
+          },
+          {
+            "lat": -41.28644271459121,
+            "lng": 174.77664471761773
+          },
+          {
+            "lat": -41.286436788416786,
+            "lng": 174.7766907228439
+          },
+          {
+            "lat": -41.286432837623636,
+            "lng": 174.7767213929901
+          },
+          {
+            "lat": -41.28642691141867,
+            "lng": 174.77676739820242
+          },
+          {
+            "lat": -41.28642493601293,
+            "lng": 174.77678273327138
+          },
+          {
+            "lat": -41.28642296060517,
+            "lng": 174.7767980683393
+          },
+          {
+            "lat": -41.286417034369684,
+            "lng": 174.77684407353763
+          },
+          {
+            "lat": -41.28641505895378,
+            "lng": 174.77685940860192
+          },
+          {
+            "lat": -41.28641308353585,
+            "lng": 174.7768747436653
+          },
+          {
+            "lat": -41.28640518184378,
+            "lng": 174.77693608390928
+          },
+          {
+            "lat": -41.28640320641568,
+            "lng": 174.776951418968
+          },
+          {
+            "lat": -41.28640123098554,
+            "lng": 174.7769667540258
+          },
+          {
+            "lat": -41.28639925555336,
+            "lng": 174.7769820890826
+          },
+          {
+            "lat": -41.286397280119154,
+            "lng": 174.77699742413847
+          },
+          {
+            "lat": -41.286381519135226,
+            "lng": 174.77704315881806
+          },
+          {
+            "lat": -41.28637083561111,
+            "lng": 174.7770494778655
+          },
+          {
+            "lat": -41.28632810151122,
+            "lng": 174.7770747540344
+          },
+          {
+            "lat": -41.286317417985366,
+            "lng": 174.77708107307149
+          },
+          {
+            "lat": -41.28630673445918,
+            "lng": 174.77708739210652
+          },
+          {
+            "lat": -41.28629605093265,
+            "lng": 174.7770937111395
+          },
+          {
+            "lat": -41.286285367405775,
+            "lng": 174.77710003017046
+          },
+          {
+            "lat": -41.286274683878545,
+            "lng": 174.77710634919924
+          },
+          {
+            "lat": -41.286264000350975,
+            "lng": 174.77711266822598
+          },
+          {
+            "lat": -41.286253316823064,
+            "lng": 174.77711898725067
+          },
+          {
+            "lat": -41.286242633294805,
+            "lng": 174.77712530627332
+          },
+          {
+            "lat": -41.286199899178314,
+            "lng": 174.77715058234298
+          },
+          {
+            "lat": -41.28618921564833,
+            "lng": 174.77715690135528
+          },
+          {
+            "lat": -41.286178532117994,
+            "lng": 174.77716322036542
+          },
+          {
+            "lat": -41.28616784858732,
+            "lng": 174.77716953937352
+          },
+          {
+            "lat": -41.28608238032947,
+            "lng": 174.77722009136414
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.77722811743
+          },
+          {
+            "lat": -41.28606881066553,
+            "lng": 174.77721255874178
+          },
+          {
+            "lat": -41.28606881071831,
+            "lng": 174.77718144136531
+          },
+          {
+            "lat": -41.286068810762714,
+            "lng": 174.77715032398885
+          },
+          {
+            "lat": -41.28606881078178,
+            "lng": 174.77713476530062
+          },
+          {
+            "lat": -41.2860688108136,
+            "lng": 174.77710364792415
+          },
+          {
+            "lat": -41.28606881083706,
+            "lng": 174.77707253054768
+          },
+          {
+            "lat": -41.28606881085654,
+            "lng": 174.77702585448299
+          },
+          {
+            "lat": -41.286068810847105,
+            "lng": 174.77694806104182
+          },
+          {
+            "lat": -41.28606881083893,
+            "lng": 174.7769325023536
+          },
+          {
+            "lat": -41.28606881082865,
+            "lng": 174.77691694366536
+          },
+          {
+            "lat": -41.286068810816296,
+            "lng": 174.77690138497712
+          },
+          {
+            "lat": -41.286068810801844,
+            "lng": 174.7768858262889
+          },
+          {
+            "lat": -41.286068810785295,
+            "lng": 174.77687026760066
+          },
+          {
+            "lat": -41.28606881076665,
+            "lng": 174.77685470891242
+          },
+          {
+            "lat": -41.28606881072308,
+            "lng": 174.77682359153596
+          },
+          {
+            "lat": -41.28606881069815,
+            "lng": 174.77680803284773
+          },
+          {
+            "lat": -41.286068810671125,
+            "lng": 174.7767924741595
+          },
+          {
+            "lat": -41.28606881067395,
+            "lng": 174.77683606773712
+          },
+          {
+            "lat": -41.286068810678195,
+            "lng": 174.77685162642535
+          },
+          {
+            "lat": -41.28606881068036,
+            "lng": 174.7768671851136
+          },
+          {
+            "lat": -41.28606881066805,
+            "lng": 174.77692941986652
+          },
+          {
+            "lat": -41.286068810659735,
+            "lng": 174.77694497855475
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.7769770654994
+          },
+          {
+            "lat": -41.2860688107641,
+            "lng": 174.77703930025234
+          },
+          {
+            "lat": -41.286068810838174,
+            "lng": 174.77708597631704
+          },
+          {
+            "lat": -41.286068810877076,
+            "lng": 174.7771170936935
+          },
+          {
+            "lat": -41.28606881090761,
+            "lng": 174.77714821106997
+          },
+          {
+            "lat": -41.28606881094353,
+            "lng": 174.7772104458229
+          },
+          {
+            "lat": -41.286068810948926,
+            "lng": 174.77724156319937
+          },
+          {
+            "lat": -41.28606881094847,
+            "lng": 174.7772571218876
+          },
+          {
+            "lat": -41.2860688109413,
+            "lng": 174.77728823926407
+          },
+          {
+            "lat": -41.286068810934566,
+            "lng": 174.7773037979523
+          },
+          {
+            "lat": -41.286068810636,
+            "lng": 174.7775150339221
+          }
+        ]
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 10,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "cid": "5b7d6d90-4c89-4745-8666-9867c66196fd",
+            "ts": 1789849429107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "cid": "567abffc-d1ee-4e55-9f05-50d405f8b4da",
+            "ts": 1789849440107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "cid": "070fcdbd-357d-43e4-8828-3bb55d72af45",
+            "ts": 1789849451107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "cid": "495d9e9a-493c-4812-8898-4fd24966227a",
+            "ts": 1789849465107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "cid": "e6515bc2-045e-4f32-b6f2-12014d2fa704",
+            "ts": 1789849476107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "cid": "4b19596a-9ea1-43dd-9dcc-d589e8b3b72d",
+            "ts": 1789849486107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "cid": "f75fb13b-0734-47c8-821e-98cc2b78ca94",
+            "ts": 1789849508107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "cid": "2a8b5e48-712c-49cf-9bd1-7ceedc611e62",
+            "ts": 1789849518107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "cid": "5f528b25-a83e-404f-98bb-4ab8322e5b7d",
+            "ts": 1789849571139
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "not-memory",
+        "mapLoaded": false,
+        "sourcePresent": false,
+        "geometryType": null,
+        "polygonCount": 0,
+        "innerRingCount": 0,
+        "evidencePointCount": 0,
+        "contentSignature": "",
+        "geometryRevision": "",
+        "geometry": null,
+        "geometryHash": null
+      },
+      "sessions": [],
+      "markers": [
+        {
+          "id": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "clientCairnId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "serverCairnId": "7301",
+          "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "permission": "personal",
+          "note": "Turn and return\u001ePrivate Cairn planted from the connected R-GPS-02 Activity.",
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "syncState": "synced"
+        }
+      ],
+      "route": null,
+      "activityRouteReference": null
+    },
+    {
+      "stage": "same-activity-detail-after-finish",
+      "observedAt": 1789892713345,
+      "currentRoute": "MapHistory",
+      "tracking": {
+        "status": "idle",
+        "transitionState": "idle",
+        "sessionId": null,
+        "provider": "real",
+        "rawCount": 0,
+        "acceptedCount": 0,
+        "distanceM": 0,
+        "lastCoordinate": null,
+        "lastCoordinateTime": null
+      },
+      "simulator": {
+        "seed": 550202,
+        "observationMode": "raw-gps",
+        "timeScale": 1,
+        "rawTrailCount": 0,
+        "truthTrailCount": 0,
+        "rawTrail": [],
+        "truthTrail": []
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 10,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "cid": "5b7d6d90-4c89-4745-8666-9867c66196fd",
+            "ts": 1789849429107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "cid": "567abffc-d1ee-4e55-9f05-50d405f8b4da",
+            "ts": 1789849440107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "cid": "070fcdbd-357d-43e4-8828-3bb55d72af45",
+            "ts": 1789849451107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "cid": "495d9e9a-493c-4812-8898-4fd24966227a",
+            "ts": 1789849465107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "cid": "e6515bc2-045e-4f32-b6f2-12014d2fa704",
+            "ts": 1789849476107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "cid": "4b19596a-9ea1-43dd-9dcc-d589e8b3b72d",
+            "ts": 1789849486107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "cid": "f75fb13b-0734-47c8-821e-98cc2b78ca94",
+            "ts": 1789849508107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "cid": "2a8b5e48-712c-49cf-9bd1-7ceedc611e62",
+            "ts": 1789849518107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "cid": "5f528b25-a83e-404f-98bb-4ab8322e5b7d",
+            "ts": 1789849571139
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "not-memory",
+        "mapLoaded": false,
+        "sourcePresent": false,
+        "geometryType": null,
+        "polygonCount": 0,
+        "innerRingCount": 0,
+        "evidencePointCount": 0,
+        "contentSignature": "",
+        "geometryRevision": "",
+        "geometry": null,
+        "geometryHash": null
+      },
+      "sessions": [
+        {
+          "id": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "remoteId": 9202,
+          "markerIds": [],
+          "trackPointCount": 25
+        }
+      ],
+      "markers": [
+        {
+          "id": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "clientCairnId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "serverCairnId": "7301",
+          "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "permission": "personal",
+          "note": "Turn and return\u001ePrivate Cairn planted from the connected R-GPS-02 Activity.",
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "syncState": "synced"
+        }
+      ],
+      "route": null,
+      "activityRouteReference": null
+    },
+    {
+      "stage": "activity-route-created",
+      "observedAt": 1789892714545,
+      "currentRoute": "MapHistory",
+      "tracking": {
+        "status": "idle",
+        "transitionState": "idle",
+        "sessionId": null,
+        "provider": "real",
+        "rawCount": 0,
+        "acceptedCount": 0,
+        "distanceM": 0,
+        "lastCoordinate": null,
+        "lastCoordinateTime": null
+      },
+      "simulator": {
+        "seed": 550202,
+        "observationMode": "raw-gps",
+        "timeScale": 1,
+        "rawTrailCount": 0,
+        "truthTrailCount": 0,
+        "rawTrail": [],
+        "truthTrail": []
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 10,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "cid": "5b7d6d90-4c89-4745-8666-9867c66196fd",
+            "ts": 1789849429107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "cid": "567abffc-d1ee-4e55-9f05-50d405f8b4da",
+            "ts": 1789849440107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "cid": "070fcdbd-357d-43e4-8828-3bb55d72af45",
+            "ts": 1789849451107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "cid": "495d9e9a-493c-4812-8898-4fd24966227a",
+            "ts": 1789849465107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "cid": "e6515bc2-045e-4f32-b6f2-12014d2fa704",
+            "ts": 1789849476107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "cid": "4b19596a-9ea1-43dd-9dcc-d589e8b3b72d",
+            "ts": 1789849486107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "cid": "f75fb13b-0734-47c8-821e-98cc2b78ca94",
+            "ts": 1789849508107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "cid": "2a8b5e48-712c-49cf-9bd1-7ceedc611e62",
+            "ts": 1789849518107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "cid": "5f528b25-a83e-404f-98bb-4ab8322e5b7d",
+            "ts": 1789849571139
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "not-memory",
+        "mapLoaded": false,
+        "sourcePresent": false,
+        "geometryType": null,
+        "polygonCount": 0,
+        "innerRingCount": 0,
+        "evidencePointCount": 0,
+        "contentSignature": "",
+        "geometryRevision": "",
+        "geometry": null,
+        "geometryHash": null
+      },
+      "sessions": [
+        {
+          "id": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "remoteId": 9202,
+          "markerIds": [],
+          "trackPointCount": 25
+        }
+      ],
+      "markers": [
+        {
+          "id": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "clientCairnId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "serverCairnId": "7301",
+          "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "permission": "personal",
+          "note": "Turn and return\u001ePrivate Cairn planted from the connected R-GPS-02 Activity.",
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "syncState": "synced"
+        }
+      ],
+      "route": {
+        "id": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+        "clientRouteId": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+        "remoteId": "6201",
+        "name": "Wellington turn and return",
+        "creationOrigin": "activity",
+        "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+        "originActivityServerId": 9202,
+        "originGeometryHash": "9d193b5850aea827f161358d5b9013a4a0bb710b377c9d921ee873048a65a32c",
+        "createdGeometryHash": "f167c7dc4967bb7f3ed44ff01e8d9e6e5ffcf946ba9bd8b22ab902f89ec687f2",
+        "geometryEditedSinceCreation": false,
+        "originPersistence": "durable",
+        "syncState": "synced",
+        "points": [
+          {
+            "lng": 174.776203,
+            "lat": -41.28649
+          },
+          {
+            "lng": 174.7762281172074,
+            "lat": -41.28648876785572
+          },
+          {
+            "lng": 174.77628355295968,
+            "lat": -41.28647404122293
+          },
+          {
+            "lng": 174.7763716415326,
+            "lat": -41.28646376031764
+          },
+          {
+            "lng": 174.77645278512028,
+            "lat": -41.28645786098443
+          },
+          {
+            "lng": 174.7765296904997,
+            "lat": -41.286457767043046
+          },
+          {
+            "lng": 174.77660979982767,
+            "lat": -41.286462403653545
+          },
+          {
+            "lng": 174.77669944835623,
+            "lat": -41.286466427332996
+          },
+          {
+            "lng": 174.7767920398313,
+            "lat": -41.2864482999383
+          },
+          {
+            "lng": 174.7768725946856,
+            "lat": -41.286422380409384
+          },
+          {
+            "lng": 174.77694416702104,
+            "lat": -41.28637935294767
+          },
+          {
+            "lng": 174.77700623063495,
+            "lat": -41.28632775917366
+          },
+          {
+            "lng": 174.77706016280877,
+            "lat": -41.28627490318661
+          },
+          {
+            "lng": 174.77711538106468,
+            "lat": -41.28621981379089
+          },
+          {
+            "lng": 174.77715252352996,
+            "lat": -41.2861740568042
+          },
+          {
+            "lng": 174.7771769428504,
+            "lat": -41.28614373121965
+          },
+          {
+            "lng": 174.77714789834158,
+            "lat": -41.28612005577358
+          },
+          {
+            "lng": 174.77707867273855,
+            "lat": -41.28610524844492
+          },
+          {
+            "lng": 174.77698207043665,
+            "lat": -41.28610172906948
+          },
+          {
+            "lng": 174.77689900035256,
+            "lat": -41.28611405576325
+          },
+          {
+            "lng": 174.77686720450282,
+            "lat": -41.286119331188544
+          },
+          {
+            "lng": 174.77688781761105,
+            "lat": -41.28611470514368
+          },
+          {
+            "lng": 174.7769399208253,
+            "lat": -41.286099833816024
+          },
+          {
+            "lng": 174.7769998222739,
+            "lat": -41.28609019588176
+          },
+          {
+            "lng": 174.77707,
+            "lat": -41.286085
+          }
+        ]
+      },
+      "activityRouteReference": null
+    },
+    {
+      "stage": "after-cold-reload-home",
+      "observedAt": 1789892725664,
+      "currentRoute": "Home",
+      "tracking": {
+        "status": "idle",
+        "transitionState": "idle",
+        "sessionId": null,
+        "provider": "real",
+        "rawCount": 0,
+        "acceptedCount": 0,
+        "distanceM": 0,
+        "lastCoordinate": null,
+        "lastCoordinateTime": null
+      },
+      "simulator": {
+        "seed": 550202,
+        "observationMode": "raw-gps",
+        "timeScale": 1,
+        "rawTrailCount": 0,
+        "truthTrailCount": 0,
+        "rawTrail": [],
+        "truthTrail": []
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 10,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "cid": "5b7d6d90-4c89-4745-8666-9867c66196fd",
+            "ts": 1789849429107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "cid": "567abffc-d1ee-4e55-9f05-50d405f8b4da",
+            "ts": 1789849440107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "cid": "070fcdbd-357d-43e4-8828-3bb55d72af45",
+            "ts": 1789849451107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "cid": "495d9e9a-493c-4812-8898-4fd24966227a",
+            "ts": 1789849465107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "cid": "e6515bc2-045e-4f32-b6f2-12014d2fa704",
+            "ts": 1789849476107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "cid": "4b19596a-9ea1-43dd-9dcc-d589e8b3b72d",
+            "ts": 1789849486107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "cid": "f75fb13b-0734-47c8-821e-98cc2b78ca94",
+            "ts": 1789849508107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "cid": "2a8b5e48-712c-49cf-9bd1-7ceedc611e62",
+            "ts": 1789849518107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "cid": "5f528b25-a83e-404f-98bb-4ab8322e5b7d",
+            "ts": 1789849571139
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "not-memory",
+        "mapLoaded": false,
+        "sourcePresent": false,
+        "geometryType": null,
+        "polygonCount": 0,
+        "innerRingCount": 0,
+        "evidencePointCount": 0,
+        "contentSignature": "",
+        "geometryRevision": "",
+        "geometry": null,
+        "geometryHash": null
+      },
+      "sessions": [
+        {
+          "id": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "remoteId": 9202,
+          "markerIds": [],
+          "trackPointCount": 0
+        }
+      ],
+      "markers": [
+        {
+          "id": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "clientCairnId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "serverCairnId": "7301",
+          "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "permission": "personal",
+          "note": "Turn and return\u001ePrivate Cairn planted from the connected R-GPS-02 Activity.",
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "syncState": "synced"
+        }
+      ],
+      "route": null,
+      "activityRouteReference": null
+    },
+    {
+      "stage": "route-reopened-from-trails",
+      "observedAt": 1789892726777,
+      "currentRoute": "MapHistory",
+      "tracking": {
+        "status": "idle",
+        "transitionState": "idle",
+        "sessionId": null,
+        "provider": "real",
+        "rawCount": 0,
+        "acceptedCount": 0,
+        "distanceM": 0,
+        "lastCoordinate": null,
+        "lastCoordinateTime": null
+      },
+      "simulator": {
+        "seed": 550202,
+        "observationMode": "raw-gps",
+        "timeScale": 1,
+        "rawTrailCount": 0,
+        "truthTrailCount": 0,
+        "rawTrail": [],
+        "truthTrail": []
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 10,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "cid": "5b7d6d90-4c89-4745-8666-9867c66196fd",
+            "ts": 1789849429107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "cid": "567abffc-d1ee-4e55-9f05-50d405f8b4da",
+            "ts": 1789849440107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "cid": "070fcdbd-357d-43e4-8828-3bb55d72af45",
+            "ts": 1789849451107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "cid": "495d9e9a-493c-4812-8898-4fd24966227a",
+            "ts": 1789849465107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "cid": "e6515bc2-045e-4f32-b6f2-12014d2fa704",
+            "ts": 1789849476107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "cid": "4b19596a-9ea1-43dd-9dcc-d589e8b3b72d",
+            "ts": 1789849486107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "cid": "f75fb13b-0734-47c8-821e-98cc2b78ca94",
+            "ts": 1789849508107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "cid": "2a8b5e48-712c-49cf-9bd1-7ceedc611e62",
+            "ts": 1789849518107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "cid": "5f528b25-a83e-404f-98bb-4ab8322e5b7d",
+            "ts": 1789849571139
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "not-memory",
+        "mapLoaded": false,
+        "sourcePresent": false,
+        "geometryType": null,
+        "polygonCount": 0,
+        "innerRingCount": 0,
+        "evidencePointCount": 0,
+        "contentSignature": "",
+        "geometryRevision": "",
+        "geometry": null,
+        "geometryHash": null
+      },
+      "sessions": [
+        {
+          "id": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "remoteId": 9202,
+          "markerIds": [],
+          "trackPointCount": 0
+        }
+      ],
+      "markers": [
+        {
+          "id": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "clientCairnId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "serverCairnId": "7301",
+          "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "permission": "personal",
+          "note": "Turn and return\u001ePrivate Cairn planted from the connected R-GPS-02 Activity.",
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "syncState": "synced"
+        }
+      ],
+      "route": {
+        "id": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+        "clientRouteId": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+        "remoteId": "6201",
+        "name": "Wellington turn and return",
+        "creationOrigin": "activity",
+        "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+        "originActivityServerId": 9202,
+        "originGeometryHash": "9d193b5850aea827f161358d5b9013a4a0bb710b377c9d921ee873048a65a32c",
+        "createdGeometryHash": "f167c7dc4967bb7f3ed44ff01e8d9e6e5ffcf946ba9bd8b22ab902f89ec687f2",
+        "geometryEditedSinceCreation": false,
+        "originPersistence": "durable",
+        "syncState": "synced",
+        "points": [
+          {
+            "lng": 174.776203,
+            "lat": -41.28649
+          },
+          {
+            "lng": 174.7762281172074,
+            "lat": -41.28648876785572
+          },
+          {
+            "lng": 174.77628355295968,
+            "lat": -41.28647404122293
+          },
+          {
+            "lng": 174.7763716415326,
+            "lat": -41.28646376031764
+          },
+          {
+            "lng": 174.77645278512028,
+            "lat": -41.28645786098443
+          },
+          {
+            "lng": 174.7765296904997,
+            "lat": -41.286457767043046
+          },
+          {
+            "lng": 174.77660979982767,
+            "lat": -41.286462403653545
+          },
+          {
+            "lng": 174.77669944835623,
+            "lat": -41.286466427332996
+          },
+          {
+            "lng": 174.7767920398313,
+            "lat": -41.2864482999383
+          },
+          {
+            "lng": 174.7768725946856,
+            "lat": -41.286422380409384
+          },
+          {
+            "lng": 174.77694416702104,
+            "lat": -41.28637935294767
+          },
+          {
+            "lng": 174.77700623063495,
+            "lat": -41.28632775917366
+          },
+          {
+            "lng": 174.77706016280877,
+            "lat": -41.28627490318661
+          },
+          {
+            "lng": 174.77711538106468,
+            "lat": -41.28621981379089
+          },
+          {
+            "lng": 174.77715252352996,
+            "lat": -41.2861740568042
+          },
+          {
+            "lng": 174.7771769428504,
+            "lat": -41.28614373121965
+          },
+          {
+            "lng": 174.77714789834158,
+            "lat": -41.28612005577358
+          },
+          {
+            "lng": 174.77707867273855,
+            "lat": -41.28610524844492
+          },
+          {
+            "lng": 174.77698207043665,
+            "lat": -41.28610172906948
+          },
+          {
+            "lng": 174.77689900035256,
+            "lat": -41.28611405576325
+          },
+          {
+            "lng": 174.77686720450282,
+            "lat": -41.286119331188544
+          },
+          {
+            "lng": 174.77688781761105,
+            "lat": -41.28611470514368
+          },
+          {
+            "lng": 174.7769399208253,
+            "lat": -41.286099833816024
+          },
+          {
+            "lng": 174.7769998222739,
+            "lat": -41.28609019588176
+          },
+          {
+            "lng": 174.77707,
+            "lat": -41.286085
+          }
+        ]
+      },
+      "activityRouteReference": null
+    },
+    {
+      "stage": "route-edited-and-saved",
+      "observedAt": 1789892727830,
+      "currentRoute": "MapHistory",
+      "tracking": {
+        "status": "idle",
+        "transitionState": "idle",
+        "sessionId": null,
+        "provider": "real",
+        "rawCount": 0,
+        "acceptedCount": 0,
+        "distanceM": 0,
+        "lastCoordinate": null,
+        "lastCoordinateTime": null
+      },
+      "simulator": {
+        "seed": 550202,
+        "observationMode": "raw-gps",
+        "timeScale": 1,
+        "rawTrailCount": 0,
+        "truthTrailCount": 0,
+        "rawTrail": [],
+        "truthTrail": []
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 10,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "cid": "5b7d6d90-4c89-4745-8666-9867c66196fd",
+            "ts": 1789849429107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "cid": "567abffc-d1ee-4e55-9f05-50d405f8b4da",
+            "ts": 1789849440107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "cid": "070fcdbd-357d-43e4-8828-3bb55d72af45",
+            "ts": 1789849451107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "cid": "495d9e9a-493c-4812-8898-4fd24966227a",
+            "ts": 1789849465107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "cid": "e6515bc2-045e-4f32-b6f2-12014d2fa704",
+            "ts": 1789849476107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "cid": "4b19596a-9ea1-43dd-9dcc-d589e8b3b72d",
+            "ts": 1789849486107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "cid": "f75fb13b-0734-47c8-821e-98cc2b78ca94",
+            "ts": 1789849508107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "cid": "2a8b5e48-712c-49cf-9bd1-7ceedc611e62",
+            "ts": 1789849518107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "cid": "5f528b25-a83e-404f-98bb-4ab8322e5b7d",
+            "ts": 1789849571139
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "not-memory",
+        "mapLoaded": false,
+        "sourcePresent": false,
+        "geometryType": null,
+        "polygonCount": 0,
+        "innerRingCount": 0,
+        "evidencePointCount": 0,
+        "contentSignature": "",
+        "geometryRevision": "",
+        "geometry": null,
+        "geometryHash": null
+      },
+      "sessions": [
+        {
+          "id": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "remoteId": 9202,
+          "markerIds": [],
+          "trackPointCount": 0
+        }
+      ],
+      "markers": [
+        {
+          "id": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "clientCairnId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "serverCairnId": "7301",
+          "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "permission": "personal",
+          "note": "Turn and return\u001ePrivate Cairn planted from the connected R-GPS-02 Activity.",
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "syncState": "synced"
+        }
+      ],
+      "route": {
+        "id": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+        "clientRouteId": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+        "remoteId": "6201",
+        "name": "Wellington turn and return — edited",
+        "creationOrigin": "activity",
+        "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+        "originActivityServerId": 9202,
+        "originGeometryHash": "9d193b5850aea827f161358d5b9013a4a0bb710b377c9d921ee873048a65a32c",
+        "createdGeometryHash": "f167c7dc4967bb7f3ed44ff01e8d9e6e5ffcf946ba9bd8b22ab902f89ec687f2",
+        "geometryEditedSinceCreation": true,
+        "originPersistence": "durable",
+        "syncState": "synced",
+        "points": [
+          {
+            "lng": 174.776203,
+            "lat": -41.28649
+          },
+          {
+            "lng": 174.77623055295967,
+            "lat": -41.286495041222935
+          },
+          {
+            "lng": 174.7762926415326,
+            "lat": -41.286475760317636
+          },
+          {
+            "lng": 174.7763787851203,
+            "lat": -41.28645986098443
+          },
+          {
+            "lng": 174.7764516904997,
+            "lat": -41.28645176704305
+          },
+          {
+            "lng": 174.77652179982766,
+            "lat": -41.28645540365355
+          },
+          {
+            "lng": 174.77660244835624,
+            "lat": -41.286465427333
+          },
+          {
+            "lng": 174.7766990398313,
+            "lat": -41.286472299938296
+          },
+          {
+            "lng": 174.77679959468563,
+            "lat": -41.28645138040938
+          },
+          {
+            "lng": 174.77688116702103,
+            "lat": -41.28641935294767
+          },
+          {
+            "lng": 174.77694523063494,
+            "lat": -41.28637275917366
+          },
+          {
+            "lng": 174.77699916280878,
+            "lat": -41.286323903186606
+          },
+          {
+            "lng": 174.7770513810647,
+            "lat": -41.2862768137909
+          },
+          {
+            "lng": 174.77711252352998,
+            "lat": -41.286226056804196
+          },
+          {
+            "lng": 174.77715894285038,
+            "lat": -41.28617873121966
+          },
+          {
+            "lng": 174.77718589834157,
+            "lat": -41.28614305577358
+          },
+          {
+            "lng": 174.77715167273857,
+            "lat": -41.28611424844492
+          },
+          {
+            "lng": 174.77707407043664,
+            "lat": -41.28609972906948
+          },
+          {
+            "lng": 174.77697300035257,
+            "lat": -41.28610205576325
+          },
+          {
+            "lng": 174.7768942045028,
+            "lat": -41.286119331188544
+          },
+          {
+            "lng": 174.77687081761107,
+            "lat": -41.28612470514368
+          },
+          {
+            "lng": 174.77689692082532,
+            "lat": -41.28611583381603
+          },
+          {
+            "lng": 174.7769458222739,
+            "lat": -41.28609519588176
+          },
+          {
+            "lng": 174.7769973707507,
+            "lat": -41.286083974831655
+          },
+          {
+            "lng": 174.77707,
+            "lat": -41.286085
+          }
+        ]
+      },
+      "activityRouteReference": null
+    },
+    {
+      "stage": "use-route-hike-prestart-idle",
+      "observedAt": 1789892728742,
+      "currentRoute": "Hiking",
+      "tracking": {
+        "status": "idle",
+        "transitionState": "idle",
+        "sessionId": null,
+        "provider": "real",
+        "rawCount": 0,
+        "acceptedCount": 0,
+        "distanceM": 0,
+        "lastCoordinate": {
+          "lat": -41.2865,
+          "lng": 174.7762,
+          "alt": null
+        },
+        "lastCoordinateTime": 1789892728398
+      },
+      "simulator": {
+        "seed": 1,
+        "observationMode": "clean-path",
+        "timeScale": 1,
+        "rawTrailCount": 0,
+        "truthTrailCount": 0,
+        "rawTrail": [],
+        "truthTrail": []
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 10,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "cid": "5b7d6d90-4c89-4745-8666-9867c66196fd",
+            "ts": 1789849429107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "cid": "567abffc-d1ee-4e55-9f05-50d405f8b4da",
+            "ts": 1789849440107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "cid": "070fcdbd-357d-43e4-8828-3bb55d72af45",
+            "ts": 1789849451107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "cid": "495d9e9a-493c-4812-8898-4fd24966227a",
+            "ts": 1789849465107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "cid": "e6515bc2-045e-4f32-b6f2-12014d2fa704",
+            "ts": 1789849476107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "cid": "4b19596a-9ea1-43dd-9dcc-d589e8b3b72d",
+            "ts": 1789849486107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "cid": "f75fb13b-0734-47c8-821e-98cc2b78ca94",
+            "ts": 1789849508107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "cid": "2a8b5e48-712c-49cf-9bd1-7ceedc611e62",
+            "ts": 1789849518107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "cid": "5f528b25-a83e-404f-98bb-4ab8322e5b7d",
+            "ts": 1789849571139
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "not-memory",
+        "mapLoaded": false,
+        "sourcePresent": false,
+        "geometryType": null,
+        "polygonCount": 0,
+        "innerRingCount": 0,
+        "evidencePointCount": 0,
+        "contentSignature": "",
+        "geometryRevision": "",
+        "geometry": null,
+        "geometryHash": null
+      },
+      "sessions": [
+        {
+          "id": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "remoteId": 9202,
+          "markerIds": [],
+          "trackPointCount": 0
+        }
+      ],
+      "markers": [
+        {
+          "id": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "clientCairnId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "serverCairnId": "7301",
+          "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "permission": "personal",
+          "note": "Turn and return\u001ePrivate Cairn planted from the connected R-GPS-02 Activity.",
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "syncState": "synced"
+        }
+      ],
+      "route": {
+        "id": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+        "clientRouteId": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+        "remoteId": "6201",
+        "name": "Wellington turn and return — edited",
+        "creationOrigin": "activity",
+        "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+        "originActivityServerId": 9202,
+        "originGeometryHash": "9d193b5850aea827f161358d5b9013a4a0bb710b377c9d921ee873048a65a32c",
+        "createdGeometryHash": "f167c7dc4967bb7f3ed44ff01e8d9e6e5ffcf946ba9bd8b22ab902f89ec687f2",
+        "geometryEditedSinceCreation": true,
+        "originPersistence": "durable",
+        "syncState": "synced",
+        "points": [
+          {
+            "lng": 174.776203,
+            "lat": -41.28649
+          },
+          {
+            "lng": 174.77623055295967,
+            "lat": -41.286495041222935
+          },
+          {
+            "lng": 174.7762926415326,
+            "lat": -41.286475760317636
+          },
+          {
+            "lng": 174.7763787851203,
+            "lat": -41.28645986098443
+          },
+          {
+            "lng": 174.7764516904997,
+            "lat": -41.28645176704305
+          },
+          {
+            "lng": 174.77652179982766,
+            "lat": -41.28645540365355
+          },
+          {
+            "lng": 174.77660244835624,
+            "lat": -41.286465427333
+          },
+          {
+            "lng": 174.7766990398313,
+            "lat": -41.286472299938296
+          },
+          {
+            "lng": 174.77679959468563,
+            "lat": -41.28645138040938
+          },
+          {
+            "lng": 174.77688116702103,
+            "lat": -41.28641935294767
+          },
+          {
+            "lng": 174.77694523063494,
+            "lat": -41.28637275917366
+          },
+          {
+            "lng": 174.77699916280878,
+            "lat": -41.286323903186606
+          },
+          {
+            "lng": 174.7770513810647,
+            "lat": -41.2862768137909
+          },
+          {
+            "lng": 174.77711252352998,
+            "lat": -41.286226056804196
+          },
+          {
+            "lng": 174.77715894285038,
+            "lat": -41.28617873121966
+          },
+          {
+            "lng": 174.77718589834157,
+            "lat": -41.28614305577358
+          },
+          {
+            "lng": 174.77715167273857,
+            "lat": -41.28611424844492
+          },
+          {
+            "lng": 174.77707407043664,
+            "lat": -41.28609972906948
+          },
+          {
+            "lng": 174.77697300035257,
+            "lat": -41.28610205576325
+          },
+          {
+            "lng": 174.7768942045028,
+            "lat": -41.286119331188544
+          },
+          {
+            "lng": 174.77687081761107,
+            "lat": -41.28612470514368
+          },
+          {
+            "lng": 174.77689692082532,
+            "lat": -41.28611583381603
+          },
+          {
+            "lng": 174.7769458222739,
+            "lat": -41.28609519588176
+          },
+          {
+            "lng": 174.7769973707507,
+            "lat": -41.286083974831655
+          },
+          {
+            "lng": 174.77707,
+            "lat": -41.286085
+          }
+        ]
+      },
+      "activityRouteReference": null
+    },
+    {
+      "stage": "use-route-run-prestart-idle",
+      "observedAt": 1789892729759,
+      "currentRoute": "Running",
+      "tracking": {
+        "status": "idle",
+        "transitionState": "idle",
+        "sessionId": null,
+        "provider": "real",
+        "rawCount": 0,
+        "acceptedCount": 0,
+        "distanceM": 0,
+        "lastCoordinate": {
+          "lat": -41.2865,
+          "lng": 174.7762,
+          "alt": null
+        },
+        "lastCoordinateTime": 1789892728398
+      },
+      "simulator": {
+        "seed": 1,
+        "observationMode": "clean-path",
+        "timeScale": 1,
+        "rawTrailCount": 0,
+        "truthTrailCount": 0,
+        "rawTrail": [],
+        "truthTrail": []
+      },
+      "memory": {
+        "personalCount": 0,
+        "presenceCount": 0,
+        "syntheticCount": 10,
+        "synthetic": [
+          {
+            "lat": -41.28648976048198,
+            "lng": 174.77620259840512,
+            "cid": "fba51fcf-e7d7-4c9b-a18c-92effd3153b8",
+            "ts": 1789849403107
+          },
+          {
+            "lat": -41.28645065909785,
+            "lng": 174.77652293952292,
+            "cid": "5b7d6d90-4c89-4745-8666-9867c66196fd",
+            "ts": 1789849429107
+          },
+          {
+            "lat": -41.286470597412794,
+            "lng": 174.77672453316438,
+            "cid": "567abffc-d1ee-4e55-9f05-50d405f8b4da",
+            "ts": 1789849440107
+          },
+          {
+            "lat": -41.28645944863634,
+            "lng": 174.7769182613713,
+            "cid": "070fcdbd-357d-43e4-8828-3bb55d72af45",
+            "ts": 1789849451107
+          },
+          {
+            "lat": -41.28633454701521,
+            "lng": 174.77706478964262,
+            "cid": "495d9e9a-493c-4812-8898-4fd24966227a",
+            "ts": 1789849465107
+          },
+          {
+            "lat": -41.286219561720245,
+            "lng": 174.77717202840518,
+            "cid": "e6515bc2-045e-4f32-b6f2-12014d2fa704",
+            "ts": 1789849476107
+          },
+          {
+            "lat": -41.28607245000244,
+            "lng": 174.77725851614616,
+            "cid": "4b19596a-9ea1-43dd-9dcc-d589e8b3b72d",
+            "ts": 1789849486107
+          },
+          {
+            "lat": -41.286069194165826,
+            "lng": 174.77706516454236,
+            "cid": "f75fb13b-0734-47c8-821e-98cc2b78ca94",
+            "ts": 1789849508107
+          },
+          {
+            "lat": -41.28610650242393,
+            "lng": 174.77679760031606,
+            "cid": "2a8b5e48-712c-49cf-9bd1-7ceedc611e62",
+            "ts": 1789849518107
+          },
+          {
+            "lat": -41.28611552997539,
+            "lng": 174.7774668109655,
+            "cid": "5f528b25-a83e-404f-98bb-4ab8322e5b7d",
+            "ts": 1789849571139
+          }
+        ]
+      },
+      "fogPresentation": {
+        "lifecycleScope": "not-memory",
+        "mapLoaded": false,
+        "sourcePresent": false,
+        "geometryType": null,
+        "polygonCount": 0,
+        "innerRingCount": 0,
+        "evidencePointCount": 0,
+        "contentSignature": "",
+        "geometryRevision": "",
+        "geometry": null,
+        "geometryHash": null
+      },
+      "sessions": [
+        {
+          "id": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "clientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "remoteId": 9202,
+          "markerIds": [],
+          "trackPointCount": 0
+        }
+      ],
+      "markers": [
+        {
+          "id": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "clientCairnId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+          "serverCairnId": "7301",
+          "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+          "permission": "personal",
+          "note": "Turn and return\u001ePrivate Cairn planted from the connected R-GPS-02 Activity.",
+          "lat": -41.28611552997539,
+          "lng": 174.7774668109655,
+          "syncState": "synced"
+        }
+      ],
+      "route": {
+        "id": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+        "clientRouteId": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+        "remoteId": "6201",
+        "name": "Wellington turn and return — edited",
+        "creationOrigin": "activity",
+        "originActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+        "originActivityServerId": 9202,
+        "originGeometryHash": "9d193b5850aea827f161358d5b9013a4a0bb710b377c9d921ee873048a65a32c",
+        "createdGeometryHash": "f167c7dc4967bb7f3ed44ff01e8d9e6e5ffcf946ba9bd8b22ab902f89ec687f2",
+        "geometryEditedSinceCreation": true,
+        "originPersistence": "durable",
+        "syncState": "synced",
+        "points": [
+          {
+            "lng": 174.776203,
+            "lat": -41.28649
+          },
+          {
+            "lng": 174.77623055295967,
+            "lat": -41.286495041222935
+          },
+          {
+            "lng": 174.7762926415326,
+            "lat": -41.286475760317636
+          },
+          {
+            "lng": 174.7763787851203,
+            "lat": -41.28645986098443
+          },
+          {
+            "lng": 174.7764516904997,
+            "lat": -41.28645176704305
+          },
+          {
+            "lng": 174.77652179982766,
+            "lat": -41.28645540365355
+          },
+          {
+            "lng": 174.77660244835624,
+            "lat": -41.286465427333
+          },
+          {
+            "lng": 174.7766990398313,
+            "lat": -41.286472299938296
+          },
+          {
+            "lng": 174.77679959468563,
+            "lat": -41.28645138040938
+          },
+          {
+            "lng": 174.77688116702103,
+            "lat": -41.28641935294767
+          },
+          {
+            "lng": 174.77694523063494,
+            "lat": -41.28637275917366
+          },
+          {
+            "lng": 174.77699916280878,
+            "lat": -41.286323903186606
+          },
+          {
+            "lng": 174.7770513810647,
+            "lat": -41.2862768137909
+          },
+          {
+            "lng": 174.77711252352998,
+            "lat": -41.286226056804196
+          },
+          {
+            "lng": 174.77715894285038,
+            "lat": -41.28617873121966
+          },
+          {
+            "lng": 174.77718589834157,
+            "lat": -41.28614305577358
+          },
+          {
+            "lng": 174.77715167273857,
+            "lat": -41.28611424844492
+          },
+          {
+            "lng": 174.77707407043664,
+            "lat": -41.28609972906948
+          },
+          {
+            "lng": 174.77697300035257,
+            "lat": -41.28610205576325
+          },
+          {
+            "lng": 174.7768942045028,
+            "lat": -41.286119331188544
+          },
+          {
+            "lng": 174.77687081761107,
+            "lat": -41.28612470514368
+          },
+          {
+            "lng": 174.77689692082532,
+            "lat": -41.28611583381603
+          },
+          {
+            "lng": 174.7769458222739,
+            "lat": -41.28609519588176
+          },
+          {
+            "lng": 174.7769973707507,
+            "lat": -41.286083974831655
+          },
+          {
+            "lng": 174.77707,
+            "lat": -41.286085
+          }
+        ]
+      },
+      "activityRouteReference": null
+    }
+  ],
+  "identities": {
+    "activityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+    "cairnClientId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+    "routeClientId": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+    "routeRemoteId": "6201",
+    "routeCreatedGeometryHash": "f167c7dc4967bb7f3ed44ff01e8d9e6e5ffcf946ba9bd8b22ab902f89ec687f2",
+    "routeSnapshotBeforeReloadHash": "d20de23cb7bd82889ada98f6a3477f526b10afd40392a0da489cf11bc61b9b99",
+    "realmSentinelBeforeReload": "f1f2-88c6640e-20260920t162207:2d657f05-dc1c-4c96-93c1-8e2fb7b92dc9",
+    "realmSentinelAfterReload": null,
+    "routeSnapshotAfterReloadHash": "d20de23cb7bd82889ada98f6a3477f526b10afd40392a0da489cf11bc61b9b99",
+    "routeEditedGeometryHash": "b60cc80ef220781e7d25ccd80bb5ef9df5c1b55495bc85a001e486579c43a43b"
+  },
+  "api": {
+    "requestCount": 217,
+    "startedClientActivityId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+    "savedActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+    "markerCreateClientId": "1909c335-d0e2-47f5-9271-7c8fc463d7f1",
+    "markerOriginActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+    "routeCreateClientId": "50e2028e-9d10-411f-ace7-c80726b0c21d",
+    "routeSourceActivityClientId": "8fe7b0c6-82f6-4a58-8adc-e22aa9484beb",
+    "routeUpdateCount": 1,
+    "fixtureMatchingCalls": 4,
+    "fixtureDirectionsCalls": 1,
+    "fixtureDirectionsCallSteps": [
+      "normal-finish-commit"
+    ]
+  },
+  "assertions": {
+    "normalHomeHikeStart": true,
+    "activityIdentityStartAcknowledged": true,
+    "activityIdentityFinishCommitted": true,
+    "realisticRawExceedsAccepted": true,
+    "variableRawCadence": true,
+    "variableHorizontalAccuracy": true,
+    "nonIdealScenarioAuthority": true,
+    "pauseResumeReturnedTracking": true,
+    "cairnClientIdentityStable": true,
+    "cairnOriginActivityStable": true,
+    "cairnTextPrivate": true,
+    "plantReturnedSameRecording": true,
+    "liveMemoryBeforeFinish": true,
+    "directionsFixtureScopedToFinalGeometry": true,
+    "finishPreservedActivityIdentity": true,
+    "linkedCairnVisibleOnSameActivity": true,
+    "routeStableAcrossCreateAndReopen": true,
+    "coldReloadCreatedNewRealm": true,
+    "routeStableAcrossColdReload": true,
+    "routeOriginActivityStable": true,
+    "createGeometryActuallyEdited": true,
+    "reopenedGeometryActuallyEdited": true,
+    "routeIdentityStableAfterEdit": true,
+    "routeUpdateAcknowledged": true,
+    "activityRouteReferenceOnHike": false,
+    "hikeUseDidNotAutoStart": true,
+    "activityRouteReferenceOnRun": false,
+    "runUseDidNotAutoStart": true,
+    "noPersonalMemoryContamination": true,
+    "sameRecordingImmediatelyBeforeFinish": true,
+    "noUnexpectedApiRequests": true,
+    "runtimeClean": true,
+    "loadedJourneyCompleted": true
+  },
+  "failed": [
+    "activityRouteReferenceOnHike",
+    "activityRouteReferenceOnRun"
+  ],
+  "terminalError": null,
+  "runtimeErrors": [],
+  "networkDiagnostics": {
+    "externalRequests": [
+      {
+        "at": "2026-09-20T08:24:18.251Z",
+        "step": "boot",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.open-meteo.com/v1/forecast?latitude=-41.2865&longitude=174.7762&current=temperature_2m,weathercode&daily=sunrise,sunset&forecast_days=1&timeformat=unixtime&timezone=auto",
+        "action": "fixture-weather-wellington"
+      },
+      {
+        "at": "2026-09-20T08:24:18.255Z",
+        "step": "boot",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=-41.2865&longitude=174.7762&localityLanguage=en",
+        "action": "fixture-reverse-geocode-wellington"
+      },
+      {
+        "at": "2026-09-20T08:24:39.572Z",
+        "step": "prefinish-memory",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.mapbox.com/styles/v1/mapbox/outdoors-v12?access_token=[redacted]",
+        "action": "fixture-mapbox-empty-style"
+      },
+      {
+        "at": "2026-09-20T08:24:40.457Z",
+        "step": "prefinish-memory",
+        "method": "POST",
+        "resourceType": "fetch",
+        "url": "https://events.mapbox.com/events/v2?access_token=[redacted]",
+        "action": "fixture-mapbox-events-empty"
+      },
+      {
+        "at": "2026-09-20T08:24:40.468Z",
+        "step": "prefinish-memory",
+        "method": "POST",
+        "resourceType": "fetch",
+        "url": "https://events.mapbox.com/events/v2?access_token=[redacted]",
+        "action": "fixture-mapbox-events-empty"
+      },
+      {
+        "at": "2026-09-20T08:24:40.623Z",
+        "step": "prefinish-memory",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.mapbox.com/map-sessions/v1?sku=101prpyY2Asmx&access_token=[redacted]",
+        "action": "fixture-mapbox-session-no-content"
+      },
+      {
+        "at": "2026-09-20T08:25:13.007Z",
+        "step": "normal-finish-commit",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.mapbox.com/matching/v5/mapbox/walking/174.776203,-41.286490;174.776200,-41.286483;174.776262,-41.286478;174.776352,-41.286444;174.776523,-41.286451;174.776557,-41.286441;174.776608,-41.286440;174.776679,-41.286459;174.776725,-41.286471;174.776918,-41.286459;174.776894,-41.286431;174.776953,-41.286423;174.776993,-41.286393;174.777038,-41.286365;174.777065,-41.286335;174.777102,-41.286313;174.777134,-41.286296;174.777194,-41.286243;174.777172,-41.286220;174.777259,-41.286072;174.777231,-41.286050;174.777208,-41.286070;174.777167,-41.286084;174.777109,-41.286083?geometries=geojson&overview=full&steps=true&tidy=false&radiuses=12;12;13;15;15;13;14;13;14;13;14;13;11;14;17;12;12;14;12;13;12;14;12;12&timestamps=1789849403;1789849404;1789849406;1789849414;1789849429;1789849430;1789849432;1789849437;1789849440;1789849451;1789849452;1789849453;1789849455;1789849463;1789849465;1789849467;1789849468;1789849475;1789849476;1789849486;1789849496;1789849498;1789849500;1789849503&access_token=[redacted]",
+        "action": "fixture-map-matching"
+      },
+      {
+        "at": "2026-09-20T08:25:13.008Z",
+        "step": "normal-finish-commit",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.mapbox.com/matching/v5/mapbox/walking/174.777231,-41.286050;174.777208,-41.286070;174.777167,-41.286084;174.777109,-41.286083;174.777065,-41.286069;174.776998,-41.286068;174.776798,-41.286107;174.776777,-41.286096;174.776718,-41.286130;174.776786,-41.286116;174.776881,-41.286097;174.776952,-41.286069;174.777019,-41.286101;174.777042,-41.286075;174.777146,-41.286087;174.777195,-41.286075;174.777252,-41.286061?geometries=geojson&overview=full&steps=true&tidy=false&radiuses=12;14;12;12;14;15;17;17;16;15;14;12;15;14;13;15;13&timestamps=1789849496;1789849498;1789849500;1789849503;1789849508;1789849513;1789849518;1789849519;1789849522;1789849528;1789849534;1789849537;1789849541;1789849544;1789849552;1789849555;1789849557&access_token=[redacted]",
+        "action": "fixture-map-matching"
+      },
+      {
+        "at": "2026-09-20T08:25:13.039Z",
+        "step": "normal-finish-commit",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.mapbox.com/directions/v5/mapbox/walking/174.777208,-41.286070;174.776777,-41.286096?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=[redacted]",
+        "action": "fixture-mapbox-walking-directions"
+      },
+      {
+        "at": "2026-09-20T08:25:13.754Z",
+        "step": "save-as-route",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.mapbox.com/matching/v5/mapbox/walking/174.776203,-41.286490;174.776234,-41.286484;174.776281,-41.286468;174.776363,-41.286462;174.776446,-41.286462;174.776531,-41.286464;174.776618,-41.286465;174.776707,-41.286463;174.776792,-41.286442;174.776865,-41.286419;174.776936,-41.286382;174.777005,-41.286334;174.777067,-41.286279;174.777124,-41.286218;174.777155,-41.286168;174.777171,-41.286139;174.777139,-41.286121;174.777075,-41.286111;174.776987,-41.286107;174.776908,-41.286114;174.776872,-41.286114;174.776884,-41.286109;174.776931,-41.286099;174.776994,-41.286095;174.777070,-41.286085?geometries=geojson&overview=full&tidy=true&access_token=[redacted]&radiuses=25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25",
+        "action": "fixture-map-matching"
+      },
+      {
+        "at": "2026-09-20T08:25:27.097Z",
+        "step": "existing-route-edit",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.mapbox.com/matching/v5/mapbox/walking/174.776203,-41.286490;174.776228,-41.286489;174.776284,-41.286474;174.776372,-41.286464;174.776453,-41.286458;174.776530,-41.286458;174.776610,-41.286462;174.776699,-41.286466;174.776792,-41.286448;174.776873,-41.286422;174.776944,-41.286379;174.777006,-41.286328;174.777060,-41.286275;174.777115,-41.286220;174.777153,-41.286174;174.777177,-41.286144;174.777148,-41.286120;174.777079,-41.286105;174.776982,-41.286102;174.776899,-41.286114;174.776867,-41.286119;174.776888,-41.286115;174.776940,-41.286100;174.777000,-41.286090;174.777070,-41.286085?geometries=geojson&overview=full&tidy=true&access_token=[redacted]&radiuses=25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25",
+        "action": "fixture-map-matching"
+      }
+    ],
+    "unexpectedExternalRequests": [],
+    "unexpectedApiRequests": [],
+    "failedRequests": [],
+    "httpErrors": []
+  },
+  "consoleNotes": [],
+  "captures": [
+    {
+      "name": "hike-prestart-r-gps-02",
+      "file": "01-hike-prestart-r-gps-02.png",
+      "route": "Hiking"
+    },
+    {
+      "name": "hike-r-gps-02-complete",
+      "file": "02-hike-r-gps-02-complete.png",
+      "route": "Hiking"
+    },
+    {
+      "name": "hike-paused",
+      "file": "03-hike-paused.png",
+      "route": "Hiking"
+    },
+    {
+      "name": "plant-text-private",
+      "file": "04-plant-text-private.png",
+      "route": "Plant"
+    },
+    {
+      "name": "hike-after-private-cairn",
+      "file": "05-hike-after-private-cairn.png",
+      "route": "Hiking"
+    },
+    {
+      "name": "live-memory-before-finish",
+      "file": "06-live-memory-before-finish.png",
+      "route": "Memory"
+    },
+    {
+      "name": "finish-handler-confirmation",
+      "file": "07-finish-handler-confirmation.png",
+      "route": "Hiking"
+    },
+    {
+      "name": "activity-detail-linked-cairn",
+      "file": "08-activity-detail-linked-cairn.png",
+      "route": "MapHistory"
+    },
+    {
+      "name": "route-create-real-geometry-edit",
+      "file": "09-route-create-real-geometry-edit.png",
+      "route": "RouteEditor"
+    },
+    {
+      "name": "route-detail-created",
+      "file": "10-route-detail-created.png",
+      "route": "MapHistory"
+    },
+    {
+      "name": "after-cold-reload-home",
+      "file": "11-after-cold-reload-home.png",
+      "route": "Home"
+    },
+    {
+      "name": "trails-same-route",
+      "file": "12-trails-same-route.png",
+      "route": "Routes"
+    },
+    {
+      "name": "route-existing-real-geometry-edit",
+      "file": "13-route-existing-real-geometry-edit.png",
+      "route": "RouteEditor"
+    },
+    {
+      "name": "route-detail-edited",
+      "file": "14-route-detail-edited.png",
+      "route": "MapHistory"
+    },
+    {
+      "name": "use-route-hike-prestart-idle",
+      "file": "15-use-route-hike-prestart-idle.png",
+      "route": "Hiking"
+    },
+    {
+      "name": "use-route-run-prestart-idle",
+      "file": "16-use-route-run-prestart-idle.png",
+      "route": "Running"
+    }
+  ],
+  "artifacts": {
+    "trace": "trace.zip",
+    "requests": "requests.json",
+    "networkDiagnostics": "network-diagnostics.json",
+    "runtimeErrors": "runtime-errors.txt"
+  }
+}

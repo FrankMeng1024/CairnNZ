@@ -27,6 +27,7 @@ import { resolveMapboxPublicTokenAuthority } from '../config/mapbox';
 import { useSessionStore } from './useSessionStore';
 import type { TrackPoint, ActivityMode, TrackingSession } from './useSessionStore';
 import type { Coordinate } from '../utils/geo';
+import type { CairnActivityContext } from './useMarkerStore';
 import { debugLogger } from '../services/debugLogger';
 import { batteryMonitor } from '../services/batteryMonitor';
 import { networkMonitor } from '../services/networkMonitor';
@@ -152,6 +153,7 @@ import {
 import { deriveActivityLocationHealth } from '../features/activity/activityLocationHealth';
 import type { ActivityTransitionState } from '../features/activity/activityOperationalState';
 import { appendCausalLivePoint } from '../features/activity/causalLiveRoute';
+import type { ActivityRouteReference } from '../features/route/routeContracts';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
@@ -187,6 +189,46 @@ let realForegroundCadenceExperiment: LocationCadenceExperiment = {
 };
 let previousRealRawDiagnostic: { lat: number; lng: number; t: number } | null = null;
 let latestRealCanonicalDecisionReason: string | null = null;
+
+function captureBorrowedRouteForRecovery(): ActivityRouteReference | undefined {
+  try {
+    // The Route store deliberately remains session-scoped. Only borrowed
+    // geometry receives the narrow durable recovery exception.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const reference = require('./useRouteStore').useRouteStore.getState()
+      .activityRouteReference as ActivityRouteReference | null;
+    if (!reference?.routeId.startsWith('friend:') || reference.points.length < 2) return undefined;
+    return { ...reference, points: reference.points.map(point => ({ ...point })) };
+  } catch {
+    return undefined;
+  }
+}
+
+async function clearActivityRouteReferenceAfterTerminal(terminal: 'finished' | 'discarded'): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const routeStore = require('./useRouteStore').useRouteStore;
+    const reference = routeStore.getState().activityRouteReference as ActivityRouteReference | null;
+    if (reference?.borrowedUse) {
+      // The local outbox is committed before the safety snapshot disappears.
+      // Network acknowledgement is deliberately retryable and never blocks
+      // the Activity's terminal transition.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { finalizeBorrowedRouteUse } = require('../features/friends/services/friendContent');
+      await finalizeBorrowedRouteUse(reference.borrowedUse, terminal);
+    }
+    routeStore.getState().clearActivityRouteReference();
+  } catch { /* Route presentation is unavailable in this runtime. */ }
+}
+
+function clearActivityRouteReferenceForAccountBoundary(): void {
+  try {
+    // Logout suspends rather than terminates an unfinished Activity. Its
+    // minimal friend reference remains in the owner-scoped recovery registry.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('./useRouteStore').useRouteStore.getState().clearActivityRouteReference();
+  } catch { /* Route presentation is unavailable in this runtime. */ }
+}
 
 function settleWithin<T>(work: Promise<T>, budgetMs: number, fallback: T): Promise<T> {
   return new Promise(resolve => {
@@ -916,7 +958,7 @@ interface TrackingState {
   setActivityMode: (mode: ActivityMode) => void;
   /** Refresh the actual native background permission without prompting. */
   refreshBackgroundLocationPermission: () => Promise<void>;
-  startTracking: () => Promise<boolean>;
+  startTracking: (requestedClientActivityId?: string) => Promise<boolean>;
   // Optional sessionName: when supplied (from the post-stop summary sheet)
   // the saved session is tagged with this name; otherwise the session
   // gets a default name on the consumer side ("Hike — DD/MM/YYYY").
@@ -927,7 +969,7 @@ interface TrackingState {
   pauseTracking: () => Promise<void>;
   resumeTracking: () => Promise<boolean>;
   addTrackPoint: (coord: ActivityCoordinate, timestamp?: number) => Promise<ActivityLocationAcceptance>;
-  linkMarker: (markerId: string) => void;
+  linkMarker: (markerId: string, activityContext: CairnActivityContext) => boolean;
   // O1 batch 37: reset removed — 0 external callers confirmed by grep audit.
   /** Clear lastStopReason after the screen has surfaced its notice. */
   clearLastStopReason: () => void;
@@ -1029,7 +1071,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     await refreshRealBackgroundAuthorization(false);
   },
 
-  startTracking: async () => {
+  startTracking: async (requestedClientActivityId) => {
     const beforeStart = get();
     // Store-boundary idempotency: the synchronous requesting transition is
     // the lock. A second tap/caller cannot initialize another writer,
@@ -1069,7 +1111,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           startWallClockTimestamp,
         )
       : startWallClockTimestamp;
-    const localSessionId = uuidv4();
+    const localSessionId = requestedClientActivityId ?? uuidv4();
     const ownerGeneration = uuidv4();
     const initialSegmentId = newSegmentId(localSessionId, startedAt);
     resetRealGpsDiagnosticState(locationProviderSource === 'real' ? localSessionId : null);
@@ -1164,6 +1206,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         currentSegmentId: initialSegmentId,
         nextSegmentStartReason: 'start',
         locationProviderSource,
+        borrowedRouteReference: captureBorrowedRouteForRecovery(),
         lifecycle: 'unfinished',
       });
     } catch {
@@ -2019,6 +2062,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           lng: point.lng,
           ts: Math.floor(point.ts),
           cid: point.cid,
+          evidence_source: point.evidenceSource,
+          source_activity_client_id: point.sourceActivityClientId,
+          source_segment_id: point.sourceSegmentId,
+          horizontal_accuracy_m: point.horizontalAccuracyM,
+          continuity_state: point.continuityState,
         }));
       let finishIdempotencyKey: string;
       try {
@@ -2034,6 +2082,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         name: finalName,
         route_points: baseRoutePayload,
         route_points_raw: rawRoutePayload,
+        route_points_canonical: s.trackPoints.map(point => toServerPoint(point)),
         memory_points: baseMemoryUnsynced,
       };
 
@@ -2411,9 +2460,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             lat: point.lat,
             lng: point.lng,
             atMs: point.t,
-            source: 'reconciliation',
+            source: s.locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
             ownerUserId,
             durability: 'deferred',
+            sourceActivityClientId: s.sessionId ?? undefined,
+            sourceSegmentId: point.segmentId,
+            horizontalAccuracyM: point.accuracy ?? undefined,
+            continuityState: 'accepted',
           });
           if (result.committed && !result.deduplicated) memoryNewCells += 1;
         }
@@ -2480,11 +2533,22 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const v412Route3 = finalDisplayTrackPoints.map(p => toServerPoint(p));
       const v412RouteRaw = (s.trackPointsRaw.length > 0 ? s.trackPointsRaw : s.trackPoints)
         .map(p => toServerPoint(p));
+      const v412RouteCanonical = s.trackPoints.map(point => toServerPoint(point));
 
       // 采样 memory_points: 从 memoryStore 里拉这次 hike 期间产生的 unsynced points
       const memoryUnsynced = useMemoryStore.getState().points
         .filter((p: any) => !p.synced && p.ts >= s.startedAt! && p.ts <= endedAt)
-        .map((p: any) => ({ lat: p.lat, lng: p.lng, ts: Math.floor(p.ts), cid: p.cid }));
+        .map((p: any) => ({
+          lat: p.lat,
+          lng: p.lng,
+          ts: Math.floor(p.ts),
+          cid: p.cid,
+          evidence_source: p.evidenceSource,
+          source_activity_client_id: p.sourceActivityClientId,
+          source_segment_id: p.sourceSegmentId,
+          horizontal_accuracy_m: p.horizontalAccuracyM,
+          continuity_state: p.continuityState,
+        }));
 
       const v412Payload = {
         end_time: new Date(endedAt).toISOString(),
@@ -2493,6 +2557,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         name: finalName,
         route_points: v412Route3,
         route_points_raw: v412RouteRaw,
+        route_points_canonical: v412RouteCanonical,
         memory_points: memoryUnsynced,
       };
       recordSavePhase('payload_serialization', payloadStartedAt, {
@@ -2798,6 +2863,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         }
       }
 
+      // Public encounter qualification is derived only from the finalized
+      // server Activity and uploaded real-source witnesses. Queueing this
+      // identity must never block Finish; offline/pending Activities are
+      // retried after their normal server save converges. Simulator evidence
+      // is deliberately excluded at this call boundary as well as server-side.
+      if (s.locationProviderSource === 'real' && s.sessionId) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const publicCairns = require('../features/public/services/publicCairns').usePublicCairnStore;
+          if (publicCairns.getState().enabled) {
+            void publicCairns.getState().verifyCompletedActivity(s.sessionId).catch(() => {});
+          }
+        } catch { /* Public is optional and cannot block Activity completion */ }
+      }
+
       // O7 (2026-07-26): 用户报 12:11 真实 hike Save 后 activity detail
       // "Loading route..." 然后 session 消失。aliyun 上 too_short_check
       // 之后 zero save events → stopTracking 在这里之前 die 但 crashLogger
@@ -3009,6 +3089,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       realActivityQaSessionId = null;
     }
     finishAcceptanceSnapshotClosed = false;
+    await clearActivityRouteReferenceAfterTerminal('finished');
     set((prev) => ({
       ...initialState,
       lastStopReason: stopReason,
@@ -4192,8 +4273,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             lat: point.lat,
             lng: point.lng,
             atMs: point.t,
-            source: 'activity',
+            source: isSimulatorSample ? 'simulator_test' : 'activity_real',
             ownerUserId: before.ownerUserId,
+            sourceActivityClientId: before.sessionId ?? undefined,
+            sourceSegmentId: point.segmentId,
+            horizontalAccuracyM: point.accuracy ?? undefined,
+            continuityState: 'accepted',
           });
           memoryResult = {
             committed: memoryResult.committed || pointMemoryResult.committed,
@@ -4367,8 +4452,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   },
 
 
-  linkMarker: (markerId) => {
-    set((s) => ({ markerIds: [...s.markerIds, markerId] }));
+  linkMarker: (markerId, activityContext) => {
+    let accepted = false;
+    set((s) => {
+      const exactActivityIsCurrent = (
+        (s.status === 'tracking' || s.status === 'paused')
+        && s.ownerUserId === activityContext.ownerUserId
+        && s.sessionId === activityContext.clientActivityId
+        && s.liveOwnerGeneration === activityContext.ownerGeneration
+      );
+      if (!exactActivityIsCurrent) return s;
+      accepted = true;
+      if (s.markerIds.includes(markerId)) return s;
+      return { markerIds: [...s.markerIds, markerId] };
+    });
+    return accepted;
   },
 
   // O1 batch 37: reset removed — 0 external callers confirmed by grep audit.
@@ -4775,6 +4873,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         await new Promise<void>((resolve) => setTimeout(resolve, 25));
       }
     }
+    clearActivityRouteReferenceForAccountBoundary();
     set({ ...initialState, activityMode: activity.activityMode });
 
     networkMonitor.stop();
@@ -4844,9 +4943,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           lat: point.lat,
           lng: point.lng,
           atMs: point.t,
-          source: 'reconciliation',
+          source: s.locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
           ownerUserId,
           durability: 'deferred',
+          sourceActivityClientId: s.sessionId ?? undefined,
+          sourceSegmentId: point.segmentId,
+          horizontalAccuracyM: point.accuracy ?? undefined,
+          continuityState: 'accepted',
         });
       }
       if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
@@ -4908,6 +5011,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       await endQaTelemetrySession(ownerUserId, 'real-activity-discarded');
       realActivityQaSessionId = null;
     }
+    await clearActivityRouteReferenceAfterTerminal('discarded');
     set({ ...initialState });
   },
 }));

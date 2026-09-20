@@ -1,0 +1,97 @@
+{
+  "namespace": "f1f2-7980dfc6-20260920t1710-canonical",
+  "externalRequests": [
+    {
+      "at": "2026-09-20T09:11:35.677Z",
+      "step": "boot",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=-41.2865&longitude=174.7762&localityLanguage=en",
+      "action": "fixture-reverse-geocode-wellington"
+    },
+    {
+      "at": "2026-09-20T09:11:35.679Z",
+      "step": "boot",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=-41.2865&longitude=174.7762&current=temperature_2m,weathercode&daily=sunrise,sunset&forecast_days=1&timeformat=unixtime&timezone=auto",
+      "action": "fixture-weather-wellington"
+    },
+    {
+      "at": "2026-09-20T09:11:56.659Z",
+      "step": "prefinish-memory",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/styles/v1/mapbox/outdoors-v12?access_token=[redacted]",
+      "action": "fixture-mapbox-empty-style"
+    },
+    {
+      "at": "2026-09-20T09:11:57.625Z",
+      "step": "prefinish-memory",
+      "method": "POST",
+      "resourceType": "fetch",
+      "url": "https://events.mapbox.com/events/v2?access_token=[redacted]",
+      "action": "fixture-mapbox-events-empty"
+    },
+    {
+      "at": "2026-09-20T09:11:57.634Z",
+      "step": "prefinish-memory",
+      "method": "POST",
+      "resourceType": "fetch",
+      "url": "https://events.mapbox.com/events/v2?access_token=[redacted]",
+      "action": "fixture-mapbox-events-empty"
+    },
+    {
+      "at": "2026-09-20T09:11:57.865Z",
+      "step": "prefinish-memory",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/map-sessions/v1?sku=101emYDNG0W89&access_token=[redacted]",
+      "action": "fixture-mapbox-session-no-content"
+    },
+    {
+      "at": "2026-09-20T09:12:30.328Z",
+      "step": "normal-finish-commit",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/matching/v5/mapbox/walking/174.776202,-41.286490;174.776200,-41.286483;174.776262,-41.286478;174.776352,-41.286444;174.776523,-41.286451;174.776557,-41.286441;174.776608,-41.286439;174.776679,-41.286459;174.776724,-41.286471;174.776918,-41.286459;174.776894,-41.286431;174.776953,-41.286423;174.776993,-41.286393;174.777038,-41.286365;174.777065,-41.286335;174.777102,-41.286313;174.777133,-41.286296;174.777194,-41.286243;174.777172,-41.286220;174.777259,-41.286072;174.777231,-41.286050;174.777208,-41.286070;174.777167,-41.286084;174.777109,-41.286083?geometries=geojson&overview=full&steps=true&tidy=false&radiuses=12;12;14;15;15;13;14;13;14;13;14;13;11;14;17;12;12;14;12;13;12;14;12;12&timestamps=1789852240;1789852241;1789852243;1789852251;1789852266;1789852267;1789852269;1789852274;1789852277;1789852288;1789852289;1789852290;1789852292;1789852300;1789852302;1789852304;1789852305;1789852312;1789852313;1789852323;1789852333;1789852335;1789852337;1789852340&access_token=[redacted]",
+      "action": "fixture-map-matching"
+    },
+    {
+      "at": "2026-09-20T09:12:30.330Z",
+      "step": "normal-finish-commit",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/matching/v5/mapbox/walking/174.777231,-41.286050;174.777208,-41.286070;174.777167,-41.286084;174.777109,-41.286083;174.777065,-41.286069;174.776998,-41.286068;174.776798,-41.286107;174.776777,-41.286096;174.776718,-41.286130;174.776786,-41.286116;174.776881,-41.286097;174.776952,-41.286069;174.777019,-41.286101;174.777041,-41.286075;174.777146,-41.286087;174.777195,-41.286075;174.777252,-41.286061?geometries=geojson&overview=full&steps=true&tidy=false&radiuses=12;14;12;12;14;15;17;17;16;15;14;12;15;14;13;15;13&timestamps=1789852333;1789852335;1789852337;1789852340;1789852345;1789852350;1789852355;1789852356;1789852359;1789852365;1789852371;1789852374;1789852378;1789852381;1789852389;1789852392;1789852394&access_token=[redacted]",
+      "action": "fixture-map-matching"
+    },
+    {
+      "at": "2026-09-20T09:12:30.392Z",
+      "step": "normal-finish-commit",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/directions/v5/mapbox/walking/174.777208,-41.286070;174.776777,-41.286096?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=[redacted]",
+      "action": "fixture-mapbox-walking-directions"
+    },
+    {
+      "at": "2026-09-20T09:12:31.216Z",
+      "step": "save-as-route",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/matching/v5/mapbox/walking/174.776202,-41.286490;174.776234,-41.286483;174.776281,-41.286468;174.776363,-41.286462;174.776446,-41.286462;174.776531,-41.286464;174.776618,-41.286465;174.776707,-41.286463;174.776792,-41.286442;174.776865,-41.286419;174.776935,-41.286382;174.777005,-41.286334;174.777067,-41.286279;174.777124,-41.286218;174.777155,-41.286168;174.777171,-41.286139;174.777139,-41.286121;174.777075,-41.286111;174.776987,-41.286107;174.776908,-41.286114;174.776872,-41.286114;174.776884,-41.286109;174.776931,-41.286099;174.776994,-41.286095;174.777070,-41.286085?geometries=geojson&overview=full&tidy=true&access_token=[redacted]&radiuses=25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25",
+      "action": "fixture-map-matching"
+    },
+    {
+      "at": "2026-09-20T09:12:44.788Z",
+      "step": "existing-route-edit",
+      "method": "GET",
+      "resourceType": "fetch",
+      "url": "https://api.mapbox.com/matching/v5/mapbox/walking/174.776202,-41.286490;174.776228,-41.286488;174.776284,-41.286474;174.776372,-41.286464;174.776453,-41.286458;174.776530,-41.286458;174.776610,-41.286462;174.776699,-41.286466;174.776792,-41.286448;174.776873,-41.286422;174.776943,-41.286379;174.777006,-41.286328;174.777060,-41.286275;174.777115,-41.286220;174.777153,-41.286174;174.777177,-41.286144;174.777148,-41.286120;174.777079,-41.286105;174.776982,-41.286102;174.776899,-41.286114;174.776867,-41.286119;174.776888,-41.286115;174.776940,-41.286100;174.777000,-41.286090;174.777070,-41.286085?geometries=geojson&overview=full&tidy=true&access_token=[redacted]&radiuses=25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25;25",
+      "action": "fixture-map-matching"
+    }
+  ],
+  "unexpectedExternalRequests": [],
+  "unexpectedApiRequests": [],
+  "failedRequests": [],
+  "httpErrors": []
+}

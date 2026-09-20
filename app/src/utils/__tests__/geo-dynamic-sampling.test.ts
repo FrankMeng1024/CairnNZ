@@ -2,16 +2,13 @@
  * geo-dynamic-sampling.test — covers Sprint 55 changes:
  *   - getSamplingInterval honors batteryLow flag
  *   - Kalman filter handles accuracy=null/0 boundary gracefully
- *   - smoothGPSPoint emits debug events without crashing on edge cases
+ *   - Kalman primitives handle accuracy edge cases without producing NaN
  */
 import {
   getSamplingInterval,
   classifyMovement,
   kalmanInit,
   kalmanUpdate,
-  smoothGPSPoint,
-  createTrackSmoother,
-  type GPSPoint,
 } from '../geo';
 
 describe('getSamplingInterval — dynamic sampling rates', () => {
@@ -72,49 +69,6 @@ describe('Kalman filter — accuracy boundary handling', () => {
     const next = kalmanUpdate(state, 0.001, 1);
     // Should be very close to new measurement (high confidence)
     expect(Math.abs(next - 0.001)).toBeLessThan(0.05);
-  });
-});
-
-describe('smoothGPSPoint — null/missing fields', () => {
-  it('first point with null accuracy → uses fallback', () => {
-    const state = createTrackSmoother();
-    const raw: GPSPoint = {
-      lat: -41.0,
-      lng: 174.0,
-      accuracy: null as unknown as number,
-      timestamp: Date.now(),
-    };
-    const result = smoothGPSPoint(state, raw);
-    expect(result).not.toBeNull();
-    expect(result!.lat).toBe(-41.0);
-    expect(result!.lng).toBe(174.0);
-  });
-
-  it('subsequent point with null accuracy → still smooths', () => {
-    const state = createTrackSmoother();
-    smoothGPSPoint(state, { lat: -41.0, lng: 174.0, accuracy: 5, timestamp: Date.now() });
-    const result = smoothGPSPoint(state, {
-      lat: -41.0001,
-      lng: 174.0001,
-      accuracy: null as unknown as number,
-      timestamp: Date.now() + 1000,
-    });
-    expect(result).not.toBeNull();
-    expect(Number.isFinite(result!.lat)).toBe(true);
-    expect(Number.isFinite(result!.lng)).toBe(true);
-  });
-
-  it('alt = null → preserved (not converted to number)', () => {
-    const state = createTrackSmoother();
-    const result = smoothGPSPoint(state, {
-      lat: -41.0,
-      lng: 174.0,
-      accuracy: 5,
-      alt: null as unknown as number,
-      timestamp: Date.now(),
-    });
-    expect(result).not.toBeNull();
-    expect(result!.alt == null).toBe(true);
   });
 });
 

@@ -16,8 +16,7 @@
  *     see is frozen. If the owner has edited away from the snapshot,
  *     a small banner shows "Others see: [snapshot.note], pinned as
  *     [snapshot.type]" so the owner is reminded of the divergence.
- * Existing type/visibility and public-snapshot behavior remain readable but
- * are not exposed as editing controls in this personal-management slice.
+ * Cairn visibility is an owner control independent from Memory sharing.
  */
 import React, { useMemo, useState, useCallback } from 'react';
 import {
@@ -70,6 +69,7 @@ import {
 } from '../components/BottomSheetFrame';
 import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { usePublicCairnStore } from '../features/public/services/publicCairns';
 
 let MapView: any = null;
 let CameraComponent: any = null;
@@ -108,9 +108,9 @@ type DetailRoute = RouteProp<RootStackParamList, 'MarkerDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const VISIBILITY_LABEL: Record<MarkerPermission, { label: string; iconName: IconName }> = {
-  personal: { label: 'Just me', iconName: 'Lock' },
-  group:    { label: 'Friends', iconName: 'Users' },
-  public:   { label: 'Anyone',  iconName: 'Globe' },
+  personal: { label: 'Only me', iconName: 'Lock' },
+  group:    { label: 'Friends can discover', iconName: 'Users' },
+  public:   { label: 'Public',  iconName: 'Globe' },
 };
 
 export function MarkerDetailScreen() {
@@ -128,6 +128,7 @@ export function MarkerDetailScreen() {
   const deleteMarker = useMarkerStore((s) => s.deleteMarker);
   const userId = useAppStore((s) => s.user?.id ?? '');
   const sessions = useSessionStore((s) => s.sessions);
+  const publicEnabled = usePublicCairnStore((state) => state.enabled);
 
   const marker = useMemo(
     // v423 C1 fix: offline-first ack 后 marker.id 会从 localId 换成 server id.
@@ -171,7 +172,8 @@ export function MarkerDetailScreen() {
   }, []);
 
   const editDirty = Boolean(marker) && (
-    encodeTitleBody(editTitle.trim(), editBody) !== marker?.note
+    encodeTitleBody(editTitle, editBody) !== marker?.note
+    || editPermission !== marker?.permission
   );
 
   const requestCloseEdit = useCallback(() => {
@@ -195,9 +197,10 @@ export function MarkerDetailScreen() {
     setSaveError(null);
     setSaving(true);
     try {
-      const newNote = encodeTitleBody(editTitle.trim(), editBody);
+      const newNote = encodeTitleBody(editTitle, editBody);
       await updateMarker(marker.id, {
         note: newNote,
+        permission: editPermission,
       });
       log('marker.edit_save', { id: marker.id });
       setIsEditing(false);
@@ -206,7 +209,7 @@ export function MarkerDetailScreen() {
     } finally {
       setSaving(false);
     }
-  }, [marker, editTitle, editBody, updateMarker]);
+  }, [marker, editTitle, editBody, editPermission, updateMarker]);
 
   const handleDelete = useCallback(async () => {
     if (!marker || deleting) return;
@@ -248,10 +251,16 @@ export function MarkerDetailScreen() {
 
   const meta = MARKER_TYPES[marker.type] ?? MARKER_TYPES.cairn;
   const { title: privateTitle, body: privateBody } = splitTitleBody(marker.note);
-  const displayTitle = privateTitle.trim()
-    ? privateTitle.trim()
-    : cairnDisplayTitle('', '', marker.createdAt);
-  const vis = VISIBILITY_LABEL[marker.permission] ?? VISIBILITY_LABEL.personal;
+  const displayTitle = cairnDisplayTitle(privateTitle, privateBody, marker.createdAt);
+  const publicStateLabel = marker.publicState === 'pending' ? 'Public · In review'
+    : marker.publicState === 'published' ? 'Public · Published'
+      : marker.publicState === 'rejected' ? 'Public · Not approved'
+        : marker.publicState === 'suspended' ? 'Public · Paused by review'
+          : marker.publicState === 'withdrawn' ? 'Public · Withdrawn'
+            : marker.permission === 'public' ? 'Public · Not submitted' : null;
+  const vis = marker.permission === 'public'
+    ? { label: publicStateLabel ?? 'Public', iconName: 'Globe' as IconName }
+    : VISIBILITY_LABEL[marker.permission] ?? VISIBILITY_LABEL.personal;
   const localOnlyCairn = !marker.synced && Boolean(marker.clientCairnId ?? marker.localId);
   const dateStr = formatDate(marker.createdAt);
   const updatedDateStr = marker.updatedAt && marker.updatedAt > marker.createdAt
@@ -266,16 +275,6 @@ export function MarkerDetailScreen() {
   const sourceActivity = marker.originActivityClientId
     ? sessions.find(session => activityMatchesTarget(session, marker.originActivityClientId!))
     : null;
-
-  // Public snapshot divergence: only relevant if a snapshot exists AND
-  // its content differs from the current marker fields (or the marker
-  // is currently not public — in which case "others see nothing right
-  // now, but here's what they'd see if you re-share").
-  const snap = marker.publicSnapshot;
-  const snapDiffers = !!snap && (
-    snap.type !== marker.type ||
-    snap.note !== marker.note
-  );
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: visualTheme.background }]} edges={['top', 'bottom']}>
@@ -445,25 +444,26 @@ export function MarkerDetailScreen() {
           </ContentSurface>
         ) : null}
 
-        {/* 6. Public snapshot divergence banner (owner only) */}
-        {snap && snapDiffers && isOwner && (
+        {marker.permission === 'public' && isOwner ? (
           <View style={[styles.snapshotBanner, { backgroundColor: visualTheme.surface, borderColor: visualTheme.border }]}>
             <View style={styles.snapshotHeaderRow}>
               <Icon name="Globe" size={12} color={visualTheme.iconInactive} strokeWidth={2} />
-              <Text style={[styles.snapshotHeader, { color: visualTheme.foregroundSecondary }]}>Public viewers see</Text>
+              <Text style={[styles.snapshotHeader, { color: visualTheme.foregroundSecondary }]}>{publicStateLabel}</Text>
             </View>
             <Text style={[styles.snapshotBody, { color: visualTheme.foreground }]}>
-              {(() => {
-                const sm = MARKER_TYPES[snap.type];
-                const sn = splitTitleBody(snap.note);
-                return `"${cairnDisplayTitle(sn.title, sn.body, marker.createdAt)}", pinned as ${sm?.label ?? snap.type}.`;
-              })()}
+              {marker.publicSubmissionCode === 'PUBLIC_ELIGIBLE_ACTIVITY_REQUIRED'
+                ? 'This Cairn is saved. Finish its source Activity, then save Public again to request review.'
+                : marker.publicSubmissionCode === 'PUBLIC_TEXT_REQUIRED'
+                  ? 'This Cairn is saved, but Public discovery needs useful text.'
+                  : marker.publicState === 'published'
+                    ? 'People who qualify nearby can discover the exact currently approved version.'
+                    : 'Your personal Cairn remains saved independently of Public review.'}
             </Text>
             <Text style={[styles.snapshotFootnote, { color: visualTheme.muted }]}>
-              Public content is frozen at the moment you first shared.
+              A material edit or changing audience removes the approved version from new Public delivery.
             </Text>
           </View>
-        )}
+        ) : null}
       </ScrollView>
 
       {/* 7. Sticky bottom action row (owner only). Outside ScrollView so
@@ -524,7 +524,8 @@ export function MarkerDetailScreen() {
             onVisibilityChange={setEditPermission}
             mode="edit"
             showTypePicker={false}
-            showVisibilityPicker={false}
+            showVisibilityPicker
+            disableVisibilityPublic={!publicEnabled && marker.permission !== 'public'}
             showLocationLockedNotice
             autoFocus={null}
             titleMaxChars={ContentConfig.titleMaxChars}

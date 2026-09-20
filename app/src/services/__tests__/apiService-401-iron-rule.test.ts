@@ -24,9 +24,11 @@ jest.mock('../crashLogger', () => ({
 // with `mock` due to jest hoisting rules).
 const mockLogout = jest.fn();
 const mockSetSessionExpired = jest.fn();
+const mockCurrentUser = { id: 'viewer-a' as string | null };
 jest.mock('../../store/useAppStore', () => ({
   useAppStore: {
     getState: () => ({
+      user: mockCurrentUser.id ? { id: mockCurrentUser.id } : null,
       logout: mockLogout,
       setSessionExpired: mockSetSessionExpired,
     }),
@@ -48,6 +50,7 @@ afterEach(() => {
   global.fetch = origFetch;
   jest.clearAllMocks();
   mockTrackingStatus.current = 'idle';
+  mockCurrentUser.id = 'viewer-a';
 });
 
 function mockResponse(status: number, headers: Record<string, string> = {}, body = {}): Response {
@@ -108,5 +111,14 @@ describe('apiService 401 iron rule — Sprint 72 STORY-00550', () => {
     const res = await authenticatedFetch('/api/something');
     expect(res.status).toBe(200);
     expect(mockLogout).not.toHaveBeenCalled();
+  });
+
+  test('identity-sensitive mutation is fenced before dispatch after an account switch', async () => {
+    mockCurrentUser.id = 'viewer-b';
+    global.fetch = jest.fn(async () => mockResponse(200)) as unknown as typeof fetch;
+    await expect(authenticatedFetch('/api/public-cairns/cairns/1/hide', {
+      method: 'POST', expectedUserId: 'viewer-a',
+    })).rejects.toMatchObject({ code: 'ACCOUNT_CHANGED' });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });

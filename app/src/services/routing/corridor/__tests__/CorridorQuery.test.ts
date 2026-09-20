@@ -1,7 +1,7 @@
 /**
  * CorridorQuery unit tests.
  */
-import { isPointInCorridor, isPolylineInCorridor } from '../CorridorQuery';
+import { isPointInCorridor } from '../CorridorQuery';
 import { PointCloudIndex, IndexedPoint } from '../PointCloudIndex';
 
 function makeIndex(points: Array<{ lng: number; lat: number }>): PointCloudIndex {
@@ -44,38 +44,5 @@ describe('isPointInCorridor', () => {
     expect(result.inCorridor).toBe(false);
     expect(result.distanceToWalkedM).toBeGreaterThan(4000);
     expect(result.distanceToWalkedM).toBeLessThan(6000);
-  });
-});
-
-describe('isPolylineInCorridor', () => {
-  it('returns ok:true when all points within radius', () => {
-    const idx = makeIndex([
-      { lng: 174.78, lat: -41.29 },
-      { lng: 174.79, lat: -41.29 },
-      { lng: 174.80, lat: -41.29 },
-    ]);
-    const polyline = [
-      { lng: 174.78, lat: -41.29 },
-      { lng: 174.79, lat: -41.29 },
-    ];
-    const result = isPolylineInCorridor(polyline, idx, 1500);
-    expect(result.ok).toBe(true);
-  });
-
-  it('returns ok:false with firstOutsideIdx', () => {
-    const idx = makeIndex([{ lng: 174.78, lat: -41.29 }]);
-    const polyline = [
-      { lng: 174.78, lat: -41.29 },
-      { lng: 175.78, lat: -41.29 }, // far outside
-    ];
-    const result = isPolylineInCorridor(polyline, idx, 1000);
-    expect(result.ok).toBe(false);
-    expect(result.firstOutsideIdx).toBe(1);
-  });
-
-  it('handles empty polyline as ok:true', () => {
-    const idx = makeIndex([{ lng: 174.78, lat: -41.29 }]);
-    const result = isPolylineInCorridor([], idx, 1000);
-    expect(result.ok).toBe(true);
   });
 });

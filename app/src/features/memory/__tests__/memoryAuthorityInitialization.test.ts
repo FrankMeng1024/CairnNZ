@@ -31,13 +31,15 @@ describe('shared Memory authority initialization', () => {
 
   test('an authoritative empty Memory snapshot invalidates cached fog geometry', () => {
     const fogLayer = read('src/features/memory/components/FogLayer.tsx');
-    const emptyBranchStart = fogLayer.lastIndexOf('if (points.length === 0)');
+    const emptyBranchStart = fogLayer.lastIndexOf('if (points.length === 0 && friendCells.length === 0)');
     const emptyBranch = fogLayer.slice(
       emptyBranchStart,
-      fogLayer.indexOf('// v356: content-hash short-circuit', emptyBranchStart),
+      fogLayer.indexOf('if (!authorityChanged && lastSigRef.current', emptyBranchStart),
     );
-    expect(emptyBranch).toContain("_moduleFogSig = ''");
-    expect(emptyBranch).toContain('_moduleFogShape = solidFog');
+    expect(emptyBranch).toContain('_moduleFogSig = contentSignature');
+    expect(emptyBranch).toContain('_moduleFogShape = solid');
+    expect(emptyBranch).toContain('_moduleEvidenceShape = null');
+    expect(emptyBranch).toContain('_moduleDisplayGeometryCache = null');
     expect(emptyBranch).not.toContain('return lastShapeRef.current');
   });
 });

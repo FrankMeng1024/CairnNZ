@@ -198,7 +198,7 @@ describe('useSessionStore — per-user isolation', () => {
     expect(sessions[0].pausePins?.[1]).toMatchObject({ lat: 31.6, lng: 121.6 });
   });
 
-  it('never evicts pending local-authoritative Activities at the 100-item history cap', async () => {
+  it('never evicts pending local-authoritative Activities at the 500-item history cap', async () => {
     const storage = setupAsyncStorageMock();
     const { useSessionStore } = require('../src/store/useSessionStore');
 
@@ -216,7 +216,7 @@ describe('useSessionStore — per-user isolation', () => {
       markerIds: [],
       syncState: 'pending',
     });
-    for (let index = 0; index < 105; index += 1) {
+    for (let index = 0; index < 505; index += 1) {
       await useSessionStore.getState().addSession({
         id: `server-${index}`,
         remoteId: index + 1,
@@ -234,7 +234,7 @@ describe('useSessionStore — per-user isolation', () => {
     }
 
     const sessions = useSessionStore.getState().sessions;
-    expect(sessions).toHaveLength(101);
+    expect(sessions).toHaveLength(501);
     expect(sessions.some((session: { id: string }) => session.id === 'old-pending')).toBe(true);
     expect(JSON.parse(storage.cairn_sessions_userA)).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'old-pending', syncState: 'pending' })]),

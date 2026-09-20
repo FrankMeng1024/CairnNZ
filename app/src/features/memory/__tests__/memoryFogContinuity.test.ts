@@ -8,7 +8,12 @@ jest.mock('../store/useFriendMemoryStore', () => ({
 }));
 
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
-import { buildFogShape } from '../components/FogLayer';
+import {
+  buildFogShape,
+  MEMORY_FOG_GEOMETRY_REVISION,
+  memoryFogContentSignature,
+  selectFogEvidencePoints,
+} from '../components/FogLayer';
 
 function isStillFogged(shape: NonNullable<ReturnType<typeof buildFogShape>>, lng: number, lat: number): boolean {
   return booleanPointInPolygon({
@@ -57,5 +62,38 @@ describe('Memory evidence rendering continuity', () => {
     expect(isStillFogged(shape!, 0, 0)).toBe(false);
     expect(isStillFogged(shape!, 0.0002, 0)).toBe(false);
     expect(isStillFogged(shape!, 0, 0.0003)).toBe(true);
+  });
+
+  test('1999/2000/2001 points cannot lose prior evidence at the former stride boundary', () => {
+    const points = Array.from({ length: 2001 }, (_, index) => ({
+      lat: 0,
+      lng: index === 1 ? 0.01 : 0,
+      ts: index + 1,
+    }));
+    for (const count of [1999, 2000, 2001]) {
+      expect(selectFogEvidencePoints(points.slice(0, count))).toContain(points[1]);
+    }
+  });
+
+  test('middle geometry and friend authorization revisions invalidate equal-count caches', () => {
+    const points = [
+      { cid: 'first', lat: -41, lng: 174, ts: 1 },
+      { cid: 'middle', lat: -41.001, lng: 174.001, ts: 2 },
+      { cid: 'last', lat: -41.002, lng: 174.002, ts: 3 },
+    ];
+    const moved = points.map(point => ({ ...point }));
+    moved[1].lat = -41.01;
+    const ring: Array<[number, number]> = [[174, -41], [174.01, -41], [174.01, -41.01], [174, -41.01], [174, -41]];
+    const cells = [{ id: 'cell', polygon: ring, sourceFriendId: 'a', authorizationVersion: 1, projectionVersion: 'p1' }];
+    const revised = [{ ...cells[0], authorizationVersion: 2, projectionVersion: 'p2' }];
+
+    expect(memoryFogContentSignature('viewer|combined', points, cells))
+      .not.toBe(memoryFogContentSignature('viewer|combined', moved, cells));
+    expect(memoryFogContentSignature('viewer|combined', points, cells))
+      .not.toBe(memoryFogContentSignature('viewer|combined', points, revised));
+    expect(memoryFogContentSignature('viewer-a|self', points, []))
+      .not.toBe(memoryFogContentSignature('viewer-b|self', points, []));
+    expect(memoryFogContentSignature('viewer-a|self', points, []))
+      .toContain(`|${MEMORY_FOG_GEOMETRY_REVISION}|`);
   });
 });

@@ -1,0 +1,146 @@
+{
+  "schema": "cairnnz.f1-f2.connected-normal-entry.loaded-web.v1",
+  "generatedAt": "2026-09-20T04:34:02.916Z",
+  "candidateFingerprint": {
+    "algorithm": "sha256",
+    "digest": "c4cda56687014520ee100293c4a41f4456237cf8547b111c5bf8734545d8c9a5",
+    "fileCount": 638,
+    "scope": [
+      "app/src",
+      "app/scripts",
+      "app/package.json",
+      "app/package-lock.json",
+      "backend/src",
+      "backend/scripts",
+      "backend/package.json",
+      "backend/package-lock.json"
+    ]
+  },
+  "verdict": "FAIL",
+  "evidenceBoundary": {
+    "renderer": "Loaded Expo Web at mobile viewport",
+    "fixtureApis": true,
+    "fixtureMapMatching": true,
+    "realApiOrMysql": false,
+    "nativeOrPhysicalDevice": false,
+    "nativeGpsOrFieldEvidence": false,
+    "actualHandlersAndNavigation": true,
+    "note": "The matching response is deterministic synthetic geometry; the real RouteEditor Beautify/Apply/Save handlers consume it."
+  },
+  "environment": {
+    "baseUrl": "http://127.0.0.1:8087",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "locale": "en-NZ",
+    "timezone": "Pacific/Auckland",
+    "qaNamespace": "f1f2-20260920T1234-c4cda566",
+    "fixtureUserId": "9917",
+    "fixtureUserEmail": "f1f2-20260920T1234-c4cda566@example.invalid",
+    "browserProfileDir": "/tmp/cairn-f1f2-20260920T1234-c4cda566-chrome-profile"
+  },
+  "source": {
+    "authority": "O55 R-GPS-02",
+    "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+    "seed": 550202,
+    "origin": {
+      "lat": -41.2865,
+      "lng": 174.7762
+    },
+    "speedKmh": 4.68,
+    "physicalPauseSeconds": 8,
+    "localVerticesM": [
+      [
+        0,
+        0
+      ],
+      [
+        70,
+        12
+      ],
+      [
+        86,
+        48
+      ],
+      [
+        48,
+        48
+      ],
+      [
+        65,
+        48
+      ],
+      [
+        110,
+        48
+      ]
+    ]
+  },
+  "flow": [
+    {
+      "at": "2026-09-20T04:34:22.535Z",
+      "step": "home-to-hike-prestart",
+      "handler": "Home Hiking control"
+    }
+  ],
+  "stages": [],
+  "identities": {},
+  "api": {
+    "requestCount": 86,
+    "startedClientActivityId": null,
+    "savedActivityClientId": null,
+    "markerCreateClientId": null,
+    "markerOriginActivityClientId": null,
+    "routeCreateClientId": null,
+    "routeSourceActivityClientId": null,
+    "routeUpdateCount": 0,
+    "fixtureMatchingCalls": 0
+  },
+  "assertions": {
+    "loadedJourneyCompleted": false,
+    "noUnexpectedApiRequests": true,
+    "runtimeClean": true
+  },
+  "failed": [
+    "loadedJourneyCompleted"
+  ],
+  "terminalError": {
+    "step": "home-to-hike",
+    "message": "page.waitForFunction: Timeout 20000ms exceeded.",
+    "stack": "page.waitForFunction: Timeout 20000ms exceeded.\n    at runLoadedJourney (/Users/mzm/Desktop/cairn/CairnNZ/app/scripts/f1-f2-connected-normal-entry-qa.mjs:795:16)\n    at async file:///Users/mzm/Desktop/cairn/CairnNZ/app/scripts/f1-f2-connected-normal-entry-qa.mjs:128:3"
+  },
+  "runtimeErrors": [],
+  "networkDiagnostics": {
+    "externalRequests": [
+      {
+        "at": "2026-09-20T04:34:21.294Z",
+        "step": "boot",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=-41.2865&longitude=174.7762&localityLanguage=en",
+        "action": "fixture-reverse-geocode-wellington"
+      },
+      {
+        "at": "2026-09-20T04:34:21.299Z",
+        "step": "boot",
+        "method": "GET",
+        "resourceType": "fetch",
+        "url": "https://api.open-meteo.com/v1/forecast?latitude=-41.2865&longitude=174.7762&current=temperature_2m,weathercode&daily=sunrise,sunset&forecast_days=1&timeformat=unixtime&timezone=auto",
+        "action": "fixture-weather-wellington"
+      }
+    ],
+    "unexpectedExternalRequests": [],
+    "unexpectedApiRequests": [],
+    "failedRequests": [],
+    "httpErrors": []
+  },
+  "consoleNotes": [],
+  "captures": [],
+  "artifacts": {
+    "trace": "trace.zip",
+    "requests": "requests.json",
+    "networkDiagnostics": "network-diagnostics.json",
+    "runtimeErrors": "runtime-errors.txt"
+  }
+}

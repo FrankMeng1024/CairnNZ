@@ -32,6 +32,7 @@ import type { ActivityLocationSource } from '../activitySimulator/types';
 import { activityFreshnessNow, activityTimestampForSource } from '../activitySimulator/simulatorTime';
 import { endSimulatorProvider } from '../activitySimulator/activityLocationProvider';
 import { appendSimulatorLog } from '../activitySimulator/simulatorLog';
+import type { ActivityRouteReference } from '../route/routeContracts';
 
 export interface RecoverableActivity {
   sessionId: string;
@@ -47,6 +48,22 @@ export interface RecoverableActivity {
   saveEligible: boolean;
   lastPointAt: number;
   locationProviderSource?: ActivityLocationSource;
+  borrowedRouteReference?: ActivityRouteReference;
+}
+
+function publishRecoveredBorrowedRoute(reference?: ActivityRouteReference): void {
+  try {
+    // Lazy import avoids making Route-store initialization part of the
+    // headless Activity recovery discovery path.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useRouteStore } = require('../../store/useRouteStore');
+    useRouteStore.setState({
+      activityRouteReference: reference ? {
+        ...reference,
+        points: reference.points.map(point => ({ ...point })),
+      } : null,
+    });
+  } catch { /* Route presentation is unavailable in this runtime. */ }
 }
 
 /** One-time bounded migration from the former file-only discovery model. */
@@ -158,6 +175,9 @@ export async function findRecoverableActivity(
       saveEligible: eligibility.eligible,
       lastPointAt,
       locationProviderSource,
+      borrowedRouteReference: registered?.clientActivityId === exactId
+        ? registered.borrowedRouteReference
+        : undefined,
     };
   }
   // Registry commit precedes native source activation. If the process died in
@@ -186,6 +206,7 @@ export async function findRecoverableActivity(
       saveEligible: false,
       lastPointAt: registered.lastMeaningfulAt,
       locationProviderSource: registered.locationProviderSource ?? 'real',
+      borrowedRouteReference: registered.borrowedRouteReference,
     };
   }
   return null;
@@ -209,6 +230,7 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
   const newOwnerGeneration = newSegmentId(`${activity.sessionId}-owner`);
   const recoverySegmentId = newSegmentId(activity.sessionId);
   const locationProviderSource = activity.locationProviderSource ?? 'real';
+  publishRecoveredBorrowedRoute(activity.borrowedRouteReference);
   useTrackingStore.setState({
     sessionId: activity.sessionId,
     ownerUserId: activity.userId,
@@ -274,9 +296,13 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
       lat: point.lat,
       lng: point.lng,
       atMs: point.t,
-      source: 'reconciliation',
+      source: locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
       ownerUserId: activity.userId,
       durability: 'deferred',
+      sourceActivityClientId: activity.clientActivityId,
+      sourceSegmentId: point.segmentId,
+      horizontalAccuracyM: point.accuracy ?? undefined,
+      continuityState: 'accepted',
     });
   }
   if (points.length > 0) await flushRecordedMemoryEvidence();
@@ -325,9 +351,13 @@ export async function discardRecoverableActivity(activity: RecoverableActivity):
       lat: point.lat,
       lng: point.lng,
       atMs: point.t,
-      source: 'reconciliation',
+      source: activity.locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
       ownerUserId: activity.userId,
       durability: 'deferred',
+      sourceActivityClientId: activity.clientActivityId,
+      sourceSegmentId: point.segmentId,
+      horizontalAccuracyM: point.accuracy ?? undefined,
+      continuityState: 'accepted',
     });
   }
   if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
@@ -336,6 +366,7 @@ export async function discardRecoverableActivity(activity: RecoverableActivity):
     clientActivityId: activity.clientActivityId,
     serverActivityId: activity.remoteId,
   });
+  publishRecoveredBorrowedRoute();
   await removePending(activity.clientActivityId, activity.userId);
   await discardActiveHike(activity.sessionId);
   // Install the server-side business tombstone even when a numeric shell is

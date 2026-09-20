@@ -166,7 +166,9 @@ export function ForegroundUnlockManager({ managePassiveGps = false }: { managePa
             lat: loc.coords.latitude,
             lng: loc.coords.longitude,
             atMs: loc.timestamp ?? Date.now(),
-            source: 'passive',
+            source: 'passive_real',
+            horizontalAccuracyM: loc.coords.accuracy ?? undefined,
+            continuityState: 'accepted',
           });
         });
         log('memory.watcher_started', { mode: 'foreground-opt-in' });

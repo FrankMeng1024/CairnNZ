@@ -409,9 +409,13 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   when there are unpreviewed strokes; here strokes have been
                   previewed, so we surface Save). */}
               <TouchableOpacity
+                testID="route-editor-apply-draft"
                 activeOpacity={0.85}
                 style={[styles.primaryCta, { backgroundColor: theme.primaryAction }, !canSave && styles.btnDisabled]}
                 disabled={!canSave}
+                accessibilityRole="button"
+                accessibilityLabel={saveLabel}
+                accessibilityState={{ disabled: !canSave, busy: isComputing }}
                 onPress={() => { setTrimOpen(false); if (canSave) onSave(); }}
               >
                 <Icon name="Check" size={18} color={theme.onPrimary} strokeWidth={2.6} />

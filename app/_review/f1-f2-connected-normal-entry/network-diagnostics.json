@@ -1,0 +1,17 @@
+{
+  "namespace": "f1-f2-52371",
+  "externalRequests": [],
+  "unexpectedExternalRequests": [],
+  "unexpectedApiRequests": [],
+  "failedRequests": [
+    {
+      "at": "2026-09-20T04:57:40.939Z",
+      "step": "boot",
+      "method": "GET",
+      "resourceType": "document",
+      "url": "http://127.0.0.1:8081/",
+      "error": "net::ERR_CONNECTION_REFUSED"
+    }
+  ],
+  "httpErrors": []
+}

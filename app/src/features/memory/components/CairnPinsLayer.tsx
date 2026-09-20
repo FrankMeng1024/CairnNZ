@@ -31,8 +31,6 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMemoryStore } from '../store/useMemoryStore';
-import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
-import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useMarkerStore, Marker, type MarkerPermission } from '../../../store/useMarkerStore';
 import { useFriendStore } from '../../../store/useFriendStore';
@@ -111,30 +109,6 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
     [likedSetForSheet, likedIds],
   );
 
-  // v413: friend memory union — 勾选 friend 后, friend 走过的地方也应视为 explored
-  // (marker "?" 会变成真实内容). 反勾即时回缩.
-  // v413 (4-eye fix E2): union 只在 Friends tab 生效, Mine tab 保 self-only.
-  const scope = useMemoryScopeStore((s) => s.scope);
-  const friendMemoryVersion = useFriendMemoryStore((s) => s.version);
-  const friendPointsExploredCheck = useMemo(() => {
-    if (scope !== 'friends') return (_lat: number, _lng: number) => false;
-    const fpts = useFriendMemoryStore.getState().getEnabledFriendPoints();
-    // R114 (2026-08-07): friend memory unlock radius kept in sync with
-    // UnlockConfig.radiusMeters (memoryConfig.ts) — 25m → 30m per user
-    // report that walking around a large building leaves a black stripe.
-    const R2 = 30 * 30;
-    return (lat: number, lng: number): boolean => {
-      // 简单线性扫描 (friend points 数量通常 < 1000)
-      for (const p of fpts) {
-        const dLat = (p.lat - lat) * 111000;
-        const dLng = (p.lng - lng) * 111000 * Math.cos(lat * Math.PI / 180);
-        if (dLat * dLat + dLng * dLng <= R2) return true;
-      }
-      return false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [friendMemoryVersion, scope]);
-
   const classified = useMemo<Classified[]>(
     () => markers.map((m) => {
       const isOwn = ownIds.has(m.id);
@@ -146,8 +120,10 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
         // FogLayer 单点 buffer 25m). 现在 owner 无条件视为 explored 是正确的产品语义:
         // "?" = "未知内容, 去探索" 只对 friend/public 观察者有意义, owner 知道自己 marker
         // 里放了什么. 也顺带覆盖 memorySync.replacePoints([]) reconcile 场景 (defense in depth).
-        // v413: friend memory union — 非 owner marker 也可能因为勾选的 friend 走过而被 explored.
-        isExplored: isOwn ? true : (isExplored(m.lat, m.lng) || friendPointsExploredCheck(m.lat, m.lng)),
+        // Non-owner Cairns only enter this collection through the server's
+        // current, friend-only Encounter authorization. Shared Memory cells
+        // are deliberately not consulted here.
+        isExplored: isOwn ? true : resolveTier(m, ownIds) === 'friend' ? true : isExplored(m.lat, m.lng),
         distanceM: haversineM(
           { lat: centerLat, lng: centerLng },
           { lat: m.lat, lng: m.lng }
@@ -155,7 +131,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       };
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [markers, centerLat, centerLng, geometryVersion, ownIds, friendMemoryVersion]
+    [markers, centerLat, centerLng, geometryVersion, ownIds]
   );
 
   const visible = useMemo(
@@ -307,9 +283,11 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   // - semantic 'own': owner deleting their own mark → deleteMarker
   //   (form A path; delete confirmation modal happens inline here).
   // - semantic 'hide': non-owner hiding a mark from their view →
-  //   noop for now (Sprint-68 Story-534 will wire cache wipe). Close
-  //   the sheet so the user sees their action was received.
+  //   immediately invoke the store's viewer-bound optimistic wipe. That
+  //   primitive owns the circle-map-only server request; it does not remove
+  //   dedicated Friend Content access.
   const deleteMarker = useMarkerStore((s) => s.deleteMarker);
+  const hideMark = useMarkerStore((s) => s.hideMark);
   const handleDeleteOrHide = useCallback((mark: Marker, semantic: 'own' | 'hide') => {
     if (semantic === 'own') {
       Alert.alert(
@@ -324,10 +302,21 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
         ],
       );
     } else {
-      // Non-owner "Hide from my map" — full cache wipe pending Story-534.
-      setSelection({ kind: 'none' });
+      // hideMark commits the local circle-map wipe synchronously before its
+      // remote await. Close only after that invocation was accepted, and
+      // contain any unexpected rejection without claiming Friend Content was
+      // removed.
+      try {
+        const hiding = hideMark(mark.id);
+        setSelection({ kind: 'none' });
+        void hiding.catch(() => {
+          Alert.alert('Could not hide this cairn', 'Please try again.');
+        });
+      } catch {
+        Alert.alert('Could not hide this cairn', 'Please try again.');
+      }
     }
-  }, [deleteMarker]);
+  }, [deleteMarker, hideMark]);
 
   if (!Mapbox.available) return null;
   const { SymbolLayer, ShapeSource, Images, Image: MbxImage, PointAnnotation, MarkerView } = Mapbox;
