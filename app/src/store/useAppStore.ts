@@ -17,6 +17,12 @@ import { crashLogger } from '../services/crashLogger';
 // 诊断报告 修复 1。
 import { detachMemorySync } from '../services/memorySync';
 import { detachMemoryPersistence } from '../features/memory/services/memoryPersistence';
+import {
+  beginAccountTransition,
+  finishAccountTransition,
+  isAccountTransitionCurrent,
+  type AccountTransitionAuthority,
+} from '../services/accountTransitionAuthority';
 
 // O12 (2026-07-27): UIMode / uiMode / setUIMode removed. Was Explorer/Navigator
 // double-switch — dead code (only 'brg' placeholder stat used isExpert). Also
@@ -55,6 +61,21 @@ interface UserProfile {
 // 用户下次成功登录时清除此标记。
 const STORAGE_KEY_LOGOUT_MARKER = 'cairn_logout_marker';
 
+interface LogoutOptions {
+  expectedUserId: string;
+  transitionAuthority?: AccountTransitionAuthority;
+}
+
+interface HydrateOptions {
+  transitionAuthority?: AccountTransitionAuthority;
+  expectedUserId?: string;
+  deferSessionInstall?: boolean;
+}
+
+export interface HydrateResult {
+  authenticatedOwnerUserId: string | null;
+}
+
 interface AppState {
   // Auth
   isLoggedIn: boolean;
@@ -68,7 +89,7 @@ interface AppState {
   // Sign In form. Cleared on next successful login.
   sessionExpired: boolean;
   setSessionExpired: (v: boolean) => void;
-  logout: () => Promise<void>;
+  logout: (options: LogoutOptions) => Promise<boolean>;
 
   // v412 4-eye fix (Critical #4): hydrationTs 供 HikingScreen 的 v412 unfinished recovery
   // useEffect 依赖数组用. hydrate 结束时 set({hydrationTs: Date.now()}), 让 iOS jetsam
@@ -76,7 +97,7 @@ interface AppState {
   hydrationTs: number;
 
   // Hydrate persisted settings on app start
-  hydrate: () => Promise<void>;
+  hydrate: (options?: HydrateOptions) => Promise<HydrateResult>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -135,11 +156,28 @@ export const useAppStore = create<AppState>((set, get) => ({
   // v412 4-eye fix (Critical #4): 供 HikingScreen recovery useEffect 依赖数组用
   hydrationTs: 0,
 
-  logout: async () => {
+  logout: async (options) => {
     crashLogger.breadcrumb('logout:start');
-    // Immediately revoke any live recorder from the outgoing account. This
-    // begins synchronously and hides the store before auth state changes;
-    // durable owner-scoped recovery data remains for a later matching login.
+    const suppliedTransition = options.transitionAuthority;
+    const usingSuppliedTransition = !!suppliedTransition && isAccountTransitionCurrent(suppliedTransition);
+    const transition = usingSuppliedTransition
+      ? suppliedTransition
+      : beginAccountTransition({
+          kind: 'logout',
+          expectedOwnerUserId: options.expectedUserId,
+        }).authority;
+    if (!transition) return false;
+    const ownsTransition = !usingSuppliedTransition;
+    const abortLogout = () => {
+      if (ownsTransition) finishAccountTransition(transition);
+      return false;
+    };
+    const ownsLogout = () => isAccountTransitionCurrent(transition)
+      && String(useAppStore.getState().user?.id ?? '') === String(options.expectedUserId);
+    if (!ownsLogout()) {
+      crashLogger.breadcrumb('logout:stale_owner_before_suspend');
+      return abortLogout();
+    }
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useTrackingStore } = require('./useTrackingStore');
@@ -149,28 +187,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       crashLogger.breadcrumb(`logout:activity_suspend_failed ${String(error).slice(0, 80)}`);
       // Do not release the account while its native lease cannot be proven
       // disabled. The caller may retry once durable storage is available.
+      if (ownsTransition) finishAccountTransition(transition);
       throw error;
     }
-    // O18 batch 6.5: unregister push token before dropping auth state so
-    // the /unregister call goes out with a valid token. Fire-and-forget —
-    // never let a push failure block sign-out.
-    // 2026-08-31: push disabled — unregister call is a no-op if no token
-    // was ever registered, but skip the require() to avoid loading the
-    // module unnecessarily.
-    // try {
-    //   // eslint-disable-next-line @typescript-eslint/no-require-imports
-    //   const { unregisterCurrent } = require('../services/pushService');
-    //   unregisterCurrent().catch(() => { /* silent */ });
-    // } catch { /* pushService import failed — silent */ }
-    // Sprint 6 round-9 review R9B6: log out of RevenueCat so post-logout
-    // purchases don't attribute to the just-signed-out user's RC account.
+    if (!ownsLogout()) {
+      crashLogger.breadcrumb('logout:stale_owner_after_suspend');
+      return abortLogout();
+    }
+    // RevenueCat is device-global. Await its reset while B is still excluded.
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { resetPurchases } = require('../services/iapService');
-      resetPurchases().catch(() => { /* silent */ });
+      await resetPurchases();
     } catch { /* iapService import failed — silent */ }
-    set({ isLoggedIn: false, user: null });
-    crashLogger.breadcrumb('logout:state_cleared');
+    if (!ownsLogout()) return abortLogout();
     try {
       // Fence same-account late shared-content reads before any logout cleanup.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -189,12 +219,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       await storage.removeItem('cairn_friends');
       crashLogger.breadcrumb('logout:friends_cleared');
     } catch { /* friend state is non-blocking during sign-out */ }
+    if (!ownsLogout()) return abortLogout();
     // Detach while the outgoing user's in-memory snapshot is still present.
     // detachMemoryPersistence snapshots synchronously before its first await;
     // clearing the store first used to overwrite Account A's durable Memory
     // with an empty payload during logout.
     try { detachMemorySync(); } catch { /* swallow */ }
     try { await detachMemoryPersistence(); } catch { /* durable store remains authoritative */ }
+    if (!ownsLogout()) return abortLogout();
     crashLogger.breadcrumb('logout:memory_sync_detached');
     // Round-5 R5-M6: also clear memory points + H3 fog cells so the next
     // sign-in doesn't briefly show the previous user's data. Pre-fix,
@@ -208,6 +240,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await storage.removeItem('cairn_last_fix_v1');
       crashLogger.breadcrumb('logout:memory_reset');
     } catch { /* swallow — memoryStore may not be initialized on cold-boot logout */ }
+    if (!ownsLogout()) return abortLogout();
     // Passive exploration is privacy-sensitive. Never carry an outgoing
     // account's opt-in into the next account on a shared device.
     try {
@@ -227,11 +260,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch { /* swallow — trackingStore or storage not loaded */ }
     // Sprint 72 STORY-00549: 硬清标记 — 阻止下次冷启动 auto-login。
     // 用户下次点 Sign In 成功后 AuthScreen 清此标记。
-    storage.setItem(STORAGE_KEY_LOGOUT_MARKER, '1').catch(() => {});
+    await storage.setItem(STORAGE_KEY_LOGOUT_MARKER, '1');
+    if (!ownsLogout()) return abortLogout();
+    // Publish signed-out state only after every outgoing-account/global cleanup
+    // has settled, so AuthScreen cannot install B during an awaited A cleanup.
+    set({ isLoggedIn: false, user: null });
+    crashLogger.breadcrumb('logout:state_cleared');
     crashLogger.breadcrumb('logout:marker_set');
+    if (ownsTransition) finishAccountTransition(transition);
+    return true;
   },
 
-  hydrate: async () => {
+  hydrate: async (options = {}) => {
+    const suppliedTransition = options.transitionAuthority;
+    const usingSuppliedTransition = !!suppliedTransition && isAccountTransitionCurrent(suppliedTransition);
+    const transition = usingSuppliedTransition
+      ? suppliedTransition
+      : beginAccountTransition({
+          kind: 'cold-hydrate',
+          expectedOwnerUserId: options.expectedUserId,
+        }).authority;
+    if (!transition) return { authenticatedOwnerUserId: null };
+    const ownsTransition = !usingSuppliedTransition;
+    let authenticatedOwnerUserId: string | null = null;
     // Outermost try/catch: hydrate must NEVER throw, otherwise the
     // App.tsx await blocks and the loading View renders forever (or
     // worse, RN's default global handler kills the app).
@@ -271,18 +322,29 @@ export const useAppStore = create<AppState>((set, get) => ({
         // Account deletion is server-owned. If the app was killed after the
         // server acknowledgement but before device cleanup completed, finish
         // that owner-scoped cleanup before any token or account can hydrate.
-        const { resumeScheduledDeletedAccountLocalPurge } = await import('../services/accountLocalData');
-        await resumeScheduledDeletedAccountLocalPurge();
+        // Keep this lazy CommonJS require: this store participates in the
+        // auth/accountLocalData module cycle, and the Jest/Babel runtime does
+        // not enable VM dynamic modules.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { resumeScheduledDeletedAccountLocalPurge } = require('../services/accountLocalData');
+        await resumeScheduledDeletedAccountLocalPurge(transition);
       } catch (error) {
         crashLogger.breadcrumb(`hydrate:account_purge_retry_failed ${String(error).slice(0, 80)}`);
+        // Marker I/O/repair failure is an account-boundary failure, not
+        // equivalent to "no pending deletion". Do not install any token or
+        // hydrate another owner until both durable mirrors can be read/healed.
+        set({ user: null, isLoggedIn: false, hydrated: true, hydrationTs: Date.now() });
+        finishAccountTransition(transition);
+        return { authenticatedOwnerUserId: null };
       }
       try {
         await storage.setItem(STORAGE_KEY_LOGOUT_MARKER, '');
       } catch { /* swallow */ }
 
       try {
-        const user = await getMe();
+        const user = await getMe(options.expectedUserId, transition);
         if (user) {
+          authenticatedOwnerUserId = String(user.id);
           // R21 (2026-08-17): unified auth flow — if getMe succeeds during
           // hydrate, we set BOTH user AND isLoggedIn=true. Previously
           // (v404 rule) hydrate only pre-warmed user and left isLoggedIn
@@ -291,7 +353,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           // exists (matches modern mobile app UX). AuthScreen's mount
           // useEffect will nav.replace('Home') on the same tick because
           // the RootNavigator gate `isLoggedIn && user` now flips true.
-          set({ user, isLoggedIn: true });
+          if (!options.deferSessionInstall && isAccountTransitionCurrent(transition)) {
+            set({ user, isLoggedIn: true });
+          }
           crashLogger.breadcrumb(`hydrate:cold_boot_prewarm user_id=${user.id}`);
           try { await useMarkerStore.getState().hydrate(user.id); } catch { /* swallow */ }
           // O41: canonical Memory initialization is owned by AppRoot's
@@ -430,9 +494,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           // banner above Sign In.
           try {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { getToken } = require('../services/tokenStore');
-            const t = await getToken();
-            if (t) {
+            const { hasStoredToken } = require('../services/tokenStore');
+            if (await hasStoredToken()) {
               set({ sessionExpired: true });
               crashLogger.breadcrumb('hydrate:session_expired_flag_set');
             }
@@ -444,6 +507,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       } catch {
         // Network unavailable — token preserved by getMe (see authService).
         // Fall through to AuthScreen so user can retry.
+        authenticatedOwnerUserId = null;
         crashLogger.breadcrumb('hydrate:network_error_token_preserved');
         try { await useSessionStore.getState().hydrate('guest'); } catch { /* swallow */ }
         try { await useMarkerStore.getState().hydrate('guest'); } catch { /* swallow */ }
@@ -548,5 +612,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Always mark hydrated so App.tsx unblocks the loading View.
     crashLogger.breadcrumb('hydrate:end');
     set({ hydrated: true, hydrationTs: Date.now() });
+    if (ownsTransition) finishAccountTransition(transition);
+    return {
+      authenticatedOwnerUserId: isAccountTransitionCurrent(transition)
+        ? authenticatedOwnerUserId
+        : null,
+    };
   },
 }));

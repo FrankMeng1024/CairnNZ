@@ -24,10 +24,10 @@ const PERMISSION = Object.freeze({
 /**
  * Permissions allowed for client write (POST/PATCH).
  *
- * v4.2 H1: `public` is rejected on all POST/PATCH for both markers and routes.
- * Only the seed scripts may insert 'public' rows directly into DB.
+ * Controlled Public v1 allows `public` for Cairns. Route handlers retain an
+ * explicit public rejection because Public Routes are out of scope.
  */
-const CLIENT_WRITEABLE_PERMISSIONS = Object.freeze(['personal', 'friend', 'group']);
+const CLIENT_WRITEABLE_PERMISSIONS = Object.freeze(['personal', 'friend', 'group', 'public']);
 
 /**
  * Normalize on read: collapse legacy 'group' → modern 'friend' before sending to client.

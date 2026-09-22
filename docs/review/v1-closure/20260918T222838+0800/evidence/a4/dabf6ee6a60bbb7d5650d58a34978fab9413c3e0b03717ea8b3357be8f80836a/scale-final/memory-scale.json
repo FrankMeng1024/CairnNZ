@@ -1,0 +1,275 @@
+{
+  "schema": "cairnnz.revision03.memory-scale.v1",
+  "generatedAt": "2026-09-20T02:59:59.531Z",
+  "environment": {
+    "machine": "darwin x64 Intel(R) Core(TM) i5-5350U CPU @ 1.80GHz",
+    "node": "v24.11.1",
+    "renderer": "actual FogLayer Turf helpers; no Mapbox paint"
+  },
+  "budgetsFrozenBeforeRun": {
+    "maxSynchronousGeometrySliceMs": 150,
+    "scheduledActionAcknowledgementMs": 100,
+    "incrementalGeometryUpdateMs": 350,
+    "maxEventLoopSchedulingDelayMs": 150,
+    "coldLoad2001Ms": 45000,
+    "diagnostic10000Ms": 150000,
+    "combinedFriend2000Ms": 60000,
+    "cacheSynchronousSliceMs": 150,
+    "sampledUnsupportedRevealCount": 0
+  },
+  "candidateFingerprint": "dabf6ee6a60bbb7d5650d58a34978fab9413c3e0b03717ea8b3357be8f80836a",
+  "cases": [
+    {
+      "id": "DISTINCT-2001-LIVE-APPEND",
+      "rawFixes": 2041,
+      "acceptedCanonicalPoints": 2041,
+      "spatiallyUniqueCoverageFootprints": 2041,
+      "temporalWitnesses": 0,
+      "coldLoadMs": 10460.175183,
+      "sliceCount": 2271,
+      "coldRebuiltTileCount": 380,
+      "incrementalRebuiltTileCount": 9,
+      "coldRebuiltGroupCount": 380,
+      "incrementalRebuiltGroupCount": 9,
+      "sliceMs": {
+        "p50": 2,
+        "p95": 9,
+        "max": 16,
+        "coldMax": 16,
+        "incrementalMax": 9
+      },
+      "insertionMs": {
+        "p50": 0.08823200000006182,
+        "p95": 0.14868400000159454,
+        "max": 22.48135000000002
+      },
+      "incrementalGeometryUpdateMs": 209.77691200000118,
+      "actionAcknowledgementMs": 8.542292000000089,
+      "renderPreparationMs": 36.412240999999995,
+      "persistentCacheRoundTrip": {
+        "inputTileCount": 380,
+        "serializedTileCount": 380,
+        "skippedTileCount": 0,
+        "chunks": 48,
+        "bytes": 684386,
+        "encodeMs": 93,
+        "maxEncodeSliceMs": 3,
+        "storageMs": 1,
+        "maxChunkWriteMs": 1,
+        "read": {
+          "operation": "read",
+          "cacheHit": true,
+          "chunkCount": 48,
+          "tileCount": 380,
+          "serializedBytes": 684386,
+          "parseMs": 9,
+          "maxParseSliceMs": 1,
+          "storageMs": 6
+        },
+        "eventLoopDelayMs": {
+          "p95": 2.2821790000016335,
+          "max": 4.348784000001615
+        },
+        "rebuiltTilesAfterReload": 9,
+        "rebuiltGroupsAfterReload": 9
+      },
+      "eventLoopSchedulingDelayMs": {
+        "cold": {
+          "p95": 10.294809000002715,
+          "max": 17.16417299999921
+        },
+        "incremental": {
+          "p95": 9.237764000001334,
+          "max": 10.154905000003055
+        }
+      },
+      "composeFogShapeMs": 6.384919000000082,
+      "unsupportedReveal": {
+        "method": "8,000 deterministic low-discrepancy samples plus independent Turf ground-distance support predicate (0.005 m numeric epsilon)",
+        "sampleCount": 8000,
+        "insideDisplay": 4565,
+        "unsupportedCount": 0,
+        "sampledUnsupportedAreaEstimateM2": 0,
+        "boundingAreaM2": 3412933.6651806934
+      },
+      "sampledRetainedLoss": 0,
+      "displayedGeometry": {
+        "components": 719,
+        "holes": 0,
+        "vertices": 14259
+      }
+    },
+    {
+      "id": "COMBINED-SELF-2001-FRIEND-CELLS-2000",
+      "selfAcceptedCanonicalPoints": 2001,
+      "friendProjectionCells": 2000,
+      "sourceCachesRemainSeparate": true,
+      "totalMs": 20145.29531,
+      "composeMs": 25.565194999995583,
+      "maxSynchronousSliceMs": 59,
+      "eventLoopSchedulingDelayMs": {
+        "p95": 3.132060999996611,
+        "max": 60.315747000000556
+      },
+      "rejectedFriendCellCount": 0,
+      "displayedGeometry": {
+        "components": 7905,
+        "holes": 0,
+        "vertices": 49981
+      }
+    },
+    {
+      "id": "DISTINCT-10000-DIAGNOSTIC",
+      "rawFixes": 10000,
+      "acceptedCanonicalPoints": 10000,
+      "spatiallyUniqueCoverageFootprints": 10000,
+      "temporalWitnesses": 0,
+      "totalMs": 51628.04700400001,
+      "sliceCount": 10914,
+      "renderPreparationMs": 93.55081999999675,
+      "composeFogShapeMs": 28.930515000000014,
+      "sliceMs": {
+        "p50": 2,
+        "p95": 9,
+        "max": 17
+      },
+      "slowestSlices": [
+        {
+          "phase": "select_points",
+          "durationMs": 17,
+          "itemCount": 10000
+        },
+        {
+          "phase": "sort_tiles",
+          "durationMs": 12,
+          "itemCount": 1890
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 12,
+          "tileKey": "174782|-41204",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 12,
+          "tileKey": "174791|-41215",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174778|-41272",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174780|-41223",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174782|-41264",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174787|-41262",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174788|-41273",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174790|-41200",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174792|-41241",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174793|-41212",
+          "itemCount": 1
+        }
+      ],
+      "phaseMaxima": [
+        {
+          "phase": "select_points",
+          "durationMs": 17,
+          "itemCount": 10000
+        },
+        {
+          "phase": "sort_tiles",
+          "durationMs": 12,
+          "itemCount": 1890
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 12,
+          "tileKey": "174782|-41204",
+          "itemCount": 1
+        },
+        {
+          "phase": "union_group",
+          "durationMs": 5,
+          "tileKey": "174776|-41200",
+          "itemCount": 3
+        },
+        {
+          "phase": "index_points",
+          "durationMs": 3,
+          "itemCount": 256
+        },
+        {
+          "phase": "sort_groups",
+          "durationMs": 2,
+          "itemCount": 1890
+        },
+        {
+          "phase": "scan_tile_cache",
+          "durationMs": 1,
+          "tileKey": "174775|-41259"
+        },
+        {
+          "phase": "group_tiles",
+          "durationMs": 1,
+          "itemCount": 128
+        },
+        {
+          "phase": "scan_group_cache",
+          "durationMs": 1,
+          "tileKey": "174775|-41231"
+        },
+        {
+          "phase": "assemble_evidence",
+          "durationMs": 0,
+          "itemCount": 3420
+        }
+      ],
+      "eventLoopSchedulingDelayMs": {
+        "p95": 10.207296000007773,
+        "max": 17.342149999996764
+      },
+      "retainedSampleLoss": 0,
+      "displayedGeometry": {
+        "components": 3420,
+        "holes": 0,
+        "vertices": 69300
+      },
+      "claimBoundary": "diagnostic maximum tested; not an unlimited-support claim"
+    }
+  ]
+}

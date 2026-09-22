@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "run_id": "20260916T164608+0800",
+  "status": "PASS",
+  "checks": {
+    "required_files_present": true,
+    "json_valid": true,
+    "referenced_captures_packaged": true,
+    "referenced_boards_packaged": true,
+    "disallowed_paths_absent": true,
+    "runtime_errors": 0,
+    "allowed_product_writes": 0
+  },
+  "counts": {
+    "files": 27,
+    "captures": 10,
+    "boards": 3
+  },
+  "errors": [],
+  "files": [
+    {
+      "path": "00_ACTIVITY_DETAIL_CONVERGENCE.md",
+      "bytes": 12514,
+      "sha256": "fbd3bcc6cd4d52b88fe519ae92c74c691a54c84ef7f4b3c7594f84de85de01b2"
+    },
+    {
+      "path": "HANDOFF.json",
+      "bytes": 4819,
+      "sha256": "5ca79f60a1e18f12bba1655cd54651aafcf8e3c4d6d4360bb3089da28b29c020"
+    },
+    {
+      "path": "OWNER_REVIEW_CARD.md",
+      "bytes": 1414,
+      "sha256": "147b1d1c0f3bc52cf663d6fa87e3d48a309d79a57808400291f2b1dcae87447a"
+    },
+    {
+      "path": "REQUIREMENTS_DELTA.json",
+      "bytes": 9407,
+      "sha256": "3407edee206d185b543e5bf4e72c8f8156649a00540cd0da7aba348896ed8198"
+    },
+    {
+      "path": "REQUIREMENTS_DELTA.md",
+      "bytes": 1993,
+      "sha256": "8c1e5f700a4b614fab6fcf2b5c3eb2f5868917e360d4adcd343ad99041c952c3"
+    },
+    {
+      "path": "scripts/build-product-family-board.mjs",
+      "bytes": 4180,
+      "sha256": "2f42bcb367e8a6590f7461ea2acd4799b2917cf1887c2ba588de0eb29f65b448"
+    },
+    {
+      "path": "scripts/capture-activity-detail.mjs",
+      "bytes": 21627,
+      "sha256": "35b0bf5df051feacb465facbd5ce9947d31d228c7a9ee40d6f94b7a983f1bf38"
+    },
+    {
+      "path": "scripts/validate-deliverables.mjs",
+      "bytes": 4028,
+      "sha256": "b8329fd10c96701b20d3eca4aecda096b78db7302767dcaa0e3b4167f8da13df"
+    },
+    {
+      "path": "TEST_RESULTS.json",
+      "bytes": 3075,
+      "sha256": "f858d6a2f83362b1f7bfb7c30664a0f4af58fa9a3618a7f6163fe67cf4a5619a"
+    },
+    {
+      "path": "test-output/scoped-regression.txt",
+      "bytes": 1931,
+      "sha256": "4118a6f934da4521a65f8ced293ba172c3e7119e63c8e26a075967c1826addd2"
+    },
+    {
+      "path": "test-output/session-store-regression.txt",
+      "bytes": 4779,
+      "sha256": "170dd0275fbb78620202d6a0e35c41fbc3428c7fb2dc9ba04e75f69029d21c8f"
+    },
+    {
+      "path": "test-output/verify-changed.txt",
+      "bytes": 532,
+      "sha256": "5975fb4b2089c49149494a5e792fb69d7e008f6e354be34d5b7d0fcaa02f0193"
+    },
+    {
+      "path": "visual/capture-results.json",
+      "bytes": 10859,
+      "sha256": "b8be498f850e72d11d2db8fe4ef7b88366b8ea5b347dfd28e7e5760179e01d88"
+    },
+    {
+      "path": "visual/images/board-actions-and-layout.jpg",
+      "bytes": 104051,
+      "sha256": "a19c6d49b68470f83b985070502795e61eecceb246b999b8e2246c7140c40ba9"
+    },
+    {
+      "path": "visual/images/board-core-themes.jpg",
+      "bytes": 104550,
+      "sha256": "0aeaed9b5f0f2716d0f3e58a45ade3a5f216866b007f745a07ad5aaeb7b446f8"
+    },
+    {
+      "path": "visual/images/board-product-family-comparison.jpg",
+      "bytes": 124584,
+      "sha256": "e8fe2bf27325e1fc79bd8ea3c6007c90d83f57769df9062d5f08b72f5fa373e6"
+    },
+    {
+      "path": "visual/images/hike-detail--delete-confirmation--night--390x844.png",
+      "bytes": 37020,
+      "sha256": "83271571add9d64deea18804e4a3691080206bce8e341c724111cff71972d6ba"
+    },
+    {
+      "path": "visual/images/hike-detail--linked-cairns-section--sunset--390x844.png",
+      "bytes": 38253,
+      "sha256": "478337fc85ba76f646bdb93d74136bf5d7a899441d7e763a025534c19b0f5979"
+    },
+    {
+      "path": "visual/images/hike-detail--local-pending--night--390x844.png",
+      "bytes": 41578,
+      "sha256": "2ebc3e8fce5eafd2aea5d09f2c3c7aa9ca7ea2a5b23befc5f8f1d71151e932b1"
+    },
+    {
+      "path": "visual/images/hike-detail--small-iphone-summary--sunset--320x568.png",
+      "bytes": 23749,
+      "sha256": "866b8c9b8c42ab0caa349ac79df4b947f45e8db7dc5c3d6aa7d211a65e61e1a1"
+    },
+    {
+      "path": "visual/images/hike-detail--summary-linked--day--390x844.png",
+      "bytes": 38018,
+      "sha256": "56adaa00db6bed7eb6f8c6dbe241f695889a93d3418f98486b1d24016892b5cc"
+    },
+    {
+      "path": "visual/images/hike-detail--summary-no-cairns--sunset--390x844.png",
+      "bytes": 32237,
+      "sha256": "917c84b5ceb838cd4c5cd5bb7c6ade6c5190f4e74d76f52415c6a3cdb24c1cf6"
+    },
+    {
+      "path": "visual/images/route-editor--save-as-route-draft--day--390x844.png",
+      "bytes": 22001,
+      "sha256": "fb403f370e6974436233ba4922a230a72a4bfd4348e016dd984cf0dbcb9bb0d5"
+    },
+    {
+      "path": "visual/images/run-detail--gap-no-cairns--day--390x844.png",
+      "bytes": 34035,
+      "sha256": "6542f1e819dbae908097bb70d9f7ab63ff46dd6fd71f6bd1962f69c7e4d9d2ae"
+    },
+    {
+      "path": "visual/images/run-detail--large-iphone-linked--day--430x932.png",
+      "bytes": 36875,
+      "sha256": "af241c307c85731725392192d51c3ec72887a6fd7e85df2d51fce6a2e7d49a17"
+    },
+    {
+      "path": "visual/images/run-detail--sync-failure-linked--night--390x844.png",
+      "bytes": 39872,
+      "sha256": "e88805d8d8e35d85c766046b2131419398771e455cfbe34e0563fcd4d80af0cd"
+    },
+    {
+      "path": "visual/index.html",
+      "bytes": 4714,
+      "sha256": "6a0204df6a743ff58eef6ea4682b26c6eb63bc67e7ce14af44582d0e8584509c"
+    }
+  ]
+}

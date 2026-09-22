@@ -1,0 +1,49 @@
+{
+  "started_at": "2026-09-18T05:05:41.617Z",
+  "assertions": [
+    {
+      "id": "FR-15.separate-connections",
+      "result": "PASS",
+      "detail": "A/B/C/D hold four distinct real MySQL connections"
+    },
+    {
+      "id": "DEP-01.schema",
+      "result": "PASS",
+      "detail": "035-039 applied on disposable MySQL 8 and additive presence/lease columns exist"
+    }
+  ],
+  "actors": {
+    "A": {
+      "id": "124",
+      "email_domain": "example.org"
+    },
+    "B": {
+      "id": "125",
+      "email_domain": "example.org"
+    },
+    "C": {
+      "id": "126",
+      "email_domain": "example.org"
+    },
+    "D": {
+      "id": "127",
+      "email_domain": "example.org"
+    }
+  },
+  "connection_ids": {
+    "A": 1523585,
+    "B": 1523586,
+    "C": 1523587,
+    "D": 1523588
+  },
+  "finished_at": "2026-09-18T05:05:41.703Z",
+  "summary": {
+    "passed": 2,
+    "failed": 1
+  },
+  "failure": {
+    "name": "TypeError",
+    "message": "fetch failed",
+    "stack": "TypeError: fetch failed\n    at node:internal/deps/undici/undici:14976:13\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async api (/harness/abcdn-api-mysql.js:25:20)\n    at async main (/harness/abcdn-api-mysql.js:149:26)"
+  }
+}

@@ -31,6 +31,7 @@ const {
   decodeCursor,
   encodeCursor,
 } = require('../services/ownedCairnLibrary');
+const { synchronizePublicSubmission } = require('../services/publicPublication');
 
 router.use(authenticate);
 
@@ -124,7 +125,9 @@ router.get('/', async (req, res) => {
     // so the newest 5000 win.
     const [markers] = await pool.execute(
       `SELECT id, user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
-              type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at
+              type, text, lat, lng, alt, permission, approximate, public_snapshot,
+              public_intent, public_state, publication_epoch, content_revision,
+              created_at, updated_at
        FROM markers WHERE user_id = ? ORDER BY created_at DESC LIMIT 5000`,
       [req.user.userId]
     );
@@ -261,14 +264,9 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
       return res.status(400).json({ error: 'Text max 250 characters' });
     }
 
-    // v4 H1: client can never write permission='public'. Only seed scripts do.
+    // Public v1 persists owner intent independently from approval/discovery.
     // Accept 'personal' | 'group' (legacy) | 'friend' (modern alias). Map
     // 'friend' → DB 'group' to keep the ENUM stable. Reject anything else.
-    if (permission === PERMISSION.PUBLIC) {
-      return res.status(400).json({
-        error: "permission='public' is not allowed for client writes",
-      });
-    }
     if (permission !== undefined && !isClientWriteable(permission)) {
       return res.status(400).json({ error: 'Invalid permission' });
     }
@@ -315,8 +313,9 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
     const [result] = await conn.execute(
       `INSERT INTO markers
          (user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
-          type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+          type, text, lat, lng, alt, permission, approximate, public_snapshot,
+          public_intent, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
        ON DUPLICATE KEY UPDATE
          id=LAST_INSERT_ID(id),
          origin_session_id=COALESCE(origin_session_id, VALUES(origin_session_id))`,
@@ -324,11 +323,13 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
         req.user.userId, client_cairn_id ?? null,
         origin_activity_client_id ?? null, originSessionId,
         type, text || '', lat, lng, alt ?? null, perm, approx, publicSnapshotJson,
+        perm === PERMISSION.PUBLIC ? 1 : 0,
       ]
     );
     const [storedRows] = await conn.execute(
       `SELECT id, user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
               type, text, lat, lng, alt, permission, audience_epoch, audience_changed_at,
+              content_revision, public_intent, public_state, publication_epoch,
               approximate, public_snapshot, created_at
        FROM markers WHERE id = ? AND user_id = ? FOR UPDATE`,
       [result.insertId, req.user.userId],
@@ -350,13 +351,13 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
       // is in flight. Replaying the same owner-scoped business identity keeps
       // immutable place/provenance, but is allowed to converge supported
       // content instead of rejecting the newer durable payload.
-      const contentChanged =
+      const resourceChanged =
         stored.type !== type
         || stored.text !== (text || '')
-        || stored.permission !== perm
         || Boolean(stored.approximate) !== Boolean(approx);
+      const permissionChanged = stored.permission !== perm;
+      const contentChanged = resourceChanged || permissionChanged;
       if (contentChanged) {
-        const permissionChanged = stored.permission !== perm;
         if (permissionChanged) {
           await conn.execute(
             `UPDATE marker_audience_epochs SET ends_at = UTC_TIMESTAMP(3)
@@ -367,11 +368,15 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
         await conn.execute(
           `UPDATE markers
            SET type = ?, text = ?, permission = ?, approximate = ?,
+               public_intent = ?,
+               content_revision = content_revision + ?,
                audience_epoch = audience_epoch + ?,
                audience_changed_at = CASE WHEN ? = 1 THEN UTC_TIMESTAMP(3) ELSE audience_changed_at END,
                updated_at = NOW()
            WHERE id = ? AND user_id = ?`,
-          [type, text || '', perm, approx, permissionChanged ? 1 : 0,
+          [type, text || '', perm, approx, perm === PERMISSION.PUBLIC ? 1 : 0,
+            resourceChanged ? 1 : 0,
+            permissionChanged ? 1 : 0,
             permissionChanged ? 1 : 0, stored.id, req.user.userId],
         );
         if (permissionChanged) stored.audience_epoch = Number(stored.audience_epoch) + 1;
@@ -379,6 +384,7 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
         stored.text = text || '';
         stored.permission = perm;
         stored.approximate = approx;
+        if (resourceChanged) stored.content_revision = Number(stored.content_revision) + 1;
       }
     }
     await conn.execute(
@@ -390,6 +396,7 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
          FROM markers WHERE id = ? AND user_id = ?`,
       [stored.id, req.user.userId],
     );
+    const publicSubmission = await synchronizePublicSubmission(conn, stored.id, req.user.userId);
     await conn.commit();
     res.status(201).json({
       id: stored.id,
@@ -405,7 +412,12 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
       type: stored.type, text: stored.text, lat: Number(stored.lat), lng: Number(stored.lng),
       alt: stored.alt == null ? null : Number(stored.alt), permission: stored.permission,
       approximate: Boolean(stored.approximate), public_snapshot: stored.public_snapshot,
+      public_intent: Boolean(stored.public_intent),
+      public_state: publicSubmission.state,
+      publication_epoch: publicSubmission.publicationEpoch ?? Number(stored.publication_epoch ?? 0),
+      content_revision: publicSubmission.contentRevision ?? Number(stored.content_revision ?? 1),
       created_at: stored.created_at,
+      public_submission: publicSubmission,
     });
   } catch (err) {
     if (conn) try { await conn.rollback(); } catch { /* ignore */ }
@@ -429,7 +441,8 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
     // Verify ownership AND fetch current state for snapshot logic.
     await conn.beginTransaction();
     const [existing] = await conn.execute(
-      `SELECT id, type, lat, lng, text, permission, audience_epoch, public_snapshot
+      `SELECT id, type, lat, lng, text, permission, audience_epoch, public_snapshot,
+              content_revision, public_intent, public_state, publication_epoch
          FROM markers WHERE id = ? AND user_id = ? FOR UPDATE`,
       [markerId, req.user.userId]
     );
@@ -441,6 +454,7 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
 
     const updates = [];
     const values = [];
+    let resourceChanged = false;
 
     if (type !== undefined) {
       // v300: valid type list updated to v105 marker types
@@ -450,34 +464,35 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
         await conn.rollback();
         return res.status(400).json({ error: 'Invalid type' });
       }
-      updates.push('type = ?');
-      values.push(type);
+      if (type !== current.type) {
+        updates.push('type = ?');
+        values.push(type);
+        resourceChanged = true;
+      }
     }
     if (text !== undefined) {
       if (text.length > 250) {
         await conn.rollback();
         return res.status(400).json({ error: 'Text max 250 characters' });
       }
-      updates.push('text = ?');
-      values.push(text);
+      if (text !== current.text) {
+        updates.push('text = ?');
+        values.push(text);
+        resourceChanged = true;
+      }
     }
     if (permission !== undefined) {
-      // v4 H1: client can never set permission='public'.
-      if (permission === PERMISSION.PUBLIC) {
-        await conn.rollback();
-        return res.status(400).json({
-          error: "permission='public' is not allowed for client writes",
-        });
-      }
       if (!isClientWriteable(permission)) {
         await conn.rollback();
         return res.status(400).json({ error: 'Invalid permission' });
       }
       const dbPerm =
         permission === PERMISSION.FRIEND ? PERMISSION.GROUP_LEGACY : permission;
-      updates.push('permission = ?');
-      values.push(dbPerm);
       if (dbPerm !== current.permission) {
+        updates.push('permission = ?');
+        values.push(dbPerm);
+        updates.push('public_intent = ?');
+        values.push(dbPerm === PERMISSION.PUBLIC ? 1 : 0);
         await conn.execute(
           `UPDATE marker_audience_epochs SET ends_at = UTC_TIMESTAMP(3)
             WHERE marker_id = ? AND audience_epoch = ? AND ends_at IS NULL`,
@@ -493,18 +508,15 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
       // honest about what client paths can do.
     }
 
-    if (updates.length === 0) {
-      await conn.rollback();
-      return res.status(400).json({ error: 'No updates provided' });
+    if (resourceChanged) updates.push('content_revision = content_revision + 1');
+    if (updates.length > 0) {
+      updates.push('updated_at = NOW()');
+      values.push(markerId, req.user.userId);
+      await conn.execute(
+        `UPDATE markers SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`,
+        values
+      );
     }
-
-    updates.push('updated_at = NOW()');
-    values.push(markerId, req.user.userId);
-
-    await conn.execute(
-      `UPDATE markers SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`,
-      values
-    );
     await conn.execute(
       `INSERT IGNORE INTO marker_audience_epochs
          (marker_id, owner_id, audience_epoch, visibility, starts_at)
@@ -514,12 +526,20 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
          FROM markers WHERE id = ? AND user_id = ?`,
       [markerId, req.user.userId],
     );
+    const publicSubmission = await synchronizePublicSubmission(conn, markerId, req.user.userId);
     await conn.commit();
 
     // BUG-006 fix: echo user_id on update too. Updating a mark currently
     // does not refresh client-side authorId — but to keep response shape
     // consistent across POST/PUT/GET, include user_id here as well.
-    res.json({ message: 'Marker updated', user_id: req.user.userId, id: Number(markerId) });
+    res.json({
+      message: 'Marker updated', user_id: req.user.userId, id: Number(markerId),
+      public_state: publicSubmission.state,
+      publication_epoch: publicSubmission.publicationEpoch ?? Number(current.publication_epoch ?? 0),
+      content_revision: publicSubmission.contentRevision
+        ?? Number(current.content_revision ?? 1) + (resourceChanged ? 1 : 0),
+      public_submission: publicSubmission,
+    });
   } catch (err) {
     try { await conn.rollback(); } catch { /* noop */ }
     console.error('[markers/update]', err.message);
@@ -634,6 +654,9 @@ router.get('/:id/community-state', async (req, res) => {
     // signal, don't leak).
     const isOwner = String(marker.user_id) === String(req.user.userId);
     if (!isOwner) {
+      if (marker.permission === 'public') {
+        return res.status(404).json({ error: 'Marker not found' });
+      }
       if (marker.permission === 'personal') {
         return res.status(404).json({ error: 'Marker not found' });
       }
@@ -681,6 +704,9 @@ router.get('/:id/interact-nonce', async (req, res) => {
     if (!marker) return res.status(404).json({ error: 'Marker not found' });
     const isOwner = String(marker.user_id) === String(req.user.userId);
     if (!isOwner) {
+      if (marker.permission === 'public') {
+        return res.status(404).json({ error: 'Marker not found' });
+      }
       if (marker.permission === 'personal' || marker.status === 'hidden') {
         return res.status(404).json({ error: 'Marker not found' });
       }
@@ -775,6 +801,12 @@ router.post('/:id/vote', voteRateLimit, idempotency, async (req, res) => {
     // per-marker stats. 404 preserves the R17F5 pattern (don't leak
     // hidden state to non-owners).
     if (marker.status === 'hidden') {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Marker not found' });
+    }
+    // Controlled Public v1 has its own encounter-bound interaction namespace.
+    // Sequential marker IDs and a legacy proximity nonce must not bypass it.
+    if (marker.permission === 'public' && String(marker.user_id) !== String(userId)) {
       await conn.rollback();
       return res.status(404).json({ error: 'Marker not found' });
     }

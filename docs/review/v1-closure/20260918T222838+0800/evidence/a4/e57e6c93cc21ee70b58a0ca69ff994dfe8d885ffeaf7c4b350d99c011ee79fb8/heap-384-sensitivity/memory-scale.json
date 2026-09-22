@@ -1,0 +1,281 @@
+{
+  "schema": "cairnnz.revision03.memory-scale.v1",
+  "generatedAt": "2026-09-20T02:55:17.233Z",
+  "environment": {
+    "machine": "darwin x64 Intel(R) Core(TM) i5-5350U CPU @ 1.80GHz",
+    "node": "v24.11.1",
+    "renderer": "actual FogLayer Turf helpers; no Mapbox paint"
+  },
+  "budgetsFrozenBeforeRun": {
+    "maxSynchronousGeometrySliceMs": 150,
+    "scheduledActionAcknowledgementMs": 100,
+    "incrementalGeometryUpdateMs": 350,
+    "maxEventLoopSchedulingDelayMs": 150,
+    "coldLoad2001Ms": 45000,
+    "diagnostic10000Ms": 150000,
+    "combinedFriend2000Ms": 60000,
+    "cacheSynchronousSliceMs": 150,
+    "sampledUnsupportedRevealCount": 0
+  },
+  "candidateFingerprint": "e57e6c93cc21ee70b58a0ca69ff994dfe8d885ffeaf7c4b350d99c011ee79fb8",
+  "cases": [
+    {
+      "id": "DISTINCT-2001-LIVE-APPEND",
+      "rawFixes": 2041,
+      "acceptedCanonicalPoints": 2041,
+      "spatiallyUniqueCoverageFootprints": 2041,
+      "temporalWitnesses": 0,
+      "coldLoadMs": 10598.539899,
+      "sliceCount": 2281,
+      "coldRebuiltTileCount": 380,
+      "incrementalRebuiltTileCount": 9,
+      "coldRebuiltGroupCount": 380,
+      "incrementalRebuiltGroupCount": 9,
+      "sliceMs": {
+        "p50": 2,
+        "p95": 9,
+        "max": 24,
+        "coldMax": 24,
+        "incrementalMax": 8
+      },
+      "insertionMs": {
+        "p50": 0.08319100000062463,
+        "p95": 0.1449399999992238,
+        "max": 13.20585200000005
+      },
+      "incrementalGeometryUpdateMs": 207.0166480000007,
+      "actionAcknowledgementMs": 25.43001600000025,
+      "renderPreparationMs": 36.24768600000061,
+      "persistentCacheRoundTrip": {
+        "inputTileCount": 380,
+        "serializedTileCount": 380,
+        "skippedTileCount": 0,
+        "chunks": 48,
+        "bytes": 684386,
+        "encodeMs": 92,
+        "maxEncodeSliceMs": 1,
+        "storageMs": 2,
+        "maxChunkWriteMs": 1,
+        "read": {
+          "operation": "read",
+          "cacheHit": true,
+          "chunkCount": 48,
+          "tileCount": 380,
+          "serializedBytes": 684386,
+          "parseMs": 11,
+          "maxParseSliceMs": 1,
+          "storageMs": 3
+        },
+        "eventLoopDelayMs": {
+          "p95": 2.1834540000018023,
+          "max": 2.9452689999998256
+        },
+        "rebuiltTilesAfterReload": 9,
+        "rebuiltGroupsAfterReload": 9
+      },
+      "eventLoopSchedulingDelayMs": {
+        "cold": {
+          "p95": 10.212662999998429,
+          "max": 31.709396000000197
+        },
+        "incremental": {
+          "p95": 9.397558000000572,
+          "max": 9.909371999998257
+        }
+      },
+      "composeFogShapeMs": 3.4371959999989485,
+      "unsupportedReveal": {
+        "method": "8,000 deterministic low-discrepancy samples plus independent Turf ground-distance support predicate (0.005 m numeric epsilon)",
+        "sampleCount": 8000,
+        "insideDisplay": 4565,
+        "unsupportedCount": 0,
+        "sampledUnsupportedAreaEstimateM2": 0,
+        "boundingAreaM2": 3412933.6651806934
+      },
+      "sampledRetainedLoss": 0,
+      "displayedGeometry": {
+        "components": 719,
+        "holes": 0,
+        "vertices": 14259
+      }
+    },
+    {
+      "id": "DISTINCT-10000-DIAGNOSTIC",
+      "rawFixes": 10000,
+      "acceptedCanonicalPoints": 10000,
+      "spatiallyUniqueCoverageFootprints": 10000,
+      "temporalWitnesses": 0,
+      "totalMs": 53539.954749000004,
+      "sliceCount": 11053,
+      "renderPreparationMs": 120.20007800000167,
+      "composeFogShapeMs": 27.552001000003656,
+      "sliceMs": {
+        "p50": 2,
+        "p95": 9,
+        "max": 103
+      },
+      "slowestSlices": [
+        {
+          "phase": "tile_geometry",
+          "durationMs": 103,
+          "tileKey": "174780|-41204",
+          "itemCount": 1
+        },
+        {
+          "phase": "circle_generation",
+          "durationMs": 101,
+          "tileKey": "174780|-41204",
+          "itemCount": 1
+        },
+        {
+          "phase": "union_group",
+          "durationMs": 45,
+          "tileKey": "174789|-41271",
+          "itemCount": 2
+        },
+        {
+          "phase": "select_points",
+          "durationMs": 30,
+          "itemCount": 10000
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 19,
+          "tileKey": "174789|-41277",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 18,
+          "tileKey": "174794|-41239",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 16,
+          "tileKey": "174777|-41211",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 16,
+          "tileKey": "174777|-41213",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 16,
+          "tileKey": "174783|-41258",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 16,
+          "tileKey": "174785|-41259",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 16,
+          "tileKey": "174787|-41279",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 15,
+          "tileKey": "174776|-41233",
+          "itemCount": 1
+        }
+      ],
+      "phaseMaxima": [
+        {
+          "phase": "tile_geometry",
+          "durationMs": 103,
+          "tileKey": "174780|-41204",
+          "itemCount": 1
+        },
+        {
+          "phase": "circle_generation",
+          "durationMs": 101,
+          "tileKey": "174780|-41204",
+          "itemCount": 1
+        },
+        {
+          "phase": "union_group",
+          "durationMs": 45,
+          "tileKey": "174789|-41271",
+          "itemCount": 2
+        },
+        {
+          "phase": "select_points",
+          "durationMs": 30,
+          "itemCount": 10000
+        },
+        {
+          "phase": "tile_union",
+          "durationMs": 15,
+          "tileKey": "174794|-41239",
+          "itemCount": 2
+        },
+        {
+          "phase": "sort_tiles",
+          "durationMs": 12,
+          "itemCount": 1890
+        },
+        {
+          "phase": "index_points",
+          "durationMs": 5,
+          "itemCount": 256
+        },
+        {
+          "phase": "rectangle_clip",
+          "durationMs": 4,
+          "tileKey": "174776|-41252",
+          "itemCount": 1
+        },
+        {
+          "phase": "sort_groups",
+          "durationMs": 3,
+          "itemCount": 1890
+        },
+        {
+          "phase": "scan_tile_cache",
+          "durationMs": 1,
+          "tileKey": "174775|-41218"
+        },
+        {
+          "phase": "chunk_union",
+          "durationMs": 1,
+          "tileKey": "174776|-41234",
+          "itemCount": 1
+        },
+        {
+          "phase": "group_tiles",
+          "durationMs": 1,
+          "itemCount": 128
+        },
+        {
+          "phase": "scan_group_cache",
+          "durationMs": 1,
+          "tileKey": "174775|-41211"
+        },
+        {
+          "phase": "assemble_evidence",
+          "durationMs": 0,
+          "itemCount": 3420
+        }
+      ],
+      "eventLoopSchedulingDelayMs": {
+        "p95": 10.319369000004372,
+        "max": 103.50011800000357
+      },
+      "retainedSampleLoss": 0,
+      "displayedGeometry": {
+        "components": 3420,
+        "holes": 0,
+        "vertices": 69300
+      },
+      "claimBoundary": "diagnostic maximum tested; not an unlimited-support claim"
+    }
+  ]
+}

@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T203209+0800",
+  "captured_at": "2026-09-17T13:20:44.397Z",
+  "isolation": {
+    "synthetic_identity_and_coordinates": true,
+    "all_api_reads_and_writes_intercepted": true,
+    "external_network_blocked": true,
+    "telemetry_disabled": true,
+    "production_data_read_or_mutated": false
+  },
+  "evidence_boundary": {
+    "renderer": "EXPO_WEB_WITH_NATIVE_MAP_UNAVAILABLE",
+    "native_mapbox": false,
+    "physical_device": false,
+    "owner_acceptance": "PENDING"
+  },
+  "assertions": [
+    {
+      "check": "day Use Route label",
+      "pass": true
+    },
+    {
+      "check": "day raw point metric absent",
+      "pass": true
+    },
+    {
+      "check": "sunset Use Route label",
+      "pass": true
+    },
+    {
+      "check": "sunset raw point metric absent",
+      "pass": true
+    },
+    {
+      "check": "night Use Route label",
+      "pass": true
+    },
+    {
+      "check": "night raw point metric absent",
+      "pass": true
+    },
+    {
+      "check": "Delete cancel retains Route",
+      "pass": true
+    },
+    {
+      "check": "Actual delete removes Route locally",
+      "pass": true
+    },
+    {
+      "check": "Reload does not resurrect deleted Route",
+      "pass": true
+    },
+    {
+      "check": "Delete preserves source Activity",
+      "pass": true
+    },
+    {
+      "check": "Delete preserves independent Cairn",
+      "pass": true
+    },
+    {
+      "check": "Delete preserves personal Memory",
+      "pass": true
+    },
+    {
+      "check": "Old-backend 404 used numeric fallback",
+      "pass": true
+    }
+  ],
+  "delete_outcome": {
+    "routePresent": false,
+    "sessions": "[{\"id\":\"activity-sentinel\",\"activityMode\":\"hiking\",\"regionCode\":\"nz\",\"startedAt\":1789647023574,\"endedAt\":1789651223574,\"durationS\":4200,\"distanceM\":2840,\"elevationGainM\":52,\"trackPoints\":[],\"markerIds\":[],\"name\":\"Source Activity sentinel\",\"memoryNewCells\":14,\"syncState\":\"synced\"}]",
+    "markers": "[{\"id\":\"cairn-sentinel\",\"lat\":-44.67,\"lng\":167.92,\"note\":\"Independent Cairn sentinel\"}]",
+    "memory": "[{\"lat\":-44.67,\"lng\":167.92,\"ts\":1789651223574,\"cid\":\"memory-sentinel\"}]",
+    "routePresentAfterReload": false,
+    "tombstoneStorage": [
+      {
+        "key": "@cairn:route_tombstones:v1:7202",
+        "value": "[{\"clientRouteId\":\"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb\",\"remoteId\":\"601\",\"deletedAt\":1789651240067,\"remoteDeleted\":true,\"lastAttemptAt\":1789651240104}]"
+      }
+    ]
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "GET",
+      "path": "/api/markers"
+    },
+    {
+      "method": "GET",
+      "path": "/api/memory/points"
+    },
+    {
+      "method": "GET",
+      "path": "/data/reverse-geocode-client",
+      "blocked_external": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/routes/client/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/routes/601"
+    },
+    {
+      "method": "GET",
+      "path": "/api/routes"
+    }
+  ],
+  "captures": [
+    {
+      "evidence_id": "ROUTE-R02-VIS-001",
+      "state": "detail-two-metrics-long-name",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-revision-02--detail-two-metrics-long-name--day--390x844.png",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NATIVE_MAP_UNAVAILABLE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "physical_device": false,
+      "notes": [
+        "Current source after raw vertex metric removal and shared Use Route label correction.",
+        "Map appearance is a Web/native-map fallback, not Mapbox proof."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-R02-VIS-002",
+      "state": "detail-two-metrics-long-name",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/route-revision-02--detail-two-metrics-long-name--sunset--390x844.png",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NATIVE_MAP_UNAVAILABLE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "physical_device": false,
+      "notes": [
+        "Current source after raw vertex metric removal and shared Use Route label correction.",
+        "Map appearance is a Web/native-map fallback, not Mapbox proof."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-R02-VIS-003",
+      "state": "detail-two-metrics-long-name",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/route-revision-02--detail-two-metrics-long-name--night--390x844.png",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NATIVE_MAP_UNAVAILABLE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "physical_device": false,
+      "notes": [
+        "Current source after raw vertex metric removal and shared Use Route label correction.",
+        "Map appearance is a Web/native-map fallback, not Mapbox proof."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-R02-VIS-004",
+      "state": "use-route-hike-run-chooser",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-revision-02--use-route-hike-run-chooser--day--390x844.png",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NATIVE_MAP_UNAVAILABLE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "physical_device": false,
+      "notes": [
+        "Actual Route Detail handler opened explicit Hike/Run choices; recording was not started."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-R02-VIS-005",
+      "state": "delete-confirmation-cancel-path",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-revision-02--delete-confirmation-cancel-path--day--390x844.png",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NATIVE_MAP_UNAVAILABLE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "physical_device": false,
+      "notes": [
+        "Actual confirmation opened; Keep Route is non-destructive."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-R02-VIS-006",
+      "state": "small-web-constraint-long-name",
+      "theme": "night",
+      "viewport": "375x667",
+      "file": "images/route-revision-02--small-web-constraint-long-name--night--375x667.png",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NATIVE_MAP_UNAVAILABLE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "physical_device": false,
+      "notes": [
+        "375x667 Web constraint only; not a native small-iPhone or safe-area claim."
+      ]
+    }
+  ],
+  "boards": [
+    "images/board-route-revision-02.jpg"
+  ],
+  "runtime_errors": []
+}

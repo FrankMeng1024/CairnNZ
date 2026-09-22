@@ -1,0 +1,1096 @@
+{
+  "schema": "cairnnz.v1-closure.validation.v2",
+  "generatedAt": "2026-09-21T14:38:42.292Z",
+  "candidateFingerprint": {
+    "algorithm": "sha256",
+    "digest": "46aa7e1af18fb8187512991bd3a3d3450f892eebd2bb01867a03c0cd8d534040",
+    "fileCount": 664,
+    "scope": [
+      "app/src",
+      "app/scripts",
+      "app/package.json",
+      "app/package-lock.json",
+      "backend/src",
+      "backend/scripts",
+      "backend/package.json",
+      "backend/package-lock.json"
+    ]
+  },
+  "currentFingerprint": {
+    "algorithm": "sha256",
+    "digest": "46aa7e1af18fb8187512991bd3a3d3450f892eebd2bb01867a03c0cd8d534040",
+    "fileCount": 664,
+    "scope": [
+      "app/src",
+      "app/scripts",
+      "app/package.json",
+      "app/package-lock.json",
+      "backend/src",
+      "backend/scripts",
+      "backend/package.json",
+      "backend/package-lock.json"
+    ]
+  },
+  "validationIntegrity": "PASS",
+  "summary": {
+    "assertions": 20,
+    "PASS": 20,
+    "FAIL": 0,
+    "HOLD": 0,
+    "BLOCKED": 0,
+    "NOT_RUN": 0,
+    "UNVERIFIED": 0,
+    "NO_DEPLOYMENT": 0,
+    "controllingStates": [
+      "PASS",
+      "HOLD"
+    ],
+    "deployment": "NO_DEPLOYMENT",
+    "result": "HOLD",
+    "otaCandidateDisposition": "OTA_CANDIDATE_READY",
+    "otaCandidateReady": true
+  },
+  "otaCandidate": {
+    "status": "OTA_CANDIDATE_READY",
+    "ready": true,
+    "formalClosureUnaffected": true,
+    "checks": [
+      {
+        "id": "contract-schema",
+        "pass": true,
+        "actual": "cairnnz.v1-closure.ota-candidate-contract.v1",
+        "reason": "OTA convergence contract schema is unsupported"
+      },
+      {
+        "id": "validation-integrity",
+        "pass": true,
+        "actual": "PASS",
+        "reason": "closeout validation integrity is not PASS"
+      },
+      {
+        "id": "required-functional-evidence",
+        "pass": true,
+        "actual": [
+          {
+            "id": "R03-C1",
+            "result": "PASS"
+          },
+          {
+            "id": "R03-C2",
+            "result": "PASS"
+          },
+          {
+            "id": "R03-C3",
+            "result": "PASS"
+          },
+          {
+            "id": "R03-C4",
+            "result": "PASS"
+          },
+          {
+            "id": "R03-GPS",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-01",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-02",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-03",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-04",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-05",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-06",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-07",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-08",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-09",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-10",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-11",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-12",
+            "result": "PASS"
+          },
+          {
+            "id": "PUB-13",
+            "result": "PASS"
+          },
+          {
+            "id": "E2E-PUBLIC",
+            "result": "PASS"
+          },
+          {
+            "id": "E2E-REGRESSION",
+            "result": "PASS"
+          }
+        ],
+        "reason": "one or more required functional assertions are missing or not PASS"
+      },
+      {
+        "id": "required-run:final-pf-r8-connected",
+        "pass": true,
+        "actual": {
+          "terminalStatus": "PASS",
+          "sourceBinding": {
+            "status": "DEPENDENCY_EQUIVALENT",
+            "checkedFiles": 82,
+            "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/final-personal-friends-current-r8-offline-console-correlation-20260921T191208+0800/SOURCE_HASHES.sha256"
+          }
+        },
+        "expected": {
+          "runId": "final-pf-r8-connected",
+          "terminalStatus": "PASS",
+          "allowedSourceBindings": [
+            "EXACT",
+            "DEPENDENCY_EQUIVALENT"
+          ],
+          "dependencyFiles": 82
+        },
+        "reason": "final-pf-r8-connected is missing, failed, or stale against its required dependency ledger"
+      },
+      {
+        "id": "required-run:public-r15-connected",
+        "pass": true,
+        "actual": {
+          "terminalStatus": "PASS",
+          "sourceBinding": {
+            "status": "DEPENDENCY_EQUIVALENT",
+            "checkedFiles": 30,
+            "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+          }
+        },
+        "expected": {
+          "runId": "public-r15-connected",
+          "terminalStatus": "PASS",
+          "allowedSourceBindings": [
+            "EXACT",
+            "DEPENDENCY_EQUIVALENT"
+          ],
+          "dependencyFiles": 30
+        },
+        "reason": "public-r15-connected is missing, failed, or stale against its required dependency ledger"
+      },
+      {
+        "id": "required-run:c3-r14-connected",
+        "pass": true,
+        "actual": {
+          "terminalStatus": "PASS",
+          "sourceBinding": {
+            "status": "DEPENDENCY_EQUIVALENT",
+            "checkedFiles": 49,
+            "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/c3-borrowed-route-connected-r14-browser-provenance-20260921T083254+0800/SOURCE_HASHES.sha256"
+          }
+        },
+        "expected": {
+          "runId": "c3-r14-connected",
+          "terminalStatus": "PASS",
+          "allowedSourceBindings": [
+            "EXACT",
+            "DEPENDENCY_EQUIVALENT"
+          ],
+          "dependencyFiles": 49
+        },
+        "reason": "c3-r14-connected is missing, failed, or stale against its required dependency ledger"
+      },
+      {
+        "id": "required-evidence:homepage-q95-loaded-web",
+        "pass": true,
+        "results": [
+          {
+            "pass": true,
+            "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/homepage-f5-q95-primary-20260921T014200+0800/output/comparison/loaded-comparison-evidence.json",
+            "pointer": "inputs.artifacts.candidateDelivery",
+            "actual": "b6ae4d9c361793ee8ce0b9b7e348b647f033fed6c365e32623474e5a86f9c9cf"
+          },
+          {
+            "pass": true,
+            "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/homepage-f5-q95-primary-20260921T014200+0800/output/comparison/loaded-comparison-evidence.json",
+            "pointer": "results.0.capturesComplete",
+            "actual": true
+          }
+        ],
+        "reason": "homepage-q95-loaded-web evidence is missing, changed, or failed"
+      },
+      {
+        "id": "required-evidence:o61-loaded-auth-web",
+        "pass": true,
+        "results": [
+          {
+            "pass": true,
+            "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-convergence-o61-20260921T203950+0800/final-auth-capture-20260921T212515+0800/auth-o61-final-receipt.json",
+            "actual": "PASS"
+          },
+          {
+            "pass": true,
+            "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-convergence-o61-20260921T203950+0800/final-auth-capture-20260921T212515+0800/auth-o61-final-receipt.json",
+            "pointer": "marker.visibleCount",
+            "actual": 1
+          },
+          {
+            "pass": true,
+            "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-convergence-o61-20260921T203950+0800/final-auth-capture-20260921T212515+0800/auth-o61-final-receipt.json",
+            "pointer": "marker.oldO60Count",
+            "actual": 0
+          },
+          {
+            "pass": true,
+            "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-convergence-o61-20260921T203950+0800/final-auth-capture-20260921T212515+0800/auth-o61-final-receipt.json",
+            "pointer": "sourceFingerprint.digest",
+            "actual": "46aa7e1af18fb8187512991bd3a3d3450f892eebd2bb01867a03c0cd8d534040"
+          }
+        ],
+        "reason": "o61-loaded-auth-web evidence is missing, changed, or failed"
+      },
+      {
+        "id": "no-known-p0",
+        "pass": true,
+        "actual": [],
+        "reason": "one or more known P0 findings remain"
+      },
+      {
+        "id": "no-local-functional-blocker",
+        "pass": true,
+        "actual": {
+          "declared": [],
+          "pendingRuns": []
+        },
+        "reason": "a local functional blocker or pending run remains"
+      },
+      {
+        "id": "remaining-gap-categories",
+        "pass": true,
+        "actual": [
+          {
+            "id": "A4-150MS",
+            "category": "PERFORMANCE_DEFERRED",
+            "state": "HOLD"
+          },
+          {
+            "id": "FR-DISCOVERY-PLAN",
+            "category": "EVIDENCE_LIMIT",
+            "state": "HOLD"
+          },
+          {
+            "id": "NATIVE-PHYSICAL",
+            "category": "NATIVE",
+            "state": "NOT_RUN"
+          },
+          {
+            "id": "OWNER-VISUAL",
+            "category": "OWNER_ACCEPTANCE",
+            "state": "PENDING"
+          }
+        ],
+        "expected": [
+          "NATIVE",
+          "OWNER_ACCEPTANCE",
+          "PERFORMANCE_DEFERRED",
+          "EVIDENCE_LIMIT",
+          "P2"
+        ],
+        "reason": "a remaining gap is outside the explicitly allowed convergence categories"
+      },
+      {
+        "id": "gap-evidence:A4-150MS",
+        "pass": true,
+        "results": [
+          {
+            "pass": true,
+            "evidencePath": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/v1-closure/20260918T222838+0800/evidence/a4/7b495374e3b2362444aaf9e6f082c10376c4101310317277b71923856822a823/A4_PERFORMANCE_DEFERRED.md",
+            "actual": "5a66c43b364e26ac4bf83dc5db966896cf4feed8d3c6fa1856f080fe0daa013e"
+          }
+        ],
+        "reason": "A4-150MS retained-gap evidence is missing or changed"
+      },
+      {
+        "id": "gap-evidence:FR-DISCOVERY-PLAN",
+        "pass": true,
+        "results": [
+          {
+            "pass": true,
+            "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/fr-discovery-500-r5.1-n2001-dbba51a1-20260921T004320+0800/RELEASE.json",
+            "actual": "67188e86817c008b2f87ec20d71a04a8213f9249d9b758d539b5c4bed652e744"
+          }
+        ],
+        "reason": "FR-DISCOVERY-PLAN retained-gap evidence is missing or changed"
+      },
+      {
+        "id": "controlling-holds-allowed",
+        "pass": true,
+        "actual": [
+          {
+            "runId": "fr-discovery-r5.1-n2001",
+            "terminalStatus": "HOLD",
+            "sourceBinding": "DEPENDENCY_EQUIVALENT"
+          }
+        ],
+        "expected": [
+          "fr-discovery-r5.1-n2001"
+        ],
+        "reason": "a controlling failure or non-allowed/stale HOLD remains"
+      },
+      {
+        "id": "operational-boundary",
+        "pass": true,
+        "actual": {
+          "registryDeployment": "NO_DEPLOYMENT",
+          "deployment": "NO_DEPLOYMENT",
+          "otaPublication": "NOT_PUBLISHED",
+          "publicProductionEnabled": false
+        },
+        "reason": "deployment, OTA publication, or Public production-off boundary is not preserved"
+      }
+    ],
+    "reasons": []
+  },
+  "results": [
+    {
+      "id": "R03-C1",
+      "result": "PASS",
+      "runs": [
+        "final-pf-r8-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "final-pf-r8-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 82,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/final-personal-friends-current-r8-offline-console-correlation-20260921T191208+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "final-pf-r8-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json",
+              "actual": "PASS"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json",
+              "pointer": "negativeJourneys.0.cachedLeasePresentAfter",
+              "actual": false
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "R03-C2",
+      "result": "PASS",
+      "runs": [
+        "final-pf-r8-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "final-pf-r8-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 82,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/final-personal-friends-current-r8-offline-console-correlation-20260921T191208+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "final-pf-r8-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json",
+              "actual": "PASS"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json",
+              "pointer": "negativeJourneys.1.durableEnvelopeReady",
+              "actual": true
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "R03-C3",
+      "result": "PASS",
+      "runs": [
+        "c3-r14-connected",
+        "final-pf-r8-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "c3-r14-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 49,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/c3-borrowed-route-connected-r14-browser-provenance-20260921T083254+0800/SOURCE_HASHES.sha256"
+        },
+        {
+          "runId": "final-pf-r8-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 82,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/final-personal-friends-current-r8-offline-console-correlation-20260921T191208+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "c3-r14-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/c3-borrowed-route-connected-r14-run-20260921T005352Z-r14one01/final-evidence.json",
+              "actual": "PASS"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/c3-borrowed-route-connected-r14-run-20260921T005352Z-r14one01/final-evidence.json",
+              "pointer": "fixture.identityGate",
+              "actual": true
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/c3-borrowed-route-connected-r14-run-20260921T005352Z-r14one01/final-evidence.json",
+              "pointer": "controls.noInjectedAccount",
+              "actual": true
+            }
+          ]
+        },
+        {
+          "runId": "final-pf-r8-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json",
+              "actual": "PASS"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json",
+              "pointer": "fixture.identityGate",
+              "actual": true
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json",
+              "pointer": "controls.noInjectedAccount",
+              "actual": true
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "R03-C4",
+      "result": "PASS",
+      "runs": [
+        "final-pf-r8-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "final-pf-r8-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 82,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/final-personal-friends-current-r8-offline-console-correlation-20260921T191208+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "final-pf-r8-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json",
+              "actual": "PASS"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/current-focused-regression-aef22db2-20260921T064152Z/REGRESSION_RESULT.json",
+              "actual": "PASS"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/local-api-mysql-rev03g.json",
+              "assertionCount": 17
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "R03-GPS",
+      "result": "PASS",
+      "runs": [
+        "final-pf-r8-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "final-pf-r8-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 82,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/final-personal-friends-current-r8-offline-console-correlation-20260921T191208+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "final-pf-r8-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-personal-receipt.json",
+              "actual": "PASS"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-personal-receipt.json",
+              "pointer": "activity.liveMemoryBeforeFinish.route",
+              "actual": "Memory"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-personal-receipt.json",
+              "pointer": "controls.nativeEvidenceClaimed",
+              "actual": false
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-01",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-01.capability"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-13.empty-save"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-02",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-02.submit-approve"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-07.revision-race"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-03",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-03.prepublication-negative"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-04.encounter"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-04",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-05b.bounded-selection"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-05",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-05.scene-detail"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json",
+              "actual": "PASS"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-06",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-08.withdrawal-race"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json",
+              "actual": "PASS"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-07",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-06.interactions"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-02a.unknown-commit-retry"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-08",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-09.hide"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-10.block"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json",
+              "actual": "PASS"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-09",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-12.operator-state"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json",
+              "actual": "PASS"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-10",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-12.operator-state"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json",
+              "actual": "PASS"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-11",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-02b.text-contract"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json",
+              "actual": "PASS"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-12",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json",
+              "actual": "PASS"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "PUB-13",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionId": "PUB-11.legacy-containment"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-disabled-result.json",
+              "actual": "PASS"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "E2E-PUBLIC",
+      "result": "PASS",
+      "runs": [
+        "public-r15-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "public-r15-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 30,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "public-r15-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/gate-receipt.json",
+              "actual": "PASS"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json",
+              "assertionCount": 17
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json",
+              "actual": "PASS"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-disabled-result.json",
+              "actual": "PASS"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "id": "E2E-REGRESSION",
+      "result": "PASS",
+      "runs": [
+        "final-pf-r8-connected"
+      ],
+      "sourceBindings": [
+        {
+          "runId": "final-pf-r8-connected",
+          "status": "DEPENDENCY_EQUIVALENT",
+          "checkedFiles": 82,
+          "ledger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/final-personal-friends-current-r8-offline-console-correlation-20260921T191208+0800/SOURCE_HASHES.sha256"
+        }
+      ],
+      "proofResults": [
+        {
+          "runId": "final-pf-r8-connected",
+          "results": [
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json",
+              "actual": "PASS"
+            },
+            {
+              "pass": true,
+              "evidencePath": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-personal-receipt.json",
+              "actual": "PASS"
+            }
+          ]
+        }
+      ],
+      "reasons": []
+    }
+  ],
+  "pendingRuns": [],
+  "consistencyErrors": [],
+  "limitation": "This validates immutable receipt status, current dependency equivalence, allocation, executable proof predicates, and the distinct owner-test OTA convergence contract. OTA_CANDIDATE_READY does not change formal closure HOLD, publish an OTA, enable Public in production, or create native evidence.",
+  "planPath": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/v1-closure/20260918T222838+0800/03_ACCEPTANCE_PLAN.json",
+  "registryPath": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/v1-closure/20260918T222838+0800/FINAL_RUN_REGISTRY.json"
+}

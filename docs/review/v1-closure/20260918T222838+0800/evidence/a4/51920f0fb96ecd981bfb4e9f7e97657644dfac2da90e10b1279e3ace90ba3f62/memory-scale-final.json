@@ -1,0 +1,149 @@
+{
+  "schema": "cairnnz.revision03.memory-scale.v1",
+  "generatedAt": "2026-09-19T13:21:36.798Z",
+  "environment": {
+    "machine": "darwin x64 Intel(R) Core(TM) i5-5350U CPU @ 1.80GHz",
+    "node": "v24.11.1",
+    "renderer": "actual FogLayer Turf helpers; no Mapbox paint"
+  },
+  "budgetsFrozenBeforeRun": {
+    "maxSynchronousGeometrySliceMs": 150,
+    "scheduledActionAcknowledgementMs": 100,
+    "incrementalGeometryUpdateMs": 350,
+    "maxEventLoopSchedulingDelayMs": 150,
+    "coldLoad2001Ms": 45000,
+    "diagnostic10000Ms": 150000,
+    "combinedFriend2000Ms": 60000,
+    "cacheSynchronousSliceMs": 150,
+    "sampledUnsupportedRevealCount": 0
+  },
+  "candidateFingerprint": "51920f0fb96ecd981bfb4e9f7e97657644dfac2da90e10b1279e3ace90ba3f62",
+  "cases": [
+    {
+      "id": "DISTINCT-2001-LIVE-APPEND",
+      "rawFixes": 2041,
+      "acceptedCanonicalPoints": 2041,
+      "spatiallyUniqueCoverageFootprints": 2041,
+      "temporalWitnesses": 0,
+      "coldLoadMs": 15582.513554,
+      "sliceCount": 2798,
+      "coldRebuiltTileCount": 380,
+      "incrementalRebuiltTileCount": 9,
+      "coldRebuiltGroupCount": 380,
+      "incrementalRebuiltGroupCount": 9,
+      "sliceMs": {
+        "p50": 3,
+        "p95": 9,
+        "max": 28,
+        "coldMax": 28,
+        "incrementalMax": 9
+      },
+      "insertionMs": {
+        "p50": 0.08910199999991164,
+        "p95": 0.17992400000002817,
+        "max": 20.216263999999683
+      },
+      "incrementalGeometryUpdateMs": 276.220996,
+      "actionAcknowledgementMs": 5.712540000000445,
+      "renderPreparationMs": 33.427856999999676,
+      "persistentCacheRoundTrip": {
+        "inputTileCount": 380,
+        "serializedTileCount": 380,
+        "skippedTileCount": 0,
+        "chunks": 48,
+        "bytes": 684374,
+        "encodeMs": 98,
+        "maxEncodeSliceMs": 2,
+        "storageMs": 5,
+        "maxChunkWriteMs": 1,
+        "read": {
+          "operation": "read",
+          "cacheHit": true,
+          "chunkCount": 48,
+          "tileCount": 380,
+          "serializedBytes": 684374,
+          "parseMs": 9,
+          "maxParseSliceMs": 1,
+          "storageMs": 5
+        },
+        "eventLoopDelayMs": {
+          "p95": 2.490840999998909,
+          "max": 3.0882949999977427
+        },
+        "rebuiltTilesAfterReload": 9,
+        "rebuiltGroupsAfterReload": 9
+      },
+      "eventLoopSchedulingDelayMs": {
+        "cold": {
+          "p95": 10.923704000000726,
+          "max": 28.347353000000112
+        },
+        "incremental": {
+          "p95": 10.393127999999706,
+          "max": 11.506560000001627
+        }
+      },
+      "composeFogShapeMs": 9.85693800000081,
+      "unsupportedReveal": {
+        "method": "8,000 deterministic low-discrepancy samples plus independent Turf ground-distance support predicate (0.005 m numeric epsilon)",
+        "sampleCount": 8000,
+        "insideDisplay": 4565,
+        "unsupportedCount": 0,
+        "sampledUnsupportedAreaEstimateM2": 0,
+        "boundingAreaM2": 3412933.6651806934
+      },
+      "sampledRetainedLoss": 0,
+      "displayedGeometry": {
+        "components": 719,
+        "holes": 0,
+        "vertices": 14259
+      }
+    },
+    {
+      "id": "COMBINED-SELF-2001-FRIEND-CELLS-2000",
+      "selfAcceptedCanonicalPoints": 2001,
+      "friendProjectionCells": 2000,
+      "sourceCachesRemainSeparate": true,
+      "totalMs": 20261.945306,
+      "composeMs": 25.392806000003475,
+      "maxSynchronousSliceMs": 42,
+      "eventLoopSchedulingDelayMs": {
+        "p95": 3.193020999999135,
+        "max": 43.65715300000011
+      },
+      "rejectedFriendCellCount": 0,
+      "displayedGeometry": {
+        "components": 7905,
+        "holes": 0,
+        "vertices": 49981
+      }
+    },
+    {
+      "id": "DISTINCT-10000-DIAGNOSTIC",
+      "rawFixes": 10000,
+      "acceptedCanonicalPoints": 10000,
+      "spatiallyUniqueCoverageFootprints": 10000,
+      "temporalWitnesses": 0,
+      "totalMs": 76841.14636700001,
+      "sliceCount": 13444,
+      "renderPreparationMs": 95.16475200000423,
+      "composeFogShapeMs": 25.66524499998195,
+      "sliceMs": {
+        "p50": 3,
+        "p95": 9,
+        "max": 19
+      },
+      "eventLoopSchedulingDelayMs": {
+        "p95": 10.895921999996062,
+        "max": 54.45700000000943
+      },
+      "retainedSampleLoss": 0,
+      "displayedGeometry": {
+        "components": 3420,
+        "holes": 0,
+        "vertices": 69300
+      },
+      "claimBoundary": "diagnostic maximum tested; not an unlimited-support claim"
+    }
+  ]
+}

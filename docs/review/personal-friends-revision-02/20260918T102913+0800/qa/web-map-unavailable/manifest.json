@@ -1,0 +1,7 @@
+{
+  "generatedAt": "2026-09-18T04:47:14.013Z",
+  "evidenceKind": "Expo Web no-token renderer fallback with synthetic personal Memory; not native/device/NZ field evidence",
+  "assertion": "Map unavailable and personal Memory management controls remained usable; loading veil opacity reached zero",
+  "screenshot": "day-memory-map-unavailable-management-390x844.png",
+  "runtimeErrors": []
+}

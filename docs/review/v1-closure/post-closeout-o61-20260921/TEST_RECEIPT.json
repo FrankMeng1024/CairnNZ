@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-09-22T02:17:45Z",
+  "command": "node --test docs/review/v1-closure/post-closeout-o61-20260921/tests/*.test.mjs",
+  "workingDirectory": "/Users/mzm/Desktop/cairn/CairnNZ",
+  "exitCode": 0,
+  "tests": 57,
+  "passed": 57,
+  "failed": 0,
+  "cancelled": 0,
+  "skipped": 0,
+  "todo": 0,
+  "durationMs": 315.502601,
+  "connectedRegressionRun": false,
+  "connectedRegressionReason": "Skipped by independent review because the changes are deterministic evidence-contract utilities and a connected journey would not exercise their mutation cases.",
+  "frozenProduct": {
+    "marker": "O61",
+    "fingerprint": "46aa7e1af18fb8187512991bd3a3d3450f892eebd2bb01867a03c0cd8d534040",
+    "fileCount": 664
+  },
+  "frozenArchives": [
+    {
+      "path": "/Users/mzm/Desktop/cairn_personal_friends_03.zip",
+      "sha256": "ddb8a95f9838caab12c3ab4a48a6e83da300f52da401271575a4cf0d9a8736e1"
+    },
+    {
+      "path": "/Users/mzm/Desktop/cairn_v1_closure_01.zip",
+      "sha256": "a73272f480b775c08b864946137bd0e68510dad237014a8f5570b67bb95aff7b"
+    }
+  ],
+  "independentReview": {
+    "result": "PASS",
+    "reviewPasses": 3,
+    "finalNegativeProbes": [
+      "null readiness identity rejected",
+      "null fixture identity rejected",
+      "contradictory embedded terminal exit rejected",
+      "observed proof receipt marked FAIL rejected"
+    ]
+  }
+}

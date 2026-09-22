@@ -1,0 +1,54 @@
+{
+  "status": "NO_SAFE_SNAP_CLONE_CANDIDATE",
+  "generated": false,
+  "cloneName": null,
+  "cloneId": null,
+  "cloneVersion": 1,
+  "source": {
+    "serverId": 2073,
+    "clientActivityId": "c302e123-534d-4f60-ade1-159e3b48f3e5",
+    "qaSessionId": "qa-mtwrqajx-un973228",
+    "userIdentity": "current-snap-owner"
+  },
+  "sourceUserMatchesReviewUser": null,
+  "reason": [
+    "D1/D3 prove only the final mapped subsection; the initial mapped candidate remains just outside the current truth gate",
+    "No tested configuration satisfies the mandatory mapped -> canonical -> mapped clone gate across both public sections",
+    "The only existing app-openable QA projection is hard-coded for almost-done-v1. Creating snap clone v1 would require production/debug app code, forbidden by this read-only task."
+  ],
+  "bestSafeAnalysisGeometry": {
+    "configuration": "D1 4s sequence-aware, tidy=false, production radii/gates",
+    "matchedSubsections": [
+      {
+        "canonicalStart": 328,
+        "canonicalEnd": 391,
+        "distanceM": 87.549,
+        "confidence": 0.97601
+      }
+    ],
+    "canonicalFallback": [
+      {
+        "canonicalStart": 0,
+        "canonicalEnd": 328
+      }
+    ],
+    "coverage": 0.1267,
+    "matchedDistanceM": 87.549,
+    "fallbackDistanceM": 755.653,
+    "internalPathCanonical": true,
+    "crossingCanonical": true,
+    "repeatedTraversalOrdered": true,
+    "uTurnPreserved": true,
+    "wrongRoadStealingM": 0
+  },
+  "immutability": {
+    "normalActivityRowCreated": false,
+    "backendActivityRowCreated": false,
+    "memoryChanged": false,
+    "statsChanged": false,
+    "pendingSyncCreated": false,
+    "originalActivityChanged": false,
+    "productionMatcherChanged": false,
+    "productionTrackingChanged": false
+  }
+}

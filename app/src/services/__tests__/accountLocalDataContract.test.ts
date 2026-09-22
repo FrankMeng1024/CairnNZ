@@ -15,6 +15,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 jest.mock('../../store/storage', () => ({
   storage: {
     getItem: jest.fn(async (key: string) => mockAsyncValues.get(key) ?? null),
+    getItemStrict: jest.fn(async (key: string) => mockAsyncValues.get(key) ?? null),
     setItem: jest.fn(async (key: string, value: string) => { mockAsyncValues.set(key, value); }),
     removeItem: jest.fn(async (key: string) => { mockAsyncValues.delete(key); }),
   },
@@ -114,7 +115,9 @@ describe('deleted-account local ownership isolation', () => {
   test('an interrupted server-accepted deletion resumes before another account hydrates', () => {
     expect(source).toContain("const SCHEDULED_PURGE_KEY = '@cairn:account-deletion-local-purge:v1'");
     expect(source).toContain("const SECURE_SCHEDULED_PURGE_KEY = 'cairn_account_deletion_local_purge_v1'");
-    expect(source).toContain('account_local_purge_schedule_failed');
+    expect(source).toContain('account_local_purge_mirror_write_failed');
+    expect(source).toContain('account_local_purge_async_read_failed');
+    expect(source).toContain('account_local_purge_secure_read_failed');
     expect(source).toContain('scheduleDeletedAccountLocalPurge');
     expect(source).toContain('completeDeletedAccountLocalPurge');
     expect(source).toContain('resumeScheduledDeletedAccountLocalPurge');

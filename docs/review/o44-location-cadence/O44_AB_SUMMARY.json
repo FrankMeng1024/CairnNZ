@@ -1,0 +1,199 @@
+{
+  "status": "invalid_ab_both_walks_runtime_distanceFilter5",
+  "generatedAt": "2026-09-11T02:10:21Z",
+  "privacy": "relative distances and timing only; no absolute coordinates",
+  "comparisonValidity": {
+    "validFiveMetreSample": true,
+    "validOneMetreSample": false,
+    "reason": "Both completed Activities emitted activity_location_cadence_experiment_v1 with variant=distanceFilter5 and foregroundDistanceFilterM=5. Both starts had debugMode=false, so the resolver correctly forced the production 5 m value even though the second Activity was named 1m.",
+    "causalFiveToOneMetreConclusionAllowed": false
+  },
+  "experiment": {
+    "desiredAccuracy": "BestForNavigation",
+    "iosTimeIntervalApplied": false,
+    "canonicalAcceptanceChanged": false,
+    "rnmapboxConfigurationChanged": false,
+    "productionDefaultDistanceFilterM": 5,
+    "requestedExperimentalDistanceFilterM": 1
+  },
+  "sessions": {
+    "distanceFilter5": {
+      "qaSessionId": "qa-mtwajfzr-1w5yy6u6",
+      "serverActivityId": 2069,
+      "activityName": "5m",
+      "clientActivityIdSuffix": "d8c92ac2",
+      "localStart": "2026-09-11T09:41:59+08:00",
+      "localFinish": "2026-09-11T09:43:46+08:00",
+      "actualVariant": "distanceFilter5",
+      "foregroundDistanceFilterM": 5,
+      "telemetryEventCount": 289,
+      "telemetryBytes": 279313
+    },
+    "distanceFilter1": null,
+    "intendedDistanceFilter1Walk": {
+      "qaSessionId": "qa-mtwamspt-nrelihji",
+      "serverActivityId": 2070,
+      "activityName": "1m",
+      "clientActivityIdSuffix": "735ef6bb",
+      "localStart": "2026-09-11T09:44:35+08:00",
+      "localFinish": "2026-09-11T09:46:30+08:00",
+      "intendedSelection": "1 m experiment",
+      "actualVariant": "distanceFilter5",
+      "foregroundDistanceFilterM": 5,
+      "debugModeAtStart": false,
+      "telemetryEventCount": 403,
+      "telemetryBytes": 404332
+    }
+  },
+  "actualFiveMetreWalks": {
+    "walkA_named5m": {
+      "durationS": 97,
+      "raw": {
+        "count": 16,
+        "fixesPerMinuteWholeActivity": 9.9,
+        "fixesPerMinuteMiddleWindow": 7.32,
+        "intervalMs": { "p50": 5903, "p90": 9895.2, "p95": 10622.3, "max": 12107 },
+        "displacementM": { "p50": 5.58, "p95": 20.882, "max": 21.33 },
+        "horizontalAccuracyM": { "p50": 14.25, "p95": 26.93, "max": 26.93 },
+        "sourceTimestampAgeMs": { "p50": 79.5, "p95": 98.5, "max": 100 }
+      },
+      "canonical": {
+        "count": 10,
+        "fixesPerMinuteWholeActivity": 6.19,
+        "fixesPerMinuteMiddleWindow": 5.23,
+        "intervalMs": { "p50": 4999, "p95": 16603.8, "max": 16981 },
+        "acceptedRatio": 0.625,
+        "hardRejectCount": 4,
+        "hardRejectRate": 0.25,
+        "rejectionReasons": { "poor-horizontal-accuracy": 4 },
+        "candidateCreatedCount": 2,
+        "candidateCreatedRate": 0.125,
+        "candidateOutcomes": { "timeoutDrop": 2, "confirmed": 0 },
+        "candidateResolutionDelayMs": { "p50": 5000, "p95": 5000, "max": 5000 }
+      },
+      "processing": {
+        "callbackToDecisionMs": { "p50": 0, "p95": 1, "max": 1 },
+        "callbackToShapeSourceMs": { "p50": 36.5, "p95": 43.2, "max": 45 },
+        "nativeTimestampToShapeSourceMs": { "p50": 128, "p95": 134.55, "max": 135 }
+      },
+      "rnmapbox": {
+        "coordinateFixCountDuringTracking": 63,
+        "sourceIntervalMs": { "p50": 1000, "p95": 6000, "max": 7000 },
+        "displacementM": { "p50": 1.11, "p95": 11.967, "max": 21.33 },
+        "horizontalAccuracyM": { "p50": 14.25, "p95": 26.92, "max": 26.93 },
+        "sourceAgeMs": { "p50": 99, "p95": 354.4, "max": 1035 },
+        "leadToLatestCairnRawMs": { "p50": 3990.5, "p95": 8961.25, "max": 12105 },
+        "distanceToLatestCairnRawM": { "p50": 2.91, "p95": 10.738, "max": 21.33 },
+        "leadToLatestCanonicalMs": { "p50": 4995.5, "p95": 15144.4, "max": 16974 },
+        "distanceToLatestCanonicalM": { "p50": 4.19, "p95": 8.34, "max": 16.4 }
+      },
+      "nominalFirst20s": {
+        "rawCount": 4,
+        "rawDisplacementSumM": 49.11,
+        "acceptedCount": 0,
+        "canonicalDistanceAddedM": 0,
+        "note": "All four fixes were >25 m accuracy and rejected."
+      },
+      "nominalLast20s": {
+        "rawCount": 5,
+        "acceptedCount": 5,
+        "canonicalDistanceAddedM": 27.21,
+        "reportedSpeedP50Mps": 1.01,
+        "note": "Telemetry indicates continued walking, not a stationary end window."
+      }
+    },
+    "walkB_named1m_but_actual5m": {
+      "durationS": 105,
+      "raw": {
+        "count": 21,
+        "fixesPerMinuteWholeActivity": 12,
+        "fixesPerMinuteMiddleWindow": 11.85,
+        "intervalMs": { "p50": 4500.5, "p90": 7100, "p95": 8150, "max": 11000 },
+        "displacementM": { "p50": 5.76, "p95": 6.49, "max": 7.82 },
+        "horizontalAccuracyM": { "p50": 14.25, "p95": 14.25, "max": 14.25 },
+        "sourceTimestampAgeMs": { "p50": 96, "p95": 106, "max": 109 }
+      },
+      "canonical": {
+        "count": 15,
+        "fixesPerMinuteWholeActivity": 8.57,
+        "fixesPerMinuteMiddleWindow": 10.94,
+        "intervalMs": { "p50": 5000, "p95": 16285.55, "max": 21000 },
+        "acceptedRatio": 0.7143,
+        "hardRejectCount": 0,
+        "downstreamStationarySuppressionCount": 1,
+        "candidateCreatedCount": 5,
+        "candidateDecisionCount": 6,
+        "candidateCreatedRate": 0.2381,
+        "candidateOutcomes": { "timeoutDrop": 4, "confirmed": 1 },
+        "candidateResolutionDelayMs": { "values": [5000, 8001, 4000, 5000, 5000], "p50": 5000, "p95": 7400.8, "max": 8001 }
+      },
+      "processing": {
+        "callbackToDecisionMs": { "p50": 0, "p95": 1, "max": 1 },
+        "callbackToShapeSourceCurrentFixMs": { "p50": 41.5, "p95": 50.8, "max": 56 },
+        "nativeTimestampToShapeSourceCurrentFixMs": { "p50": 138.5, "p95": 156.4, "max": 159 },
+        "canonicalPointPublicationIncludingConfirmedCandidateMs": { "callbackToShapeP95": 1259.6, "callbackToShapeMax": 4068, "nativeToShapeP95": 1359, "nativeToShapeMax": 4159 }
+      },
+      "rnmapbox": {
+        "coordinateFixCountDuringTracking": 106,
+        "sourceIntervalMs": { "p50": 1000, "p95": 1000, "max": 1000 },
+        "displacementM": { "p50": 1.26, "p95": 2.225, "max": 5.41 },
+        "horizontalAccuracyM": { "p50": 14.25, "p95": 14.25, "max": 14.25 },
+        "sourceAgeMs": { "p50": 1087, "p95": 1094, "max": 1122 },
+        "leadToLatestCairnRawMs": { "p50": 2001, "p95": 6001, "max": 10001 },
+        "distanceToLatestCairnRawM": { "p50": 3.125, "p95": 6.072, "max": 7.82 },
+        "leadToLatestCanonicalMs": { "p50": 3001, "p95": 14851, "max": 20001 },
+        "distanceToLatestCanonicalM": { "p50": 4.66, "p95": 11.955, "max": 14.92 }
+      },
+      "nominalFirst20s": {
+        "rawCount": 5,
+        "rawDisplacementSumM": 20.29,
+        "acceptedCount": 2,
+        "canonicalDistanceAddedM": 14.15,
+        "reportedSpeedP50Mps": 0.07,
+        "note": "Protocol and low reported speed support stationary interpretation, but exact human stop timing was not independently instrumented."
+      },
+      "nominalLast20s": {
+        "rawCount": 3,
+        "rawDisplacementSumM": 16.23,
+        "acceptedCount": 1,
+        "canonicalDistanceAddedM": 14.92,
+        "reportedSpeedP50Mps": 0.4,
+        "note": "Protocol suggests stopping; telemetry alone cannot prove the final accepted edge was false movement."
+      }
+    }
+  },
+  "observedNonCausalComparison": {
+    "rawIntervalP50Reduction": 0.2376,
+    "rawIntervalP95Reduction": 0.2327,
+    "canonicalIntervalP50Reduction": -0.0002,
+    "canonicalIntervalP95Reduction": 0.0192,
+    "interpretation": "Natural provider/accuracy variation between two 5 m sessions; not a 5 m to 1 m treatment effect."
+  },
+  "selectedStall": {
+    "qaSessionId": "qa-mtwamspt-nrelihji",
+    "startShanghai": "2026-09-11T09:45:57.154+08:00",
+    "endShanghai": "2026-09-11T09:46:18.152+08:00",
+    "traceStallMs": 20998,
+    "rnmapboxChangedCoordinateEvents": 21,
+    "rnmapboxUniqueSourceTimestamps": 21,
+    "rnmapboxSourceIntervalP50Ms": 1000,
+    "rnmapboxCumulativeStepDisplacementM": 18.4,
+    "rnmapboxMaxDistanceFromCanonicalM": 14.92,
+    "rnmapboxAccuracyM": { "min": 14.25, "max": 14.25 },
+    "cairnRawCallbacks": [
+      { "rawOrdinal": 19, "dtMs": 6000, "rawDisplacementM": 5.37, "reportedSpeedMps": 0.4, "decision": "QUARANTINE", "outcome": "timeout-drop at 5000 ms" },
+      { "rawOrdinal": 20, "dtMs": 7000, "rawDisplacementM": 5.13, "reportedSpeedMps": 0.1, "decision": "QUARANTINE", "outcome": "timeout-drop at 5000 ms" },
+      { "rawOrdinal": 21, "dtMs": 8000, "rawDisplacementM": 5.73, "reportedSpeedMps": 0.87, "decision": "ACCEPT", "outcome": "ShapeSource in 48 ms" }
+    ],
+    "classification": ["S1 Cairn source silence between 5 m callbacks", "S3 stationary Candidate timeout/drop", "S6 GPS UI semantic mismatch", "S7 separate fresh RNMapbox presentation source"],
+    "notPresent": ["S2 25 m accuracy rejection", "S4 accepted point delayed downstream", "S5 lifecycle/provider restart"]
+  },
+  "derivedDecision": {
+    "oneMetreProductionCandidate": "NOT MEASURED",
+    "ordinaryLatencyHumanImprovementExplainedByOneMetre": false,
+    "dualProviderAtOneMetre": "NOT MEASURED",
+    "singleCairnOwnedHighCadenceSource": "SUPPORTED FOR INVESTIGATION, NOT YET SELECTED",
+    "provisionalPresentation": "POTENTIALLY USEFUL FOR UNCERTAIN INTERVALS, NOT JUSTIFIED AS A SUBSTITUTE FOR A VALID 1 m TEST OR CANDIDATE FIX",
+    "requiredNextMeasurement": "Repeat only the intended 1 m walk with Debug Mode remaining ON through Activity Start and verify the emitted identity before interpreting cadence."
+  }
+}

@@ -86,6 +86,12 @@ describe('storage', () => {
       const { storage } = require('../src/store/storage');
       await expect(storage.removeItem('k')).resolves.toBeUndefined();
     });
+
+    it('rethrows a strict remove failure so security-sensitive invalidation cannot false-pass', async () => {
+      (AsyncStorage.removeItem as jest.Mock).mockRejectedValueOnce(new Error('disk full'));
+      const { storage } = require('../src/store/storage');
+      await expect(storage.removeItem('k', { strict: true })).rejects.toThrow('disk full');
+    });
   });
 
   describe('on web', () => {

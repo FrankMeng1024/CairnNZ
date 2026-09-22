@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T180318+0800",
+  "client_focused_regression": {"suites_passed":17,"suites_total":17,"tests_passed":133,"tests_total":133,"exit_code":0},
+  "backend_origin_and_activity": {"tests_passed":18,"tests_total":18,"exit_code":0,"runner":"node --test"},
+  "activity_verify_changed": {"checks_passed":550,"checks_total":550,"exit_code":0},
+  "typescript": {"full_project_exit":"NONZERO_PRE_EXISTING_BASELINE","diagnostic_lines":253,"card_touched_file_diagnostic_lines":0},
+  "visual_flow": {"captures":16,"boards":4,"handler_steps":14,"runtime_errors":0},
+  "diagnosed_test_repairs": [
+    "runPreviewFinally fixture was updated to include the current required segments result shape",
+    "PolylineSampler's existing flattenGeometryToParts helper was exported for the existing alt-preservation regression"
+  ],
+  "incorrect_runner_attempt": "Jest was initially used for two node:test backend files and correctly rejected them as containing no Jest tests; the authoritative rerun used node --test and passed 18/18."
+}
+

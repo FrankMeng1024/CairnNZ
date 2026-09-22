@@ -1,0 +1,3 @@
+console [route:Plant]: Error: Cannot read properties of undefined (reading 'send')
+    at http://127.0.0.1:8081/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:91883:28
+Known mapbox-gl v2 request callback during direct QA route teardown; the next mounted map was independently required to report loaded().

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "archive_filename": "cairn_personal_01.zip",
+  "archive_revision": "01",
+  "run_id": "20260917T141933+0800",
+  "candidate_marker": "O58",
+  "source_head_at_start": "12fa1cd0ef599e53a81cd30537ce761c5e2150ce",
+  "content_root": "cairn_personal_01",
+  "file_count_including_manifests": 46,
+  "sha256_manifest": "MANIFEST.sha256",
+  "contains": [
+    "English implementation report and scoped plan",
+    "Requirements delta and machine-readable handoff",
+    "Changed-file, mutation-state, and retrieval-coverage inventories",
+    "Owner device review card",
+    "Activity Detail evidence provenance addendum",
+    "Focused test and QA output",
+    "Reproducible isolated capture script",
+    "Offline-readable visual board and actual referenced redacted screenshots"
+  ],
+  "excluded": [
+    "secrets",
+    ".env files",
+    "private databases",
+    "private user coordinates",
+    "node_modules",
+    "unrelated project files",
+    "production data"
+  ],
+  "archive_sha256_sidecar": "/Users/mzm/Desktop/cairn_personal_01.zip.sha256",
+  "note": "The external archive sidecar avoids the impossible self-hash cycle. MANIFEST.sha256 verifies every packaged payload file except itself."
+}
+

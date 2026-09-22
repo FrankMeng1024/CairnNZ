@@ -1,0 +1,167 @@
+{
+  "schema": "cairnnz.v1-closure.supervision.preparation-results.v1",
+  "mode": "PREPARE_ONLY",
+  "startedAt": "2026-09-19T10:16:34.718Z",
+  "finishedAt": "2026-09-19T10:16:38.073Z",
+  "rootSessionId": "01a0b4c1-b498-76e0-95bd-1976d11586f2",
+  "runId": "20260918T222838+0800",
+  "command": [
+    "/Users/mzm/.nvm/versions/node/v24.11.1/bin/node",
+    "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/v1-closure/20260918T222838+0800/supervision/test-preparation.mjs",
+    "--output",
+    "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/v1-closure/20260918T222838+0800/supervision/PREPARATION_RESULTS.json"
+  ],
+  "source": {
+    "head": "393338b5c159e7341d22b94086b5c29455386bdf",
+    "productFingerprint": "9cee885d048b37ba1257f2651e0add6aa0a37b583e59e5404cb8df2636722632",
+    "prepareStartTree": "ac6aa48abe38c5bf76d850d49f0826365173bdf4"
+  },
+  "inputs": {
+    "specification": "/Users/mzm/Desktop/CairnNZ_Unattended_04/SUPERVISION_ACCEPTANCE.json",
+    "specificationSha256": "cca589a77e3f24c68ba2f4d5ded49577bf428742635c03ccc8aa5742649cca6f",
+    "fixtures": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/v1-closure/20260918T222838+0800/supervision/fixtures/supervision-cases.json",
+    "fixturesSha256": "248c857d96da117e3a26d1fd77574f17f25ed96f443f36dc5815652fe7fdc245",
+    "queue": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/v1-closure/20260918T222838+0800/04_WORK_QUEUE.json",
+    "queueSha256": "7d25a8720c45a0b8e8975e53a3b1b94eba2496e3130665d464d3df3ba27bdd95"
+  },
+  "controls": {
+    "hookDefinition": "/Users/mzm/Desktop/cairn/CairnNZ/.codex/hooks.json",
+    "hookDefinitionSha256": "0909bdbb20abac6637d8eb5ff1e39abc360bb52480e1fabb52ed75343faa42dc",
+    "handler": "/Users/mzm/Desktop/cairn/CairnNZ/.codex/hooks/cairn-v1-stop-gate.mjs",
+    "handlerSha256": "61af54fc631e6f5189534749cd76a0daa14d0b33e8b48169b5d3139c84aa789a",
+    "queueAdapter": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/v1-closure/20260918T222838+0800/supervision/queue-adapter.mjs",
+    "queueAdapterSha256": "1f1ebc133177b146b975e4898a6418d124aaeed29cc7636791512610935a6996",
+    "observer": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/v1-closure/20260918T222838+0800/supervision/observer.mjs",
+    "observerSha256": "b26000e28e243c16271ca025691b51262935eb3d6eb390bf1e06a90d9f78ab0e"
+  },
+  "deterministicChecks": {
+    "repeatedHandlerOutputIdentical": true,
+    "repeatedQueueProjectionIdentical": true,
+    "nonRootSessionIgnored": true,
+    "subagentStopIgnored": true,
+    "otherWorkingDirectoryIgnored": true,
+    "configurationContainsOnlyStop": true
+  },
+  "tests": [
+    {
+      "id": "T01",
+      "requiredEvidenceClass": "LIVE",
+      "status": "NOT_RUN",
+      "preparationStatus": "NOT_RUN_LIVE_ONLY",
+      "actualEvidence": [],
+      "limitation": "PREPARE_ONLY does not invoke a real Stop hook or create a real disposable child/job failure."
+    },
+    {
+      "id": "T02",
+      "requiredEvidenceClass": "UNIT_PLUS_REAL_QUEUE_CHECK",
+      "status": "PASS",
+      "preparationStatus": "UNIT_OR_FIXTURE_PASS",
+      "actualEvidence": [
+        "real queue 7d25a8720c45a0b8e8975e53a3b1b94eba2496e3130665d464d3df3ba27bdd95 retains A4,A5,B4,C2,C3,D1,D2"
+      ]
+    },
+    {
+      "id": "T03",
+      "requiredEvidenceClass": "FIXTURE",
+      "status": "PASS",
+      "preparationStatus": "UNIT_OR_FIXTURE_PASS",
+      "actualEvidence": [
+        "DISPATCHED is retained as distinct from RUNNING"
+      ]
+    },
+    {
+      "id": "T04",
+      "requiredEvidenceClass": "LIVE",
+      "status": "NOT_RUN",
+      "preparationStatus": "NOT_RUN_LIVE_ONLY",
+      "actualEvidence": [],
+      "limitation": "PREPARE_ONLY does not invoke a real Stop hook or create a real disposable child/job failure."
+    },
+    {
+      "id": "T05",
+      "requiredEvidenceClass": "FIXTURE",
+      "status": "PASS",
+      "preparationStatus": "UNIT_OR_FIXTURE_PASS",
+      "actualEvidence": [
+        "independent READY work is projected without spawning a duplicate or bypassing approval"
+      ]
+    },
+    {
+      "id": "T06",
+      "requiredEvidenceClass": "FIXTURE",
+      "status": "PASS",
+      "preparationStatus": "UNIT_OR_FIXTURE_PASS",
+      "actualEvidence": [
+        "late output becomes terminal only after explicit quarantine"
+      ]
+    },
+    {
+      "id": "T07",
+      "requiredEvidenceClass": "FIXTURE",
+      "status": "PASS",
+      "preparationStatus": "UNIT_OR_FIXTURE_PASS",
+      "actualEvidence": [
+        "verified local software is represented separately from native and owner checks"
+      ]
+    },
+    {
+      "id": "T08",
+      "requiredEvidenceClass": "OWNER_LIVE",
+      "status": "NOT_RUN",
+      "preparationStatus": "UNIT_OR_FIXTURE_PASS",
+      "actualEvidence": [
+        "unit pause override allowed; same-session live owner drill remains NOT_RUN"
+      ],
+      "limitation": "Pause override passed as a unit fixture; the required owner-live pause/resume drill remains NOT_RUN."
+    },
+    {
+      "id": "T09",
+      "requiredEvidenceClass": "FIXTURE_ONLY",
+      "status": "PASS",
+      "preparationStatus": "UNIT_OR_FIXTURE_PASS",
+      "actualEvidence": [
+        "fixture-only classified pauses allow checkpoint return without retry or spawn behavior"
+      ]
+    },
+    {
+      "id": "T10",
+      "requiredEvidenceClass": "OBSERVER_FIXTURE",
+      "status": "PASS",
+      "preparationStatus": "UNIT_OR_FIXTURE_PASS",
+      "actualEvidence": [
+        "stale file, root silence, and missing process produce uncertainty only"
+      ]
+    },
+    {
+      "id": "T11",
+      "requiredEvidenceClass": "FIXTURE",
+      "status": "PASS",
+      "preparationStatus": "UNIT_OR_FIXTURE_PASS",
+      "actualEvidence": [
+        "changed source invalidates older evidence"
+      ]
+    },
+    {
+      "id": "T12",
+      "requiredEvidenceClass": "UNIT",
+      "status": "PASS",
+      "preparationStatus": "UNIT_OR_FIXTURE_PASS",
+      "actualEvidence": [
+        "one correction is requested, then a visible fault returns control; explicit owner pause still wins"
+      ]
+    }
+  ],
+  "summary": {
+    "result": "PASS_WITH_LIVE_TESTS_NOT_RUN",
+    "fixturePass": 9,
+    "liveNotRun": [
+      "T01",
+      "T04",
+      "T08"
+    ],
+    "hookTrusted": false,
+    "hookLoaded": "UNVERIFIED",
+    "liveStopInvocation": "NOT_RUN"
+  },
+  "limitation": "These are deterministic unit/fixture receipts. They do not prove that Codex trusted, loaded, or invoked the project Stop hook."
+}

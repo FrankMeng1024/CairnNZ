@@ -1,0 +1,54 @@
+{
+  "verifiedAt": "2026-09-11T15:23:58.290Z",
+  "source": "fresh sessions.route_points Detail-authority read",
+  "expectedFingerprint": "f4f38b0c",
+  "observed": {
+    "identity": {
+      "id": 2073,
+      "clientActivityId": "c302e123-534d-4f60-ade1-159e3b48f3e5",
+      "type": "hiking",
+      "name": "snap",
+      "finalized": true,
+      "abandoned": false,
+      "flags": null
+    },
+    "route": {
+      "routeHash": "208fa97501e8f70201d0701bfe97815e8d93bcd51be3fd8df7863ceba74b70ec",
+      "rawHash": "3d47e9144ae6d3e13e900e341787aefcb86586e7819a809cb6168f70a8fad13f",
+      "pointCount": 97,
+      "rawPointCount": 428,
+      "fingerprint": "f4f38b0c",
+      "segmentCount": 1,
+      "timestampsMonotonic": true,
+      "endpointsPresent": true
+    },
+    "metrics": {
+      "distanceM": 843.202,
+      "durationS": 805
+    },
+    "ownerAggregate": {
+      "session_count": 12,
+      "finalized_count": "10",
+      "distance_sum_m": 4802.370010375977,
+      "duration_sum_s": "4699"
+    },
+    "memoryAggregate": {
+      "row_count": 170,
+      "id_sum": "2613903",
+      "timestamp_sum": "304128693045857",
+      "max_id": "15479"
+    }
+  },
+  "checks": {
+    "identity": true,
+    "fingerprint": true,
+    "routeHash": true,
+    "rawHash": true,
+    "pointCounts": true,
+    "metrics": true,
+    "chronology": true,
+    "ownerAggregate": true,
+    "memoryAggregate": true
+  },
+  "backupStillRestorable": true
+}

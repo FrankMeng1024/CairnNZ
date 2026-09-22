@@ -1,0 +1,1541 @@
+{
+  "schema": "cairnnz.o52.blind-field-forensic.v1",
+  "generated_at": "2026-09-12T21:28:47+08:00",
+  "analysis_mode": "blind-read-only",
+  "coordinate_policy": {
+    "exact_coordinates_included": false,
+    "geometry_representation": "distances, durations, headings, and local progress only",
+    "note": "Production latitude/longitude was used transiently for forensic calculations and is not reproduced."
+  },
+  "authority": {
+    "field_evidence_order": [
+      "production Activity persistence",
+      "persisted canonical and Final geometry",
+      "O52 QA/runtime telemetry",
+      "current O52 source contracts",
+      "current deterministic replay",
+      "tests"
+    ],
+    "o51_regression_authority": [
+      "docs/review/activity-real/O51_REAL_FIELD_FORENSIC.md",
+      "docs/review/activity-real/o51-field/O51_FIELD_FORENSIC_HANDOFF.json"
+    ],
+    "settled_o51_names_preserved": [
+      "great hike",
+      "run issue",
+      "mstand"
+    ],
+    "tester_symptom_known": false,
+    "source_changed": false,
+    "ota_published": false,
+    "o_marker_advanced": false
+  },
+  "global_verdict": {
+    "tracking_freeze": "NOT READY",
+    "final_freeze": "READY WITH KNOWN LIMITATIONS",
+    "energy_measurement_readiness": "NOT READY / CONFOUNDED",
+    "battery_accepted": false,
+    "blind_assessment": "Both saved routes remain truthful and recoverable, but both contain material evidence-loss intervals; lost run also contains a confirmed post-reacquisition segment-provenance reversal."
+  },
+  "evidence_limitations": [
+    {
+      "id": "EL-01",
+      "scope": "both",
+      "limitation": "The server route_points_raw payload was finalized from durable canonical evidence after recovery and is not the original raw callback stream."
+    },
+    {
+      "id": "EL-02",
+      "scope": "lost run",
+      "limitation": "Primary QA telemetry ends 9.555 seconds after Start after an HTTP 401 upload; full-session provider, WAL, presentation, and Finish aggregates are unavailable."
+    },
+    {
+      "id": "EL-03",
+      "scope": "hike ka",
+      "limitation": "Raw spatial-delta arrays were privacy-redacted during upload and terminal health fields after field 48 were truncated by the sanitizer."
+    },
+    {
+      "id": "EL-04",
+      "scope": "both",
+      "limitation": "No physical battery or thermal readings were persisted."
+    }
+  ],
+  "precision_policy": {
+    "variant": "distanceFilter1",
+    "foreground": {
+      "accuracy": "BestForNavigation",
+      "distance_interval_m": 1,
+      "ios_time_interval_applied": false
+    },
+    "background": {
+      "accuracy": "BestForNavigation",
+      "distance_interval_m": 1,
+      "ios_time_interval_applied": false
+    },
+    "canonical_acceptance_changed": false,
+    "rnmapbox_activity_authority": "expo-custom-provider",
+    "field_conclusion": "Background evidence opportunity materially improved where the source was active; actual cadence remained wider and platform-shaped and did not prevent lifecycle/process silence."
+  },
+  "activities": {
+    "hike_ka": {
+      "identity": {
+        "requested_label": "hike ka",
+        "server_name": "ka",
+        "exact_literal_server_name_found": false,
+        "identity_resolution": "Unambiguous most recent O52 hiking Activity for production user 72.",
+        "server_id": 2077,
+        "client_id": "f7a6fcb9-eed4-45b3-a7e5-fe9c8bd71b4b",
+        "user_id": 72,
+        "mode": "hiking",
+        "app_version": "0.2.6",
+        "native_build": "56",
+        "ota_update_id": null,
+        "o52_runtime_proof": "activity_location_cadence_experiment_v1 emitted O52 1 m/custom-provider fields",
+        "start_utc": "2026-09-12T12:00:25Z",
+        "end_utc": "2026-09-12T12:06:33Z",
+        "server_finalized_utc": "2026-09-12T12:07:42Z",
+        "wall_duration_s": 368,
+        "active_duration_s": 356,
+        "saved_distance_m": 329.2645568847656,
+        "raw_callback_count": 168,
+        "canonical_point_count": 138,
+        "final_point_count": 41,
+        "canonical_segment_aware_distance_m": 329.26456062432186,
+        "canonical_all_adjacency_distance_m": 414.20447209378625,
+        "final_segment_aware_distance_m": 316.891,
+        "unique_segment_ids": 2,
+        "contiguous_segment_runs": 2,
+        "gps_reacquired_gap_count": 0,
+        "process_recovery_boundary_count": 1,
+        "pause_count": 1,
+        "resume_count": 1,
+        "cairn_count": 0,
+        "plant_count": 0
+      },
+      "blind_assessment": {
+        "state": "SUSPICIOUS BUT RECOVERABLE",
+        "summary": "Mostly usable route with an 89.703 s process-recovery break and transient presentation/data-quality anomalies; no invented distance or global corruption.",
+        "confidence": "HIGH for anomaly, MEDIUM for root cause"
+      },
+      "foreground_cadence": {
+        "provider_elapsed_ms_lower_bound": 229655,
+        "raw_callback_count": 135,
+        "callbacks_per_minute_upper_bound_from_elapsed_lower_bound": 35.27,
+        "retained_delta_sample_count": 57,
+        "delta_ms": {
+          "p50": 1000,
+          "p95": 6000,
+          "max": 9000
+        },
+        "long_gap_counts": {
+          "gt_2s": 5,
+          "gt_3s": 3,
+          "gt_5s": 3,
+          "gt_10s": 0
+        },
+        "raw_spatial_delta_m": null,
+        "raw_spatial_delta_unavailable_reason": "Privacy-redacted from uploaded aggregate.",
+        "raw_accuracy_m": null,
+        "raw_accuracy_unavailable_reason": "Coalesced upload does not retain every callback accuracy.",
+        "accepted_evidence": {
+          "point_count": 121,
+          "delta_s": {
+            "p50": 1,
+            "p95": 2.001,
+            "max": 13
+          },
+          "spatial_delta_m": {
+            "p50": 1.491,
+            "p95": 3.125,
+            "max": 32.209
+          },
+          "hacc_m": {
+            "p50": 14.246,
+            "p95": 16.732,
+            "max": 24.614
+          }
+        }
+      },
+      "background_cadence": {
+        "provider_elapsed_ms_lower_bound": 42592,
+        "raw_callback_count": 33,
+        "callbacks_per_minute_upper_bound_from_elapsed_lower_bound": 46.49,
+        "retained_delta_sample_count": 29,
+        "delta_ms": {
+          "p50": 1000,
+          "p95": 6565,
+          "max": 8000
+        },
+        "long_gap_counts": {
+          "gt_2s": 6,
+          "gt_3s": 4,
+          "gt_5s": 2,
+          "gt_10s": 0
+        },
+        "raw_spatial_delta_m": null,
+        "raw_spatial_delta_unavailable_reason": "Privacy-redacted from uploaded aggregate.",
+        "raw_accuracy_m": null,
+        "raw_accuracy_unavailable_reason": "Coalesced upload does not retain every callback accuracy.",
+        "accepted_evidence": {
+          "point_count": 17,
+          "delta_s": {
+            "p50": 1,
+            "p95": 12.435,
+            "max": 12.435
+          },
+          "spatial_delta_m": {
+            "p50": 1.818,
+            "p95": 23.721,
+            "max": 23.721
+          },
+          "hacc_m": {
+            "p50": 14.246,
+            "p95": 20.373,
+            "max": 20.373
+          }
+        }
+      },
+      "raw_health": {
+        "distribution_basis": "persisted trusted/canonical evidence, not original raw callbacks",
+        "accuracy_m": {
+          "p50": 14.245954622602348,
+          "p95": 16.907515392598327,
+          "max": 24.61421972462782,
+          "le_5m": {
+            "count": 5,
+            "percent": 3.62
+          },
+          "gt_5_le_10m": {
+            "count": 7,
+            "percent": 5.07
+          },
+          "gt_10_le_20m": {
+            "count": 122,
+            "percent": 88.41
+          },
+          "gt_20m": {
+            "count": 4,
+            "percent": 2.9
+          }
+        },
+        "reported_speed_mps": {
+          "p50": 0.980797139583045,
+          "p95": 1.2532084680220836,
+          "max": 1.5054200397209656
+        },
+        "coordinate_speed_mps": {
+          "p50": 1.0772801815871993,
+          "p95": 2.5352741251477413,
+          "max": 4.780004212695615
+        },
+        "speed_accuracy": null,
+        "valid_course_count": 126,
+        "course_resultant": 0.9466139965635831,
+        "course_change_deg": {
+          "p50": 4.3605197304599415,
+          "p95": 24.387054083131737,
+          "max": 61.80658841266779
+        },
+        "longest_source_silence_s": 89.703,
+        "longest_foreground_within_source_silence_s": 9,
+        "longest_background_within_source_silence_s": 8,
+        "classification": "USABLE",
+        "explanation": "Dense and directionally consistent when active, but broad approximately 14 m hAcc and one process break prevent GOOD."
+      },
+      "canonical_health": {
+        "accept_decisions": 131,
+        "candidate_decisions": 19,
+        "reject_decisions": 9,
+        "refine_decisions": 7,
+        "stationary_named_suppress_or_refine": 12,
+        "candidate_transitions": {
+          "created": 10,
+          "confirmed": 7,
+          "rejected": 6,
+          "timeout": 2
+        },
+        "segment_count": 2,
+        "gap_count": 0,
+        "gap_reasons": [],
+        "other_break_reasons": [
+          "process-recovery"
+        ],
+        "longest_canonical_silence_s": 89.703,
+        "longest_canonical_silence_while_raw_healthy_s": 8.912,
+        "false_stationary_distance_m": null,
+        "false_stationary_distance_note": "No defensible >=30 s stationary window; no drift accumulation observed.",
+        "maximum_suspicious_accepted_edge": {
+          "distance_m": 37.864683915858386,
+          "duration_s": 41.001,
+          "verdict": "plausible delayed/batched movement"
+        },
+        "maximum_suspicious_rejected_or_held_movement_m": 32.20899604242126,
+        "owner_generation_rejections": 1,
+        "duplicate_canonical_points": 0,
+        "timestamp_chronology_violations": 0,
+        "foreground_background_handoffs": {
+          "clean": 2,
+          "suspicious": 1
+        }
+      },
+      "stationary_windows": [
+        {
+          "start_utc": "2026-09-12T12:03:48Z",
+          "end_utc": "2026-09-12T12:04:01Z",
+          "duration_s": 13,
+          "meaningful_stationary_window": false,
+          "accepted_distance_m": 3.26,
+          "hacc_m": 14.25,
+          "raw_cloud_radius_m": null,
+          "candidate_behavior": "stationary Candidate/refine logic active",
+          "exit_behavior": "movement resumed without Gap",
+          "segment_continuity": true,
+          "verdict": "Too short and accuracy-limited to classify stationary."
+        }
+      ],
+      "transition_windows": [
+        {
+          "id": "HK-T1",
+          "background_start_utc": "2026-09-12T12:01:54.648Z",
+          "foreground_return_utc": "2026-09-12T12:02:03.233Z",
+          "foreground_takeover_complete_utc": "2026-09-12T12:02:03.363Z",
+          "drained_count": 11,
+          "provider_overlap_ms": 0,
+          "canonical_continuity": true,
+          "result": "healthy"
+        },
+        {
+          "id": "HK-T2",
+          "background_start_utc": "2026-09-12T12:02:09.004Z",
+          "foreground_return_utc": "2026-09-12T12:02:38.124Z",
+          "foreground_takeover_complete_utc": "2026-09-12T12:02:38.314Z",
+          "drained_count": 18,
+          "provider_overlap_ms": 0,
+          "canonical_continuity": true,
+          "result": "healthy with batching"
+        },
+        {
+          "id": "HK-T3",
+          "inactive_utc": "2026-09-12T12:04:05.060Z",
+          "background_utc": "2026-09-12T12:04:37.155Z",
+          "foreground_return_utc": "2026-09-12T12:04:44.917Z",
+          "background_source_started_while_active_utc": "2026-09-12T12:04:54.511Z",
+          "background_source_stopped_utc": "2026-09-12T12:04:59.302Z",
+          "provider_overlap_ms": 0,
+          "canonical_continuity": false,
+          "result": "suspicious lifecycle ordering before process recovery"
+        },
+        {
+          "id": "HK-T4",
+          "map_restore_utc": "2026-09-12T12:06:07.395Z",
+          "apple_idle_stopped_utc": "2026-09-12T12:06:12.398Z",
+          "expo_foreground_started_utc": "2026-09-12T12:06:13.176Z",
+          "first_recovered_canonical_utc": "2026-09-12T12:06:13.704Z",
+          "provider_overlap_ms": 0,
+          "canonical_continuity": false,
+          "break_reason": "process-recovery",
+          "result": "truthful recovery with missing evidence"
+        }
+      ],
+      "turn_and_geometry_windows": [
+        {
+          "id": "HK-G1",
+          "start_utc": "2026-09-12T12:00:33Z",
+          "end_utc": "2026-09-12T12:00:42Z",
+          "event": "startup acquisition correction",
+          "local_displacement_m": 32.209,
+          "raw": "implausible leap under changing accuracy",
+          "canonical": "rejected/quarantined, then coherent corridor confirmed",
+          "final": "confirmed corridor represented",
+          "shape_verdict": "faithful and conservative"
+        },
+        {
+          "id": "HK-G2",
+          "start_utc": "2026-09-12T12:01:58Z",
+          "end_utc": "2026-09-12T12:02:20Z",
+          "event": "short reversal/lateral detour",
+          "local_progress_m": {
+            "before": 108,
+            "reversal": 90,
+            "after": 103
+          },
+          "raw": "background evidence with hAcc up to about 20 m and invalid course",
+          "canonical": "retained",
+          "final": "reasonably simplified without trusted network geometry",
+          "shape_verdict": "data-quality-limited; true U-turn not proven"
+        },
+        {
+          "id": "HK-G3",
+          "start_utc": "2026-09-12T12:04:03Z",
+          "end_utc": "2026-09-12T12:04:44Z",
+          "event": "delayed background fix",
+          "distance_m": 37.864683915858386,
+          "duration_s": 41.001,
+          "delivery_delay_s": 17.751,
+          "canonical": "continuous accepted edge",
+          "final": "preserved",
+          "shape_verdict": "correct"
+        },
+        {
+          "id": "HK-G4",
+          "start_utc": "2026-09-12T12:04:44.001Z",
+          "end_utc": "2026-09-12T12:06:13.704Z",
+          "event": "process recovery relocation",
+          "distance_m": 84.93991146122742,
+          "duration_s": 89.703,
+          "canonical": "new segment; connector excluded",
+          "final": "separate segment",
+          "shape_verdict": "truthful discontinuity"
+        }
+      ],
+      "provider_ownership": {
+        "expo_foreground_starts": 4,
+        "expo_foreground_stops": 4,
+        "expo_background_starts": 3,
+        "expo_background_stops": 3,
+        "cairn_custom_provider_starts": 5,
+        "cairn_custom_provider_observed_stops": 4,
+        "missing_custom_stop_explanation": "Interrupted process interval.",
+        "mapbox_apple_idle_intervals_ms": [
+          3885,
+          5003
+        ],
+        "provider_overlap_ms": 0,
+        "unintended_simultaneous_activity_ownership": false,
+        "pause_behavior": "Custom provider stopped 10 ms after Pause; no later accepted fix.",
+        "finish_behavior": "Already paused; fence/drain completed before O50."
+      },
+      "camera_follow": {
+        "follow_state_before_background": null,
+        "manual_browse_state": null,
+        "follow_state_after_foreground": null,
+        "recenter_latency_ms": null,
+        "missing_fields": [
+          "correlated followUser state",
+          "manual gesture state",
+          "camera center and puck/canonical target in one event",
+          "map-idle completion latency"
+        ],
+        "recovery_sequence": {
+          "apple_idle_start_utc": "2026-09-12T12:06:07.395Z",
+          "camera_fly_start_utc": "2026-09-12T12:06:07.505Z",
+          "camera_fly_interrupted_utc": "2026-09-12T12:06:09.109Z",
+          "apple_target_hacc_range_m": [
+            39,
+            68
+          ],
+          "max_inter_target_displacement_m": 50.13,
+          "apple_idle_stop_utc": "2026-09-12T12:06:12.398Z",
+          "expo_custom_start_utc": "2026-09-12T12:06:13.176Z",
+          "classification": "EXPECTED BUT UX-CONFUSING",
+          "severity": "P2"
+        }
+      },
+      "presentation_health": {
+        "presentation_location_events": 140,
+        "user_location_targets": 140,
+        "source_interval_s": {
+          "p50": 1,
+          "p95": 3,
+          "max": 30
+        },
+        "presentation_to_raw_separation_m": {
+          "p50": 1.25,
+          "p95": 2.55,
+          "max": 84.94
+        },
+        "presentation_to_canonical_separation_m": {
+          "p50": 1.52,
+          "p95": 28.25,
+          "max": 84.94
+        },
+        "animation_targets": 127,
+        "animation_completions": 109,
+        "animation_interruptions": 17,
+        "animation_resets": 1,
+        "startup_separation_duration_s": 8.912,
+        "presentation_updates_while_fully_backgrounded": 0,
+        "tracking_truth_correct_while_presentation_suspicious": true
+      },
+      "route_efficiency": {
+        "geometry_build_count": 138,
+        "shape_source_update_count": 137,
+        "changed_payload_bytes_max": 2048,
+        "changed_payload_bytes_cumulative": 136944,
+        "stable_body_chunk_count": 0,
+        "bounded_head_update_count": 137,
+        "rollback_or_full_projection_rebuild_count": 138,
+        "route_projection_rebuilt_true_for_all_retained_aggregates": true,
+        "payload_bound_satisfied": true,
+        "incremental_projection_behaved_as_designed": false,
+        "source_cause": "Hike remaps points to fresh objects, defeating the point-identity append check.",
+        "visible_route_regression": false
+      },
+      "wal": {
+        "accepted_or_recovered_record_count": 138,
+        "instrumented_append_count_lower_bound": 137,
+        "physical_append_operations_lower_bound": 135,
+        "logical_bytes_lower_bound": 113217,
+        "actual_append_bytes_lower_bound": 113217,
+        "checkpoint_count": 0,
+        "checkpoint_bytes": 0,
+        "total_commit_ms_lower_bound": 1378,
+        "commit_latency_ms": {
+          "p50": null,
+          "p95": null,
+          "max": 471
+        },
+        "repair_events": 0,
+        "torn_tail_events": 0,
+        "rollback_or_corruption_events": 0,
+        "process_death_recovered_records": 129,
+        "linear_or_bounded_behavior_confirmed": true,
+        "note": "One final pre-process record was recovered but occurred after the last first-generation health counter."
+      },
+      "qa": {
+        "remote_merged_events": 1066,
+        "remote_merged_bytes": 950327,
+        "final_reported_local_bounded_events": 599,
+        "upload_count": 10,
+        "server_merged_bytes_echoed_at_upload_10": 949730,
+        "actual_request_upload_bytes": null,
+        "last_reported_delta_event_count": 105,
+        "retained_point_event_aggregates": 130,
+        "coalesced_point_event_total": null,
+        "durable_flush_count": null,
+        "durable_flush_bytes": null,
+        "critical_immediate_flush_count": null,
+        "overhead_material": true,
+        "defects": [
+          "critical flush serializes the whole bounded local array",
+          "coalesced aggregate timestamp changes defeat timestamp delta cursor and server identity",
+          "48-field sanitizer drops required terminal callback/cadence fields"
+        ]
+      },
+      "memory": {
+        "evidence_calls": 406,
+        "evidence_mutations": 13,
+        "new_explored_cells": 13,
+        "deduplications": 393,
+        "batch_flushes": 2,
+        "persistence_writes": 18,
+        "persistence_bytes": 462912,
+        "full_snapshot_generations": 18,
+        "network_sync_requests": 5,
+        "server_points": 13,
+        "max_persistence_latency_ms": null,
+        "deferred_durability_boundary_flushed": true,
+        "truth_regression": false,
+        "batching_verdict": "Effective against 1 m per-callback amplification; lifecycle/recovery boundaries still produced more snapshots than mutations."
+      },
+      "network": {
+        "activity_start_requests": 1,
+        "activity_final_save_requests": 1,
+        "activity_delta_backup_requests": null,
+        "memory_requests": 5,
+        "qa_uploads": 10,
+        "map_matching_requests_production": 4,
+        "directions_requests_production": 3,
+        "mapbox_tile_or_style_requests": null,
+        "live_map_matching_requests": 0,
+        "request_storm": false,
+        "unexpected_long_wait": "Server final save observed about 63 seconds after local durable completion."
+      },
+      "final": {
+        "canonical_distance_m": 329.26456062432186,
+        "final_distance_m": 316.891,
+        "length_ratio": 0.9624,
+        "canonical_to_final_displacement_m": {
+          "p50": 0.3665146502163886,
+          "p95": 1.6584522814056721,
+          "max": 2.3495089436589547
+        },
+        "final_point_count": 41,
+        "small_zigzag_diagnostic": {
+          "before": 4,
+          "after": 3
+        },
+        "network_refined_islands": 1,
+        "canonical_derived_sections": 4,
+        "free_traversal_sections": 1,
+        "road_offset_sections": 1,
+        "pedestrian_network_sections": 0,
+        "seam_rejections": 0,
+        "wrong_road_stealing": false,
+        "map_matching_requests": 4,
+        "directions_requests": 3,
+        "timeouts": 0,
+        "fallback_count": 1,
+        "canonical_fallback_distance_m": 316.8587467780753,
+        "o50_duration_ms": 3792,
+        "saved_replay_equal": true,
+        "main_corridor": {
+          "map_matching_attempted": true,
+          "map_matching_response": "HTTP 200; one later window accepted candidate",
+          "directions_attempted": true,
+          "directions_response": "HTTP 200; no safe candidate",
+          "network_candidate": true,
+          "accepted_into_final_distance_m": 0,
+          "rejection_reason": "conservative side/ambiguity compositor gates",
+          "final_mode": "canonical-derived plus FREE_TRAVERSAL"
+        },
+        "recovery_corridor": {
+          "map_matching_attempted": true,
+          "response": "HTTP 200 accepted candidate",
+          "tracepoint_support": "4/4 non-null",
+          "confidence": 0.8419190899075566,
+          "accepted": true,
+          "geometry_mode": "road-offset",
+          "canonical_distance_m": 12.405813846246614,
+          "display_distance_m": 11.418016277245654,
+          "displacement_max_m": 1.0734832428919938
+        },
+        "straight_road_endpoint_blend_recurrence": false
+      },
+      "finish": {
+        "source_fence_and_reconciliation_ms": 1163,
+        "o50_wall_ms": 3792,
+        "map_matching_aggregate_request_ms": 6130,
+        "directions_aggregate_request_ms": 770,
+        "memory_reconciliation_ms": 939,
+        "payload_serialization_ms": 2,
+        "local_durable_completion_ms": 999,
+        "server_save_request_duration_ms": null,
+        "navigation_ms": null,
+        "finish_to_local_complete_ms": 6952,
+        "finish_to_observed_server_save_ms": 70000,
+        "note": "Aggregate API durations overlap; server save delay is pending-sync latency and not proof the UI blocked."
+      },
+      "pace": null,
+      "cairns": []
+    },
+    "lost_run": {
+      "identity": {
+        "requested_label": "lost run",
+        "server_name": "lost run",
+        "exact_literal_server_name_found": true,
+        "server_id": 2078,
+        "client_id": "71b581ea-0feb-4f18-ba77-8b195b90a87b",
+        "user_id": 72,
+        "mode": "running",
+        "app_version": "0.2.6",
+        "native_build": "56",
+        "ota_update_id": null,
+        "o52_runtime_proof": "activity_location_cadence_experiment_v1 emitted O52 1 m/custom-provider fields",
+        "start_utc": "2026-09-12T12:07:44Z",
+        "end_utc": "2026-09-12T12:18:42Z",
+        "server_finalized_utc": "2026-09-12T12:27:42Z",
+        "wall_duration_s": 658,
+        "active_duration_s": 614,
+        "saved_distance_m": 753.3114013671875,
+        "raw_callback_count": null,
+        "raw_callback_unavailable_reason": "QA telemetry ended after opening window; server raw payload is recovered canonical evidence.",
+        "canonical_point_count": 245,
+        "final_point_count": 68,
+        "canonical_segment_aware_distance_m": 753.3114013671875,
+        "canonical_all_adjacency_distance_m": 1429.2667200051737,
+        "final_segment_aware_distance_m": 722.529,
+        "unique_segment_ids": 2,
+        "contiguous_segment_runs": 3,
+        "gps_reacquired_gap_count": 1,
+        "presentation_break_count": 2,
+        "pause_count": null,
+        "resume_count": null,
+        "cairn_count": 0,
+        "plant_count": 0
+      },
+      "blind_assessment": {
+        "state": "ABNORMAL",
+        "summary": "A material true source-loss Gap is represented honestly, but the recovered background tail reuses the stale pre-Gap segment identity.",
+        "confidence": "HIGH"
+      },
+      "foreground_cadence": {
+        "scope": "opening window only",
+        "provider_elapsed_ms_approx": 3300,
+        "raw_callback_count": 5,
+        "retained_delta_sample_count": 4,
+        "delta_ms": {
+          "p50": 1000,
+          "p95": 5586,
+          "max": 5586
+        },
+        "long_gap_counts": {
+          "gt_2s": 1,
+          "gt_3s": 1,
+          "gt_5s": 1,
+          "gt_10s": 0
+        },
+        "raw_spatial_delta_m": null,
+        "raw_accuracy_m": null
+      },
+      "background_cadence": {
+        "scope": "opening confirmed provider run only",
+        "provider_elapsed_ms": 5175,
+        "raw_callback_count": 5,
+        "retained_delta_sample_count": 4,
+        "delta_ms": {
+          "p50": 1000,
+          "p95": 2578,
+          "max": 2578
+        },
+        "long_gap_counts": {
+          "gt_2s": 1,
+          "gt_3s": 0,
+          "gt_5s": 0,
+          "gt_10s": 0
+        },
+        "raw_spatial_delta_m": null,
+        "raw_accuracy_m": null,
+        "whole_persisted_accepted_stream": {
+          "point_count": 245,
+          "background_dominant": true,
+          "exact_source_attribution": false,
+          "delta_s": {
+            "p50": 1,
+            "p95": 2,
+            "max": 328.002
+          },
+          "long_gap_counts": {
+            "gt_2s": 4,
+            "gt_3s": 3,
+            "gt_5s": 3,
+            "gt_10s": 3
+          },
+          "spatial_delta_m": {
+            "p50": 2.953,
+            "p95": 4.742,
+            "max": 673.941
+          },
+          "hacc_m": {
+            "p50": 14.246,
+            "p95": 14.246,
+            "max": 22.469
+          },
+          "healthy_first_run_accepted_points_per_minute": 52.8
+        }
+      },
+      "raw_health": {
+        "distribution_basis": "persisted trusted/canonical evidence, not original raw callbacks",
+        "accuracy_m": {
+          "p50": 14.245954723342155,
+          "p95": 14.245955357781096,
+          "max": 22.469459772294925,
+          "le_5m": {
+            "count": 2,
+            "percent": 0.82
+          },
+          "gt_5_le_10m": {
+            "count": 6,
+            "percent": 2.45
+          },
+          "gt_10_le_20m": {
+            "count": 236,
+            "percent": 96.33
+          },
+          "gt_20m": {
+            "count": 1,
+            "percent": 0.41
+          }
+        },
+        "reported_speed_mps": {
+          "p50": 2.525379424483772,
+          "p95": 3.6453603887736477,
+          "max": 4.979358889576263
+        },
+        "coordinate_speed_mps": {
+          "p50": 2.873245674278907,
+          "p95": 4.646431976235726,
+          "max": 9.041939697517506
+        },
+        "speed_accuracy": null,
+        "valid_course_count": 236,
+        "course_resultant": 0.6061405903727161,
+        "course_change_deg": {
+          "p50": 4.683772805182798,
+          "p95": 21.813245682385435,
+          "max": 169.45236779882555
+        },
+        "longest_source_silence_s": 328.002,
+        "longest_foreground_silence_s": null,
+        "longest_background_silence_s": null,
+        "classification": "POOR",
+        "explanation": "Available sections are dense and usable; the five-minute source outage makes the whole session POOR."
+      },
+      "canonical_health": {
+        "accept_decisions": null,
+        "candidate_decisions": null,
+        "reject_decisions": null,
+        "stationary_suppress_count": null,
+        "aggregate_unavailable_reason": "Terminal QA health not uploaded.",
+        "canonical_point_count": 245,
+        "unique_segment_count": 2,
+        "contiguous_segment_run_count": 3,
+        "gap_count": 1,
+        "gap_reasons": [
+          "gps-reacquired"
+        ],
+        "gap_duration_s": 328.002,
+        "gap_distance_m": 673.9409231161394,
+        "false_gap": false,
+        "maximum_same_run_edge": {
+          "distance_m": 17.81496100761845,
+          "duration_s": 13
+        },
+        "maximum_one_second_edge_m": 9.041939697517506,
+        "maximum_suspicious_rejected_movement_m": null,
+        "owner_generation_rejections_retained": 1,
+        "duplicate_canonical_points": 0,
+        "timestamp_chronology_violations": 0,
+        "segment_chronology_violation": true,
+        "segment_runs": [
+          {
+            "identity": "start-segment",
+            "start_utc": "2026-09-12T12:07:45.048Z",
+            "end_utc": "2026-09-12T12:11:46.000Z",
+            "point_count": 213
+          },
+          {
+            "identity": "gps-reacquired-segment",
+            "start_utc": "2026-09-12T12:17:14.002Z",
+            "end_utc": "2026-09-12T12:17:16.002Z",
+            "point_count": 2
+          },
+          {
+            "identity": "incorrectly-reused-start-segment",
+            "start_utc": "2026-09-12T12:17:18.001Z",
+            "end_utc": "2026-09-12T12:17:59.000Z",
+            "point_count": 30
+          }
+        ]
+      },
+      "stationary_windows": [
+        {
+          "start_utc": "2026-09-12T12:10:57Z",
+          "end_utc": "2026-09-12T12:11:03Z",
+          "duration_s": 6,
+          "meaningful_stationary_window": false,
+          "reported_speed_min_mps": 0.05,
+          "raw_cloud_radius_m": null,
+          "accepted_distance_m": null,
+          "exit_behavior": "Next accepted fix after 13 s moved 17.815 m; no Gap.",
+          "segment_continuity": true,
+          "verdict": "Brief stop/deceleration behaved correctly."
+        }
+      ],
+      "transition_windows": [
+        {
+          "id": "LR-T1",
+          "background_start_utc": "2026-09-12T12:07:46.066Z",
+          "foreground_return_utc": "2026-09-12T12:07:51.205Z",
+          "foreground_takeover_complete_utc": "2026-09-12T12:07:51.288Z",
+          "drained_count": 5,
+          "provider_overlap_ms": 0,
+          "canonical_continuity": true,
+          "result": "healthy"
+        },
+        {
+          "id": "LR-T2",
+          "background_transition_utc": "2026-09-12T12:07:53.691Z",
+          "registration_attempt_utc": "2026-09-12T12:07:53.717Z",
+          "registration_result_utc": null,
+          "last_retained_telemetry_utc": "2026-09-12T12:07:53.717Z",
+          "persisted_evidence_continues_to_utc": "2026-09-12T12:11:46.000Z",
+          "canonical_continuity": "dense until later 328 s outage",
+          "result": "ownership outcome unavailable"
+        }
+      ],
+      "turn_and_geometry_windows": [
+        {
+          "id": "LR-G1",
+          "time_utc": "2026-09-12T12:08:46Z",
+          "event": "approximately 56 degree corridor turn",
+          "canonical": "preserved",
+          "final": "preserved/simplified",
+          "shape_verdict": "healthy"
+        },
+        {
+          "id": "LR-G2",
+          "time_utc": "2026-09-12T12:10:38Z",
+          "event": "major direction change",
+          "maximum_one_second_edge_m": 9.041939697517506,
+          "canonical": "preserved under Run envelope and accuracy uncertainty",
+          "final": "preserved/simplified",
+          "shape_verdict": "usable, accuracy-limited"
+        },
+        {
+          "id": "LR-G3",
+          "time_utc": "2026-09-12T12:11:30Z",
+          "event": "major corridor turn",
+          "canonical": "preserved",
+          "final": "preserved",
+          "shape_verdict": "healthy"
+        },
+        {
+          "id": "LR-G4",
+          "start_utc": "2026-09-12T12:11:46.000Z",
+          "end_utc": "2026-09-12T12:17:14.002Z",
+          "event": "source-loss relocation and direction reversal",
+          "duration_s": 328.002,
+          "distance_m": 673.9409231161394,
+          "canonical": "correct new gps-reacquired segment",
+          "final": "separate run with no connector",
+          "shape_verdict": "truthful source-loss representation"
+        },
+        {
+          "id": "LR-G5",
+          "time_utc": "2026-09-12T12:17:18.001Z",
+          "event": "segment identity reversion",
+          "edge_distance_m": 2.014403966441056,
+          "edge_duration_s": 1.999,
+          "canonical": "plausible geometry assigned stale old segment ID",
+          "final": "unnecessary second break",
+          "shape_verdict": "incorrect provenance"
+        }
+      ],
+      "provider_ownership": {
+        "scope": "opening retained window only",
+        "expo_foreground_starts": 2,
+        "expo_background_confirmed_starts": 1,
+        "second_background_registration_result": null,
+        "cairn_custom_provider_starts": 2,
+        "cairn_custom_provider_stops": 2,
+        "mapbox_apple_idle_prestart_ms": 2416,
+        "provider_overlap_ms": 0,
+        "unintended_simultaneous_activity_ownership_in_retained_window": false,
+        "unintended_simultaneous_activity_ownership_entire_session": null,
+        "entire_session_unavailable_reason": "QA telemetry cutoff.",
+        "pause_behavior": null,
+        "finish_behavior": null
+      },
+      "camera_follow": {
+        "follow_state_before_background": null,
+        "manual_browse_state": null,
+        "follow_state_after_foreground": null,
+        "camera_target": null,
+        "canonical_user_location": null,
+        "puck_target": null,
+        "recenter_latency_ms": null,
+        "classification": "INSUFFICIENT EVIDENCE"
+      },
+      "presentation_health": {
+        "scope": "opening retained window only",
+        "presentation_location_events": 4,
+        "route_geometry_build_count": 1,
+        "route_source_update_count": 0,
+        "changed_payload_bytes": 16,
+        "presentation_updates_while_retained_background_interval": 0,
+        "maximum_separation_m": null,
+        "head_catch_up": null,
+        "classification": "INSUFFICIENT EVIDENCE after opening"
+      },
+      "route_efficiency": {
+        "geometry_build_count": null,
+        "shape_source_update_count": null,
+        "changed_payload_bytes_total": null,
+        "changed_payload_bytes_max": null,
+        "stable_body_rebuild_count": null,
+        "bounded_head_update_count": null,
+        "rollback_or_full_rebuild_count": null,
+        "opening_observation": {
+          "geometry_build_count": 1,
+          "source_update_count": 0,
+          "payload_bytes": 16,
+          "route_projection_rebuilt": true
+        },
+        "incremental_route_behavior_verdict": "INSUFFICIENT EVIDENCE"
+      },
+      "wal": {
+        "accepted_or_recovered_record_count": 245,
+        "append_count": null,
+        "physical_append_operations": null,
+        "logical_bytes": null,
+        "actual_append_bytes": null,
+        "checkpoint_count": null,
+        "checkpoint_bytes": null,
+        "total_commit_ms": null,
+        "commit_latency_ms": {
+          "p50": null,
+          "p95": null,
+          "max": null
+        },
+        "repair_events": null,
+        "torn_tail_events": null,
+        "rollback_or_corruption_events": null,
+        "durability_confirmed": true,
+        "linear_or_bounded_behavior_confirmed": null,
+        "note": "All 245 canonical points survived eventual process recovery, but runtime scaling counters were not uploaded."
+      },
+      "qa": {
+        "remote_merged_events": 102,
+        "remote_merged_bytes": 82735,
+        "upload_attempt_count_access_log": 5,
+        "successful_uploads_before_terminal_failure": 4,
+        "terminal_failure_http_status": 401,
+        "terminal_failure_utc_approx": "2026-09-12T12:09:53Z",
+        "first_checkpoint_server_merged_bytes_echoed": 3075,
+        "actual_request_upload_bytes": null,
+        "first_checkpoint_delta_event_count": 5,
+        "retained_point_event_aggregates": 24,
+        "coalesced_point_event_total": null,
+        "durable_flush_count": null,
+        "durable_flush_bytes": null,
+        "critical_immediate_flush_count": null,
+        "overhead_material": "unknown after opening",
+        "tracking_failure_isolation_worked": true,
+        "observability_survived": false
+      },
+      "memory": {
+        "evidence_calls": null,
+        "evidence_mutations_lower_bound": 42,
+        "new_explored_cells": 42,
+        "deduplications": null,
+        "batch_flushes": null,
+        "persistence_writes": null,
+        "persistence_bytes": null,
+        "full_snapshot_generations": null,
+        "network_sync_requests": 17,
+        "network_401_requests": 15,
+        "retry_interval_s": 15,
+        "successful_batches": [
+          39,
+          3
+        ],
+        "server_points": 42,
+        "max_persistence_latency_ms": null,
+        "deferred_durability_boundary_flushed": true,
+        "truth_regression": false,
+        "batching_verdict": "Truth persisted, but fixed 15 s authorization-failure retry created a request storm."
+      },
+      "network": {
+        "activity_start_requests": 1,
+        "activity_final_save_requests": 1,
+        "activity_delta_backup_requests": null,
+        "memory_requests": 17,
+        "memory_401_requests": 15,
+        "qa_upload_attempts": 5,
+        "qa_terminal_status": 401,
+        "map_matching_requests_production": null,
+        "directions_requests_production": null,
+        "map_matching_requests_current_replay": 6,
+        "directions_requests_current_replay": 4,
+        "mapbox_tile_or_style_requests": null,
+        "live_map_matching_requests": 0,
+        "marker_post_400_count": 2,
+        "request_storm": true,
+        "request_storm_kind": "Memory POST 401 at fixed 15 s backoff",
+        "unexpected_long_wait": "Server finalization about 9 minutes after saved end."
+      },
+      "final": {
+        "canonical_distance_m": 753.3114013671875,
+        "final_distance_m": 722.529,
+        "length_ratio": 0.9591,
+        "canonical_to_final_displacement_m": {
+          "p50": 0.4440346243542973,
+          "p95": 2.528456066705512,
+          "max": 5.366046507488256
+        },
+        "final_point_count": 68,
+        "small_zigzag_diagnostic": {
+          "before": 11,
+          "after": 4
+        },
+        "network_refined_islands": 0,
+        "canonical_derived_sections_current_replay": 5,
+        "free_traversal_sections_current_replay": 1,
+        "road_offset_sections": 0,
+        "pedestrian_network_sections": 0,
+        "seam_rejections": 0,
+        "wrong_road_stealing": false,
+        "map_matching_requests_production": null,
+        "directions_requests_production": null,
+        "map_matching_requests_current_replay": 6,
+        "directions_requests_current_replay": 4,
+        "timeouts_production": null,
+        "canonical_fallback_distance_m": 753.3114013671875,
+        "o50_duration_ms_production": null,
+        "saved_replay_equal": true,
+        "saved_replay_fingerprint": "010ce8da",
+        "runs": [
+          {
+            "input_points": 213,
+            "output_points": 61,
+            "map_matching_requests": 4,
+            "directions_requests": 3,
+            "network_candidate": "one Directions candidate formed",
+            "network_geometry_accepted": false,
+            "rejection_reason": "conservative side/ambiguity compositor gates",
+            "canonical_fallback_distance_m": 706.13,
+            "canonical_derived_sections": 3,
+            "free_traversal_sections": 1
+          },
+          {
+            "input_points": 2,
+            "output_points": 2,
+            "map_matching_requests": 1,
+            "directions_requests": 0,
+            "network_geometry_accepted": false,
+            "canonical_fallback_distance_m": 1.319
+          },
+          {
+            "input_points": 30,
+            "output_points": 5,
+            "map_matching_requests": 1,
+            "directions_requests": 1,
+            "network_geometry_accepted": false,
+            "canonical_fallback_distance_m": 45.862
+          }
+        ],
+        "straight_road_endpoint_blend_recurrence": false,
+        "gap_connector_credited": false
+      },
+      "pace": {
+        "formula": "active_duration_s / (saved_distance_m / 1000)",
+        "active_duration_s": 614,
+        "saved_distance_m": 753.3114013671875,
+        "seconds_per_km": 814.93,
+        "displayed_approx": "13:35 min/km",
+        "mathematically_correct_for_saved_activity": true,
+        "label": "LIVE PACE",
+        "label_semantically_correct": false,
+        "gap_effect": "Gap time remains while unobserved distance is not credited; physical pace is unknowable and displayed average can be materially slow.",
+        "invented_connector_distance_allowed": false,
+        "classification": "PRODUCT DESIGN ISSUE",
+        "severity": "P2",
+        "confidence": "HIGH"
+      },
+      "finish": {
+        "source_fence_and_reconciliation_ms": null,
+        "o50_wall_ms": null,
+        "map_matching_ms": null,
+        "directions_ms": null,
+        "local_persistence_ms": null,
+        "server_save_request_duration_ms": null,
+        "navigation_ms": null,
+        "saved_end_to_server_finalized_ms": 540000,
+        "last_canonical_to_saved_end_ms": 43000,
+        "intervening_app_start_utc": "2026-09-12T12:18:28.929Z",
+        "finalizing_app_start_utc": "2026-09-12T12:27:42.008Z",
+        "classification": "INSUFFICIENT EVIDENCE",
+        "note": "Eventual durability is proved; client-visible Finish latency and cause of pending delay are not."
+      },
+      "cairns": [],
+      "unlinked_marker_network_errors": {
+        "count": 2,
+        "http_status": 400,
+        "time_range_utc": "2026-09-12T12:17:10Z/2026-09-12T12:17:17Z",
+        "activity_link_proven": false,
+        "classification": "INSUFFICIENT EVIDENCE"
+      }
+    }
+  },
+  "replay": {
+    "hike_ka": {
+      "canonical_input_points": 138,
+      "canonical_output_points": 138,
+      "segment_runs_saved": 2,
+      "segment_runs_replay": 2,
+      "distance_saved_m": 329.26456062432186,
+      "distance_replay_m": 329.26456062432186,
+      "final_points_saved": 41,
+      "final_points_replay": 41,
+      "final_equal": true,
+      "raw_replay_possible": false
+    },
+    "lost_run": {
+      "canonical_input_points": 245,
+      "canonical_output_points": 245,
+      "segment_runs_saved": 3,
+      "segment_runs_replay": 3,
+      "distance_saved_m": 753.3114013671875,
+      "distance_replay_m": 753.3114013671875,
+      "final_points_saved": 68,
+      "final_points_replay": 68,
+      "final_fingerprint_saved_and_replay": "010ce8da",
+      "final_equal": true,
+      "raw_replay_possible": false
+    },
+    "version_or_state_divergence_detected": false
+  },
+  "suspicious_intervals": [
+    {
+      "rank": 1,
+      "id": "O52F-01",
+      "activity": "lost run",
+      "start_utc": "2026-09-12T12:11:46.000Z",
+      "end_utc": "2026-09-12T12:17:14.002Z",
+      "duration_s": 328.002,
+      "symptom": "Complete source/canonical silence with 673.941 m plausible endpoint relocation.",
+      "raw_evidence": "No callback telemetry survives; endpoints have healthy recorded accuracy before/after.",
+      "canonical_consequence": "Correct gps-reacquired Gap; connector and distance excluded.",
+      "final_consequence": "Separate Final run; no invented connector.",
+      "likely_layer": "native source/lifecycle/process",
+      "classification": "LIKELY BUG",
+      "severity": "P1",
+      "confidence": "HIGH anomaly / MEDIUM cause"
+    },
+    {
+      "rank": 2,
+      "id": "O52F-02",
+      "activity": "hike ka",
+      "start_utc": "2026-09-12T12:04:44.001Z",
+      "end_utc": "2026-09-12T12:06:13.704Z",
+      "duration_s": 89.703,
+      "symptom": "Process-recovery boundary with 84.940 m plausible relocation.",
+      "raw_evidence": "No accepted/source evidence across interval; process restarts and recovery loads 129 points.",
+      "canonical_consequence": "New process-recovery segment; connector excluded.",
+      "final_consequence": "Separate short Final run.",
+      "likely_layer": "lifecycle/process recovery",
+      "classification": "LIKELY BUG",
+      "severity": "P1",
+      "confidence": "HIGH anomaly / MEDIUM cause"
+    },
+    {
+      "rank": 3,
+      "id": "O52F-03",
+      "activity": "lost run",
+      "start_utc": "2026-09-12T12:17:18.001Z",
+      "end_utc": "2026-09-12T12:17:59.000Z",
+      "duration_s": 40.999,
+      "symptom": "Thirty plausible points reuse the original segment ID after two points in the new reacquisition segment.",
+      "raw_evidence": "Persisted point provenance old -> new -> old with increasing timestamps.",
+      "canonical_consequence": "Segment chronology violation and second break.",
+      "final_consequence": "Unnecessary second Final break.",
+      "likely_layer": "background context/canonical provenance",
+      "classification": "CONFIRMED BUG",
+      "severity": "P1",
+      "confidence": "HIGH"
+    },
+    {
+      "rank": 4,
+      "id": "O52F-04",
+      "activity": "hike ka",
+      "start_utc": "2026-09-12T12:04:05.060Z",
+      "end_utc": "2026-09-12T12:05:11.180Z",
+      "duration_s": 66.12,
+      "symptom": "Delayed inactive/background state and background source activation after foreground return.",
+      "canonical_consequence": "Late 41 s movement fix accepted, later low-quality evidence rejected; process continuity later lost.",
+      "final_consequence": "No direct Final corruption; precedes recovery break.",
+      "likely_layer": "AppState/location ownership lifecycle",
+      "classification": "LIKELY BUG",
+      "severity": "P1",
+      "confidence": "HIGH sequence / MEDIUM causality"
+    },
+    {
+      "rank": 5,
+      "id": "O52F-05",
+      "activity": "hike ka",
+      "start_utc": "2026-09-12T12:00:25Z",
+      "end_utc": "2026-09-12T12:06:27Z",
+      "duration_s": 362,
+      "symptom": "All normal route append telemetry reports full projection rebuild.",
+      "canonical_consequence": "None.",
+      "final_consequence": "None; live route remains visually continuous.",
+      "likely_layer": "map presentation efficiency",
+      "classification": "CONFIRMED BUG",
+      "severity": "P1",
+      "confidence": "HIGH"
+    },
+    {
+      "rank": 6,
+      "id": "O52F-06",
+      "activity": "lost run",
+      "start_utc": "2026-09-12T12:08:15Z",
+      "end_utc": "2026-09-12T12:11:46Z",
+      "duration_s": 211,
+      "symptom": "Fifteen Memory POST 401 responses at 15 s cadence.",
+      "canonical_consequence": "None.",
+      "final_consequence": "None; Memory eventually syncs 42 cells.",
+      "likely_layer": "Memory network backoff",
+      "classification": "CONFIRMED BUG",
+      "severity": "P1",
+      "confidence": "HIGH"
+    },
+    {
+      "rank": 7,
+      "id": "O52F-07",
+      "activity": "hike ka",
+      "start_utc": "2026-09-12T12:00:24.530Z",
+      "end_utc": "2026-09-12T12:06:40.750Z",
+      "duration_s": 376.22,
+      "symptom": "QA merged 1,066 events and approximately 950 KB despite coalescing/delta intent.",
+      "canonical_consequence": "None.",
+      "final_consequence": "None.",
+      "likely_layer": "QA persistence/upload identity",
+      "classification": "CONFIRMED BUG",
+      "severity": "P1",
+      "confidence": "HIGH"
+    },
+    {
+      "rank": 8,
+      "id": "O52F-08",
+      "activity": "lost run",
+      "start_utc": "2026-09-12T12:09:53Z",
+      "end_utc": "2026-09-12T12:27:42Z",
+      "duration_s": 1069,
+      "symptom": "QA upload 401 terminates primary Activity telemetry.",
+      "canonical_consequence": "Tracking continues and persists.",
+      "final_consequence": "No geometry loss attributable to telemetry; forensic completeness lost.",
+      "likely_layer": "QA upload/auth",
+      "classification": "CONFIRMED BUG",
+      "severity": "P1",
+      "confidence": "HIGH"
+    },
+    {
+      "rank": 9,
+      "id": "O52F-09",
+      "activity": "hike ka",
+      "start_utc": "2026-09-12T12:00:33Z",
+      "end_utc": "2026-09-12T12:00:42Z",
+      "duration_s": 8.912,
+      "symptom": "Raw/puck location up to approximately 33 m ahead of canonical route during acquisition.",
+      "canonical_consequence": "Implausible points rejected/quarantined; corridor later confirmed.",
+      "final_consequence": "Confirmed corridor retained.",
+      "likely_layer": "sensor acquisition/presentation",
+      "classification": "EXPECTED BUT UX-CONFUSING",
+      "severity": "P2",
+      "confidence": "HIGH"
+    },
+    {
+      "rank": 10,
+      "id": "O52F-10",
+      "activity": "hike ka",
+      "start_utc": "2026-09-12T12:06:07.395Z",
+      "end_utc": "2026-09-12T12:06:13.176Z",
+      "duration_s": 5.781,
+      "symptom": "Recovery map runs Apple idle provider and interrupted camera fly before restored Expo custom authority.",
+      "canonical_consequence": "None.",
+      "final_consequence": "None.",
+      "likely_layer": "camera/recovery presentation",
+      "classification": "EXPECTED BUT UX-CONFUSING",
+      "severity": "P2",
+      "confidence": "HIGH"
+    },
+    {
+      "rank": 11,
+      "id": "O52F-11",
+      "activity": "hike ka",
+      "start_utc": "2026-09-12T12:01:58Z",
+      "end_utc": "2026-09-12T12:02:20Z",
+      "duration_s": 22,
+      "symptom": "Short retained reversal/detour under broad hAcc and invalid course.",
+      "canonical_consequence": "Distance and shape retained.",
+      "final_consequence": "Reasonably simplified without unsafe Snap.",
+      "likely_layer": "sensor evidence",
+      "classification": "DATA QUALITY LIMITATION",
+      "severity": "P2",
+      "confidence": "MEDIUM"
+    },
+    {
+      "rank": 12,
+      "id": "O52F-12",
+      "activity": "hike ka",
+      "start_utc": "2026-09-12T12:06:13Z",
+      "end_utc": "2026-09-12T12:06:13.471Z",
+      "duration_s": 0.471,
+      "symptom": "Single WAL recovery-generation commit spike.",
+      "canonical_consequence": "No data loss.",
+      "final_consequence": "None.",
+      "likely_layer": "persistence latency",
+      "classification": "EXPECTED / ACCEPTABLE",
+      "severity": "NOT A DEFECT",
+      "confidence": "HIGH"
+    },
+    {
+      "rank": 13,
+      "id": "O52F-13",
+      "activity": "lost run",
+      "start_utc": "2026-09-12T12:17:10Z",
+      "end_utc": "2026-09-12T12:17:17Z",
+      "duration_s": 7,
+      "symptom": "Two marker POST 400 responses with no persisted or linked Cairn.",
+      "canonical_consequence": "None.",
+      "final_consequence": "None.",
+      "likely_layer": "marker sync",
+      "classification": "INSUFFICIENT EVIDENCE",
+      "severity": "P2",
+      "confidence": "MEDIUM"
+    },
+    {
+      "rank": 14,
+      "id": "O52F-14",
+      "activity": "lost run",
+      "start_utc": "2026-09-12T12:18:42Z",
+      "end_utc": "2026-09-12T12:27:42Z",
+      "duration_s": 540,
+      "symptom": "Server finalization is delayed across app starts.",
+      "canonical_consequence": "All 245 points eventually survive.",
+      "final_consequence": "Saved Final is complete and replay-equal.",
+      "likely_layer": "pending save/recovery",
+      "classification": "INSUFFICIENT EVIDENCE",
+      "severity": "P2",
+      "confidence": "HIGH delay / LOW UX cause"
+    }
+  ],
+  "healthy_evidence": [
+    "O52 BestForNavigation plus 1 m policy emitted for both Activities.",
+    "Healthy background intervals delivered dense evidence with 1 s median source cadence.",
+    "Every fully observed foreground/background takeover had zero provider overlap and ordered drain.",
+    "Custom Mapbox provider stopped in background and at Hike Pause; no fully-background route source update was observed.",
+    "No false gps-reacquired Gap or invented connector distance occurred.",
+    "Brief stationary/slow periods exited without false distance or segment explosion.",
+    "Owner fencing rejected pre-owner evidence and no duplicate canonical point was detected.",
+    "Hike WAL recovered 129 points after process interruption and showed append-linear bytes.",
+    "Lost Run eventually recovered all 245 points despite telemetry failure.",
+    "Memory truth reached server: 13 Hike cells and 42 Run cells.",
+    "O50 reproduced both saved Final geometries, preserved breaks, and stole no wrong road.",
+    "Unsafe network candidates fell back conservatively; Hike accepted only one safe short road-offset island.",
+    "No great hike endpoint-blend recurrence was detected.",
+    "Hike reached local durable completion 6.952 seconds after Finish request."
+  ],
+  "issue_matrix": [
+    {
+      "id": "O52F-01",
+      "activity": "lost run",
+      "finding": "328 s / 674 m evidence outage",
+      "layer": "native location/lifecycle",
+      "classification": "LIKELY BUG",
+      "severity": "P1",
+      "confidence": "HIGH anomaly / MEDIUM cause"
+    },
+    {
+      "id": "O52F-02",
+      "activity": "hike ka",
+      "finding": "89.7 s / 84.9 m process-recovery loss",
+      "layer": "lifecycle/recovery",
+      "classification": "LIKELY BUG",
+      "severity": "P1",
+      "confidence": "HIGH anomaly / MEDIUM cause"
+    },
+    {
+      "id": "O52F-03",
+      "activity": "lost run",
+      "finding": "Segment ID reverts after correct reacquisition",
+      "layer": "canonical provenance",
+      "classification": "CONFIRMED BUG",
+      "severity": "P1",
+      "confidence": "HIGH"
+    },
+    {
+      "id": "O52F-04",
+      "activity": "hike ka",
+      "finding": "Delayed inactive/background transition and BG start while active",
+      "layer": "ownership lifecycle",
+      "classification": "LIKELY BUG",
+      "severity": "P1",
+      "confidence": "MEDIUM-HIGH"
+    },
+    {
+      "id": "O52F-05",
+      "activity": "hike ka",
+      "finding": "Incremental route projection always rebuilds",
+      "layer": "map efficiency",
+      "classification": "CONFIRMED BUG",
+      "severity": "P1",
+      "confidence": "HIGH"
+    },
+    {
+      "id": "O52F-06",
+      "activity": "lost run",
+      "finding": "Fixed 15 s Memory retry on HTTP 401",
+      "layer": "network/Memory",
+      "classification": "CONFIRMED BUG",
+      "severity": "P1",
+      "confidence": "HIGH"
+    },
+    {
+      "id": "O52F-07",
+      "activity": "both",
+      "finding": "QA full-array critical flush and unstable coalesced delta identity",
+      "layer": "telemetry efficiency",
+      "classification": "CONFIRMED BUG",
+      "severity": "P1",
+      "confidence": "HIGH"
+    },
+    {
+      "id": "O52F-08",
+      "activity": "lost run",
+      "finding": "QA 401 removes most field observability",
+      "layer": "telemetry/auth",
+      "classification": "CONFIRMED BUG",
+      "severity": "P1",
+      "confidence": "HIGH"
+    },
+    {
+      "id": "O52F-09",
+      "activity": "hike ka",
+      "finding": "Startup puck ahead of truthful route",
+      "layer": "presentation/sensor",
+      "classification": "EXPECTED BUT UX-CONFUSING",
+      "severity": "P2",
+      "confidence": "HIGH"
+    },
+    {
+      "id": "O52F-10",
+      "activity": "hike ka",
+      "finding": "Recovery idle-provider camera fly before Activity restore",
+      "layer": "camera/presentation",
+      "classification": "EXPECTED BUT UX-CONFUSING",
+      "severity": "P2",
+      "confidence": "HIGH"
+    },
+    {
+      "id": "O52F-11",
+      "activity": "hike ka",
+      "finding": "Short uncertain background detour",
+      "layer": "sensor",
+      "classification": "DATA QUALITY LIMITATION",
+      "severity": "P2",
+      "confidence": "MEDIUM"
+    },
+    {
+      "id": "O52F-12",
+      "activity": "hike ka",
+      "finding": "Isolated 471 ms WAL recovery commit with no data loss",
+      "layer": "persistence latency",
+      "classification": "EXPECTED / ACCEPTABLE",
+      "severity": "NOT A DEFECT",
+      "confidence": "HIGH"
+    },
+    {
+      "id": "O52F-13",
+      "activity": "lost run",
+      "finding": "Two unlinked marker POST 400 responses",
+      "layer": "marker sync",
+      "classification": "INSUFFICIENT EVIDENCE",
+      "severity": "P2",
+      "confidence": "MEDIUM"
+    },
+    {
+      "id": "O52F-14",
+      "activity": "lost run",
+      "finding": "Nine-minute server finalization delay",
+      "layer": "save/recovery",
+      "classification": "INSUFFICIENT EVIDENCE",
+      "severity": "P2",
+      "confidence": "MEDIUM"
+    },
+    {
+      "id": "O52F-15",
+      "activity": "lost run",
+      "finding": "LIVE PACE is saved whole-Activity average and is distorted by missing evidence",
+      "layer": "product metric semantics",
+      "classification": "PRODUCT DESIGN ISSUE",
+      "severity": "P2",
+      "confidence": "HIGH"
+    }
+  ],
+  "freeze_blockers": [
+    "Explain and contain the material source/lifecycle interruptions observed in both O52 Activities.",
+    "Correct the lost run post-reacquisition segment-provenance reversal.",
+    "Restore reliable low-overhead terminal telemetry before claiming provider/energy validation."
+  ],
+  "energy_measurement_confounders": [
+    "Hike full route projection rebuilt on every normal append.",
+    "QA full-array critical flush and unstable coalesced upload delta identity.",
+    "Memory HTTP 401 retried every 15 seconds.",
+    "Lost Run telemetry missing for most of the session."
+  ],
+  "optional_visual": {
+    "created": false,
+    "reason": "Distinct original raw GPS and accepted/rejected network geometry were not durably retained for both Activities; presenting canonical recovery payload as raw would be misleading."
+  }
+}

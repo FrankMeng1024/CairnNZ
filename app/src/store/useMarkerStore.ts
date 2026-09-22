@@ -741,6 +741,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     // mutex only serialised hydrate() — loadFromBackend was fire-and-
     // forget and outlived the mutex window.
     const capturedUserId = get().userId;
+    // The guest/null slots contain local cold-boot fallback data only. This
+    // method owns the authenticated endpoint, so enforce its account
+    // prerequisite here for hydrate and every future caller.
+    if (!capturedUserId || capturedUserId === 'guest') return;
     try {
       const res = await authenticatedFetch('/api/markers');
       if (!res.ok) return;

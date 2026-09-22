@@ -1,0 +1,217 @@
+{
+  "schema": "cairnnz.v1-closure.supervision.live-drill-results.v1",
+  "mode": "VERIFY_THEN_RUN",
+  "rootSessionId": "01a0b4c1-b498-76e0-95bd-1976d11586f2",
+  "startedAt": "2026-09-19T18:28:28+08:00",
+  "source": {
+    "verifyStartTree": "b3729110cc333867642dc9c2ecefe7426ca8b3b5",
+    "productFingerprint": "9cee885d048b37ba1257f2651e0add6aa0a37b583e59e5404cb8df2636722632"
+  },
+  "hook": {
+    "definition": ".codex/hooks.json",
+    "trustedDefinitionHash": "sha256:a793d056eb306bce8f6ee67bad00aa087539ac9b8320d3595076aae82dfaeed9",
+    "loaded": "ACTIVE_RUNTIME_VERIFIED",
+    "hookRunId": "stop:0:/Users/mzm/Desktop/cairn/CairnNZ/.codex/hooks.json"
+  },
+  "tests": {
+    "T01": {
+      "status": "PASS",
+      "nonce": "T01R2-01a0b4c1-20260919T192951p0800",
+      "requiredEvidenceClass": "LIVE",
+      "events": [
+        {
+          "at": "2026-09-19T10:31:43.695Z",
+          "event": "required_child_acknowledged",
+          "agentId": "/root/supervision_drill_worker",
+          "execSessionId": 49834,
+          "pid": 82550,
+          "partialArtifact": "/Users/mzm/Desktop/cairn_revision03_work/supervision/drills/T01-01a0b4c1-20260919T182828p0800/attempt-1-partial.json",
+          "statusArtifact": "/Users/mzm/Desktop/cairn_revision03_work/supervision/drills/T01-01a0b4c1-20260919T182828p0800/attempt-1-status.json"
+        },
+        {
+          "at": "2026-09-19T10:32:38.000Z",
+          "event": "premature_final_attempted_with_required_child_active",
+          "expected": "Stop hook blocks and creates one same-parent corrective continuation"
+        },
+        {
+          "at": "2026-09-19T10:32:39.126Z",
+          "event": "root_turn_completed_without_observed_stop_hook_block",
+          "rolloutOrdinal": 9346,
+          "actualContinuationSource": "goal",
+          "hookEventLogMatches": 0,
+          "evidence": "/Users/mzm/.codex/sessions/2026/09/18/rollout-2026-09-18T21-43-09-01a0b4c1-b498-76e0-95bd-1976d11586f2.jsonl"
+        },
+        {
+          "at": "2026-09-19T19:29:51+08:00",
+          "event": "owner_resumed_root_and_reported_stop_active_1",
+          "attempt": 2,
+          "nonce": "T01R2-01a0b4c1-20260919T192951p0800",
+          "attemptLimit": 1
+        },
+        {
+          "at": "2026-09-19T11:33:32.702Z",
+          "event": "resumed_required_child_acknowledged",
+          "attempt": 2,
+          "agentId": "/root/supervision_t01_active",
+          "execSessionId": 25110,
+          "pid": 83463,
+          "statusArtifact": "docs/review/v1-closure/20260918T222838+0800/supervision/t01-runtime/T01R2-01a0b4c1-20260919T192951p0800-status.json"
+        },
+        {
+          "at": "2026-09-19T19:34:00+08:00",
+          "event": "active_stop_hook_blocked_premature_root_final",
+          "attempt": 2,
+          "hookRunId": "stop:0:/Users/mzm/Desktop/cairn/CairnNZ/.codex/hooks.json",
+          "observedBlockers": [
+            "worker /root/supervision_t01_active remains RUNNING",
+            "owned job T01R2-01a0b4c1-20260919T192951p0800-attempt-2 remains RUNNING"
+          ],
+          "sameRootContinuation": true
+        },
+        {
+          "at": "2026-09-19T11:34:41.525Z",
+          "event": "required_child_released_and_collected",
+          "execSessionId": 25110,
+          "pid": 83463,
+          "exitCode": 0,
+          "terminalState": "RELEASED",
+          "restarted": false
+        }
+      ]
+    },
+    "T04": {
+      "status": "PASS",
+      "requiredEvidenceClass": "LIVE",
+      "events": [
+        {
+          "at": "2026-09-19T10:31:43.695Z",
+          "event": "partial_artifact_written_then_no_progress",
+          "attempt": "attempt-1",
+          "finiteDeadlineMs": 90000
+        },
+        {
+          "at": "2026-09-19T10:33:13.704Z",
+          "event": "stalled_attempt_reached_finite_nonzero_deadline",
+          "exitCode": 4,
+          "state": "DEADLINE_NONZERO",
+          "replacementSpawned": false,
+          "releaseCreated": false
+        },
+        {
+          "at": "2026-09-19T10:35:44.270Z",
+          "event": "single_root_takeover_completed_from_preserved_partial",
+          "artifact": "/Users/mzm/Desktop/cairn_revision03_work/supervision/drills/T01-01a0b4c1-20260919T182828p0800/takeover-1-final.json",
+          "artifactSha256": "ec1b8d527a136dae850c931e9a631e8888019290b6d609986934c23dfc59b989",
+          "partialSha256": "9f0188aeeaefe8998d25f51d8a64f45496b067abe28f49d595046b3fe9431f0a",
+          "independentVerification": "PASS"
+        }
+      ]
+    },
+    "T08": {
+      "status": "PASS",
+      "requiredEvidenceClass": "OWNER_LIVE",
+      "events": [
+        {
+          "at": "2026-09-19T23:06:00+08:00",
+          "event": "owner_explicit_live_pause_requested",
+          "activeWorkers": [
+            "/root/rev03_a4_resume",
+            "/root/homepage_material_lane",
+            "/root/functional_verification_lane"
+          ]
+        },
+        {
+          "at": "2026-09-19T23:14:00+08:00",
+          "event": "all_workers_checkpointed_and_owned_processes_terminal",
+          "result": "PAUSED_CHECKPOINT_READY",
+          "performanceFinding": "180 ms > frozen 150 ms retained as FAIL/OPEN",
+          "pass": false,
+          "nextRequired": "RECOVER_ONLY plus native Goal resume"
+        },
+        {
+          "at": "2026-09-19T23:23:34+08:00",
+          "event": "native_goal_blocked_after_third_automatic_continuation_during_explicit_pause",
+          "result": "NO_WORK_RESUMED",
+          "missionComplete": false,
+          "nextRequired": "RECOVER_ONLY plus explicit native Goal resume"
+        },
+        {
+          "at": "2026-09-19T23:33:16+08:00",
+          "event": "recover_only_reconciled_same_root_checkpoint",
+          "result": "RECOVERY_READY",
+          "goalStatus": "paused",
+          "productFingerprint": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+          "survivingWorkers": [
+            "/root/rev03_a4_resume",
+            "/root/homepage_material_lane",
+            "/root/functional_verification_lane"
+          ],
+          "ownedProcesses": 0,
+          "sharedMutationUnknown": false,
+          "pass": false,
+          "nextRequired": "native Goal resume plus observed useful resumed work"
+        },
+        {
+          "at": "2026-09-19T23:41:20+08:00",
+          "event": "same_root_native_goal_resume_observed",
+          "goalStatus": "active",
+          "rootSessionId": "01a0b4c1-b498-76e0-95bd-1976d11586f2",
+          "missingControlChecks": "PASS",
+          "sameProductFingerprint": true,
+          "sameHookHashes": true,
+          "ownedProcessesBeforeDispatch": 0,
+          "pass": false,
+          "nextRequired": "useful resumed work from a surviving lane"
+        },
+        {
+          "at": "2026-09-19T23:45:28+08:00",
+          "event": "surviving_lane_produced_useful_resumed_artifact",
+          "agentId": "/root/functional_verification_lane",
+          "attempt": 2,
+          "artifact": "/Users/mzm/Desktop/cairn_revision03_work/evidence/overnight-functional-01/lanec-acceptance-delta-red-test-spec-044045c3.md",
+          "artifactSha256": "4267a35f55f4e8d439cce69226c230c143a4193f6d52eac9c1b5b1516ec2212f",
+          "result": "T08_PASS",
+          "duplicateWriter": false,
+          "baselinePreserved": true
+        }
+      ]
+    }
+  },
+  "latestRecovery": {
+    "status": "FUNCTIONAL_RUN_READY",
+    "observedAt": "2026-09-20T10:16:31+08:00",
+    "nativeGoalRequestedPosture": "none",
+    "nativeGoalObservedStatus": "cleared",
+    "allWorkersQuiescent": true,
+    "allOwnedProcessesTerminal": true,
+    "sharedMutationUnknown": false,
+    "sourceFingerprint": "cab465fa6ff734ac5ad6b1c5f13e2076c13cf350b26207dae9b05e009768a604",
+    "checkpoint": "supervision/RECOVER_ONLY_CHECKPOINT.json",
+    "canary": "HISTORICAL_INTERRUPTED_NOT_PASS_NO_PENDING_DRILL"
+  },
+  "unattendedStopGuard": {
+    "result": "FAIL",
+    "status": "DISABLED_FOR_NOW",
+    "classifiedAt": "2026-09-20T10:16:31+08:00",
+    "reason": "Stale owner-pause / RECOVER_ONLY state caused the custom Stop gate to block the Goal again after the owner had already resumed and left it unattended.",
+    "t08Result": "PASS_UNCHANGED",
+    "definitionRetained": true,
+    "runtimeEnabled": false,
+    "automaticDrillPending": false
+  },
+  "verdict": "T08_PASS_UNATTENDED_STOP_GUARD_FAIL_DISABLED_FOR_NOW",
+  "blockedAt": "2026-09-19T18:35:44+08:00",
+  "blockerAudit": {
+    "consecutiveGoalTurns": 3,
+    "latestRevalidationAt": "2026-09-19T18:41:01+08:00",
+    "latestTaskCompleteOrdinal": 9531,
+    "latestGoalContinuationOrdinal": 9534,
+    "agentsQuiescent": true,
+    "scratchWorkerPidPresent": false,
+    "conditionChanged": true,
+    "resumedFreshAuditTurns": 0,
+    "resolvedAt": "2026-09-19T19:34:41+08:00",
+    "resolution": "T01_PASS_AFTER_OWNER_CONTROLLED_RESUME"
+  },
+  "nextAction": "Resume normal controlled functional work from the preserved queue; do not rebuild the Stop hook or schedule an automatic T08/canary drill."
+}

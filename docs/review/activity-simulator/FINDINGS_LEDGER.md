@@ -291,3 +291,416 @@ Scope: local implementation only; no production mutation
 - **ACTION:** Added contract/manual guidance; public real-GPS Activities remain wall-clock.
 - **STATUS:** ACCEPTED SYNTHETIC-TIME CHARACTERISTIC
 - **TEST:** Historical timestamp and backend payload tests; Manual accelerated-time closure step 5.
+
+## SIM-025
+
+- **AREA:** Simulator overlay composition
+- **SEVERITY:** High
+- **CLASSIFICATION:** PROVEN
+- **FACT:** The compact trigger was anchored at `right: 10, top: 118`; the expanded panel filled the screen from `top: 84` to `bottom: 106`, and the joystick lived inside that panel.
+- **EVIDENCE:** Unchanged 390×844 reproduction measured the trigger at the upper-right and the expanded panel across the map center; the approved runtime board showed metric/map/action obstruction.
+- **IMPACT:** Debug controls obscured the UI they are meant to test.
+- **ACTION:** Docked the compact trigger at lower-left above activity controls, bounded the settings panel above map center, and separated the live joystick into a right-side dock.
+- **STATUS:** FIXED LOCALLY; NATIVE DEVICE VISUAL CONFIRMATION REQUIRED
+
+## SIM-026
+
+- **AREA:** Live metric formatting
+- **SEVERITY:** High
+- **CLASSIFICATION:** PROVEN
+- **FACT:** Canonical `formatDuration` passed the fractional seconds remainder directly to `String()`.
+- **EVIDENCE:** Unchanged runtime reproduced `01:30.679000000000002` from `durationS=90.679000000000002` on Hike.
+- **IMPACT:** Hike/Run metric width expanded and could collide with adjacent metrics.
+- **ACTION:** Normalize finite, non-negative duration to whole elapsed seconds in the shared formatter.
+- **STATUS:** FIXED LOCALLY; UNIT AND 390×844 RUNTIME PASS
+
+## SIM-027
+
+- **AREA:** Run map readiness
+- **SEVERITY:** High
+- **CLASSIFICATION:** PROVEN for the unbounded loading state; UNKNOWN for the reported native basemap-render failure
+- **FACT:** Running reset `mapLoadState` to `loading` on focus and had no timeout when native success/failure callbacks did not fire. No evidence identifies a Simulator-specific Mapbox style/tile failure.
+- **EVIDENCE:** Source trace against HikingMap's existing bounded readiness guard; Expo Web cannot render the native `@rnmapbox/maps` path.
+- **IMPACT:** A missed native callback could leave `Loading map…` masking the map forever.
+- **ACTION:** The first timeout-only mitigation was superseded in Round 2: the underlying map is revealed after the bound while diagnostics remain `timed-out`, and native style/idle/load/error callbacks now report actual readiness. Mapbox style/token/config remain unchanged.
+- **STATUS:** SUPERSEDED BY SIM-032; NATIVE MAP CONFIRMATION REQUIRED
+
+## SIM-028
+
+- **AREA:** Simulator camera/recenter
+- **SEVERITY:** High
+- **CLASSIFICATION:** PROVEN
+- **FACT:** Hike recenter read only the real-GPS `lastCoordinate`; Run's active Camera lacked the ref used by the Simulator follow effect.
+- **EVIDENCE:** Direct Hike/Run camera-path trace.
+- **IMPACT:** Simulator movement could update canonical activity evidence while camera recenter/follow used a stale or missing target.
+- **ACTION:** Hike now recenters on its selected provider position; active Run binds the existing camera ref.
+- **STATUS:** FIXED LOCALLY; NATIVE CAMERA MOTION CONFIRMATION REQUIRED
+
+## SIM-029
+
+- **AREA:** Start-coordinate readiness
+- **SEVERITY:** High
+- **CLASSIFICATION:** PROVEN
+- **FACT:** Fresh Simulator state silently treated the Queenstown fallback coordinate as configured and exposed no explicit no-start state.
+- **EVIDENCE:** Store defaults/persistence/provider trace.
+- **IMPACT:** QA could start from an unintended location and had no actionable setup signal.
+- **ACTION:** Added a persisted `startConfigured` invariant, fail-closed provider preparation, a compact `SET START` trigger state, and an expanded worldwide-coordinate setup prompt. Existing v1 users retain validated saved starts.
+- **STATUS:** FIXED LOCALLY; STORE AND 390×844 RUNTIME PASS
+
+## SIM-030
+
+- **AREA:** Reported zero distance / native basemap failure
+- **SEVERITY:** High
+- **CLASSIFICATION:** UNKNOWN
+- **FACT:** The supplied report shows `0.0 km`, but no device log or accepted-sample trace proves whether no samples were emitted, rejected, or simply not yet accumulated. The native basemap failure is likewise not reproducible on Expo Web.
+- **EVIDENCE:** The unchanged engine/provider tests pass the same canonical sink and the Web renderer intentionally uses the map-unavailable fallback.
+- **IMPACT:** These two native symptoms cannot be declared closed from browser evidence.
+- **ACTION:** Round-2 native evidence narrowed the client-side branches; see SIM-032 for map authority/readiness fixes and SIM-035 for the joystick input-layer fix. Mapbox style/token/config remain unchanged.
+- **STATUS:** SUPERSEDED BY SIM-032/SIM-035; NATIVE VERIFICATION GATE REMAINS
+
+## SIM-031
+
+- **AREA:** Controlled render evidence
+- **SEVERITY:** Low
+- **CLASSIFICATION:** PROVEN
+- **FACT:** The first repaired board injected a historical virtual timestamp and a bound ID without activating an engine lease; the passive runtime correctly advanced its clock to wall time and produced an artificial stale-signal banner.
+- **EVIDENCE:** Runtime snapshot showed `locationProviderSource=simulator` but a roughly twelve-hour difference between the passive Simulator clock and the injected point.
+- **IMPACT:** The board could falsely suggest a provider-timeline regression.
+- **ACTION:** Keep controlled render-only points on the passive runtime clock and assert the source/timestamp relationship. Canonical accelerated-clock behavior remains covered by engine tests with a real lease.
+- **STATUS:** QA HARNESS FIXED; FINAL BOARD HAS NO ARTIFICIAL SIGNAL-LOSS STATE
+
+## SIM-032
+
+- **AREA:** Map hidden only under Debug/Simulator
+- **SEVERITY:** Critical
+- **FACT:** Debug Mode alone did not change the Hike/Run Mapbox tree, but `showSimulator` became true as soon as the Simulator toggle was on. Before any virtual start existed, that branch skipped real-location priming, removed `UserLocation`, installed a synthetic `ShapeSource`, and supplied the persisted/default virtual coordinate to Camera. The loading mask also observed only a subset of the native Mapbox readiness events.
+- **ROOT CAUSE:** One boolean conflated Simulator control visibility with Simulator location authority and camera display. The setup state therefore replaced the proven normal map/location path too early; the idle engine also rewrote the same virtual position once per second, churning the synthetic source while native style/idle readiness was not observed.
+- **FIX:** Split `simulatorControlsEnabled` from `simulatorLocationAuthoritative`; no-start setup now preserves real-GPS/default map display, while configured pre-start and bound Activities may use virtual authority. A stationary pre-start runtime is quiescent. Added native style-loaded, map-idle, map-loaded, fully-rendered, and loading-error observations. A timeout can reveal the underlying map but remains explicitly `timed-out`, never `mapReady`.
+- **TEST:** `nativeBlockerRound2.test.ts` no-start/configured/active matrix; `simulatorContracts.test.ts` native callback and Hike/Run tree assertions; iOS Expo bundle export passes. Expanded SIM exposes map mounted/style/ready/load event/camera/display diagnostics.
+- **STATUS:** FIXED LOCALLY; REAL-IPHONE MAP RENDER CONFIRMATION REQUIRED
+
+## SIM-033
+
+- **AREA:** Empty expanded SIM settings
+- **SEVERITY:** Critical
+- **FACT:** The expanded native panel used only `maxHeight` around a flex `ScrollView`, and its former movement child retained `flex: 1` after being moved into scroll content. The diagnostic block also preceded the controls.
+- **ROOT CAUSE:** Native Yoga could resolve the scroll viewport/content flex chain without usable control height, so expansion succeeded while the configuration surface appeared empty or non-scrollable.
+- **FIX:** Gave the bounded panel a concrete 210-point height, removed content-child flex growth, enabled nested native scrolling/visible indicator, and ordered start/speed/time/altitude/GPS/lifecycle controls before diagnostics.
+- **TEST:** `simulatorContracts.test.ts` asserts fixed viewport, scroll surface, ordering, and pre-start controls; 390×844 Expo Web board visibly renders Start here/Use map center and no-start inputs.
+- **STATUS:** FIXED LOCALLY; REAL-IPHONE SCROLL/TOUCH CONFIRMATION REQUIRED
+
+## SIM-034
+
+- **AREA:** Missing independent Activity Simulator toggle
+- **SEVERITY:** Critical
+- **FACT:** The tested native artifact offered no usable way to disable Simulator without disabling Debug Mode, despite the provider having a persisted `enabled` state distinct from the Settings `debugMode` state.
+- **ROOT CAUSE:** The tested UI did not expose the existing provider capability state as a verifiable independent Developer control, and it had no explicit active-Activity lock grammar.
+- **FIX:** Settings → Developer now exposes a testable `Activity Simulator` switch. Fresh user state defaults OFF, disabling it while idle stops the Simulator runtime and hides all SIM UI without changing Debug Mode. The switch is disabled while any Activity is active/unfinished, with Finish/Save/Discard guidance, preventing a mid-Activity provider switch.
+- **TEST:** Store toggle/active-lock test; pure Debug/Simulator/build source-selection matrix; mobile QA harness clicks Simulator OFF, proves Debug remains ON, and proves all SIM overlays disappear.
+- **STATUS:** FIXED LOCALLY; REAL-IPHONE SETTINGS CONFIRMATION REQUIRED
+
+## SIM-035
+
+- **AREA:** Joystick continuous movement failure
+- **SEVERITY:** Critical
+- **FACT:** Native joystick magnitude was calculated from `gesture.dx/dy`, whose origin is the finger-down point, and `onPanResponderGrant` supplied no movement input. A held edge press therefore began at magnitude zero; small drags produced very small speeds. The responder also accepted termination by the surrounding native map gesture system, which released input and stopped motion.
+- **ROOT CAUSE:** The first failure layer was joystick/touch input, not the geodesic engine, accelerated clock, sample sequence, or canonical Activity acceptance. Autopilot and a once-set full joystick vector both continue through the same engine/sink path in deterministic tests.
+- **FIX:** Derive bearing/magnitude from native `locationX/locationY` relative to the fixed joystick center on grant and move, keep the responder until release, block native responder takeover, and retain the same joystick node/timers across panel rerenders. Release remains the sole normal zero-input transition.
+- **TEST:** Pure center/edge vector tests; source contract for grant/move/termination; ten-second continuous-hold tests at 5 km/h 1×, 5 km/h 10×, and Run 10 km/h 10×; release-stop and continuous-autopilot tests; canonical acceptance tests show no repeated rejection or non-monotonic timestamp.
+- **STATUS:** FIXED LOCALLY; REAL-IPHONE HOLD/DRAG/RELEASE CONFIRMATION REQUIRED
+
+## SIM-036
+
+- **AREA:** Native blocker diagnostics
+- **SEVERITY:** High
+- **FACT:** The former panel exposed only the latest combined decision and could not show where generated motion diverged from canonical Activity or displayed map state.
+- **ROOT CAUSE:** Generated, accepted, committed, and displayed stages were not separately observable on-device.
+- **FIX:** Expanded SIM now shows selected/active provider, Simulator/start state, map mount/style/readiness/event/camera/display, joystick activity/magnitude/bearing, autopilot, virtual coordinate/time, generated and accepted sequences/coordinates, last rejection, owner/Activity/segment, committed point count, and last committed position. JSONL logging remains bounded and Simulator-local.
+- **TEST:** Diagnostic source contracts plus engine/store sequence assertions; local Mapbox package confirms all wired native callbacks are supported by installed v10.3.1.
+- **STATUS:** IMPLEMENTED LOCALLY; DEVICE FAILURE CAPTURE READY
+
+## SIM-037
+
+- **AREA:** O36 Run native map readiness
+- **SEVERITY:** Critical
+- **CLASSIFICATION:** PROVEN
+- **FACT:** O36 Run reached `style_loaded` with a valid camera ref, then three `onMapLoadingError`-family callbacks forced `mapLoadState='unavailable'`.
+- **EVIDENCE:** Production QA session `qa-mtsmpawf-lc911f5m`; installed `@rnmapbox/maps` documents that `onMapLoadingError` can repeat and is not exclusive with successful loading.
+- **IMPACT:** Both normal and Debug Run can display `Map unavailable` even though the native style exists.
+- **DECISION:** Resource/loading errors remain diagnostics; positive style/load/idle/render evidence owns display readiness. Preserve structured error payloads.
+- **STATUS:** FORENSIC COMPLETE; O37 IMPLEMENTATION PENDING
+
+## SIM-038
+
+- **AREA:** O36 Hike camera lifecycle
+- **SEVERITY:** High
+- **CLASSIFICATION:** PROVEN
+- **FACT:** `hike_camera_initial_target_applied` fired 18 times during one active Simulator movement interval because an initial-camera effect depended on the changing accepted coordinate.
+- **EVIDENCE:** Production QA session `qa-mtsmpawf-lc911f5m`, 12:13:38Z–12:14:16Z.
+- **IMPACT:** Runtime GPS updates repeatedly execute initialization semantics and make map/camera diagnosis misleading.
+- **DECISION:** Initial camera application is per mount/phase only; later location changes use explicit follow/recenter behavior.
+- **STATUS:** FORENSIC COMPLETE; O37 IMPLEMENTATION PENDING
+
+## SIM-039
+
+- **AREA:** O36 telemetry retention and map correlation
+- **SEVERITY:** High
+- **CLASSIFICATION:** PROVEN
+- **FACT:** The latest iPhone row reached 522,308 bytes and begins at Simulator sample 18. It contains no virtual-origin/provider-lock/first-point chain and no map mount IDs.
+- **EVIDENCE:** Production rows `qa-mtsmovfy-43c9lqeb` and `qa-mtsmpawf-lc911f5m` retrieved through the operations-only SOP.
+- **IMPACT:** Bounded telemetry succeeds operationally but high-volume stationary samples evict the exact transitions required to prove real-to-virtual isolation and re-entry ownership.
+- **DECISION:** Keep bounds, reduce repeated stationary diagnostics, add mount IDs, and preserve high-value transition evidence without making telemetry a product dependency.
+- **STATUS:** FORENSIC COMPLETE; O37 IMPLEMENTATION PENDING
+
+## SIM-040
+
+- **AREA:** O37 normal Hike/Run Mapbox ownership
+- **SEVERITY:** Critical
+- **CLASSIFICATION:** PROVEN ROOT CAUSE; LOCALLY FIXED
+- **FACT:** O36 treated Run loading-error callbacks as terminal despite prior style success, and Hike readiness depended on callbacks that did not reliably arrive on re-entry. Screen-local readiness/camera state lacked a native mount identity.
+- **DECISION:** One stable `HikingMap` owns each Hike/Run screen across pre-start and Tracking. Each focus entry rotates a native map key/mount ID and resets only screen-local style/readiness/camera guards. Style, load, idle, or full-render are positive readiness evidence; loading errors remain structured nonterminal diagnostics. The initial Hike camera contract runs once per mount.
+- **STATUS:** IMPLEMENTED AND CHARACTERIZED; PHYSICAL O37 RETEST REQUIRED
+
+## SIM-041
+
+- **AREA:** Real-to-virtual first-point contamination
+- **SEVERITY:** Critical
+- **CLASSIFICATION:** PROVEN RISK; LOCALLY FENCED
+- **FACT:** A virtual-origin Activity is only truthful if provider ownership is fixed before canonical point one. Selecting a map center is not location evidence.
+- **DECISION:** Start selects/binds Simulator before Tracking, deactivates real sources, logs `simulator_provider_locked`, then emits the origin through `addTrackPoint`. Canonical ingestion rejects any real/foreground/background callback for that owner as `provider-source-mismatch` and emits a protected rejection event. Tests use Shanghai-shaped real callbacks and a Queenstown origin for both Hike and Run; only Queenstown is committed and no connector exists.
+- **STATUS:** IMPLEMENTED AND TESTED
+
+## SIM-042
+
+- **AREA:** Repeated GPS loss and gap truth
+- **SEVERITY:** Critical
+- **CLASSIFICATION:** PROVEN CONTRACT; LOCALLY IMPLEMENTED
+- **FACT:** A one-gap `before/after` model cannot represent repeated real-world outages. Manual Lost reacquisition has no known path between endpoints.
+- **DECISION:** Each explicit `丢失 → 重新定位 → 从这里继续` allocates a new canonical segment with reason `gps-reacquired`. No connecting point is inserted; segmented stats and Memory exclude the unknown connector. Tests produce Segment 1 through Segment 4 with three zero-distance gaps.
+- **STATUS:** IMPLEMENTED AND TESTED; DASHED VISUAL POLISH REMAINS NON-BLOCKING
+
+## SIM-043
+
+- **AREA:** Debug Activity-tail rollback durability and sync
+- **SEVERITY:** Critical
+- **CLASSIFICATION:** PROVEN SAFE WITHOUT BACKEND CHANGE
+- **FACT:** Active points may be incrementally backed up to the server, but normal final Save sends the authoritative complete route/raw/metric snapshot and the server overwrites those fields. Memory and Cairns are independent durable objects.
+- **DECISION:** Rollback drains production/ingest, truncates the durable journal through a write-ahead cap marker, recomputes Activity state from retained accepted points, and restores Simulator position/time to that tail. Recovery honors the cap even if killed before snapshot replacement. Final Save overwrites any stale incremental server tail. Memory remains monotonic and Cairns remain committed by locked product decision.
+- **STATUS:** IMPLEMENTED AND TESTED; NATIVE ONLINE FINISH/DETAIL RETEST REQUIRED
+
+## SIM-044
+
+- **AREA:** Live time-scale safety
+- **SEVERITY:** High
+- **CLASSIFICATION:** PROVEN ARCHITECTURAL REQUIREMENT
+- **FACT:** Runtime controls appear after Start, so a Simulator Activity begun at `1×` must be able to change to `30×` without future-dating or rewriting prior evidence.
+- **DECISION:** Every Simulator Activity reserves the existing 12-hour-plus-safety historical window, including `1×`. Scale changes affect only subsequent clock advancement. Real GPS continues to use wall-clock time and never reads this clock.
+- **STATUS:** IMPLEMENTED AND TESTED
+
+## SIM-045
+
+- **AREA:** Backend requirement
+- **SEVERITY:** Informational
+- **CLASSIFICATION:** PROVEN
+- **FACT:** Authoritative final-save replacement, existing segmented payloads, and the deployed authenticated QA telemetry transport already satisfy O37. No schema or backend endpoint change is required.
+- **DECISION:** Keep all O37 source changes local for the human OTA. Do not push or deploy backend.
+- **STATUS:** NO BACKEND CHANGE
+
+## SIM-046
+
+- **AREA:** Active-provider UI isolation
+- **SEVERITY:** High
+- **CLASSIFICATION:** PROVEN STATE-MODEL EDGE; LOCALLY FIXED
+- **FACT:** The persisted Simulator preference may be enabled while a Real-provider Activity is already active, because continuity locking correctly prohibits switching only an active/unfinished Simulator Activity. Preference state alone must not expose an inert SIM console or joystick over that Real Activity.
+- **DECISION:** Idle Debug screens show virtual-origin setup when the preference is enabled. Once Activity state is non-idle, SIM controls are visible only when that Activity's immutable provider is `simulator`. Provider authority, not the preference, owns the runtime UI.
+- **STATUS:** IMPLEMENTED AND TESTED
+
+## SIM-047
+
+- **AREA:** O37 native Mapbox authorization
+- **SEVERITY:** Critical
+- **FACT:** O37 native MapViews mounted, loaded the Standard style, and acquired camera refs, then every Standard source/tile request returned HTTP 401. The named EAS `preview` environment contained the public Mapbox token but initially lacked the API-base and Simulator variables that existed only under `eas.json` build profiles.
+- **ROOT CAUSE:** The O37 OTA was bundled without a complete named EAS environment, while `initMapbox` unconditionally replaced native Mapbox configuration with an empty JS value.
+- **CHANGE:** Empty/invalid token configuration no longer mutates Mapbox; token presence is emitted only as a boolean. The project `preview` environment now holds the three required non-secret/public OTA inputs and the publish SOP requires `--environment preview`.
+- **TEST:** Read-only O37 trace proves 401; EAS environment execution reports token/API/Simulator booleans all true without exposing values; Expo iOS export runs under that exact environment.
+- **STATUS:** IMPLEMENTED; O38 NATIVE TILE/FIRST+SECOND ENTRY CONFIRMATION REQUIRED
+
+## SIM-048
+
+- **AREA:** QA telemetry event loss
+- **SEVERITY:** Critical
+- **FACT:** O37 auto-upload succeeded, but its 523,842-byte row had no start checkpoint, map mount, provider lock, first accepted/committed point, finish, Save, or sync chain. Same-turn asynchronous appends could read one old array and overwrite siblings.
+- **ROOT CAUSE:** Per-session appends were not serialized, routine GPS events dominated the byte budget, and too few lifecycle names were reserved from eviction.
+- **CHANGE:** Serialize all appends and drain them before flush/upload; sample/coalesce routine events; reserve up to 256 critical transitions while retaining the hard 2,000-event/512-KiB cap; add a distinct `simulator_first_point_committed` event and bounded upload checkpoints.
+- **TEST:** Forty same-turn events survive immediate export; noise-bound tests preserve the map/origin/provider/first-point/gap/rollback/Cairn/Save/sync set; privacy and uploader suites pass.
+- **STATUS:** IMPLEMENTED; O38 REMOTE TRACE COMPLETENESS CONFIRMATION REQUIRED
+
+## SIM-049
+
+- **AREA:** `debug1` zombie Activity mutations
+- **SEVERITY:** Critical
+- **FACT:** production deleted the source Activity at 10:02:04 Shanghai time, then created Route 82 at 10:02:19 and updated it at 10:02:20. The Route therefore did not predate deletion.
+- **ROOT CAUSE:** mounted Detail and RouteEditor retained geometry/actions after the live Activity disappeared; the route-create API had no source identity and could not serialize create against delete.
+- **CHANGE:** Delete invalidates mounted Detail before its first await and resets navigation to Trails. RouteEditor checks the live source, and Activity-derived POSTs include immutable provenance. The backend locks user then source session in the same order as deletion and rejects missing/deleted/unfinalized sources. Existing independently committed Routes are untouched.
+- **TEST:** client navigation/source-authority contracts and backend route/delete lock-order/schema contracts pass.
+- **STATUS:** IMPLEMENTED; BACKEND DEPLOY REQUIRED
+
+## SIM-050
+
+- **AREA:** Activity Detail Back stack
+- **SEVERITY:** High
+- **FACT:** conditional `goBack()` could return a post-save Detail to Home or leave that Detail reachable behind Trails, producing Detail → Trails → Detail loops.
+- **ROOT CAUSE:** post-save Detail was treated as ordinary navigation history instead of a leaf destination.
+- **CHANGE:** Activity Detail Back always resets to the canonical two-entry stack `Home → Routes(initialTab=activities)`; Trails Back therefore returns Home and cannot reopen the saved Detail.
+- **TEST:** source contract proves the target-detail handler contains the reset and no `goBack`.
+- **STATUS:** IMPLEMENTED; O38 NATIVE STACK CONFIRMATION REQUIRED
+
+## SIM-051
+
+- **AREA:** `hike-08/09/2026` rename
+- **SEVERITY:** High
+- **FACT:** production session 2052 remains named `Hike — 08/09/2026`; the old Detail action changed only local Zustand/AsyncStorage and made no server request.
+- **ROOT CAUSE:** a synced Activity had no server-authoritative rename contract, so the next hydrate restored the old name and the UI had reported false success.
+- **CHANGE:** authenticated/validated completed-Activity rename is server-first and rejects nonexistent/deleted rows. Pending-local rename atomically updates both upload payload and summary before the UI projection. Syncing or failed persistence reports truthful failure.
+- **TEST:** server schema/route/model contracts, remote rejection/no-local-change, successful server-first rename, and pending-outbox ordering tests pass.
+- **STATUS:** IMPLEMENTED; BACKEND DEPLOY AND PRODUCTION SMOKE REQUIRED
+
+## SIM-052
+
+- **AREA:** Per-segment map matching
+- **SEVERITY:** High
+- **FACT:** O37 supplied the matcher without accuracy/altitude/speed, emitted no matching outcome, and required every segment to succeed before using any derived geometry.
+- **ROOT CAUSE:** completion stripped quality metadata and treated all segments as one success switch despite already matching each segment independently.
+- **CHANGE:** pass the canonical fields, emit attempt/result/fallback per segment, retain successful matches alongside raw fallback for only failed segments, preserve segment IDs, and keep raw accepted GPS as `route_points_raw` authority.
+- **TEST:** contract proves matching precedes Save, fallback stays per segment, Activity Detail reads derived `route_points`, and no cross-gap input is constructed.
+- **STATUS:** IMPLEMENTED; O38 FINISH/DETAIL TRACE REQUIRED
+
+## SIM-053
+
+- **AREA:** Walking Auto Move and measured acceleration
+- **SEVERITY:** High
+- **FACT:** straight-line movement can cross buildings/terrain and is not an acceptable primary walking simulation. Existing engine tests did not explicitly assert the human-reported 30× ten-second distances.
+- **ROOT CAUSE:** destination input contained one geodesic target rather than pedestrian geometry; perceived speed lacked a direct generated-distance/accepted-distance contract.
+- **CHANGE:** primary `自动前往` resolves Mapbox walking geometry, fails closed with Chinese joystick guidance, and reserves straight-line movement for Advanced QA. Deterministic movement remains physical configured speed on virtual time.
+- **TEST:** 5 km/h × 30× × 10 s = 416.7 m and 10 km/h × 30× × 10 s = 833.3 m at generated input; canonical acceptance/visible camera remain native-retained evidence for O38.
+- **STATUS:** IMPLEMENTED AND UNIT-VERIFIED; NATIVE PUBLICATION/CAMERA CONFIRMATION REQUIRED
+
+## SIM-054
+
+- **AREA:** O38 backend authority and production rollout
+- **SEVERITY:** High
+- **FACT:** Synced rename required server authority, and an Activity-derived Route mutation needed a server-side source-existence lock to prevent the proven `debug1` post-delete zombie write. Neither change required a schema modification.
+- **ROOT CAUSE:** The prior APIs could neither persist a completed-Activity rename nor distinguish an independently created Route from a Route mutation initiated by a stale Activity Detail.
+- **CHANGE:** Backend-only commit `8900028e` adds authenticated validated rename and transactionally serializes source-Activity Route creation against deletion. It was pushed normally and deployed with the canonical script; zero migrations ran. Operations telemetry smoke also reconfirmed auth, retrieval, and privacy behavior.
+- **TEST:** 19 backend contracts pass; production checkout/health/schema/ledger/log checks pass; anonymous telemetry and rename probes return 401; smoke session `qa-o38-smoke-1788927556466` is retrievable by ID and timestamp with real coordinates and credential-shaped fields removed.
+- **STATUS:** DEPLOYED AND VERIFIED; O38 CLIENT/NATIVE FUNCTIONAL RETEST REQUIRED
+
+## SIM-055
+
+- **AREA:** O38 production Activity realism (`hike-09/09/2026`)
+- **SEVERITY:** Gate
+- **FACT:** Production session 2053 retains 371 strictly monotonic raw points over 370.441 virtual seconds, one segment, zero gaps, 1 m accuracy, maximum inferred speed 3.756 m/s, 762.319 m raw same-segment distance, 368 s duration, and 22.861 m positive elevation. Raw-distance recomputation matches the stored metric. Forty-three ordinary Memory points were committed along the accepted path.
+- **ROOT CAUSE:** No Activity-data defect found. The deterministic Simulator callback cadence is more regular than historical real Hikes 192/193, but every sample satisfies the same canonical acceptance and durable business contract.
+- **CHANGE:** No Simulator movement or matching correction. Preserve O38 architecture and add only a deterministic accelerated-parity contract.
+- **TEST:** Production SELECT-only raw/display/Memory aggregation plus source tests and 1x-versus-120x engine comparison.
+- **STATUS:** REALISTIC ACTIVITY DATA — PASS
+
+## SIM-056
+
+- **AREA:** O38 telemetry automatic upload and sufficiency
+- **SEVERITY:** High
+- **FACT:** QA session `qa-mttg439c-ccqp1eyj` automatically reached yiiling in repeated HTTP 200 batches and retains 833 events / 524,245 bytes. It reconstructs virtual origin, provider lock, first generated/accepted/committed point, movement/rejection, Memory/metrics, Finish, matching, Save, server-synced acknowledgement, completion, and origin clear for session 2053.
+- **ROOT CAUSE:** No critical-event loss occurred after O38 reservation/coalescing. Map idle remains noisy (542 retained events), leaving only 43 bytes under the hard cap, but critical reconstruction survived and product correctness is unaffected.
+- **CHANGE:** Reserve the single fresh-entry reset event as critical. Do not expand bounds or reopen the working uploader.
+- **TEST:** Operations retrieval by `qaSessionId`, DB event/count/size comparison, upload checkpoints, and nginx 20-second authenticated POST cadence.
+- **STATUS:** QA TELEMETRY SUFFICIENT FOR NATIVE FORENSICS
+
+## SIM-057
+
+- **AREA:** Fresh Simulator origin setup
+- **SEVERITY:** Medium
+- **FACT:** Completion/discard clears origin, but fresh Hike/Run focus had no independent reconciliation of stale persisted setup against the durable unfinished-Activity registry.
+- **ROOT CAUSE:** Screen focus relied on previous lifecycle teardown and the optional manual Reset action; `status=idle` alone cannot distinguish a new Activity from a not-yet-restored unfinished Activity.
+- **CHANGE:** Both Hike and Run invoke one registry-aware fresh-entry initializer. It clears all pre-start/runtime virtual state when no owner exists, preserves enabled/QA identity/map lifecycle, rechecks live ownership after storage I/O, and fails closed for an unfinished or unreadable registry.
+- **TEST:** stale origin/destination/Lost/120x state resets; an exact unfinished Simulator state and registry uncertainty are preserved; both screen sources use the guard.
+- **STATUS:** IMPLEMENTED AND AUTOMATED; O39 NATIVE RE-ENTRY CONFIRMATION REQUIRED
+
+## SIM-058
+
+- **AREA:** Fast realistic Debug replay
+- **SEVERITY:** High
+- **FACT:** Existing 30x already subdivides movement into three ordered ten-virtual-second canonical samples per ordinary wall tick while retaining configured physical speed. Naively exposing 120x with the former five-second delayed-tick allowance could serialize 60 samples in one UI turn.
+- **ROOT CAUSE:** The clock had a wall-delay cap but no scale-independent virtual-advance/sample-count cap.
+- **CHANGE:** Add 60x/120x while capping every tick to 120 virtual seconds / 12 canonical samples. Every sample retains monotonic historical time and traverses the unchanged acceptance/journal/metrics/Memory path. Suspended wall backlog beyond the cap is dropped rather than teleported.
+- **TEST:** 5 km/h at 1x for 120 wall seconds and 120x for one wall second end within 0.1 m with equivalent 120 s Activity duration, distance, pace basis, elevation, segment, physical-speed metadata, and endpoint. A five-second delayed 120x tick still emits exactly 12 intermediate samples and 166.7 m, never 60 samples or a teleport.
+- **STATUS:** IMPLEMENTED AND AUTOMATED; 120x IS THE MAXIMUM NORMAL QA OPTION FOR O39 NATIVE PROFILING
+
+## SIM-059
+
+- **AREA:** O40 Simulator Poor/Lost/Frozen semantics and status truth
+- **SEVERITY:** High
+- **FACT:** O39 `case01` advanced the hidden position and emitted 41 Poor samples, but every sample used 60m accuracy and therefore failed the shared 25m production gate. Lost emitted no samples; Frozen emitted a fixed coordinate. Direct Lost/Frozen recovery did not own the same segment handoff as manual relocation, and the real-freshness status remained green during short Debug state changes.
+- **ROOT CAUSE:** Poor generated only categorically unusable evidence; known-loss recovery was coupled to one UI action; the status surface had no Simulator-state authority.
+- **CHANGE:** Poor emits a deterministic accepted/rejected degraded mix through the unchanged canonical filter. Every Lost/Frozen recovery starts a fresh durable Activity segment and retains its boundary marker until an accepted point. Hike/Run show explicit Simulator Normal/Poor/Lost/Frozen state while real GPS retains O40 freshness semantics.
+- **TEST:** Engine/provider/store tests cover hidden movement, mixed Poor outcomes, Lost no-emission, Frozen fixed callbacks, repeated recovery, initially rejected Poor recovery, and status-source contracts.
+- **STATUS:** IMPLEMENTED AND AUTOMATED; O41 NATIVE STATE CONFIRMATION REQUIRED
+
+## SIM-060
+
+- **AREA:** O40 Fast Replay discoverability
+- **SEVERITY:** High
+- **FACT:** source already contained 60x/120x and bounded intermediate samples, but the collapsed native control displayed only `SIM`; the newest O40 checkpoint remained at 1x and contained no scale-selection event.
+- **ROOT CAUSE:** current multiplier and replay affordance were hidden behind an unlabeled collapsed runtime surface. Native engine regression was not evidenced.
+- **CHANGE:** the collapsed chip displays `SIM · <scale>x` and the normal runtime panel exposes 1x/5x/10x/30x/60x/120x without Advanced QA.
+- **TEST:** 5km/h 1x/120x parity preserves physical distance/time/pace/segment/endpoints and all intermediate points; 390x844 Expo-Web QA visibly exposes all six controls with zero runtime errors.
+- **STATUS:** IMPLEMENTED AND AUTOMATED; O41 NATIVE DISCOVERABILITY CONFIRMATION REQUIRED
+
+## SIM-061
+
+- **AREA:** O40 Simulator joystick S/SE jitter
+- **SEVERITY:** High
+- **FACT:** the octant bearing math is monotonic, but the responder consumed local coordinates while its animated knob and labels remained hit-testable. O40 telemetry lacked move vectors, so it cannot prove this was the only native contributor.
+- **ROOT CAUSE:** PROVEN coordinate-contract defect: the supposedly fixed input surface did not exclusively own pointer targeting. Exclusive attribution of the human-observed shake remains INCONCLUSIVE until O41 vector telemetry.
+- **CHANGE:** a fixed `box-only` surface owns all joystick events; one pure center-relative function owns magnitude/bearing; bounded touch vector and requested/actual displacement telemetry was added.
+- **TEST:** N/NE/E/SE/S/SW/W/NW and twenty sustained inputs per direction retain constant bearing/magnitude.
+- **STATUS:** IMPLEMENTED AND AUTOMATED; S/SE NATIVE FIRST-DIVERGENCE CONFIRMATION REQUIRED
+
+## SIM-062
+
+- **AREA:** Activity Save blocking latency
+- **SEVERITY:** High
+- **FACT:** O39 `case01` matching took about 1.194s, but the client reached its 20.199s server wait bound. Production logs showed spatial Memory attribution running about 84.4s inside the Save transaction and causing a concurrent Memory upload lock timeout.
+- **ROOT CAUSE:** derived H3 region projection was incorrectly part of the source-data commit/acknowledgement critical path.
+- **CHANGE:** commit session/raw/display/Memory evidence first, then schedule derived attribution in a coalescing per-user post-commit queue with a reset fence. Add client phase timings from Finish through server acknowledgement persistence.
+- **TEST:** 17 backend contracts pass for atomic source durability, non-blocking projection, coalescing, and reset fencing. Scoped commit `f5d0127c` is deployed; production backend/DB health and restart counts are clean.
+- **STATUS:** PROVEN BLOCKER REMOVED AND DEPLOYED; O41 NATIVE WALL-CLOCK MEASUREMENT REQUIRED
+
+## SIM-063
+
+- **AREA:** Map matching truth gate and zoomed-out gap styling
+- **SEVERITY:** Medium
+- **FACT:** Activity 2057 segment 1 moved derived geometry about 20m at p95 and 25.4m maximum from nominal 5m accepted evidence; case00 baseline was 1.8m/2.8m. Matching had only a 0.3 confidence floor. Gap data was correctly segmented, but used a constant screen-space line style at every zoom.
+- **ROOT CAUSE:** matched output had no accuracy-bounded geometric plausibility gate; gap presentation did not adapt to summary zoom.
+- **CHANGE:** record confidence/deviation/endpoint/length metrics and fall back per segment to raw accepted geometry outside a bounded quality envelope. Keep gap data intact and interpolate only line width/opacity by zoom.
+- **TEST:** near-raw baseline is accepted, observed nearby-path-shaped displacement is rejected, segment-local fallback passes, and Activity/Map History contracts retain raw authority and explicit gaps.
+- **STATUS:** IMPLEMENTED AND AUTOMATED; O41 NATIVE VISUAL CONFIRMATION REQUIRED
+
+## SIM-064
+
+- **AREA:** Memory bridge across segment and Activity boundaries
+- **SEVERITY:** Critical
+- **FACT:** production showed Russia-to-New-Zealand and New-Zealand-to-Shanghai cross-Activity discontinuities plus a 154.5m same-Activity gap. `memory_points` contained only actual endpoints; the client reconstructed all close-in-time rows as one LineString and buffered the invented connector.
+- **ROOT CAUSE:** flat Memory evidence has no Activity/segment identity, yet rendering inferred traversal continuity from row order and time alone.
+- **CHANGE:** render only 30m bounded footprints around persisted Memory evidence. Overlapping observations form corridors naturally; no line is synthesized between disconnected rows. Empty state also invalidates module/instance fog caches.
+- **TEST:** same-segment overlap, one/two gaps, fresh Activity, cache reset, and monotonic rollback contracts pass. No Activity writer/calculation or real/Simulator split was introduced.
+- **STATUS:** IMPLEMENTED AND AUTOMATED; O41 CLEAN-BASELINE NATIVE CONFIRMATION REQUIRED
+
+## SIM-065
+
+- **AREA:** Home Memory authority and authorized account reset
+- **SEVERITY:** High
+- **FACT:** Home consumed the shared local store, but full server reconciliation was mounted only by MemoryScreen. Exact user 72 held 115 Memory rows, 6 derived regions, and about 0.062215km2; opening Memory was therefore the initialization side effect.
+- **ROOT CAUSE:** account Memory reconciliation was screen-owned, and empty/reset rendering could reuse stale module fog geometry.
+- **CHANGE:** authenticated app initialization now hydrates local Memory, attaches sync, and launches bounded server reconciliation independent of screen lifecycle. Empty authoritative results discard only synced stale cache; genuine offline-unsynced evidence is preserved. The reset path fences server projection/pending client work and clears fog caches.
+- **TEST:** cold direct-Home initialization, offline cache, server-empty reconcile, unsynced preservation, reset invalidation, and later shared-store publication pass. Authorized production cleanup deleted only 115 `memory_points` and 6 `unlocked_regions`; 6 Activities and all Cairn/Route counts were preserved, and repeated checks remained zero.
+- **STATUS:** IMPLEMENTED, PRODUCTION MEMORY RESET, AND AUTOMATED; O41 COLD-LAUNCH DEVICE CONFIRMATION REQUIRED

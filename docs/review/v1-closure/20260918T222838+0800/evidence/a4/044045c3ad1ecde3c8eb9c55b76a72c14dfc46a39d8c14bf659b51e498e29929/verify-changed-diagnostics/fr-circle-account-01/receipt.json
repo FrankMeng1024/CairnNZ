@@ -1,0 +1,60 @@
+{
+  "schema": "cairnnz.fr-circle-account-01.red-green.v1",
+  "summarizedAt": "2026-09-19T23:55:25+08:00",
+  "owner": "/root/rev03_a4_resume",
+  "baselineProductFingerprint": {
+    "digest": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+    "fileCount": 633
+  },
+  "scope": "FR-CIRCLE-ACCOUNT-01 only",
+  "command": "cd app && npx jest src/store/__tests__/useMarkerStore.circleAccountBoundary.test.ts src/store/__tests__/useMarkerStore.fastAck.test.ts --runInBand --silent",
+  "red": {
+    "exitCode": 1,
+    "suitesPassed": 1,
+    "suitesFailed": 1,
+    "testsPassed": 10,
+    "testsFailed": 1,
+    "failure": "Expected two /api/circle/markers GETs but received one: account A's loadingCircle single-flight state suppressed account B's normal load.",
+    "implementationState": "useMarkerStore implementation unchanged from the baseline product fingerprint; only the new regression owner was present.",
+    "log": "red.log",
+    "logSha256": "53dcf1b22984ad5cf6a86e26ab913a93882cf97a87ff7b78cf994b76f81f5dc9"
+  },
+  "green": {
+    "exitCode": 0,
+    "suitesPassed": 2,
+    "suitesFailed": 0,
+    "testsPassed": 11,
+    "testsFailed": 0,
+    "timeSeconds": 2.124,
+    "log": "green.log",
+    "logSha256": "3a0b895e55e685cffc68e18eab4206e24f98de82f23ab494f5760589035bc8aa"
+  },
+  "nonAcceptanceAttempt": {
+    "classification": "test-harness error before assertions; not defect evidence",
+    "cause": "the isolated regression initially omitted the AsyncStorage native mock",
+    "log": "red-harness-error.log",
+    "logSha256": "bebec33ca014887730ea03eda0d306334203ec17e13bde534b55b6c5ed4eba4f"
+  },
+  "changedFiles": [
+    {
+      "path": "app/src/store/__tests__/useMarkerStore.circleAccountBoundary.test.ts",
+      "change": "new deterministic deferred account-switch regression"
+    },
+    {
+      "path": "app/src/store/useMarkerStore.ts",
+      "change": "circle-load initiating-viewer/generation fence, guarded publication/finalization, and loading reset on clear/direct hydrate switch"
+    }
+  ],
+  "finalProductFingerprint": {
+    "digest": "995a402cc6ce552ed6346607c02295de50ce51b4b44fb31656f40ecc6922bac8",
+    "fileCount": 634
+  },
+  "boundaries": {
+    "broadVerifyRerun": false,
+    "mysqlRun": false,
+    "expoRun": false,
+    "settingsEdited": false,
+    "homepageEdited": false,
+    "publicEdited": false
+  }
+}

@@ -1,0 +1,7 @@
+run_id=20260917T180318+0800
+branch=master
+head=12fa1cd0ef599e53a81cd30537ce761c5e2150ce
+marker=O58
+archive_target=/Users/mzm/Desktop/cairn_route_detail_01.zip
+archive_target_state=ABSENT
+status_lines=173

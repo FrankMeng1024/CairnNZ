@@ -1,0 +1,1434 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T141933+0800",
+  "captured_at": "2026-09-17T07:37:55.391Z",
+  "base_url": "http://127.0.0.1:8101",
+  "isolation": {
+    "fresh_browser_context": true,
+    "synthetic_identity": true,
+    "synthetic_coordinates": true,
+    "api_reads_fixture_intercepted": true,
+    "api_writes_prevented_in_browser": true,
+    "prevented_write_attempt_count": 123,
+    "allowed_product_write_count": 0,
+    "production_data_read": false,
+    "production_data_mutated": false,
+    "telemetry_enabled": false
+  },
+  "evidence_boundary": {
+    "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+    "actual_web_mapbox_proven": false,
+    "native_mapbox_proven": false,
+    "physical_device_proven": false,
+    "normal_handler_chain_proven": true,
+    "initial_activity_fixture_route_forced": true,
+    "device_loading_proven": false,
+    "explicit_user_acceptance": "PENDING"
+  },
+  "required_flow": [
+    {
+      "step": "home-to-trails",
+      "route": "Routes",
+      "handler": "Home Trails control"
+    },
+    {
+      "step": "trails-back-home",
+      "route": "Home",
+      "handler": "shared Back control"
+    },
+    {
+      "step": "home-to-plant",
+      "route": "Plant",
+      "handler": "Home Leave a Cairn control"
+    },
+    {
+      "step": "activity-linked-cairn-to-detail",
+      "route": "MarkerDetail",
+      "handler": "Activity linked Cairn row onPress"
+    },
+    {
+      "step": "pending-edit-accepted",
+      "route": "MarkerDetail",
+      "handler": "Save changes button",
+      "stableCairnId": "529ea2cf-6b37-4233-8053-ca515992dc06"
+    },
+    {
+      "step": "detail-back-to-same-activity",
+      "route": "MapHistory",
+      "handler": "shared Back control"
+    },
+    {
+      "step": "activity-back-to-activities",
+      "route": "Routes",
+      "handler": "Activity Detail canonical Back control"
+    },
+    {
+      "step": "trails-back-home-after-activity",
+      "route": "Home",
+      "handler": "Trails Back control"
+    },
+    {
+      "step": "home-to-memory",
+      "route": "Memory",
+      "handler": "Home Memory control"
+    },
+    {
+      "step": "memory-intro-dismissed",
+      "route": "Memory",
+      "handler": "Got it control"
+    },
+    {
+      "step": "memory-to-all-cairns",
+      "route": "AllCairns",
+      "handler": "Memory All Cairns control"
+    },
+    {
+      "step": "edited-cairn-retrieved",
+      "route": "AllCairns",
+      "handler": "owner projection + library merge",
+      "stableCairnId": "529ea2cf-6b37-4233-8053-ca515992dc06"
+    },
+    {
+      "step": "all-cairns-row-to-detail",
+      "route": "MarkerDetail",
+      "handler": "All Cairns row onPress"
+    }
+  ],
+  "captures": [
+    {
+      "evidence_id": "CAIRN-VIS-001",
+      "page": "current-home-reference",
+      "state": "current-source",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/current-home-reference--current-source--day--390x844.png",
+      "entry_mode": "NORMAL_APP_ROOT",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Current Home implementation at this source identity; synthetic signed-in fixture.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-002",
+      "page": "current-trails-reference",
+      "state": "current-source",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/current-trails-reference--current-source--day--390x844.png",
+      "entry_mode": "NORMAL_HOME_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Current two-library Trails implementation reached from Home; not the historical three-tab screen.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-003",
+      "page": "current-plant-reference",
+      "state": "current-source",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/current-plant-reference--current-source--day--390x844.png",
+      "entry_mode": "NORMAL_HOME_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Current Plant implementation reached from Home; not the historical Leave a mark taxonomy form.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-004",
+      "page": "activity-detail",
+      "state": "explicit-linked-cairn",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/activity-detail--explicit-linked-cairn--day--390x844.png",
+      "entry_mode": "FORCED_SYNTHETIC_ACTIVITY_START",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic Activity seeded in-memory; linked row is derived from explicit Activity provenance.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence.",
+        "This does not re-prove Activity delete, Route save, or sync retry."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-005",
+      "page": "own-cairn-detail",
+      "state": "enriched-from-activity",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/own-cairn-detail--enriched-from-activity--day--390x844.png",
+      "entry_mode": "NORMAL_ACTIVITY_ROW_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Same stable local Cairn opened from the Activity linked row; Web map is intentionally unavailable.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-006",
+      "page": "own-cairn-detail",
+      "state": "edit-form-long-unicode",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/own-cairn-detail--edit-form-long-unicode--day--390x844.png",
+      "entry_mode": "NORMAL_DETAIL_EDIT_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Real shared edit sheet with a disposable pending-create payload; no production request can leave the browser.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-007",
+      "page": "memory",
+      "state": "normal-all-cairns-entry",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/memory--normal-all-cairns-entry--day--390x844.png",
+      "entry_mode": "NORMAL_HOME_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Memory reached from Home; All Cairns control remains outside map/loading/permission branches.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-008",
+      "page": "all-cairns",
+      "state": "local-failed-and-downloaded-history",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/all-cairns--local-failed-and-downloaded-history--day--390x844.png",
+      "entry_mode": "NORMAL_MEMORY_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Local committed Cairn plus fixture owner-history page; no friend/public/bbox rows.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-009",
+      "page": "all-cairns",
+      "state": "personal-library",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/all-cairns--personal-library--sunset--390x844.png",
+      "entry_mode": "NORMAL_MEMORY_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Same actual list state after Cairn theme switch.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-010",
+      "page": "all-cairns",
+      "state": "personal-library",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/all-cairns--personal-library--night--390x844.png",
+      "entry_mode": "NORMAL_MEMORY_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Same actual list state after Cairn theme switch.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-011",
+      "page": "own-cairn-detail",
+      "state": "edited-retrieved-from-library",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/own-cairn-detail--edited-retrieved-from-library--night--390x844.png",
+      "entry_mode": "NORMAL_LIBRARY_ROW_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Edited durable pending Cairn reopened by the same stable identity from All Cairns.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-012",
+      "page": "own-cairn-detail",
+      "state": "edited-retrieved-from-library",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/own-cairn-detail--edited-retrieved-from-library--sunset--390x844.png",
+      "entry_mode": "NORMAL_LIBRARY_ROW_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Same owned Detail identity and content in Sunset.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-013",
+      "page": "own-cairn-detail",
+      "state": "edited-retrieved-from-library",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/own-cairn-detail--edited-retrieved-from-library--day--390x844.png",
+      "entry_mode": "NORMAL_LIBRARY_ROW_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Same owned Detail identity and content in Day.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-014",
+      "page": "own-cairn-detail",
+      "state": "valid-empty-quick-cairn-map-unavailable",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/own-cairn-detail--valid-empty-quick-cairn-map-unavailable--day--390x844.png",
+      "entry_mode": "FORCED_FIXTURE_ROUTE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic empty Quick Cairn; actual date fallback, Add a note action, and map-unavailable UI.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-015",
+      "page": "own-cairn-detail",
+      "state": "synced-edit-failure-draft-retained",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/own-cairn-detail--synced-edit-failure-draft-retained--day--390x844.png",
+      "entry_mode": "FORCED_FIXTURE_ROUTE_THEN_NORMAL_EDIT",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic synced Cairn; PUT prevented and answered 503 inside browser; draft retained in real edit sheet.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-016",
+      "page": "own-cairn-detail",
+      "state": "delete-confirmation-non-cascade",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/own-cairn-detail--delete-confirmation-non-cascade--day--390x844.png",
+      "entry_mode": "FORCED_FIXTURE_ROUTE_THEN_NORMAL_DELETE_OPEN",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic owned Cairn; confirmation rendered, destructive confirmation not pressed.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-017",
+      "page": "all-cairns",
+      "state": "true-empty-library",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/all-cairns--true-empty-library--day--390x844.png",
+      "entry_mode": "FORCED_FIXTURE_ROUTE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic complete owner-history response with zero Cairns.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-018",
+      "page": "all-cairns",
+      "state": "search-empty-complete-scope",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/all-cairns--search-empty-complete-scope--day--390x844.png",
+      "entry_mode": "FORCED_FIXTURE_ROUTE_THEN_NORMAL_SEARCH",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic complete-scope search response with no match; actual search field handler.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-019",
+      "page": "own-cairn-detail",
+      "state": "small-web-viewport",
+      "theme": "night",
+      "viewport": "375x667",
+      "file": "images/own-cairn-detail--small-web-viewport--night--375x667.png",
+      "entry_mode": "FORCED_FIXTURE_ROUTE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "375x667 browser viewport with synthetic long content.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence.",
+        "Constraint check only; not a small physical iPhone or native keyboard test."
+      ]
+    },
+    {
+      "evidence_id": "CAIRN-VIS-020",
+      "page": "own-cairn-detail",
+      "state": "large-web-focused-edit",
+      "theme": "sunset",
+      "viewport": "430x932",
+      "file": "images/own-cairn-detail--large-web-focused-edit--sunset--430x932.png",
+      "entry_mode": "FORCED_FIXTURE_ROUTE_THEN_NORMAL_EDIT",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "430x932 browser viewport with the real shared edit sheet and focused multiline field.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence.",
+        "Web focus/layout stress only; no iOS software keyboard is present."
+      ]
+    }
+  ],
+  "boards": [
+    "images/board-personal-core.jpg",
+    "images/board-states-and-actions.jpg",
+    "images/board-current-reference-correction.jpg"
+  ],
+  "request_ledger": [
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/",
+      "query": "",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/index.ts.bundle",
+      "query": "?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": "",
+      "action": "prevented-api-write"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/node_modules/expo-task-manager/build/TaskManager.bundle",
+      "query": "?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable&modulesOnly=true&runModule=false",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/node_modules/expo-location/build/index.bundle",
+      "query": "?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable&modulesOnly=true&runModule=false",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/assets/",
+      "query": "?unstable_path=.%2Fassets%2Ffonts/Inter_400Regular.ttf",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/assets/",
+      "query": "?unstable_path=.%2Fassets%2Ffonts/Inter_600SemiBold.ttf",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/assets/",
+      "query": "?unstable_path=.%2Fassets%2Ffonts/Inter_700Bold.ttf",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/node_modules/expo-updates/build/index.bundle",
+      "query": "?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable&modulesOnly=true&runModule=false",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/src/services/accountLocalData.bundle",
+      "query": "?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable&modulesOnly=true&runModule=false",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/node_modules/@react-native-async-storage/async-storage/lib/module/index.bundle",
+      "query": "?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable&modulesOnly=true&runModule=false",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/src/features/activitySimulator/simulatorLog.bundle",
+      "query": "?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable&modulesOnly=true&runModule=false",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/src/services/backgroundLocationTask.bundle",
+      "query": "?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable&modulesOnly=true&runModule=false",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:9",
+      "path": "/api/markers",
+      "query": "",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/node_modules/expo-file-system/legacy.bundle",
+      "query": "?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable&modulesOnly=true&runModule=false",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/assets/",
+      "query": "?unstable_path=.%2Fassets%2Fauth/landing-hero.jpg",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:9",
+      "path": "/api/memory/points",
+      "query": "?after_ts=0&after_cid=&until=1789630621277&limit=10000",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/src/features/activity/activityRegistry.bundle",
+      "query": "?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable&modulesOnly=true&runModule=false",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/assets/",
+      "query": "?unstable_path=.%2Fassets%2Fhome%2Fprototypes%2Ffinal-nz-world-sunny%2Ffinal-micro-polish/sunny-evening-final-micro-3x.jpg",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "api.bigdatacloud.net",
+      "path": "/data/reverse-geocode-client",
+      "query": "?latitude=-44.6712&longitude=167.9251&localityLanguage=en",
+      "action": "blocked-external"
+    },
+    {
+      "method": "GET",
+      "host": "api.open-meteo.com",
+      "path": "/v1/forecast",
+      "query": "?latitude=-44.6712&longitude=167.9251&current=temperature_2m,weathercode&daily=sunrise,sunset&forecast_days=1&timeformat=unixtime&timezone=auto",
+      "action": "fixture-weather"
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/markers",
+      "query": "",
+      "action": "prevented-api-write"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/assets/",
+      "query": "?unstable_path=.%2Fassets%2Fhome%2Fprototypes%2Ffinal-nz-world-sunny%2Ffinal-micro-polish/sunny-day-final-micro-3x.jpg",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:9",
+      "path": "/api/routes",
+      "query": "",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/src/store/storage.bundle",
+      "query": "?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable&modulesOnly=true&runModule=false",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:9",
+      "path": "/api/friends",
+      "query": "",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:9",
+      "path": "/api/memory-subscriptions",
+      "query": "",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:9",
+      "path": "/api/circle/fog",
+      "query": "",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:9",
+      "path": "/api/markers/library",
+      "query": "?limit=40",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8101",
+      "path": "/assets/",
+      "query": "?unstable_path=.%2Fassets%2Fhome%2Fprototypes%2Fweather-full-frame-correction%2Fsunny-night/sunny-night-star-micro-v2-3x.jpg",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "PUT",
+      "host": "127.0.0.1:9",
+      "path": "/api/markers/902",
+      "query": "",
+      "action": "prevented-api-write"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:9",
+      "path": "/api/markers/library",
+      "query": "?limit=40&q=no%20such%20cairn",
+      "action": "fixture-api-read"
+    }
+  ],
+  "prevented_write_attempts": [
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/markers",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "PUT",
+      "host": "127.0.0.1:9",
+      "path": "/api/markers/902",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:9",
+      "path": "/api/edit-diag",
+      "query": ""
+    }
+  ],
+  "runtime_errors": []
+}

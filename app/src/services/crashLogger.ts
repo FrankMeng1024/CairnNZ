@@ -237,7 +237,9 @@ export const crashLogger = {
         const key = useSettingsStore.getState().telemetryApiKey;
         if (key) crashHeaders['X-API-Key'] = key;
       } catch { /* silent — settings store not loaded during crash boot */ }
-      const token = await getToken();
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const ownerId = String(require('../store/useAppStore').useAppStore.getState().user?.id ?? '');
+      const token = ownerId ? await getToken(ownerId) : null;
       if (token) crashHeaders.Authorization = `Bearer ${token}`;
       await fetch(url, {
         method: 'POST',

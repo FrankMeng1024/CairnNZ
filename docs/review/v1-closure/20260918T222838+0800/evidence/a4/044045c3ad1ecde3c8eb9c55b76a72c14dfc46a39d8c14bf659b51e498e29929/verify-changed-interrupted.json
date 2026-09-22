@@ -1,0 +1,17 @@
+{
+  "schema": "cairnnz.interrupted-command-receipt.v1",
+  "command": "cd app && npm run verify:changed",
+  "execSessionId": 9895,
+  "candidateFingerprint": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+  "state": "INTERRUPTED_BY_EXPLICIT_OWNER_PAUSE",
+  "exitCode": 130,
+  "result": "NOT_RUN_TO_COMPLETION",
+  "stdoutObserved": [
+    "> app@0.2.6 verify:changed",
+    "> node scripts/verify-activity.mjs"
+  ],
+  "failureOutputObserved": false,
+  "interruptedAt": null,
+  "timestampNote": "The command was not instrumented with an exact wall-clock stop timestamp. It was interrupted after the 2026-09-19T13:53:21.524Z loaded-Web manifest and before the 2026-09-19T21:58:04+0800 pause inventory. No timestamp was reconstructed.",
+  "resumeAction": "After explicit owner resume, start this required gate from the beginning; do not classify this interrupted receipt as PASS or FAIL."
+}

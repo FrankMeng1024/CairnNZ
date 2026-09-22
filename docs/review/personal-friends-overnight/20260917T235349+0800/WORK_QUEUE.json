@@ -1,0 +1,28 @@
+{
+  "run_id": "20260917T235349+0800",
+  "status": "completed",
+  "current": null,
+  "start_identity": {
+    "head": "ac981e1c97199984082bc3dcc885fc2d946038a7",
+    "origin_master": "ac981e1c97199984082bc3dcc885fc2d946038a7",
+    "ota_marker": "O59"
+  },
+  "queue": [
+    {"id":"W0","status":"completed","checkpoint":"checkpoints/W0.json"},
+    {"id":"W1","status":"completed","checkpoint":"checkpoints/W1.json"},
+    {"id":"W2","status":"completed","checkpoint":"checkpoints/W2.json"},
+    {"id":"W3","status":"completed","checkpoint":"checkpoints/W3.json"},
+    {"id":"W4","status":"completed","checkpoint":"checkpoints/W4.json"},
+    {"id":"W5","status":"completed","checkpoint":"checkpoints/W5.json"},
+    {"id":"W6","status":"completed","checkpoint":"checkpoints/W6.json"},
+    {"id":"W7","status":"completed","checkpoint":"checkpoints/W7.json"}
+  ],
+  "excluded_claims": [
+    "physical-device validation",
+    "native binary loaded on the owner phone",
+    "New Zealand field validation",
+    "owner acceptance",
+    "whole-app acceptance",
+    "OTA publication"
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "started_at": "2026-09-18T05:06:11.790Z",
+  "assertions": [
+    {
+      "id": "FR-15.separate-connections",
+      "result": "PASS",
+      "detail": "A/B/C/D hold four distinct real MySQL connections"
+    },
+    {
+      "id": "DEP-01.schema",
+      "result": "PASS",
+      "detail": "035-039 applied on disposable MySQL 8 and additive presence/lease columns exist"
+    },
+    {
+      "id": "PF-R3.presence-return",
+      "result": "PASS",
+      "detail": "same-place later-day presence stores two immutable witnesses alongside one exploration-coverage row"
+    },
+    {
+      "id": "FR-02.default-deny",
+      "result": "PASS",
+      "detail": "non-friends receive no Memory projection and opaque content denial"
+    },
+    {
+      "id": "FR-03.author-policy",
+      "result": "PASS",
+      "detail": "A standing author policy provisions only A→B; no reciprocal grant appears"
+    },
+    {
+      "id": "PJ-06/FR-03.provenance-projection",
+      "result": "PASS",
+      "detail": "only post-grant finalized activity_real becomes coarse cells; no raw source/times"
+    },
+    {
+      "id": "SAFE-01.private-mask",
+      "result": "PASS",
+      "detail": "private-place change bumps authorization version and removes intersecting whole cells"
+    }
+  ],
+  "actors": {
+    "A": {
+      "id": "128",
+      "email_domain": "example.org"
+    },
+    "B": {
+      "id": "129",
+      "email_domain": "example.org"
+    },
+    "C": {
+      "id": "130",
+      "email_domain": "example.org"
+    },
+    "D": {
+      "id": "131",
+      "email_domain": "example.org"
+    }
+  },
+  "connection_ids": {
+    "A": 1523593,
+    "B": 1523594,
+    "C": 1523595,
+    "D": 1523596
+  },
+  "finished_at": "2026-09-18T05:06:12.272Z",
+  "summary": {
+    "passed": 7,
+    "failed": 1
+  },
+  "failure": {
+    "name": "AssertionError",
+    "message": "POST /api/friend-content/encounters/verify: {\"error\":\"Server error\"}\n\n500 !== 200\n",
+    "stack": "AssertionError [ERR_ASSERTION]: POST /api/friend-content/encounters/verify: {\"error\":\"Server error\"}\n\n500 !== 200\n\n    at api (/harness/abcdn-api-mysql.js:34:38)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async main (/harness/abcdn-api-mysql.js:254:28)"
+  }
+}

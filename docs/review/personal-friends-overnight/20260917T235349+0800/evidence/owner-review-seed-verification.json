@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-09-17T18:12:15.326Z",
+  "realm": "cairn_pf_review_2f8cd36",
+  "api_base": "https://api.yiiling.cn/pf-review-o60",
+  "synthetic_only": true,
+  "author": {
+    "id": "120",
+    "email_domain": "example.org"
+  },
+  "viewer": {
+    "id": "122",
+    "email_domain": "example.org"
+  },
+  "friendship_current": true,
+  "viewer_activity": {
+    "session_id": "2096",
+    "accepted_memory_points": 7,
+    "evidence_time_relation": "post-Cairn synthetic fixture"
+  },
+  "projection": {
+    "count": 1,
+    "coarse_cell_count": 1,
+    "exposes_raw_points": false
+  },
+  "friend_cairn": {
+    "id": "494",
+    "encounter_response_contains_id": true,
+    "listed_read_only": true
+  },
+  "friend_route": {
+    "id": "93",
+    "listed_read_only": true
+  },
+  "credentials": "private handoff outside archive",
+  "native_or_field_validation": false
+}

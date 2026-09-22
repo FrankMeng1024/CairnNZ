@@ -1,0 +1,8 @@
+{
+  "work_package":"W2",
+  "status":"completed",
+  "verdict":"READY",
+  "completed_at":"2026-09-18T09:20:00+08:00",
+  "delivered":["author sharing policy","per-friend prospective grant epochs","coarse server projections","250m endpoint/private containment","versioned 24h cache","revoke/account/out-of-order fencing","personal/combined/single-friend scopes"],
+  "evidence":["FRIENDS_VERDICT.md","evidence/abcdn-api-mysql-review-final.json","evidence/app-personal-friends-tests-final.log"]
+}

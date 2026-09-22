@@ -1,0 +1,17 @@
+{
+  "description": "Cairn V1 closure root-session Stop gate. Prepared only; owner trust is required before Codex may load it.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/env node \"$(git rev-parse --show-toplevel)/.codex/hooks/cairn-v1-stop-gate.mjs\"",
+            "timeout": 3,
+            "statusMessage": "Checking the Cairn V1 closure queue"
+          }
+        ]
+      }
+    ]
+  }
+}

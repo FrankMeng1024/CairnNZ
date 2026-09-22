@@ -1,0 +1,2132 @@
+{
+  "generatedAt": "2026-09-11T11:12:21.623Z",
+  "source": "read-only exact ordered canonical evidence; persisted outputs use local metres only",
+  "D0_CURRENT_PRODUCTION": {
+    "algorithmVersion": "segment-walking-v3-hybrid",
+    "profile": "mapbox/walking",
+    "tidy": true,
+    "overview": "full",
+    "geometries": "geojson",
+    "canonicalInputCount": 392,
+    "chunkSize": 80,
+    "chunkOverlap": 1,
+    "cadence": {
+      "temporalP50S": 1,
+      "temporalP95S": 5,
+      "spatialP50M": 1.417,
+      "spatialP95M": 6.145
+    },
+    "timestamps": "strictly increasing seconds when possible (present in all five requests)",
+    "radiusPolicy": "round(clamp(horizontalAccuracy, 10m, 40m)); default 15m",
+    "requestCount": 5,
+    "decision": "raw-fallback",
+    "fallbackReason": "no-derived-chunks",
+    "requests": [
+      {
+        "inputPointCount": 80,
+        "headTimestamp": 1789119791999,
+        "tailTimestamp": 1789119943000,
+        "timestampsIncluded": true,
+        "minimumRadiusM": 10,
+        "maximumRadiusM": 14,
+        "durationMs": 674,
+        "result": "partial_tracepoint_coverage",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "subMatchingCount": 1,
+        "tracepointCount": 80,
+        "nullTracepointCount": 68,
+        "confidence": 0.971186120336339,
+        "qualityReason": null
+      },
+      {
+        "inputPointCount": 80,
+        "headTimestamp": 1789119943000,
+        "tailTimestamp": 1789120088999,
+        "timestampsIncluded": true,
+        "minimumRadiusM": 10,
+        "maximumRadiusM": 15,
+        "durationMs": 702,
+        "result": "partial_tracepoint_coverage",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "subMatchingCount": 1,
+        "tracepointCount": 80,
+        "nullTracepointCount": 77,
+        "confidence": 0.9537680990236971,
+        "qualityReason": null
+      },
+      {
+        "inputPointCount": 80,
+        "headTimestamp": 1789120088999,
+        "tailTimestamp": 1789120186999,
+        "timestampsIncluded": true,
+        "minimumRadiusM": 14,
+        "maximumRadiusM": 14,
+        "durationMs": 769,
+        "result": "NoSegment",
+        "httpStatus": 200,
+        "responseCode": "NoSegment",
+        "subMatchingCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "confidence": null,
+        "qualityReason": null
+      },
+      {
+        "inputPointCount": 80,
+        "headTimestamp": 1789120186999,
+        "tailTimestamp": 1789120469999,
+        "timestampsIncluded": true,
+        "minimumRadiusM": 14,
+        "maximumRadiusM": 14,
+        "durationMs": 1403,
+        "result": "NoSegment",
+        "httpStatus": 200,
+        "responseCode": "NoSegment",
+        "subMatchingCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "confidence": null,
+        "qualityReason": null
+      },
+      {
+        "inputPointCount": 76,
+        "headTimestamp": 1789120469999,
+        "tailTimestamp": 1789120596999,
+        "timestampsIncluded": true,
+        "minimumRadiusM": 14,
+        "maximumRadiusM": 14,
+        "durationMs": 514,
+        "result": "partial_tracepoint_coverage",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "subMatchingCount": 1,
+        "tracepointCount": 76,
+        "nullTracepointCount": 71,
+        "confidence": 0.04190921502245182,
+        "qualityReason": null
+      }
+    ],
+    "finalGeometry": "canonical",
+    "matchedSubsectionCount": 0,
+    "canonicalFallbackSubsectionCount": 1,
+    "matchedDistanceM": 0,
+    "canonicalFallbackDistanceM": 843.202,
+    "coverage": 0,
+    "canonicalToFinalDisplacement": {
+      "p50M": 0,
+      "p95M": 0,
+      "maxM": 0
+    },
+    "lengthDistortion": 0,
+    "repeatedTraversalPreserved": true,
+    "uTurnPreserved": true,
+    "reproducedResponses": [
+      {
+        "start": 0,
+        "end": 79,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 680,
+        "inputCount": 80,
+        "timestampsIncluded": true,
+        "tidy": true,
+        "radiusMinM": 10,
+        "radiusMaxM": 14,
+        "matchingsCount": 1,
+        "tracepointCount": 80,
+        "nullTracepointCount": 68,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.971186,
+            "distanceM": 174,
+            "geometryPointCount": 14
+          }
+        ],
+        "submatches": [
+          {
+            "matchingIndex": 0,
+            "sourceStart": 0,
+            "sourceEnd": 79,
+            "sourceCount": 12,
+            "contiguous": false,
+            "confidence": 0.971186,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 14.535,
+              "p95DeviationM": 19.966,
+              "maxDeviationM": 22.049,
+              "endpointDeviationM": 19.943,
+              "rawLengthM": 179.601,
+              "matchedLengthM": 174.007,
+              "lengthRatio": 0.9689,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": false,
+              "headM": 14.06,
+              "tailM": 19.943,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "noncontiguous-or-too-short"
+          }
+        ]
+      },
+      {
+        "start": 79,
+        "end": 158,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 172,
+        "inputCount": 80,
+        "timestampsIncluded": true,
+        "tidy": true,
+        "radiusMinM": 10,
+        "radiusMaxM": 15,
+        "matchingsCount": 1,
+        "tracepointCount": 80,
+        "nullTracepointCount": 77,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.953768,
+            "distanceM": 22.8,
+            "geometryPointCount": 4
+          }
+        ],
+        "submatches": [
+          {
+            "matchingIndex": 0,
+            "sourceStart": 0,
+            "sourceEnd": 17,
+            "sourceCount": 3,
+            "contiguous": false,
+            "confidence": 0.953768,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 13.715,
+              "p95DeviationM": 17.611,
+              "maxDeviationM": 17.611,
+              "endpointDeviationM": 15.962,
+              "rawLengthM": 32,
+              "matchedLengthM": 22.834,
+              "lengthRatio": 0.7136,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": true,
+              "headM": 11.778,
+              "tailM": 15.962,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "noncontiguous-or-too-short"
+          }
+        ]
+      },
+      {
+        "start": 158,
+        "end": 237,
+        "httpStatus": 200,
+        "code": "NoSegment",
+        "message": "Could not find a matching segment for input coordinates",
+        "durationMs": 170,
+        "inputCount": 80,
+        "timestampsIncluded": true,
+        "tidy": true,
+        "radiusMinM": 14,
+        "radiusMaxM": 14,
+        "matchingsCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "matchings": [],
+        "submatches": []
+      },
+      {
+        "start": 237,
+        "end": 316,
+        "httpStatus": 200,
+        "code": "NoSegment",
+        "message": "Could not find a matching segment for input coordinates",
+        "durationMs": 513,
+        "inputCount": 80,
+        "timestampsIncluded": true,
+        "tidy": true,
+        "radiusMinM": 14,
+        "radiusMaxM": 14,
+        "matchingsCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "matchings": [],
+        "submatches": []
+      },
+      {
+        "start": 316,
+        "end": 391,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 172,
+        "inputCount": 76,
+        "timestampsIncluded": true,
+        "tidy": true,
+        "radiusMinM": 14,
+        "radiusMaxM": 14,
+        "matchingsCount": 1,
+        "tracepointCount": 76,
+        "nullTracepointCount": 71,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.041909,
+            "distanceM": 69.2,
+            "geometryPointCount": 5
+          }
+        ],
+        "submatches": [
+          {
+            "matchingIndex": 0,
+            "sourceStart": 6,
+            "sourceEnd": 75,
+            "sourceCount": 5,
+            "contiguous": false,
+            "confidence": 0.041909,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 8.233,
+              "p95DeviationM": 17.654,
+              "maxDeviationM": 20.085,
+              "endpointDeviationM": 16.874,
+              "rawLengthM": 123.776,
+              "matchedLengthM": 69.267,
+              "lengthRatio": 0.5596,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": true,
+              "headM": 16.874,
+              "tailM": 8.341,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "noncontiguous-or-too-short"
+          }
+        ]
+      }
+    ]
+  },
+  "D1_4S_TIDY_FALSE": {
+    "name": "D1_4S_TIDY_FALSE",
+    "inputCount": 150,
+    "cadence": {
+      "temporalP50S": 4,
+      "temporalP95S": 7,
+      "spatialP50M": 5.399,
+      "spatialP95M": 8.05
+    },
+    "chunkCount": 2,
+    "okResponses": 2,
+    "noSegmentResponses": 0,
+    "totalTracepoints": 151,
+    "nullTracepoints": 84,
+    "acceptedSubsections": 1,
+    "acceptedObservationCoverage": 0.1267,
+    "acceptedSourceDistanceM": 87.549,
+    "acceptedRanges": [
+      {
+        "resampledStart": 131,
+        "resampledEnd": 149,
+        "canonicalStart": 328,
+        "canonicalEnd": 391,
+        "rawOrdinalStart": 368,
+        "rawOrdinalEnd": 431,
+        "distanceM": 87.549,
+        "confidence": 0.97601,
+        "quality": {
+          "accepted": true,
+          "reason": "accepted",
+          "p50DeviationM": 7.963,
+          "p95DeviationM": 8.754,
+          "maxDeviationM": 8.754,
+          "endpointDeviationM": 8.744,
+          "rawLengthM": 87.549,
+          "matchedLengthM": 87.223,
+          "lengthRatio": 0.9963,
+          "deviationEnvelopeM": 15
+        }
+      }
+    ],
+    "requestSummaries": [
+      {
+        "sourceStart": 0,
+        "sourceEnd": 79,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 172,
+        "inputCount": 80,
+        "timestampsIncluded": true,
+        "tidy": false,
+        "radiusMinM": 10,
+        "radiusMaxM": 15,
+        "matchingsCount": 2,
+        "tracepointCount": 80,
+        "nullTracepointCount": 39,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.068601,
+            "distanceM": 234.9,
+            "geometryPointCount": 42
+          },
+          {
+            "index": 1,
+            "confidence": 0,
+            "distanceM": 2.5,
+            "geometryPointCount": 3
+          }
+        ],
+        "submatches": [
+          {
+            "matchingIndex": 0,
+            "sourceStart": 0,
+            "sourceEnd": 37,
+            "sourceCount": 38,
+            "contiguous": true,
+            "confidence": 0.068601,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 14.48,
+              "p95DeviationM": 17.611,
+              "maxDeviationM": 19.022,
+              "endpointDeviationM": 14.541,
+              "rawLengthM": 208.198,
+              "matchedLengthM": 234.798,
+              "lengthRatio": 1.1278,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": true,
+              "headM": 14.06,
+              "tailM": 14.541,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "confidence"
+          },
+          {
+            "matchingIndex": 1,
+            "sourceStart": 38,
+            "sourceEnd": 40,
+            "sourceCount": 3,
+            "contiguous": true,
+            "confidence": 0,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 24.688,
+              "p95DeviationM": 29.66,
+              "maxDeviationM": 29.66,
+              "endpointDeviationM": 29.662,
+              "rawLengthM": 10.678,
+              "matchedLengthM": 2.513,
+              "lengthRatio": 0.2353,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": false,
+              "headM": 19.246,
+              "tailM": 29.662,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "confidence"
+          }
+        ]
+      },
+      {
+        "sourceStart": 79,
+        "sourceEnd": 149,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 172,
+        "inputCount": 71,
+        "timestampsIncluded": true,
+        "tidy": false,
+        "radiusMinM": 14,
+        "radiusMaxM": 14,
+        "matchingsCount": 3,
+        "tracepointCount": 71,
+        "nullTracepointCount": 45,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0,
+            "distanceM": 0.6,
+            "geometryPointCount": 2
+          },
+          {
+            "index": 1,
+            "confidence": 0,
+            "distanceM": 19.2,
+            "geometryPointCount": 5
+          },
+          {
+            "index": 2,
+            "confidence": 0.97601,
+            "distanceM": 87.3,
+            "geometryPointCount": 19
+          }
+        ],
+        "submatches": [
+          {
+            "matchingIndex": 0,
+            "sourceStart": 45,
+            "sourceEnd": 46,
+            "sourceCount": 2,
+            "contiguous": true,
+            "confidence": 0,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 25.507,
+              "p95DeviationM": 28.474,
+              "maxDeviationM": 28.474,
+              "endpointDeviationM": 28.442,
+              "rawLengthM": 5.966,
+              "matchedLengthM": 0.581,
+              "lengthRatio": 0.0974,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": false,
+              "headM": 28.442,
+              "tailM": 22.516,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "confidence"
+          },
+          {
+            "matchingIndex": 1,
+            "sourceStart": 47,
+            "sourceEnd": 51,
+            "sourceCount": 5,
+            "contiguous": true,
+            "confidence": 0,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 8.067,
+              "p95DeviationM": 16.893,
+              "maxDeviationM": 16.893,
+              "endpointDeviationM": 16.874,
+              "rawLengthM": 30.066,
+              "matchedLengthM": 19.232,
+              "lengthRatio": 0.6397,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": true,
+              "headM": 16.874,
+              "tailM": 3.298,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "confidence"
+          },
+          {
+            "matchingIndex": 2,
+            "sourceStart": 52,
+            "sourceEnd": 70,
+            "sourceCount": 19,
+            "contiguous": true,
+            "confidence": 0.97601,
+            "quality": {
+              "accepted": true,
+              "reason": "accepted",
+              "p50DeviationM": 7.963,
+              "p95DeviationM": 8.754,
+              "maxDeviationM": 8.754,
+              "endpointDeviationM": 8.744,
+              "rawLengthM": 87.549,
+              "matchedLengthM": 87.223,
+              "lengthRatio": 0.9963,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": true,
+              "headM": 8.744,
+              "tailM": 8.341,
+              "envelopeM": 17.807
+            },
+            "accepted": true,
+            "rejectReason": null
+          }
+        ]
+      }
+    ]
+  },
+  "D2_4S_TIDY_TRUE": {
+    "name": "D2_4S_TIDY_TRUE",
+    "inputCount": 150,
+    "cadence": {
+      "temporalP50S": 4,
+      "temporalP95S": 7,
+      "spatialP50M": 5.399,
+      "spatialP95M": 8.05
+    },
+    "chunkCount": 2,
+    "okResponses": 2,
+    "noSegmentResponses": 0,
+    "totalTracepoints": 151,
+    "nullTracepoints": 132,
+    "acceptedSubsections": 0,
+    "acceptedObservationCoverage": 0,
+    "acceptedSourceDistanceM": 0,
+    "acceptedRanges": [],
+    "requestSummaries": [
+      {
+        "sourceStart": 0,
+        "sourceEnd": 79,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 170,
+        "inputCount": 80,
+        "timestampsIncluded": true,
+        "tidy": true,
+        "radiusMinM": 10,
+        "radiusMaxM": 15,
+        "matchingsCount": 1,
+        "tracepointCount": 80,
+        "nullTracepointCount": 66,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.961345,
+            "distanceM": 204.2,
+            "geometryPointCount": 17
+          }
+        ],
+        "submatches": [
+          {
+            "matchingIndex": 0,
+            "sourceStart": 0,
+            "sourceEnd": 39,
+            "sourceCount": 14,
+            "contiguous": false,
+            "confidence": 0.961345,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 14.554,
+              "p95DeviationM": 19.023,
+              "maxDeviationM": 24.69,
+              "endpointDeviationM": 24.662,
+              "rawLengthM": 218.845,
+              "matchedLengthM": 203.953,
+              "lengthRatio": 0.932,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": false,
+              "headM": 14.06,
+              "tailM": 24.662,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "noncontiguous-or-too-short"
+          }
+        ]
+      },
+      {
+        "sourceStart": 79,
+        "sourceEnd": 149,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 170,
+        "inputCount": 71,
+        "timestampsIncluded": true,
+        "tidy": true,
+        "radiusMinM": 14,
+        "radiusMaxM": 14,
+        "matchingsCount": 1,
+        "tracepointCount": 71,
+        "nullTracepointCount": 66,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.063518,
+            "distanceM": 69.2,
+            "geometryPointCount": 5
+          }
+        ],
+        "submatches": [
+          {
+            "matchingIndex": 0,
+            "sourceStart": 47,
+            "sourceEnd": 70,
+            "sourceCount": 5,
+            "contiguous": false,
+            "confidence": 0.063518,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 8.334,
+              "p95DeviationM": 19.543,
+              "maxDeviationM": 20.085,
+              "endpointDeviationM": 16.874,
+              "rawLengthM": 123.27,
+              "matchedLengthM": 69.268,
+              "lengthRatio": 0.5619,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": true,
+              "headM": 16.874,
+              "tailM": 8.341,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "noncontiguous-or-too-short"
+          }
+        ]
+      }
+    ]
+  },
+  "D3_4S_TIDY_FALSE_CONSERVATIVE_RADII": {
+    "name": "D3_4S_TIDY_FALSE_CONSERVATIVE_RADII",
+    "inputCount": 150,
+    "cadence": {
+      "temporalP50S": 4,
+      "temporalP95S": 7,
+      "spatialP50M": 5.399,
+      "spatialP95M": 8.05
+    },
+    "chunkCount": 2,
+    "okResponses": 2,
+    "noSegmentResponses": 0,
+    "totalTracepoints": 151,
+    "nullTracepoints": 84,
+    "acceptedSubsections": 1,
+    "acceptedObservationCoverage": 0.1267,
+    "acceptedSourceDistanceM": 87.549,
+    "acceptedRanges": [
+      {
+        "resampledStart": 131,
+        "resampledEnd": 149,
+        "canonicalStart": 328,
+        "canonicalEnd": 391,
+        "rawOrdinalStart": 368,
+        "rawOrdinalEnd": 431,
+        "distanceM": 87.549,
+        "confidence": 0.97601,
+        "quality": {
+          "accepted": true,
+          "reason": "accepted",
+          "p50DeviationM": 7.963,
+          "p95DeviationM": 8.754,
+          "maxDeviationM": 8.754,
+          "endpointDeviationM": 8.744,
+          "rawLengthM": 87.549,
+          "matchedLengthM": 87.223,
+          "lengthRatio": 0.9963,
+          "deviationEnvelopeM": 15
+        }
+      }
+    ],
+    "requestSummaries": [
+      {
+        "sourceStart": 0,
+        "sourceEnd": 79,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 171,
+        "inputCount": 80,
+        "timestampsIncluded": true,
+        "tidy": false,
+        "radiusMinM": 10,
+        "radiusMaxM": 22,
+        "matchingsCount": 2,
+        "tracepointCount": 80,
+        "nullTracepointCount": 39,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.068601,
+            "distanceM": 234.9,
+            "geometryPointCount": 42
+          },
+          {
+            "index": 1,
+            "confidence": 0,
+            "distanceM": 2.5,
+            "geometryPointCount": 3
+          }
+        ],
+        "submatches": [
+          {
+            "matchingIndex": 0,
+            "sourceStart": 0,
+            "sourceEnd": 37,
+            "sourceCount": 38,
+            "contiguous": true,
+            "confidence": 0.068601,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 14.48,
+              "p95DeviationM": 17.611,
+              "maxDeviationM": 19.022,
+              "endpointDeviationM": 14.541,
+              "rawLengthM": 208.198,
+              "matchedLengthM": 234.798,
+              "lengthRatio": 1.1278,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": true,
+              "headM": 14.06,
+              "tailM": 14.541,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "confidence"
+          },
+          {
+            "matchingIndex": 1,
+            "sourceStart": 38,
+            "sourceEnd": 40,
+            "sourceCount": 3,
+            "contiguous": true,
+            "confidence": 0,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 24.688,
+              "p95DeviationM": 29.66,
+              "maxDeviationM": 29.66,
+              "endpointDeviationM": 29.662,
+              "rawLengthM": 10.678,
+              "matchedLengthM": 2.513,
+              "lengthRatio": 0.2353,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": false,
+              "headM": 19.246,
+              "tailM": 29.662,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "confidence"
+          }
+        ]
+      },
+      {
+        "sourceStart": 79,
+        "sourceEnd": 149,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 171,
+        "inputCount": 71,
+        "timestampsIncluded": true,
+        "tidy": false,
+        "radiusMinM": 21,
+        "radiusMaxM": 21,
+        "matchingsCount": 3,
+        "tracepointCount": 71,
+        "nullTracepointCount": 45,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0,
+            "distanceM": 0.6,
+            "geometryPointCount": 2
+          },
+          {
+            "index": 1,
+            "confidence": 0,
+            "distanceM": 19.2,
+            "geometryPointCount": 5
+          },
+          {
+            "index": 2,
+            "confidence": 0.97601,
+            "distanceM": 87.3,
+            "geometryPointCount": 19
+          }
+        ],
+        "submatches": [
+          {
+            "matchingIndex": 0,
+            "sourceStart": 45,
+            "sourceEnd": 46,
+            "sourceCount": 2,
+            "contiguous": true,
+            "confidence": 0,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 25.507,
+              "p95DeviationM": 28.474,
+              "maxDeviationM": 28.474,
+              "endpointDeviationM": 28.442,
+              "rawLengthM": 5.966,
+              "matchedLengthM": 0.581,
+              "lengthRatio": 0.0974,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": false,
+              "headM": 28.442,
+              "tailM": 22.516,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "confidence"
+          },
+          {
+            "matchingIndex": 1,
+            "sourceStart": 47,
+            "sourceEnd": 51,
+            "sourceCount": 5,
+            "contiguous": true,
+            "confidence": 0,
+            "quality": {
+              "accepted": false,
+              "reason": "raw_deviation",
+              "p50DeviationM": 8.067,
+              "p95DeviationM": 16.893,
+              "maxDeviationM": 16.893,
+              "endpointDeviationM": 16.874,
+              "rawLengthM": 30.066,
+              "matchedLengthM": 19.232,
+              "lengthRatio": 0.6397,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": true,
+              "headM": 16.874,
+              "tailM": 3.298,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "confidence"
+          },
+          {
+            "matchingIndex": 2,
+            "sourceStart": 52,
+            "sourceEnd": 70,
+            "sourceCount": 19,
+            "contiguous": true,
+            "confidence": 0.97601,
+            "quality": {
+              "accepted": true,
+              "reason": "accepted",
+              "p50DeviationM": 7.963,
+              "p95DeviationM": 8.754,
+              "maxDeviationM": 8.754,
+              "endpointDeviationM": 8.744,
+              "rawLengthM": 87.549,
+              "matchedLengthM": 87.223,
+              "lengthRatio": 0.9963,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": true,
+              "headM": 8.744,
+              "tailM": 8.341,
+              "envelopeM": 17.807
+            },
+            "accepted": true,
+            "rejectReason": null
+          }
+        ]
+      }
+    ]
+  },
+  "D4_PUBLIC_SUBSECTIONS": [
+    {
+      "name": "D4_HEAD_MAPPED_CANDIDATE",
+      "inputCount": 22,
+      "cadence": {
+        "temporalP50S": 4,
+        "temporalP95S": 8.282,
+        "spatialP50M": 5.198,
+        "spatialP95M": 11.894
+      },
+      "chunkCount": 1,
+      "okResponses": 1,
+      "noSegmentResponses": 0,
+      "totalTracepoints": 22,
+      "nullTracepoints": 0,
+      "acceptedSubsections": 0,
+      "acceptedObservationCoverage": 0,
+      "acceptedSourceDistanceM": 0,
+      "acceptedRanges": [],
+      "requestSummaries": [
+        {
+          "sourceStart": 0,
+          "sourceEnd": 21,
+          "httpStatus": 200,
+          "code": "Ok",
+          "message": null,
+          "durationMs": 169,
+          "inputCount": 22,
+          "timestampsIncluded": true,
+          "tidy": false,
+          "radiusMinM": 10,
+          "radiusMaxM": 14,
+          "matchingsCount": 1,
+          "tracepointCount": 22,
+          "nullTracepointCount": 0,
+          "matchings": [
+            {
+              "index": 0,
+              "confidence": 0.946153,
+              "distanceM": 118.4,
+              "geometryPointCount": 22
+            }
+          ],
+          "submatches": [
+            {
+              "matchingIndex": 0,
+              "sourceStart": 0,
+              "sourceEnd": 21,
+              "sourceCount": 22,
+              "contiguous": true,
+              "confidence": 0.946153,
+              "quality": {
+                "accepted": false,
+                "reason": "raw_deviation",
+                "p50DeviationM": 14.379,
+                "p95DeviationM": 15.058,
+                "maxDeviationM": 15.882,
+                "endpointDeviationM": 15.865,
+                "rawLengthM": 120.764,
+                "matchedLengthM": 118.537,
+                "lengthRatio": 0.9816,
+                "deviationEnvelopeM": 15
+              },
+              "endpoints": {
+                "accepted": true,
+                "headM": 14.06,
+                "tailM": 15.865,
+                "envelopeM": 17.807
+              },
+              "accepted": false,
+              "rejectReason": "quality-raw_deviation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "D4A_INITIAL_PUBLIC_CORRIDOR",
+      "inputCount": 38,
+      "cadence": {
+        "temporalP50S": 4,
+        "temporalP95S": 17.001,
+        "spatialP50M": 5.199,
+        "spatialP95M": 11.894
+      },
+      "chunkCount": 1,
+      "okResponses": 1,
+      "noSegmentResponses": 0,
+      "totalTracepoints": 38,
+      "nullTracepoints": 0,
+      "acceptedSubsections": 0,
+      "acceptedObservationCoverage": 0,
+      "acceptedSourceDistanceM": 0,
+      "acceptedRanges": [],
+      "requestSummaries": [
+        {
+          "sourceStart": 0,
+          "sourceEnd": 37,
+          "httpStatus": 200,
+          "code": "Ok",
+          "message": null,
+          "durationMs": 169,
+          "inputCount": 38,
+          "timestampsIncluded": true,
+          "tidy": false,
+          "radiusMinM": 10,
+          "radiusMaxM": 14,
+          "matchingsCount": 1,
+          "tracepointCount": 38,
+          "nullTracepointCount": 0,
+          "matchings": [
+            {
+              "index": 0,
+              "confidence": 0.068601,
+              "distanceM": 234.9,
+              "geometryPointCount": 42
+            }
+          ],
+          "submatches": [
+            {
+              "matchingIndex": 0,
+              "sourceStart": 0,
+              "sourceEnd": 37,
+              "sourceCount": 38,
+              "contiguous": true,
+              "confidence": 0.068601,
+              "quality": {
+                "accepted": false,
+                "reason": "raw_deviation",
+                "p50DeviationM": 14.48,
+                "p95DeviationM": 17.611,
+                "maxDeviationM": 19.022,
+                "endpointDeviationM": 14.541,
+                "rawLengthM": 208.198,
+                "matchedLengthM": 234.798,
+                "lengthRatio": 1.1278,
+                "deviationEnvelopeM": 15
+              },
+              "endpoints": {
+                "accepted": true,
+                "headM": 14.06,
+                "tailM": 14.541,
+                "envelopeM": 17.807
+              },
+              "accepted": false,
+              "rejectReason": "confidence"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "D4B_LOWER_PUBLIC_OUTBOUND",
+      "inputCount": 22,
+      "cadence": {
+        "temporalP50S": 4,
+        "temporalP95S": 5,
+        "spatialP50M": 5.175,
+        "spatialP95M": 6.711
+      },
+      "chunkCount": 1,
+      "okResponses": 0,
+      "noSegmentResponses": 1,
+      "totalTracepoints": 0,
+      "nullTracepoints": 0,
+      "acceptedSubsections": 0,
+      "acceptedObservationCoverage": 0,
+      "acceptedSourceDistanceM": 0,
+      "acceptedRanges": [],
+      "requestSummaries": [
+        {
+          "sourceStart": 0,
+          "sourceEnd": 21,
+          "httpStatus": 200,
+          "code": "NoSegment",
+          "message": "Could not find a matching segment for input coordinates",
+          "durationMs": 168,
+          "inputCount": 22,
+          "timestampsIncluded": true,
+          "tidy": false,
+          "radiusMinM": 14,
+          "radiusMaxM": 14,
+          "matchingsCount": 0,
+          "tracepointCount": 0,
+          "nullTracepointCount": 0,
+          "matchings": [],
+          "submatches": []
+        }
+      ]
+    },
+    {
+      "name": "D4C_LOWER_PUBLIC_RETURN",
+      "inputCount": 16,
+      "cadence": {
+        "temporalP50S": 4,
+        "temporalP95S": 6,
+        "spatialP50M": 5.615,
+        "spatialP95M": 7.676
+      },
+      "chunkCount": 1,
+      "okResponses": 0,
+      "noSegmentResponses": 1,
+      "totalTracepoints": 0,
+      "nullTracepoints": 0,
+      "acceptedSubsections": 0,
+      "acceptedObservationCoverage": 0,
+      "acceptedSourceDistanceM": 0,
+      "acceptedRanges": [],
+      "requestSummaries": [
+        {
+          "sourceStart": 0,
+          "sourceEnd": 15,
+          "httpStatus": 200,
+          "code": "NoSegment",
+          "message": "Could not find a matching segment for input coordinates",
+          "durationMs": 170,
+          "inputCount": 16,
+          "timestampsIncluded": true,
+          "tidy": false,
+          "radiusMinM": 14,
+          "radiusMaxM": 14,
+          "matchingsCount": 0,
+          "tracepointCount": 0,
+          "nullTracepointCount": 0,
+          "matchings": [],
+          "submatches": []
+        }
+      ]
+    },
+    {
+      "name": "D4D_FINAL_PUBLIC_CORRIDOR",
+      "inputCount": 19,
+      "cadence": {
+        "temporalP50S": 4,
+        "temporalP95S": 4,
+        "spatialP50M": 4.977,
+        "spatialP95M": 5.777
+      },
+      "chunkCount": 1,
+      "okResponses": 1,
+      "noSegmentResponses": 0,
+      "totalTracepoints": 19,
+      "nullTracepoints": 0,
+      "acceptedSubsections": 1,
+      "acceptedObservationCoverage": 1,
+      "acceptedSourceDistanceM": 87.549,
+      "acceptedRanges": [
+        {
+          "resampledStart": 0,
+          "resampledEnd": 18,
+          "canonicalStart": 328,
+          "canonicalEnd": 391,
+          "rawOrdinalStart": 368,
+          "rawOrdinalEnd": 431,
+          "distanceM": 87.549,
+          "confidence": 0.97601,
+          "quality": {
+            "accepted": true,
+            "reason": "accepted",
+            "p50DeviationM": 7.963,
+            "p95DeviationM": 8.754,
+            "maxDeviationM": 8.754,
+            "endpointDeviationM": 8.744,
+            "rawLengthM": 87.549,
+            "matchedLengthM": 87.223,
+            "lengthRatio": 0.9963,
+            "deviationEnvelopeM": 15
+          }
+        }
+      ],
+      "requestSummaries": [
+        {
+          "sourceStart": 0,
+          "sourceEnd": 18,
+          "httpStatus": 200,
+          "code": "Ok",
+          "message": null,
+          "durationMs": 169,
+          "inputCount": 19,
+          "timestampsIncluded": true,
+          "tidy": false,
+          "radiusMinM": 14,
+          "radiusMaxM": 14,
+          "matchingsCount": 1,
+          "tracepointCount": 19,
+          "nullTracepointCount": 0,
+          "matchings": [
+            {
+              "index": 0,
+              "confidence": 0.97601,
+              "distanceM": 87.3,
+              "geometryPointCount": 19
+            }
+          ],
+          "submatches": [
+            {
+              "matchingIndex": 0,
+              "sourceStart": 0,
+              "sourceEnd": 18,
+              "sourceCount": 19,
+              "contiguous": true,
+              "confidence": 0.97601,
+              "quality": {
+                "accepted": true,
+                "reason": "accepted",
+                "p50DeviationM": 7.963,
+                "p95DeviationM": 8.754,
+                "maxDeviationM": 8.754,
+                "endpointDeviationM": 8.744,
+                "rawLengthM": 87.549,
+                "matchedLengthM": 87.223,
+                "lengthRatio": 0.9963,
+                "deviationEnvelopeM": 15
+              },
+              "endpoints": {
+                "accepted": true,
+                "headM": 8.744,
+                "tailM": 8.341,
+                "envelopeM": 17.807
+              },
+              "accepted": true,
+              "rejectReason": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "D5_INTERNAL_ONLY": {
+    "name": "D5_INTERNAL_PATH_OUTBOUND",
+    "inputCount": 21,
+    "cadence": {
+      "temporalP50S": 4,
+      "temporalP95S": 7,
+      "spatialP50M": 6.107,
+      "spatialP95M": 10.374
+    },
+    "chunkCount": 1,
+    "okResponses": 0,
+    "noSegmentResponses": 0,
+    "totalTracepoints": 0,
+    "nullTracepoints": 0,
+    "acceptedSubsections": 0,
+    "acceptedObservationCoverage": 0,
+    "acceptedSourceDistanceM": 0,
+    "acceptedRanges": [],
+    "requestSummaries": [
+      {
+        "sourceStart": 0,
+        "sourceEnd": 20,
+        "httpStatus": 200,
+        "code": "NoMatch",
+        "message": "No matching found",
+        "durationMs": 168,
+        "inputCount": 21,
+        "timestampsIncluded": true,
+        "tidy": false,
+        "radiusMinM": 10,
+        "radiusMaxM": 15,
+        "matchingsCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "matchings": [],
+        "submatches": []
+      }
+    ]
+  },
+  "HISTORICAL_BACK_STYLE_ON_SNAP": {
+    "name": "HISTORICAL_BACK_STYLE_ON_SNAP",
+    "sourceCount": 392,
+    "outputCount": 147,
+    "goodRuns": 1,
+    "lostRuns": 0,
+    "chunksOk": 2,
+    "chunksFallback": 4,
+    "seamBridges": 0,
+    "sourceLengthM": 843.202,
+    "outputLengthM": 813.066,
+    "lengthRatio": 0.9643,
+    "sourceToOutputP50M": 0.397,
+    "sourceToOutputP95M": 14.775,
+    "sourceToOutputMaxM": 19.029,
+    "requests": [
+      {
+        "runStart": 0,
+        "sourceStart": 0,
+        "sourceEnd": 79,
+        "accepted": true,
+        "confidence": 0.971186,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 170,
+        "inputCount": 80,
+        "timestampsIncluded": false,
+        "tidy": true,
+        "radiusMinM": 10,
+        "radiusMaxM": 14,
+        "matchingsCount": 1,
+        "tracepointCount": 80,
+        "nullTracepointCount": 68,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.971186,
+            "distanceM": 174,
+            "geometryPointCount": 14
+          }
+        ]
+      },
+      {
+        "runStart": 0,
+        "sourceStart": 70,
+        "sourceEnd": 149,
+        "accepted": false,
+        "confidence": 0.095813,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 170,
+        "inputCount": 80,
+        "timestampsIncluded": false,
+        "tidy": true,
+        "radiusMinM": 10,
+        "radiusMaxM": 15,
+        "matchingsCount": 1,
+        "tracepointCount": 80,
+        "nullTracepointCount": 75,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.095813,
+            "distanceM": 62.9,
+            "geometryPointCount": 7
+          }
+        ]
+      },
+      {
+        "runStart": 0,
+        "sourceStart": 140,
+        "sourceEnd": 219,
+        "accepted": false,
+        "confidence": 0,
+        "httpStatus": 200,
+        "code": "NoSegment",
+        "message": "Could not find a matching segment for input coordinates",
+        "durationMs": 169,
+        "inputCount": 80,
+        "timestampsIncluded": false,
+        "tidy": true,
+        "radiusMinM": 14,
+        "radiusMaxM": 14,
+        "matchingsCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "matchings": []
+      },
+      {
+        "runStart": 0,
+        "sourceStart": 210,
+        "sourceEnd": 289,
+        "accepted": false,
+        "confidence": 0,
+        "httpStatus": 200,
+        "code": "NoSegment",
+        "message": "Could not find a matching segment for input coordinates",
+        "durationMs": 169,
+        "inputCount": 80,
+        "timestampsIncluded": false,
+        "tidy": true,
+        "radiusMinM": 14,
+        "radiusMaxM": 14,
+        "matchingsCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "matchings": []
+      },
+      {
+        "runStart": 0,
+        "sourceStart": 280,
+        "sourceEnd": 359,
+        "accepted": false,
+        "confidence": 0,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 173,
+        "inputCount": 80,
+        "timestampsIncluded": false,
+        "tidy": true,
+        "radiusMinM": 14,
+        "radiusMaxM": 14,
+        "matchingsCount": 1,
+        "tracepointCount": 80,
+        "nullTracepointCount": 74,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0,
+            "distanceM": 664,
+            "geometryPointCount": 25
+          }
+        ]
+      },
+      {
+        "runStart": 0,
+        "sourceStart": 350,
+        "sourceEnd": 391,
+        "accepted": true,
+        "confidence": 0.979914,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 169,
+        "inputCount": 42,
+        "timestampsIncluded": false,
+        "tidy": true,
+        "radiusMinM": 14,
+        "radiusMaxM": 14,
+        "matchingsCount": 1,
+        "tracepointCount": 42,
+        "nullTracepointCount": 37,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.979914,
+            "distanceM": 53.8,
+            "geometryPointCount": 5
+          }
+        ]
+      }
+    ]
+  },
+  "windowProbes": [
+    {
+      "name": "INITIAL_PUBLIC_WINDOWS",
+      "probes": [
+        {
+          "start": 0,
+          "end": 11,
+          "response": {
+            "httpStatus": 200,
+            "code": "Ok",
+            "message": null,
+            "durationMs": 170,
+            "inputCount": 12,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 1,
+            "tracepointCount": 12,
+            "nullTracepointCount": 0,
+            "matchings": [
+              {
+                "index": 0,
+                "confidence": 0.966675,
+                "distanceM": 51.6,
+                "geometryPointCount": 12
+              }
+            ]
+          },
+          "submatches": [
+            {
+              "matchingIndex": 0,
+              "sourceStart": 0,
+              "sourceEnd": 11,
+              "sourceCount": 12,
+              "contiguous": true,
+              "confidence": 0.966675,
+              "quality": {
+                "accepted": false,
+                "reason": "raw_deviation",
+                "p50DeviationM": 13.883,
+                "p95DeviationM": 15.028,
+                "maxDeviationM": 15.028,
+                "endpointDeviationM": 15.011,
+                "rawLengthM": 52.138,
+                "matchedLengthM": 51.581,
+                "lengthRatio": 0.9893,
+                "deviationEnvelopeM": 15
+              },
+              "endpoints": {
+                "accepted": true,
+                "headM": 14.06,
+                "tailM": 15.011,
+                "envelopeM": 17.807
+              },
+              "accepted": false,
+              "rejectReason": "quality-raw_deviation"
+            }
+          ]
+        },
+        {
+          "start": 10,
+          "end": 21,
+          "response": {
+            "httpStatus": 200,
+            "code": "Ok",
+            "message": null,
+            "durationMs": 170,
+            "inputCount": 12,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 10,
+            "radiusMaxM": 21,
+            "matchingsCount": 1,
+            "tracepointCount": 12,
+            "nullTracepointCount": 0,
+            "matchings": [
+              {
+                "index": 0,
+                "confidence": 0.926455,
+                "distanceM": 71.9,
+                "geometryPointCount": 12
+              }
+            ]
+          },
+          "submatches": [
+            {
+              "matchingIndex": 0,
+              "sourceStart": 0,
+              "sourceEnd": 11,
+              "sourceCount": 12,
+              "contiguous": true,
+              "confidence": 0.926455,
+              "quality": {
+                "accepted": false,
+                "reason": "raw_deviation",
+                "p50DeviationM": 14.669,
+                "p95DeviationM": 15.882,
+                "maxDeviationM": 15.882,
+                "endpointDeviationM": 15.865,
+                "rawLengthM": 73.824,
+                "matchedLengthM": 72.079,
+                "lengthRatio": 0.9764,
+                "deviationEnvelopeM": 15
+              },
+              "endpoints": {
+                "accepted": true,
+                "headM": 14.445,
+                "tailM": 15.865,
+                "envelopeM": 17.807
+              },
+              "accepted": false,
+              "rejectReason": "quality-raw_deviation"
+            }
+          ]
+        },
+        {
+          "start": 20,
+          "end": 31,
+          "response": {
+            "httpStatus": 200,
+            "code": "Ok",
+            "message": null,
+            "durationMs": 172,
+            "inputCount": 12,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 10,
+            "radiusMaxM": 21,
+            "matchingsCount": 1,
+            "tracepointCount": 12,
+            "nullTracepointCount": 0,
+            "matchings": [
+              {
+                "index": 0,
+                "confidence": 0.214651,
+                "distanceM": 65.4,
+                "geometryPointCount": 14
+              }
+            ]
+          },
+          "submatches": [
+            {
+              "matchingIndex": 0,
+              "sourceStart": 0,
+              "sourceEnd": 11,
+              "sourceCount": 12,
+              "contiguous": true,
+              "confidence": 0.214651,
+              "quality": {
+                "accepted": false,
+                "reason": "raw_deviation",
+                "p50DeviationM": 19.163,
+                "p95DeviationM": 26.404,
+                "maxDeviationM": 26.404,
+                "endpointDeviationM": 26.376,
+                "rawLengthM": 71.462,
+                "matchedLengthM": 65.278,
+                "lengthRatio": 0.9135,
+                "deviationEnvelopeM": 15
+              },
+              "endpoints": {
+                "accepted": false,
+                "headM": 14.923,
+                "tailM": 26.376,
+                "envelopeM": 17.807
+              },
+              "accepted": false,
+              "rejectReason": "confidence"
+            }
+          ]
+        },
+        {
+          "start": 30,
+          "end": 39,
+          "response": {
+            "httpStatus": 200,
+            "code": "Ok",
+            "message": null,
+            "durationMs": 170,
+            "inputCount": 10,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 1,
+            "tracepointCount": 10,
+            "nullTracepointCount": 2,
+            "matchings": [
+              {
+                "index": 0,
+                "confidence": 0,
+                "distanceM": 57.7,
+                "geometryPointCount": 10
+              }
+            ]
+          },
+          "submatches": [
+            {
+              "matchingIndex": 0,
+              "sourceStart": 0,
+              "sourceEnd": 9,
+              "sourceCount": 8,
+              "contiguous": false,
+              "confidence": 0,
+              "quality": {
+                "accepted": false,
+                "reason": "raw_deviation",
+                "p50DeviationM": 15.732,
+                "p95DeviationM": 24.69,
+                "maxDeviationM": 24.69,
+                "endpointDeviationM": 24.662,
+                "rawLengthM": 40.215,
+                "matchedLengthM": 57.577,
+                "lengthRatio": 1.4317,
+                "deviationEnvelopeM": 15
+              },
+              "endpoints": {
+                "accepted": false,
+                "headM": 19.943,
+                "tailM": 24.662,
+                "envelopeM": 17.807
+              },
+              "accepted": false,
+              "rejectReason": "noncontiguous-or-too-short"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "INTERNAL_OUTBOUND_WINDOWS",
+      "probes": [
+        {
+          "start": 40,
+          "end": 51,
+          "response": {
+            "httpStatus": 200,
+            "code": "NoMatch",
+            "message": "No matching found",
+            "durationMs": 278,
+            "inputCount": 12,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 10,
+            "radiusMaxM": 22,
+            "matchingsCount": 0,
+            "tracepointCount": 0,
+            "nullTracepointCount": 0,
+            "matchings": []
+          },
+          "submatches": []
+        },
+        {
+          "start": 50,
+          "end": 60,
+          "response": {
+            "httpStatus": 200,
+            "code": "NoSegment",
+            "message": "Could not find a matching segment for input coordinates",
+            "durationMs": 169,
+            "inputCount": 11,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 0,
+            "tracepointCount": 0,
+            "nullTracepointCount": 0,
+            "matchings": []
+          },
+          "submatches": []
+        }
+      ]
+    },
+    {
+      "name": "LOWER_OUT_AND_BACK_WINDOWS",
+      "probes": [
+        {
+          "start": 60,
+          "end": 71,
+          "response": {
+            "httpStatus": 200,
+            "code": "NoSegment",
+            "message": "Could not find a matching segment for input coordinates",
+            "durationMs": 169,
+            "inputCount": 12,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 0,
+            "tracepointCount": 0,
+            "nullTracepointCount": 0,
+            "matchings": []
+          },
+          "submatches": []
+        },
+        {
+          "start": 70,
+          "end": 81,
+          "response": {
+            "httpStatus": 200,
+            "code": "NoSegment",
+            "message": "Could not find a matching segment for input coordinates",
+            "durationMs": 169,
+            "inputCount": 12,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 0,
+            "tracepointCount": 0,
+            "nullTracepointCount": 0,
+            "matchings": []
+          },
+          "submatches": []
+        },
+        {
+          "start": 80,
+          "end": 91,
+          "response": {
+            "httpStatus": 200,
+            "code": "NoSegment",
+            "message": "Could not find a matching segment for input coordinates",
+            "durationMs": 169,
+            "inputCount": 12,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 0,
+            "tracepointCount": 0,
+            "nullTracepointCount": 0,
+            "matchings": []
+          },
+          "submatches": []
+        },
+        {
+          "start": 90,
+          "end": 101,
+          "response": {
+            "httpStatus": 200,
+            "code": "NoSegment",
+            "message": "Could not find a matching segment for input coordinates",
+            "durationMs": 169,
+            "inputCount": 12,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 0,
+            "tracepointCount": 0,
+            "nullTracepointCount": 0,
+            "matchings": []
+          },
+          "submatches": []
+        },
+        {
+          "start": 100,
+          "end": 103,
+          "response": {
+            "httpStatus": 200,
+            "code": "NoSegment",
+            "message": "Could not find a matching segment for input coordinates",
+            "durationMs": 168,
+            "inputCount": 4,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 0,
+            "tracepointCount": 0,
+            "nullTracepointCount": 0,
+            "matchings": []
+          },
+          "submatches": []
+        }
+      ]
+    },
+    {
+      "name": "INTERNAL_RETURN_WINDOWS",
+      "probes": [
+        {
+          "start": 104,
+          "end": 115,
+          "response": {
+            "httpStatus": 200,
+            "code": "NoSegment",
+            "message": "Could not find a matching segment for input coordinates",
+            "durationMs": 170,
+            "inputCount": 12,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 0,
+            "tracepointCount": 0,
+            "nullTracepointCount": 0,
+            "matchings": []
+          },
+          "submatches": []
+        },
+        {
+          "start": 114,
+          "end": 125,
+          "response": {
+            "httpStatus": 200,
+            "code": "Ok",
+            "message": null,
+            "durationMs": 169,
+            "inputCount": 12,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 1,
+            "tracepointCount": 12,
+            "nullTracepointCount": 10,
+            "matchings": [
+              {
+                "index": 0,
+                "confidence": 0,
+                "distanceM": 0.6,
+                "geometryPointCount": 2
+              }
+            ]
+          },
+          "submatches": [
+            {
+              "matchingIndex": 0,
+              "sourceStart": 10,
+              "sourceEnd": 11,
+              "sourceCount": 2,
+              "contiguous": true,
+              "confidence": 0,
+              "quality": {
+                "accepted": false,
+                "reason": "raw_deviation",
+                "p50DeviationM": 25.507,
+                "p95DeviationM": 28.474,
+                "maxDeviationM": 28.474,
+                "endpointDeviationM": 28.442,
+                "rawLengthM": 5.966,
+                "matchedLengthM": 0.581,
+                "lengthRatio": 0.0974,
+                "deviationEnvelopeM": 15
+              },
+              "endpoints": {
+                "accepted": false,
+                "headM": 28.442,
+                "tailM": 22.516,
+                "envelopeM": 17.807
+              },
+              "accepted": false,
+              "rejectReason": "confidence"
+            }
+          ]
+        },
+        {
+          "start": 124,
+          "end": 130,
+          "response": {
+            "httpStatus": 200,
+            "code": "Ok",
+            "message": null,
+            "durationMs": 170,
+            "inputCount": 7,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 1,
+            "tracepointCount": 7,
+            "nullTracepointCount": 2,
+            "matchings": [
+              {
+                "index": 0,
+                "confidence": 0,
+                "distanceM": 19.3,
+                "geometryPointCount": 5
+              }
+            ]
+          },
+          "submatches": [
+            {
+              "matchingIndex": 0,
+              "sourceStart": 0,
+              "sourceEnd": 6,
+              "sourceCount": 5,
+              "contiguous": false,
+              "confidence": 0,
+              "quality": {
+                "accepted": false,
+                "reason": "raw_deviation",
+                "p50DeviationM": 10.984,
+                "p95DeviationM": 28.474,
+                "maxDeviationM": 28.474,
+                "endpointDeviationM": 28.442,
+                "rawLengthM": 41.603,
+                "matchedLengthM": 19.348,
+                "lengthRatio": 0.4651,
+                "deviationEnvelopeM": 15
+              },
+              "endpoints": {
+                "accepted": false,
+                "headM": 28.442,
+                "tailM": 3.298,
+                "envelopeM": 17.807
+              },
+              "accepted": false,
+              "rejectReason": "noncontiguous-or-too-short"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "FINAL_PUBLIC_WINDOWS",
+      "probes": [
+        {
+          "start": 131,
+          "end": 142,
+          "response": {
+            "httpStatus": 200,
+            "code": "Ok",
+            "message": null,
+            "durationMs": 172,
+            "inputCount": 12,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 1,
+            "tracepointCount": 12,
+            "nullTracepointCount": 0,
+            "matchings": [
+              {
+                "index": 0,
+                "confidence": 0.974084,
+                "distanceM": 54.5,
+                "geometryPointCount": 12
+              }
+            ]
+          },
+          "submatches": [
+            {
+              "matchingIndex": 0,
+              "sourceStart": 0,
+              "sourceEnd": 11,
+              "sourceCount": 12,
+              "contiguous": true,
+              "confidence": 0.974084,
+              "quality": {
+                "accepted": true,
+                "reason": "accepted",
+                "p50DeviationM": 7.798,
+                "p95DeviationM": 8.754,
+                "maxDeviationM": 8.754,
+                "endpointDeviationM": 8.744,
+                "rawLengthM": 54.769,
+                "matchedLengthM": 54.483,
+                "lengthRatio": 0.9948,
+                "deviationEnvelopeM": 15
+              },
+              "endpoints": {
+                "accepted": true,
+                "headM": 8.744,
+                "tailM": 7.955,
+                "envelopeM": 17.807
+              },
+              "accepted": true,
+              "rejectReason": null
+            }
+          ]
+        },
+        {
+          "start": 141,
+          "end": 149,
+          "response": {
+            "httpStatus": 200,
+            "code": "Ok",
+            "message": null,
+            "durationMs": 254,
+            "inputCount": 9,
+            "timestampsIncluded": true,
+            "tidy": false,
+            "radiusMinM": 21,
+            "radiusMaxM": 21,
+            "matchingsCount": 1,
+            "tracepointCount": 9,
+            "nullTracepointCount": 0,
+            "matchings": [
+              {
+                "index": 0,
+                "confidence": 0.977632,
+                "distanceM": 37.9,
+                "geometryPointCount": 9
+              }
+            ]
+          },
+          "submatches": [
+            {
+              "matchingIndex": 0,
+              "sourceStart": 0,
+              "sourceEnd": 8,
+              "sourceCount": 9,
+              "contiguous": true,
+              "confidence": 0.977632,
+              "quality": {
+                "accepted": true,
+                "reason": "accepted",
+                "p50DeviationM": 8.309,
+                "p95DeviationM": 8.736,
+                "maxDeviationM": 8.736,
+                "endpointDeviationM": 8.341,
+                "rawLengthM": 37.96,
+                "matchedLengthM": 37.879,
+                "lengthRatio": 0.9979,
+                "deviationEnvelopeM": 15
+              },
+              "endpoints": {
+                "accepted": true,
+                "headM": 7.418,
+                "tailM": 8.341,
+                "envelopeM": 17.807
+              },
+              "accepted": true,
+              "rejectReason": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "verdict": "D1/D3 safely accept the final public subsection only. The isolated head is promising but 0.058m over the current p95 gate. No run proves every clone gate, so it is not promoted as a review clone."
+}

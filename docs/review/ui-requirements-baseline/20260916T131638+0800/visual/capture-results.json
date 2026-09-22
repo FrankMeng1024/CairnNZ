@@ -1,0 +1,1611 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-09-16T06:22:00.560Z",
+  "base_url": "http://127.0.0.1:8099",
+  "isolation": {
+    "fresh_browser_context": true,
+    "synthetic_identity": true,
+    "synthetic_coordinates": true,
+    "cairn_api_reads_fixture_intercepted": true,
+    "cairn_api_writes_denied": true,
+    "blocked_write_count": 161,
+    "preview_or_runtime_production_api_used": false
+  },
+  "captures": [
+    {
+      "evidence_id": "VIS-001",
+      "page": "hike",
+      "state": "ready",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/hike--ready--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-002",
+      "page": "hike",
+      "state": "tracking",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/hike--tracking--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-003",
+      "page": "run",
+      "state": "ready",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/run--ready--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-004",
+      "page": "run",
+      "state": "tracking",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/run--tracking--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-005",
+      "page": "hike",
+      "state": "ready",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/hike--ready--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-006",
+      "page": "hike",
+      "state": "tracking",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/hike--tracking--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-007",
+      "page": "run",
+      "state": "ready",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/run--ready--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-008",
+      "page": "run",
+      "state": "tracking",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/run--tracking--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-009",
+      "page": "hike",
+      "state": "ready",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/hike--ready--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-010",
+      "page": "hike",
+      "state": "tracking",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/hike--tracking--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-011",
+      "page": "run",
+      "state": "ready",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/run--ready--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-012",
+      "page": "run",
+      "state": "tracking",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/run--tracking--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store state injected; no Activity start/finish performed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-013",
+      "page": "trails",
+      "state": "activities",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/trails--activities--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "fixture_boundary": "Synthetic Activity and Route rows injected after mount.",
+      "notes": [
+        "Normal Home entry exists; this capture uses forced navigation.",
+        "No All Cairns tab is present."
+      ]
+    },
+    {
+      "evidence_id": "VIS-014",
+      "page": "trails",
+      "state": "routes",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/trails--routes--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "fixture_boundary": "Synthetic Activity and Route rows injected after mount.",
+      "notes": [
+        "No All Cairns tab is present."
+      ]
+    },
+    {
+      "evidence_id": "VIS-015",
+      "page": "trails",
+      "state": "activities",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/trails--activities--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "fixture_boundary": "Synthetic Activity and Route rows injected after mount.",
+      "notes": [
+        "Normal Home entry exists; this capture uses forced navigation.",
+        "No All Cairns tab is present."
+      ]
+    },
+    {
+      "evidence_id": "VIS-016",
+      "page": "trails",
+      "state": "routes",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/trails--routes--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "fixture_boundary": "Synthetic Activity and Route rows injected after mount.",
+      "notes": [
+        "No All Cairns tab is present."
+      ]
+    },
+    {
+      "evidence_id": "VIS-017",
+      "page": "trails",
+      "state": "activities",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/trails--activities--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "fixture_boundary": "Synthetic Activity and Route rows injected after mount.",
+      "notes": [
+        "Normal Home entry exists; this capture uses forced navigation.",
+        "No All Cairns tab is present."
+      ]
+    },
+    {
+      "evidence_id": "VIS-018",
+      "page": "trails",
+      "state": "routes",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/trails--routes--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "fixture_boundary": "Synthetic Activity and Route rows injected after mount.",
+      "notes": [
+        "No All Cairns tab is present."
+      ]
+    },
+    {
+      "evidence_id": "VIS-019",
+      "page": "activity-detail",
+      "state": "synced",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/activity-detail--synced--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "fixture_boundary": "Synthetic completed Activity injected; direct detail route.",
+      "notes": [
+        "SVG/fallback path is not native Mapbox proof."
+      ]
+    },
+    {
+      "evidence_id": "VIS-020",
+      "page": "route-detail",
+      "state": "saved",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-detail--saved--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "fixture_boundary": "Synthetic saved Route injected; direct detail route.",
+      "notes": [
+        "The visible Layers control has no implemented handler in source."
+      ]
+    },
+    {
+      "evidence_id": "VIS-021",
+      "page": "route-editor",
+      "state": "view",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-editor--view--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "fixture_boundary": "Synthetic saved Route injected; direct editor route.",
+      "notes": [
+        "Web fallback is not native Mapbox proof.",
+        "Gear action is a source TODO."
+      ]
+    },
+    {
+      "evidence_id": "VIS-022",
+      "page": "plant",
+      "state": "activity-compose",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/plant--activity-compose--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "fixture_boundary": "Synthetic active Hike state opens compose directly; Plant Cairn is not pressed.",
+      "notes": [
+        "No Cairn creation or backend write occurred."
+      ]
+    },
+    {
+      "evidence_id": "VIS-023",
+      "page": "own-cairn-detail",
+      "state": "synced-own",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/own-cairn-detail--synced-own--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "fixture_boundary": "Synthetic own Cairn injected; direct detail route.",
+      "notes": [
+        "Not a native renderer capture.",
+        "Normal reachability exists after successful full Plant."
+      ]
+    },
+    {
+      "evidence_id": "VIS-024",
+      "page": "memory",
+      "state": "personal",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/memory--personal--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "fixture_boundary": "Synthetic personal trace and own Cairn; all friend/public API reads fixture-empty.",
+      "notes": [
+        "Web adapter substitutes outdoors-v12 for native Standard v3.",
+        "No real friend-location access."
+      ]
+    },
+    {
+      "evidence_id": "VIS-025",
+      "page": "settings",
+      "state": "root",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/settings--root--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "fixture_boundary": "Synthetic user; auth/profile read intercepted.",
+      "notes": [
+        "No feedback, export, reset, deletion, sign-out, or external link action invoked."
+      ]
+    },
+    {
+      "evidence_id": "VIS-026",
+      "page": "activity-detail",
+      "state": "synced",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/activity-detail--synced--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "fixture_boundary": "Synthetic completed Activity injected; direct detail route.",
+      "notes": [
+        "SVG/fallback path is not native Mapbox proof."
+      ]
+    },
+    {
+      "evidence_id": "VIS-027",
+      "page": "route-detail",
+      "state": "saved",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/route-detail--saved--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "fixture_boundary": "Synthetic saved Route injected; direct detail route.",
+      "notes": [
+        "The visible Layers control has no implemented handler in source."
+      ]
+    },
+    {
+      "evidence_id": "VIS-028",
+      "page": "route-editor",
+      "state": "view",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/route-editor--view--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "fixture_boundary": "Synthetic saved Route injected; direct editor route.",
+      "notes": [
+        "Web fallback is not native Mapbox proof.",
+        "Gear action is a source TODO."
+      ]
+    },
+    {
+      "evidence_id": "VIS-029",
+      "page": "plant",
+      "state": "activity-compose",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/plant--activity-compose--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "fixture_boundary": "Synthetic active Hike state opens compose directly; Plant Cairn is not pressed.",
+      "notes": [
+        "No Cairn creation or backend write occurred."
+      ]
+    },
+    {
+      "evidence_id": "VIS-030",
+      "page": "own-cairn-detail",
+      "state": "synced-own",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/own-cairn-detail--synced-own--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "fixture_boundary": "Synthetic own Cairn injected; direct detail route.",
+      "notes": [
+        "Not a native renderer capture.",
+        "Normal reachability exists after successful full Plant."
+      ]
+    },
+    {
+      "evidence_id": "VIS-031",
+      "page": "memory",
+      "state": "personal",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/memory--personal--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "fixture_boundary": "Synthetic personal trace and own Cairn; all friend/public API reads fixture-empty.",
+      "notes": [
+        "Web adapter substitutes outdoors-v12 for native Standard v3.",
+        "No real friend-location access."
+      ]
+    },
+    {
+      "evidence_id": "VIS-032",
+      "page": "settings",
+      "state": "root",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/settings--root--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "fixture_boundary": "Synthetic user; auth/profile read intercepted.",
+      "notes": [
+        "No feedback, export, reset, deletion, sign-out, or external link action invoked."
+      ]
+    },
+    {
+      "evidence_id": "VIS-033",
+      "page": "activity-detail",
+      "state": "synced",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/activity-detail--synced--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "fixture_boundary": "Synthetic completed Activity injected; direct detail route.",
+      "notes": [
+        "SVG/fallback path is not native Mapbox proof."
+      ]
+    },
+    {
+      "evidence_id": "VIS-034",
+      "page": "route-detail",
+      "state": "saved",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/route-detail--saved--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "fixture_boundary": "Synthetic saved Route injected; direct detail route.",
+      "notes": [
+        "The visible Layers control has no implemented handler in source."
+      ]
+    },
+    {
+      "evidence_id": "VIS-035",
+      "page": "route-editor",
+      "state": "view",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/route-editor--view--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "fixture_boundary": "Synthetic saved Route injected; direct editor route.",
+      "notes": [
+        "Web fallback is not native Mapbox proof.",
+        "Gear action is a source TODO."
+      ]
+    },
+    {
+      "evidence_id": "VIS-036",
+      "page": "plant",
+      "state": "activity-compose",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/plant--activity-compose--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "fixture_boundary": "Synthetic active Hike state opens compose directly; Plant Cairn is not pressed.",
+      "notes": [
+        "No Cairn creation or backend write occurred."
+      ]
+    },
+    {
+      "evidence_id": "VIS-037",
+      "page": "own-cairn-detail",
+      "state": "synced-own",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/own-cairn-detail--synced-own--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "fixture_boundary": "Synthetic own Cairn injected; direct detail route.",
+      "notes": [
+        "Not a native renderer capture.",
+        "Normal reachability exists after successful full Plant."
+      ]
+    },
+    {
+      "evidence_id": "VIS-038",
+      "page": "memory",
+      "state": "personal",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/memory--personal--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "fixture_boundary": "Synthetic personal trace and own Cairn; all friend/public API reads fixture-empty.",
+      "notes": [
+        "Web adapter substitutes outdoors-v12 for native Standard v3.",
+        "No real friend-location access."
+      ]
+    },
+    {
+      "evidence_id": "VIS-039",
+      "page": "settings",
+      "state": "root",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/settings--root--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "fixture_boundary": "Synthetic user; auth/profile read intercepted.",
+      "notes": [
+        "No feedback, export, reset, deletion, sign-out, or external link action invoked."
+      ]
+    },
+    {
+      "evidence_id": "VIS-040",
+      "page": "hike",
+      "state": "ready-small-screen",
+      "theme": "sunset",
+      "viewport": "320x568",
+      "file": "images/hike--ready-small-screen--sunset--320x568.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "fixture_boundary": "Tracking store ready state injected at representative small viewport.",
+      "notes": [
+        "Small-screen surrounding-chrome evidence only.",
+        "Not native Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "VIS-041",
+      "page": "settings",
+      "state": "root-large-screen",
+      "theme": "night",
+      "viewport": "430x932",
+      "file": "images/settings--root-large-screen--night--430x932.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "fixture_boundary": "Synthetic user; auth/profile read intercepted at representative large viewport.",
+      "notes": [
+        "No destructive, feedback, export, purchase, or external-link action invoked."
+      ]
+    }
+  ],
+  "boards": [
+    "images/board-activity-day-sunset-night.jpg",
+    "images/board-library-detail-editor.jpg",
+    "images/board-cairn-memory-settings.jpg"
+  ],
+  "request_ledger": [
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/index.ts.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag",
+      "action": "blocked-write"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/node_modules/expo-task-manager/build/TaskManager.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/node_modules/expo-location/build/index.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/assets/",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/node_modules/expo-updates/build/index.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/src/services/accountLocalData.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/node_modules/@react-native-async-storage/async-storage/lib/module/index.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/src/features/activitySimulator/simulatorLog.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/src/services/backgroundLocationTask.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "api.yiiling.cn",
+      "path": "/api/markers",
+      "action": "fixture-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/node_modules/expo-file-system/legacy.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "api.yiiling.cn",
+      "path": "/api/memory/points",
+      "action": "fixture-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/src/features/activity/activityRegistry.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "api.bigdatacloud.net",
+      "path": "/data/reverse-geocode-client",
+      "action": "blocked-external"
+    },
+    {
+      "method": "GET",
+      "host": "api.open-meteo.com",
+      "path": "/v1/forecast",
+      "action": "fixture-weather"
+    },
+    {
+      "method": "GET",
+      "host": "api.yiiling.cn",
+      "path": "/api/routes",
+      "action": "fixture-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/src/store/storage.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/node_modules/mapbox-gl/dist/mapbox-gl.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "api.yiiling.cn",
+      "path": "/api/friends",
+      "action": "fixture-read"
+    },
+    {
+      "method": "GET",
+      "host": "api.yiiling.cn",
+      "path": "/api/memory-subscriptions",
+      "action": "fixture-read"
+    },
+    {
+      "method": "GET",
+      "host": "api.yiiling.cn",
+      "path": "/api/circle/fog",
+      "action": "fixture-read"
+    }
+  ],
+  "blocked_writes": [
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag"
+    }
+  ],
+  "runtime_errors": [
+    "pageerror: Cannot read properties of undefined (reading '0')"
+  ]
+}

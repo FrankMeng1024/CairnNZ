@@ -1,0 +1,91 @@
+
+> app@0.2.6 test
+> jest --watchAll=false --runInBand src/features/memory/__tests__/friendMemoryAuthorizationOrdering.test.ts
+
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+FAIL src/features/memory/__tests__/friendMemoryAuthorizationOrdering.test.ts
+  friend Memory authorization cache ordering
+    ✓ accepts an account-scoped projection only until its server-bounded expiry (41 ms)
+    ✓ fails closed when the wall clock moves behind the last observed server cache time (8 ms)
+    ✓ drops a slower prior-account hydration after a newer account switch (6 ms)
+    ✓ an old-account network response cannot populate or strand the new account cache (9 ms)
+    ✕ a deselect and purge while loading fences the earlier same-account response (12 ms)
+
+  ● friend Memory authorization cache ordering › a deselect and purge while loading fences the earlier same-account response
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 37
+
+    - Object {}
+    + Object {
+    +   "11": Object {
+    +     "authorizationExpiresAtMs": 87400000,
+    +     "authorizationVersion": 4,
+    +     "cellSizeM": 200,
+    +     "cells": Array [
+    +       Object {
+    +         "id": "coarse-cell",
+    +         "polygon": Array [
+    +           Array [
+    +             174.7,
+    +             -41.3,
+    +           ],
+    +           Array [
+    +             174.8,
+    +             -41.3,
+    +           ],
+    +           Array [
+    +             174.8,
+    +             -41.2,
+    +           ],
+    +           Array [
+    +             174.7,
+    +             -41.2,
+    +           ],
+    +           Array [
+    +             174.7,
+    +             -41.3,
+    +           ],
+    +         ],
+    +       },
+    +     ],
+    +     "friendId": "11",
+    +     "projectionVersion": "late-projection",
+    +     "serverAuthorizedAtMs": 1000000,
+    +   },
+    + }
+
+      196 |     await pending;
+      197 |
+    > 198 |     expect(useFriendMemoryStore.getState().projections).toEqual({});
+          |                                                         ^
+      199 |     const persistedAfterRace = JSON.parse(values.get(`${CACHE_PREFIX}viewer-a`) ?? '{}');
+      200 |     expect(persistedAfterRace.projections ?? {}).toEqual({});
+      201 |   });
+
+      at Object.toEqual (src/features/memory/__tests__/friendMemoryAuthorizationOrdering.test.ts:198:57)
+      at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+      at _next (node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 4 passed, 5 total
+Snapshots:   0 total
+Time:        1.398 s, estimated 2 s
+Ran all test suites matching /src\/features\/memory\/__tests__\/friendMemoryAuthorizationOrdering.test.ts/i.

@@ -1,0 +1,1231 @@
+{
+  "generatedAt": "2026-09-12T11:44:05.103Z",
+  "algorithmVersion": "pedestrian-final-v1",
+  "sourceBackupRouteHash": "3e1b6d8cdccd27c2b89e05935f0119dd6b930424f7fa8cf599a692c9ec09ac51",
+  "canonicalPointCount": 392,
+  "finalGeometryFingerprint": "f4f38b0c",
+  "points": [
+    {
+      "lat": 31.20476830484492,
+      "lng": 121.59629651129632,
+      "alt": 3.413591004908085,
+      "t": 1789119791999
+    },
+    {
+      "lat": 31.20474779217648,
+      "lng": 121.59629948165572,
+      "alt": 2.600944614969194,
+      "t": 1789119794239
+    },
+    {
+      "lat": 31.204730951814557,
+      "lng": 121.59630060434651,
+      "alt": 2.690271122381091,
+      "t": 1789119795909
+    },
+    {
+      "lat": 31.204682304146807,
+      "lng": 121.59630358277514,
+      "alt": 2.053898769430816,
+      "t": 1789119800733
+    },
+    {
+      "lat": 31.20464259661181,
+      "lng": 121.59630648820453,
+      "alt": 1.822245824150741,
+      "t": 1789119804673
+    },
+    {
+      "lat": 31.204595412511967,
+      "lng": 121.59631050387262,
+      "alt": 1.3678651843219995,
+      "t": 1789119809358
+    },
+    {
+      "lat": 31.20455158260386,
+      "lng": 121.59631356177317,
+      "alt": 0.8841895209625363,
+      "t": 1789119813706
+    },
+    {
+      "lat": 31.204508496736764,
+      "lng": 121.5963165677639,
+      "alt": 0.5454217810183764,
+      "t": 1789119817981
+    },
+    {
+      "lat": 31.204464033912068,
+      "lng": 121.59631959932013,
+      "alt": 0.8049070760607719,
+      "t": 1789119822391
+    },
+    {
+      "lat": 31.20441542873734,
+      "lng": 121.59632257514716,
+      "alt": 1.0849291076883674,
+      "t": 1789119827211
+    },
+    {
+      "lat": 31.2043626450274,
+      "lng": 121.59632655882336,
+      "alt": 0.8899635365232825,
+      "t": 1789119832449
+    },
+    {
+      "lat": 31.2043170703925,
+      "lng": 121.59632953108218,
+      "alt": 0.8333009602501988,
+      "t": 1789119836969
+    },
+    {
+      "lat": 31.20426923084932,
+      "lng": 121.59633351771078,
+      "alt": 0.6095380624756217,
+      "t": 1789119841719
+    },
+    {
+      "lat": 31.20422451883076,
+      "lng": 121.59633656625749,
+      "alt": 0.5007201666012406,
+      "t": 1789119846154
+    },
+    {
+      "lat": 31.20416833873092,
+      "lng": 121.59634050872063,
+      "alt": 0.49760326370596886,
+      "t": 1789119851728
+    },
+    {
+      "lat": 31.20414437610187,
+      "lng": 121.59634250560639,
+      "alt": 0.3245405750349164,
+      "t": 1789119854107
+    },
+    {
+      "lat": 31.204080201581217,
+      "lng": 121.59634705340706,
+      "alt": 4.357967436737784,
+      "t": 1789119860473
+    },
+    {
+      "lat": 31.204012854321054,
+      "lng": 121.59635182604755,
+      "alt": 2.9019144129259953,
+      "t": 1789119867155
+    },
+    {
+      "lat": 31.204006022664842,
+      "lng": 121.59635182604755,
+      "alt": 2.9019144129259953,
+      "t": 1789119867832
+    },
+    {
+      "lat": 31.203994047622896,
+      "lng": 121.59635249132765,
+      "alt": 2.0978219565272394,
+      "t": 1789119869019
+    },
+    {
+      "lat": 31.203976224399224,
+      "lng": 121.59635447168584,
+      "alt": 1.9806523175628712,
+      "t": 1789119870792
+    },
+    {
+      "lat": 31.203957222958447,
+      "lng": 121.59635558941766,
+      "alt": 3.035603655994718,
+      "t": 1789119872676
+    },
+    {
+      "lat": 31.20390364785891,
+      "lng": 121.59635955794354,
+      "alt": 2.1046548234813667,
+      "t": 1789119877992
+    },
+    {
+      "lat": 31.20385850462852,
+      "lng": 121.59636256749224,
+      "alt": 2.2059218725189567,
+      "t": 1789119882470
+    },
+    {
+      "lat": 31.203803405112033,
+      "lng": 121.5963717972579,
+      "alt": 1.4429926648736,
+      "t": 1789119888000
+    },
+    {
+      "lat": 31.203679852520764,
+      "lng": 121.59639885263056,
+      "alt": 0.7762897675856948,
+      "t": 1789119899400
+    },
+    {
+      "lat": 31.20355629992949,
+      "lng": 121.59642590800321,
+      "alt": 3.0269006630405784,
+      "t": 1789119910800
+    },
+    {
+      "lat": 31.203432747338223,
+      "lng": 121.59645296337587,
+      "alt": 2.1768586803227663,
+      "t": 1789119922200
+    },
+    {
+      "lat": 31.20330919474695,
+      "lng": 121.59648001874852,
+      "alt": 2.714961259309616,
+      "t": 1789119933600
+    },
+    {
+      "lat": 31.20318564215568,
+      "lng": 121.59650707412118,
+      "alt": 3.3621147889643908,
+      "t": 1789119945000
+    },
+    {
+      "lat": 31.2031774510388,
+      "lng": 121.59653275054238,
+      "alt": 2.4804301923140883,
+      "t": 1789119947701
+    },
+    {
+      "lat": 31.203219237030748,
+      "lng": 121.59657711239456,
+      "alt": 2.9085901230573654,
+      "t": 1789119954206
+    },
+    {
+      "lat": 31.203227418845795,
+      "lng": 121.59666034723304,
+      "alt": 3.3466036738827825,
+      "t": 1789119962465
+    },
+    {
+      "lat": 31.203227929776524,
+      "lng": 121.59667187704646,
+      "alt": 3.5352100133895874,
+      "t": 1789119963603
+    },
+    {
+      "lat": 31.2032317518686,
+      "lng": 121.59669190359033,
+      "alt": 3.948097019456327,
+      "t": 1789119965626
+    },
+    {
+      "lat": 31.203232852477623,
+      "lng": 121.59670440565394,
+      "alt": 3.8198949303478,
+      "t": 1789119966865
+    },
+    {
+      "lat": 31.203229030045847,
+      "lng": 121.59671947152438,
+      "alt": 3.78780859336257,
+      "t": 1789119968414
+    },
+    {
+      "lat": 31.203214452947364,
+      "lng": 121.59671214856262,
+      "alt": 3.3091029580682516,
+      "t": 1789119970242
+    },
+    {
+      "lat": 31.20319721404402,
+      "lng": 121.59671662656486,
+      "alt": 3.0650311866775155,
+      "t": 1789119972277
+    },
+    {
+      "lat": 31.203093197739758,
+      "lng": 121.59672627321615,
+      "alt": 4.296782818622887,
+      "t": 1789119984302
+    },
+    {
+      "lat": 31.202989181435495,
+      "lng": 121.59673591986743,
+      "alt": 4.290167540311813,
+      "t": 1789119996327
+    },
+    {
+      "lat": 31.20288516513123,
+      "lng": 121.59674556651872,
+      "alt": 5.299862711690366,
+      "t": 1789120008353
+    },
+    {
+      "lat": 31.202810338080816,
+      "lng": 121.59670554050903,
+      "alt": 5.55526575393786,
+      "t": 1789120017836
+    },
+    {
+      "lat": 31.202787390763795,
+      "lng": 121.59678060376709,
+      "alt": 6.201166131984728,
+      "t": 1789120025693
+    },
+    {
+      "lat": 31.20265249524405,
+      "lng": 121.59675334556883,
+      "alt": 6.840929135680199,
+      "t": 1789120041470
+    },
+    {
+      "lat": 31.202517599724302,
+      "lng": 121.59672608737056,
+      "alt": 6.463529992848635,
+      "t": 1789120057247
+    },
+    {
+      "lat": 31.202412430984985,
+      "lng": 121.59677464164184,
+      "alt": 8.024323250167072,
+      "t": 1789120070278
+    },
+    {
+      "lat": 31.202307262245668,
+      "lng": 121.59682319591313,
+      "alt": 6.055189601145685,
+      "t": 1789120083309
+    },
+    {
+      "lat": 31.20220209350635,
+      "lng": 121.59687175018442,
+      "alt": 3.808254473842681,
+      "t": 1789120096340
+    },
+    {
+      "lat": 31.202104047405623,
+      "lng": 121.59687095144889,
+      "alt": 3.2664429740980268,
+      "t": 1789120107640
+    },
+    {
+      "lat": 31.2020060013049,
+      "lng": 121.59687015271335,
+      "alt": 2.586607792414725,
+      "t": 1789120118939
+    },
+    {
+      "lat": 31.20190795520417,
+      "lng": 121.59686935397782,
+      "alt": 1.469669266603887,
+      "t": 1789120130239
+    },
+    {
+      "lat": 31.20189835660735,
+      "lng": 121.5968690694381,
+      "alt": 1.8066031225025656,
+      "t": 1789120131346
+    },
+    {
+      "lat": 31.20189153868612,
+      "lng": 121.596881260174,
+      "alt": 1.7059941301122308,
+      "t": 1789120132781
+    },
+    {
+      "lat": 31.2018876254542,
+      "lng": 121.59689672007032,
+      "alt": 1.456957400776446,
+      "t": 1789120134371
+    },
+    {
+      "lat": 31.20188578186102,
+      "lng": 121.59702791032532,
+      "alt": 3.113833552226424,
+      "t": 1789120147304
+    },
+    {
+      "lat": 31.201883938267834,
+      "lng": 121.59715910058031,
+      "alt": 3.970359998755157,
+      "t": 1789120160238
+    },
+    {
+      "lat": 31.20188209467465,
+      "lng": 121.59729029083532,
+      "alt": 3.992337148636579,
+      "t": 1789120173172
+    },
+    {
+      "lat": 31.20188025108147,
+      "lng": 121.59742148109032,
+      "alt": 4.1883757235482335,
+      "t": 1789120186106
+    },
+    {
+      "lat": 31.20194060770526,
+      "lng": 121.59752553195212,
+      "alt": 5.203443683683872,
+      "t": 1789120198499
+    },
+    {
+      "lat": 31.202000964329056,
+      "lng": 121.59762958281392,
+      "alt": 6.569391994737089,
+      "t": 1789120210892
+    },
+    {
+      "lat": 31.202061320952847,
+      "lng": 121.59773363367572,
+      "alt": 6.738297042436898,
+      "t": 1789120223285
+    },
+    {
+      "lat": 31.202099013013328,
+      "lng": 121.59772748847148,
+      "alt": 7.497375167906284,
+      "t": 1789120227671
+    },
+    {
+      "lat": 31.202111864293187,
+      "lng": 121.59772370860144,
+      "alt": 7.816269902512431,
+      "t": 1789120229198
+    },
+    {
+      "lat": 31.2021298088938,
+      "lng": 121.5977222346686,
+      "alt": 8.24167256243527,
+      "t": 1789120231271
+    },
+    {
+      "lat": 31.202138215233735,
+      "lng": 121.59773035317164,
+      "alt": 8.744216471910477,
+      "t": 1789120232528
+    },
+    {
+      "lat": 31.20209205625741,
+      "lng": 121.5977237804857,
+      "alt": 10.088519042357802,
+      "t": 1789120237887
+    },
+    {
+      "lat": 31.202036199111213,
+      "lng": 121.59769598353186,
+      "alt": 6.755690849386156,
+      "t": 1789120244883
+    },
+    {
+      "lat": 31.202006311304977,
+      "lng": 121.59756014594072,
+      "alt": 6.670167534612119,
+      "t": 1789120258709
+    },
+    {
+      "lat": 31.201976423498742,
+      "lng": 121.59742430834957,
+      "alt": 6.5744645250961185,
+      "t": 1789120272535
+    },
+    {
+      "lat": 31.201946535692507,
+      "lng": 121.59728847075843,
+      "alt": 7.257199374958873,
+      "t": 1789120286361
+    },
+    {
+      "lat": 31.201916647886268,
+      "lng": 121.59715263316727,
+      "alt": 8.536820208653808,
+      "t": 1789120300187
+    },
+    {
+      "lat": 31.201886760080033,
+      "lng": 121.59701679557612,
+      "alt": 3.113833552226424,
+      "t": 1789120314014
+    },
+    {
+      "lat": 31.201856872273797,
+      "lng": 121.59688095798498,
+      "alt": 7.604133739136159,
+      "t": 1789120327840
+    },
+    {
+      "lat": 31.201882063280735,
+      "lng": 121.59683224500348,
+      "alt": 6.068672630004585,
+      "t": 1789120333451
+    },
+    {
+      "lat": 31.20201278402589,
+      "lng": 121.59682811232398,
+      "alt": 6.157376798801124,
+      "t": 1789120348522
+    },
+    {
+      "lat": 31.202143504771044,
+      "lng": 121.59682397964447,
+      "alt": 6.3108544973656535,
+      "t": 1789120363592
+    },
+    {
+      "lat": 31.202274225516195,
+      "lng": 121.59681984696496,
+      "alt": 6.993199032731354,
+      "t": 1789120378663
+    },
+    {
+      "lat": 31.20240494626135,
+      "lng": 121.59681571428546,
+      "alt": 6.107343387790024,
+      "t": 1789120393733
+    },
+    {
+      "lat": 31.202535667006504,
+      "lng": 121.59681158160595,
+      "alt": 7.7609590366482735,
+      "t": 1789120408804
+    },
+    {
+      "lat": 31.20266638775166,
+      "lng": 121.59680744892644,
+      "alt": 6.620183692313731,
+      "t": 1789120423874
+    },
+    {
+      "lat": 31.20279710849681,
+      "lng": 121.59680331624693,
+      "alt": 6.648645367473364,
+      "t": 1789120438945
+    },
+    {
+      "lat": 31.202927829241965,
+      "lng": 121.59679918356743,
+      "alt": 9.281744537875056,
+      "t": 1789120454015
+    },
+    {
+      "lat": 31.20305854998712,
+      "lng": 121.59679505088792,
+      "alt": 8.292565988376737,
+      "t": 1789120469086
+    },
+    {
+      "lat": 31.203135510147163,
+      "lng": 121.59677220304505,
+      "alt": 8.322776418179274,
+      "t": 1789120478237
+    },
+    {
+      "lat": 31.20321247030721,
+      "lng": 121.59674935520216,
+      "alt": 7.742184286005795,
+      "t": 1789120487387
+    },
+    {
+      "lat": 31.203237249119514,
+      "lng": 121.59665874184948,
+      "alt": 3.3466036738827825,
+      "t": 1789120496765
+    },
+    {
+      "lat": 31.203262027931817,
+      "lng": 121.5965681284968,
+      "alt": 4.493044677190483,
+      "t": 1789120506142
+    },
+    {
+      "lat": 31.203355025842612,
+      "lng": 121.59650787330992,
+      "alt": 5.494674271903932,
+      "t": 1789120518396
+    },
+    {
+      "lat": 31.203405879055342,
+      "lng": 121.59650868362914,
+      "alt": 4.956311582587659,
+      "t": 1789120524257
+    },
+    {
+      "lat": 31.203414617150415,
+      "lng": 121.59661717864476,
+      "alt": 4.3567216619849205,
+      "t": 1789120534999
+    },
+    {
+      "lat": 31.203440503838756,
+      "lng": 121.5967489649145,
+      "alt": 3.6837410973384976,
+      "t": 1789120545332
+    },
+    {
+      "lat": 31.203464003838754,
+      "lng": 121.59688096491449,
+      "alt": 4.454946847632527,
+      "t": 1789120555666
+    },
+    {
+      "lat": 31.203487503838755,
+      "lng": 121.59701296491448,
+      "alt": 3.908623237162829,
+      "t": 1789120565999
+    },
+    {
+      "lat": 31.203511003838756,
+      "lng": 121.59714496491449,
+      "alt": 3.7732151579111814,
+      "t": 1789120576332
+    },
+    {
+      "lat": 31.203534503838753,
+      "lng": 121.5972769649145,
+      "alt": 3.367705872282386,
+      "t": 1789120586666
+    },
+    {
+      "lat": 31.20356142526941,
+      "lng": 121.59740806764675,
+      "alt": 2.977182211354375,
+      "t": 1789120596999
+    }
+  ],
+  "stats": {
+    "algorithmVersion": "pedestrian-final-v1",
+    "canonicalPointCount": 392,
+    "resampledPointCount": 162,
+    "mapMatchingRequestCount": 8,
+    "directionsRequestCount": 3,
+    "requestResults": [
+      {
+        "kind": "map-matching",
+        "sourceStart": 0,
+        "sourceEnd": 59,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          0,
+          1,
+          2,
+          5,
+          9,
+          13,
+          17,
+          21,
+          25,
+          29,
+          33,
+          37,
+          41,
+          45,
+          49,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59
+        ],
+        "durationMs": 1280,
+        "result": "accepted-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": 24,
+        "nullTracepointCount": 0,
+        "acceptedCandidateCount": 1,
+        "rejectedCandidateCount": 0,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 56,
+        "sourceEnd": 93,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          68,
+          72,
+          73,
+          74,
+          75,
+          77,
+          78,
+          79,
+          80,
+          83,
+          84,
+          85,
+          86,
+          89,
+          93
+        ],
+        "durationMs": 1104,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": 24,
+        "nullTracepointCount": 4,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 2,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 85,
+        "sourceEnd": 136,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          85,
+          86,
+          89,
+          93,
+          96,
+          100,
+          103,
+          107,
+          111,
+          115,
+          118,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          128,
+          129,
+          130,
+          131,
+          132,
+          136
+        ],
+        "durationMs": 1016,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 2,
+        "tracepointCount": 24,
+        "nullTracepointCount": 17,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 2,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 130,
+        "sourceEnd": 209,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          130,
+          131,
+          132,
+          136,
+          139,
+          143,
+          146,
+          150,
+          154,
+          158,
+          162,
+          166,
+          170,
+          174,
+          178,
+          182,
+          186,
+          190,
+          193,
+          196,
+          200,
+          203,
+          205,
+          209
+        ],
+        "durationMs": 1114,
+        "result": "NoSegment",
+        "httpStatus": 200,
+        "responseCode": "NoSegment",
+        "matchingCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 0,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 200,
+        "sourceEnd": 265,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          200,
+          203,
+          205,
+          209,
+          213,
+          217,
+          220,
+          225,
+          229,
+          233,
+          235,
+          236,
+          237,
+          238,
+          239,
+          243,
+          247,
+          251,
+          255,
+          259,
+          262,
+          263,
+          264,
+          265
+        ],
+        "durationMs": 336,
+        "result": "NoSegment",
+        "httpStatus": 200,
+        "responseCode": "NoSegment",
+        "matchingCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 0,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 262,
+        "sourceEnd": 308,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          262,
+          263,
+          264,
+          265,
+          266,
+          267,
+          268,
+          269,
+          270,
+          271,
+          272,
+          273,
+          274,
+          277,
+          281,
+          285,
+          289,
+          293,
+          297,
+          301,
+          305,
+          306,
+          307,
+          308
+        ],
+        "durationMs": 386,
+        "result": "NoSegment",
+        "httpStatus": 200,
+        "responseCode": "NoSegment",
+        "matchingCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 0,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 305,
+        "sourceEnd": 328,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          305,
+          306,
+          307,
+          308,
+          309,
+          310,
+          311,
+          312,
+          313,
+          314,
+          315,
+          316,
+          317,
+          318,
+          319,
+          320,
+          321,
+          322,
+          323,
+          324,
+          325,
+          326,
+          327,
+          328
+        ],
+        "durationMs": 1102,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": 24,
+        "nullTracepointCount": 19,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 2,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 325,
+        "sourceEnd": 391,
+        "inputPointCount": 22,
+        "sourceIndexMap": [
+          325,
+          326,
+          327,
+          328,
+          329,
+          332,
+          336,
+          340,
+          342,
+          346,
+          350,
+          354,
+          358,
+          362,
+          366,
+          370,
+          374,
+          378,
+          382,
+          386,
+          389,
+          391
+        ],
+        "durationMs": 350,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": 22,
+        "nullTracepointCount": 2,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 2,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "walking-directions",
+        "sourceStart": 332,
+        "sourceEnd": 391,
+        "inputPointCount": 2,
+        "sourceIndexMap": [
+          332,
+          391
+        ],
+        "durationMs": 178,
+        "result": "accepted-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": null,
+        "nullTracepointCount": null,
+        "acceptedCandidateCount": 1,
+        "rejectedCandidateCount": 0,
+        "profile": "walking",
+        "matcherTidy": null
+      },
+      {
+        "kind": "walking-directions",
+        "sourceStart": 56,
+        "sourceEnd": 73,
+        "inputPointCount": 2,
+        "sourceIndexMap": [
+          56,
+          73
+        ],
+        "durationMs": 182,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": null,
+        "nullTracepointCount": null,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 1,
+        "profile": "walking",
+        "matcherTidy": null
+      },
+      {
+        "kind": "walking-directions",
+        "sourceStart": 97,
+        "sourceEnd": 168,
+        "inputPointCount": 2,
+        "sourceIndexMap": [
+          97,
+          168
+        ],
+        "durationMs": 177,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": null,
+        "nullTracepointCount": null,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 1,
+        "profile": "walking",
+        "matcherTidy": null
+      }
+    ],
+    "matchedIslandCount": 1,
+    "directionsIslandCount": 1,
+    "canonicalDerivedSectionCount": 2,
+    "freeTraversalSectionCount": 1,
+    "roadOffsetSectionCount": 2,
+    "pedestrianNetworkSectionCount": 0,
+    "rejectedNetworkCandidateCount": 10,
+    "displayRefined": true,
+    "acceptedMatchedDistanceM": 187.9790814984489,
+    "canonicalFallbackDistanceM": 655.2229699542984,
+    "mapMatchingApiDurationMs": 6688,
+    "directionsApiDurationMs": 537,
+    "totalApiWallDurationMs": 2887,
+    "totalApiDurationMs": 7225,
+    "durationMs": 2929,
+    "sections": [
+      {
+        "sourceStart": 0,
+        "sourceEnd": 59,
+        "state": "NETWORK_CONFIDENT",
+        "geometryMode": "B_ROAD_OFFSET",
+        "networkSource": "map-matching",
+        "decision": "refined",
+        "reason": "coherent-isolated-envelope-overrun;stable-evidence-offset",
+        "confidence": 0.8848030563618882,
+        "corridorEvidence": {
+          "score": 0.8848030563618882,
+          "mapboxConfidence": 0.9264661476411816,
+          "tracepointCoverage": 1,
+          "ambiguityKnownFraction": 1,
+          "unambiguousFraction": 0.9583333333333334,
+          "bearingAgreementScore": 0.994212322408438,
+          "bearingDeltaDeg": 0.31832226753590476,
+          "lengthAgreementScore": 0.9209348767355255,
+          "lengthRatio": 0.9739085093227234,
+          "endpointSafetyScore": 0.2761861526183824,
+          "endpointDeviationM": 14.657230409477755,
+          "lateralStabilityScore": 0.9876784613284163,
+          "temporalPersistenceScore": 1,
+          "accuracyP95M": 14.24595458902166,
+          "overlappingWindowAgreementCount": 0,
+          "acceptedByBaseGate": false,
+          "acceptedByCoherentOverrun": true,
+          "accepted": true,
+          "reason": "coherent-isolated-envelope-overrun",
+          "lateral": {
+            "sampleCount": 60,
+            "signedMedianM": 14.170376614370415,
+            "absoluteMedianM": 14.170376614370415,
+            "madM": 0.4928615468633497,
+            "p95ResidualM": 1.254736822044249,
+            "stableSignFraction": 1,
+            "plausibleForAccuracy": true,
+            "stable": true
+          }
+        },
+        "lateralOffsetM": 14.170376614370415,
+        "canonicalDistanceM": 110.38836106029964,
+        "displayDistanceM": 107.55800705073365,
+        "maximumDisplayEdgeM": 7.502417844509909,
+        "lengthRatio": 0.9743600323224302,
+        "canonicalDisplacementP50M": 0.49012307725919274,
+        "canonicalDisplacementP95M": 1.2543358050889264,
+        "canonicalDisplacementMaxM": 1.5131715518071633,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 7.688169399319349,
+          "exitHeadingDeltaDeg": 0.2344790843977762,
+          "entryEdgeM": 2.298332892401781,
+          "exitEdgeM": 6.189353458604427,
+          "maxAllowedEdgeM": 22
+        }
+      },
+      {
+        "sourceStart": 59,
+        "sourceEnd": 80,
+        "state": "FREE_TRAVERSAL",
+        "geometryMode": "FREE_TRAVERSAL",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "bounded-coherent-connector-inside-evidence-envelope",
+        "confidence": 1,
+        "corridorEvidence": null,
+        "lateralOffsetM": null,
+        "canonicalDistanceM": 73.68126487725016,
+        "displayDistanceM": 69.88661869698129,
+        "maximumDisplayEdgeM": 13.977324976734307,
+        "lengthRatio": 0.9484991715792259,
+        "canonicalDisplacementP50M": 1.1180585300373427,
+        "canonicalDisplacementP95M": 2.7305455719556337,
+        "canonicalDisplacementMaxM": 3.050523315351922,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 4.327204602650909,
+          "exitHeadingDeltaDeg": 42.99659063341119,
+          "entryEdgeM": 13.977322501744734,
+          "exitEdgeM": 13.977324976734307,
+          "maxAllowedEdgeM": 22
+        }
+      },
+      {
+        "sourceStart": 80,
+        "sourceEnd": 332,
+        "state": "OFF_NETWORK_PATH",
+        "geometryMode": "C_CANONICAL_DERIVED",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "no-safe-network-candidate;bounded-heading-aware-cleanup",
+        "confidence": 1,
+        "corridorEvidence": null,
+        "lateralOffsetM": null,
+        "canonicalDistanceM": 581.5417050770482,
+        "displayDistanceM": 569.2605091106094,
+        "maximumDisplayEdgeM": 15.222091153557152,
+        "lengthRatio": 0.9788816591153826,
+        "canonicalDisplacementP50M": 0.4894809721664666,
+        "canonicalDisplacementP95M": 1.570760491570195,
+        "canonicalDisplacementMaxM": 3.199554383909244,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 17.967347270157404,
+          "exitHeadingDeltaDeg": 4.332566634428019,
+          "entryEdgeM": 2.6063811795432117,
+          "exitEdgeM": 10.364467975779432,
+          "maxAllowedEdgeM": 22
+        }
+      },
+      {
+        "sourceStart": 332,
+        "sourceEnd": 391,
+        "state": "NETWORK_CONFIDENT",
+        "geometryMode": "B_ROAD_OFFSET",
+        "networkSource": "walking-directions",
+        "decision": "refined",
+        "reason": "composite-corridor-evidence;stable-evidence-offset",
+        "confidence": 0.87691753082403,
+        "corridorEvidence": {
+          "score": 0.87691753082403,
+          "mapboxConfidence": 0.850683148937869,
+          "tracepointCoverage": 1,
+          "ambiguityKnownFraction": 0,
+          "unambiguousFraction": 1,
+          "bearingAgreementScore": 0.9911509270920409,
+          "bearingDeltaDeg": 0.4866990099377517,
+          "lengthAgreementScore": 0.9746051147200195,
+          "lengthRatio": 0.9916196878576065,
+          "endpointSafetyScore": 0.5881109990479202,
+          "endpointDeviationM": 8.340752269279616,
+          "lateralStabilityScore": 0.9910254303352601,
+          "temporalPersistenceScore": 1,
+          "accuracyP95M": 14.2459546210736,
+          "overlappingWindowAgreementCount": 0,
+          "acceptedByBaseGate": true,
+          "acceptedByCoherentOverrun": false,
+          "accepted": true,
+          "reason": "composite-corridor-evidence",
+          "lateral": {
+            "sampleCount": 60,
+            "signedMedianM": 7.959841133813691,
+            "absoluteMedianM": 7.959841133813691,
+            "madM": 0.3589827865895927,
+            "p95ResidualM": 0.7158621589499017,
+            "stableSignFraction": 1,
+            "plausibleForAccuracy": true,
+            "stable": true
+          }
+        },
+        "lateralOffsetM": 7.959841133813691,
+        "canonicalDistanceM": 77.59072043814925,
+        "displayDistanceM": 76.97722394423602,
+        "maximumDisplayEdgeM": 12.860300310083883,
+        "lengthRatio": 0.9920931718322905,
+        "canonicalDisplacementP50M": 0.2622953664418638,
+        "canonicalDisplacementP95M": 0.7158618185286472,
+        "canonicalDisplacementMaxM": 0.8655198281512985,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 9.758110900500526,
+          "exitHeadingDeltaDeg": 5.805686051873238,
+          "entryEdgeM": 12.860300310083883,
+          "exitEdgeM": 12.823302696557889,
+          "maxAllowedEdgeM": 22
+        }
+      }
+    ],
+    "preFallbackCandidateSummary": [
+      {
+        "sourceStart": 0,
+        "sourceEnd": 59,
+        "mode": "B_ROAD_OFFSET",
+        "source": "map-matching",
+        "confidence": 0.8848030563618882,
+        "maximumDisplayEdgeM": 7.502417844509909
+      },
+      {
+        "sourceStart": 332,
+        "sourceEnd": 391,
+        "mode": "B_ROAD_OFFSET",
+        "source": "walking-directions",
+        "confidence": 0.87691753082403,
+        "maximumDisplayEdgeM": 12.860300310083883
+      }
+    ],
+    "preFallbackWholeRouteValidation": {
+      "accepted": true,
+      "reason": "accepted",
+      "canonicalLengthM": 843.202051452747,
+      "finalLengthM": 823.6823588025603,
+      "lengthRatio": 0.9768505157019526,
+      "maximumCanonicalEdgeM": 14.270866417100509,
+      "maximumFinalEdgeM": 15.222091153557152
+    },
+    "wholeRouteValidation": {
+      "accepted": true,
+      "reason": "accepted",
+      "canonicalLengthM": 843.202051452747,
+      "finalLengthM": 823.6823588025603,
+      "lengthRatio": 0.9768505157019526,
+      "maximumCanonicalEdgeM": 14.270866417100509,
+      "maximumFinalEdgeM": 15.222091153557152
+    },
+    "finalGeometryFingerprint": "f4f38b0c"
+  }
+}

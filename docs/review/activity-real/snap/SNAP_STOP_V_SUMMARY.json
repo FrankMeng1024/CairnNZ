@@ -1,0 +1,26 @@
+{
+  "classification": "MINOR STOP-TRANSITION TUNING",
+  "mixedCauses": [
+    "V1_LAST_MOVING_FIX_AFTER_PHYSICAL_STOP",
+    "V6_CANDIDATE_TIMEOUT",
+    "V3_FREEZE_HYSTERESIS_ONE_FIX_LATE"
+  ],
+  "canonicalFalseDistanceM": 5.171,
+  "vDetourExcessM": 2.183,
+  "badEdgeCount": 1,
+  "durationS": 9,
+  "memory": {
+    "canonicalEdgeConsideredM": 5.171,
+    "newCells": 0,
+    "newAreaM2": 0,
+    "progressionEffect": 0
+  },
+  "selfStabilized": {
+    "afterBadEdgeS": 11,
+    "nextObservationDecision": "QUARANTINE",
+    "furtherFalseAcceptedEdgesBeforeRealResume": 0,
+    "realResumeAfterS": 126
+  },
+  "exactCause": "A possible-stationary candidate was rejected on return, then the replacement candidate aged 5000.016ms. candidate-timeout re-entered classifyWithoutPending; missing speedAccuracy was treated as reliable, reported speed 0.85m/s satisfied reportedMoving, and a 5.171m/9s edge was accepted before the window reached the five-fix stationary-cluster requirement.",
+  "proposedNarrowChange": "On possible-stationary-jitter timeout, absent speedAccuracy must not independently establish reportedMoving. Hold traversal in REFINE/new-candidate until accuracy-adjusted lower-bound progression or two coherent post-timeout fixes confirm motion."
+}

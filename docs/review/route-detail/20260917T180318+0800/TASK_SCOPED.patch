@@ -1,0 +1,3415 @@
+--- a/app/src/components/OtaBadge.tsx
++++ b/app/src/components/OtaBadge.tsx
+@@ -348,7 +348,9 @@
+ // chosen Final display, explicit Cairns, truthful mutations, and Route handoff.
+ // O58 (2026-09-17): authoritative Own Cairn Detail plus owner-scoped personal
+ // All Cairns retrieval, durable words/delete truth, and stable identity.
+-export const OTA_VERSION = 'O58';
++// O59 (2026-09-17): authoritative Own Route Detail, truthful existing-draft
++// editing, durable Activity origin, and explicit Hike/Run pre-start handoff.
++export const OTA_VERSION = 'O59';
+ 
+ 
+ type OtaState =
+
+--- a/app/src/screens/HikingScreen.tsx
++++ b/app/src/screens/HikingScreen.tsx
+@@ -25,6 +25,7 @@
+ import { useTrackingStore } from '../store/useTrackingStore';
+ import { useMarkerStore } from '../store/useMarkerStore';
+ import { useRouteStore } from '../store/useRouteStore';
++import { routeMatchesIdentity } from '../features/route/routeContracts';
+ import { getCurrentRegion } from '../config/regions';
+ import { formatDuration, haversineM } from '../utils/geo';
+ import { useDistance } from '../utils/distanceFormat';
+@@ -307,6 +308,9 @@
+   const routes = useRouteStore(s => s.routes);
+   const loadRoutes = useRouteStore(s => s.loadRoutes);
+   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
++  const activityRouteReference = useRouteStore(s => s.activityRouteReference);
++  const captureActivityRouteReference = useRouteStore(s => s.captureActivityRouteReference);
++  const clearActivityRouteReference = useRouteStore(s => s.clearActivityRouteReference);
+   const isTracking = status === 'tracking';
+   // v120: paused state behaves like tracking for layout purposes (the
+   // user pauses via Stop, the summary sheet appears, but the live stats
+@@ -340,7 +344,7 @@
+     setSelectedRoute(requestedRouteId);
+   }, [requestedRouteId]);
+   useEffect(() => {
+-    const selected = selectedRoute ? routes.find(item => item.id === selectedRoute) : null;
++    const selected = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+     if (!selected || selected.points.length >= 2) return;
+     void loadRouteDetail(selected.id).catch(() => {});
+   }, [loadRouteDetail, routes, selectedRoute]);
+@@ -606,8 +610,14 @@
+       setUnfinishedResolutionRequested(true);
+       return;
+     }
++    if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
++      Alert.alert('Route unavailable', 'This Route is not ready on this device yet.');
++      return;
++    }
++    if (!selectedRoute) clearActivityRouteReference();
+     const started = await startTracking();
+     if (!started) {
++      clearActivityRouteReference();
+       const authoritative = await findRecoverableActivity('hiking');
+       if (authoritative) {
+         setUnfinished(authoritative);
+@@ -862,7 +872,7 @@
+     closeRoutePicker();
+   };
+ 
+-  const selectedRouteName = routes.find(r => r.id === selectedRoute)?.name ?? 'Free Hike';
++  const selectedRouteName = routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Hike';
+ 
+   // v412: 两个 return 分支 (phase='select' early return + Phase 2 主 return) 都需要挂
+   // UnfinishedRecoveryModal, 抽成一个 node 避免复制粘贴导致 onContinue/onDiscard 逻辑分叉。
+@@ -953,8 +963,10 @@
+   // One native Mapbox owner spans pre-start and Tracking. Activity/provider
+   // transitions update layers and camera data; they never replace a map that
+   // has already loaded on the device.
+-  const activeRoute = selectedRoute ? routes.find(r => r.id === selectedRoute) : null;
+-  const routePolyline = activeRoute?.points ?? [];
++  const activeRoute = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
++  const routePolyline = activitySessionVisible && activityRouteReference
++    ? activityRouteReference.points
++    : (activeRoute?.points ?? []);
+   const hikeMapSurface = (
+     <HikingMap
+       key="hike-map-surface"
+@@ -1040,7 +1052,7 @@
+           mode="hike"
+           safeBottom={insets.bottom}
+           routeName={selectedRouteName}
+-          routeDescription={selectedRoute ? 'Route selected · shown on the map for guidance' : 'Explore freely without a planned route'}
++          routeDescription={selectedRoute ? 'This Route is shown on the map for reference.' : 'Explore freely without a planned route'}
+           readinessLabel={simulatorLocationAuthoritative
+             ? 'Simulator origin ready'
+             : hasLocationPermission === false
+
+--- a/app/src/screens/MapHistoryScreen.tsx
++++ b/app/src/screens/MapHistoryScreen.tsx
+@@ -51,6 +51,7 @@
+   formatAverageActivityPace,
+   linkedCairnsForActivity,
+ } from '../features/activity/activityDetailPresentation';
++import { routeMatchesIdentity, routeOriginLines } from '../features/route/routeContracts';
+ import { cairnDisplayTitle, splitTitleBody } from '../features/plant/services/noteEncoding';
+ import {
+   ALMOST_DONE_CLONE_V1_ID,
+@@ -182,8 +183,8 @@
+         : { styleJSON: resolvedMapStyle.json })}
+       logoEnabled
+       attributionEnabled
+-      logoPosition={{ top: 12, right: 8 }}
+-      attributionPosition={{ top: 48, right: 8 }}
++      logoPosition={{ top: 76, right: 8 }}
++      attributionPosition={{ top: 112, right: 8 }}
+       scaleBarEnabled={false}
+       compassEnabled={false}
+       onRegionDidChange={(e: any) => {
+@@ -754,9 +755,17 @@
+   // by targetRouteId. Renders a full-screen route detail view with Edit Route
+   // + Preview + Delete stacked buttons per row-03 col 5.
+   const allRoutes = useRouteStore(s => s.routes);
+-  const selectedRoute = targetRouteId ? allRoutes.find(r => r.id === targetRouteId) : null;
++  const selectedRoute = targetRouteId
++    ? allRoutes.find(item => routeMatchesIdentity(item, targetRouteId)) ?? null
++    : null;
+   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
++  const routeDetailState = useRouteStore(s => targetRouteId
++    ? (s.routeDetailState[selectedRoute?.id ?? targetRouteId] ?? 'idle')
++    : 'idle');
+   const [routeUseLoading, setRouteUseLoading] = useState(false);
++  const [routeUseTargetId, setRouteUseTargetId] = useState<string | null>(null);
++  const [routeDeleteConfirm, setRouteDeleteConfirm] = useState(false);
++  const routeUseInFlightRef = useRef(false);
+   // O12: settings-aware distance format for detail modal + stat displays.
+   const dist = useDistance();
+   const debugMode = useSettingsStore(s => s.debugMode);
+@@ -782,18 +791,19 @@
+   const [showFilters, setShowFilters] = useState(false);
+ 
+   useEffect(() => {
+-    if (!selectedRoute || selectedRoute.points.length >= 2) return;
+-    void loadRouteDetail(selectedRoute.id).catch(() => {});
+-  }, [loadRouteDetail, selectedRoute?.id, selectedRoute?.points.length]);
++    if (!targetRouteId || (selectedRoute && selectedRoute.points.length >= 2)) return;
++    void loadRouteDetail(selectedRoute?.id ?? targetRouteId).catch(() => {});
++  }, [loadRouteDetail, selectedRoute?.id, selectedRoute?.points.length, targetRouteId]);
+ 
+   const useSelectedRoute = useCallback(async () => {
+-    if (!selectedRoute || routeUseLoading) return;
++    if (!selectedRoute || routeUseLoading || routeUseInFlightRef.current) return;
++    routeUseInFlightRef.current = true;
+     setRouteUseLoading(true);
+     try {
+       if (selectedRoute.points.length < 2) {
+         await loadRouteDetail(selectedRoute.id);
+       }
+-      const ready = useRouteStore.getState().routes.find(item => item.id === selectedRoute.id);
++      const ready = useRouteStore.getState().routes.find(item => routeMatchesIdentity(item, selectedRoute.id));
+       if (!ready || ready.points.length < 2) {
+         Alert.alert(
+           'Route unavailable',
+@@ -801,26 +811,48 @@
+         );
+         return;
+       }
+-      const open = (mode: 'hiking' | 'running') => {
+-        if (mode === 'running') nav.navigate('Running', { routeId: ready.id });
+-        else nav.navigate('Hiking', { routeId: ready.id });
+-      };
+-      if (ready.activityMode === 'running') open('running');
+-      else if (ready.activityMode === 'hiking') open('hiking');
+-      else {
+-        Alert.alert('Use this route', 'Choose how you want to move.', [
+-          { text: 'Hike', onPress: () => open('hiking') },
+-          { text: 'Run', onPress: () => open('running') },
+-          { text: 'Cancel', style: 'cancel' },
+-        ]);
++      const tracking = useTrackingStore.getState();
++      if (tracking.status !== 'idle') {
++        Alert.alert(
++          'Activity already in progress',
++          'Finish or discard the current Activity before choosing another Route.',
++          [
++            {
++              text: 'Return to Activity',
++              onPress: () => {
++                routeUseInFlightRef.current = false;
++                nav.navigate(tracking.activityMode === 'running' ? 'Running' : 'Hiking');
++              },
++            },
++            { text: 'Stay here', style: 'cancel', onPress: () => { routeUseInFlightRef.current = false; } },
++          ],
++        );
++        return;
+       }
++      setRouteUseTargetId(ready.id);
+     } catch {
+       Alert.alert('Route unavailable', 'The route could not be prepared. Check your connection and try again.');
+     } finally {
++      routeUseInFlightRef.current = false;
+       setRouteUseLoading(false);
+     }
+   }, [loadRouteDetail, nav, routeUseLoading, selectedRoute]);
+ 
++  const openRouteForActivity = useCallback((mode: 'hiking' | 'running') => {
++    if (!routeUseTargetId || routeUseInFlightRef.current) return;
++    const ready = useRouteStore.getState().routes.find(item => routeMatchesIdentity(item, routeUseTargetId));
++    if (!ready || ready.points.length < 2) {
++      setRouteUseTargetId(null);
++      Alert.alert('Route unavailable', 'The route could not be prepared. Check your connection and try again.');
++      return;
++    }
++    routeUseInFlightRef.current = true;
++    setRouteUseTargetId(null);
++    if (mode === 'running') nav.navigate('Running', { routeId: ready.id });
++    else nav.navigate('Hiking', { routeId: ready.id });
++    routeUseInFlightRef.current = false;
++  }, [nav, routeUseTargetId]);
++
+   const region = getCurrentRegion();
+   const allSessions = useSessionStore(s => s.sessions);
+   const resolvedTargetSession = targetSessionId
+@@ -893,6 +925,45 @@
+   // Updates reactively as the user moves (Zustand subscription).
+   const lastCoord = useTrackingStore(s => s.lastCoordinate);
+   const [deleteConfirm, setDeleteConfirm] = useState(false);
++  const [routeActionError, setRouteActionError] = useState<string | null>(null);
++  const routeRenameInFlightRef = useRef(false);
++  const routeDeleteInFlightRef = useRef(false);
++
++  const commitRouteRename = useCallback(async () => {
++    if (!selectedRoute || renameSaving || routeRenameInFlightRef.current) return;
++    const nextName = renameText.trim();
++    if (!nextName) return;
++    routeRenameInFlightRef.current = true;
++    setRenameSaving(true);
++    setRouteActionError(null);
++    try {
++      await useRouteStore.getState().updateRoute(selectedRoute.id, { name: nextName });
++      setRenameEditing(false);
++    } catch {
++      setRouteActionError('The Route name was not saved. Your draft is still here.');
++    } finally {
++      routeRenameInFlightRef.current = false;
++      setRenameSaving(false);
++    }
++  }, [renameSaving, renameText, selectedRoute]);
++
++  const deleteSelectedRoute = useCallback(async () => {
++    if (!selectedRoute || deleteSaving || routeDeleteInFlightRef.current) return;
++    routeDeleteInFlightRef.current = true;
++    setDeleteSaving(true);
++    setRouteActionError(null);
++    try {
++      await useRouteStore.getState().deleteRoute(selectedRoute.id);
++      setRouteDeleteConfirm(false);
++      nav.goBack();
++    } catch {
++      setRouteActionError('The Route was not deleted. Try again when you are ready.');
++      setRouteDeleteConfirm(false);
++    } finally {
++      routeDeleteInFlightRef.current = false;
++      setDeleteSaving(false);
++    }
++  }, [deleteSaving, nav, selectedRoute]);
+ 
+   useFocusEffect(useCallback(() => {
+     setRouteDraftOpening(false);
+@@ -1176,6 +1247,17 @@
+   const mapMarkers: Marker[] = sessionForDisplay
+     ? routeFlags
+     : markers.slice(0, 8);
++  const routePreviewSession = selectedRoute && selectedRoute.points.length >= 2
++    ? ({
++        id: `route-preview-${selectedRoute.id}`,
++        activityMode: selectedRoute.activityMode ?? 'hiking',
++        trackPoints: selectedRoute.points.map((point, index) => ({
++          ...point,
++          t: selectedRoute.createdAt + index,
++          segmentId: 'route-reference',
++        })),
++      } as unknown as TrackingSession)
++    : null;
+ 
+   return (
+     <View style={[styles.container, { backgroundColor: visualTheme.background }]}>
+@@ -1184,7 +1266,22 @@
+         {/* Track polyline when session selected. Native (iOS/Android with
+             @rnmapbox/maps available) renders the track on a real Mapbox
+             map; web/Expo Go falls back to the SVG-on-panel rendering. */}
+-        {sessionRender ? (
++        {routePreviewSession ? (
++          MapView
++            ? <NativeTrackMap session={routePreviewSession} markers={[]} />
++            : <TrackPolyline session={routePreviewSession} />
++        ) : targetRouteId ? (
++          <View style={trackStyles.noGpsWrap} testID="route-map-unavailable">
++            {routeDetailState === 'loading' ? <ActivityIndicator color={visualTheme.primary} /> : null}
++            <Text style={[trackStyles.noGpsLabel, { color: visualTheme.foregroundSecondary }]}>
++              {routeDetailState === 'not-found'
++                ? 'Route unavailable'
++                : routeDetailState === 'error'
++                  ? 'Route map unavailable — details remain accessible offline'
++                  : 'Preparing Route map…'}
++            </Text>
++          </View>
++        ) : sessionRender ? (
+           isLoadingTrackPoints
+             // v261: still fetching trackPoints — render nothing in the
+             // map area instead of flashing "Activity too short to record
+@@ -1288,6 +1385,7 @@
+           (red outline pill, full width). Pill radius 14, minHeight 54 — Auth
+           submit style. */}
+       {targetRouteId && selectedRoute ? (
++        <>
+         <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
+           <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
+           <View style={{ marginBottom: Spacing.md }}>
+@@ -1299,25 +1397,21 @@
+                   onChangeText={setRenameText}
+                   autoFocus
+                   maxLength={60}
+-                  onSubmitEditing={() => {
+-                    const t = renameText.trim();
+-                    if (t) useRouteStore.getState().updateRoute(selectedRoute.id, { name: t });
+-                    setRenameEditing(false);
+-                  }}
++                  editable={!renameSaving}
++                  onSubmitEditing={() => { void commitRouteRename(); }}
+                   returnKeyType="done"
+                   placeholder="Route name"
+                   placeholderTextColor={visualTheme.muted}
+                 />
+                 <TouchableOpacity
+-                  onPress={() => {
+-                    const t = renameText.trim();
+-                    if (t) useRouteStore.getState().updateRoute(selectedRoute.id, { name: t });
+-                    setRenameEditing(false);
+-                  }}
++                  onPress={() => { void commitRouteRename(); }}
++                  disabled={renameSaving || !renameText.trim()}
+                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                   accessibilityLabel="Save new route name"
+                 >
+-                  <Icon name="Check" size={20} color={visualTheme.iconActive} strokeWidth={2.5} />
++                  {renameSaving
++                    ? <ActivityIndicator size="small" color={visualTheme.primary} />
++                    : <Icon name="Check" size={20} color={visualTheme.iconActive} strokeWidth={2.5} />}
+                 </TouchableOpacity>
+                 <TouchableOpacity
+                   onPress={() => setRenameEditing(false)}
+@@ -1346,36 +1440,55 @@
+             )}
+           </View>
+           {selectedRoute.syncState && selectedRoute.syncState !== 'synced' ? (
+-            <SyncBadge
+-              state={selectedRoute.syncState}
+-              onPress={selectedRoute.syncState === 'failed'
+-                ? () => useRouteStore.getState().retryRouteSync(selectedRoute.id)
+-                : undefined}
+-            />
++            <View style={styles.routeSyncBlock}>
++              <SyncBadge
++                state={selectedRoute.syncState}
++                onPress={selectedRoute.syncState === 'failed'
++                  && selectedRoute.syncErrorCode !== 'SOURCE_ACTIVITY_DELETED'
++                  && selectedRoute.syncErrorCode !== 'SOURCE_ACTIVITY_UNAUTHORIZED'
++                  ? () => useRouteStore.getState().retryRouteSync(selectedRoute.id)
++                  : undefined}
++              />
++              {selectedRoute.syncState === 'failed' ? (
++                <Text style={[styles.routeStateText, { color: visualTheme.foregroundSecondary }]} testID="route-sync-failure-detail">
++                  {selectedRoute.syncErrorCode === 'SOURCE_ACTIVITY_DELETED'
++                    ? 'The source Activity was deleted before this Route could sync. This Route remains saved on this device.'
++                    : selectedRoute.syncErrorCode === 'SOURCE_ACTIVITY_UNAUTHORIZED'
++                      ? 'The source Activity is not available to this account. This Route remains saved on this device.'
++                      : 'This Route is saved on this device. Retry when your connection is available.'}
++                </Text>
++              ) : null}
++            </View>
++          ) : null}
++          {routeActionError ? (
++            <Text style={[styles.routeStateText, { color: visualTheme.destructive }]} testID="route-action-error">
++              {routeActionError}
++            </Text>
+           ) : null}
++          <View style={styles.routeOriginBlock} testID="route-origin-context">
++            {routeOriginLines(selectedRoute).map(line => (
++              <Text key={line} style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary }]}>{line}</Text>
++            ))}
++            {selectedRoute.originPersistence === 'legacy-local' ? (
++              <Text style={[styles.routeStateText, { color: Colors.warning }]}>Origin is saved on this device; server support is pending.</Text>
++            ) : null}
++            <Text style={[styles.routeUpdatedText, { color: visualTheme.muted }]}>Updated {formatDate(selectedRoute.updatedAt)}</Text>
++          </View>
+           <View style={styles.singleSessionStats}>
+             <View style={styles.singleStat}>
+               <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{dist.format(selectedRoute.distanceM ?? 0, 2)}</Text>
+               <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>{dist.unit}</Text>
+             </View>
+             <View style={styles.singleStat}>
+-              {/* Concept crops/05 middle stat = estimated time. Routes carry no
+-                  recorded duration, so estimate from distance + typical pace
+-                  per activity mode (hiking 4 km/h, running 10 km/h). */}
+-              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>
+-                {formatDuration(
+-                  Math.round(
+-                    (selectedRoute.distanceM ?? 0) /
+-                    (selectedRoute.activityMode === 'running' ? 2.78 : 1.11)
+-                  )
+-                )}
+-              </Text>
+-              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>time</Text>
+-            </View>
+-            <View style={styles.singleStat}>
+-              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>+{dist.formatElevation(selectedRoute.elevationGainM ?? 0)}{dist.elevUnit}</Text>
+-              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>elev</Text>
++              <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{selectedRoute.points.length || '—'}</Text>
++              <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>points</Text>
+             </View>
++            {selectedRoute.elevationGainM > 0 ? (
++              <View style={styles.singleStat}>
++                <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>+{dist.formatElevation(selectedRoute.elevationGainM)}{dist.elevUnit}</Text>
++                <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>elevation</Text>
++              </View>
++            ) : null}
+           </View>
+           <View style={styles.routeActions}>
+             <PrimaryButton
+@@ -1402,22 +1515,96 @@
+                 <Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>Edit</Text>
+               </TouchableOpacity>
+               <TouchableOpacity
+-                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.destructiveSurface, borderColor: visualTheme.destructive }, deleteConfirm && { backgroundColor: visualTheme.destructive }]}
+-                onPress={() => {
+-                  if (!deleteConfirm) { setDeleteConfirm(true); return; }
+-                  const rs = useRouteStore.getState();
+-                  if (rs.deleteRoute) void rs.deleteRoute(selectedRoute.id);
+-                  nav.goBack();
+-                }}
++                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.destructiveSurface, borderColor: visualTheme.destructive }]}
++                onPress={() => setRouteDeleteConfirm(true)}
++                disabled={deleteSaving}
+                 accessibilityRole="button"
+-                accessibilityLabel={deleteConfirm ? 'Confirm delete route' : 'Delete route'}
++                accessibilityLabel="Delete route"
+               >
+-                <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? visualTheme.onPrimary : visualTheme.destructive} strokeWidth={2} />
+-                <Text style={[styles.routeMaintenanceText, { color: deleteConfirm ? visualTheme.onPrimary : visualTheme.destructive }]}>{deleteConfirm ? 'Confirm' : 'Delete'}</Text>
++                {deleteSaving
++                  ? <ActivityIndicator size="small" color={visualTheme.destructive} />
++                  : <Icon name="Trash2" size={IconSize.sm} color={visualTheme.destructive} strokeWidth={2} />}
++                <Text style={[styles.routeMaintenanceText, { color: visualTheme.destructive }]}>Delete</Text>
+               </TouchableOpacity>
+             </View>
+           </View>
+         </View>
++        <ModalCard
++          visible={routeUseTargetId != null}
++          onDismiss={() => setRouteUseTargetId(null)}
++          testID="route-use-mode-picker"
++        >
++          <ModalCardHeader
++            title="Use this Route"
++            body="Choose an Activity. This Route is shown on the map for reference, and you will review it before starting."
++            onClose={() => setRouteUseTargetId(null)}
++          />
++          <View style={styles.deleteModalActions}>
++            <PrimaryButton
++              label="Hike"
++              onPress={() => openRouteForActivity('hiking')}
++              testID="route-use-hike"
++            />
++            <PrimaryButton
++              label="Run"
++              variant="secondary"
++              onPress={() => openRouteForActivity('running')}
++              testID="route-use-run"
++            />
++            <PrimaryButton
++              label="Cancel"
++              variant="secondary"
++              onPress={() => setRouteUseTargetId(null)}
++            />
++          </View>
++        </ModalCard>
++        <ModalCard
++          visible={routeDeleteConfirm}
++          onDismiss={() => !deleteSaving && setRouteDeleteConfirm(false)}
++          dismissible={!deleteSaving}
++          testID="route-delete-confirmation"
++        >
++          <ModalCardHeader
++            title="Delete Route?"
++            body="This removes the Route. Its source Activity, Cairns, and Memory stay unchanged."
++            onClose={deleteSaving ? undefined : () => setRouteDeleteConfirm(false)}
++          />
++          <View style={styles.deleteModalActions}>
++            <PrimaryButton
++              label="Delete Route"
++              variant="destructive"
++              onPress={() => { void deleteSelectedRoute(); }}
++              loading={deleteSaving}
++              testID="route-delete-confirm"
++            />
++            <PrimaryButton
++              label="Keep Route"
++              variant="secondary"
++              onPress={() => setRouteDeleteConfirm(false)}
++              disabled={deleteSaving}
++            />
++          </View>
++        </ModalCard>
++        </>
++      ) : targetRouteId ? (
++        <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]} testID="route-detail-state">
++          <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
++          <Text style={[styles.detailTitle, { color: visualTheme.foreground }]}>
++            {routeDetailState === 'not-found' ? 'Route unavailable' : 'Loading Route'}
++          </Text>
++          <Text style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary, marginTop: Spacing.sm }]}>
++            {routeDetailState === 'not-found'
++              ? 'This Route may have been deleted or is not available to this account.'
++              : routeDetailState === 'error'
++                ? 'The Route could not be loaded. Check your connection and try again.'
++                : 'Preparing the saved Route…'}
++          </Text>
++          {routeDetailState === 'error' ? (
++            <View style={{ marginTop: Spacing.lg }}>
++              <PrimaryButton label="Try Again" onPress={() => { void loadRouteDetail(targetRouteId); }} />
++            </View>
++          ) : null}
++        </View>
+       ) : targetSessionId && selectedSession ? (
+         <>
+           <View style={[styles.singleSessionPanel, styles.activityDetailPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
+@@ -2261,6 +2448,11 @@
+   activityDeleteText: { fontSize: FontSize.caption, fontWeight: '600' },
+   deleteModalActions: { gap: Spacing.sm },
+   routeActions: { gap: Spacing.sm, marginTop: Spacing.lg },
++  routeOriginBlock: { gap: 3, marginBottom: Spacing.md },
++  routeSyncBlock: { gap: Spacing.xs, marginBottom: Spacing.sm, alignItems: 'flex-start' },
++  routeOriginText: { fontSize: FontSize.caption, lineHeight: 19, fontWeight: '600' },
++  routeUpdatedText: { fontSize: FontSize.small, lineHeight: 17, marginTop: 2 },
++  routeStateText: { fontSize: FontSize.small, lineHeight: 18, marginBottom: Spacing.xs },
+   routeMaintenanceRow: { flexDirection: 'row', gap: Spacing.sm },
+   routeMaintenanceAction: {
+     flex: 1,
+
+--- a/app/src/screens/RouteEditorScreen.tsx
++++ b/app/src/screens/RouteEditorScreen.tsx
+@@ -48,6 +48,7 @@
+ import { useSettingsStore } from '../store/useSettingsStore';
+ import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
+ import { useVisualTheme } from '../hooks/useVisualTheme';
++import { routeMatchesIdentity } from '../features/route/routeContracts';
+ import { useMapTheme } from '../hooks/useMapTheme';
+ import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
+ 
+@@ -102,7 +103,10 @@
+   const updateRoute = useRouteStore(s => s.updateRoute);
+   const deleteRoute = useRouteStore(s => s.deleteRoute);
+   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
+-  const existingRoute = useRouteStore(s => s.routes.find(r => r.id === routeId));
++  const routeDetailState = useRouteStore(s => routeId ? (s.routeDetailState[routeId] ?? 'idle') : 'idle');
++  const existingRoute = useRouteStore(s => routeId
++    ? s.routes.find(item => routeMatchesIdentity(item, routeId))
++    : undefined);
+   const session = useSessionStore(s => fromSessionId ? s.sessions.find(x => x.id === fromSessionId) : null);
+ 
+   const [name, setName] = useState('');
+@@ -114,6 +118,12 @@
+   const [enterEditLoading, setEnterEditLoading] = useState(false);
+   const [enterEditError, setEnterEditError] = useState<string | null>(null);
+   const [saving, setSaving] = useState(false);
++  const saveInFlightRef = useRef(false);
++  const deleteInFlightRef = useRef(false);
++  const allowLeaveRef = useRef(false);
++  const initialNameRef = useRef('');
++  const initialPermissionRef = useRef<'personal' | 'friend'>('personal');
++  const didHydrateBaselineRef = useRef(false);
+   // Sprint 69 STORY-00535: route visibility toggle. Original default 'friend'.
+   // 2026-08-16 concept: default changed to 'personal' ('Just me') per
+   // RouteEditor-1.png — safer/more private default per Playwright QA finding.
+@@ -188,13 +198,16 @@
+   // flow no longer pre-fills with "Hike Jun 9" / "Run Jun 9" — PO wants
+   // the user to think about the name and confirm before Save unlocks.
+   useEffect(() => {
+-    if (existingRoute) {
++    if (existingRoute && !didHydrateBaselineRef.current) {
+       setName(existingRoute.name);
+       // Sprint 69 STORY-00535: hydrate visibility for edit. Default 'friend'
+       // when the existing row has no permission field (legacy rows).
+       if (existingRoute.permission === 'personal' || existingRoute.permission === 'friend') {
+         setPermission(existingRoute.permission);
+       }
++      initialNameRef.current = existingRoute.name;
++      initialPermissionRef.current = existingRoute.permission === 'friend' ? 'friend' : 'personal';
++      didHydrateBaselineRef.current = true;
+     }
+   }, [existingRoute]);
+ 
+@@ -549,12 +562,14 @@
+   // if user has edited; otherwise falls back to sessionTrackPoints
+   // (save-as-route untouched) or existingRoute.points (existing route).
+   const handleViewSave = useCallback(async () => {
+-    if (saving) return;
++    if (saving || saveInFlightRef.current) return;
++    setEnterEditError(null);
+     const trimmed = name.trim();
+     if (trimmed.length === 0) {
+       Alert.alert('Name required', 'Please name this route before saving.', [{ text: 'OK' }]);
+       return;
+     }
++    saveInFlightRef.current = true;
+     setSaving(true);
+     try {
+       const liveSourceSession = fromSessionId
+@@ -647,6 +662,7 @@
+       // Clear the in-memory draft and any open edit session.
+       try { useRouteEditStore.getState().clearCommittedDraft(); } catch {}
+       try { useRouteEditStore.getState().cancelEdit(); } catch {}
++      allowLeaveRef.current = true;
+ 
+       // A newly created future-intent object lands on the one canonical Route
+       // Detail surface. RouteEditor remains the confirmation/draft step, not
+@@ -683,8 +699,10 @@
+       } else {
+         body = 'Something got lost between here and our server. Try again in a moment.';
+       }
++      setEnterEditError(body);
+       Alert.alert('Save failed', body, [{ text: 'OK' }]);
+     } finally {
++      saveInFlightRef.current = false;
+       setSaving(false);
+     }
+   }, [saving, name, routeId, fromSessionId, reconnectsActivityGap, existingRoute, sessionTrackPoints, session, addRoute, updateRoute, nav]);
+@@ -692,13 +710,22 @@
+   const handleDelete = useCallback(() => {
+     if (!routeId) return;
+     Alert.alert(
+-      'Delete route?',
+-      'This action cannot be undone.',
++      'Delete Route?',
++      'This removes the Route. Its source Activity, Cairns, and Memory stay unchanged.',
+       [
+         { text: 'Cancel', style: 'cancel' },
+         { text: 'Delete', style: 'destructive', onPress: async () => {
+-          await deleteRoute(routeId);
+-          nav.goBack();
++          if (deleteInFlightRef.current) return;
++          deleteInFlightRef.current = true;
++          try {
++            await deleteRoute(routeId);
++            allowLeaveRef.current = true;
++            nav.goBack();
++          } catch {
++            Alert.alert('Delete failed', 'The Route is still here. Check your connection and try again.');
++          } finally {
++            deleteInFlightRef.current = false;
++          }
+         } },
+       ],
+     );
+@@ -737,6 +764,35 @@
+   // "save in flight", matching PO's expectation that Save should not
+   // appear locked when nothing seems wrong.
+   const canSaveView = nameValid && !saving;
++  const hasUnsavedChanges = isEditing
++    || Boolean(draftForThisScreen)
++    || name.trim() !== initialNameRef.current.trim()
++    || permission !== initialPermissionRef.current;
++
++  useEffect(() => {
++    const unsubscribe = (nav as any).addListener('beforeRemove', (event: any) => {
++      if (allowLeaveRef.current || !hasUnsavedChanges || saving) return;
++      event.preventDefault();
++      Alert.alert(
++        'Discard Route changes?',
++        'Your saved Route will stay unchanged.',
++        [
++          { text: 'Stay', style: 'cancel' },
++          {
++            text: 'Discard',
++            style: 'destructive',
++            onPress: () => {
++              useRouteEditStore.getState().cancelEdit();
++              useRouteEditStore.getState().clearCommittedDraft();
++              allowLeaveRef.current = true;
++              (nav as any).dispatch(event.data.action);
++            },
++          },
++        ],
++      );
++    });
++    return unsubscribe;
++  }, [hasUnsavedChanges, nav, saving]);
+ 
+   // v251: stable segments + showOriginal so DualLineLayer (now memoed)
+   // doesn't re-render on every appendStrokePoint frame. Deps avoid the
+@@ -755,6 +811,31 @@
+     confidence: 'confident' as const,
+   }], [renderPoints.length, editBrushStrokes.length, editHasCommittedEdit, editIsModified]);
+ 
++  if (routeId && !existingRoute && (routeDetailState === 'not-found' || routeDetailState === 'error')) {
++    return (
++      <View style={[styles.container, styles.unavailable, { backgroundColor: visualTheme.background }]} testID="route-editor-unavailable">
++        <View style={[styles.unavailableTop, { paddingTop: insets.top + 8 }]}>
++          <BackButton variant="inline" onPress={() => nav.goBack()} />
++        </View>
++        <Icon name="Route" size={36} color={visualTheme.iconInactive} strokeWidth={1.6} />
++        <Text style={[styles.unavailableTitle, { color: visualTheme.foreground }]}>Route unavailable</Text>
++        <Text style={[styles.unavailableBody, { color: visualTheme.foregroundSecondary }]}>
++          {routeDetailState === 'not-found'
++            ? 'This Route may have been deleted or is not available to this account.'
++            : 'The saved Route could not be loaded. Check your connection and try again.'}
++        </Text>
++        {routeDetailState === 'error' ? (
++          <TouchableOpacity
++            style={[styles.unavailableRetry, { backgroundColor: visualTheme.primary }]}
++            onPress={() => { void loadRouteDetail(routeId); }}
++          >
++            <Text style={[styles.viewSaveBtnText, { color: visualTheme.onPrimary }]}>Try Again</Text>
++          </TouchableOpacity>
++        ) : null}
++      </View>
++    );
++  }
++
+   return (
+     <View style={[styles.container, { backgroundColor: visualTheme.background }]}>
+       <View style={styles.mapArea}>
+@@ -765,8 +846,10 @@
+             {...(editorResolvedMapStyle.kind === 'url'
+               ? { styleURL: editorResolvedMapStyle.url }
+               : { styleJSON: editorResolvedMapStyle.json })}
+-            logoEnabled={false}
+-            attributionEnabled={false}
++            logoEnabled
++            attributionEnabled
++            logoPosition={{ top: insets.top + 58, right: 8 }}
++            attributionPosition={{ top: insets.top + 92, right: 8 }}
+             scaleBarEnabled={false}
+             compassEnabled={false}
+             scrollEnabled={!isEditing || editActiveTool === 'pan'}
+@@ -918,21 +1001,14 @@
+       </View>
+ 
+       {/* Top floating BackButton — same in view-mode and edit-mode for
+-          consistency with the rest of the app.
+-          2026-08-16 T-C06: in edit mode, show "Edit Route" title + gear icon. */}
++          consistency with the rest of the app. */}
+       <View style={[styles.topOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+         <View style={styles.topRow} pointerEvents="box-none">
+-          <BackButton variant="inline" />
++          <BackButton variant="inline" onPress={() => nav.goBack()} />
+           {isEditing ? (
+             <>
+               <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>Edit Route</Text>
+-              <TouchableOpacity
+-                style={[styles.gearBtn, { backgroundColor: visualTheme.mapOverlay, borderColor: visualTheme.border }]}
+-                onPress={() => { /* TODO route settings */ }}
+-                activeOpacity={0.85}
+-              >
+-                <Icon name="Cog" size={20} color={visualTheme.icon} strokeWidth={1.9} />
+-              </TouchableOpacity>
++              <View style={{ width: 40 }} />
+             </>
+           ) : (
+             <View style={{ flex: 1 }} />
+@@ -946,7 +1022,13 @@
+           {/* Brush gesture capture — only intercepts when brush/eraser tool active */}
+           <BrushOverlay mapViewRef={mapViewRef} />
+           {/* Bottom card — tool strip is now inside this card */}
+-          <EditOverlayV274 onCancel={handleCancelEdit} onSave={handleSave} onPreview={handlePreview} onBeautify={handleBeautify} />
++          <EditOverlayV274
++            onCancel={handleCancelEdit}
++            onSave={handleSave}
++            onPreview={handlePreview}
++            onBeautify={handleBeautify}
++            saveLabel="Apply to draft"
++          />
+         </>
+       ) : (
+         <>
+@@ -1048,7 +1130,7 @@
+                   ) : (
+                     <>
+                       <Icon name="Check" size={16} color={visualTheme.onPrimary} strokeWidth={2.5} />
+-                      <Text style={[styles.viewSaveBtnText, { color: visualTheme.onPrimary }]}>Save</Text>
++                      <Text style={[styles.viewSaveBtnText, { color: visualTheme.onPrimary }]}>Save Route</Text>
+                     </>
+                   )}
+                 </TouchableOpacity>
+@@ -1063,6 +1145,11 @@
+ 
+ const styles = StyleSheet.create({
+   container: { flex: 1, backgroundColor: Colors.primaryBg },
++  unavailable: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, gap: Spacing.sm },
++  unavailableTop: { position: 'absolute', top: 0, left: Spacing.md },
++  unavailableTitle: { fontSize: FontSize.h2, fontWeight: '700', marginTop: Spacing.sm },
++  unavailableBody: { fontSize: FontSize.body, lineHeight: 22, textAlign: 'center' },
++  unavailableRetry: { minHeight: 46, paddingHorizontal: Spacing.xl, borderRadius: Radius.button, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.md },
+   mapArea: { flex: 1 },
+   fallback: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface },
+   fallbackText: { color: Colors.textSecondary, fontSize: FontSize.body },
+@@ -1088,7 +1175,6 @@
+     alignItems: 'center',
+     paddingHorizontal: Spacing.base,
+   },
+-  // 2026-08-16 T-C06: Edit Route title + gear
+   topTitle: {
+     flex: 1,
+     textAlign: 'center',
+@@ -1096,17 +1182,6 @@
+     fontWeight: '700',
+     color: '#1E2A24',
+   },
+-  gearBtn: {
+-    width: 40,
+-    height: 40,
+-    borderRadius: 20,
+-    backgroundColor: 'rgba(255,255,255,0.94)',
+-    alignItems: 'center',
+-    justifyContent: 'center',
+-    borderWidth: 1,
+-    borderColor: 'rgba(20,42,30,0.08)',
+-  },
+-
+   // Bottom: rounded white card panel
+   bottomPanelWrap: {
+     position: 'absolute',
+
+--- a/app/src/screens/RunningScreen.tsx
++++ b/app/src/screens/RunningScreen.tsx
+@@ -14,7 +14,7 @@
+ import React, { useState, useRef, useEffect } from 'react';
+ import {
+   View, Text, StyleSheet, TouchableOpacity, Animated, Easing, ScrollView,
+-  Platform, TextInput, KeyboardAvoidingView, Keyboard, Linking,
++  Platform, TextInput, KeyboardAvoidingView, Keyboard, Linking, Alert,
+ } from 'react-native';
+ import { haptic } from '../services/hapticService';
+ import { useSafeAreaInsets } from 'react-native-safe-area-context';
+@@ -24,6 +24,7 @@
+ import { useTrackingStore } from '../store/useTrackingStore';
+ import { useAppStore } from '../store/useAppStore';
+ import { useRouteStore } from '../store/useRouteStore';
++import { routeMatchesIdentity } from '../features/route/routeContracts';
+ import { useMarkerStore } from '../store/useMarkerStore';
+ import { getCurrentRegion } from '../config/regions';
+ import { formatDuration } from '../utils/geo';
+@@ -111,6 +112,9 @@
+   const routes = useRouteStore(s => s.routes);
+   const loadRoutes = useRouteStore(s => s.loadRoutes);
+   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
++  const activityRouteReference = useRouteStore(s => s.activityRouteReference);
++  const captureActivityRouteReference = useRouteStore(s => s.captureActivityRouteReference);
++  const clearActivityRouteReference = useRouteStore(s => s.clearActivityRouteReference);
+   const [unfinishedRun, setUnfinishedRun] = useState<RecoverableActivity | null>(null);
+   const [unfinishedResolutionRequested, setUnfinishedResolutionRequested] = useState(false);
+   // R21 (2026-08-18): dark theme parity with Hiking. Run tray + top pills
+@@ -175,7 +179,7 @@
+     setSelectedRoute(requestedRouteId);
+   }, [requestedRouteId]);
+   useEffect(() => {
+-    const selected = selectedRoute ? routes.find(item => item.id === selectedRoute) : null;
++    const selected = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+     if (!selected || selected.points.length >= 2) return;
+     void loadRouteDetail(selected.id).catch(() => {});
+   }, [loadRouteDetail, routes, selectedRoute]);
+@@ -400,7 +404,7 @@
+     closeRoutePicker();
+   };
+ 
+-  const selectedRouteName = routes.find(r => r.id === selectedRoute)?.name ?? 'Free Run';
++  const selectedRouteName = routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Run';
+ 
+   useFocusEffect(React.useCallback(() => {
+     setRunFollowUser(true);
+@@ -455,8 +459,14 @@
+       return;
+     }
+     setActivityMode('running');
++    if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
++      Alert.alert('Route unavailable', 'This Route is not ready on this device yet.');
++      return;
++    }
++    if (!selectedRoute) clearActivityRouteReference();
+     const started = await startTracking();
+     if (!started) {
++      clearActivityRouteReference();
+       const authoritative = await findRecoverableActivity('running');
+       if (authoritative) {
+         setUnfinishedRun(authoritative);
+@@ -690,8 +700,10 @@
+ 
+   // One native Mapbox owner spans pre-start and Tracking. Activity/provider
+   // transitions update layers and camera targets; they never replace the map.
+-  const activeRoute = selectedRoute ? routes.find(item => item.id === selectedRoute) : null;
+-  const plannedRoutePoints = activeRoute?.points ?? [];
++  const activeRoute = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
++  const plannedRoutePoints = isActivitySessionVisible(operationalState) && activityRouteReference
++    ? activityRouteReference.points
++    : (activeRoute?.points ?? []);
+   const runMapSurface = (
+     <View key="run-map-surface" style={StyleSheet.absoluteFillObject}>
+       <HikingMap
+@@ -746,7 +758,7 @@
+           mode="run"
+           safeBottom={insets.bottom}
+           routeName={selectedRouteName}
+-          routeDescription={selectedRoute ? 'Route selected · shown on the map for guidance' : 'Run freely without a planned route'}
++          routeDescription={selectedRoute ? 'This Route is shown on the map for reference.' : 'Run freely without a planned route'}
+           readinessLabel={simulatorLocationAuthoritative
+             ? 'Simulator origin ready'
+             : permissionBlocked
+
+--- a/app/src/services/offlineEntity.ts
++++ b/app/src/services/offlineEntity.ts
+@@ -51,6 +51,8 @@
+   attempts: number;
+   lastTriedAt?: number;
+   lastError?: string;
++  /** Machine-readable server outcome retained for truthful retry decisions. */
++  lastErrorCode?: string;
+   /** Increments when accepted local content changes during an in-flight sync. */
+   revision?: number;
+ }
+@@ -330,7 +332,12 @@
+       const next = q.map((entry) => {
+         if (entry.localId !== localId) return entry;
+         found = true;
+-        const { lastTriedAt: _lastTriedAt, lastError: _lastError, ...rest } = entry;
++        const {
++          lastTriedAt: _lastTriedAt,
++          lastError: _lastError,
++          lastErrorCode: _lastErrorCode,
++          ...rest
++        } = entry;
+         return { ...rest, attempts: 0, syncState: 'pending' as SyncState };
+       });
+       if (found) await write(ownerId, next);
+@@ -406,6 +413,7 @@
+           entry.attempts += 1;
+           entry.lastTriedAt = Date.now();
+           entry.lastError = String(err?.message ?? err).slice(0, 120);
++          entry.lastErrorCode = typeof err?.code === 'string' ? err.code : undefined;
+ 
+           if (isAuthError(err)) {
+             entry.syncState = 'failed';
+
+--- a/app/src/services/routeOfflineEntities.ts
++++ b/app/src/services/routeOfflineEntities.ts
+@@ -5,7 +5,11 @@
+ export interface OfflineRouteCreatePayload {
+   userId: string;
+   route: Omit<Route, 'id' | 'createdAt' | 'updatedAt' | 'runCount' | 'isActive' | 'remoteId' | 'syncState'>;
+-  sourceActivity?: { clientActivityId?: string; serverActivityId?: number };
++  sourceActivity?: {
++    clientActivityId?: string;
++    serverActivityId?: number;
++    reconnectsActivityGap?: boolean;
++  };
+ }
+ 
+ let routeAckHandler: ((localId: string, server: Route, data: OfflineRouteCreatePayload, ownerId: string) => void | Promise<void>) | null = null;
+@@ -44,6 +48,7 @@
+     }
+     try {
+       const created = await createRoute({
++        client_route_id: localId,
+         name: data.route.name,
+         description: data.route.description,
+         points: data.route.points,
+@@ -53,6 +58,7 @@
+         permission: data.route.permission,
+         source_activity_client_id: data.sourceActivity?.clientActivityId,
+         source_session_id: data.sourceActivity?.serverActivityId,
++        origin_gap_reconnected: data.sourceActivity?.reconnectsActivityGap,
+       }, localId);
+       if (!created) {
+         const error: any = new Error('route create returned no route');
+@@ -63,7 +69,9 @@
+     } catch (error: any) {
+       // Activity and Route queues may race after connectivity returns. A
+       // source lookup miss is repairable after the Activity upload lands.
+-      if (error?.code === 'SOURCE_ACTIVITY_NOT_FOUND') error.status = 503;
++      if (error?.code === 'SOURCE_ACTIVITY_NOT_FOUND' || error?.code === 'SOURCE_ACTIVITY_NOT_READY') {
++        error.status = 503;
++      }
+       throw error;
+     }
+   },
+
+--- a/app/src/services/routeService.ts
++++ b/app/src/services/routeService.ts
+@@ -6,6 +6,7 @@
+ import type { Route, RoutePoint, Waypoint } from '../store/useRouteStore';
+ 
+ interface RoutePayload {
++  client_route_id?: string;
+   name: string;
+   description?: string;
+   points: RoutePoint[];
+@@ -17,6 +18,7 @@
+   permission?: 'personal' | 'friend';
+   source_activity_client_id?: string;
+   source_session_id?: number;
++  origin_gap_reconnected?: boolean;
+ }
+ 
+ interface RemoteRoute {
+@@ -35,6 +37,14 @@
+   /** Sprint 67 migration 018 added the column; Sprint 67 STORY-00528 wires
+    *  Route.findByUser / findByIdAndUser to return it. */
+   permission?: 'personal' | 'friend' | 'public';
++  client_route_id?: string | null;
++  creation_origin?: 'activity' | 'manual' | null;
++  source_activity_client_id?: string | null;
++  source_session_id?: number | null;
++  origin_geometry_hash?: string | null;
++  created_geometry_hash?: string | null;
++  geometry_edited_since_creation?: number | boolean;
++  origin_gap_reconnected?: number | boolean;
+ }
+ 
+ function remoteToLocal(r: RemoteRoute): Route {
+@@ -56,6 +66,16 @@
+     // because that endpoint scopes to the viewer's own; /api/circle/routes
+     // is the only path Public routes traverse — see Story-538).
+     permission: r.permission === 'public' ? undefined : r.permission,
++    clientRouteId: r.client_route_id ?? undefined,
++    remoteId: String(r.id),
++    creationOrigin: r.creation_origin ?? 'legacy_unknown',
++    originActivityClientId: r.source_activity_client_id ?? undefined,
++    originActivityServerId: r.source_session_id ?? undefined,
++    originGeometryHash: r.origin_geometry_hash ?? undefined,
++    createdGeometryHash: r.created_geometry_hash ?? undefined,
++    geometryEditedSinceCreation: Boolean(r.geometry_edited_since_creation),
++    originActivityGapReconnected: Boolean(r.origin_gap_reconnected),
++    originPersistence: r.creation_origin ? 'durable' : 'unknown',
+   };
+ }
+ 
+@@ -70,65 +90,84 @@
+ // (the list endpoint omits these for performance). Use this when opening
+ // RouteEditor / route detail.
+ export async function fetchRouteDetail(id: string): Promise<Route | null> {
+-  try {
+-    const res = await authenticatedFetch(`/api/routes/${id}`);
+-    if (!res.ok) return null;
+-    const data = await res.json();
+-    return data?.route ? remoteToLocal(data.route) : null;
+-  } catch {
+-    return null;
+-  }
++  const res = await authenticatedFetch(`/api/routes/${id}`);
++  if (res.status === 404) return null;
++  if (!res.ok) throw new Error(`Route fetch failed (${res.status})`);
++  const data = await res.json();
++  return data?.route ? remoteToLocal(data.route) : null;
+ }
+ 
+ export async function createRoute(
+   payload: RoutePayload,
+   idempotencyKey?: string,
+ ): Promise<Route | null> {
+-  try {
+-    const res = await authenticatedFetch('/api/routes', {
++  const request = (body: RoutePayload, key?: string) => authenticatedFetch('/api/routes', {
+       method: 'POST',
+-      body: JSON.stringify(payload),
+-      headers: idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : undefined,
++      body: JSON.stringify(body),
++      headers: key ? { 'X-Idempotency-Key': key } : undefined,
+     });
+-    if (!res.ok) {
+-      let body: any = null;
+-      try { body = await res.json(); } catch { /* non-JSON response */ }
+-      const error = new Error(body?.error ?? `Route create failed (${res.status})`);
+-      (error as any).code = body?.code ?? `HTTP_${res.status}`;
+-      (error as any).status = res.status;
+-      throw error;
++  let res = await request(payload);
++  let body: any = null;
++  if (!res.ok) {
++    try { body = await res.json(); } catch { /* non-JSON response */ }
++    const rejectedFields = new Set((body?.details ?? []).map((detail: any) => detail?.field));
++    const oldBackend = res.status === 400
++      && (rejectedFields.has('client_route_id') || rejectedFields.has('origin_gap_reconnected'));
++    if (oldBackend) {
++      const {
++        client_route_id: _clientRouteId,
++        origin_gap_reconnected: _gap,
++        ...legacyPayload
++      } = payload;
++      // Compatibility only. The legacy backend can still create the Route but
++      // cannot durably round-trip the new provenance fields. Its existing
++      // idempotency key protects retry duplication for an unchanged payload.
++      res = await request(legacyPayload, idempotencyKey ?? payload.client_route_id);
++      body = null;
+     }
+-    const data = await res.json();
+-    return data?.route ? remoteToLocal(data.route) : null;
+-  } catch (error) {
++  }
++  if (!res.ok) {
++    try { body = body ?? await res.json(); } catch { /* non-JSON response */ }
++    const error = new Error(body?.error ?? `Route create failed (${res.status})`);
++    (error as any).code = body?.code ?? `HTTP_${res.status}`;
++    (error as any).status = res.status;
+     throw error;
+   }
++  const data = await res.json();
++  return data?.route ? remoteToLocal(data.route) : null;
+ }
+ 
+ export async function updateRoute(
+   id: string,
+   payload: Partial<RoutePayload>
+ ): Promise<Route | null> {
+-  try {
+-    const res = await authenticatedFetch(`/api/routes/${id}`, {
+-      method: 'PUT',
+-      body: JSON.stringify(payload),
+-    });
+-    if (!res.ok) return null;
+-    const data = await res.json();
+-    return data?.route ? remoteToLocal(data.route) : null;
+-  } catch {
+-    return null;
++  const res = await authenticatedFetch(`/api/routes/${id}`, {
++    method: 'PUT',
++    body: JSON.stringify(payload),
++  });
++  if (!res.ok) {
++    const error: any = new Error(`Route update failed (${res.status})`);
++    error.status = res.status;
++    throw error;
+   }
++  const data = await res.json();
++  return data?.route ? remoteToLocal(data.route) : null;
+ }
+ 
+ export async function deleteRoute(id: string): Promise<boolean> {
+-  try {
+-    const res = await authenticatedFetch(`/api/routes/${id}`, { method: 'DELETE' });
+-    return res.ok;
+-  } catch {
+-    return false;
+-  }
++  const res = await authenticatedFetch(`/api/routes/${id}`, { method: 'DELETE' });
++  if (res.status === 404) return true;
++  if (!res.ok) throw new Error(`Route delete failed (${res.status})`);
++  return true;
++}
++
++export async function deleteRouteByClientId(clientRouteId: string): Promise<boolean> {
++  const res = await authenticatedFetch(`/api/routes/client/${encodeURIComponent(clientRouteId)}`, {
++    method: 'DELETE',
++  });
++  if (res.status === 404) return true;
++  if (!res.ok) throw new Error(`Route delete failed (${res.status})`);
++  return true;
+ }
+ 
+ // O1 batch 36: incrementRouteRunCount removed — last caller (useRouteStore.incrementRunCount)
+
+--- a/app/src/store/useRouteStore.ts
++++ b/app/src/store/useRouteStore.ts
+@@ -11,6 +11,7 @@
+   fetchRouteDetail,
+   updateRoute as apiUpdateRoute,
+   deleteRoute as apiDeleteRoute,
++  deleteRouteByClientId,
+ } from '../services/routeService';
+ import { crashLogger } from '../services/crashLogger';
+ import { storage } from './storage';
+@@ -21,6 +22,19 @@
+   type OfflineRouteCreatePayload,
+ } from '../services/routeOfflineEntities';
+ import type { SyncState } from '../services/offlineEntity';
++import {
++  cloneActivityRouteReference,
++  routeIdentityKeys,
++  routeMatchesIdentity,
++  type ActivityRouteReference,
++  type RouteCreationOrigin,
++} from '../features/route/routeContracts';
++import {
++  isRouteTombstoned,
++  listRouteTombstones,
++  markRouteRemoteDeleted,
++  tombstoneRoute,
++} from '../services/routeTombstones';
+ 
+ // ── Types ───────────────────────────────────────────────────────────────────
+ 
+@@ -89,14 +103,27 @@
+   permission?: 'personal' | 'friend';
+   /** Local identity remains stable while the outbox replaces server state. */
+   remoteId?: string;
++  /** Durable per-owner client identity used across create acknowledgement. */
++  clientRouteId?: string;
+   syncState?: SyncState;
++  syncErrorCode?: string;
++  syncErrorMessage?: string;
+   /** Minimal local provenance for Activity → independent Route handoff. */
+   originActivityClientId?: string;
+   originActivityServerId?: number;
+   /** True only when the user explicitly chose to reconnect an Activity Gap in the new Route. */
+   originActivityGapReconnected?: boolean;
++  creationOrigin?: RouteCreationOrigin;
++  originGeometryHash?: string;
++  createdGeometryHash?: string;
++  geometryEditedSinceCreation?: boolean;
++  /** Whether provenance has survived a server round trip. */
++  originPersistence?: 'pending' | 'durable' | 'legacy-local' | 'unknown';
+ }
+ 
++export type RouteDetailState = 'idle' | 'loading' | 'ready' | 'not-found' | 'error';
++export interface RouteDeleteResult { remoteState: 'not-needed' | 'deleted' | 'queued' }
++
+ const routeCacheKey = (userId: string) => `@cairn:routes:v1:${userId}`;
+ 
+ function currentUserId(): string {
+@@ -123,19 +150,28 @@
+   return {
+     ...entry.data.route,
+     id: entry.localId,
++    clientRouteId: entry.localId,
+     createdAt: entry.savedAt,
+     updatedAt: entry.savedAt,
+     runCount: 0,
+     isActive: false,
+     syncState: entry.syncState,
++    syncErrorCode: entry.lastErrorCode,
++    syncErrorMessage: entry.lastError,
++    creationOrigin: entry.data.sourceActivity ? 'activity' : 'manual',
++    originPersistence: 'pending',
+   };
+ }
+ 
++let detailRequestSequence = 0;
++
+ interface RouteStore {
+   routes: Route[];
++  routeOwnerId: string | null;
+   /** Personal-library load state. Cached/local Routes remain visible on error. */
+   routesLoading: boolean;
+   routesLoadError: boolean;
++  routeDetailState: Record<string, RouteDetailState>;
+   // O1 batch 35: activeRouteId removed — written only in setActiveRoute (dead) + deleteRoute;
+   // 0 external readers. routesLoadCompleted removed — only written internally; 0 external readers.
+   /** Sprint 69 STORY-00538: subscribed-friend friend+public routes
+@@ -152,6 +188,9 @@
+    *  "Free hike". Session-scoped only — not persisted. */
+   followingRouteId: string | null;
+   setFollowingRoute: (id: string | null) => void;
++  activityRouteReference: ActivityRouteReference | null;
++  captureActivityRouteReference: (id: string | null) => ActivityRouteReference | null;
++  clearActivityRouteReference: () => void;
+ 
+   // Load from backend
+   loadRoutes: () => Promise<void>;
+@@ -161,7 +200,7 @@
+   // Used by RouteEditor when opening an existing route — the list
+   // endpoint omits points for perf, so the in-store route may have
+   // points=[]; this fills it in.
+-  loadRouteDetail: (id: string) => Promise<void>;
++  loadRouteDetail: (id: string) => Promise<RouteDetailState>;
+ 
+   // CRUD
+   addRoute: (
+@@ -173,7 +212,7 @@
+     },
+   ) => Promise<string | null>;
+   updateRoute: (id: string, updates: Partial<Route>) => Promise<void>;
+-  deleteRoute: (id: string) => Promise<void>;
++  deleteRoute: (id: string) => Promise<RouteDeleteResult>;
+   retryRouteSync: (id: string) => Promise<void>;
+ 
+   // O1 batch 35: removed addWaypoint, removeWaypoint (0 external callers — waypoint UI not built),
+@@ -184,49 +223,119 @@
+ 
+ export const useRouteStore = create<RouteStore>((set, get) => ({
+   routes: [],
++  routeOwnerId: null,
+   // The first list request begins when Trails mounts. Starting in loading
+   // prevents an empty-library flash before cache/server truth is known.
+   routesLoading: true,
+   routesLoadError: false,
++  routeDetailState: {},
+   // Sprint 69 STORY-00538: initial empty until first loadCircleRoutes().
+   circleRoutes: [],
+   loadingCircleRoutes: false,
+   followingRouteId: null,
++  activityRouteReference: null,
+ 
+   setFollowingRoute: (id) => set({ followingRouteId: id }),
++  captureActivityRouteReference: (id) => {
++    if (!id) {
++      set({ activityRouteReference: null });
++      return null;
++    }
++    const route = get().routes.find(item => routeMatchesIdentity(item, id));
++    if (!route || route.points.length < 2) return null;
++    const snapshot = cloneActivityRouteReference(route);
++    set({ activityRouteReference: snapshot });
++    return snapshot;
++  },
++  clearActivityRouteReference: () => set({ activityRouteReference: null }),
+ 
+   loadRoutes: async () => {
+-    set({ routesLoading: true, routesLoadError: false });
+     const ownerId = currentUserId();
+-    const [cached, queued] = await Promise.all([
++    if (get().routeOwnerId !== ownerId) {
++      detailRequestSequence += 1;
++      set({
++        routes: [],
++        routeOwnerId: ownerId || null,
++        activityRouteReference: null,
++        followingRouteId: null,
++        routeDetailState: {},
++        routesLoading: true,
++        routesLoadError: false,
++      });
++    } else {
++      set({ routesLoading: true, routesLoadError: false });
++    }
++    const [cached, queued, tombstoneRecords] = await Promise.all([
+       readRouteCache(ownerId),
+       offlineRoutes.listPending(),
++      listRouteTombstones(ownerId),
+     ]);
+-    const queuedRoutes = queued.map(pendingRoute);
++    const tombstonedClientIds = new Set(tombstoneRecords.map(item => item.clientRouteId));
++    const tombstonedRemoteIds = new Set(tombstoneRecords.map(item => item.remoteId).filter(Boolean) as string[]);
++    const hidden = (route: Route) => routeIdentityKeys(route).some(identity => (
++      tombstonedClientIds.has(identity) || tombstonedRemoteIds.has(identity)
++    ));
++    const queuedRoutes = queued.map(pendingRoute).filter(route => !hidden(route));
+     const queuedIds = new Set(queuedRoutes.map(route => route.id));
+-    const local = [...queuedRoutes, ...cached.filter(route => !queuedIds.has(route.id))];
+-    if (local.length > 0) set({ routes: local });
++    const cachedLocal = cached.filter(route => !queuedIds.has(route.id) && !hidden(route));
++    const durableIdentities = new Set([...queuedRoutes, ...cachedLocal].flatMap(routeIdentityKeys));
++    const retainedMemory = get().routes.filter(route => (
++      !hidden(route) && !routeIdentityKeys(route).some(identity => durableIdentities.has(identity))
++    ));
++    const local = [...queuedRoutes, ...cachedLocal, ...retainedMemory];
++    if (currentUserId() === ownerId) set({ routes: local });
++    // Reconcile durable local deletes without blocking cached Route use.
++    void Promise.all(tombstoneRecords.filter(item => !item.remoteDeleted).map(async item => {
++      try {
++        try {
++          await deleteRouteByClientId(item.clientRouteId);
++        } catch {
++          if (!item.remoteId) throw new Error('route_delete_waiting_for_server_identity');
++          await apiDeleteRoute(item.remoteId);
++        }
++        await markRouteRemoteDeleted(ownerId, item.clientRouteId);
++      } catch {
++        // The tombstone stays authoritative locally and retries on next load.
++      }
++    }));
+     try {
+       const remote = await fetchRoutes();
+-      const existingByRemoteId = new Map<string, Route>();
++      if (currentUserId() !== ownerId) return;
++      const existingByIdentity = new Map<string, Route>();
+       for (const route of get().routes) {
+-        existingByRemoteId.set(route.remoteId ?? route.id, route);
++        for (const identity of routeIdentityKeys(route)) existingByIdentity.set(identity, route);
+       }
+       // List responses intentionally omit heavy geometry. Preserve a detail
+       // snapshot already loaded for Route use instead of replacing it with an
+       // empty list-row projection during a background refresh.
+-      const remoteWithLocalDetail = remote.map(route => {
+-        const existing = existingByRemoteId.get(route.id);
++      const remoteWithLocalDetail: Route[] = remote.filter(route => !hidden(route)).map(route => {
++        const existing = routeIdentityKeys(route)
++          .map(identity => existingByIdentity.get(identity))
++          .find(Boolean);
+         if (!existing) return route;
+-        return {
++        const remoteHasDurableOrigin = route.originPersistence === 'durable';
++        const mergedRoute: Route = {
++          ...existing,
+           ...route,
+-          // Keep the stable local identity and minimal origin handoff. The
+-          // current server schema does not round-trip these fields yet.
++          // Stable local identity survives a fast server acknowledgement and
++          // later list refresh. Modern server provenance is authoritative;
++          // an old server is labelled local-only rather than silently erased.
+           id: existing.id,
+-          remoteId: existing.remoteId ?? route.id,
+-          originActivityClientId: existing.originActivityClientId,
+-          originActivityServerId: existing.originActivityServerId,
+-          originActivityGapReconnected: existing.originActivityGapReconnected,
++          clientRouteId: existing.clientRouteId ?? route.clientRouteId,
++          remoteId: route.remoteId ?? route.id,
++          originActivityClientId: remoteHasDurableOrigin
++            ? route.originActivityClientId
++            : existing.originActivityClientId,
++          originActivityServerId: remoteHasDurableOrigin
++            ? route.originActivityServerId
++            : existing.originActivityServerId,
++          originActivityGapReconnected: remoteHasDurableOrigin
++            ? route.originActivityGapReconnected
++            : existing.originActivityGapReconnected,
++          creationOrigin: remoteHasDurableOrigin ? route.creationOrigin : existing.creationOrigin,
++          originPersistence: remoteHasDurableOrigin
++            ? 'durable'
++            : (existing.creationOrigin ? 'legacy-local' : 'unknown'),
+           ...(route.points.length < 2 && existing.points.length >= 2
+             ? {
+                 points: existing.points.map(point => ({ ...point })),
+@@ -236,16 +345,18 @@
+               }
+             : {}),
+         };
++        return mergedRoute;
+       });
+-      const remoteIds = new Set(remoteWithLocalDetail.map(route => route.remoteId ?? route.id));
++      const remoteIdentities = new Set(remoteWithLocalDetail.flatMap(routeIdentityKeys));
+       const stillLocal = queuedRoutes.filter(route =>
+-        !route.remoteId || !remoteIds.has(route.remoteId));
++        !routeIdentityKeys(route).some(identity => remoteIdentities.has(identity)));
+       const merged = [...stillLocal, ...remoteWithLocalDetail];
++      if (currentUserId() !== ownerId) return;
+       set({ routes: merged, routesLoading: false, routesLoadError: false });
+       await persistRouteCache(merged, ownerId);
+     } catch (err) {
+       crashLogger.breadcrumb(`route:load:offline_cache count=${local.length}`);
+-      set({ routesLoading: false, routesLoadError: true });
++      if (currentUserId() === ownerId) set({ routesLoading: false, routesLoadError: true });
+     }
+   },
+ 
+@@ -289,18 +400,77 @@
+   },
+ 
+   loadRouteDetail: async (id) => {
+-    const existing = get().routes.find(route => route.id === id || route.remoteId === id);
++    const ownerId = currentUserId();
++    const requestId = ++detailRequestSequence;
++    const existing = get().routes.find(route => routeMatchesIdentity(route, id));
+     const stableId = existing?.id ?? id;
+-    const detail = await fetchRouteDetail(existing?.remoteId ?? id);
+-    if (!detail) return;
+-    set((s) => ({
+-      routes: s.routes.map(r => r.id === stableId ? { ...r, ...detail, id: stableId } : r),
+-    }));
++    if (existing && existing.points.length >= 2 && !existing.remoteId) {
++      set(state => ({ routeDetailState: { ...state.routeDetailState, [stableId]: 'ready' } }));
++      return 'ready';
++    }
++    const remoteTarget = existing?.remoteId ?? (/^\d+$/.test(id) ? id : null);
++    if (!remoteTarget) {
++      set(state => ({ routeDetailState: { ...state.routeDetailState, [stableId]: existing ? 'ready' : 'not-found' } }));
++      return existing ? 'ready' : 'not-found';
++    }
++    set(state => ({ routeDetailState: { ...state.routeDetailState, [stableId]: 'loading' } }));
++    try {
++      const detail = await fetchRouteDetail(remoteTarget);
++      if (requestId !== detailRequestSequence || currentUserId() !== ownerId) return 'idle';
++      if (!detail) {
++        const fallback = get().routes.find(route => routeMatchesIdentity(route, stableId));
++        const result: RouteDetailState = fallback ? 'ready' : 'not-found';
++        set(state => ({ routeDetailState: { ...state.routeDetailState, [stableId]: result } }));
++        return result;
++      }
++      const clientIdentity = existing?.clientRouteId ?? detail.clientRouteId;
++      if (clientIdentity && await isRouteTombstoned(ownerId, clientIdentity)) {
++        set(state => ({ routeDetailState: { ...state.routeDetailState, [stableId]: 'not-found' } }));
++        return 'not-found';
++      }
++      const durableOrigin = detail.originPersistence === 'durable';
++      set((state) => {
++        if (currentUserId() !== ownerId) return state;
++        const current = state.routes.find(route => routeMatchesIdentity(route, stableId));
++        const merged: Route = {
++          ...(current ?? detail),
++          ...detail,
++          id: current?.id ?? stableId,
++          clientRouteId: current?.clientRouteId ?? detail.clientRouteId,
++          remoteId: detail.remoteId ?? remoteTarget,
++          creationOrigin: durableOrigin ? detail.creationOrigin : current?.creationOrigin,
++          originActivityClientId: durableOrigin ? detail.originActivityClientId : current?.originActivityClientId,
++          originActivityServerId: durableOrigin ? detail.originActivityServerId : current?.originActivityServerId,
++          originActivityGapReconnected: durableOrigin
++            ? detail.originActivityGapReconnected
++            : current?.originActivityGapReconnected,
++          originPersistence: durableOrigin
++            ? 'durable'
++            : (current?.creationOrigin ? 'legacy-local' : 'unknown'),
++        };
++        return {
++          routes: current
++            ? state.routes.map(route => routeMatchesIdentity(route, stableId) ? merged : route)
++            : [merged, ...state.routes],
++          routeDetailState: { ...state.routeDetailState, [merged.id]: 'ready' },
++        };
++      });
++      await persistRouteCache(get().routes, ownerId);
++      return 'ready';
++    } catch {
++      if (requestId !== detailRequestSequence || currentUserId() !== ownerId) return 'idle';
++      const fallback = get().routes.find(route => routeMatchesIdentity(route, stableId));
++      const result: RouteDetailState = fallback ? 'ready' : 'error';
++      set(state => ({ routeDetailState: { ...state.routeDetailState, [stableId]: result } }));
++      return result;
++    }
+   },
+ 
+   addRoute: async (routeData, sourceActivity) => {
+     const ownerId = currentUserId();
+     if (!ownerId) throw new Error('route owner unavailable');
++    if (get().routeOwnerId && get().routeOwnerId !== ownerId) throw new Error('route owner changed');
++    if (!get().routeOwnerId) set({ routeOwnerId: ownerId });
+     // Route is a new product object. Copy every nested collection so later
+     // Activity enhancement or editor state cannot mutate its geometry.
+     const routeSnapshot = {
+@@ -309,6 +479,8 @@
+       originActivityServerId: sourceActivity?.serverActivityId ?? routeData.originActivityServerId,
+       originActivityGapReconnected: sourceActivity?.reconnectsActivityGap
+         ?? routeData.originActivityGapReconnected,
++      creationOrigin: sourceActivity ? 'activity' as const : (routeData.creationOrigin ?? 'manual' as const),
++      originPersistence: 'pending' as const,
+       points: routeData.points.map(point => ({ ...point })),
+       originalPoints: routeData.originalPoints?.map(point => ({ ...point })),
+       segments: routeData.segments?.map(segment => ({ ...segment })),
+@@ -319,6 +491,7 @@
+     const route: Route = {
+       ...routeSnapshot,
+       id: saved.localId,
++      clientRouteId: saved.localId,
+       createdAt: saved.savedAt,
+       updatedAt: saved.savedAt,
+       runCount: 0,
+@@ -337,90 +510,143 @@
+   },
+ 
+   updateRoute: async (id, updates) => {
+-    // v10-audit (BUG-EH-1): snapshot pre-update state so we can roll
+-    // back optimistic mutation if backend rejects. Prior code left the
+-    // store with unsynced data on failure.
+-    const prevRoute = get().routes.find(r => r.id === id);
+-    // Optimistic local update
+-    set((s) => ({
+-      routes: s.routes.map(r =>
+-        r.id === id ? { ...r, ...updates, updatedAt: Date.now() } : r
+-      ),
+-    }));
+-    const localOnly = prevRoute && !prevRoute.remoteId && !/^\d+$/.test(prevRoute.id);
+-    if (localOnly) {
+-      await offlineRoutes.updateLocal(id, data => ({
++    const ownerId = currentUserId();
++    const prevRoute = get().routes.find(route => routeMatchesIdentity(route, id));
++    if (!prevRoute) throw new Error('route_not_found');
++    const acceptedUpdates: Partial<Route> = { ...updates };
++    delete acceptedUpdates.id;
++    delete acceptedUpdates.remoteId;
++    delete acceptedUpdates.clientRouteId;
++    delete acceptedUpdates.creationOrigin;
++    delete acceptedUpdates.originActivityClientId;
++    delete acceptedUpdates.originActivityServerId;
++    delete acceptedUpdates.originGeometryHash;
++    delete acceptedUpdates.createdGeometryHash;
++    delete acceptedUpdates.originPersistence;
++    const nextLocal: Route = {
++      ...prevRoute,
++      ...acceptedUpdates,
++      updatedAt: Date.now(),
++      geometryEditedSinceCreation: acceptedUpdates.points
++        ? true
++        : prevRoute.geometryEditedSinceCreation,
++    };
++    const clientId = prevRoute.clientRouteId ?? (!prevRoute.remoteId && !/^\d+$/.test(prevRoute.id) ? prevRoute.id : undefined);
++    if (clientId) {
++      const changed = await offlineRoutes.updateLocal(clientId, data => ({
+         ...data,
+-        route: { ...data.route, ...updates },
+-      }));
+-      if (prevRoute.syncState === 'failed') await offlineRoutes.retry(id);
+-      await persistRouteCache(get().routes);
+-      return;
+-    }
+-    // Sync to backend
+-    const route = get().routes.find(r => r.id === id);
+-    if (route) {
+-      try {
+-        const updated = await apiUpdateRoute(route.remoteId ?? id, {
+-          name: route.name,
+-          description: route.description,
+-          points: route.points,
+-          waypoints: route.waypoints,
+-          distance_m: route.distanceM,
+-          elevation_gain_m: route.elevationGainM,
+-          ...Object.fromEntries(
+-            Object.entries(updates).map(([k, v]) => {
+-              if (k === 'distanceM') return ['distance_m', v];
+-              if (k === 'elevationGainM') return ['elevation_gain_m', v];
+-              return [k, v];
+-            })
+-          ),
+-        });
+-        if (!updated) throw new Error('route update was not accepted');
+-      } catch (err) {
+-        // v10-audit (BUG-EH-1): roll back optimistic update.
+-        if (prevRoute) {
+-          set((s) => ({
+-            routes: s.routes.map(r => r.id === id ? prevRoute : r),
+-          }));
+-        }
+-        throw err;
++        route: { ...data.route, ...acceptedUpdates },
++      }), ownerId);
++      if (changed) {
++        if (currentUserId() !== ownerId) throw new Error('route_owner_changed');
++        set(state => ({
++          routes: state.routes.map(route => routeMatchesIdentity(route, prevRoute.id)
++            ? { ...nextLocal, syncState: 'pending' }
++            : route),
++        }));
++        if (prevRoute.syncState === 'failed') await offlineRoutes.retry(clientId, ownerId);
++        await persistRouteCache(get().routes, ownerId);
++        return;
+       }
+     }
+-    await persistRouteCache(get().routes);
++
++    const remoteId = prevRoute.remoteId ?? (/^\d+$/.test(prevRoute.id) ? prevRoute.id : null);
++    if (!remoteId) throw new Error('route_remote_identity_unavailable');
++    const payload: Parameters<typeof apiUpdateRoute>[1] = {};
++    if (acceptedUpdates.name !== undefined) payload.name = acceptedUpdates.name;
++    if (acceptedUpdates.description !== undefined) payload.description = acceptedUpdates.description;
++    if (acceptedUpdates.points !== undefined) payload.points = acceptedUpdates.points;
++    if (acceptedUpdates.waypoints !== undefined) payload.waypoints = acceptedUpdates.waypoints;
++    if (acceptedUpdates.distanceM !== undefined) payload.distance_m = acceptedUpdates.distanceM;
++    if (acceptedUpdates.elevationGainM !== undefined) payload.elevation_gain_m = acceptedUpdates.elevationGainM;
++    if (acceptedUpdates.permission !== undefined) payload.permission = acceptedUpdates.permission;
++    const updated = await apiUpdateRoute(remoteId, payload);
++    if (!updated) throw new Error('route update was not accepted');
++    if (currentUserId() !== ownerId) throw new Error('route_owner_changed');
++    const stillCurrent = get().routes.find(route => routeMatchesIdentity(route, prevRoute.id));
++    if (!stillCurrent) throw new Error('route_no_longer_available');
++    set(state => ({
++      routes: state.routes.map(route => routeMatchesIdentity(route, prevRoute.id)
++        ? {
++            ...nextLocal,
++            ...updated,
++            id: prevRoute.id,
++            clientRouteId: prevRoute.clientRouteId ?? updated.clientRouteId,
++            remoteId,
++            syncState: 'synced',
++            creationOrigin: updated.originPersistence === 'durable'
++              ? updated.creationOrigin
++              : prevRoute.creationOrigin,
++            originActivityClientId: updated.originPersistence === 'durable'
++              ? updated.originActivityClientId
++              : prevRoute.originActivityClientId,
++            originActivityServerId: updated.originPersistence === 'durable'
++              ? updated.originActivityServerId
++              : prevRoute.originActivityServerId,
++            originActivityGapReconnected: updated.originPersistence === 'durable'
++              ? updated.originActivityGapReconnected
++              : prevRoute.originActivityGapReconnected,
++            originGeometryHash: updated.originPersistence === 'durable'
++              ? updated.originGeometryHash
++              : prevRoute.originGeometryHash,
++            createdGeometryHash: updated.originPersistence === 'durable'
++              ? updated.createdGeometryHash
++              : prevRoute.createdGeometryHash,
++            originPersistence: updated.originPersistence === 'durable'
++              ? 'durable'
++              : (prevRoute.originPersistence === 'durable' ? 'durable' : 'legacy-local'),
++          }
++        : route),
++    }));
++    await persistRouteCache(get().routes, ownerId);
+   },
+ 
+   deleteRoute: async (id) => {
+     crashLogger.breadcrumb(`route:delete:start id=${id}`);
+-    // O1 (2026-07-26): 删除 PENDING_PREFIX (@cairn:pending_route_cleanup:v2:)
+-    // write-only 标记。用户明确说 "删除是毫秒级操作,没理由要 note 也不
+-    // 需要考虑崩溃"。原设计: setItem 前 + removeItem 后 走 pending 标记,
+-    // 便于 boot drain 补齐失败的 cascade。但 boot drain 从未实现,标记只
+-    // 写不读,纯废动作。
+-    const before = get().routes.find(r => r.id === id);
+-    if (before && !before.remoteId && !/^\d+$/.test(before.id)) {
+-      await offlineRoutes.discard(before.id);
+-      set((s) => ({ routes: s.routes.filter(route => route.id !== id) }));
+-      await persistRouteCache(get().routes);
+-      return;
+-    }
+-    let backendOk = false;
+-    try {
+-      backendOk = await apiDeleteRoute(before?.remoteId ?? id);
+-      crashLogger.breadcrumb(`route:delete:remote-ok id=${id}`);
+-    } catch (err) {
+-      crashLogger.breadcrumb(`route:delete:remote-error ${String(err).slice(0, 80)}`);
+-    }
+-    if (!backendOk) {
+-      return;
++    const before = get().routes.find(route => routeMatchesIdentity(route, id));
++    if (!before) throw new Error('route_not_found');
++    const ownerId = currentUserId();
++    if (!ownerId) throw new Error('route_owner_required');
++    const clientId = before.clientRouteId ?? (!before.remoteId && !/^\d+$/.test(before.id) ? before.id : undefined);
++    const remoteId = before.remoteId ?? (/^\d+$/.test(before.id) ? before.id : undefined);
++    let result: RouteDeleteResult;
++    if (clientId) {
++      await tombstoneRoute(ownerId, clientId, remoteId);
++      try { await offlineRoutes.discard(clientId, ownerId); } catch { /* tombstone still wins */ }
++      if (currentUserId() !== ownerId) throw new Error('route_owner_changed_after_delete');
++      set((state) => ({
++        routes: state.routes.filter(route => !routeMatchesIdentity(route, before.id)),
++        followingRouteId: state.followingRouteId && routeMatchesIdentity(before, state.followingRouteId)
++          ? null
++          : state.followingRouteId,
++      }));
++      await persistRouteCache(get().routes, ownerId);
++      try {
++        try {
++          await deleteRouteByClientId(clientId);
++        } catch {
++          if (!remoteId) throw new Error('route_delete_queued');
++          await apiDeleteRoute(remoteId);
++        }
++        await markRouteRemoteDeleted(ownerId, clientId);
++        result = { remoteState: remoteId ? 'deleted' : 'not-needed' };
++      } catch (error) {
++        crashLogger.breadcrumb(`route:delete:remote-queued ${String(error).slice(0, 80)}`);
++        result = { remoteState: 'queued' };
++      }
++    } else {
++      if (!remoteId) throw new Error('route_delete_identity_missing');
++      await apiDeleteRoute(remoteId);
++      if (currentUserId() !== ownerId) throw new Error('route_owner_changed_after_delete');
++      set(state => ({
++        routes: state.routes.filter(route => !routeMatchesIdentity(route, before.id)),
++        followingRouteId: state.followingRouteId && routeMatchesIdentity(before, state.followingRouteId)
++          ? null
++          : state.followingRouteId,
++      }));
++      await persistRouteCache(get().routes, ownerId);
++      result = { remoteState: 'deleted' };
+     }
+-    set((s) => ({
+-      routes: s.routes.filter(r => r.id !== id),
+-      // If the deleted route was being followed, drop the follow so the
+-      // Hiking/Running screens don't hold a dangling id.
+-      followingRouteId: s.followingRouteId === id ? null : s.followingRouteId,
+-    }));
+-    await persistRouteCache(get().routes);
+     try {
+       const { deleteExtras } = await import('../services/LocalRouteExtras');
+       await deleteExtras(id);
+@@ -461,8 +687,7 @@
+     } catch (err) {
+       crashLogger.breadcrumb(`route:delete:session-error ${String(err).slice(0, 80)}`);
+     }
+-    void before;
+-    return;
++    return result;
+   },
+   retryRouteSync: async (id) => {
+     const route = get().routes.find(item => item.id === id);
+@@ -471,7 +696,9 @@
+     if (!queued) return;
+     set(state => ({
+       routes: state.routes.map(item =>
+-        item.id === id ? { ...item, syncState: 'pending' } : item),
++        item.id === id
++          ? { ...item, syncState: 'pending', syncErrorCode: undefined, syncErrorMessage: undefined }
++          : item),
+     }));
+     await persistRouteCache(get().routes);
+   },
+@@ -484,30 +711,74 @@
+ setRouteCreateHandlers(
+   async (localId, server, data, ownerId) => {
+     if (currentUserId() !== ownerId) return;
++    if (await isRouteTombstoned(ownerId, localId)) {
++      try {
++        await deleteRouteByClientId(localId);
++      } catch {
++        if (server.remoteId ?? server.id) await apiDeleteRoute(server.remoteId ?? server.id);
++      }
++      return;
++    }
++    const latestEntry = await offlineRoutes.getEntry(localId);
++    const latestData = latestEntry?.data ?? data;
++    const supersededWhileSyncing = Boolean(latestEntry && JSON.stringify(latestData.route) !== JSON.stringify(data.route));
++    if (currentUserId() !== ownerId) return;
+     useRouteStore.setState(state => {
+-      const existing = state.routes.find(route => route.id === localId);
++      const existing = state.routes.find(route => routeMatchesIdentity(route, localId));
++      const durableOrigin = server.originPersistence === 'durable';
++      const base: Route = existing ?? {
++        ...latestData.route,
++        id: localId,
++        clientRouteId: localId,
++        createdAt: server.createdAt ?? Date.now(),
++        updatedAt: server.updatedAt ?? Date.now(),
++        runCount: server.runCount ?? 0,
++        isActive: false,
++      };
+       const synced: Route = {
+-        ...(existing ?? data.route),
+-        ...server,
++        ...base,
++        ...(supersededWhileSyncing ? {} : server),
+         // Keep the local identity stable for an already-open detail/editor.
+         id: localId,
+-        remoteId: server.id,
+-        syncState: 'synced',
++        clientRouteId: server.clientRouteId ?? existing?.clientRouteId ?? localId,
++        remoteId: server.remoteId ?? server.id,
++        syncState: supersededWhileSyncing ? 'pending' : 'synced',
++        syncErrorCode: undefined,
++        syncErrorMessage: undefined,
+         isActive: existing?.isActive ?? false,
++        creationOrigin: durableOrigin
++          ? server.creationOrigin
++          : (existing?.creationOrigin ?? (latestData.sourceActivity ? 'activity' : 'manual')),
++        originActivityClientId: durableOrigin
++          ? server.originActivityClientId
++          : (existing?.originActivityClientId ?? latestData.sourceActivity?.clientActivityId),
++        originActivityServerId: durableOrigin
++          ? server.originActivityServerId
++          : (existing?.originActivityServerId ?? latestData.sourceActivity?.serverActivityId),
++        originActivityGapReconnected: durableOrigin
++          ? server.originActivityGapReconnected
++          : (existing?.originActivityGapReconnected ?? latestData.sourceActivity?.reconnectsActivityGap),
++        originPersistence: durableOrigin ? 'durable' : 'legacy-local',
+       };
+       return {
+         routes: existing
+-          ? state.routes.map(route => route.id === localId ? synced : route)
++          ? state.routes.map(route => routeMatchesIdentity(route, localId) ? synced : route)
+           : [synced, ...state.routes],
+       };
+     });
+     await persistRouteCache(useRouteStore.getState().routes, ownerId);
+   },
+-  (localId, _error, ownerId) => {
++  (localId, error: any, ownerId) => {
+     if (currentUserId() !== ownerId) return;
+     useRouteStore.setState(state => ({
+-      routes: state.routes.map(route =>
+-        route.id === localId ? { ...route, syncState: 'failed' } : route),
++      routes: state.routes.map(route => route.id === localId
++        ? {
++            ...route,
++            syncState: 'failed',
++            syncErrorCode: typeof error?.code === 'string' ? error.code : undefined,
++            syncErrorMessage: String(error?.message ?? error).slice(0, 120),
++          }
++        : route),
+     }));
+     void persistRouteCache(useRouteStore.getState().routes, ownerId);
+   },
+
+--- a/app/src/store/__tests__/useRouteStore.offline.test.ts
++++ b/app/src/store/__tests__/useRouteStore.offline.test.ts
+@@ -1,4 +1,5 @@
+ const mockStorage = new Map<string, string>();
++let mockOwnerId = 'route-owner';
+ 
+ jest.mock('@react-native-async-storage/async-storage', () => ({
+   __esModule: true,
+@@ -14,18 +15,26 @@
+ }));
+ jest.mock('../../services/crashLogger', () => ({ crashLogger: { breadcrumb: jest.fn() } }));
+ jest.mock('../useAppStore', () => ({
+-  useAppStore: { getState: () => ({ user: { id: 'route-owner' } }) },
++  useAppStore: { getState: () => ({ user: mockOwnerId ? { id: mockOwnerId } : null }) },
+ }));
+ jest.mock('../../services/routeService', () => ({
+   fetchRoutes: jest.fn(async () => { throw new Error('offline'); }),
+   fetchRouteDetail: jest.fn(async () => null),
+   createRoute: jest.fn(async () => { throw new Error('network unavailable'); }),
+   updateRoute: jest.fn(async () => null),
+-  deleteRoute: jest.fn(async () => false),
++  deleteRoute: jest.fn(async () => true),
++  deleteRouteByClientId: jest.fn(async () => true),
+ }));
+ 
+ import { offlineRoutes } from '../../services/routeOfflineEntities';
+-import { createRoute, fetchRouteDetail } from '../../services/routeService';
++import {
++  createRoute,
++  deleteRoute as deleteRemoteRoute,
++  deleteRouteByClientId,
++  fetchRouteDetail,
++  fetchRoutes,
++  updateRoute,
++} from '../../services/routeService';
+ import { useRouteStore } from '../useRouteStore';
+ 
+ const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+@@ -33,7 +42,22 @@
+ describe('offline Route creation', () => {
+   beforeEach(() => {
+     mockStorage.clear();
+-    useRouteStore.setState({ routes: [], routesLoading: false, routesLoadError: false });
++    mockOwnerId = 'route-owner';
++    jest.clearAllMocks();
++    jest.mocked(createRoute).mockRejectedValue(new Error('network unavailable'));
++    jest.mocked(fetchRoutes).mockRejectedValue(new Error('offline'));
++    jest.mocked(fetchRouteDetail).mockResolvedValue(null);
++    jest.mocked(updateRoute).mockResolvedValue(null);
++    jest.mocked(deleteRemoteRoute).mockResolvedValue(true);
++    jest.mocked(deleteRouteByClientId).mockResolvedValue(true);
++    useRouteStore.setState({
++      routes: [],
++      routeOwnerId: 'route-owner',
++      routesLoading: false,
++      routesLoadError: false,
++      routeDetailState: {},
++      activityRouteReference: null,
++    });
+   });
+ 
+   test('commits an independent local Route before server acknowledgement', async () => {
+@@ -54,6 +78,7 @@
+     expect(id).toEqual(expect.any(String));
+     expect(useRouteStore.getState().routes[0]).toMatchObject({
+       id,
++      clientRouteId: id,
+       name: 'Ridge return',
+       syncState: 'pending',
+     });
+@@ -136,6 +161,7 @@
+ 
+   test('a server load failure preserves local Routes and exposes honest load state', async () => {
+     useRouteStore.setState({
++      routeOwnerId: 'route-owner',
+       routes: [{
+         id: 'local-route',
+         name: 'Local ridge',
+@@ -159,6 +185,196 @@
+     ]));
+   });
+ 
++  test('pending edits update durable create payload before visible truth', async () => {
++    const id = await useRouteStore.getState().addRoute({
++      name: 'Original',
++      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
++      waypoints: [],
++      distanceM: 140,
++      elevationGainM: 8,
++    });
++
++    await useRouteStore.getState().updateRoute(id!, { name: 'Durable draft' });
++
++    expect((await offlineRoutes.getEntry(id!))?.data.route.name).toBe('Durable draft');
++    expect(useRouteStore.getState().routes[0]).toMatchObject({
++      id,
++      name: 'Durable draft',
++      syncState: 'pending',
++    });
++  });
++
++  test('synced update waits for acknowledgement and retains accepted truth on failure', async () => {
++    const route = {
++      id: 'stable-client', clientRouteId: 'stable-client', remoteId: '42',
++      name: 'Accepted', createdAt: 1, updatedAt: 1,
++      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
++      waypoints: [], distanceM: 140, elevationGainM: 8, runCount: 0,
++      isActive: false, syncState: 'synced' as const,
++    };
++    useRouteStore.setState({ routes: [route] });
++    jest.mocked(updateRoute).mockRejectedValueOnce(new Error('offline'));
++
++    await expect(useRouteStore.getState().updateRoute(route.id, { name: 'Draft' })).rejects.toThrow('offline');
++    expect(useRouteStore.getState().routes[0].name).toBe('Accepted');
++
++    jest.mocked(updateRoute).mockResolvedValueOnce({ ...route, id: '42', remoteId: '42', name: 'Draft' });
++    await useRouteStore.getState().updateRoute(route.id, { name: 'Draft' });
++    expect(useRouteStore.getState().routes[0]).toMatchObject({ id: 'stable-client', remoteId: '42', name: 'Draft' });
++  });
++
++  test('an old-backend update preserves local origin without claiming durable provenance', async () => {
++    const route = {
++      id: 'stable-client', clientRouteId: 'stable-client', remoteId: '42',
++      name: 'Accepted', createdAt: 1, updatedAt: 1,
++      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
++      waypoints: [], distanceM: 140, elevationGainM: 8, runCount: 0,
++      isActive: false, syncState: 'synced' as const,
++      creationOrigin: 'activity' as const,
++      originActivityClientId: 'activity-client',
++      originPersistence: 'legacy-local' as const,
++    };
++    useRouteStore.setState({ routes: [route] });
++    jest.mocked(updateRoute).mockResolvedValueOnce({
++      ...route,
++      id: '42',
++      clientRouteId: undefined,
++      creationOrigin: 'legacy_unknown',
++      originActivityClientId: undefined,
++      originPersistence: 'unknown',
++      name: 'Renamed',
++    });
++
++    await useRouteStore.getState().updateRoute(route.id, { name: 'Renamed' });
++
++    expect(useRouteStore.getState().routes[0]).toMatchObject({
++      id: 'stable-client',
++      name: 'Renamed',
++      creationOrigin: 'activity',
++      originActivityClientId: 'activity-client',
++      originPersistence: 'legacy-local',
++    });
++  });
++
++  test('permanent source failure stays local and is not presented as retryable connectivity', async () => {
++    jest.mocked(createRoute).mockRejectedValueOnce(Object.assign(
++      new Error('Source Activity no longer exists.'),
++      { status: 410, code: 'SOURCE_ACTIVITY_DELETED' },
++    ));
++    const id = await useRouteStore.getState().addRoute({
++      name: 'Independent local copy',
++      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
++      waypoints: [], distanceM: 140, elevationGainM: 8,
++    }, { clientActivityId: 'deleted-activity' });
++    await settle();
++    await settle();
++
++    expect(useRouteStore.getState().routes[0]).toMatchObject({
++      id,
++      syncState: 'failed',
++      syncErrorCode: 'SOURCE_ACTIVITY_DELETED',
++    });
++    expect((await offlineRoutes.getEntry(id!))?.lastErrorCode).toBe('SOURCE_ACTIVITY_DELETED');
++  });
++
++  test('legacy synced delete waits for acknowledgement and retains Route on failure', async () => {
++    const route = {
++      id: '42', remoteId: '42', name: 'Legacy server Route',
++      createdAt: 1, updatedAt: 1,
++      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
++      waypoints: [], distanceM: 140, elevationGainM: 8, runCount: 0,
++      isActive: false, syncState: 'synced' as const,
++    };
++    useRouteStore.setState({ routes: [route] });
++    jest.mocked(deleteRemoteRoute).mockRejectedValueOnce(new Error('offline'));
++    await expect(useRouteStore.getState().deleteRoute(route.id)).rejects.toThrow('offline');
++    expect(useRouteStore.getState().routes).toHaveLength(1);
++
++    jest.mocked(deleteRemoteRoute).mockResolvedValueOnce(true);
++    await useRouteStore.getState().deleteRoute(route.id);
++    expect(useRouteStore.getState().routes).toHaveLength(0);
++  });
++
++  test('durable delete prevents a late create acknowledgement from resurrecting the Route', async () => {
++    let resolveCreate!: (route: any) => void;
++    jest.mocked(createRoute).mockReturnValueOnce(new Promise(resolve => { resolveCreate = resolve; }));
++    const id = await useRouteStore.getState().addRoute({
++      name: 'Delete me',
++      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
++      waypoints: [], distanceM: 140, elevationGainM: 8,
++    });
++    await settle();
++    await useRouteStore.getState().deleteRoute(id!);
++    expect(useRouteStore.getState().routes).toHaveLength(0);
++    resolveCreate({
++      id: '99', remoteId: '99', clientRouteId: id!, name: 'Delete me',
++      createdAt: 1, updatedAt: 1,
++      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
++      waypoints: [], distanceM: 140, elevationGainM: 8, runCount: 0, isActive: false,
++    });
++    await settle();
++    await settle();
++    expect(useRouteStore.getState().routes).toHaveLength(0);
++  });
++
++  test('an active Activity keeps an independent Route reference snapshot', () => {
++    const route = {
++      id: 'snapshot-route', clientRouteId: 'snapshot-route', name: 'Reference',
++      createdAt: 1, updatedAt: 1,
++      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
++      waypoints: [], distanceM: 140, elevationGainM: 8, runCount: 0, isActive: false,
++    };
++    useRouteStore.setState({ routes: [route] });
++    const snapshot = useRouteStore.getState().captureActivityRouteReference(route.id);
++    route.points[0].lat = 0;
++    useRouteStore.setState({ routes: [{ ...route, points: [{ lat: 1, lng: 1 }, ...route.points.slice(1)] }] });
++    expect(snapshot?.points[0].lat).toBe(-43);
++    expect(useRouteStore.getState().activityRouteReference?.points[0].lat).toBe(-43);
++  });
++
++  test('server acknowledgement discovered by list deduplicates the pending local identity', async () => {
++    const id = await useRouteStore.getState().addRoute({
++      name: 'Response lost',
++      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
++      waypoints: [], distanceM: 140, elevationGainM: 8,
++    });
++    jest.mocked(fetchRoutes).mockResolvedValueOnce([{
++      id: '88', remoteId: '88', clientRouteId: id!, name: 'Response lost',
++      creationOrigin: 'manual', originPersistence: 'durable',
++      createdAt: 1, updatedAt: 2, points: [], waypoints: [],
++      distanceM: 140, elevationGainM: 8, runCount: 0, isActive: false,
++    }]);
++
++    await useRouteStore.getState().loadRoutes();
++
++    expect(useRouteStore.getState().routes).toHaveLength(1);
++    expect(useRouteStore.getState().routes[0]).toMatchObject({
++      id,
++      clientRouteId: id,
++      remoteId: '88',
++      originPersistence: 'durable',
++    });
++  });
++
++  test('late detail response is dropped after an account switch', async () => {
++    let resolveDetail!: (value: any) => void;
++    jest.mocked(fetchRouteDetail).mockReturnValueOnce(new Promise(resolve => { resolveDetail = resolve; }));
++    useRouteStore.setState({ routes: [{
++      id: 'a-client', clientRouteId: 'a-client', remoteId: '42', name: 'A',
++      createdAt: 1, updatedAt: 1, points: [], waypoints: [], distanceM: 10,
++      elevationGainM: 0, runCount: 0, isActive: false,
++    }] });
++    const pending = useRouteStore.getState().loadRouteDetail('a-client');
++    mockOwnerId = 'owner-b';
++    resolveDetail({
++      id: '42', remoteId: '42', name: 'Leaked A', createdAt: 1, updatedAt: 2,
++      points: [{ lat: -43, lng: 171 }, { lat: -43.1, lng: 171.1 }], waypoints: [],
++      distanceM: 10, elevationGainM: 0, runCount: 0, isActive: false,
++    });
++    await pending;
++    expect(useRouteStore.getState().routes[0].name).toBe('A');
++  });
++
+   test('detail hydration uses remote identity while preserving the local stable ID', async () => {
+     jest.mocked(fetchRouteDetail).mockResolvedValueOnce({
+       id: '42',
+
+--- a/backend/src/middleware/schemas.js
++++ b/backend/src/middleware/schemas.js
+@@ -202,6 +202,7 @@
+ }).unknown(true); // Allow other UI-only fields (icon, id) — server ignores.
+ 
+ const routeCreate = Joi.object({
++  client_route_id: clientUuid,
+   name: Joi.string().min(1).max(100).required(),
+   points: Joi.array().items(pointObj).min(2).max(10000).required(),
+   waypoints: Joi.array().items(waypointObj).max(500).allow(null),
+@@ -216,6 +217,7 @@
+   // only while that completed Activity still exists for this owner.
+   source_activity_client_id: clientUuid,
+   source_session_id: Joi.number().integer().min(1),
++  origin_gap_reconnected: Joi.boolean(),
+ });
+ 
+ const routeUpdate = Joi.object({
+
+--- a/backend/src/models/Route.js
++++ b/backend/src/models/Route.js
+@@ -2,6 +2,7 @@
+  * Route model — wraps routes table queries.
+  */
+ const pool = require('../config/db');
++const crypto = require('crypto');
+ 
+ /**
+  * Normalise a JSON column value. mysql2 auto-parses JSON columns on
+@@ -17,10 +18,20 @@
+   return v; // already an object/array (mysql2 auto-parse)
+ }
+ 
++function geometryHash(points) {
++  const parsed = parseJsonCol(points) ?? [];
++  const canonical = parsed.map((point) => [
++    Number(point.lat.toFixed(7)),
++    Number(point.lng.toFixed(7)),
++    point.alt == null ? null : Number(point.alt.toFixed(2)),
++  ]);
++  return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
++}
++
+ const Route = {
+   async create({
+     userId, name, description, points, waypoints, distanceM, elevationGainM, permission,
+-    sourceActivityClientId, sourceSessionId,
++    clientRouteId, sourceActivityClientId, sourceSessionId, originGapReconnected,
+   }) {
+     // v120 fix: explicitly validate + stringify so mysql2 doesn't fall
+     // through to Array.toString() for the JSON column. The "[object
+@@ -34,15 +45,8 @@
+     // and rejected unknown values. Accept ('personal','friend') and default to
+     // 'personal' when undefined to preserve previous behavior.
+     const perm = permission === 'friend' ? 'friend' : 'personal';
+-    const insert = async (executor) => executor.execute(
+-      `INSERT INTO routes (user_id, name, description, points, waypoints, distance_m, elevation_gain_m, permission)
+-       VALUES (?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?)`,
+-      [userId, name, description ?? null, pointsJson, waypointsJson, distanceM ?? 0, elevationGainM ?? 0, perm],
+-    );
+-    if (!sourceActivityClientId && !sourceSessionId) {
+-      const [result] = await insert(pool);
+-      return result.insertId;
+-    }
++    const originHash = geometryHash(points);
++    const hasActivityOrigin = Boolean(sourceActivityClientId || sourceSessionId);
+ 
+     // Match Activity deletion's users-row/session-row lock order. A Route
+     // either commits before deletion (and legitimately survives it) or the
+@@ -52,27 +56,121 @@
+     try {
+       await conn.beginTransaction();
+       await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);
+-      const [activities] = sourceActivityClientId
+-        ? await conn.execute(
+-          `SELECT id FROM sessions
++      if (clientRouteId) {
++        const [tombstones] = await conn.execute(
++          `SELECT client_route_id FROM route_client_tombstones
++           WHERE user_id = ? AND client_route_id = ? FOR UPDATE`,
++          [userId, clientRouteId],
++        );
++        if (tombstones[0]) {
++          const error = new Error('Route was deleted by the client.');
++          error.code = 'ROUTE_TOMBSTONED';
++          throw error;
++        }
++      }
++
++      let sourceId = null;
++      let sourceClientId = sourceActivityClientId ?? null;
++      let sourceGeometryHash = null;
++      if (hasActivityOrigin) {
++        const [activities] = sourceActivityClientId
++          ? await conn.execute(
++          `SELECT id, client_activity_id, route_points FROM sessions
+            WHERE user_id = ? AND client_activity_id = ? AND finalized_at IS NOT NULL
+            LIMIT 1 FOR UPDATE`,
+           [userId, sourceActivityClientId],
+-        )
+-        : await conn.execute(
+-          `SELECT id FROM sessions
++          )
++          : await conn.execute(
++          `SELECT id, client_activity_id, route_points FROM sessions
+            WHERE user_id = ? AND id = ? AND finalized_at IS NOT NULL
+            LIMIT 1 FOR UPDATE`,
+           [userId, sourceSessionId],
++          );
++        if (!activities[0]) {
++          let code = 'SOURCE_ACTIVITY_NOT_FOUND';
++          if (sourceActivityClientId) {
++            const [deleted] = await conn.execute(
++              `SELECT client_activity_id FROM activity_client_tombstones
++               WHERE user_id = ? AND client_activity_id = ? LIMIT 1`,
++              [userId, sourceActivityClientId],
++            );
++            if (deleted[0]) {
++              code = 'SOURCE_ACTIVITY_DELETED';
++            } else {
++              const [known] = await conn.execute(
++                `SELECT user_id, finalized_at FROM sessions
++                 WHERE client_activity_id = ? LIMIT 1`,
++                [sourceActivityClientId],
++              );
++              if (known[0]?.user_id !== undefined && known[0].user_id !== userId) {
++                code = 'SOURCE_ACTIVITY_UNAUTHORIZED';
++              } else if (known[0] && !known[0].finalized_at) {
++                code = 'SOURCE_ACTIVITY_NOT_READY';
++              }
++            }
++          } else if (sourceSessionId) {
++            const [known] = await conn.execute(
++              'SELECT user_id, finalized_at FROM sessions WHERE id = ? LIMIT 1',
++              [sourceSessionId],
++            );
++            if (!known[0]) code = 'SOURCE_ACTIVITY_DELETED';
++            else if (known[0].user_id !== userId) code = 'SOURCE_ACTIVITY_UNAUTHORIZED';
++            else if (!known[0].finalized_at) code = 'SOURCE_ACTIVITY_NOT_READY';
++          }
++          const error = new Error(code === 'SOURCE_ACTIVITY_NOT_READY'
++            ? 'Source Activity has not completed syncing.'
++            : 'Source Activity is not available.');
++          error.code = code;
++          throw error;
++        }
++        sourceId = activities[0].id;
++        sourceClientId = activities[0].client_activity_id ?? sourceClientId;
++        sourceGeometryHash = geometryHash(activities[0].route_points ?? []);
++      }
++
++      let routeId = null;
++      if (clientRouteId) {
++        const [existing] = await conn.execute(
++          `SELECT id, created_geometry_hash FROM routes
++           WHERE user_id = ? AND client_route_id = ? LIMIT 1 FOR UPDATE`,
++          [userId, clientRouteId],
++        );
++        if (existing[0]) {
++          // A retry after response loss may carry a newer durable local draft.
++          // Converge mutable Route content while the server-owned origin fields
++          // remain immutable. This is safe because client_route_id is unique per
++          // owner and ordinary update cannot rewrite provenance.
++          const edited = existing[0].created_geometry_hash !== originHash ? 1 : 0;
++          await conn.execute(
++            `UPDATE routes
++             SET name = ?, description = ?, points = CAST(? AS JSON),
++                 waypoints = CAST(? AS JSON), distance_m = ?, elevation_gain_m = ?,
++                 permission = ?, geometry_edited_since_creation = GREATEST(geometry_edited_since_creation, ?),
++                 updated_at = NOW()
++             WHERE id = ? AND user_id = ?`,
++            [name, description ?? null, pointsJson, waypointsJson, distanceM ?? 0,
++              elevationGainM ?? 0, perm, edited, existing[0].id, userId],
++          );
++          routeId = existing[0].id;
++        }
++      }
++      if (!routeId) {
++        const [result] = await conn.execute(
++          `INSERT INTO routes
++           (user_id, client_route_id, creation_origin, source_activity_client_id,
++            source_session_id, origin_geometry_hash, created_geometry_hash, geometry_edited_since_creation,
++            origin_gap_reconnected, name, description, points, waypoints,
++            distance_m, elevation_gain_m, permission)
++           VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?)`,
++          [userId, clientRouteId ?? null, hasActivityOrigin ? 'activity' : 'manual',
++            sourceClientId, sourceId, sourceGeometryHash ?? originHash, originHash,
++            originGapReconnected ? 1 : 0, name, description ?? null, pointsJson,
++            waypointsJson, distanceM ?? 0, elevationGainM ?? 0, perm],
+         );
+-      if (!activities[0]) {
+-        const error = new Error('Source Activity not found.');
+-        error.code = 'SOURCE_ACTIVITY_NOT_FOUND';
+-        throw error;
++        routeId = result.insertId;
+       }
+-      const [result] = await insert(conn);
+       await conn.commit();
+-      return result.insertId;
++      return routeId;
+     } catch (error) {
+       try { await conn.rollback(); } catch { /* ignore */ }
+       throw error;
+@@ -84,7 +182,10 @@
+   // List — omits heavy points JSON for performance
+   async findByUser(userId) {
+     const [rows] = await pool.execute(
+-      `SELECT id, user_id, name, description, distance_m, elevation_gain_m, run_count, last_run_at, permission, created_at, updated_at
++      `SELECT id, user_id, client_route_id, creation_origin,
++              source_activity_client_id, source_session_id, origin_geometry_hash,
++              created_geometry_hash, geometry_edited_since_creation, origin_gap_reconnected,
++              name, description, distance_m, elevation_gain_m, run_count, last_run_at, permission, created_at, updated_at
+        FROM routes WHERE user_id = ? ORDER BY run_count DESC, created_at DESC`,
+       [userId]
+     );
+@@ -94,7 +195,10 @@
+   // Detail — includes full points + waypoints
+   async findByIdAndUser(id, userId) {
+     const [rows] = await pool.execute(
+-      `SELECT id, user_id, name, description, points, waypoints, distance_m, elevation_gain_m, run_count, last_run_at, permission, created_at, updated_at
++      `SELECT id, user_id, client_route_id, creation_origin,
++              source_activity_client_id, source_session_id, origin_geometry_hash,
++              created_geometry_hash, geometry_edited_since_creation, origin_gap_reconnected,
++              name, description, points, waypoints, distance_m, elevation_gain_m, run_count, last_run_at, permission, created_at, updated_at
+        FROM routes WHERE id = ? AND user_id = ?`,
+       [id, userId]
+     );
+@@ -113,7 +217,12 @@
+ 
+     if (name !== undefined)           { updates.push('name = ?');             values.push(name); }
+     if (description !== undefined)    { updates.push('description = ?');      values.push(description); }
+-    if (points !== undefined)         { updates.push('points = ?');           values.push(JSON.stringify(points)); }
++    if (points !== undefined) {
++      updates.push('points = ?');
++      values.push(JSON.stringify(points));
++      updates.push('geometry_edited_since_creation = CASE WHEN created_geometry_hash IS NULL OR created_geometry_hash <> ? THEN 1 ELSE geometry_edited_since_creation END');
++      values.push(geometryHash(points));
++    }
+     if (waypoints !== undefined)      { updates.push('waypoints = ?');        values.push(JSON.stringify(waypoints)); }
+     if (distanceM !== undefined)      { updates.push('distance_m = ?');       values.push(distanceM); }
+     if (elevationGainM !== undefined) { updates.push('elevation_gain_m = ?'); values.push(elevationGainM); }
+@@ -144,6 +253,30 @@
+     return result.affectedRows;
+   },
+ 
++  async deleteByClientId(clientRouteId, userId) {
++    const conn = await pool.getConnection();
++    try {
++      await conn.beginTransaction();
++      await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);
++      await conn.execute(
++        `INSERT INTO route_client_tombstones (user_id, client_route_id)
++         VALUES (?, ?) ON DUPLICATE KEY UPDATE deleted_at = deleted_at`,
++        [userId, clientRouteId],
++      );
++      const [result] = await conn.execute(
++        'DELETE FROM routes WHERE user_id = ? AND client_route_id = ?',
++        [userId, clientRouteId],
++      );
++      await conn.commit();
++      return result.affectedRows;
++    } catch (error) {
++      try { await conn.rollback(); } catch { /* ignore */ }
++      throw error;
++    } finally {
++      conn.release();
++    }
++  },
++
+   async incrementRunCount(id, userId) {
+     const [result] = await pool.execute(
+       'UPDATE routes SET run_count = run_count + 1, last_run_at = NOW() WHERE id = ? AND user_id = ?',
+@@ -154,3 +287,4 @@
+ };
+ 
+ module.exports = Route;
++module.exports.geometryHash = geometryHash;
+
+--- a/backend/src/routes/routes.js
++++ b/backend/src/routes/routes.js
+@@ -23,18 +23,9 @@
+ router.post('/', validateBody(schemas.route.create), idempotency, async (req, res) => {
+   const {
+     name, description, points, waypoints, distance_m, elevation_gain_m, permission,
+-    source_activity_client_id, source_session_id,
++    client_route_id, source_activity_client_id, source_session_id, origin_gap_reconnected,
+   } = req.body;
+ 
+-  // v120 debug: dump body shape so we can see exactly why JSON.stringify
+-  // produces "[object Object],[object Object]" in storage.
+-  console.log('[routes/create] body keys:', Object.keys(req.body));
+-  console.log('[routes/create] points isArray:', Array.isArray(points), 'len:', points?.length);
+-  if (Array.isArray(points) && points[0]) {
+-    console.log('[routes/create] points[0]:', JSON.stringify(points[0]));
+-    console.log('[routes/create] points[0] type:', typeof points[0]);
+-  }
+-
+   if (!name || typeof name !== 'string' || name.trim().length === 0) {
+     return res.status(400).json({ error: 'name is required.' });
+   }
+@@ -68,23 +59,50 @@
+       distanceM: distance_m ?? 0,
+       elevationGainM: elevation_gain_m ?? 0,
+       permission, // already validated above; Route.create defaults undefined → 'personal'
++      clientRouteId: client_route_id,
+       sourceActivityClientId: source_activity_client_id,
+       sourceSessionId: source_session_id,
++      originGapReconnected: origin_gap_reconnected,
+     });
+     const route = await Route.findByIdAndUser(id, req.user.userId);
+     return res.status(201).json({ route });
+   } catch (err) {
+-    if (err.code === 'SOURCE_ACTIVITY_NOT_FOUND') {
++    if (err.code === 'SOURCE_ACTIVITY_NOT_FOUND' || err.code === 'SOURCE_ACTIVITY_NOT_READY') {
+       return res.status(409).json({
+-        error: 'Source Activity no longer exists or has not completed syncing.',
++        error: 'Source Activity has not completed syncing.',
+         code: err.code,
+       });
+     }
++    if (err.code === 'SOURCE_ACTIVITY_DELETED') {
++      return res.status(410).json({ error: 'Source Activity no longer exists.', code: err.code });
++    }
++    if (err.code === 'SOURCE_ACTIVITY_UNAUTHORIZED') {
++      return res.status(403).json({ error: 'Source Activity is not available to this account.', code: err.code });
++    }
++    if (err.code === 'ROUTE_TOMBSTONED') {
++      return res.status(409).json({ error: err.message, code: err.code });
++    }
+     console.error('[routes/create]', err);
+     return res.status(500).json({ error: 'Server error.' });
+   }
+ });
+ 
++// Stable client identity lets a durable local delete win over an in-flight or
++// response-lost create without relying on a transient server id.
++router.delete('/client/:clientRouteId', async (req, res) => {
++  const clientRouteId = String(req.params.clientRouteId || '');
++  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRouteId)) {
++    return res.status(400).json({ error: 'Invalid client Route ID.' });
++  }
++  try {
++    const deleted = await Route.deleteByClientId(clientRouteId, req.user.userId);
++    return res.json({ ok: true, deleted: deleted > 0, client_route_id: clientRouteId });
++  } catch (err) {
++    console.error('[routes/delete-client]', err.message);
++    return res.status(500).json({ error: 'Server error.' });
++  }
++});
++
+ // ── GET /api/routes ─────────────────────────────────────────────────────────
+ router.get('/', async (req, res) => {
+   try {
+
+--- a/backend/src/routes/__tests__/freeActivityContracts.test.js
++++ b/backend/src/routes/__tests__/freeActivityContracts.test.js
+@@ -192,8 +192,11 @@
+   assert.match(routes, /router\.post\('\/', validateBody\(schemas\.route\.create\), idempotency/);
+   assert.match(routes, /source_activity_client_id/);
+   assert.match(routes, /SOURCE_ACTIVITY_NOT_FOUND/);
+-  const guardedCreate = model.slice(model.indexOf('if (!sourceActivityClientId'));
+-  assert.ok(guardedCreate.indexOf('SELECT id FROM users WHERE id = ? FOR UPDATE') < guardedCreate.indexOf('SELECT id FROM sessions'));
+-  assert.ok(guardedCreate.indexOf('SELECT id FROM sessions') < guardedCreate.indexOf('const [result] = await insert(conn)'));
++  const guardedCreate = model.slice(model.indexOf('async create'), model.indexOf('async findByUser'));
++  const userLock = guardedCreate.indexOf('SELECT id FROM users WHERE id = ? FOR UPDATE');
++  const sourceLock = guardedCreate.indexOf('SELECT id, client_activity_id, route_points FROM sessions');
++  const insert = guardedCreate.indexOf('INSERT INTO routes');
++  assert.ok(userLock >= 0 && sourceLock > userLock);
++  assert.ok(insert > sourceLock);
+   assert.match(guardedCreate, /finalized_at IS NOT NULL/);
+ });
+
+--- a/app/src/components/Icon.tsx
++++ b/app/src/components/Icon.tsx
+@@ -30,7 +30,7 @@
+   // Sprint 21
+   Apple,
+   // Sprint 26
+-  RotateCcw, Download,
++  RotateCcw, Download, Undo2, Sparkles, Move,
+   // Sprint 27
+   PlayCircle,
+   // Sprint 42+ (Phase 1-2)
+@@ -80,7 +80,7 @@
+   Globe,
+   Compass,
+   Apple,
+-  RotateCcw, Download,
++  RotateCcw, Download, Undo2, Sparkles, Move,
+   PlayCircle,
+   Pause, Pencil, TrendingUp, Phone,
+   Plus, Edit3,
+
+--- a/app/src/components/map/EditOverlayV274.tsx
++++ b/app/src/components/map/EditOverlayV274.tsx
+@@ -29,19 +29,22 @@
+ import { Colors, Spacing, Radius, FontSize, Shadow } from '../tokens';
+ import { Icon } from '../Icon';
+ import { useDistance } from '../../utils/distanceFormat';
++import { useVisualTheme } from '../../hooks/useVisualTheme';
+ 
+ interface EditOverlayV274Props {
+   onCancel: () => void;
+   onSave: () => Promise<void> | void;
+   onPreview: () => Promise<void> | void;
+   onBeautify: () => Promise<void> | void;
++  saveLabel?: string;
+ }
+ 
+ type ToolKey = 'pan' | 'brush';
+ 
+ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element {
+-  const { onSave, onPreview, onBeautify } = props;
++  const { onSave, onPreview, onBeautify, saveLabel = 'Apply to draft' } = props;
+   const insets = useSafeAreaInsets();
++  const theme = useVisualTheme();
+   // O12 Round-3 R3-C1: settings-aware distance format for trim readout.
+   const dist = useDistance();
+ 
+@@ -152,16 +155,23 @@
+           activeOpacity={0.85}
+           disabled={!canUndo}
+           onPress={handleUndoTap}
+-          style={[styles.utilityBadge, !canUndo && styles.btnDisabled]}
++          style={[
++            styles.utilityBadge,
++            { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle, shadowColor: theme.shadow },
++            !canUndo && styles.btnDisabled,
++          ]}
+         >
+-          <Icon name="Undo2" size={16} color={CONCEPT_GREEN} strokeWidth={2.4} />
++          <Icon name="Undo2" size={16} color={theme.iconActive} strokeWidth={2.4} />
+         </TouchableOpacity>
+         <TouchableOpacity
+           activeOpacity={0.85}
+           onPress={handleResetTap}
+-          style={[styles.utilityBadge, { backgroundColor: Colors.dangerBg }]}
++          style={[
++            styles.utilityBadge,
++            { backgroundColor: theme.destructiveSurface, borderColor: theme.borderSubtle, shadowColor: theme.shadow },
++          ]}
+         >
+-          <Icon name="RotateCcw" size={16} color={Colors.danger} strokeWidth={2.4} />
++          <Icon name="RotateCcw" size={16} color={theme.destructive} strokeWidth={2.4} />
+         </TouchableOpacity>
+       </View>
+ 
+@@ -284,29 +294,33 @@
+         >
+           {/* Error pill (red, overrides status) OR status pill (light) */}
+           {inErrorState ? (
+-            <View style={styles.errorPill}>
+-              <Icon name="TriangleAlert" size={14} color={Colors.surface} strokeWidth={2.5} />
+-              <Text style={styles.errorPillText} numberOfLines={2}>{lastError}</Text>
++            <View style={[styles.errorPill, { backgroundColor: theme.destructive, shadowColor: theme.shadow }]}>
++              <Icon name="TriangleAlert" size={14} color={theme.onPrimary} strokeWidth={2.5} />
++              <Text style={[styles.errorPillText, { color: theme.onPrimary }]} numberOfLines={2}>{lastError}</Text>
+             </View>
+           ) : statusText ? (
+-            <View style={styles.statusPill}>
+-              <Text style={styles.statusPillText} numberOfLines={1}>{statusText}</Text>
++            <View style={[styles.statusPill, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle, shadowColor: theme.shadow }]}>
++              <Text style={[styles.statusPillText, { color: theme.foreground }]} numberOfLines={1}>{statusText}</Text>
+             </View>
+           ) : null}
+ 
+           {hasUnpreviewedStrokes ? (
+             <TouchableOpacity
+               activeOpacity={0.85}
+-              style={[styles.previewBtn, !canPreview && styles.btnDisabled]}
++              style={[
++                styles.previewBtn,
++                { backgroundColor: theme.secondaryAction, borderColor: theme.primary },
++                !canPreview && styles.btnDisabled,
++              ]}
+               disabled={!canPreview}
+               onPress={() => canPreview && onPreview()}
+             >
+               {isComputing ? (
+-                <ActivityIndicator size="small" color={Colors.primary} />
++                <ActivityIndicator size="small" color={theme.primary} />
+               ) : (
+                 <>
+-                  <Icon name="Eye" size={16} color={Colors.primary} strokeWidth={2.5} />
+-                  <Text style={styles.previewBtnText} numberOfLines={1}>
++                  <Icon name="Eye" size={16} color={theme.primary} strokeWidth={2.5} />
++                  <Text style={[styles.previewBtnText, { color: theme.foreground }]} numberOfLines={1}>
+                     {inErrorState ? 'Fix the stroke first' : 'Preview'}
+                   </Text>
+                 </>
+@@ -318,12 +332,12 @@
+                   trimOpen. Tap-outside backdrop dismisses it (rendered
+                   separately, see below). */}
+               {trimOpen && (
+-                <View style={styles.trimPanel} pointerEvents="auto">
++                <View style={[styles.trimPanel, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle, shadowColor: theme.shadow }]} pointerEvents="auto">
+                   <View style={styles.trimHeaderRow}>
+-                    <Icon name="Scissors" size={14} color={CONCEPT_GREEN} strokeWidth={2.5} />
+-                    <Text style={styles.trimHeaderText} numberOfLines={1}>Trim · drag handles</Text>
++                    <Icon name="Scissors" size={14} color={theme.iconActive} strokeWidth={2.5} />
++                    <Text style={[styles.trimHeaderText, { color: theme.foreground }]} numberOfLines={1}>Trim · drag handles</Text>
+                     {totalLengthM > 0 && (trimStartFrac > 0 || trimEndFrac < 1) && (
+-                      <Text style={styles.trimReadout} numberOfLines={1}>
++                      <Text style={[styles.trimReadout, { color: theme.foregroundSecondary }]} numberOfLines={1}>
+                         {dist.format(editedLengthM, 2)} / {dist.format(totalLengthM, 2)} {dist.unit}
+                       </Text>
+                     )}
+@@ -344,17 +358,17 @@
+                   Trim     = toggles trim slider panel
+                   Draw     = brush tool
+                   Move     = pan tool (map pan, no polyline translate) */}
+-              <View style={styles.toolsCard} pointerEvents="auto">
++              <View style={[styles.toolsCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle, shadowColor: theme.shadow }]} pointerEvents="auto">
+                 <TouchableOpacity
+                   activeOpacity={0.85}
+                   style={styles.toolTab}
+                   disabled={!canBeautify}
+                   onPress={() => { setTrimOpen(false); if (canBeautify) onBeautify(); }}
+                 >
+-                  <View style={styles.toolIconWrap}>
+-                    <Icon name="Sparkles" size={22} color={CONCEPT_GREEN} strokeWidth={2.2} />
++                  <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }]}>
++                    <Icon name="Sparkles" size={22} color={theme.iconActive} strokeWidth={2.2} />
+                   </View>
+-                  <Text style={styles.toolTabLabel}>Beautify</Text>
++                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }]}>Beautify</Text>
+                 </TouchableOpacity>
+ 
+                 <TouchableOpacity
+@@ -362,10 +376,10 @@
+                   style={[styles.toolTab, trimOpen && styles.toolTabActive]}
+                   onPress={() => setTrimOpen(v => !v)}
+                 >
+-                  <View style={[styles.toolIconWrap, trimOpen && styles.toolIconWrapActive]}>
+-                    <Icon name="Scissors" size={22} color={trimOpen ? Colors.surface : CONCEPT_GREEN} strokeWidth={2.2} />
++                  <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, trimOpen && { backgroundColor: theme.primary }]}>
++                    <Icon name="Scissors" size={22} color={trimOpen ? theme.onPrimary : theme.iconActive} strokeWidth={2.2} />
+                   </View>
+-                  <Text style={[styles.toolTabLabel, trimOpen && styles.toolTabLabelActive]}>Trim</Text>
++                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, trimOpen && { color: theme.primary, fontWeight: '800' }]}>Trim</Text>
+                 </TouchableOpacity>
+ 
+                 <TouchableOpacity
+@@ -373,10 +387,10 @@
+                   style={[styles.toolTab, safeTool === 'brush' && styles.toolTabActive]}
+                   onPress={() => { setTrimOpen(false); setActiveTool('brush'); }}
+                 >
+-                  <View style={[styles.toolIconWrap, safeTool === 'brush' && styles.toolIconWrapActive]}>
+-                    <Icon name="Pencil" size={22} color={safeTool === 'brush' ? Colors.surface : CONCEPT_GREEN} strokeWidth={2.2} />
++                  <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, safeTool === 'brush' && { backgroundColor: theme.primary }]}>
++                    <Icon name="Pencil" size={22} color={safeTool === 'brush' ? theme.onPrimary : theme.iconActive} strokeWidth={2.2} />
+                   </View>
+-                  <Text style={[styles.toolTabLabel, safeTool === 'brush' && styles.toolTabLabelActive]}>Draw</Text>
++                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'brush' && { color: theme.primary, fontWeight: '800' }]}>Draw</Text>
+                 </TouchableOpacity>
+ 
+                 <TouchableOpacity
+@@ -384,10 +398,10 @@
+                   style={[styles.toolTab, safeTool === 'pan' && styles.toolTabActive]}
+                   onPress={() => { setTrimOpen(false); setActiveTool('pan'); }}
+                 >
+-                  <View style={[styles.toolIconWrap, safeTool === 'pan' && styles.toolIconWrapActive]}>
+-                    <Icon name="Move" size={22} color={safeTool === 'pan' ? Colors.surface : CONCEPT_GREEN} strokeWidth={2.2} />
++                  <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, safeTool === 'pan' && { backgroundColor: theme.primary }]}>
++                    <Icon name="Move" size={22} color={safeTool === 'pan' ? theme.onPrimary : theme.iconActive} strokeWidth={2.2} />
+                   </View>
+-                  <Text style={[styles.toolTabLabel, safeTool === 'pan' && styles.toolTabLabelActive]}>Move</Text>
++                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'pan' && { color: theme.primary, fontWeight: '800' }]}>Move</Text>
+                 </TouchableOpacity>
+               </View>
+ 
+@@ -396,12 +410,12 @@
+                   previewed, so we surface Save). */}
+               <TouchableOpacity
+                 activeOpacity={0.85}
+-                style={[styles.primaryCta, !canSave && styles.btnDisabled]}
++                style={[styles.primaryCta, { backgroundColor: theme.primaryAction }, !canSave && styles.btnDisabled]}
+                 disabled={!canSave}
+                 onPress={() => { setTrimOpen(false); if (canSave) onSave(); }}
+               >
+-                <Icon name="Check" size={18} color={Colors.surface} strokeWidth={2.6} />
+-                <Text style={styles.primaryCtaText} numberOfLines={1}>Save</Text>
++                <Icon name="Check" size={18} color={theme.onPrimary} strokeWidth={2.6} />
++                <Text style={[styles.primaryCtaText, { color: theme.onPrimary }]} numberOfLines={1}>{saveLabel}</Text>
+               </TouchableOpacity>
+             </>
+           )}
+
+--- a/app/src/services/routing/corridor/PolylineSampler.ts
++++ b/app/src/services/routing/corridor/PolylineSampler.ts
+@@ -136,7 +136,7 @@
+  * LineString → array with one part. MultiLineString → array of parts (same
+  * order as the GeoJSON). Empty for unknown geometry types.
+  */
+-function flattenGeometryToParts(
++export function flattenGeometryToParts(
+   geom: { type: string; coordinates: any },
+ ): LngLat[][] {
+   if (geom.type === 'LineString') {
+
+--- a/app/src/store/__tests__/runPreviewFinally.test.ts
++++ b/app/src/store/__tests__/runPreviewFinally.test.ts
+@@ -107,11 +107,15 @@
+     matchSegmentMock.mockResolvedValue({
+       ok: true,
+       matchedPoints: useRouteEditStore.getState().brushStrokes[0].points,
++      segments: [{
++        points: useRouteEditStore.getState().brushStrokes[0].points,
++        confidence: 0.9,
++      }],
+       confidence: 0.9,
+       durationMs: 50,
+     });
+     const r = await useRouteEditStore.getState().runPreview();
+-    expect(r.ok).toBe(true);
++    expect(r).toEqual({ ok: true });
+     expect(useRouteEditStore.getState().isComputing).toBe(false);
+   });
+ 
+@@ -155,6 +159,10 @@
+       return {
+         ok: true,
+         matchedPoints: useRouteEditStore.getState().brushStrokes[0].points,
++        segments: [{
++          points: useRouteEditStore.getState().brushStrokes[0].points,
++          confidence: 0.9,
++        }],
+         confidence: 0.9,
+         durationMs: 50,
+       };
+
+--- a/app/src/features/route/routeContracts.ts
++++ b/app/src/features/route/routeContracts.ts
+@@ -0,0 +1,56 @@
++import type { Route, RoutePoint } from '../../store/useRouteStore';
++
++export type RouteCreationOrigin = 'activity' | 'manual' | 'legacy_unknown';
++
++export interface ActivityRouteReference {
++  routeId: string;
++  name: string;
++  points: RoutePoint[];
++  distanceM: number;
++  elevationGainM: number;
++  capturedAt: number;
++}
++
++export function routeIdentityKeys(route: Pick<Route, 'id' | 'remoteId' | 'clientRouteId'>): string[] {
++  return Array.from(new Set([route.id, route.remoteId, route.clientRouteId].filter(Boolean) as string[]));
++}
++
++export function routeMatchesIdentity(
++  route: Pick<Route, 'id' | 'remoteId' | 'clientRouteId'>,
++  target: string,
++): boolean {
++  return routeIdentityKeys(route).includes(String(target));
++}
++
++export function cloneActivityRouteReference(route: Route, capturedAt = Date.now()): ActivityRouteReference {
++  return {
++    routeId: route.id,
++    name: route.name,
++    points: route.points.map(point => ({ ...point })),
++    distanceM: route.distanceM,
++    elevationGainM: route.elevationGainM,
++    capturedAt,
++  };
++}
++
++export function routeOriginLines(route: Route): string[] {
++  const lines: string[] = [];
++  if (route.creationOrigin === 'activity' || route.originActivityClientId || route.originActivityServerId) {
++    lines.push('Created from an Activity');
++    if (route.originGeometryHash && route.createdGeometryHash
++      && route.originGeometryHash !== route.createdGeometryHash) {
++      lines.push('Adjusted when this Route was created');
++    }
++  } else if (route.creationOrigin === 'manual') {
++    lines.push('Created as a Route');
++  } else {
++    lines.push('Origin not recorded');
++  }
++  if (route.geometryEditedSinceCreation) lines.push('Edited since creation');
++  if (route.originActivityGapReconnected) lines.push('Includes a planned connection across a missing Activity section');
++  return lines;
++}
++
++export function routeCanBeUsed(route: Route): boolean {
++  return route.points.length >= 2;
++}
+
+--- a/app/src/features/route/__tests__/routeContracts.test.ts
++++ b/app/src/features/route/__tests__/routeContracts.test.ts
+@@ -0,0 +1,115 @@
++import fs from 'fs';
++import path from 'path';
++import {
++  cloneActivityRouteReference,
++  routeCanBeUsed,
++  routeMatchesIdentity,
++  routeOriginLines,
++} from '../routeContracts';
++import type { Route } from '../../../store/useRouteStore';
++
++const appRoot = path.resolve(__dirname, '../../../..');
++const read = (relative: string) => fs.readFileSync(path.join(appRoot, relative), 'utf8');
++
++function route(overrides: Partial<Route> = {}): Route {
++  return {
++    id: 'local-route',
++    clientRouteId: 'local-route',
++    remoteId: '42',
++    name: 'Ridge Route',
++    createdAt: 1,
++    updatedAt: 2,
++    points: [{ lat: -45, lng: 168 }, { lat: -45.001, lng: 168.001 }],
++    waypoints: [],
++    distanceM: 140,
++    elevationGainM: 10,
++    runCount: 0,
++    isActive: false,
++    ...overrides,
++  };
++}
++
++describe('Route product contracts', () => {
++  test('local, server, and client identities resolve one owned Route', () => {
++    const value = route();
++    expect(routeMatchesIdentity(value, 'local-route')).toBe(true);
++    expect(routeMatchesIdentity(value, '42')).toBe(true);
++    expect(routeMatchesIdentity(value, 'someone-else')).toBe(false);
++  });
++
++  test('Activity origin, creation adjustment, later edit, and Gap remain distinct', () => {
++    const lines = routeOriginLines(route({
++      creationOrigin: 'activity',
++      originGeometryHash: 'activity-hash',
++      createdGeometryHash: 'created-hash',
++      geometryEditedSinceCreation: true,
++      originActivityGapReconnected: true,
++    }));
++    expect(lines).toEqual([
++      'Created from an Activity',
++      'Adjusted when this Route was created',
++      'Edited since creation',
++      'Includes a planned connection across a missing Activity section',
++    ]);
++    expect(routeOriginLines(route({ creationOrigin: 'legacy_unknown' }))).toEqual(['Origin not recorded']);
++  });
++
++  test('the Activity reference is a deep geometry snapshot and never starts recording', () => {
++    const source = route();
++    const snapshot = cloneActivityRouteReference(source, 123);
++    source.points[0].lat = 0;
++    expect(snapshot.points[0].lat).toBe(-45);
++    expect(snapshot.capturedAt).toBe(123);
++    expect(routeCanBeUsed(source)).toBe(true);
++    expect(routeCanBeUsed(route({ points: [] }))).toBe(false);
++  });
++});
++
++describe('Route Detail / editor / use source contracts', () => {
++  const detail = read('src/screens/MapHistoryScreen.tsx');
++  const editor = read('src/screens/RouteEditorScreen.tsx');
++  const overlay = read('src/components/map/EditOverlayV274.tsx');
++  const hike = read('src/screens/HikingScreen.tsx');
++  const run = read('src/screens/RunningScreen.tsx');
++
++  test('Detail owns Use, Edit, acknowledged rename/delete, origin, and explicit unavailable states', () => {
++    expect(detail).toContain('routeMatchesIdentity(item, targetRouteId)');
++    expect(detail).toContain("'Route unavailable'");
++    expect(detail).toContain('await useRouteStore.getState().updateRoute');
++    expect(detail).toContain('await useRouteStore.getState().deleteRoute');
++    expect(detail).toContain('routeOriginLines(selectedRoute)');
++    expect(detail).toContain('title="Use this Route"');
++    expect(detail).toContain('testID="route-use-hike"');
++    expect(detail).toContain('testID="route-use-run"');
++    expect(detail).toContain("tracking.status !== 'idle'");
++    expect(detail).not.toContain('shown on the map for guidance');
++  });
++
++  test('editor separates Apply from durable Save and guards unsaved exit', () => {
++    expect(overlay).toContain("saveLabel = 'Apply to draft'");
++    expect(editor).toContain('saveLabel="Apply to draft"');
++    expect(editor).toContain('>Save Route</Text>');
++    expect(editor).toContain("addListener('beforeRemove'");
++    expect(editor).toContain("'Discard Route changes?'");
++    expect(editor).not.toContain('TODO route settings');
++  });
++
++  test('Hike and Run receive a selected Route reference without auto-start or follower activation', () => {
++    for (const source of [hike, run]) {
++      expect(source).toContain('captureActivityRouteReference(selectedRoute)');
++      expect(source).toContain('This Route is shown on the map for reference.');
++      expect(source).not.toContain('setFollowingRoute(');
++    }
++    expect(detail).toContain("nav.navigate('Running', { routeId: ready.id })");
++    expect(detail).toContain("nav.navigate('Hiking', { routeId: ready.id })");
++  });
++
++  test('all three surfaces use shared semantic theme roles', () => {
++    expect(detail).toContain('useVisualTheme()');
++    expect(editor).toContain('useVisualTheme()');
++    expect(hike).toContain('useVisualTheme()');
++    expect(run).toContain('useVisualTheme()');
++    expect(detail).toContain('visualTheme.surfaceElevated');
++    expect(editor).toContain('visualTheme.surfaceElevated');
++  });
++});
+
+--- a/app/src/services/__tests__/routeService.contract.test.ts
++++ b/app/src/services/__tests__/routeService.contract.test.ts
+@@ -0,0 +1,108 @@
++const mockAuthenticatedFetch = jest.fn();
++
++jest.mock('../apiService', () => ({
++  authenticatedFetch: (...args: any[]) => mockAuthenticatedFetch(...args),
++}));
++
++import { createRoute, fetchRouteDetail, updateRoute } from '../routeService';
++
++const response = (status: number, body: unknown) => ({
++  ok: status >= 200 && status < 300,
++  status,
++  json: jest.fn(async () => body),
++});
++
++const remote = {
++  id: 42,
++  user_id: 7,
++  client_route_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
++  name: 'Ridge Route',
++  description: null,
++  points: [{ lat: -45, lng: 168 }, { lat: -45.001, lng: 168.001 }],
++  waypoints: [],
++  distance_m: 140,
++  elevation_gain_m: 10,
++  run_count: 0,
++  last_run_at: null,
++  permission: 'personal',
++  creation_origin: 'activity',
++  source_activity_client_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
++  source_session_id: 72,
++  origin_geometry_hash: 'origin-hash',
++  created_geometry_hash: 'created-hash',
++  geometry_edited_since_creation: 1,
++  origin_gap_reconnected: 1,
++  created_at: '2026-09-17T00:00:00.000Z',
++  updated_at: '2026-09-17T01:00:00.000Z',
++};
++
++describe('Route service origin and deployment compatibility', () => {
++  beforeEach(() => mockAuthenticatedFetch.mockReset());
++
++  test('modern detail maps durable server origin and current edit evidence', async () => {
++    mockAuthenticatedFetch.mockResolvedValueOnce(response(200, { route: remote }));
++    await expect(fetchRouteDetail('42')).resolves.toMatchObject({
++      id: '42',
++      remoteId: '42',
++      clientRouteId: remote.client_route_id,
++      creationOrigin: 'activity',
++      originActivityClientId: remote.source_activity_client_id,
++      originActivityServerId: 72,
++      originGeometryHash: 'origin-hash',
++      createdGeometryHash: 'created-hash',
++      geometryEditedSinceCreation: true,
++      originActivityGapReconnected: true,
++      originPersistence: 'durable',
++    });
++  });
++
++  test('modern create sends stable identity without stale-response idempotency caching', async () => {
++    mockAuthenticatedFetch.mockResolvedValueOnce(response(201, { route: remote }));
++    await createRoute({
++      client_route_id: remote.client_route_id,
++      name: remote.name,
++      points: remote.points,
++      distance_m: 140,
++      elevation_gain_m: 10,
++      source_activity_client_id: remote.source_activity_client_id,
++      origin_gap_reconnected: true,
++    }, remote.client_route_id);
++
++    const [, options] = mockAuthenticatedFetch.mock.calls[0];
++    expect(JSON.parse(options.body)).toMatchObject({
++      client_route_id: remote.client_route_id,
++      origin_gap_reconnected: true,
++    });
++    expect(options.headers).toBeUndefined();
++  });
++
++  test('old backend retry remains usable but strips fields it cannot persist', async () => {
++    mockAuthenticatedFetch
++      .mockResolvedValueOnce(response(400, {
++        error: 'Validation failed.',
++        details: [{ field: 'client_route_id', message: 'not allowed' }],
++      }))
++      .mockResolvedValueOnce(response(201, { route: { ...remote, client_route_id: null, creation_origin: null } }));
++
++    const local = await createRoute({
++      client_route_id: remote.client_route_id,
++      name: remote.name,
++      points: remote.points,
++      distance_m: 140,
++      elevation_gain_m: 10,
++      source_activity_client_id: remote.source_activity_client_id,
++      origin_gap_reconnected: true,
++    }, remote.client_route_id);
++
++    const [, options] = mockAuthenticatedFetch.mock.calls[1];
++    expect(JSON.parse(options.body)).not.toHaveProperty('client_route_id');
++    expect(JSON.parse(options.body)).not.toHaveProperty('origin_gap_reconnected');
++    expect(options.headers).toEqual({ 'X-Idempotency-Key': remote.client_route_id });
++    expect(local).toMatchObject({ creationOrigin: 'legacy_unknown', originPersistence: 'unknown' });
++  });
++
++  test('update failure rejects instead of manufacturing success', async () => {
++    mockAuthenticatedFetch.mockResolvedValueOnce(response(503, { error: 'offline' }));
++    await expect(updateRoute('42', { name: 'Draft' })).rejects.toThrow('Route update failed (503)');
++  });
++});
+
+--- a/app/src/services/routeTombstones.ts
++++ b/app/src/services/routeTombstones.ts
+@@ -0,0 +1,73 @@
++import AsyncStorage from '@react-native-async-storage/async-storage';
++
++export interface RouteTombstone {
++  clientRouteId: string;
++  remoteId?: string;
++  deletedAt: number;
++  remoteDeleted?: boolean;
++}
++
++const keyFor = (userId: string) => `@cairn:route_tombstones:v1:${userId}`;
++let mutationTail: Promise<void> = Promise.resolve();
++
++async function read(userId: string): Promise<RouteTombstone[]> {
++  const raw = await AsyncStorage.getItem(keyFor(userId));
++  if (!raw) return [];
++  const parsed: unknown = JSON.parse(raw);
++  if (!Array.isArray(parsed)) throw new Error('route_tombstones_corrupt');
++  return parsed.filter((item): item is RouteTombstone => Boolean(
++    item && typeof item === 'object'
++    && typeof (item as RouteTombstone).clientRouteId === 'string'
++    && typeof (item as RouteTombstone).deletedAt === 'number',
++  ));
++}
++
++async function afterMutations(): Promise<void> {
++  await mutationTail.catch(() => undefined);
++}
++
++export async function tombstoneRoute(
++  userId: string,
++  clientRouteId: string,
++  remoteId?: string,
++): Promise<RouteTombstone> {
++  if (!userId || !clientRouteId) throw new Error('route_tombstone_identity_required');
++  let committed!: RouteTombstone;
++  const operation = mutationTail.catch(() => undefined).then(async () => {
++    const records = await read(userId);
++    const existing = records.find(item => item.clientRouteId === clientRouteId);
++    committed = existing
++      ? { ...existing, remoteId: remoteId ?? existing.remoteId }
++      : { clientRouteId, remoteId, deletedAt: Date.now(), remoteDeleted: false };
++    const next = [committed, ...records.filter(item => item.clientRouteId !== clientRouteId)];
++    await AsyncStorage.setItem(keyFor(userId), JSON.stringify(next));
++    if (!(await read(userId)).some(item => item.clientRouteId === clientRouteId)) {
++      throw new Error('route_tombstone_verify_failed');
++    }
++  });
++  mutationTail = operation;
++  await operation;
++  return committed;
++}
++
++export async function listRouteTombstones(userId: string): Promise<RouteTombstone[]> {
++  if (!userId) return [];
++  await afterMutations();
++  return read(userId);
++}
++
++export async function isRouteTombstoned(userId: string, clientRouteId: string): Promise<boolean> {
++  return (await listRouteTombstones(userId)).some(item => item.clientRouteId === clientRouteId);
++}
++
++export async function markRouteRemoteDeleted(userId: string, clientRouteId: string): Promise<void> {
++  const operation = mutationTail.catch(() => undefined).then(async () => {
++    const records = await read(userId);
++    const next = records.map(item => item.clientRouteId === clientRouteId
++      ? { ...item, remoteDeleted: true }
++      : item);
++    await AsyncStorage.setItem(keyFor(userId), JSON.stringify(next));
++  });
++  mutationTail = operation;
++  await operation;
++}
+
+--- a/backend/src/migrations/036_route_origin_identity.sql
++++ b/backend/src/migrations/036_route_origin_identity.sql
+@@ -0,0 +1,37 @@
++-- CARD-ROUTE-01: durable Route identity, origin, edit evidence, and deletion.
++-- LOCAL/STAGING REVIEW ONLY. Do not run against production without the
++-- reviewed deployment order in the card handoff.
++USE cairn;
++
++ALTER TABLE routes
++  ADD COLUMN client_route_id CHAR(36) NULL AFTER user_id,
++  ADD COLUMN creation_origin ENUM('activity', 'manual') NULL AFTER client_route_id,
++  ADD COLUMN source_activity_client_id CHAR(36) NULL AFTER creation_origin,
++  ADD COLUMN source_session_id BIGINT UNSIGNED NULL AFTER source_activity_client_id,
++  ADD COLUMN origin_geometry_hash CHAR(64) NULL AFTER source_session_id,
++  ADD COLUMN created_geometry_hash CHAR(64) NULL AFTER origin_geometry_hash,
++  ADD COLUMN geometry_edited_since_creation TINYINT(1) NOT NULL DEFAULT 0 AFTER created_geometry_hash,
++  ADD COLUMN origin_gap_reconnected TINYINT(1) NOT NULL DEFAULT 0 AFTER geometry_edited_since_creation,
++  ALGORITHM=INPLACE, LOCK=NONE;
++
++CREATE UNIQUE INDEX uk_routes_user_client_route
++  ON routes(user_id, client_route_id);
++
++CREATE INDEX idx_routes_source_activity
++  ON routes(user_id, source_activity_client_id);
++
++ALTER TABLE routes
++  ADD CONSTRAINT fk_routes_source_session
++    FOREIGN KEY (source_session_id) REFERENCES sessions(id) ON DELETE SET NULL;
++
++CREATE TABLE route_client_tombstones (
++  user_id BIGINT UNSIGNED NOT NULL,
++  client_route_id CHAR(36) NOT NULL,
++  deleted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++  PRIMARY KEY (user_id, client_route_id),
++  CONSTRAINT fk_route_tombstone_user
++    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
++
++-- Legacy rows deliberately retain NULL origin and client identity. Cairn
++-- cannot honestly infer provenance from geometry or historical proximity.
+
+--- a/backend/src/routes/__tests__/routeOriginRoundTrip.test.js
++++ b/backend/src/routes/__tests__/routeOriginRoundTrip.test.js
+@@ -0,0 +1,233 @@
++'use strict';
++
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const path = require('node:path');
++
++const modelPath = path.resolve(__dirname, '../../models/Route.js');
++const dbPath = path.resolve(__dirname, '../../config/db.js');
++
++function createMemoryPool() {
++  const state = {
++    nextId: 1,
++    sessions: [{
++      id: 72,
++      user_id: 7,
++      client_activity_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
++      finalized_at: '2026-09-17T00:00:00.000Z',
++      route_points: [{ lat: -45, lng: 168, alt: 100 }, { lat: -45.001, lng: 168.001, alt: 110 }],
++    }, {
++      id: 73,
++      user_id: 7,
++      client_activity_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
++      finalized_at: null,
++      route_points: [],
++    }],
++    routes: [],
++    tombstones: new Set(),
++    activityTombstones: new Set(['99999999-9999-4999-8999-999999999999']),
++  };
++
++  async function execute(sql, params = []) {
++    const compact = sql.replace(/\s+/g, ' ').trim();
++    if (compact.startsWith('SELECT id FROM users')) return [[{ id: params[0] }]];
++    if (compact.startsWith('SELECT client_route_id FROM route_client_tombstones')) {
++      return [[state.tombstones.has(`${params[0]}:${params[1]}`) ? { client_route_id: params[1] } : undefined].filter(Boolean)];
++    }
++    if (compact.startsWith('SELECT client_activity_id FROM activity_client_tombstones')) {
++      return [[state.activityTombstones.has(params[1]) ? { client_activity_id: params[1] } : undefined].filter(Boolean)];
++    }
++    if (compact.startsWith('SELECT id, client_activity_id, route_points FROM sessions')) {
++      const byClient = compact.includes('client_activity_id = ?');
++      const found = state.sessions.find(row => row.user_id === params[0]
++        && (byClient ? row.client_activity_id === params[1] : row.id === params[1])
++        && row.finalized_at);
++      return [[found].filter(Boolean)];
++    }
++    if (compact.startsWith('SELECT user_id, finalized_at FROM sessions')) {
++      const byClient = compact.includes('client_activity_id = ?');
++      const found = state.sessions.find(row => byClient
++        ? row.client_activity_id === params[0]
++        : row.id === params[0]);
++      return [[found].filter(Boolean)];
++    }
++    if (compact.startsWith('SELECT id, created_geometry_hash FROM routes')) {
++      const found = state.routes.find(row => row.user_id === params[0] && row.client_route_id === params[1]);
++      return [[found].filter(Boolean)];
++    }
++    if (compact.startsWith('INSERT INTO routes')) {
++      const [user_id, client_route_id, creation_origin, source_activity_client_id,
++        source_session_id, origin_geometry_hash, created_geometry_hash,
++        origin_gap_reconnected, name, description, points, waypoints,
++        distance_m, elevation_gain_m, permission] = params;
++      const row = {
++        id: state.nextId++, user_id, client_route_id, creation_origin,
++        source_activity_client_id, source_session_id, origin_geometry_hash,
++        created_geometry_hash, geometry_edited_since_creation: 0,
++        origin_gap_reconnected, name, description, points: JSON.parse(points),
++        waypoints: JSON.parse(waypoints), distance_m, elevation_gain_m, permission,
++        run_count: 0, last_run_at: null,
++        created_at: '2026-09-17T00:01:00.000Z', updated_at: '2026-09-17T00:01:00.000Z',
++      };
++      state.routes.push(row);
++      return [{ insertId: row.id, affectedRows: 1 }];
++    }
++    if (compact.startsWith('UPDATE routes SET name = ?')) {
++      const id = params[params.length - 2];
++      const userId = params[params.length - 1];
++      const row = state.routes.find(item => item.id === id && item.user_id === userId);
++      if (!row) return [{ affectedRows: 0 }];
++      [row.name, row.description] = params;
++      row.points = JSON.parse(params[2]);
++      row.waypoints = JSON.parse(params[3]);
++      row.distance_m = params[4];
++      row.elevation_gain_m = params[5];
++      row.permission = params[6];
++      row.geometry_edited_since_creation = Math.max(row.geometry_edited_since_creation, params[7]);
++      return [{ affectedRows: 1 }];
++    }
++    if (compact.startsWith('UPDATE routes SET points = ?')) {
++      const [points, hash, id, userId] = params;
++      const row = state.routes.find(item => item.id === id && item.user_id === userId);
++      if (!row) return [{ affectedRows: 0 }];
++      row.points = JSON.parse(points);
++      if (!row.created_geometry_hash || row.created_geometry_hash !== hash) row.geometry_edited_since_creation = 1;
++      return [{ affectedRows: 1 }];
++    }
++    if (compact.startsWith('SELECT id, user_id, client_route_id') && compact.includes('WHERE id = ?')) {
++      const found = state.routes.find(row => row.id === Number(params[0]) && row.user_id === params[1]);
++      return [[found ? { ...found } : undefined].filter(Boolean)];
++    }
++    if (compact.startsWith('INSERT INTO route_client_tombstones')) {
++      state.tombstones.add(`${params[0]}:${params[1]}`);
++      return [{ affectedRows: 1 }];
++    }
++    if (compact.startsWith('DELETE FROM routes WHERE user_id')) {
++      const before = state.routes.length;
++      state.routes = state.routes.filter(row => !(row.user_id === params[0] && row.client_route_id === params[1]));
++      return [{ affectedRows: before - state.routes.length }];
++    }
++    throw new Error(`Unhandled SQL in memory Route DB: ${compact}`);
++  }
++
++  const connection = {
++    execute,
++    beginTransaction: async () => undefined,
++    commit: async () => undefined,
++    rollback: async () => undefined,
++    release: () => undefined,
++  };
++  return { state, execute, getConnection: async () => connection };
++}
++
++function loadRouteWithPool(pool) {
++  delete require.cache[modelPath];
++  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: pool };
++  return require(modelPath);
++}
++
++test('Activity origin and edit evidence survive create, reload, edit, and source deletion', async () => {
++  const pool = createMemoryPool();
++  const Route = loadRouteWithPool(pool);
++  const sourceId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
++  const clientRouteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
++  const original = [{ lat: -45, lng: 168, alt: 100 }, { lat: -45.001, lng: 168.001, alt: 110 }];
++
++  const id = await Route.create({
++    userId: 7, clientRouteId, name: 'Activity Route', points: original,
++    waypoints: [], distanceM: 140, elevationGainM: 10,
++    sourceActivityClientId: sourceId,
++  });
++  const firstReload = await Route.findByIdAndUser(id, 7);
++  assert.equal(firstReload.client_route_id, clientRouteId);
++  assert.equal(firstReload.creation_origin, 'activity');
++  assert.equal(firstReload.source_activity_client_id, sourceId);
++  assert.equal(firstReload.source_session_id, 72);
++  assert.equal(firstReload.geometry_edited_since_creation, 0);
++  assert.equal(firstReload.origin_geometry_hash, firstReload.created_geometry_hash);
++
++  const edited = [{ lat: -45, lng: 168, alt: 100 }, { lat: -45.002, lng: 168.003, alt: 115 }];
++  await Route.update(id, 7, {
++    points: edited,
++    // Ordinary updates cannot rewrite these because Route.update ignores them.
++    sourceActivityClientId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
++  });
++  const secondReload = await Route.findByIdAndUser(id, 7);
++  assert.deepEqual(secondReload.points, edited);
++  assert.equal(secondReload.source_activity_client_id, sourceId);
++  assert.equal(secondReload.origin_geometry_hash, firstReload.origin_geometry_hash);
++  assert.equal(secondReload.created_geometry_hash, firstReload.created_geometry_hash);
++  assert.equal(secondReload.geometry_edited_since_creation, 1);
++
++  // ON DELETE SET NULL removes only the live link; the independent Route and
++  // historical Activity-origin fact remain.
++  pool.state.sessions = [];
++  pool.state.routes[0].source_session_id = null;
++  const afterSourceDelete = await Route.findByIdAndUser(id, 7);
++  assert.equal(afterSourceDelete.creation_origin, 'activity');
++  assert.equal(afterSourceDelete.source_activity_client_id, sourceId);
++  assert.equal(afterSourceDelete.source_session_id, null);
++});
++
++test('client Route identity converges response-loss retries and tombstones win', async () => {
++  const pool = createMemoryPool();
++  const Route = loadRouteWithPool(pool);
++  const clientRouteId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
++  const first = [{ lat: -45, lng: 168 }, { lat: -45.001, lng: 168.001 }];
++  const revised = [{ lat: -45, lng: 168 }, { lat: -45.002, lng: 168.004 }];
++  const id1 = await Route.create({ userId: 7, clientRouteId, name: 'First', points: first, waypoints: [] });
++  const id2 = await Route.create({ userId: 7, clientRouteId, name: 'Revised', points: revised, waypoints: [] });
++  assert.equal(id2, id1);
++  assert.equal(pool.state.routes.length, 1);
++  assert.equal((await Route.findByIdAndUser(id1, 7)).name, 'Revised');
++  assert.equal((await Route.findByIdAndUser(id1, 7)).geometry_edited_since_creation, 1);
++
++  await Route.deleteByClientId(clientRouteId, 7);
++  assert.equal(pool.state.routes.length, 0);
++  await assert.rejects(
++    Route.create({ userId: 7, clientRouteId, name: 'Late create', points: first, waypoints: [] }),
++    error => error.code === 'ROUTE_TOMBSTONED',
++  );
++});
++
++test('source Activity must be finalized and owned by the Route owner', async () => {
++  const pool = createMemoryPool();
++  const Route = loadRouteWithPool(pool);
++  const points = [{ lat: -45, lng: 168 }, { lat: -45.001, lng: 168.001 }];
++  await assert.rejects(
++    Route.create({
++      userId: 8,
++      clientRouteId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
++      name: 'Unauthorized', points, waypoints: [],
++      sourceActivityClientId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
++    }),
++    error => error.code === 'SOURCE_ACTIVITY_UNAUTHORIZED',
++  );
++  await assert.rejects(
++    Route.create({
++      userId: 7,
++      clientRouteId: '11111111-1111-4111-8111-111111111111',
++      name: 'Still uploading', points, waypoints: [],
++      sourceActivityClientId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
++    }),
++    error => error.code === 'SOURCE_ACTIVITY_NOT_READY',
++  );
++  await assert.rejects(
++    Route.create({
++      userId: 7,
++      clientRouteId: '22222222-2222-4222-8222-222222222222',
++      name: 'Temporarily missing', points, waypoints: [],
++      sourceActivityClientId: '88888888-8888-4888-8888-888888888888',
++    }),
++    error => error.code === 'SOURCE_ACTIVITY_NOT_FOUND',
++  );
++  await assert.rejects(
++    Route.create({
++      userId: 7,
++      clientRouteId: '33333333-3333-4333-8333-333333333333',
++      name: 'Deleted source', points, waypoints: [],
++      sourceActivityClientId: '99999999-9999-4999-8999-999999999999',
++    }),
++    error => error.code === 'SOURCE_ACTIVITY_DELETED',
++  );
++});

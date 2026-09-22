@@ -1,0 +1,137 @@
+{
+  "schema": "cairnnz.v1-closure.supervision.prepare-checkpoint.v1",
+  "status": "PREPARED_NEEDS_TRUST",
+  "recordedAt": "2026-09-19T18:15:32+08:00",
+  "mode": "PREPARE_ONLY",
+  "intentionalBoundary": true,
+  "mission": {
+    "rootSessionId": "01a0b4c1-b498-76e0-95bd-1976d11586f2",
+    "runId": "20260918T222838+0800",
+    "stage": "OWNER_PAUSED at Revision-03 A4 exact-source validation/freeze; Public B4 and downstream closure remain preserved behind it",
+    "preservedScopes": [
+      "Personal/Friends Revision 03",
+      "Continuous Overnight V1 Closure including controlled Public",
+      "already-authorized Homepage work"
+    ],
+    "homepageWorkStartedInThisPreparation": false,
+    "featureWritingResumed": false
+  },
+  "source": {
+    "head": "393338b5c159e7341d22b94086b5c29455386bdf",
+    "prepareStartTree": "ac6aa48abe38c5bf76d850d49f0826365173bdf4",
+    "prepareStartIndex": "/Users/mzm/Desktop/cairn_revision03_work/baseline/supervision-prepare-start.index",
+    "productFingerprint": "9cee885d048b37ba1257f2651e0add6aa0a37b583e59e5404cb8df2636722632",
+    "productFingerprintFileCount": 632,
+    "candidate": "O60",
+    "appRuntime": "0.2.6"
+  },
+  "instructionInputs": [
+    {
+      "path": "/Users/mzm/Desktop/CairnNZ_Unattended_04/MASTER_PROMPT.md",
+      "sha256": "f7069353a24f7a35bf41f98d5824ead239eec83ef1e594c300552521eb2dd8cd"
+    },
+    {
+      "path": "/Users/mzm/Desktop/CairnNZ_Unattended_04/SUPERVISION_ACCEPTANCE.json",
+      "sha256": "cca589a77e3f24c68ba2f4d5ded49577bf428742635c03ccc8aa5742649cca6f"
+    },
+    {
+      "path": "/Users/mzm/Downloads/CairnNZ_Project_Authority.md",
+      "sha256": "7f17e353b13e27f941bb059899f05b699ae009d831d565a930ec93beddcc0f1c"
+    }
+  ],
+  "runtime": {
+    "codexCli": "0.151.0",
+    "observedRootModel": "gpt-5.6-sol",
+    "observedRootReasoningEffort": "ultra",
+    "configuredDefaultModel": "gpt-5.6-sol",
+    "configuredDefaultReasoningEffort": "xhigh",
+    "serviceTier": "UNVERIFIED",
+    "approvalPolicy": "never",
+    "sandbox": "danger-full-access",
+    "multiAgentAvailable": true,
+    "maximumConcurrentSlots": 4,
+    "hooksFeature": "stable/enabled capability; this definition is not yet trusted or runtime-verified",
+    "goalsFeature": "stable/enabled capability; current goal is null and was not changed",
+    "fast": "required OFF; no activation/configuration change made; active service-mode telemetry unavailable"
+  },
+  "agents": [
+    {
+      "id": "/root/auth_final_review",
+      "attempt": 1,
+      "state": "COMPLETED",
+      "writer": false
+    },
+    {
+      "id": "/root/flow_gps_final_review",
+      "attempt": 1,
+      "state": "COMPLETED",
+      "writer": false
+    }
+  ],
+  "liveFeatureWriters": [],
+  "ownedBackgroundJobs": [],
+  "servicesObserved": [
+    "Expo Web parent 54519 and Metro 54749 with workers 54875/54876/54877",
+    "review backend parent 39821 and server 40048 on 3010",
+    "orphan disposable backend 56707 on 33482, database unavailable",
+    "cairn-v1-closure-mysql container 691e61549515 on host 3310",
+    "unrelated cc-builder-mysql container f3b4d31e78f1 on host 3306"
+  ],
+  "preparedFiles": [
+    ".codex/hooks.json",
+    ".codex/hooks/cairn-v1-stop-gate.mjs",
+    "docs/review/v1-closure/20260918T222838+0800/supervision/CONTROL.json",
+    "docs/review/v1-closure/20260918T222838+0800/supervision/queue-adapter.mjs",
+    "docs/review/v1-closure/20260918T222838+0800/supervision/observer.mjs",
+    "docs/review/v1-closure/20260918T222838+0800/supervision/test-preparation.mjs",
+    "docs/review/v1-closure/20260918T222838+0800/supervision/fixtures/supervision-cases.json",
+    "docs/review/v1-closure/20260918T222838+0800/supervision/README.md"
+  ],
+  "runtimeVerified": [
+    "Node syntax for gate, adapter, observer, and preparation runner",
+    "nine eligible deterministic unit/fixture cases",
+    "root/session/cwd/event isolation",
+    "derived real queue retains A4,A5,B4,C2,C3,D1,D2",
+    "read-only observer fixture and one local metadata sample",
+    "no supervision script or observer process remains live"
+  ],
+  "notRuntimeVerified": [
+    "hook trust",
+    "hook loading in this already-running client",
+    "real Stop invocation/continuation T01",
+    "real disposable child/job stall T04",
+    "owner-live pause/resume T08",
+    "Fast active service-state telemetry",
+    "native/device/field behavior"
+  ],
+  "preparationTests": {
+    "receipt": "PREPARATION_RESULTS.json",
+    "result": "PASS_WITH_LIVE_TESTS_NOT_RUN",
+    "fixturePass": 9,
+    "liveNotRun": ["T01", "T04", "T08"],
+    "preservedFailedReceipt": "PREPARATION_RESULTS.failed-01.json",
+    "focusedRepair": "RETURNED workers with an integrated/rejected/quarantined disposition are terminal; the first test exposed and the second test verified this correction."
+  },
+  "hook": {
+    "definitionSha256": "0909bdbb20abac6637d8eb5ff1e39abc360bb52480e1fabb52ed75343faa42dc",
+    "handlerSha256": "61af54fc631e6f5189534749cd76a0daa14d0b33e8b48169b5d3139c84aa789a",
+    "trusted": false,
+    "loaded": "UNVERIFIED",
+    "liveInvocation": "NOT_RUN",
+    "activationInstructions": "README.md#owner-trust-and-loading-boundary"
+  },
+  "firstReadyWorkAfterVerifyThenRun": {
+    "queueId": "A4",
+    "task": "Diagnose the loaded Raw GPS accepted-to-Memory 2026.4 ms result against the frozen 40 ms budget; do not retry unchanged or raise the budget."
+  },
+  "prohibitionsObserved": [
+    "No feature writing resumed",
+    "No hook trusted or auto-trusted",
+    "No Goal created or changed",
+    "No Codex upgrade or restart",
+    "No permission change",
+    "No process or service stopped/restarted",
+    "No migration/deployment/database mutation",
+    "No OTA or general Public enablement"
+  ]
+}

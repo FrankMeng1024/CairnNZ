@@ -1,0 +1,1268 @@
+{
+  "schema_version": 1,
+  "audit_id": "20260916T131638+0800",
+  "offline_readable": true,
+  "privacy": {
+    "synthetic_only": true,
+    "historical_private_looking_images_excluded": true,
+    "secrets_or_tokens_included": false
+  },
+  "isolation": {
+    "fresh_browser_context": true,
+    "synthetic_identity": true,
+    "synthetic_coordinates": true,
+    "cairn_api_reads_fixture_intercepted": true,
+    "cairn_api_writes_denied": true,
+    "blocked_write_count": 161,
+    "preview_or_runtime_production_api_used": false
+  },
+  "runtime_limitations": [
+    "pageerror: Cannot read properties of undefined (reading '0')"
+  ],
+  "prevented_requests": {
+    "product_api_writes": 161,
+    "unique_target": "POST api.yiiling.cn/api/edit-diag"
+  },
+  "captures": [
+    {
+      "capture_id": "VIS-001",
+      "page": "hike",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "ready",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "e62e8f3a40bc2e0bc1826425c2946dfa1cdd843d4229309137f3556df1f04b50",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing hike component renders this ready chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/hike--ready--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-002",
+      "page": "hike",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "tracking",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "e62e8f3a40bc2e0bc1826425c2946dfa1cdd843d4229309137f3556df1f04b50",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing hike component renders this tracking chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/hike--tracking--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-003",
+      "page": "run",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "ready",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "c8d17d924c744e86a08383ed97427c1dd58f57d1882180f329137627ecf83a69",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing run component renders this ready chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/run--ready--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-004",
+      "page": "run",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "tracking",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "c8d17d924c744e86a08383ed97427c1dd58f57d1882180f329137627ecf83a69",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing run component renders this tracking chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/run--tracking--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-005",
+      "page": "hike",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "ready",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "e62e8f3a40bc2e0bc1826425c2946dfa1cdd843d4229309137f3556df1f04b50",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing hike component renders this ready chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/hike--ready--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-006",
+      "page": "hike",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "tracking",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "e62e8f3a40bc2e0bc1826425c2946dfa1cdd843d4229309137f3556df1f04b50",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing hike component renders this tracking chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/hike--tracking--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-007",
+      "page": "run",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "ready",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "c8d17d924c744e86a08383ed97427c1dd58f57d1882180f329137627ecf83a69",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing run component renders this ready chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/run--ready--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-008",
+      "page": "run",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "tracking",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "c8d17d924c744e86a08383ed97427c1dd58f57d1882180f329137627ecf83a69",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing run component renders this tracking chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/run--tracking--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-009",
+      "page": "hike",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "ready",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "e62e8f3a40bc2e0bc1826425c2946dfa1cdd843d4229309137f3556df1f04b50",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing hike component renders this ready chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/hike--ready--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-010",
+      "page": "hike",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "tracking",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "e62e8f3a40bc2e0bc1826425c2946dfa1cdd843d4229309137f3556df1f04b50",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing hike component renders this tracking chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/hike--tracking--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-011",
+      "page": "run",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "ready",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "c8d17d924c744e86a08383ed97427c1dd58f57d1882180f329137627ecf83a69",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing run component renders this ready chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/run--ready--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-012",
+      "page": "run",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "tracking",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "c8d17d924c744e86a08383ed97427c1dd58f57d1882180f329137627ecf83a69",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store state injected; no Activity start/finish performed.",
+      "what_this_proves": "The current existing run component renders this tracking chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/run--tracking--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-013",
+      "page": "trails",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "activities",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "029553da4df59c29c83965bcc574686c49dbc68214abed29d0dcf1bc49b82441",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic Activity and Route rows injected after mount.",
+      "what_this_proves": "The current existing trails component renders this activities chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Normal Home entry exists; this capture uses forced navigation.",
+        "No All Cairns tab is present.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/trails--activities--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-014",
+      "page": "trails",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "routes",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "029553da4df59c29c83965bcc574686c49dbc68214abed29d0dcf1bc49b82441",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic Activity and Route rows injected after mount.",
+      "what_this_proves": "The current existing trails component renders this routes chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "No All Cairns tab is present.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/trails--routes--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-015",
+      "page": "trails",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "activities",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "029553da4df59c29c83965bcc574686c49dbc68214abed29d0dcf1bc49b82441",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic Activity and Route rows injected after mount.",
+      "what_this_proves": "The current existing trails component renders this activities chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Normal Home entry exists; this capture uses forced navigation.",
+        "No All Cairns tab is present.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/trails--activities--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-016",
+      "page": "trails",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "routes",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "029553da4df59c29c83965bcc574686c49dbc68214abed29d0dcf1bc49b82441",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic Activity and Route rows injected after mount.",
+      "what_this_proves": "The current existing trails component renders this routes chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "No All Cairns tab is present.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/trails--routes--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-017",
+      "page": "trails",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "activities",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "029553da4df59c29c83965bcc574686c49dbc68214abed29d0dcf1bc49b82441",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic Activity and Route rows injected after mount.",
+      "what_this_proves": "The current existing trails component renders this activities chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Normal Home entry exists; this capture uses forced navigation.",
+        "No All Cairns tab is present.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/trails--activities--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-018",
+      "page": "trails",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "routes",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_LIST",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "029553da4df59c29c83965bcc574686c49dbc68214abed29d0dcf1bc49b82441",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic Activity and Route rows injected after mount.",
+      "what_this_proves": "The current existing trails component renders this routes chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "No All Cairns tab is present.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/trails--routes--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-019",
+      "page": "activity-detail",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "synced",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "5a7b8c5f3e5a6b080584f3e080f3ef6775dcf08733752193a41339a778da6e93",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic completed Activity injected; direct detail route.",
+      "what_this_proves": "The current existing activity-detail component renders this synced chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "SVG/fallback path is not native Mapbox proof.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/activity-detail--synced--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-020",
+      "page": "route-detail",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "saved",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "5a7b8c5f3e5a6b080584f3e080f3ef6775dcf08733752193a41339a778da6e93",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic saved Route injected; direct detail route.",
+      "what_this_proves": "The current existing route-detail component renders this saved chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "The visible Layers control has no implemented handler in source.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/route-detail--saved--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-021",
+      "page": "route-editor",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "view",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "5ba210a6fd98235be891bba862cd13f31c3d86aeaf6bbe701c04ea075fd56e24",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic saved Route injected; direct editor route.",
+      "what_this_proves": "The current existing route-editor component renders this view chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Web fallback is not native Mapbox proof.",
+        "Gear action is a source TODO.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/route-editor--view--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-022",
+      "page": "plant",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "activity-compose",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "965d6344f421b09f37191070443f0b885a7d845918730f28a275ffc5ee7954f6",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic active Hike state opens compose directly; Plant Cairn is not pressed.",
+      "what_this_proves": "The current existing plant component renders this activity-compose chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "No Cairn creation or backend write occurred.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/plant--activity-compose--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-023",
+      "page": "own-cairn-detail",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "synced-own",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "c27d68a953f237d0377360270a451cc08e29d0d57f8691946dd38f84682ed190",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic own Cairn injected; direct detail route.",
+      "what_this_proves": "The current existing own-cairn-detail component renders this synced-own chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not a native renderer capture.",
+        "Normal reachability exists after successful full Plant.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/own-cairn-detail--synced-own--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-024",
+      "page": "memory",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "personal",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "f82d1a5adaa9b0aec3c4cdf07021ceb29621db6c019b6e1b39493e4aec04a06f",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic personal trace and own Cairn; all friend/public API reads fixture-empty.",
+      "what_this_proves": "The current existing memory component renders this personal chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Web adapter substitutes outdoors-v12 for native Standard v3.",
+        "No real friend-location access.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/memory--personal--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-025",
+      "page": "settings",
+      "theme": "day",
+      "viewport": "390x844",
+      "ui_state": "root",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "fba9436d1809d7443f8892e9547ab4a0704fa82b506e248110cea15765c7f96a",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic user; auth/profile read intercepted.",
+      "what_this_proves": "The current existing settings component renders this root chrome/state on Expo Web at 390x844 under day with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "No feedback, export, reset, deletion, sign-out, or external link action invoked.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/settings--root--day--390x844.png"
+    },
+    {
+      "capture_id": "VIS-026",
+      "page": "activity-detail",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "synced",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "5a7b8c5f3e5a6b080584f3e080f3ef6775dcf08733752193a41339a778da6e93",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic completed Activity injected; direct detail route.",
+      "what_this_proves": "The current existing activity-detail component renders this synced chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "SVG/fallback path is not native Mapbox proof.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/activity-detail--synced--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-027",
+      "page": "route-detail",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "saved",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "5a7b8c5f3e5a6b080584f3e080f3ef6775dcf08733752193a41339a778da6e93",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic saved Route injected; direct detail route.",
+      "what_this_proves": "The current existing route-detail component renders this saved chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "The visible Layers control has no implemented handler in source.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/route-detail--saved--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-028",
+      "page": "route-editor",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "view",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "5ba210a6fd98235be891bba862cd13f31c3d86aeaf6bbe701c04ea075fd56e24",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic saved Route injected; direct editor route.",
+      "what_this_proves": "The current existing route-editor component renders this view chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Web fallback is not native Mapbox proof.",
+        "Gear action is a source TODO.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/route-editor--view--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-029",
+      "page": "plant",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "activity-compose",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "965d6344f421b09f37191070443f0b885a7d845918730f28a275ffc5ee7954f6",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic active Hike state opens compose directly; Plant Cairn is not pressed.",
+      "what_this_proves": "The current existing plant component renders this activity-compose chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "No Cairn creation or backend write occurred.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/plant--activity-compose--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-030",
+      "page": "own-cairn-detail",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "synced-own",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "c27d68a953f237d0377360270a451cc08e29d0d57f8691946dd38f84682ed190",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic own Cairn injected; direct detail route.",
+      "what_this_proves": "The current existing own-cairn-detail component renders this synced-own chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not a native renderer capture.",
+        "Normal reachability exists after successful full Plant.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/own-cairn-detail--synced-own--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-031",
+      "page": "memory",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "personal",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "f82d1a5adaa9b0aec3c4cdf07021ceb29621db6c019b6e1b39493e4aec04a06f",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic personal trace and own Cairn; all friend/public API reads fixture-empty.",
+      "what_this_proves": "The current existing memory component renders this personal chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Web adapter substitutes outdoors-v12 for native Standard v3.",
+        "No real friend-location access.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/memory--personal--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-032",
+      "page": "settings",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "ui_state": "root",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "fba9436d1809d7443f8892e9547ab4a0704fa82b506e248110cea15765c7f96a",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic user; auth/profile read intercepted.",
+      "what_this_proves": "The current existing settings component renders this root chrome/state on Expo Web at 390x844 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "No feedback, export, reset, deletion, sign-out, or external link action invoked.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/settings--root--sunset--390x844.png"
+    },
+    {
+      "capture_id": "VIS-033",
+      "page": "activity-detail",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "synced",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "5a7b8c5f3e5a6b080584f3e080f3ef6775dcf08733752193a41339a778da6e93",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic completed Activity injected; direct detail route.",
+      "what_this_proves": "The current existing activity-detail component renders this synced chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "SVG/fallback path is not native Mapbox proof.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/activity-detail--synced--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-034",
+      "page": "route-detail",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "saved",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "5a7b8c5f3e5a6b080584f3e080f3ef6775dcf08733752193a41339a778da6e93",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic saved Route injected; direct detail route.",
+      "what_this_proves": "The current existing route-detail component renders this saved chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "The visible Layers control has no implemented handler in source.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/route-detail--saved--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-035",
+      "page": "route-editor",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "view",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "5ba210a6fd98235be891bba862cd13f31c3d86aeaf6bbe701c04ea075fd56e24",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic saved Route injected; direct editor route.",
+      "what_this_proves": "The current existing route-editor component renders this view chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Web fallback is not native Mapbox proof.",
+        "Gear action is a source TODO.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/route-editor--view--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-036",
+      "page": "plant",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "activity-compose",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "965d6344f421b09f37191070443f0b885a7d845918730f28a275ffc5ee7954f6",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic active Hike state opens compose directly; Plant Cairn is not pressed.",
+      "what_this_proves": "The current existing plant component renders this activity-compose chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "No Cairn creation or backend write occurred.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/plant--activity-compose--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-037",
+      "page": "own-cairn-detail",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "synced-own",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "c27d68a953f237d0377360270a451cc08e29d0d57f8691946dd38f84682ed190",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic own Cairn injected; direct detail route.",
+      "what_this_proves": "The current existing own-cairn-detail component renders this synced-own chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Not a native renderer capture.",
+        "Normal reachability exists after successful full Plant.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/own-cairn-detail--synced-own--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-038",
+      "page": "memory",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "personal",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "REAL_WEB_MAPBOX_ADAPTER",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "f82d1a5adaa9b0aec3c4cdf07021ceb29621db6c019b6e1b39493e4aec04a06f",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic personal trace and own Cairn; all friend/public API reads fixture-empty.",
+      "what_this_proves": "The current existing memory component renders this personal chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Web adapter substitutes outdoors-v12 for native Standard v3.",
+        "No real friend-location access.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/memory--personal--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-039",
+      "page": "settings",
+      "theme": "night",
+      "viewport": "390x844",
+      "ui_state": "root",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "fba9436d1809d7443f8892e9547ab4a0704fa82b506e248110cea15765c7f96a",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic user; auth/profile read intercepted.",
+      "what_this_proves": "The current existing settings component renders this root chrome/state on Expo Web at 390x844 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "No feedback, export, reset, deletion, sign-out, or external link action invoked.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/settings--root--night--390x844.png"
+    },
+    {
+      "capture_id": "VIS-040",
+      "page": "hike",
+      "theme": "sunset",
+      "viewport": "320x568",
+      "ui_state": "ready-small-screen",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_NATIVE_MAP_SUBSTITUTE_OR_BLANK",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "e62e8f3a40bc2e0bc1826425c2946dfa1cdd843d4229309137f3556df1f04b50",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Tracking store ready state injected at representative small viewport.",
+      "what_this_proves": "The current existing hike component renders this ready-small-screen chrome/state on Expo Web at 320x568 under sunset with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "Small-screen surrounding-chrome evidence only.",
+        "Not native Mapbox evidence.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/hike--ready-small-screen--sunset--320x568.png"
+    },
+    {
+      "capture_id": "VIS-041",
+      "page": "settings",
+      "theme": "night",
+      "viewport": "430x932",
+      "ui_state": "root-large-screen",
+      "entry_type": "FORCED_TEST_ROUTE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_FORM",
+      "data_source": "SYNTHETIC_FIXTURE",
+      "source_fingerprint": "fba9436d1809d7443f8892e9547ab4a0704fa82b506e248110cea15765c7f96a",
+      "app_runtime_ota_backend_identity": {
+        "captured_code": "HEAD 12fa1cd dirty current source; not attributable to deployed O56",
+        "app": "0.2.6",
+        "runtime": "0.2.6",
+        "marker_in_source": "O56",
+        "installed_ota": "UNKNOWN",
+        "backend_match": "NOT_USED_API_FIXTURES"
+      },
+      "capture_time": "2026-09-16T06:22:00.560Z",
+      "mock_or_fixture_boundaries": "Synthetic user; auth/profile read intercepted at representative large viewport.",
+      "what_this_proves": "The current existing settings component renders this root-large-screen chrome/state on Expo Web at 430x932 under night with synthetic fixtures.",
+      "what_this_does_not_prove": [
+        "No destructive, feedback, export, purchase, or external-link action invoked.",
+        "Normal navigation unless separately sourced.",
+        "Deployed/native/device/field quality.",
+        "Explicit user acceptance."
+      ],
+      "relative_file": "images/settings--root-large-screen--night--430x932.png"
+    }
+  ],
+  "boards": [
+    {
+      "board_id": "BOARD-1",
+      "relative_file": "images/board-activity-day-sunset-night.jpg"
+    },
+    {
+      "board_id": "BOARD-2",
+      "relative_file": "images/board-library-detail-editor.jpg"
+    },
+    {
+      "board_id": "BOARD-3",
+      "relative_file": "images/board-cairn-memory-settings.jpg"
+    }
+  ],
+  "missing_pages": [
+    {
+      "page": "All Cairns",
+      "reachability": "UNREACHABLE",
+      "reason": "No current page/normal entry; no fabricated screenshot."
+    },
+    {
+      "page": "Non-owner Cairn Detail",
+      "reachability": "UNREACHABLE_NORMAL_USER",
+      "reason": "Source components only; no fabricated successful workflow."
+    }
+  ]
+}

@@ -160,7 +160,9 @@ class TelemetryUploader {
       if (settings.telemetryApiKey) {
         uploadHeaders['X-API-Key'] = settings.telemetryApiKey;
       }
-      const token = await getToken();
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const ownerId = String(require('../store/useAppStore').useAppStore.getState().user?.id ?? '');
+      const token = ownerId ? await getToken(ownerId) : null;
       if (token) uploadHeaders.Authorization = `Bearer ${token}`;
       const resp = await fetch(url, {
         method: 'POST',
@@ -262,7 +264,9 @@ class TelemetryUploader {
         'X-Cairn-Ended-At': input.endedAt ? String(input.endedAt) : '',
       };
       if (settings.telemetryApiKey) headers['X-API-Key'] = settings.telemetryApiKey;
-      const token = await getToken();
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const ownerId = String(require('../store/useAppStore').useAppStore.getState().user?.id ?? '');
+      const token = ownerId ? await getToken(ownerId) : null;
       if (token) headers.Authorization = `Bearer ${token}`;
       const response = await fetch(`${backendUrl.replace(/\/$/, '')}/api/telemetry/sessions`, {
         method: 'POST',

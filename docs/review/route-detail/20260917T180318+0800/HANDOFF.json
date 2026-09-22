@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "card": "CARD-ROUTE-01",
+  "module": "OWN_ROUTE_DETAIL_EXISTING_EDITOR_USE_ROUTE",
+  "run_id": "20260917T180318+0800",
+  "run_date_local": "2026-09-17",
+  "timezone": "Asia/Shanghai",
+  "repository": "/Users/mzm/Desktop/cairn/CairnNZ",
+  "source_identity": {"branch":"master","head_at_start":"12fa1cd0ef599e53a81cd30537ce761c5e2150ce","worktree_was_dirty":true,"unrelated_dirty_work":"PRESERVED","task_changes_committed":false,"task_scoped_patch":"TASK_SCOPED.patch"},
+  "candidate": {"baseline_marker":"O58","marker":"O59","increment_count":1,"meaning":"LOCAL_CLIENT_CANDIDATE_IDENTITY_ONLY","ota_published":false,"device_loaded":false,"owner_accepted":false,"native_app_version_changed":false,"runtime_version_changed":false,"build_number_changed":false,"dependencies_changed":false},
+  "verdict": "IMPLEMENTATION_COMPLETE_GROUPED_DEVICE_REVIEW_REQUIRED",
+  "journey": {
+    "activity_save_as_route_to_canonical_detail": true,
+    "trails_reopens_same_route": true,
+    "existing_editor_save_returns_to_same_detail": true,
+    "apply_is_draft_only": true,
+    "cancel_preserves_saved_route": true,
+    "failed_save_retains_draft": true,
+    "hike_prestart_selected_route": true,
+    "run_prestart_selected_route": true,
+    "auto_recording": false,
+    "active_following_enabled": false
+  },
+  "origin": {
+    "minimum_contract_implemented": true,
+    "client_route_identity": true,
+    "creation_origin": true,
+    "source_activity_owner_and_finalized_validation": true,
+    "source_and_created_geometry_hashes": true,
+    "edited_since_creation": true,
+    "explicit_gap_reconnect": true,
+    "ordinary_update_can_rewrite_origin": false,
+    "source_activity_delete_cascades_route": false,
+    "full_segment_lineage_or_version_tree": false
+  },
+  "offline_mutation": {
+    "pending_create_durable": true,
+    "pending_edit_updates_payload": true,
+    "synced_edit_waits_for_ack": true,
+    "failed_save_retains_draft": true,
+    "response_loss_converges_identity": true,
+    "owner_change_and_late_response_guarded": true,
+    "tombstone_prevents_resurrection": true,
+    "legacy_delete_waits_for_remote_ack": true
+  },
+  "tests": {
+    "client_focused":{"suites_passed":17,"suites_total":17,"tests_passed":133,"tests_total":133},
+    "backend_origin_and_activity":{"tests_passed":18,"tests_total":18,"runner":"node --test"},
+    "activity_verify_changed":{"checks_passed":550,"checks_total":550},
+    "typescript":{"full_project":"NONZERO_PRE_EXISTING_BASELINE","diagnostic_lines":253,"card_touched_file_diagnostic_lines":0},
+    "raw_results":"TEST_RESULTS.json"
+  },
+  "visual_evidence": {"capture_count":16,"board_count":4,"normal_handler_flow_step_count":14,"renderer":"EXPO_WEB_WITH_MAP_SERVICES_BLOCKED","actual_web_mapbox_proven":false,"native_mapbox_proven":false,"physical_device_proven":false,"native_small_screen_proven":false,"device_loading_proven":false,"explicit_user_acceptance":"PENDING","manifest":"visual/capture-results.json","offline_board":"visual/index.html"},
+  "runtime_isolation": {"api_base_url":"http://127.0.0.1:8102","fresh_browser_context":true,"synthetic_identity":true,"synthetic_coordinates":true,"api_reads_fixture_intercepted":true,"api_writes_fixture_intercepted":true,"external_requests_blocked":true,"production_data_read":false,"production_data_mutated":false,"telemetry_enabled":false},
+  "requirements": {"delta_markdown":"REQUIREMENTS_DELTA.md","delta_json":"REQUIREMENTS_DELTA.json","rq_route_001":"IMPLEMENTED_CANDIDATE","rq_route_002":"IMPLEMENTED_CANDIDATE","rq_route_003":"IMPLEMENTED_LOCAL_MINIMUM_BACKEND_DEPLOYMENT_PENDING","rq_route_004":"IMPLEMENTED_CANDIDATE","rq_route_005":"IMPLEMENTED_CANDIDATE","rq_route_006":"IMPLEMENTED_CANDIDATE","rq_route_007":"NOT_IMPLEMENTED_OUT_OF_SCOPE","rq_trail_003":"IMPLEMENTED_CANDIDATE","rq_offline_001":"IMPLEMENTED_ROUTE_SCOPE"},
+  "backend": {"code_changed_locally":true,"migration":"036_route_origin_identity.sql","migration_executed":false,"deployed":false,"old_backend_route_use_compatible":true,"old_backend_origin_durable":false,"deployment_order":"DEPLOYMENT_DEPENDENCIES.md","prior_o58_owner_history_and_replay_deployed":false},
+  "carry_forward": {"card_ad_01_preserved":true,"card_cairn_01_preserved":true,"previous_packages_modified":false,"activity_delete_or_sync_reclassified":false,"native_acceptance_reclassified":false},
+  "artifacts": {"report_root":"docs/review/route-detail/20260917T180318+0800","archive_path":"/Users/mzm/Desktop/cairn_route_detail_01.zip","archive_revision":"01","archive_manifest":"MANIFEST.sha256","archive_hash_sidecar":"/Users/mzm/Desktop/cairn_route_detail_01.zip.sha256","touched_hashes":"TOUCHED_FILE_HASHES.sha256"},
+  "prohibited_actions": {"backend_deployment":false,"production_migration":false,"ota_publication":false,"external_service_mutation":false,"production_data_mutation":false},
+  "next_action": "GROUPED_OWNER_PHYSICAL_DEVICE_REVIEW_AFTER_REQUIRED_LOCAL_BACKEND_PATCHES_ARE_AVAILABLE"
+}
+

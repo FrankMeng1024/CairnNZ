@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-12T11:45:00Z",
+  "marker_transition": {
+    "from": "O51",
+    "to": "O52",
+    "advanced_once": true
+  },
+  "verdict": {
+    "engineering_efficiency_ready": true,
+    "battery_accepted": false,
+    "freeze_readiness": "READY FOR FINAL FIELD TEST",
+    "terminal": "O52 READY FOR PRECISION / ENERGY FIELD VALIDATION"
+  },
+  "authority": {
+    "repository_source_is_truth": true,
+    "field_case_names": [
+      "great hike",
+      "run issue",
+      "mstand"
+    ],
+    "missing_requested_file": "CairnNZ_Project_Authority.md",
+    "missing_file_searched_under_repository_parent": true,
+    "historical_conclusions_reopened": false
+  },
+  "installed_versions": {
+    "rnmapbox_maps": "10.3.1",
+    "expo_location": "19.0.8",
+    "expo_file_system": "19.0.23"
+  },
+  "location_policy": {
+    "unified_precision_intent": true,
+    "hike_and_run_share_policy": true,
+    "foreground": {
+      "api": "Location.watchPositionAsync",
+      "accuracy": "Location.Accuracy.BestForNavigation",
+      "distance_interval_m": 1,
+      "time_interval_ms": 1000,
+      "time_interval_ios_effective": false
+    },
+    "background": {
+      "api": "Location.startLocationUpdatesAsync",
+      "accuracy": "Location.Accuracy.BestForNavigation",
+      "distance_interval_m": 1,
+      "time_interval_ms": 1000,
+      "time_interval_ios_effective": false,
+      "activity_type": "Fitness",
+      "pauses_updates_automatically": false,
+      "shows_background_location_indicator": true,
+      "deferred_updates_requested": false
+    },
+    "production_distance_interval_m": 1,
+    "internal_debug_ab_baseline_m": 5,
+    "adaptive_cadence_added": false,
+    "polling_added": false,
+    "delivery_caveat": "The 1 m distance filter is a requested spatial threshold, not a temporal or per-metre delivery guarantee. iOS may batch, delay, coalesce, throttle, or suspend callbacks."
+  },
+  "tracking_correctness": {
+    "storage_schema": "acc",
+    "canonical_schema": "accuracy",
+    "adapter": "toCanonicalJournalPoint",
+    "downstream_multiple_schema_awareness": false,
+    "thresholds_changed": false,
+    "stationary_v2_changed": false,
+    "run_issue_regression": {
+      "interval_s": 121,
+      "displacement_m": 11.937,
+      "recorded_accuracy_m": 14.246,
+      "known_recording_loss": false,
+      "gap_after_fix": false
+    },
+    "true_loss_control": {
+      "known_recording_loss": true,
+      "gap_preserved": true
+    },
+    "stale_owner_rejected": true,
+    "hike_run_one_engine": true,
+    "mode_specific_maximum_mps": {
+      "hiking": 4.17,
+      "running": 10
+    }
+  },
+  "location_ownership": {
+    "before_activity_foreground_native_clients": 2,
+    "before": [
+      "Expo canonical source",
+      "RNMapbox Apple location and heading presentation source"
+    ],
+    "after_activity_foreground_native_clients_intent": 1,
+    "after": "Expo Activity stream feeds canonical truth and RNMapbox CustomLocationProvider presentation",
+    "presentation_coordinate_published_before_wal": true,
+    "canonical_published_after_wal": true,
+    "idle_mapbox_apple_provider_allowed": true,
+    "pause_sensor_provider_active": false,
+    "finish_sensor_provider_active": false,
+    "background_presentation_active": false,
+    "custom_override_passively_mounted_during_non_idle_activity": true,
+    "custom_override_reason": "Prevent restoration of the RNMapbox Apple provider during Pause/background/Finish",
+    "manual_browse_semantics_changed": false
+  },
+  "efficiency_changes": {
+    "journal": {
+      "before_complexity_per_point": "O(total Activity history)",
+      "after_complexity_per_point": "O(new record), except rare O(n) recovery/rollback/Finish work",
+      "format": "checksummed JSONL WAL v2",
+      "native_write": "FileHandle EOF append",
+      "legacy_plain_jsonl_readable": true,
+      "one_point_commit_awaited": true,
+      "bounded_background_tail_read": 2,
+      "partial_write_detection": true,
+      "checksum_corruption_detection": true
+    },
+    "qa": {
+      "ordinary_event_coalesce_window_ms": 10000,
+      "coalesce_lookup_max_events": 256,
+      "timing_spatial_sample_cap": 24,
+      "durable_flush_interval_ms": 30000,
+      "upload_interval_ms": 120000,
+      "upload_shape": "delta",
+      "transition_error_immediate_flush": true,
+      "exact_real_coordinates_uploaded": false
+    },
+    "debug_logger": {
+      "native_append_only": true,
+      "full_history_read_per_flush": false,
+      "session_cap_bytes": 52428800
+    },
+    "route": {
+      "representation": "stable body chunks plus bounded live head",
+      "maximum_live_head_points": 256,
+      "normal_append_examines_only_new_points": true,
+      "seam_coordinate_overlap": 1,
+      "gaps_preserved": true,
+      "u_turn_and_repeated_traversal_preserved": true,
+      "rollback_rebuild_once": true
+    },
+    "memory": {
+      "movement_owns_truth": true,
+      "spatial_dedupe_m": 12.5,
+      "activity_evidence_recoverable_from_wal": true,
+      "snapshot_debounce_ms": 3000,
+      "snapshot_max_wait_ms": 15000,
+      "snapshot_created_at_flush": true,
+      "private_bucket_index_full_clone_per_mutation": false,
+      "private_h3_map_full_clone_per_mutation": false,
+      "public_point_array_immutable_copy_remains": true,
+      "network_push_debounce_ms": 30000,
+      "network_push_max_wait_ms": 60000
+    },
+    "lifecycle": {
+      "background_drain_polling_removed": true,
+      "point_registry_rewrite_removed": true,
+      "point_background_context_rewrite_removed": true,
+      "auto_pause_history_scan": "bounded 15 minute suffix once per minute"
+    },
+    "react": {
+      "route_projection_memoized_by_route_reference": true,
+      "raw_location_subscriber": "HikingMap only",
+      "large_architecture_rewrite": false
+    },
+    "network": {
+      "activity_delta_backup_foreground_ms": 120000,
+      "activity_delta_backup_background_ms": 300000,
+      "map_matching_during_recording": false,
+      "directions_during_recording": false
+    }
+  },
+  "journal_scaling": [
+    {
+      "duration": "30 min",
+      "points": 1800,
+      "record_bytes": 220,
+      "before_cumulative_bytes": 356598000,
+      "after_append_bytes": 396000,
+      "modeled_reduction_ratio": 900.5
+    },
+    {
+      "duration": "2 h",
+      "points": 7200,
+      "record_bytes": 220,
+      "before_cumulative_bytes": 5703192000,
+      "after_append_bytes": 1584000,
+      "modeled_reduction_ratio": 3600.5
+    },
+    {
+      "duration": "5 h",
+      "points": 18000,
+      "record_bytes": 220,
+      "before_cumulative_bytes": 35641980000,
+      "after_append_bytes": 3960000,
+      "modeled_reduction_ratio": 9000.5
+    }
+  ],
+  "route_scaling": {
+    "tested_point_counts": [
+      1800,
+      7200,
+      18000
+    ],
+    "before_final_update_5h_coordinate_bytes": 288000,
+    "after_max_update_coordinate_bytes": 4128,
+    "before_5h_cumulative_coordinate_bytes": 2592144000,
+    "after_5h_conservative_upper_bound_coordinate_bytes": 74304000
+  },
+  "real_cases": {
+    "great hike": {
+      "verdict": "PASS_NO_REGRESSION",
+      "raw_callbacks": 99,
+      "canonical_points": 88,
+      "segments": 1,
+      "gaps": 0,
+      "canonical_length_m": 177.025,
+      "final_length_m": 172.516,
+      "sensor_limitation_changed": false,
+      "o50_endpoint_blend": "P2_DEFERRED"
+    },
+    "run issue": {
+      "verdict": "PASS_FALSE_GAP_FIXED_BY_ADAPTER",
+      "historical_raw_callbacks": 119,
+      "historical_segments": 2,
+      "historical_false_gaps": 1,
+      "counterfactual_segments": 1,
+      "counterfactual_false_gaps": 0,
+      "invented_connector_distance": false,
+      "canonical_count_reported": null
+    },
+    "mstand": {
+      "verdict": "PASS_REMAINS_CONTINUOUS",
+      "raw_callbacks": 40,
+      "canonical_points": 38,
+      "segments": 1,
+      "gaps": 0,
+      "canonical_length_m": 251.613,
+      "final_length_m": 249.241,
+      "accepted_network_sections": 0,
+      "network_request_timeouts": 3
+    },
+    "snap": {
+      "verdict": "PASS",
+      "canonical_points": 392,
+      "canonical_length_m": 843.202,
+      "final_points": 97,
+      "final_length_m": 823.682,
+      "fingerprint": "f4f38b0c",
+      "map_matching_requests": 8,
+      "directions_requests": 3,
+      "final_processing_ms": 2929,
+      "whole_route_accepted": true,
+      "u_turn_repeated_traversal_preserved": true,
+      "small_zigzag_count": 0
+    }
+  },
+  "mstand_snap_diagnostic": {
+    "demonstrated_cause": "All one Map Matching and two Directions requests timed out",
+    "sparse_background_evidence_could_affect_opportunity": true,
+    "sparse_evidence_demonstrated_as_cause": false,
+    "conservative_gates_demonstrated_as_cause": false,
+    "gates_loosened": false,
+    "production_interpolation_added": false
+  },
+  "observability": {
+    "location": [
+      "foreground/background elapsed ms",
+      "raw callbacks FG/BG",
+      "callback delta p50/p95/max",
+      "spatial delta p50/p95",
+      "provider starts/stops",
+      "provider overlap ms"
+    ],
+    "canonical": [
+      "accept/candidate/reject/stationary counts",
+      "gap count and reasons",
+      "segment count"
+    ],
+    "persistence": [
+      "journal record and operation count",
+      "logical/actual append bytes",
+      "checkpoint count/bytes",
+      "total/max commit ms"
+    ],
+    "map": [
+      "geometry builds",
+      "source updates",
+      "approximate payload bytes",
+      "presentation provider duration"
+    ],
+    "memory": [
+      "evidence mutations",
+      "persistence writes/bytes",
+      "network requests/attempted points"
+    ],
+    "lifecycle_and_final": [
+      "pause/resume and app-state transitions",
+      "foreground restore checkpoints",
+      "Finish phases",
+      "O50 duration and request results"
+    ]
+  },
+  "verification": {
+    "focused_final": {
+      "suites_passed": 2,
+      "tests_passed": 51
+    },
+    "activity_gps": {
+      "passed": true,
+      "tests_passed": 300,
+      "tests_failed": 0
+    },
+    "activity_core": {
+      "suites_passed": 32,
+      "suites_failed": 1,
+      "assertions_passed": 375,
+      "baseline_assertions_failed": 7,
+      "baseline_exception": "v409-offlineQueue.test.ts expects two absent test-only exports; identical before O52"
+    },
+    "o50_snap_replay": "PASS",
+    "expo_web_mobile_qa": {
+      "screenshots": 36,
+      "layout_checks": 34,
+      "hike_pause_resume": "2/2",
+      "run_pause_resume": "2/2",
+      "runtime_errors": 0
+    },
+    "scoped_o52_typescript_diagnostics": 0
+  },
+  "remaining": {
+    "blockers_before_next_field_test": [],
+    "needs_real_device_measurement": [
+      "actual iOS background cadence and batching under 1 m request",
+      "provider overlap and custom puck/camera latency",
+      "screen-on versus screen-off battery attribution",
+      "CPU, wakeups, memory, frame time and device warmth",
+      "physical journal commit latency",
+      "Mapbox renderer suspension",
+      "long-session O50 Finish resource peak"
+    ],
+    "p2_can_defer": [
+      "great hike GH-3 endpoint/road-offset blend",
+      "public Memory point-array copy per new 12.5 m cell",
+      "additional React isolation if profiling justifies it",
+      "compass heading source only for a future heading product"
+    ],
+    "out_of_scope_product_ux": [
+      "LIVE PACE naming/semantics",
+      "Run Finish UX",
+      "Quick Cairn feedback",
+      "Untitled Cairn",
+      "Plant and general Hike/Run UI polish",
+      "foreground-return recenter product behavior"
+    ]
+  },
+  "ota": {
+    "native_rebuild_required": false,
+    "ota_sufficient": true,
+    "published": false
+  }
+}

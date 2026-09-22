@@ -1,0 +1,60 @@
+{
+  "run_id": "20260918T102913+0800",
+  "candidate": "O60",
+  "verdicts": ["PERSONAL_VERDICT.md", "FRIENDS_VERDICT.md"],
+  "acceptance": "ACCEPTANCE_RESULTS.json",
+  "reports": [
+    "SUMMARY.md",
+    "REVIEW_CORRECTIONS.md",
+    "REALTIME_MEMORY_CONTRACT_AND_RESULTS.md",
+    "SHARED_CACHE_AND_BORROWED_ROUTE_STATE_TABLES.md",
+    "MEMORY_TRUTH_PRESENCE_DISPLAY_COMPARISON.md",
+    "INTEGRATED_JOURNEYS.md",
+    "UI_AND_PERFORMANCE_EVIDENCE.md",
+    "OPERATIONS_RECEIPT.md",
+    "REQUIREMENTS_DELTA.md",
+    "TIMING_ERRATUM.md",
+    "REMAINING_LIMITATIONS.md",
+    "OWNER_REVIEW.md"
+  ],
+  "reproductions": {
+    "PF-R1": "reproductions/PF-R1-before.txt",
+    "PF-R2": "reproductions/PF-R2-before.txt",
+    "PF-R3": "reproductions/PF-R3-before.txt",
+    "M-LIVE-07": "reproductions/M-LIVE-07-before.txt"
+  },
+  "final_tests": {
+    "client_208": "logs/app-affected-tests-final-pass.log",
+    "activity_core_508": "logs/verify-changed-final-pass.log",
+    "personal_store_56": "logs/integrated-personal-store-journey-final.log",
+    "backend_39": "logs/backend-final-tests-393338b.log",
+    "mysql_api_17": "operations/review-abcdn-api-mysql-ordered-races-pass.json"
+  },
+  "visual": {
+    "loaded_manifest": "qa/web-loaded/manifest.json",
+    "loaded_capture_count": 70,
+    "map_unavailable_manifest": "qa/web-map-unavailable/manifest.json",
+    "performance": "qa/memory-presentation-metrics.json",
+    "boards": [
+      "qa/web-loaded/personal-friends-three-theme-board.jpg",
+      "qa/web-loaded/full-surface-three-theme-board.jpg",
+      "qa/web-loaded/revision-02-edge-state-board.jpg"
+    ]
+  },
+  "operations": {
+    "backup": "operations/backup-receipt.log",
+    "rehearsal": "operations/review-migration-rehearsal.log",
+    "review_schema": "operations/review-schema-038-039.log",
+    "review_deploy_failure": "operations/review-deploy.log",
+    "review_deploy_repair": "operations/review-deploy-repair.log",
+    "production_deploy": "operations/production-canonical-deploy.log",
+    "production_verification": "operations/production-postdeploy-verification.log",
+    "final_identities": "operations/final-deployed-identities.log"
+  },
+  "diffs": {
+    "client_revision01_to_revision02": "diffs/client-revision01-to-revision02.patch",
+    "backend_deployed": "diffs/backend-deployed-9b92be3-to-393338b.patch",
+    "ordered_race_harness": "diffs/harness-post-deploy-ordered-race.patch"
+  },
+  "fingerprints": ["SOURCE_FINGERPRINTS.json", "TASK_SCOPED_SOURCE_SHA256.txt"]
+}

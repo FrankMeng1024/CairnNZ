@@ -3,7 +3,25 @@
  * Returns a typed result so callers can handle errors inline without try/catch.
  */
 import { API_BASE_URL } from '../config/api';
-import { saveToken, clearToken, getToken } from './tokenStore';
+import {
+  bindTokenOwnerIfCurrent,
+  clearTokenIfCurrent,
+  getToken,
+  getTokenAuthority,
+  installTokenForAccountTransition,
+  isTokenAuthorityCurrent,
+  replaceTokenIfCurrent,
+  type TokenAuthority,
+} from './tokenStore';
+import {
+  beginAccountTransition,
+  clearUnknownAccountTransitionResult,
+  finishAccountTransition,
+  isAccountTransitionCurrent,
+  markAccountTransitionResultUnknown,
+  type AccountTransitionAuthority,
+  type AccountTransitionKind,
+} from './accountTransitionAuthority';
 import { crashLogger } from './crashLogger';
 
 export interface UserProfile {
@@ -17,7 +35,7 @@ export interface UserProfile {
   providers?: string[];
 }
 
-interface AuthResult {
+export interface AuthResult {
   user?: UserProfile;
   token?: string;
   error?: string;
@@ -27,6 +45,110 @@ interface AuthResult {
   step?: 'verify';
   email?: string;
   devCode?: string;  // only present in dev builds — backend returns code directly
+  tokenAuthority?: TokenAuthority;
+  transitionAuthority?: AccountTransitionAuthority;
+  commitState?: 'committed' | 'unknown';
+}
+
+function currentUserId(): string | null {
+  try {
+    // Dynamic to avoid the authService -> useAppStore -> authService cycle.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useAppStore } = require('../store/useAppStore');
+    return useAppStore.getState().user?.id == null
+      ? null
+      : String(useAppStore.getState().user.id);
+  } catch {
+    return null;
+  }
+}
+
+function ownerStillCurrent(expectedUserId?: string): boolean {
+  return expectedUserId === undefined || currentUserId() === String(expectedUserId);
+}
+
+async function getCurrentOwnedToken(): Promise<string | null> {
+  const owner = currentUserId();
+  return owner ? getToken(owner) : null;
+}
+
+async function commitUnauthenticatedToken(
+  transition: AccountTransitionAuthority,
+  data: any,
+): Promise<TokenAuthority | null> {
+  if (!data?.token) return null;
+  return installTokenForAccountTransition(
+    transition,
+    String(data.token),
+    data?.user?.id == null ? null : String(data.user.id),
+  );
+}
+
+function startTransition(input: {
+  kind: AccountTransitionKind;
+  expectedOwnerUserId?: string | null;
+  reconciliationKey?: string | null;
+}): AccountTransitionAuthority | null {
+  return beginAccountTransition(input).authority ?? null;
+}
+
+async function resumeCommittedDeletionBeforeAuth(
+  transition: AccountTransitionAuthority,
+): Promise<void> {
+  // Keep this a lazy CommonJS require: authService participates in a store
+  // cycle, while the app's Jest/Babel runtime does not enable VM dynamic
+  // modules. The dependency is still resolved only at the account boundary.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { resumeScheduledDeletedAccountLocalPurge } = require('./accountLocalData');
+  await resumeScheduledDeletedAccountLocalPurge(transition);
+}
+
+async function reconcileDeletionAfterLogin(ownerUserId: string, hint?: string): Promise<void> {
+  clearUnknownAccountTransitionResult(`restore-account:${ownerUserId}`);
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const localData = require('./accountLocalData');
+  const pendingDelete = await localData.getDeletedAccountPurgeRecord();
+  if (pendingDelete?.ownerUserId !== ownerUserId || pendingDelete.state !== 'unknown') return;
+  if (hint === 'pending_deletion') {
+    await localData.scheduleDeletedAccountLocalPurge(ownerUserId);
+  } else {
+    await localData.clearDeletedAccountPurgeAfterReconciliation(ownerUserId);
+    clearUnknownAccountTransitionResult(`delete-account:${ownerUserId}`);
+  }
+}
+
+function authorityOwns(
+  authority: TokenAuthority | null,
+  expectedUserId: string | undefined,
+  transition?: AccountTransitionAuthority,
+): authority is TokenAuthority {
+  if (!authority) return false;
+  if (expectedUserId === undefined) return true;
+  const expectedOwner = String(expectedUserId);
+  if (authority.ownerUserId !== expectedOwner) return false;
+  const publishedOwner = currentUserId();
+  if (publishedOwner === expectedOwner) return true;
+  if (publishedOwner !== null || !transition || !isAccountTransitionCurrent(transition)) return false;
+
+  // Session installation intentionally hydrates before publishing the user.
+  // Only token-producing/cold-hydrate leases may authorize that signed-out
+  // interval. Destructive mutations and background refresh never may.
+  const permitsPrePublishOwner: Record<AccountTransitionKind, boolean> = {
+    'cold-hydrate': true,
+    login: true,
+    'verify-registration': true,
+    'google-login': true,
+    'apple-login': true,
+    'password-reset': true,
+    'restore-account': true,
+    'refresh-token': false,
+    logout: false,
+    'delete-account': false,
+    'change-password': false,
+  };
+  return permitsPrePublishOwner[transition.kind]
+    && (transition.expectedOwnerUserId === null
+      || transition.expectedOwnerUserId === expectedOwner);
 }
 
 async function post(path: string, body: object): Promise<Response> {
@@ -58,15 +180,24 @@ export async function register(
 }
 
 export async function verifyCode(email: string, code: string): Promise<AuthResult> {
+  const transition = startTransition({ kind: 'verify-registration' });
+  if (!transition) return { error: 'Another account change is already in progress.' };
   try {
+    await resumeCommittedDeletionBeforeAuth(transition);
     const res = await post('/api/auth/verify', { email, code });
     const data = await res.json();
     if (!res.ok) {
+      finishAccountTransition(transition);
       return { error: data?.error || 'Verification failed.' };
     }
-    await saveToken(data.token);
-    return { user: data.user, token: data.token };
+    const tokenAuthority = await commitUnauthenticatedToken(transition, data);
+    if (!tokenAuthority) {
+      finishAccountTransition(transition);
+      return { error: 'This sign-in attempt no longer owns the device session.' };
+    }
+    return { user: data.user, token: data.token, tokenAuthority, transitionAuthority: transition };
   } catch {
+    finishAccountTransition(transition);
     return { error: 'Unable to connect. Please try again.' };
   }
 }
@@ -83,13 +214,36 @@ export async function resendCode(email: string): Promise<{ error?: string }> {
 }
 
 export async function login(email: string, password: string): Promise<AuthResult> {
+  const transition = startTransition({ kind: 'login' });
+  if (!transition) return { error: 'Another account change is already in progress.' };
   try {
+    await resumeCommittedDeletionBeforeAuth(transition);
     const res = await post('/api/auth/login', { email, password });
     const data = await res.json();
     if (!res.ok) {
+      finishAccountTransition(transition);
       return { error: data?.error || data?.message || 'Sign in failed. Check your email and password.', hint: data?.hint };
     }
-    await saveToken(data.token);
+    const tokenAuthority = await commitUnauthenticatedToken(transition, data);
+    if (!tokenAuthority) {
+      finishAccountTransition(transition);
+      return { error: 'This sign-in attempt no longer owns the device session.' };
+    }
+    const reconciledOwner = data?.user?.id == null ? null : String(data.user.id);
+    if (reconciledOwner) {
+      clearUnknownAccountTransitionResult(`password-reset:${email.trim().toLowerCase()}`);
+      // A successful password login is the reconciliation proof for an
+      // earlier ambiguous change-password response. Either old or new
+      // password working makes an immediate mutation retry safe again.
+      clearUnknownAccountTransitionResult(`change-password:${reconciledOwner}`);
+      try {
+        await reconcileDeletionAfterLogin(reconciledOwner, data.hint);
+      } catch {
+        await clearTokenIfCurrent(tokenAuthority);
+        finishAccountTransition(transition);
+        return { error: 'This account was verified, but its earlier deletion result could not be reconciled safely.' };
+      }
+    }
     // O18 AUTH-01: backend surfaces hint='pending_deletion' when the account
     // was soft-deleted. Token is still valid so restore endpoint can auth,
     // caller decides whether to show restore modal or block sign-in.
@@ -98,8 +252,11 @@ export async function login(email: string, password: string): Promise<AuthResult
       token: data.token,
       hint: data.hint,
       restoreDeadline: data.restore_deadline,
+      tokenAuthority,
+      transitionAuthority: transition,
     };
   } catch {
+    finishAccountTransition(transition);
     return { error: 'Unable to connect. Please try again.' };
   }
 }
@@ -112,26 +269,34 @@ export async function login(email: string, password: string): Promise<AuthResult
  * network never blocks app boot indefinitely. On timeout, returns null and
  * the caller falls through to the offline / Sign In path.
  */
-export async function getMe(): Promise<UserProfile | null> {
+export async function getMe(
+  expectedUserId?: string,
+  transition?: AccountTransitionAuthority,
+): Promise<UserProfile | null> {
   try {
-    const token = await getToken();
-    if (!token) return null;
+    const authority = await getTokenAuthority();
+    if (!authorityOwns(authority, expectedUserId, transition)) return null;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${authority.token}` },
         signal: controller.signal,
       });
       if (!res.ok) {
         // Only clear token on 401/403 (auth failure), not on transient 5xx
         if (res.status === 401 || res.status === 403) {
-          await clearToken();
+          await clearTokenIfCurrent(authority);
         }
         return null;
       }
       const data = await res.json();
-      return data.user ?? null;
+      if (!data.user
+        || !authorityOwns(authority, expectedUserId, transition)
+        || !(await isTokenAuthorityCurrent(authority))) return null;
+      if (expectedUserId !== undefined && String(data.user.id) !== String(expectedUserId)) return null;
+      const bound = await bindTokenOwnerIfCurrent(authority, String(data.user.id));
+      return bound ? data.user : null;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -142,13 +307,28 @@ export async function getMe(): Promise<UserProfile | null> {
 }
 
 export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
+  const transition = startTransition({ kind: 'google-login' });
+  if (!transition) return { error: 'Another account change is already in progress.' };
   try {
+    await resumeCommittedDeletionBeforeAuth(transition);
     const res = await post('/api/auth/google', { id_token: idToken });
     const data = await res.json();
     if (!res.ok) {
+      finishAccountTransition(transition);
       return { error: data?.error || 'Google sign-in failed. Please try again.', hint: data?.hint };
     }
-    await saveToken(data.token);
+    const tokenAuthority = await commitUnauthenticatedToken(transition, data);
+    if (!tokenAuthority) {
+      finishAccountTransition(transition);
+      return { error: 'This sign-in attempt no longer owns the device session.' };
+    }
+    try {
+      await reconcileDeletionAfterLogin(String(data.user.id), data.hint);
+    } catch {
+      await clearTokenIfCurrent(tokenAuthority);
+      finishAccountTransition(transition);
+      return { error: 'This account was verified, but its earlier deletion result could not be reconciled safely.' };
+    }
     // Sprint 6 round-10 review R10B7 fix: forward pending_deletion +
     // restoreDeadline from backend so AuthScreen's restore_confirm view
     // fires on Google login the same way it does for password + Apple.
@@ -159,8 +339,11 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
       token: data.token,
       hint: data.hint,
       restoreDeadline: data.restore_deadline,
+      tokenAuthority,
+      transitionAuthority: transition,
     };
   } catch {
+    finishAccountTransition(transition);
     return { error: 'Unable to connect. Please try again.' };
   }
 }
@@ -178,7 +361,10 @@ export async function loginWithApple(
   providedName?: string,
   rawNonce?: string,
 ): Promise<AuthResult> {
+  const transition = startTransition({ kind: 'apple-login' });
+  if (!transition) return { error: 'Another account change is already in progress.' };
   try {
+    await resumeCommittedDeletionBeforeAuth(transition);
     const res = await post('/api/auth/apple', {
       identity_token: idToken,
       name: providedName,
@@ -186,34 +372,93 @@ export async function loginWithApple(
     });
     const data = await res.json();
     if (!res.ok) {
+      finishAccountTransition(transition);
       return { error: data?.error || 'Apple sign-in failed. Please try again.', hint: data?.hint };
     }
-    await saveToken(data.token);
+    const tokenAuthority = await commitUnauthenticatedToken(transition, data);
+    if (!tokenAuthority) {
+      finishAccountTransition(transition);
+      return { error: 'This sign-in attempt no longer owns the device session.' };
+    }
+    try {
+      await reconcileDeletionAfterLogin(String(data.user.id), data.hint);
+    } catch {
+      await clearTokenIfCurrent(tokenAuthority);
+      finishAccountTransition(transition);
+      return { error: 'This account was verified, but its earlier deletion result could not be reconciled safely.' };
+    }
     return {
       user: data.user,
       token: data.token,
       hint: data.hint,
       restoreDeadline: data.restore_deadline,
+      tokenAuthority,
+      transitionAuthority: transition,
     };
   } catch {
+    finishAccountTransition(transition);
     return { error: 'Unable to connect. Please try again.' };
   }
 }
 
-export async function logout(): Promise<void> {
-  // O18 AUTH-08: revoke jti server-side so the token can't be re-used
-  // (e.g. if the user handed the phone off and someone lifted the token).
-  // Best-effort: local clearToken always runs even if the backend call fails.
-  const token = await getToken();
-  if (token) {
-    try {
-      await fetch(`${API_BASE_URL}/api/auth/logout`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+export async function logout(options: {
+  expectedAuthority?: TokenAuthority;
+  expectedUserId?: string;
+  transitionAuthority?: AccountTransitionAuthority;
+  revoke?: boolean;
+  keepTransition?: boolean;
+} = {}): Promise<{ cleared: boolean; ownerChanged: boolean }> {
+  const suppliedTransition = options.transitionAuthority;
+  const usingSuppliedTransition = !!suppliedTransition && isAccountTransitionCurrent(suppliedTransition);
+  const transition = usingSuppliedTransition
+    ? suppliedTransition
+    : startTransition({ kind: 'logout', expectedOwnerUserId: options.expectedUserId });
+  if (!transition) return { cleared: false, ownerChanged: true };
+  const ownsTransition = !usingSuppliedTransition;
+  const authority = options.expectedAuthority ?? await getTokenAuthority();
+  try {
+    if (authority && !(await isTokenAuthorityCurrent(authority))) {
+      return { cleared: false, ownerChanged: true };
+    }
+    if (options.expectedUserId !== undefined
+      && authority
+      && authority.ownerUserId !== String(options.expectedUserId)) {
+      return { cleared: false, ownerChanged: true };
+    }
+    if (options.expectedUserId !== undefined
+      && !authority
+      && currentUserId() !== String(options.expectedUserId)) {
+      return { cleared: false, ownerChanged: true };
+    }
+    if (authority && options.revoke !== false) {
+      try {
+        await fetch(`${API_BASE_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${authority.token}` },
+        });
+      } catch { /* local sign-out remains authoritative */ }
+    }
+    if (!isAccountTransitionCurrent(transition)) return { cleared: false, ownerChanged: true };
+    const currentOwner = currentUserId();
+    if (currentOwner != null) {
+      if (options.expectedUserId !== undefined && currentOwner !== String(options.expectedUserId)) {
+        return { cleared: true, ownerChanged: true };
+      }
+      // Dynamic import avoids the authService/useAppStore module cycle.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useAppStore } = require('../store/useAppStore');
+      const localCleared = await useAppStore.getState().logout({
+        expectedUserId: options.expectedUserId ?? currentOwner,
+        transitionAuthority: transition,
       });
-    } catch { /* silent — network offline is fine, blacklist is a nice-to-have */ }
+      if (!localCleared) return { cleared: false, ownerChanged: false };
+    }
+    if (!isAccountTransitionCurrent(transition)) return { cleared: false, ownerChanged: true };
+    const cleared = authority ? await clearTokenIfCurrent(authority) : true;
+    return { cleared, ownerChanged: false };
+  } finally {
+    if (ownsTransition && !options.keepTransition) finishAccountTransition(transition);
   }
-  await clearToken();
 }
 
 // O18 AUTH-04: request a 6-digit password reset code by email.
@@ -244,66 +489,301 @@ export async function passwordResetVerify(
   code: string,
   newPassword: string,
 ): Promise<AuthResult> {
+  const reconciliationKey = `password-reset:${email.trim().toLowerCase()}`;
+  const transition = startTransition({ kind: 'password-reset', reconciliationKey });
+  if (!transition) return {
+    error: 'The previous reset result is still unresolved. Sign in with the new password before requesting another reset.',
+    hint: 'commit_unknown',
+  };
   try {
+    await resumeCommittedDeletionBeforeAuth(transition);
     const res = await post('/api/auth/password-reset/verify', {
       email, code, new_password: newPassword,
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => null);
     if (!res.ok) {
+      if (res.status >= 500) {
+        markAccountTransitionResultUnknown(transition);
+        return {
+          error: 'The reset reached Cairn, but the final result is unknown. Try signing in with the new password; do not submit the reset again.',
+          hint: 'commit_unknown',
+          commitState: 'unknown',
+        };
+      }
+      finishAccountTransition(transition);
       return { error: data?.error || 'Reset failed.', hint: data?.hint };
     }
-    await saveToken(data.token);
-    return { user: data.user, token: data.token };
+    const tokenAuthority = await commitUnauthenticatedToken(transition, data);
+    if (!tokenAuthority) {
+      finishAccountTransition(transition);
+      return { error: 'Password reset committed, but this device could not install the returned session. Sign in with the new password.', commitState: 'committed' };
+    }
+    return {
+      user: data.user,
+      token: data.token,
+      tokenAuthority,
+      transitionAuthority: transition,
+      commitState: 'committed',
+    };
   } catch {
-    return { error: 'Unable to connect. Please try again.' };
+    markAccountTransitionResultUnknown(transition);
+    return {
+      error: 'The reset result is unknown. Try signing in with the new password; do not submit the reset again.',
+      hint: 'commit_unknown',
+      commitState: 'unknown',
+    };
   }
 }
 
 // O18 AUTH-01: soft-delete the current account. Returns the grace deadline
 // so the UI can display "Restore before <date>". Auth middleware will
 // invalidate the current token via jti blacklist as a side-effect.
-export async function deleteAccount(): Promise<{
+export async function deleteAccount(expectedUserId?: string): Promise<{
   error?: string;
   deletedAt?: string;
   restoreDeadline?: string;
+  commitState?: 'committed' | 'unknown';
+  localCleanup?: 'complete' | 'pending';
+  durableCleanupScheduled?: boolean;
 }> {
-  const token = await getToken();
-  if (!token) return { error: 'not_signed_in' };
+  if (!expectedUserId) return { error: 'account_owner_required' };
+  const transition = startTransition({
+    kind: 'delete-account',
+    expectedOwnerUserId: expectedUserId,
+    reconciliationKey: `delete-account:${expectedUserId}`,
+  });
+  if (!transition) return {
+    error: 'A previous account deletion result is unresolved or another account change is in progress.',
+  };
+  const authority = await getTokenAuthority();
+  if (!authorityOwns(authority, expectedUserId)) {
+    finishAccountTransition(transition);
+    return { error: 'account_changed' };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const localData = require('./accountLocalData');
+  let dispatched = false;
+  let serverCommitObserved = false;
+  let committedData: any = null;
+  let durableCleanupScheduled = false;
   try {
+    // The single durable slot is claimed before dispatch. A second account
+    // cannot overwrite this owner or reach the server while it is occupied.
+    await localData.reserveDeletedAccountLocalPurge(expectedUserId);
+    // Promote to UNKNOWN immediately before dispatch. If the process dies
+    // after this durable write, a request may have reached the server and the
+    // user must reconcile. A process death while still RESERVED is known to
+    // precede dispatch and cold boot may release that reservation safely.
+    await localData.markDeletedAccountLocalPurgeUnknown(expectedUserId);
+    dispatched = true;
     const res = await fetch(`${API_BASE_URL}/api/auth/account`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${authority.token}` },
     });
-    const data = await res.json();
-    if (!res.ok) return { error: data?.error || 'Could not delete account.' };
-    return { deletedAt: data.deleted_at, restoreDeadline: data.restore_deadline };
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      if (res.status >= 500) {
+        await localData.markDeletedAccountLocalPurgeUnknown(expectedUserId);
+        markAccountTransitionResultUnknown(transition);
+        return {
+          commitState: 'unknown',
+          error: 'Cairn received the deletion request, but its result is unknown. Do not retry until this account is reconciled.',
+        };
+      }
+      await localData.clearDeletedAccountPurgeAfterReconciliation(expectedUserId);
+      finishAccountTransition(transition);
+      return { error: data?.error || 'Could not delete account.' };
+    }
+
+    serverCommitObserved = true;
+    committedData = data;
+    try {
+      await localData.scheduleDeletedAccountLocalPurge(expectedUserId);
+      durableCleanupScheduled = true;
+    } catch {
+      durableCleanupScheduled = false;
+    }
+    let localCleanup: 'complete' | 'pending' = 'pending';
+    // DELETE already revoked the server session. The shared transition keeps
+    // B out while token, stores, globals, credentials and marker are cleared.
+    const signOut = await logout({
+      expectedAuthority: authority,
+      expectedUserId,
+      transitionAuthority: transition,
+      revoke: false,
+    });
+    if (signOut.cleared && !signOut.ownerChanged && durableCleanupScheduled) {
+      try {
+        await localData.completeDeletedAccountLocalPurge(expectedUserId, transition);
+        localCleanup = 'complete';
+      } catch {
+        // The committed marker remains authoritative, including when strict
+        // SecureStore credential deletion fails.
+      }
+    } else if (signOut.cleared && !signOut.ownerChanged) {
+      // Both durable marker stores were unavailable after a known server
+      // commit. Best effort may still finish safely in this live process,
+      // but failure must remain visibly unsafe because it cannot resume.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { clearCredentialsStrict } = require('./credentialsStore');
+        await localData.purgeDeletedAccountLocalData(expectedUserId);
+        await localData.purgeDeletedAccountDeviceGlobalData(expectedUserId, transition);
+        await clearCredentialsStrict();
+        await localData.clearDeletedAccountPurgeAfterReconciliation(expectedUserId);
+        localCleanup = 'complete';
+      } catch { /* truthful pending/unsafe result below */ }
+    }
+    finishAccountTransition(transition);
+    return {
+      commitState: 'committed',
+      deletedAt: data.deleted_at,
+      restoreDeadline: data.restore_deadline,
+      localCleanup,
+      durableCleanupScheduled,
+    };
   } catch {
-    return { error: 'Unable to connect. Please try again.' };
+    if (serverCommitObserved) {
+      // A 2xx is monotonic server truth. Later sign-out/keychain/cache errors
+      // can only leave local cleanup pending; they can never turn the DELETE
+      // back into UNKNOWN or invite a duplicate server mutation.
+      if (!durableCleanupScheduled) {
+        try {
+          await localData.scheduleDeletedAccountLocalPurge(expectedUserId);
+          durableCleanupScheduled = true;
+        } catch { /* surface the missing durable retry authority below */ }
+      }
+      finishAccountTransition(transition);
+      return {
+        commitState: 'committed',
+        deletedAt: committedData?.deleted_at,
+        restoreDeadline: committedData?.restore_deadline,
+        localCleanup: 'pending',
+        durableCleanupScheduled,
+        error: durableCleanupScheduled
+          ? 'Account deletion committed. On-device cleanup is pending and will resume safely.'
+          : 'Account deletion committed, but this device could not schedule durable local cleanup. Keep the app open and contact support before using another account.',
+      };
+    }
+    if (!dispatched) {
+      try { await localData.clearDeletedAccountPurgeReservation(expectedUserId); } catch { /* cold boot also releases RESERVED */ }
+      finishAccountTransition(transition);
+      return { error: 'Cairn could not reserve safe on-device deletion cleanup. No deletion was sent; an earlier unresolved deletion may require reconciliation.' };
+    }
+    // Any thrown outcome after dispatch may be a committed server mutation.
+    // Persist UNKNOWN when possible; never release the durable slot as a
+    // known-precommit retry.
+    try { await localData.markDeletedAccountLocalPurgeUnknown(expectedUserId); } catch { /* keep prior reservation */ }
+    markAccountTransitionResultUnknown(transition);
+    return {
+      commitState: 'unknown',
+      error: 'The account deletion result is unknown. Do not submit another deletion until this account is reconciled.',
+    };
   }
 }
 
 export async function changePassword(
   currentPassword: string,
   newPassword: string,
-): Promise<{ error?: string }> {
-  const token = await getToken();
-  if (!token) return { error: 'Your session ended. Please sign in again.' };
+  expectedUserId?: string,
+): Promise<{
+  error?: string;
+  commitState?: 'committed' | 'unknown';
+  sessionTransitioned?: boolean;
+}> {
+  if (!expectedUserId) return { error: 'The signed-in account is required.' };
+  const transition = startTransition({
+    kind: 'change-password',
+    expectedOwnerUserId: expectedUserId,
+    reconciliationKey: `change-password:${expectedUserId}`,
+  });
+  if (!transition) return {
+    error: 'The previous password result is unresolved or another account change is in progress.',
+  };
+  const authority = await getTokenAuthority();
+  if (!authorityOwns(authority, expectedUserId)) {
+    finishAccountTransition(transition);
+    return { error: 'The signed-in account changed. Open Password again for the current account.' };
+  }
+  let dispatched = false;
+  let serverCommitObserved = false;
   try {
+    dispatched = true;
     const res = await fetch(`${API_BASE_URL}/api/auth/password`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${authority.token}`,
       },
       body: JSON.stringify({ currentPassword, newPassword }),
     });
-    const data = await res.json();
-    if (!res.ok) return { error: data?.error || 'Password could not be updated.' };
-    if (!data?.token) return { error: 'Password changed, but the new session could not be confirmed. Please sign in again.' };
-    await saveToken(data.token);
-    return {};
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      if (res.status >= 500) {
+        markAccountTransitionResultUnknown(transition);
+        return {
+          commitState: 'unknown',
+          error: 'Cairn received the password change, but its result is unknown. Check which password works before trying again.',
+        };
+      }
+      finishAccountTransition(transition);
+      return { error: data?.error || 'Password could not be updated.' };
+    }
+    serverCommitObserved = true;
+    if (!data?.token) {
+      // The server commit is authoritative. Keep A/B separation while the
+      // invalid local session is removed; do not present this as retryable.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useAppStore } = require('../store/useAppStore');
+      await useAppStore.getState().logout({ expectedUserId, transitionAuthority: transition });
+      await clearTokenIfCurrent(authority);
+      finishAccountTransition(transition);
+      return {
+        commitState: 'committed',
+        sessionTransitioned: false,
+        error: 'Password updated on the server, but the new session could not be confirmed. Sign in again; do not retry the password change.',
+      };
+    }
+    const replacement = await replaceTokenIfCurrent(
+      authority,
+      String(data.token),
+      data?.user?.id == null ? authority.ownerUserId : String(data.user.id),
+      transition,
+    );
+    if (!replacement || currentUserId() !== String(expectedUserId)) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useAppStore } = require('../store/useAppStore');
+      await useAppStore.getState().logout({ expectedUserId, transitionAuthority: transition });
+      await clearTokenIfCurrent(replacement ?? authority);
+      finishAccountTransition(transition);
+      return {
+        commitState: 'committed',
+        sessionTransitioned: false,
+        error: 'Password updated on the server, but this device could not keep the new session. Sign in again; do not retry the password change.',
+      };
+    }
+    finishAccountTransition(transition);
+    return { commitState: 'committed', sessionTransitioned: true };
   } catch {
-    return { error: 'Unable to connect. Your password was not changed.' };
+    if (serverCommitObserved) {
+      // A successful HTTP response is monotonic server truth. A later local
+      // logout, token replacement, or keychain cleanup failure cannot turn a
+      // committed password mutation into UNKNOWN or invite a duplicate PATCH.
+      finishAccountTransition(transition);
+      return {
+        commitState: 'committed',
+        sessionTransitioned: false,
+        error: 'Password updated on the server, but this device could not finish the local session transition. Sign in again; do not retry the password change.',
+      };
+    }
+    if (!dispatched) finishAccountTransition(transition);
+    else markAccountTransitionResultUnknown(transition);
+    return {
+      commitState: dispatched ? 'unknown' : undefined,
+      error: dispatched
+        ? 'The password result is unknown. Check which password works before trying again.'
+        : 'The password request was not sent. Please try again.',
+    };
   }
 }
 
@@ -318,8 +798,20 @@ export async function changePassword(
 // surface `hint: 'save_token_failed'` and a specific error message
 // telling the user to re-sign in (a fresh /login mints a new token
 // which we can retry saving with a clean keychain slot).
-export async function restoreAccount(): Promise<AuthResult> {
-  const token = await getToken();
+export async function restoreAccount(
+  expectedAuthority?: TokenAuthority,
+  suppliedTransition?: AccountTransitionAuthority,
+): Promise<AuthResult> {
+  const usingSuppliedTransition = !!suppliedTransition && isAccountTransitionCurrent(suppliedTransition);
+  const transition = usingSuppliedTransition
+    ? suppliedTransition
+    : startTransition({ kind: 'restore-account' });
+  if (!transition) return {
+    error: 'The previous restore result is unresolved or another account change is in progress.',
+    hint: 'commit_unknown',
+  };
+  const ownsTransition = !usingSuppliedTransition;
+  const authority = expectedAuthority ?? await getTokenAuthority();
   // AUTH-3 (2026-08-11): user-facing English message replaces internal
   // 'not_signed_in' sentinel. Root cause: restore modal is entered right
   // after login (with hint='pending_deletion'), so getToken() should
@@ -329,17 +821,29 @@ export async function restoreAccount(): Promise<AuthResult> {
   // (a) is plain English (no snake_case) and (b) tells the user exactly
   // what to do next. AuthScreen inspects hint='session_missing' to
   // route back to the sign-in view instead of splash.
-  if (!token) return { error: 'Your session ended. Please sign in again to restore your account.', hint: 'session_missing' };
+  if (!authority
+    || !authority.ownerUserId
+    || !(await isTokenAuthorityCurrent(authority))) {
+    finishAccountTransition(transition);
+    return { error: 'Your session ended. Please sign in again to restore your account.', hint: 'session_missing' };
+  }
+  const reconciliationKey = `restore-account:${authority.ownerUserId}`;
   let res: Response;
   let data: any;
   try {
     res = await fetch(`${API_BASE_URL}/api/auth/account/restore`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${authority.token}` },
     });
-    data = await res.json();
+    data = await res.json().catch(() => null);
   } catch {
-    return { error: 'Unable to connect. Please try again.' };
+    await clearTokenIfCurrent(authority);
+    markAccountTransitionResultUnknown(transition, reconciliationKey);
+    return {
+      error: 'The restore result is unknown. Sign in again to reconcile this account; do not retry Restore now.',
+      hint: 'commit_unknown',
+      commitState: 'unknown',
+    };
   }
   if (!res.ok) {
     // AUTH-3 4:59-race (2026-08-11, 4-eyes review #2): if the row was
@@ -354,24 +858,92 @@ export async function restoreAccount(): Promise<AuthResult> {
       res.status === 404 ||
       (res.status === 401 && /account\s*not\s*found/i.test(backendMsg));
     if (isAccountGone) {
+      finishAccountTransition(transition);
       return {
         error: 'This account has been permanently deleted. Please sign in with a different account or create a new one.',
         hint: 'account_gone',
       };
     }
+    if (res.status >= 500) {
+      await clearTokenIfCurrent(authority);
+      markAccountTransitionResultUnknown(transition, reconciliationKey);
+      return {
+        error: 'Cairn received the restore request, but its result is unknown. Sign in again to reconcile; do not retry Restore now.',
+        hint: 'commit_unknown',
+        commitState: 'unknown',
+      };
+    }
+    if (ownsTransition) finishAccountTransition(transition);
     return { error: backendMsg || 'Restore failed.' };
   }
   if (data.token) {
-    try {
-      await saveToken(data.token);
-    } catch {
+    const replacement = await replaceTokenIfCurrent(
+      authority,
+      String(data.token),
+      data?.user?.id == null ? authority.ownerUserId : String(data.user.id),
+      transition,
+    );
+    if (!replacement) {
+      // Server restore committed, but the old token may now be revoked.
+      // Clear local authenticated UI under the still-exclusive transition.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useAppStore } = require('../store/useAppStore');
+      await useAppStore.getState().logout({
+        expectedUserId: authority.ownerUserId,
+        transitionAuthority: transition,
+      });
+      await clearTokenIfCurrent(authority);
+      finishAccountTransition(transition);
       return {
         error: 'Restore succeeded on server but we couldn\'t save the new session. Please sign in with email + password to continue.',
         hint: 'save_token_failed',
+        commitState: 'committed',
       };
     }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const localData = require('./accountLocalData');
+      await localData.clearDeletedAccountPurgeAfterRestore(authority.ownerUserId);
+      clearUnknownAccountTransitionResult(reconciliationKey);
+      clearUnknownAccountTransitionResult(`delete-account:${authority.ownerUserId}`);
+    } catch {
+      // Leaving a committed purge marker would erase the restored account on
+      // next boot, so fail closed and remove its local authenticated UI.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useAppStore } = require('../store/useAppStore');
+      await useAppStore.getState().logout({
+        expectedUserId: authority.ownerUserId,
+        transitionAuthority: transition,
+      });
+      await clearTokenIfCurrent(replacement);
+      finishAccountTransition(transition);
+      return {
+        error: 'Restore succeeded, but this device could not retire its deletion marker. Sign in again after checking device storage.',
+        hint: 'save_token_failed',
+        commitState: 'committed',
+      };
+    }
+    return {
+      user: data.user,
+      token: data.token,
+      tokenAuthority: replacement,
+      transitionAuthority: transition,
+      commitState: 'committed',
+    };
   }
-  return { user: data.user, token: data.token };
+  await clearTokenIfCurrent(authority);
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { useAppStore } = require('../store/useAppStore');
+  await useAppStore.getState().logout({
+    expectedUserId: authority.ownerUserId,
+    transitionAuthority: transition,
+  });
+  finishAccountTransition(transition);
+  return {
+    error: 'Restore succeeded on the server, but no replacement session was returned. Sign in again; do not retry Restore.',
+    hint: 'save_token_failed',
+    commitState: 'committed',
+  };
 }
 
 // Request a full data export. A successful response only means the job was
@@ -382,7 +954,7 @@ export async function requestDataExport(): Promise<{
   downloadUrl?: string | null;
   expiresAt?: string;
 }> {
-  const token = await getToken();
+  const token = await getCurrentOwnedToken();
   if (!token) return { error: 'not_signed_in' };
   try {
     const res = await fetch(`${API_BASE_URL}/api/account/export`, {
@@ -421,7 +993,7 @@ export async function fetchExportHistory(): Promise<{
   exports: DataExportSummary[];
   error?: string;
 }> {
-  const token = await getToken();
+  const token = await getCurrentOwnedToken();
   if (!token) return { exports: [], error: 'Your session ended. Please sign in again.' };
   try {
     const res = await fetch(`${API_BASE_URL}/api/account/exports`, {
@@ -455,7 +1027,7 @@ export async function submitFeedback(input: {
   message: string;
   appVersion?: string | null;
 }): Promise<{ acknowledged: boolean; error?: string }> {
-  const token = await getToken();
+  const token = await getCurrentOwnedToken();
   if (!token) return { acknowledged: false, error: 'Your session ended. Please sign in again.' };
   try {
     const res = await fetch(`${API_BASE_URL}/api/account/feedback`, {
@@ -485,7 +1057,7 @@ export async function submitFeedback(input: {
 // Backend enforces >= 13 same as register + immutable once set.
 export async function patchDob(dateOfBirth: string): Promise<AuthResult> {
   crashLogger.breadcrumb(`patchdob:start dob_len=${dateOfBirth.length}`);
-  const token = await getToken();
+  const token = await getCurrentOwnedToken();
   if (!token) {
     crashLogger.breadcrumb('patchdob:no_token — return not_signed_in');
     return { error: 'not_signed_in' };
@@ -524,7 +1096,7 @@ export async function patchDob(dateOfBirth: string): Promise<AuthResult> {
 // so the user isn't blocked if the endpoint is unreachable.
 export async function patchOnboardingDone(): Promise<AuthResult> {
   crashLogger.breadcrumb('h2:patch_onboarding_start');
-  const token = await getToken();
+  const token = await getCurrentOwnedToken();
   if (!token) {
     crashLogger.breadcrumb('h2:no_token');
     return { error: 'not_signed_in' };
@@ -554,15 +1126,15 @@ export async function patchOnboardingDone(): Promise<AuthResult> {
 // R100 SETTINGS: update display name from Settings screen. Called by
 // Edit Name modal after user types + hits Save. Backend enforces
 // length 1..32 + strips control chars. Returns updated user on success.
-export async function patchName(name: string): Promise<AuthResult> {
-  const token = await getToken();
-  if (!token) return { error: 'not_signed_in' };
+export async function patchName(name: string, expectedUserId?: string): Promise<AuthResult> {
+  const authority = await getTokenAuthority();
+  if (!authorityOwns(authority, expectedUserId)) return { error: 'account_changed' };
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${authority.token}`,
       },
       body: JSON.stringify({ name }),
     });
@@ -588,16 +1160,24 @@ export async function patchName(name: string): Promise<AuthResult> {
  * treat a failure as "user must re-login" is up to the caller (typically
  * apiService.ts, which owns the auth-invalid header check).
  */
-export async function refreshToken(): Promise<{ token?: string; error?: string; authInvalid?: boolean }> {
-  const token = await getToken();
-  if (!token) return { error: 'no_token' };
+export async function refreshToken(expectedUserId?: string): Promise<{ token?: string; error?: string; authInvalid?: boolean }> {
+  if (!expectedUserId) return { error: 'account_owner_required' };
+  const transition = startTransition({
+    kind: 'refresh-token',
+    expectedOwnerUserId: expectedUserId,
+  });
+  if (!transition) return { error: 'transition_in_progress' };
   try {
+    const authority = await getTokenAuthority();
+    if (!authority) return { error: 'no_token' };
+    if (!isAccountTransitionCurrent(transition)
+      || !authorityOwns(authority, expectedUserId)) return { error: 'account_changed' };
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${authority.token}` },
         signal: controller.signal,
       });
       if (!res.ok) {
@@ -606,7 +1186,17 @@ export async function refreshToken(): Promise<{ token?: string; error?: string; 
       }
       const data = await res.json();
       if (data.token) {
-        await saveToken(data.token);
+        if (!isAccountTransitionCurrent(transition)
+          || !authorityOwns(authority, expectedUserId)) return { error: 'authority_changed' };
+        const replacement = await replaceTokenIfCurrent(
+          authority,
+          String(data.token),
+          authority.ownerUserId,
+          transition,
+        );
+        if (!replacement
+          || !isAccountTransitionCurrent(transition)
+          || !ownerStillCurrent(expectedUserId)) return { error: 'authority_changed' };
         return { token: data.token };
       }
       return { error: 'no_token_in_response' };
@@ -615,5 +1205,7 @@ export async function refreshToken(): Promise<{ token?: string; error?: string; 
     }
   } catch {
     return { error: 'network' };
+  } finally {
+    finishAccountTransition(transition);
   }
 }

@@ -1,0 +1,187 @@
+ M .gitignore
+ M AGENTS.md
+ M app/__tests__/plantTitleBody.test.ts
+ M app/__tests__/useSessionStore.test.ts
+ M app/__tests__/useTrackingStore.test.ts
+ M app/__tests__/v409-offlineQueue.test.ts
+ M app/scripts/activity-simulator-qa.mjs
+ M app/src/components/Icon.tsx
+ M app/src/components/OtaBadge.tsx
+ M app/src/components/SyncBadge.tsx
+ M app/src/components/activity/ActivityRecordingChrome.tsx
+ M app/src/components/map/EditOverlayV274.tsx
+ D app/src/components/settings/MemorySettingsSection.tsx
+ M app/src/config/mapbox.ts
+ M app/src/features/activity/__tests__/activityContracts.test.ts
+ M app/src/features/activity/__tests__/activityLocationHealth.test.ts
+ M app/src/features/activity/__tests__/activityOperationalState.test.ts
+ M app/src/features/activity/__tests__/confirmedRoutePresentation.test.ts
+ M app/src/features/activity/__tests__/freeActivityIntegrationContracts.test.ts
+ M app/src/features/activity/activityContracts.ts
+ M app/src/features/activity/activityLocationHealth.ts
+ M app/src/features/activity/activityOperationalState.ts
+ M app/src/features/activitySimulator/ActivitySimulatorPanel.tsx
+ M app/src/features/activitySimulator/__tests__/engine.test.ts
+ M app/src/features/activitySimulator/__tests__/simulatorContracts.test.ts
+ M app/src/features/activitySimulator/__tests__/store.test.ts
+ M app/src/features/activitySimulator/activityLocationProvider.ts
+ M app/src/features/activitySimulator/activitySimulatorEngine.ts
+ M app/src/features/activitySimulator/simulatorLog.ts
+ M app/src/features/activitySimulator/types.ts
+ M app/src/features/activitySimulator/useActivitySimulatorStore.ts
+ M app/src/features/marks/components/MarkCard.tsx
+ M app/src/features/marks/components/MarkDetailSheet.tsx
+ M app/src/features/marks/components/MarkForm.tsx
+ M app/src/features/memory/__tests__/memorySettingsContract.test.ts
+ M app/src/features/memory/__tests__/memorySyncReconcile.test.ts
+ M app/src/features/memory/components/FogLayer.tsx
+ M app/src/features/memory/components/ForegroundUnlockManager.tsx
+ M app/src/features/memory/components/MemoryMap.tsx
+ M app/src/features/memory/screens/MemoryScreen.tsx
+ M app/src/features/memory/services/hierarchyService.ts
+ M app/src/features/memory/services/mapboxAdapter.web.tsx
+ M app/src/features/memory/store/useMemorySettingsStore.ts
+ M app/src/features/plant/components/ContentStep.tsx
+ M app/src/features/plant/components/PinAdjustStep.tsx
+ M app/src/features/plant/config/plantConfig.ts
+ M app/src/features/plant/services/noteEncoding.ts
+ M app/src/hooks/useRouteFollowing.ts
+ M app/src/navigation/RootNavigator.tsx
+ M app/src/screens/AuthScreen.tsx
+ M app/src/screens/DebugScreen.tsx
+ M app/src/screens/HikingMap.tsx
+ M app/src/screens/HikingScreen.tsx
+ M app/src/screens/HomeScreen.tsx
+ M app/src/screens/MapHistoryScreen.tsx
+ M app/src/screens/MarkerDetailScreen.tsx
+ M app/src/screens/PlantScreen.tsx
+ M app/src/screens/RouteEditorScreen.tsx
+ M app/src/screens/RoutesScreen.tsx
+ M app/src/screens/RunningScreen.tsx
+ M app/src/screens/SettingsScreen.tsx
+ M app/src/screens/__tests__/activityRecordingUiContracts.test.ts
+ M app/src/services/__tests__/offlineCommittedEntity.test.ts
+ M app/src/services/__tests__/telemetryPrivacy.test.ts
+ M app/src/services/appLog.ts
+ M app/src/services/authService.ts
+ M app/src/services/markerOfflineEntities.ts
+ M app/src/services/memorySync.ts
+ M app/src/services/offlineEntity.ts
+ M app/src/services/routeFollowing/VoiceGuidance.ts
+ M app/src/services/routeService.ts
+ M app/src/services/routing/__tests__/pedestrianFinalRoute.test.ts
+ M app/src/services/routing/corridor/PolylineSampler.ts
+ M app/src/services/routing/pedestrianFinalRoute.ts
+ M app/src/services/telemetryPrivacy.ts
+ M app/src/services/telemetryUploader.ts
+ M app/src/store/__tests__/runPreviewFinally.test.ts
+ M app/src/store/useAppStore.ts
+ M app/src/store/useMarkerStore.ts
+ M app/src/store/useRouteStore.ts
+ M app/src/store/useSessionStore.ts
+ M app/src/store/useSettingsStore.ts
+ M app/src/store/useTrackingStore.ts
+ M app/src/utils/dateFormat.ts
+ M backend/public/privacy.html
+ M backend/src/cron/authSweep.js
+ M backend/src/index.js
+ M backend/src/middleware/schemas.js
+ M backend/src/models/DataExport.js
+ M backend/src/models/Route.js
+ M backend/src/models/Session.js
+ M backend/src/models/User.js
+ M backend/src/routes/__tests__/freeActivityContracts.test.js
+ M backend/src/routes/account.js
+ M backend/src/routes/auth.js
+ M backend/src/routes/edit-diag.js
+ M backend/src/routes/markers.js
+ M backend/src/routes/memory.js
+ M backend/src/routes/routes.js
+ M backend/src/routes/sessions.js
+ M backend/src/routes/telemetry.js
+ M backend/src/services/emailService.js
+ M backend/src/utils/__tests__/qaTelemetryPrivacy.test.js
+ M backend/src/utils/qaTelemetryPrivacy.js
+ M docs/operations/PRODUCTION_BACKEND_DEPLOY.md
+ M docs/review/activity-simulator/FINDINGS_LEDGER.md
+ M docs/review/activity-simulator/LOGGING_CONTRACT.md
+ M docs/review/activity-simulator/MANUAL_QA_GUIDE.md
+ M docs/review/activity-simulator/QA_TELEMETRY.md
+ M docs/review/activity-simulator/SIMULATOR_CONTRACT.md
+ M docs/review/activity-simulator/TEST_EVIDENCE.md
+ M docs/review/activity-simulator/runtime-evidence.json
+?? app/_review/settings-product-dna/
+?? app/_review/trails-personal-library/
+?? app/scripts/capture-activity-mapbox-qa.mjs
+?? app/scripts/capture-o54-activity-qa.mjs
+?? app/scripts/capture-overnight-offline-activity-qa.mjs
+?? app/scripts/capture-overnight-plant-qa.mjs
+?? app/scripts/capture-settings-product-dna-qa.mjs
+?? app/scripts/capture-trails-personal-library-qa.mjs
+?? app/scripts/capture-trails-product-ux-audit.mjs
+?? app/scripts/evaluate-final-v2-nz.mjs
+?? app/scripts/evaluate-o54-field.mjs
+?? app/scripts/evaluate-o55-gps-simulator.mjs
+?? app/scripts/render-settings-before-after.mjs
+?? app/src/features/activity/__tests__/activityDetailPresentation.test.ts
+?? app/src/features/activity/__tests__/activityMapPresentation.test.ts
+?? app/src/features/activity/__tests__/activityRouteState.test.ts
+?? app/src/features/activity/__tests__/causalLiveRoute.test.ts
+?? app/src/features/activity/__tests__/livePace.test.ts
+?? app/src/features/activity/activityDetailPresentation.ts
+?? app/src/features/activity/activityMapPresentation.ts
+?? app/src/features/activity/activityRouteState.ts
+?? app/src/features/activity/causalLiveRoute.ts
+?? app/src/features/activity/livePace.ts
+?? app/src/features/activitySimulator/__tests__/rawGpsObservationModel.test.ts
+?? app/src/features/activitySimulator/rawGpsObservationModel.ts
+?? app/src/features/cairns/
+?? app/src/features/plant/services/__tests__/
+?? app/src/features/route/
+?? app/src/features/trails/
+?? app/src/screens/AllCairnsScreen.tsx
+?? app/src/screens/__tests__/settingsProductConvergence.test.ts
+?? app/src/services/__tests__/accountLocalDataContract.test.ts
+?? app/src/services/__tests__/hapticService.test.ts
+?? app/src/services/__tests__/routeService.contract.test.ts
+?? app/src/services/__tests__/settingsServerActions.test.ts
+?? app/src/services/accountLocalData.ts
+?? app/src/services/routeOfflineEntities.ts
+?? app/src/services/routeTombstones.ts
+?? app/src/services/routing/__tests__/finalV2NzSimulation.test.ts
+?? app/src/store/__tests__/useMarkerStore.fastAck.test.ts
+?? app/src/store/__tests__/useRouteStore.offline.test.ts
+?? app/src/utils/__tests__/distanceFormatSettings.test.ts
+?? backend/scripts/verify-migration-036.sh
+?? backend/src/middleware/__tests__/
+?? backend/src/migrations/035_settings_correctness.sql
+?? backend/src/migrations/036_route_origin_identity.sql
+?? backend/src/models/__tests__/
+?? backend/src/routes/__tests__/fixtures/
+?? backend/src/routes/__tests__/routeOriginMySql.integration.js
+?? backend/src/routes/__tests__/routeOriginRoundTrip.test.js
+?? backend/src/routes/__tests__/settingsCorrectnessContracts.test.js
+?? backend/src/services/__tests__/
+?? backend/src/services/ownedCairnLibrary.js
+?? docs/operations/ACTIVITY_VERIFICATION.md
+?? docs/review/OVERNIGHT_CAIRN_CONVERGENCE.md
+?? docs/review/activity-detail/
+?? docs/review/activity-offline/
+?? docs/review/activity-real/
+?? docs/review/activity-sim/
+?? docs/review/activity-simulator/FINAL_PARITY_FORENSIC.md
+?? docs/review/activity-simulator/FINAL_SIMULATOR_FORENSIC.md
+?? docs/review/activity-simulator/NATIVE_REGRESSION_FORENSIC.md
+?? docs/review/activity-simulator/O40_SIMULATOR_REGRESSION_FORENSIC.md
+?? docs/review/activity-simulator/REAL_GPS_NATIVE_FORENSIC.md
+?? docs/review/activity-ui/
+?? docs/review/cairn-personal/
+?? docs/review/o43-live-location-forensic/
+?? docs/review/o44-location-cadence/
+?? docs/review/o45-tracking-hardening/
+?? docs/review/plant/
+?? docs/review/product-system-v1-audit/
+?? docs/review/route-detail/
+?? docs/review/settings/
+?? docs/review/trails/
+?? docs/review/ui-requirements-baseline/

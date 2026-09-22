@@ -1,0 +1,57 @@
+✔ projection cells are fixed coarse polygons and a 250 m mask removes intersecting cells (2.992328ms)
+✖ privacy mask radius is ground distance at representative NZ latitudes (4.35791ms)
+✖ privacy mask handles an NZ-adjacent antimeridian wrap conservatively (0.793543ms)
+✔ server projection excludes whole endpoint/private cells and emits no source rows (9.250123ms)
+✔ friendship active uniqueness does not derive a generated column from cascading FK inputs (1.187741ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 3
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 235.91407
+
+✖ failing tests:
+
+test at src/services/__tests__/friendProjection.test.js:50:1
+✖ privacy mask radius is ground distance at representative NZ latitudes (4.35791ms)
+  AssertionError [ERR_ASSERTION]: inside at -35
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/Users/mzm/Desktop/cairn/CairnNZ/backend/src/services/__tests__/friendProjection.test.js:62:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at src/services/__tests__/friendProjection.test.js:67:1
+✖ privacy mask handles an NZ-adjacent antimeridian wrap conservatively (0.793543ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/Users/mzm/Desktop/cairn/CairnNZ/backend/src/services/__tests__/friendProjection.test.js:76:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

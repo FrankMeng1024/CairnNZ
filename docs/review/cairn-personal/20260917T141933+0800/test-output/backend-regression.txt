@@ -1,0 +1,28 @@
+✔ start schema accepts immutable client Activity identity for either mode (6.613243ms)
+✔ save accepts the canonical segmented foreground/background point contract and stable Memory ID (0.990463ms)
+✔ bounded historical accelerated Activity payload traverses Start, append, Finish and Memory validation (205.774377ms)
+✔ legacy malformed background points are not silently reinterpreted by the server contract (0.688808ms)
+✔ live and queued session writes accept their idempotency body field (2.233014ms)
+✔ Cairn create accepts immutable identity and Activity provenance (0.789679ms)
+✔ migration defines per-user business uniqueness and resurrection tombstones (0.60109ms)
+✔ singleton schema and migration ledger fail closed (0.744345ms)
+✔ server reconciliation preserves client identity before acknowledging and cleanup (1.086235ms)
+✔ client-identity delete routes persist tombstones before removing matching rows (4.710837ms)
+✔ legacy numeric delete paths tombstone any discovered client identity transactionally (1.10867ms)
+✔ completed Activity rename is authenticated, validated and rejects deleted rows (2.368393ms)
+✔ Activity Save acknowledges committed source rows before derived Memory attribution (0.642191ms)
+✔ supported Memory reset transaction clears points and derived regions only (0.429646ms)
+✔ Activity-derived Route creation is serialized against source deletion (0.854224ms)
+✔ owner history query is always scoped to the authenticated owner (8.371106ms)
+✔ the route takes owner identity only from authenticated request state (0.676075ms)
+✔ search covers owner history before stable pagination (0.463183ms)
+✔ cursor round trip is deterministic and malformed cursors fail closed (2.347614ms)
+✔ same stable identity can converge newer pending content without moving its place (1.890254ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 525.204672

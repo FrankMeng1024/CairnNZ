@@ -51,6 +51,12 @@ describe('Friends production proof contract', () => {
     expect(source).not.toContain('label="Keep friend"');
   });
 
+  it('silently discards stale block and unfriend completions after an account boundary', () => {
+    expect(source.match(/if \(result\.superseded\) return;/g)).toHaveLength(2);
+    expect(source).toMatch(/blockUser\(friendActionTarget\.id\);\s+if \(result\.superseded\) return;\s+setBlockBusy\(false\)/);
+    expect(source).toMatch(/removeFriendAPI\(profileFriend\.id\);\s+if \(result\.superseded\) return;\s+setRemoveBusy\(false\)/);
+  });
+
   it('closes Add friend without an artificial success delay and refreshes requests', () => {
     expect(source).toContain('onRequestSent();\n      close();');
     expect(source).toContain('onRequestSent={() => { void loadRequests(); }}');

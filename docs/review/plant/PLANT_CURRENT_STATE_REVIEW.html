@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CairnNZ — Plant Current State Review</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f7f3e9;
+      --muted: #b8c1ba;
+      --field: #172a24;
+      --field-2: #20372f;
+      --line: rgba(235, 241, 232, 0.15);
+      --green: #8ead78;
+      --warn: #e2a15d;
+      --danger: #e07868;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #0f1916;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    header, main { width: min(1500px, calc(100% - 40px)); margin: 0 auto; }
+    header { padding: 56px 0 28px; border-bottom: 1px solid var(--line); }
+    h1 { margin: 0 0 10px; font-size: clamp(28px, 4vw, 48px); line-height: 1.08; letter-spacing: -0.025em; }
+    h2 { margin: 0 0 8px; font-size: 24px; }
+    p { margin: 0; }
+    .lede { max-width: 900px; color: var(--muted); font-size: 17px; }
+    .verdict {
+      display: inline-flex;
+      margin-top: 22px;
+      padding: 8px 12px;
+      border: 1px solid rgba(226, 161, 93, .45);
+      border-radius: 999px;
+      background: rgba(226, 161, 93, .10);
+      color: #f4c998;
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    main { padding: 36px 0 72px; }
+    section { margin-top: 46px; }
+    .section-note { max-width: 950px; color: var(--muted); margin-bottom: 20px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
+      gap: 20px;
+      align-items: start;
+    }
+    figure {
+      margin: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--field);
+    }
+    figure img {
+      display: block;
+      width: 100%;
+      max-height: 760px;
+      object-fit: contain;
+      background: #292929;
+    }
+    figcaption { padding: 16px 17px 18px; }
+    figcaption strong { display: block; margin-bottom: 5px; font-size: 15px; }
+    figcaption span { display: block; color: var(--muted); font-size: 13px; }
+    .tag {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: rgba(142, 173, 120, .12);
+      color: #b8d2a7;
+      font-size: 10px;
+      font-weight: 750;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .tag.problem { background: rgba(224, 120, 104, .11); color: #f0a99e; }
+    .findings {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+    .finding { padding: 17px; border-radius: 14px; background: var(--field-2); border: 1px solid var(--line); }
+    .finding b { display: block; margin-bottom: 5px; }
+    .finding p { color: var(--muted); font-size: 13px; }
+    .evidence {
+      margin-top: 46px;
+      padding: 18px 20px;
+      border-left: 3px solid var(--warn);
+      background: rgba(226, 161, 93, .07);
+      color: var(--muted);
+      border-radius: 0 12px 12px 0;
+      font-size: 13px;
+    }
+    code { color: #d7e8cd; }
+    footer { margin-top: 50px; padding-top: 22px; border-top: 1px solid var(--line); color: #b8d2a7; font-weight: 750; letter-spacing: .04em; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Plant — current product state</h1>
+    <p class="lede">A current-state evidence board, not a redesign. The comparison asks whether Plant feels like an intentional Cairn action, whether the outdoor journey stays coherent, and whether later social/detail surfaces fulfill what creation promises.</p>
+    <div class="verdict">Valuable core · incoherent surrounding product · no redesign applied</div>
+  </header>
+
+  <main>
+    <section>
+      <h2>Product-family references</h2>
+      <p class="section-note">These accepted surfaces are references for material, typography, control character, atmosphere, and hierarchy—not layouts Plant should copy.</p>
+      <div class="grid">
+        <figure>
+          <img src="../activity-ui/before/references/home-day-390x844.png" alt="Accepted Cairn Home day reference" />
+          <figcaption><strong>Home — scenic invitation</strong><span>Environment remains primary; quiet record/action surfaces sit inside it.</span><em class="tag">Accepted reference</em></figcaption>
+        </figure>
+        <figure>
+          <img src="../activity-ui/before/references/friends-day-390x844.png" alt="Accepted Cairn Friends day reference" />
+          <figcaption><strong>Friends — quiet human presence</strong><span>Low-pressure social language and a clear, restrained primary action.</span><em class="tag">Accepted reference</em></figcaption>
+        </figure>
+        <figure>
+          <img src="../activity-ui/after/hike-tracking-day-390x844.png" alt="Accepted Cairn Hike recording reference" />
+          <figcaption><strong>Hike — field atlas in motion</strong><span>Map environment, precise hierarchy, and Plant as a meaningful secondary action.</span><em class="tag">Accepted reference</em></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section>
+      <h2>Hike → Plant journey</h2>
+      <p class="section-note">The endpoints feel Cairn: notice something in the landscape, then leave a durable trace. The intervening interaction leaves the Activity environment and becomes a three-step form workflow.</p>
+      <div class="grid">
+        <figure>
+          <img src="current/01-hike-plant-entry-context.png" alt="Current accepted Hike recording with Plant action" />
+          <figcaption><strong>1 · Hike context</strong><span>Plant is intentionally prominent beside Pause and Finish. It promises a place-aware action without taking over the hike.</span><em class="tag">Cairn fit</em></figcaption>
+        </figure>
+        <figure>
+          <img src="current/02-pin-adjust.png" alt="Current Plant pin adjustment screen" />
+          <figcaption><strong>2 · Pin adjustment</strong><span>The map-centered step is the strongest visual/product moment. Current local Web capture lacks a Mapbox token, so only real chrome and pin are visible.</span><em class="tag">Useful supporting step</em></figcaption>
+        </figure>
+        <figure>
+          <img src="current/03-compose-empty.png" alt="Current empty Plant compose screen" />
+          <figcaption><strong>3 · Empty compose</strong><span>Danger is preselected; generic Cairn is partially off-screen; unavailable Anyone and a false photo promise remain visible.</span><em class="tag problem">Model + burden</em></figcaption>
+        </figure>
+        <figure>
+          <img src="current/04-compose-filled.png" alt="Current filled Plant compose screen" />
+          <figcaption><strong>4 · Filled state</strong><span>Structured Water report, title, note, and Friends audience are readable—but this is a data-entry task rather than a quick outdoor trace.</span><em class="tag problem">High interruption</em></figcaption>
+        </figure>
+        <figure>
+          <img src="current/05-saving.png" alt="Current Plant saving state" />
+          <figcaption><strong>5 · Saving</strong><span>Calm and clear state treatment. Initial create is genuinely local-first; the visual restraint is worth preserving.</span><em class="tag">Keep behavior</em></figcaption>
+        </figure>
+        <figure>
+          <img src="current/06-saved-own-pending.png" alt="Current own Marker detail with pending sync" />
+          <figcaption><strong>6 · Saved own Cairn</strong><span>Type, audience, sync, time, and location are visible. Forced Detail extends time away from Hike; modern edits are not server-durable.</span><em class="tag problem">Trust defect behind UI</em></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section>
+      <h2>Theme continuity</h2>
+      <p class="section-note">Plant’s root adopts the accepted night environment, but child form primitives retain static day colors. This is a component-contract failure, not a request for a different visual direction.</p>
+      <div class="grid">
+        <figure>
+          <img src="current/09-compose-empty-night.png" alt="Current Plant compose screen at night with low contrast title" />
+          <figcaption><strong>Night compose</strong><span>The “Leave a mark” title is nearly invisible; day-white inputs and disabled states do not belong to the same night material system.</span><em class="tag problem">High-severity visual inconsistency</em></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section>
+      <h2>Shared/social detail contracts</h2>
+      <p class="section-note">These sheets are the real shared production component rendered inside its developer scenario host. The host text behind each sheet is not production UI. In production, the friend/public journeys that should reach these forms are incomplete.</p>
+      <div class="grid">
+        <figure>
+          <img src="current/07-friend-mark-detail.png" alt="Shared friend Mark detail sheet in current dev scenario host" />
+          <figcaption><strong>Friend Mark sheet</strong><span>Calm, anonymous-feed-free presentation fits Cairn. The production Trails friend card currently cannot reach it, and Memory does not render friend Marks.</span><em class="tag problem">Production path broken</em></figcaption>
+        </figure>
+        <figure>
+          <img src="current/08-public-mark-detail.png" alt="Shared public Mark detail sheet in current dev scenario host" />
+          <figcaption><strong>Public Mark sheet</strong><span>Like/Report mechanics are visible in the component, but public creation and content reveal are unavailable in the real journey.</span><em class="tag problem">Dormant product scope</em></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section>
+      <h2>Evidence-backed product findings</h2>
+      <div class="findings">
+        <div class="finding"><b>Core value survives</b><p>A durable personal trace tied to exact place and Activity is distinctly Cairn and worth keeping.</p></div>
+        <div class="finding"><b>Quick Cairn proves the interaction</b><p>One tap, trusted Activity coordinate, toast, and no context loss is the right outdoor character—though later enrichment is missing.</p></div>
+        <div class="finding"><b>Current full flow is overcommitted</b><p>GPS, pin, taxonomy, title, note, audience, save, and forced detail make an occasional deliberate stop—not a frequent noticing gesture.</p></div>
+        <div class="finding"><b>Social promise is ahead of reality</b><p>Friend and public surfaces exist in pieces but not as complete create → encounter → read → act journeys.</p></div>
+        <div class="finding"><b>Visual polish cannot fix model conflict</b><p>Danger reports and personal memories have different trust and lifecycle needs despite sharing the same type row.</p></div>
+        <div class="finding"><b>Durability must be truthful</b><p>Initial create is strong; Hut sync, modern edit, delete failure, and inert Retry make later state untrustworthy.</p></div>
+      </div>
+    </section>
+
+    <div class="evidence">
+      <strong>Capture note.</strong> Captured from current Expo Web at 390 × 844 on 12 September 2026 using in-memory QA fixtures and intercepted API calls; no backend writes occurred. The local Web environment lacked a Mapbox access token, so blank map canvases are an environment limitation, not evidence of a native map defect. Runtime details are in <code>current/results.json</code>. The complete forensic reasoning and source evidence are in <code>PLANT_PRODUCT_UX_AUDIT.md</code>.
+    </div>
+
+    <footer>PLANT AUDIT READY FOR PRODUCT DECISION — NO REDESIGN APPLIED</footer>
+  </main>
+</body>
+</html>

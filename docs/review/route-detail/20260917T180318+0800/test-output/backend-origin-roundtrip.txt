@@ -1,0 +1,8 @@
+Command (cwd backend):
+node --test src/routes/__tests__/freeActivityContracts.test.js src/routes/__tests__/routeOriginRoundTrip.test.js
+
+PASS: 18/18 tests. Exit 0.
+Covered source owner/finalized validation, origin persistence/reload, edit evidence, immutable source fields, source deletion independence, stable identity, response-loss convergence, tombstone precedence, and existing Activity/backend contracts.
+
+Invocation note: an earlier `npx jest` invocation was the wrong runner for these `node:test` files and reported no Jest tests. That invocation is not product evidence and was corrected, not retried as a flaky failure.
+

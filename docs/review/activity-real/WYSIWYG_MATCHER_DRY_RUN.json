@@ -1,0 +1,614 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-11T09:29:08.519Z",
+  "privacy": "No coordinates or Mapbox token are persisted; production access is SELECT-only.",
+  "productionConfiguration": {
+    "matcher": "snapTrack.ts v7 hybrid, loaded directly",
+    "profile": "mapbox/walking",
+    "tidy": true,
+    "perCallTimeoutMs": 1600,
+    "perSegmentTotalTimeoutMs": 4000,
+    "chunkSize": 80,
+    "chunkOverlap": 1,
+    "qualityGates": "unchanged current code"
+  },
+  "sessions": [
+    {
+      "serverId": 2062,
+      "name": "almost work",
+      "clientActivityId": "3db88be5-4f0a-4fab-a5ae-a619c4ccfb59",
+      "inputAuthority": "persisted canonical segments used by current Save matcher",
+      "segmentResults": [
+        {
+          "segmentIndex": 0,
+          "inputPointCount": 42,
+          "inputLengthM": 509.428,
+          "inputReversalCount": 0,
+          "outputPointCount": 42,
+          "outputLengthM": 509.428,
+          "outputReversalCount": 0,
+          "lengthRatio": 1,
+          "decision": "canonical-fallback",
+          "reason": "no-derived-chunks",
+          "quality": {
+            "accepted": true,
+            "reason": "accepted",
+            "p50DeviationM": 0,
+            "p95DeviationM": 0,
+            "maxDeviationM": 0,
+            "endpointDeviationM": 0,
+            "rawLengthM": 509.4284646855642,
+            "matchedLengthM": 509.4284646855642,
+            "lengthRatio": 1,
+            "deviationEnvelopeM": 15
+          },
+          "stats": {
+            "apiCalls": 2,
+            "chunksOk": 0,
+            "chunksFallback": 2,
+            "qualityFallbacks": 0,
+            "minConfidence": null,
+            "maxP95DeviationM": 0,
+            "maxEndpointDeviationM": 0,
+            "goodRuns": 2,
+            "lostRuns": 2,
+            "seamBridges": 0,
+            "requestResults": [
+              {
+                "inputPointCount": 15,
+                "headTimestamp": 1788961363447,
+                "tailTimestamp": 1788961530727,
+                "timestampsIncluded": true,
+                "minimumRadiusM": 10,
+                "maximumRadiusM": 18,
+                "durationMs": 770,
+                "result": "partial_tracepoint_coverage",
+                "httpStatus": 200,
+                "responseCode": "Ok",
+                "subMatchingCount": 1,
+                "tracepointCount": 15,
+                "nullTracepointCount": 8,
+                "confidence": 0.036079287228903745,
+                "qualityReason": null
+              },
+              {
+                "inputPointCount": 24,
+                "headTimestamp": 1788961540601,
+                "tailTimestamp": 1788961829000,
+                "timestampsIncluded": true,
+                "minimumRadiusM": 10,
+                "maximumRadiusM": 14,
+                "durationMs": 203,
+                "result": "partial_tracepoint_coverage",
+                "httpStatus": 200,
+                "responseCode": "Ok",
+                "subMatchingCount": 1,
+                "tracepointCount": 24,
+                "nullTracepointCount": 15,
+                "confidence": 0.9531446682798687,
+                "qualityReason": null
+              }
+            ],
+            "durationMs": 983
+          },
+          "durationMs": 985
+        }
+      ],
+      "chronologyWindows": []
+    },
+    {
+      "serverId": 2067,
+      "name": "somethingwrong",
+      "clientActivityId": "70f69c8e-028b-4e8d-89bc-20592e7dbfd6",
+      "inputAuthority": "persisted canonical segments used by current Save matcher",
+      "segmentResults": [
+        {
+          "segmentIndex": 0,
+          "inputPointCount": 1,
+          "decision": "canonical-fallback",
+          "reason": "too-short"
+        },
+        {
+          "segmentIndex": 1,
+          "inputPointCount": 61,
+          "inputLengthM": 357.753,
+          "inputReversalCount": 2,
+          "outputPointCount": 61,
+          "outputLengthM": 357.753,
+          "outputReversalCount": 2,
+          "lengthRatio": 1,
+          "decision": "canonical-fallback",
+          "reason": "no-derived-chunks",
+          "quality": {
+            "accepted": true,
+            "reason": "accepted",
+            "p50DeviationM": 0,
+            "p95DeviationM": 0,
+            "maxDeviationM": 0,
+            "endpointDeviationM": 0,
+            "rawLengthM": 357.7529893300068,
+            "matchedLengthM": 357.7529893300068,
+            "lengthRatio": 1,
+            "deviationEnvelopeM": 15
+          },
+          "stats": {
+            "apiCalls": 1,
+            "chunksOk": 0,
+            "chunksFallback": 1,
+            "qualityFallbacks": 0,
+            "minConfidence": null,
+            "maxP95DeviationM": 0,
+            "maxEndpointDeviationM": 0,
+            "goodRuns": 1,
+            "lostRuns": 0,
+            "seamBridges": 0,
+            "requestResults": [
+              {
+                "inputPointCount": 61,
+                "headTimestamp": 1789044588138,
+                "tailTimestamp": 1789044916000,
+                "timestampsIncluded": false,
+                "minimumRadiusM": 10,
+                "maximumRadiusM": 18,
+                "durationMs": 180,
+                "result": "partial_tracepoint_coverage",
+                "httpStatus": 200,
+                "responseCode": "Ok",
+                "subMatchingCount": 1,
+                "tracepointCount": 61,
+                "nullTracepointCount": 39,
+                "confidence": 0,
+                "qualityReason": null
+              }
+            ],
+            "durationMs": 180
+          },
+          "durationMs": 181
+        },
+        {
+          "segmentIndex": 2,
+          "inputPointCount": 11,
+          "inputLengthM": 71.925,
+          "inputReversalCount": 3,
+          "outputPointCount": 11,
+          "outputLengthM": 71.925,
+          "outputReversalCount": 3,
+          "lengthRatio": 1,
+          "decision": "canonical-fallback",
+          "reason": "no-derived-chunks",
+          "quality": {
+            "accepted": true,
+            "reason": "accepted",
+            "p50DeviationM": 0,
+            "p95DeviationM": 0,
+            "maxDeviationM": 0,
+            "endpointDeviationM": 0,
+            "rawLengthM": 71.92463161984382,
+            "matchedLengthM": 71.92463161984382,
+            "lengthRatio": 1,
+            "deviationEnvelopeM": 15
+          },
+          "stats": {
+            "apiCalls": 1,
+            "chunksOk": 0,
+            "chunksFallback": 1,
+            "qualityFallbacks": 0,
+            "minConfidence": null,
+            "maxP95DeviationM": 0,
+            "maxEndpointDeviationM": 0,
+            "goodRuns": 1,
+            "lostRuns": 1,
+            "seamBridges": 0,
+            "requestResults": [
+              {
+                "inputPointCount": 10,
+                "headTimestamp": 1789044931149,
+                "tailTimestamp": 1789045004999,
+                "timestampsIncluded": true,
+                "minimumRadiusM": 14,
+                "maximumRadiusM": 19,
+                "durationMs": 183,
+                "result": "partial_tracepoint_coverage",
+                "httpStatus": 200,
+                "responseCode": "Ok",
+                "subMatchingCount": 1,
+                "tracepointCount": 10,
+                "nullTracepointCount": 5,
+                "confidence": 4.516952811783881e-9,
+                "qualityReason": null
+              }
+            ],
+            "durationMs": 183
+          },
+          "durationMs": 183
+        },
+        {
+          "segmentIndex": 3,
+          "inputPointCount": 2,
+          "inputLengthM": 13.054,
+          "inputReversalCount": 0,
+          "outputPointCount": 2,
+          "outputLengthM": 13.054,
+          "outputReversalCount": 0,
+          "lengthRatio": 1,
+          "decision": "canonical-fallback",
+          "reason": "no-derived-chunks",
+          "quality": {
+            "accepted": true,
+            "reason": "accepted",
+            "p50DeviationM": 0,
+            "p95DeviationM": 0,
+            "maxDeviationM": 0,
+            "endpointDeviationM": 0,
+            "rawLengthM": 13.053564531359216,
+            "matchedLengthM": 13.053564531359216,
+            "lengthRatio": 1,
+            "deviationEnvelopeM": 15
+          },
+          "stats": {
+            "apiCalls": 0,
+            "chunksOk": 0,
+            "chunksFallback": 0,
+            "qualityFallbacks": 0,
+            "minConfidence": null,
+            "maxP95DeviationM": 0,
+            "maxEndpointDeviationM": 0,
+            "goodRuns": 1,
+            "lostRuns": 1,
+            "seamBridges": 0,
+            "requestResults": [],
+            "durationMs": 0
+          },
+          "durationMs": 0
+        }
+      ],
+      "chronologyWindows": []
+    },
+    {
+      "serverId": 2069,
+      "name": "5m",
+      "clientActivityId": "778d7231-353a-4708-8507-8171d8c92ac2",
+      "inputAuthority": "persisted canonical segments used by current Save matcher",
+      "segmentResults": [
+        {
+          "segmentIndex": 0,
+          "inputPointCount": 10,
+          "inputLengthM": 73.53,
+          "inputReversalCount": 1,
+          "outputPointCount": 10,
+          "outputLengthM": 73.53,
+          "outputReversalCount": 1,
+          "lengthRatio": 1,
+          "decision": "canonical-fallback",
+          "reason": "no-derived-chunks",
+          "quality": {
+            "accepted": true,
+            "reason": "accepted",
+            "p50DeviationM": 0,
+            "p95DeviationM": 0,
+            "maxDeviationM": 0,
+            "endpointDeviationM": 0,
+            "rawLengthM": 73.5301521087687,
+            "matchedLengthM": 73.5301521087687,
+            "lengthRatio": 1,
+            "deviationEnvelopeM": 15
+          },
+          "stats": {
+            "apiCalls": 1,
+            "chunksOk": 0,
+            "chunksFallback": 1,
+            "qualityFallbacks": 0,
+            "minConfidence": null,
+            "maxP95DeviationM": 0,
+            "maxEndpointDeviationM": 0,
+            "goodRuns": 1,
+            "lostRuns": 1,
+            "seamBridges": 0,
+            "requestResults": [
+              {
+                "inputPointCount": 8,
+                "headTimestamp": 1789090974040,
+                "tailTimestamp": 1789091018000,
+                "timestampsIncluded": true,
+                "minimumRadiusM": 10,
+                "maximumRadiusM": 14,
+                "durationMs": 181,
+                "result": "partial_tracepoint_coverage",
+                "httpStatus": 200,
+                "responseCode": "Ok",
+                "subMatchingCount": 1,
+                "tracepointCount": 8,
+                "nullTracepointCount": 4,
+                "confidence": 0.0001371269152383725,
+                "qualityReason": null
+              }
+            ],
+            "durationMs": 181
+          },
+          "durationMs": 181
+        }
+      ],
+      "chronologyWindows": []
+    },
+    {
+      "serverId": 2070,
+      "name": "1m",
+      "clientActivityId": "c8872a58-efc4-4adc-87d1-7461735ef6bb",
+      "inputAuthority": "persisted canonical segments used by current Save matcher",
+      "segmentResults": [
+        {
+          "segmentIndex": 0,
+          "inputPointCount": 15,
+          "inputLengthM": 105.181,
+          "inputReversalCount": 0,
+          "outputPointCount": 15,
+          "outputLengthM": 105.181,
+          "outputReversalCount": 0,
+          "lengthRatio": 1,
+          "decision": "canonical-fallback",
+          "reason": "no-derived-chunks",
+          "quality": {
+            "accepted": true,
+            "reason": "accepted",
+            "p50DeviationM": 0,
+            "p95DeviationM": 0,
+            "maxDeviationM": 0,
+            "endpointDeviationM": 0,
+            "rawLengthM": 105.18082994650365,
+            "matchedLengthM": 105.18082994650365,
+            "lengthRatio": 1,
+            "deviationEnvelopeM": 15
+          },
+          "stats": {
+            "apiCalls": 1,
+            "chunksOk": 0,
+            "chunksFallback": 1,
+            "qualityFallbacks": 0,
+            "minConfidence": null,
+            "maxP95DeviationM": 0,
+            "maxEndpointDeviationM": 0,
+            "goodRuns": 1,
+            "lostRuns": 0,
+            "seamBridges": 0,
+            "requestResults": [
+              {
+                "inputPointCount": 15,
+                "headTimestamp": 1789091077251,
+                "tailTimestamp": 1789091177999,
+                "timestampsIncluded": true,
+                "minimumRadiusM": 13,
+                "maximumRadiusM": 14,
+                "durationMs": 182,
+                "result": "partial_tracepoint_coverage",
+                "httpStatus": 200,
+                "responseCode": "Ok",
+                "subMatchingCount": 1,
+                "tracepointCount": 15,
+                "nullTracepointCount": 13,
+                "confidence": 0.0020096582583091216,
+                "qualityReason": null
+              }
+            ],
+            "durationMs": 182
+          },
+          "durationMs": 183
+        }
+      ],
+      "chronologyWindows": []
+    },
+    {
+      "serverId": 2071,
+      "name": "new 1m",
+      "clientActivityId": "7e8244f7-71f3-45f1-b2df-dcfd974c96a6",
+      "inputAuthority": "persisted canonical segments used by current Save matcher",
+      "segmentResults": [
+        {
+          "segmentIndex": 0,
+          "inputPointCount": 30,
+          "inputLengthM": 112.173,
+          "inputReversalCount": 2,
+          "outputPointCount": 30,
+          "outputLengthM": 112.173,
+          "outputReversalCount": 2,
+          "lengthRatio": 1,
+          "decision": "canonical-fallback",
+          "reason": "no-derived-chunks",
+          "quality": {
+            "accepted": true,
+            "reason": "accepted",
+            "p50DeviationM": 0,
+            "p95DeviationM": 0,
+            "maxDeviationM": 0,
+            "endpointDeviationM": 0,
+            "rawLengthM": 112.17341448761029,
+            "matchedLengthM": 112.17341448761029,
+            "lengthRatio": 1,
+            "deviationEnvelopeM": 15
+          },
+          "stats": {
+            "apiCalls": 1,
+            "chunksOk": 0,
+            "chunksFallback": 1,
+            "qualityFallbacks": 0,
+            "minConfidence": null,
+            "maxP95DeviationM": 0,
+            "maxEndpointDeviationM": 0,
+            "goodRuns": 2,
+            "lostRuns": 1,
+            "seamBridges": 0,
+            "requestResults": [
+              {
+                "inputPointCount": 28,
+                "headTimestamp": 1789093700750,
+                "tailTimestamp": 1789093812999,
+                "timestampsIncluded": false,
+                "minimumRadiusM": 12,
+                "maximumRadiusM": 14,
+                "durationMs": 601,
+                "result": "NoMatch",
+                "httpStatus": 200,
+                "responseCode": "NoMatch",
+                "subMatchingCount": 0,
+                "tracepointCount": 0,
+                "nullTracepointCount": 0,
+                "confidence": null,
+                "qualityReason": null
+              }
+            ],
+            "durationMs": 601
+          },
+          "durationMs": 602
+        }
+      ],
+      "chronologyWindows": []
+    },
+    {
+      "serverId": 2072,
+      "name": "almost done (immutable pending source)",
+      "clientActivityId": "99e48b0d-ad87-4aba-a94f-0d033393d0e6",
+      "inputAuthority": "persisted canonical segments used by current Save matcher",
+      "segmentResults": [
+        {
+          "segmentIndex": 0,
+          "inputPointCount": 222,
+          "inputLengthM": 428.59,
+          "inputReversalCount": 10,
+          "outputPointCount": 222,
+          "outputLengthM": 428.59,
+          "outputReversalCount": 10,
+          "lengthRatio": 1,
+          "decision": "canonical-fallback",
+          "reason": "no-derived-chunks",
+          "quality": {
+            "accepted": true,
+            "reason": "accepted",
+            "p50DeviationM": 0,
+            "p95DeviationM": 0,
+            "maxDeviationM": 0,
+            "endpointDeviationM": 0,
+            "rawLengthM": 428.58960555322574,
+            "matchedLengthM": 428.58960555322574,
+            "lengthRatio": 1,
+            "deviationEnvelopeM": 15
+          },
+          "stats": {
+            "apiCalls": 4,
+            "chunksOk": 0,
+            "chunksFallback": 4,
+            "qualityFallbacks": 0,
+            "minConfidence": null,
+            "maxP95DeviationM": 0,
+            "maxEndpointDeviationM": 0,
+            "goodRuns": 2,
+            "lostRuns": 1,
+            "seamBridges": 0,
+            "requestResults": [
+              {
+                "inputPointCount": 80,
+                "headTimestamp": 1789103334747,
+                "tailTimestamp": 1789103463000,
+                "timestampsIncluded": false,
+                "minimumRadiusM": 10,
+                "maximumRadiusM": 14,
+                "durationMs": 182,
+                "result": "partial_tracepoint_coverage",
+                "httpStatus": 200,
+                "responseCode": "Ok",
+                "subMatchingCount": 1,
+                "tracepointCount": 80,
+                "nullTracepointCount": 77,
+                "confidence": 0.00005054189065656356,
+                "qualityReason": null
+              },
+              {
+                "inputPointCount": 80,
+                "headTimestamp": 1789103463000,
+                "tailTimestamp": 1789103589999,
+                "timestampsIncluded": true,
+                "minimumRadiusM": 10,
+                "maximumRadiusM": 19,
+                "durationMs": 529,
+                "result": "partial_tracepoint_coverage",
+                "httpStatus": 200,
+                "responseCode": "Ok",
+                "subMatchingCount": 1,
+                "tracepointCount": 80,
+                "nullTracepointCount": 71,
+                "confidence": 0.7480742686298775,
+                "qualityReason": null
+              },
+              {
+                "inputPointCount": 7,
+                "headTimestamp": 1789103589999,
+                "tailTimestamp": 1789103599999,
+                "timestampsIncluded": true,
+                "minimumRadiusM": 14,
+                "maximumRadiusM": 14,
+                "durationMs": 529,
+                "result": "NoSegment",
+                "httpStatus": 200,
+                "responseCode": "NoSegment",
+                "subMatchingCount": 0,
+                "tracepointCount": 0,
+                "nullTracepointCount": 0,
+                "confidence": null,
+                "qualityReason": null
+              },
+              {
+                "inputPointCount": 56,
+                "headTimestamp": 1789103606755,
+                "tailTimestamp": 1789103728998,
+                "timestampsIncluded": true,
+                "minimumRadiusM": 10,
+                "maximumRadiusM": 14,
+                "durationMs": 173,
+                "result": "NoSegment",
+                "httpStatus": 200,
+                "responseCode": "NoSegment",
+                "subMatchingCount": 0,
+                "tracepointCount": 0,
+                "nullTracepointCount": 0,
+                "confidence": null,
+                "qualityReason": null
+              }
+            ],
+            "durationMs": 705
+          },
+          "durationMs": 719
+        }
+      ],
+      "chronologyWindows": [
+        {
+          "key": "u_turn",
+          "rawOrdinalRange": [
+            119,
+            130
+          ],
+          "pointCount": 11,
+          "lengthM": 33.859,
+          "reversalCount": 2
+        },
+        {
+          "key": "deliberate_z",
+          "rawOrdinalRange": [
+            163,
+            188
+          ],
+          "pointCount": 24,
+          "lengthM": 91.581,
+          "reversalCount": 1
+        },
+        {
+          "key": "repeated_corridor",
+          "rawOrdinalRange": [
+            188,
+            210
+          ],
+          "pointCount": 23,
+          "lengthM": 43.587,
+          "reversalCount": 1
+        }
+      ]
+    }
+  ]
+}

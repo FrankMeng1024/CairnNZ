@@ -1,0 +1,67 @@
+diff --git a/backend/scripts/personal-friends-harness/abcdn-api-mysql.js b/backend/scripts/personal-friends-harness/abcdn-api-mysql.js
+index 9bd37d1..01c6327 100644
+--- a/backend/scripts/personal-friends-harness/abcdn-api-mysql.js
++++ b/backend/scripts/personal-friends-harness/abcdn-api-mysql.js
+@@ -21,6 +21,12 @@ if (!baseUrl || !jwtSecret) throw new Error('HARNESS_API_URL and JWT_SECRET are
+ const evidence = { started_at: new Date().toISOString(), assertions: [], actors: {}, connection_ids: {} };
+ function pass(id, detail) { evidence.assertions.push({ id, result: 'PASS', detail }); }
+ 
++function deferred() {
++  let resolve;
++  const promise = new Promise(done => { resolve = done; });
++  return { promise, resolve };
++}
++
+ async function api(actor, path, { method = 'GET', body, expected } = {}) {
+   const response = await fetch(`${baseUrl}${path}`, {
+     method,
+@@ -278,6 +284,49 @@ async function main() {
+     await api(actors.B, `/api/markers/${markerId}`, { method: 'PUT', body: { text: 'viewer mutation' }, expected: 404 });
+     pass('FR-10/FR-11.encounter', 'prospective canonical real evidence creates one idempotent encounter; non-friend denied and viewer cannot mutate');
+ 
++    // Hold a real authorized response at the transport boundary while the
++    // author changes the resource. The client ordering suite consumes the
++    // same sequence through its actual store methods; this server-side half
++    // proves the held and current payloads came from the isolated API/MySQL.
++    const changedReadCaptured = deferred();
++    const releaseChangedRead = deferred();
++    const delayedChangedRead = (async () => {
++      const response = await api(actors.B, `/api/friend-content/cairns/${markerId}`, { expected: 200 });
++      changedReadCaptured.resolve();
++      await releaseChangedRead.promise;
++      return response;
++    })();
++    await changedReadCaptured.promise;
++    await api(actors.A, `/api/markers/${markerId}`, {
++      method: 'PUT', body: { text: `Whakarongo${String.fromCharCode(30)}Changed after held read` }, expected: 200,
++    });
++    const currentChangedRead = await api(actors.B, `/api/friend-content/cairns/${markerId}`, { expected: 200 });
++    releaseChangedRead.resolve();
++    const staleChangedRead = await delayedChangedRead;
++    assert.notEqual(
++      staleChangedRead.body.cairn.resource_revision,
++      currentChangedRead.body.cairn.resource_revision,
++    );
++    pass('FR-08.resource-change-read-barrier', 'a real old detail response was held until after a newer resource revision was read');
++
++    const revokeReadCaptured = deferred();
++    const releaseRevokeRead = deferred();
++    const delayedRevokedRead = (async () => {
++      const response = await api(actors.B, `/api/friend-content/cairns/${markerId}`, { expected: 200 });
++      revokeReadCaptured.resolve();
++      await releaseRevokeRead.promise;
++      return response;
++    })();
++    await revokeReadCaptured.promise;
++    await api(actors.A, `/api/markers/${markerId}`, {
++      method: 'PUT', body: { permission: 'personal' }, expected: 200,
++    });
++    await api(actors.B, `/api/friend-content/cairns/${markerId}`, { expected: 404 });
++    releaseRevokeRead.resolve();
++    const staleRevokedRead = await delayedRevokedRead;
++    assert.equal(staleRevokedRead.body.cairn.read_only, true);
++    pass('FR-08.revoke-read-barrier', 'a real authorized detail response was held until after revoke and an authoritative 404');
++
+     const routeCreate = await api(actors.A, '/api/routes', {
+       method: 'POST', body: {
+         client_route_id: crypto.randomUUID(), name: 'Te Ara synthetic', permission: 'friend',

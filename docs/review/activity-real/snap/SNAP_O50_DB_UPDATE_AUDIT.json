@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-11T15:12:18.886Z",
+  "operation": "authorized O50 exact automatic route_points-only mutation of existing snap Activity",
+  "serverId": 2073,
+  "fieldsMutated": [
+    "route_points"
+  ],
+  "extraActivityRowCreated": false,
+  "backup": {
+    "path": "docs/review/activity-real/snap/SNAP_BEFORE_O49_DB_BACKUP.json",
+    "mode": "0600",
+    "valid": true,
+    "originalRouteHash": "3e1b6d8cdccd27c2b89e05935f0119dd6b930424f7fa8cf599a692c9ec09ac51",
+    "rawHash": "3d47e9144ae6d3e13e900e341787aefcb86586e7819a809cb6168f70a8fad13f",
+    "restoreTool": "restore_snap_o48_from_backup.mjs --restore"
+  },
+  "automaticResult": {
+    "algorithmVersion": "pedestrian-final-v1",
+    "finalGeometryFingerprint": "f4f38b0c",
+    "canonicalPointCount": 392,
+    "displayPointCount": 97,
+    "wholeRouteValidation": {
+      "accepted": true,
+      "reason": "accepted",
+      "canonicalLengthM": 843.202051452747,
+      "finalLengthM": 823.6823588025603,
+      "lengthRatio": 0.9768505157019526,
+      "maximumCanonicalEdgeM": 14.270866417100509,
+      "maximumFinalEdgeM": 15.222091153557152
+    },
+    "sections": [
+      {
+        "sourceStart": 0,
+        "sourceEnd": 59,
+        "state": "NETWORK_CONFIDENT",
+        "geometryMode": "B_ROAD_OFFSET",
+        "networkSource": "map-matching",
+        "decision": "refined",
+        "reason": "coherent-isolated-envelope-overrun;stable-evidence-offset",
+        "confidence": 0.8848030563618882,
+        "corridorEvidence": {
+          "score": 0.8848030563618882,
+          "mapboxConfidence": 0.9264661476411816,
+          "tracepointCoverage": 1,
+          "ambiguityKnownFraction": 1,
+          "unambiguousFraction": 0.9583333333333334,
+          "bearingAgreementScore": 0.994212322408438,
+          "bearingDeltaDeg": 0.31832226753590476,
+          "lengthAgreementScore": 0.9209348767355255,
+          "lengthRatio": 0.9739085093227234,
+          "endpointSafetyScore": 0.2761861526183824,
+          "endpointDeviationM": 14.657230409477755,
+          "lateralStabilityScore": 0.9876784613284163,
+          "temporalPersistenceScore": 1,
+          "accuracyP95M": 14.24595458902166,
+          "overlappingWindowAgreementCount": 0,
+          "acceptedByBaseGate": false,
+          "acceptedByCoherentOverrun": true,
+          "accepted": true,
+          "reason": "coherent-isolated-envelope-overrun",
+          "lateral": {
+            "sampleCount": 60,
+            "signedMedianM": 14.170376614370415,
+            "absoluteMedianM": 14.170376614370415,
+            "madM": 0.4928615468633497,
+            "p95ResidualM": 1.254736822044249,
+            "stableSignFraction": 1,
+            "plausibleForAccuracy": true,
+            "stable": true
+          }
+        },
+        "lateralOffsetM": 14.170376614370415,
+        "canonicalDistanceM": 110.38836106029964,
+        "displayDistanceM": 107.55800705073365,
+        "maximumDisplayEdgeM": 7.502417844509909,
+        "lengthRatio": 0.9743600323224302,
+        "canonicalDisplacementP50M": 0.49012307725919274,
+        "canonicalDisplacementP95M": 1.2543358050889264,
+        "canonicalDisplacementMaxM": 1.5131715518071633,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 7.688169399319349,
+          "exitHeadingDeltaDeg": 0.2344790843977762,
+          "entryEdgeM": 2.298332892401781,
+          "exitEdgeM": 6.189353458604427,
+          "maxAllowedEdgeM": 22
+        }
+      },
+      {
+        "sourceStart": 59,
+        "sourceEnd": 80,
+        "state": "FREE_TRAVERSAL",
+        "geometryMode": "FREE_TRAVERSAL",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "bounded-coherent-connector-inside-evidence-envelope",
+        "confidence": 1,
+        "corridorEvidence": null,
+        "lateralOffsetM": null,
+        "canonicalDistanceM": 73.68126487725016,
+        "displayDistanceM": 69.88661869698129,
+        "maximumDisplayEdgeM": 13.977324976734307,
+        "lengthRatio": 0.9484991715792259,
+        "canonicalDisplacementP50M": 1.1180585300373427,
+        "canonicalDisplacementP95M": 2.7305455719556337,
+        "canonicalDisplacementMaxM": 3.050523315351922,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 4.327204602650909,
+          "exitHeadingDeltaDeg": 42.99659063341119,
+          "entryEdgeM": 13.977322501744734,
+          "exitEdgeM": 13.977324976734307,
+          "maxAllowedEdgeM": 22
+        }
+      },
+      {
+        "sourceStart": 80,
+        "sourceEnd": 332,
+        "state": "OFF_NETWORK_PATH",
+        "geometryMode": "C_CANONICAL_DERIVED",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "no-safe-network-candidate;bounded-heading-aware-cleanup",
+        "confidence": 1,
+        "corridorEvidence": null,
+        "lateralOffsetM": null,
+        "canonicalDistanceM": 581.5417050770482,
+        "displayDistanceM": 569.2605091106094,
+        "maximumDisplayEdgeM": 15.222091153557152,
+        "lengthRatio": 0.9788816591153826,
+        "canonicalDisplacementP50M": 0.4894809721664666,
+        "canonicalDisplacementP95M": 1.570760491570195,
+        "canonicalDisplacementMaxM": 3.199554383909244,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 17.967347270157404,
+          "exitHeadingDeltaDeg": 4.332566634428019,
+          "entryEdgeM": 2.6063811795432117,
+          "exitEdgeM": 10.364467975779432,
+          "maxAllowedEdgeM": 22
+        }
+      },
+      {
+        "sourceStart": 332,
+        "sourceEnd": 391,
+        "state": "NETWORK_CONFIDENT",
+        "geometryMode": "B_ROAD_OFFSET",
+        "networkSource": "walking-directions",
+        "decision": "refined",
+        "reason": "composite-corridor-evidence;stable-evidence-offset",
+        "confidence": 0.87691753082403,
+        "corridorEvidence": {
+          "score": 0.87691753082403,
+          "mapboxConfidence": 0.850683148937869,
+          "tracepointCoverage": 1,
+          "ambiguityKnownFraction": 0,
+          "unambiguousFraction": 1,
+          "bearingAgreementScore": 0.9911509270920409,
+          "bearingDeltaDeg": 0.4866990099377517,
+          "lengthAgreementScore": 0.9746051147200195,
+          "lengthRatio": 0.9916196878576065,
+          "endpointSafetyScore": 0.5881109990479202,
+          "endpointDeviationM": 8.340752269279616,
+          "lateralStabilityScore": 0.9910254303352601,
+          "temporalPersistenceScore": 1,
+          "accuracyP95M": 14.2459546210736,
+          "overlappingWindowAgreementCount": 0,
+          "acceptedByBaseGate": true,
+          "acceptedByCoherentOverrun": false,
+          "accepted": true,
+          "reason": "composite-corridor-evidence",
+          "lateral": {
+            "sampleCount": 60,
+            "signedMedianM": 7.959841133813691,
+            "absoluteMedianM": 7.959841133813691,
+            "madM": 0.3589827865895927,
+            "p95ResidualM": 0.7158621589499017,
+            "stableSignFraction": 1,
+            "plausibleForAccuracy": true,
+            "stable": true
+          }
+        },
+        "lateralOffsetM": 7.959841133813691,
+        "canonicalDistanceM": 77.59072043814925,
+        "displayDistanceM": 76.97722394423602,
+        "maximumDisplayEdgeM": 12.860300310083883,
+        "lengthRatio": 0.9920931718322905,
+        "canonicalDisplacementP50M": 0.2622953664418638,
+        "canonicalDisplacementP95M": 0.7158618185286472,
+        "canonicalDisplacementMaxM": 0.8655198281512985,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 9.758110900500526,
+          "exitHeadingDeltaDeg": 5.805686051873238,
+          "entryEdgeM": 12.860300310083883,
+          "exitEdgeM": 12.823302696557889,
+          "maxAllowedEdgeM": 22
+        }
+      }
+    ]
+  },
+  "database": {
+    "before": {
+      "routeHash": "eb5f5a03dace61460288e6004023a7a035ba0d3a69956a481d34169745c20b3f",
+      "rawHash": "3d47e9144ae6d3e13e900e341787aefcb86586e7819a809cb6168f70a8fad13f"
+    },
+    "after": {
+      "routeHash": "208fa97501e8f70201d0701bfe97815e8d93bcd51be3fd8df7863ceba74b70ec",
+      "rawHash": "3d47e9144ae6d3e13e900e341787aefcb86586e7819a809cb6168f70a8fad13f",
+      "routeCount": 97,
+      "rawCount": 428,
+      "distanceM": 843.202,
+      "durationS": 805
+    },
+    "ownerAggregate": {
+      "session_count": 12,
+      "finalized_count": "10",
+      "distance_sum_m": 4802.370010375977,
+      "duration_sum_s": "4699"
+    },
+    "memoryAggregate": {
+      "row_count": 170,
+      "id_sum": "2613903",
+      "timestamp_sum": "304128693045857",
+      "max_id": "15479"
+    }
+  },
+  "independentDetailVerification": {
+    "source": "sessions.route_points",
+    "pointCount": 97,
+    "finalGeometryFingerprint": "f4f38b0c",
+    "segmentCount": 1,
+    "timestampsMonotonic": true,
+    "endpointFieldsPresent": true
+  },
+  "invariants": {
+    "routePointsRawUnchanged": true,
+    "distanceUnchanged": true,
+    "durationUnchanged": true,
+    "ownerAggregateUnchanged": true,
+    "memoryAggregateUnchanged": true,
+    "ownershipUnchanged": true,
+    "progressionUnchanged": true,
+    "pendingSyncCreated": false,
+    "backendCodeDeployed": false
+  }
+}

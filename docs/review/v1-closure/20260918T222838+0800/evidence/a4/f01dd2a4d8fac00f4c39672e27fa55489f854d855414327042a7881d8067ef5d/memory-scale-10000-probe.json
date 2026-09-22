@@ -1,0 +1,50 @@
+{
+  "schema": "cairnnz.revision03.memory-scale.v1",
+  "generatedAt": "2026-09-19T13:02:52.643Z",
+  "environment": {
+    "machine": "darwin x64 Intel(R) Core(TM) i5-5350U CPU @ 1.80GHz",
+    "node": "v24.11.1",
+    "renderer": "actual FogLayer Turf helpers; no Mapbox paint"
+  },
+  "budgetsFrozenBeforeRun": {
+    "maxSynchronousGeometrySliceMs": 150,
+    "scheduledActionAcknowledgementMs": 100,
+    "incrementalGeometryUpdateMs": 350,
+    "maxEventLoopSchedulingDelayMs": 150,
+    "coldLoad2001Ms": 45000,
+    "diagnostic10000Ms": 150000,
+    "combinedFriend2000Ms": 60000,
+    "cacheSynchronousSliceMs": 150,
+    "sampledUnsupportedRevealCount": 0
+  },
+  "candidateFingerprint": "f01dd2a4d8fac00f4c39672e27fa55489f854d855414327042a7881d8067ef5d",
+  "cases": [
+    {
+      "id": "DISTINCT-10000-DIAGNOSTIC",
+      "rawFixes": 10000,
+      "acceptedCanonicalPoints": 10000,
+      "spatiallyUniqueCoverageFootprints": 10000,
+      "temporalWitnesses": 0,
+      "totalMs": 120098.117645,
+      "sliceCount": 32090,
+      "renderPreparationMs": 103.18935500000043,
+      "composeFogShapeMs": 10.133641000007628,
+      "sliceMs": {
+        "p50": 3,
+        "p95": 4,
+        "max": 95
+      },
+      "eventLoopSchedulingDelayMs": {
+        "p95": 5.804420000000391,
+        "max": 95.73696500000369
+      },
+      "retainedSampleLoss": 0,
+      "displayedGeometry": {
+        "components": 3420,
+        "holes": 0,
+        "vertices": 69300
+      },
+      "claimBoundary": "diagnostic maximum tested; not an unlimited-support claim"
+    }
+  ]
+}

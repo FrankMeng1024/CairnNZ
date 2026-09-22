@@ -1,0 +1,54 @@
+{
+  "recommendation": "NO LIVE ROAD ASSIST in the next release",
+  "authorityRanking": [
+    "LA presentation-only (only defensible future experiment)",
+    "LB derived confirmed display (later, after offline proof)",
+    "LC canonical road-aware truth (reject)"
+  ],
+  "strictlyQualifying": {
+    "distanceM": 87.973,
+    "durationS": 70,
+    "distancePercent": 10.4,
+    "durationPercent": 8.7
+  },
+  "includingBorderlineHead": {
+    "distanceM": 209.529,
+    "durationS": 175.001,
+    "distancePercent": 24.8,
+    "durationPercent": 21.7
+  },
+  "crossing": "must exit; current evidence is ambiguous and a live online match could trap the display on the old road",
+  "internalPath": "must remain OFF; D5 returns NoMatch and nearby-road capture is unsafe",
+  "reentry": "final corridor supports confident re-entry after several fixes",
+  "onlineConstraint": {
+    "observedDryRunLatencyMs": [
+      172,
+      172
+    ],
+    "productionBudgetMs": 4000,
+    "assessment": "hundreds of milliseconds per request plus connectivity/cost prevents a calm one-second live loop"
+  },
+  "comparison": [
+    {
+      "option": "L0 canonical/live O48",
+      "stability": "healthy",
+      "truth": "highest",
+      "lag": "low",
+      "mappedStraightness": "GPS-bounded"
+    },
+    {
+      "option": "L1 O48 bounded presentation (cross-track constraint disabled)",
+      "stability": "healthy/continuous",
+      "truth": "presentation-only 1-2m bound",
+      "lag": "low",
+      "mappedStraightness": "nearly L0; no wrong-road risk"
+    },
+    {
+      "option": "L2 online road-assisted display",
+      "stability": "network-dependent",
+      "truth": "safe only in 10.4% strict interval",
+      "lag": "response-limited",
+      "mappedStraightness": "best where correct; materially worse at crossing/internal path"
+    }
+  ]
+}

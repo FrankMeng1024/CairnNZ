@@ -47,11 +47,6 @@ import {
   submitFeedback,
   type DataExportSummary,
 } from '../services/authService';
-import {
-  completeDeletedAccountLocalPurge,
-  scheduleDeletedAccountLocalPurge,
-} from '../services/accountLocalData';
-import { clearCredentials } from '../services/credentialsStore';
 import { deleteAllMemoryFromServer } from '../services/memorySync';
 import { haptic } from '../services/hapticService';
 import { PRIVACY_URL } from '../config/api';
@@ -229,7 +224,6 @@ export function SettingsScreen() {
   const isLoggedIn = useAppStore((state) => state.isLoggedIn);
   const renderedOwnerId = isLoggedIn && user?.id ? String(user.id) : null;
   const setUser = useAppStore((state) => state.setUser);
-  const appLogout = useAppStore((state) => state.logout);
   const units = useSettingsStore((state) => state.units);
   const appearance = useSettingsStore((state) => state.appearance);
   const hapticFeedback = useSettingsStore((state) => state.hapticFeedback);
@@ -254,15 +248,18 @@ export function SettingsScreen() {
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordOwnerId, setPasswordOwnerId] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePhrase, setDeletePhrase] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [deleteSaving, setDeleteSaving] = useState(false);
+  const [deleteOwnerId, setDeleteOwnerId] = useState<string | null>(null);
 
   const [exports, setExports] = useState<DataExportSummary[]>([]);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportRequesting, setExportRequesting] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [exportStateOwnerId, setExportStateOwnerId] = useState<string | null>(null);
   const [memoryDeleting, setMemoryDeleting] = useState(false);
 
   const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>('feedback');
@@ -271,12 +268,36 @@ export function SettingsScreen() {
   const [feedbackError, setFeedbackError] = useState('');
   const [feedbackSubmissionId, setFeedbackSubmissionId] = useState(() => Crypto.randomUUID());
   const feedbackFlight = useRef(false);
+  const feedbackGeneration = useRef(0);
+  const nameFlight = useRef(false);
+  const nameGeneration = useRef(0);
+  const passwordFlight = useRef(false);
+  const passwordGeneration = useRef(0);
   const exportFlight = useRef(false);
+  const exportGeneration = useRef(0);
   const deleteFlight = useRef(false);
+  const deleteGeneration = useRef(0);
   const memoryDeleteFlight = useRef(false);
   const memoryDeleteGeneration = useRef(0);
+  const settingsMounted = useRef(true);
   const priorRenderedOwnerId = useRef(renderedOwnerId);
   const profileRefreshGeneration = useRef(0);
+
+  useEffect(() => {
+    settingsMounted.current = true;
+    return () => {
+      settingsMounted.current = false;
+      profileRefreshGeneration.current += 1;
+      memoryDeleteGeneration.current += 1;
+      nameGeneration.current += 1;
+      passwordGeneration.current += 1;
+      deleteGeneration.current += 1;
+      exportGeneration.current += 1;
+      exportFlight.current = false;
+      feedbackGeneration.current += 1;
+      feedbackFlight.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (priorRenderedOwnerId.current === renderedOwnerId) return;
@@ -286,6 +307,43 @@ export function SettingsScreen() {
     memoryDeleteGeneration.current += 1;
     memoryDeleteFlight.current = false;
     setMemoryDeleting(false);
+    nameGeneration.current += 1;
+    nameFlight.current = false;
+    setNameSaving(false);
+    setNameOpen(false);
+    setNameDraft('');
+    setNameError('');
+    setNameOwnerId(null);
+    passwordGeneration.current += 1;
+    passwordFlight.current = false;
+    setPasswordSaving(false);
+    setPasswordOpen(false);
+    setCurrentPassword('');
+    setNextPassword('');
+    setPasswordConfirmation('');
+    setPasswordError('');
+    setPasswordOwnerId(null);
+    deleteFlight.current = false;
+    deleteGeneration.current += 1;
+    setDeleteSaving(false);
+    setDeleteOpen(false);
+    setDeletePhrase('');
+    setDeleteError('');
+    setDeleteOwnerId(null);
+    exportGeneration.current += 1;
+    exportFlight.current = false;
+    setExports([]);
+    setExportLoading(false);
+    setExportRequesting(false);
+    setExportError('');
+    setExportStateOwnerId(renderedOwnerId);
+    feedbackGeneration.current += 1;
+    feedbackFlight.current = false;
+    setFeedbackKind('feedback');
+    setFeedbackText('');
+    setFeedbackState('idle');
+    setFeedbackError('');
+    setFeedbackSubmissionId(Crypto.randomUUID());
   }, [renderedOwnerId]);
 
   const refreshPermission = useCallback(async () => {
@@ -304,18 +362,32 @@ export function SettingsScreen() {
     if (!isLoggedIn || !ownerId) return;
     const generation = ++profileRefreshGeneration.current;
     setProfileLoading(true);
-    const fresh = await getMe();
+    const fresh = await getMe(ownerId);
     if (generation !== profileRefreshGeneration.current) return;
     if (fresh && String(fresh.id) === ownerId && currentOwnerId() === ownerId) setUser(fresh);
     setProfileLoading(false);
   }, [isLoggedIn, setUser]);
 
   const refreshExports = useCallback(async (quiet = false) => {
+    const ownerId = currentOwnerId();
+    if (!settingsMounted.current || !ownerId) return;
+    const generation = ++exportGeneration.current;
+    setExportStateOwnerId(ownerId);
     if (!quiet) setExportLoading(true);
-    const result = await fetchExportHistory();
-    setExports(result.exports);
-    setExportError(result.error ?? '');
-    if (!quiet) setExportLoading(false);
+    try {
+      const result = await fetchExportHistory();
+      if (!settingsMounted.current
+        || generation !== exportGeneration.current
+        || currentOwnerId() !== ownerId) return;
+      setExports(result.exports);
+      setExportError(result.error ?? '');
+    } finally {
+      if (settingsMounted.current
+        && generation === exportGeneration.current
+        && currentOwnerId() === ownerId) {
+        setExportLoading(false);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -330,9 +402,14 @@ export function SettingsScreen() {
   useEffect(() => {
     if (page !== 'privacy') return;
     void refreshExports();
-  }, [page, refreshExports]);
+  }, [page, refreshExports, renderedOwnerId]);
 
-  const hasPendingExport = exports.some((item) => item.status === 'queued' || item.status === 'building');
+  const exportStateIsCurrentOwner = !!renderedOwnerId && exportStateOwnerId === renderedOwnerId;
+  const visibleExports = exportStateIsCurrentOwner ? exports : [];
+  const visibleExportLoading = exportStateIsCurrentOwner && exportLoading;
+  const visibleExportRequesting = exportStateIsCurrentOwner && exportRequesting;
+  const visibleExportError = exportStateIsCurrentOwner ? exportError : '';
+  const hasPendingExport = visibleExports.some((item) => item.status === 'queued' || item.status === 'building');
   useEffect(() => {
     if (page !== 'privacy' || !hasPendingExport) return;
     const timer = setInterval(() => void refreshExports(true), 4_000);
@@ -386,8 +463,12 @@ export function SettingsScreen() {
           text: 'Sign out',
           onPress: () => void (async () => {
             try {
-              await appLogout();
-              await logout();
+              const ownerId = currentOwnerId();
+              if (!ownerId) return;
+              const tokenResult = await logout({ expectedUserId: ownerId });
+              if (tokenResult.ownerChanged || !tokenResult.cleared) {
+                Alert.alert('Account changed', 'Sign out did not act on the newer account. Try again from its Settings screen.');
+              }
             } catch {
               Alert.alert('Could not sign out', 'Cairn could not safely stop the current account session. Please try again.');
             }
@@ -397,7 +478,7 @@ export function SettingsScreen() {
     );
   };
 
-  const latestExport = exports[0] ?? null;
+  const latestExport = visibleExports[0] ?? null;
   const exportExpired = latestExport?.expires_at
     ? new Date(latestExport.expires_at).getTime() <= Date.now()
     : false;
@@ -542,6 +623,7 @@ export function SettingsScreen() {
                 title="Change password"
                 detail="Requires your current Cairn password"
                 onPress={() => {
+                  setPasswordOwnerId(currentOwnerId());
                   setCurrentPassword('');
                   setNextPassword('');
                   setPasswordConfirmation('');
@@ -573,6 +655,7 @@ export function SettingsScreen() {
             detail="Seven days to restore, then permanent deletion"
             destructive
             onPress={() => {
+              setDeleteOwnerId(currentOwnerId());
               setDeletePhrase('');
               setDeleteError('');
               setDeleteOpen(true);
@@ -585,7 +668,7 @@ export function SettingsScreen() {
   );
 
   const renderExportState = () => {
-    if (exportLoading) {
+    if (visibleExportLoading) {
       return <View style={styles.asyncRow}><ActivityIndicator color={theme.primary} /><Text style={[styles.statusText, { color: theme.textSecondary }]}>Checking export status…</Text></View>;
     }
     if (!latestExport) {
@@ -596,7 +679,17 @@ export function SettingsScreen() {
         <View style={styles.stackSmall}>
           <Text style={[styles.statusStrong, { color: theme.textPrimary }]}>Ready to download</Text>
           <Text style={[styles.body, { color: theme.textSecondary }]}>JSON · {formatBytes(latestExport.size_bytes) || 'size unavailable'} · link expires {new Date(latestExport.expires_at || '').toLocaleString()}</Text>
-          <PrimaryButton label="Open download" variant="secondary" onPress={() => void Linking.openURL(latestExport.download_url!)} testID="settings-export-download" />
+          <PrimaryButton
+            label="Open download"
+            variant="secondary"
+            onPress={() => {
+              if (!settingsMounted.current
+                || currentOwnerId() !== renderedOwnerId
+                || exportStateOwnerId !== renderedOwnerId) return;
+              void Linking.openURL(latestExport.download_url!);
+            }}
+            testID="settings-export-download"
+          />
         </View>
       );
     }
@@ -659,23 +752,42 @@ export function SettingsScreen() {
             </View>
           </View>
           {renderExportState()}
-          {exportError ? <Text accessibilityLiveRegion="polite" style={[styles.error, { color: theme.destructive }]}>{exportError}</Text> : null}
+          {visibleExportError ? <Text accessibilityLiveRegion="polite" style={[styles.error, { color: theme.destructive }]}>{visibleExportError}</Text> : null}
           {latestExport?.status !== 'queued' && latestExport?.status !== 'building' ? (
             <PrimaryButton
               label={latestExport?.status === 'failed' || exportExpired ? 'Request fresh export' : 'Request export'}
-              loading={exportRequesting}
+              loading={visibleExportRequesting}
               onPress={() => void (async () => {
+                const ownerId = currentOwnerId();
                 if (exportFlight.current) return;
+                if (!settingsMounted.current
+                  || !ownerId
+                  || ownerId !== renderedOwnerId) return;
+                const generation = ++exportGeneration.current;
                 exportFlight.current = true;
+                setExportStateOwnerId(ownerId);
+                setExportLoading(false);
                 setExportRequesting(true);
                 setExportError('');
                 try {
                   const result = await requestDataExport();
+                  if (!settingsMounted.current
+                    || generation !== exportGeneration.current
+                    || currentOwnerId() !== ownerId) return;
                   if (result.error) setExportError(result.error);
-                  await refreshExports(true);
+                  const history = await fetchExportHistory();
+                  if (!settingsMounted.current
+                    || generation !== exportGeneration.current
+                    || currentOwnerId() !== ownerId) return;
+                  setExports(history.exports);
+                  setExportError(history.error ?? '');
                 } finally {
-                  exportFlight.current = false;
-                  setExportRequesting(false);
+                  if (settingsMounted.current
+                    && generation === exportGeneration.current
+                    && currentOwnerId() === ownerId) {
+                    exportFlight.current = false;
+                    setExportRequesting(false);
+                  }
                 }
               })()}
               testID="settings-export-request"
@@ -785,7 +897,12 @@ export function SettingsScreen() {
             disabled={feedbackText.trim().length < 3}
             renderIcon={(color) => <Icon name="Send" size={IconSize.sm} color={color} />}
             onPress={() => void (async () => {
-              if (feedbackFlight.current) return;
+              const ownerId = renderedOwnerId;
+              if (!settingsMounted.current
+                || !ownerId
+                || currentOwnerId() !== ownerId
+                || feedbackFlight.current) return;
+              const generation = ++feedbackGeneration.current;
               feedbackFlight.current = true;
               setFeedbackState('sending');
               setFeedbackError('');
@@ -796,6 +913,9 @@ export function SettingsScreen() {
                   message: feedbackText,
                   appVersion: Application.nativeApplicationVersion,
                 });
+                if (!settingsMounted.current
+                  || currentOwnerId() !== ownerId
+                  || generation !== feedbackGeneration.current) return;
                 if (result.acknowledged) {
                   setFeedbackState('sent');
                   setFeedbackText('');
@@ -806,7 +926,11 @@ export function SettingsScreen() {
                   setFeedbackError(result.error || 'Feedback was not delivered. Try again.');
                 }
               } finally {
-                feedbackFlight.current = false;
+                if (settingsMounted.current
+                  && currentOwnerId() === ownerId
+                  && generation === feedbackGeneration.current) {
+                  feedbackFlight.current = false;
+                }
               }
             })()}
             testID="settings-feedback-send"
@@ -862,22 +986,30 @@ export function SettingsScreen() {
             disabled={!nameDraft.trim() || !nameOwnerId || currentOwnerId() !== nameOwnerId}
             onPress={() => void (async () => {
               const ownerId = nameOwnerId;
+              if (nameFlight.current) return;
               if (!ownerId || currentOwnerId() !== ownerId) {
                 setNameError('The signed-in account changed. Close this draft and try again.');
                 return;
               }
+              nameFlight.current = true;
+              const generation = ++nameGeneration.current;
               setNameSaving(true);
-              const result = await patchName(nameDraft.trim());
+              const result = await patchName(nameDraft.trim(), ownerId);
               const currentUser = useAppStore.getState().user;
-              if (currentOwnerId() !== ownerId || !currentUser) {
-                setNameSaving(false);
-                return;
-              }
-              if (result.user && String(result.user.id) === ownerId) {
+              if (generation === nameGeneration.current
+                && currentOwnerId() === ownerId
+                && currentUser
+                && result.user
+                && String(result.user.id) === ownerId) {
                 setUser({ ...currentUser, ...result.user });
                 setNameOpen(false);
-              } else setNameError(result.error || 'Name could not be saved.');
-              setNameSaving(false);
+              } else if (generation === nameGeneration.current && currentOwnerId() === ownerId) {
+                setNameError(result.error || 'Name could not be saved.');
+              }
+              if (generation === nameGeneration.current) {
+                nameFlight.current = false;
+                setNameSaving(false);
+              }
             })()}
             style={styles.flexButton}
             testID="settings-name-save"
@@ -886,7 +1018,7 @@ export function SettingsScreen() {
       </ModalCard>
 
       <ModalCard visible={passwordOpen} onDismiss={() => !passwordSaving && setPasswordOpen(false)} dismissible={!passwordSaving} testID="settings-password-modal">
-        <ModalCardHeader title="Change password" body="Other signed-in devices will be signed out." onClose={() => setPasswordOpen(false)} />
+        <ModalCardHeader title="Change password" body="Other signed-in devices will be signed out." onClose={passwordSaving ? undefined : () => setPasswordOpen(false)} />
         <View style={styles.stackSmall}>
           <TextField label="Current password" value={currentPassword} onChangeText={(value) => { setCurrentPassword(value); setPasswordError(''); }} secureTextEntry autoCapitalize="none" testID="settings-current-password" />
           <TextField label="New password" value={nextPassword} onChangeText={(value) => { setNextPassword(value); setPasswordError(''); }} secureTextEntry autoCapitalize="none" testID="settings-new-password" />
@@ -899,19 +1031,39 @@ export function SettingsScreen() {
             loading={passwordSaving}
             disabled={!currentPassword || nextPassword.length < 8 || passwordConfirmation.length < 8}
             onPress={() => void (async () => {
+              if (passwordFlight.current) return;
+              const ownerId = passwordOwnerId;
+              if (!ownerId || currentOwnerId() !== ownerId) {
+                setPasswordError('The signed-in account changed. Close this form and try again.');
+                return;
+              }
               if (nextPassword !== passwordConfirmation) {
                 setPasswordError('New passwords do not match.');
                 return;
               }
+              passwordFlight.current = true;
+              const generation = ++passwordGeneration.current;
               setPasswordSaving(true);
-              const result = await changePassword(currentPassword, nextPassword);
-              if (result.error) setPasswordError(result.error);
-              else {
+              const result = await changePassword(currentPassword, nextPassword, ownerId);
+              const ownerIsCurrent = settingsMounted.current
+                && currentOwnerId() === ownerId
+                && generation === passwordGeneration.current;
+              if (!ownerIsCurrent) return;
+              if (result.commitState === 'committed' && result.sessionTransitioned) {
                 setPasswordOpen(false);
                 void refreshProfile();
                 Alert.alert('Password updated', 'This device remains signed in. Other sessions have been revoked.');
+              } else if (result.commitState === 'committed') {
+                Alert.alert('Password updated', result.error || 'Sign in again to continue. Do not retry the password change.');
+              } else if (result.commitState === 'unknown') {
+                Alert.alert('Password result unknown', result.error || 'Check which password works before trying again.');
+              } else {
+                setPasswordError(result.error || 'Password could not be updated.');
               }
-              setPasswordSaving(false);
+              if (generation === passwordGeneration.current) {
+                passwordFlight.current = false;
+                setPasswordSaving(false);
+              }
             })()}
             style={styles.flexButton}
             testID="settings-password-save"
@@ -923,7 +1075,7 @@ export function SettingsScreen() {
         <ModalCardHeader
           title="Delete your account?"
           body="Your account will be disabled now. You can restore server-backed data by signing in during the next seven days. After that, Cairn permanently deletes your profile, Activities, Routes, Cairns, Memory, friendships, exports, feedback and account-linked diagnostics. Account data on this device is cleared now; unsynced device-only data cannot be restored."
-          onClose={() => setDeleteOpen(false)}
+          onClose={deleteSaving ? undefined : () => setDeleteOpen(false)}
         />
         <TextField
           label="Type delete account to confirm"
@@ -941,56 +1093,39 @@ export function SettingsScreen() {
             loading={deleteSaving}
             disabled={deletePhrase.trim().toLowerCase() !== 'delete account' || !user?.id}
             onPress={() => void (async () => {
-              if (!user?.id || deleteFlight.current) return;
+              const ownerId = deleteOwnerId;
+              if (!ownerId || currentOwnerId() !== ownerId || deleteFlight.current) return;
               deleteFlight.current = true;
-              const ownerId = String(user.id);
+              const generation = ++deleteGeneration.current;
               setDeleteSaving(true);
               setDeleteError('');
-              const result = await deleteAccount();
-              if (result.error) {
-                setDeleteError(result.error === 'not_signed_in' ? 'Your session ended. Sign in again before deleting your account.' : result.error);
+              const result = await deleteAccount(ownerId);
+              if (!settingsMounted.current
+                || generation !== deleteGeneration.current
+                || currentOwnerId() !== ownerId) return;
+              if (result.commitState !== 'committed') {
+                setDeleteError(result.error === 'not_signed_in'
+                  ? 'Your session ended. Sign in again before deleting your account.'
+                  : (result.error || 'The deletion result could not be confirmed.'));
                 setDeleteSaving(false);
                 deleteFlight.current = false;
                 return;
               }
-              let purgeScheduled = true;
-              try {
-                await scheduleDeletedAccountLocalPurge(ownerId);
-              } catch {
-                // Continue with the immediate purge even if both durable marker
-                // stores are unavailable. If that purge also fails, the user is
-                // told that this installation is not safe for another account.
-                purgeScheduled = false;
-              }
               const deadline = result.restoreDeadline ? new Date(result.restoreDeadline).toLocaleString() : 'seven days from now';
-              let localCleanupDeferred = false;
-              try {
-                await appLogout();
-                await completeDeletedAccountLocalPurge(ownerId);
-                await clearCredentials();
-                await logout();
-              } catch (error) {
-                // The server transaction has already accepted deletion. Keep
-                // moving to signed-out state. When it was written successfully,
-                // the durable purge marker retries owner-scoped cleanup before
-                // the next account can hydrate.
-                localCleanupDeferred = true;
-                useAppStore.setState({ isLoggedIn: false, user: null });
-                await clearCredentials().catch(() => undefined);
-                await logout().catch(() => undefined);
+              if (generation === deleteGeneration.current) {
+                setDeleteOpen(false);
+                setDeleteSaving(false);
+                deleteFlight.current = false;
               }
-              setDeleteOpen(false);
-              setDeleteSaving(false);
-              deleteFlight.current = false;
-              if (localCleanupDeferred && !purgeScheduled) {
+              if (result.localCleanup !== 'complete' && result.durableCleanupScheduled === false) {
                 Alert.alert(
                   'Account deletion accepted',
                   'Cairn could not confirm that all account data was cleared from this installation. Do not sign another account into this installation; reinstall Cairn first.',
                 );
-              } else if (localCleanupDeferred) {
+              } else if (result.localCleanup !== 'complete') {
                 Alert.alert(
                   'Account scheduled for deletion',
-                  `You can restore server-backed data by signing in before ${deadline}. Cairn will retry clearing this device before another account is loaded.`,
+                  `The account that started this request was deleted on the server. You can restore it by signing in before ${deadline}. Its durable device cleanup remains pending; the current account was not signed out.`,
                 );
               } else {
                 Alert.alert('Account scheduled for deletion', `You can restore server-backed data by signing in before ${deadline}. After that it cannot be recovered.`);

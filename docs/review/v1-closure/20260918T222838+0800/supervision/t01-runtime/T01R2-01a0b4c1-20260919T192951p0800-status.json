@@ -1,0 +1,10 @@
+{
+  "schema": "cairnnz.v1-closure.supervision.t01-worker.v1",
+  "nonce": "T01R2-01a0b4c1-20260919T192951p0800",
+  "pid": 83463,
+  "startedAt": "2026-09-19T11:33:32.702Z",
+  "state": "RELEASED",
+  "finishedAt": "2026-09-19T11:34:41.525Z",
+  "exitCode": 0,
+  "detail": "Release artifact observed"
+}

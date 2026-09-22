@@ -1,0 +1,18 @@
+{
+  "schema": "cairnnz.ota-publication.v1",
+  "ota": "O55",
+  "publishedAt": "2026-09-13T14:35:15.402Z",
+  "branch": "production",
+  "platform": "ios",
+  "runtimeVersion": "0.2.6",
+  "message": "O55 Calibrated dual-mode GPS Simulator",
+  "groupId": "b4f426e2-4ddf-482c-9df2-4789cc8cd89b",
+  "updateId": "01a09b31-9e4a-713d-b6ad-3ebaae45a2fa",
+  "manifestPermalink": "https://u.expo.dev/update/01a09b31-9e4a-713d-b6ad-3ebaae45a2fa",
+  "baseGitCommit": "12fa1cd0ef599e53a81cd30537ce761c5e2150ce",
+  "workingTreeDirty": true,
+  "simulatorCapabilityBundled": true,
+  "easEnvironment": "production",
+  "backendDeployed": false,
+  "productionDataMutated": false
+}

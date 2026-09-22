@@ -52,6 +52,7 @@ test('bounded historical accelerated Activity payload traverses Start, append, F
     name: 'Accelerated QA',
     route_points: [first, second],
     route_points_raw: [first, second],
+    route_points_canonical: [first, second],
     memory_points: memory,
   }).error, undefined);
   assert.equal(schemas.memory.points.validate({ points: memory }).error, undefined);

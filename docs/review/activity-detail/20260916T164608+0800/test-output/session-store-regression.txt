@@ -1,0 +1,53 @@
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+FAIL __tests__/useSessionStore.test.ts
+  useSessionStore — per-user isolation
+    ✓ user A sessions do not leak to user B after switch (72 ms)
+    ✓ guest hydrate is isolated from logged-in users (10 ms)
+    ✓ clearSessions only clears current user, not others (4 ms)
+    ✓ uses correct storage keys (cairn_sessions_<userId>) (7 ms)
+    ✓ persists pausePins through hydrate roundtrip (9 ms)
+    ✕ never evicts pending local-authoritative Activities at the 100-item history cap (47 ms)
+    ✓ renames a synced Activity only after the server accepts it (103 ms)
+    ✓ renames pending Activity outbox before changing its local projection (21 ms)
+    ✓ reports a durable queued server deletion without resurrecting the local Activity (15 ms)
+
+  ● useSessionStore — per-user isolation › never evicts pending local-authoritative Activities at the 100-item history cap
+
+    expect(received).toHaveLength(expected)
+
+    Expected length: 101
+    Received length: 106
+    Received array:  [{"activityMode": "running", "distanceM": 1, "durationS": 1, "elevationGainM": 0, "endedAt": 115, "id": "server-104", "markerIds": [], "regionCode": "nz", "remoteId": 105, "startedAt": 114, "syncState": "synced", "trackPoints": []}, {"activityMode": "running", "distanceM": 1, "durationS": 1, "elevationGainM": 0, "endedAt": 114, "id": "server-103", "markerIds": [], "regionCode": "nz", "remoteId": 104, "startedAt": 113, "syncState": "synced", "trackPoints": []}, {"activityMode": "running", "distanceM": 1, "durationS": 1, "elevationGainM": 0, "endedAt": 113, "id": "server-102", "markerIds": [], "regionCode": "nz", "remoteId": 103, "startedAt": 112, "syncState": "synced", "trackPoints": []}, {"activityMode": "running", "distanceM": 1, "durationS": 1, "elevationGainM": 0, "endedAt": 112, "id": "server-101", "markerIds": [], "regionCode": "nz", "remoteId": 102, "startedAt": 111, "syncState": "synced", "trackPoints": []}, {"activityMode": "running", "distanceM": 1, "durationS": 1, "elevationGainM": 0, "endedAt": 111, "id": "server-100", "markerIds": [], "regionCode": "nz", "remoteId": 101, "startedAt": 110, "syncState": "synced", "trackPoints": []}, {"activityMode": "running", "distanceM": 1, "durationS": 1, "elevationGainM": 0, "endedAt": 110, "id": "server-99", "markerIds": [], "regionCode": "nz", "remoteId": 100, "startedAt": 109, "syncState": "synced", "trackPoints": []}, {"activityMode": "running", "distanceM": 1, "durationS": 1, "elevationGainM": 0, "endedAt": 109, "id": "server-98", "markerIds": [], "regionCode": "nz", "remoteId": 99, "startedAt": 108, "syncState": "synced", "trackPoints": []}, {"activityMode": "running", "distanceM": 1, "durationS": 1, "elevationGainM": 0, "endedAt": 108, "id": "server-97", "markerIds": [], "regionCode": "nz", "remoteId": 98, "startedAt": 107, "syncState": "synced", "trackPoints": []}, {"activityMode": "running", "distanceM": 1, "durationS": 1, "elevationGainM": 0, "endedAt": 107, "id": "server-96", "markerIds": [], "regionCode": "nz", "remoteId": 97, "startedAt": 106, "syncState": "synced", "trackPoints": []}, {"activityMode": "running", "distanceM": 1, "durationS": 1, "elevationGainM": 0, "endedAt": 106, "id": "server-95", "markerIds": [], "regionCode": "nz", "remoteId": 96, "startedAt": 105, "syncState": "synced", "trackPoints": []}, …]
+
+      235 |
+      236 |     const sessions = useSessionStore.getState().sessions;
+    > 237 |     expect(sessions).toHaveLength(101);
+          |                      ^
+      238 |     expect(sessions.some((session: { id: string }) => session.id === 'old-pending')).toBe(true);
+      239 |     expect(JSON.parse(storage.cairn_sessions_userA)).toEqual(
+      240 |       expect.arrayContaining([expect.objectContaining({ id: 'old-pending', syncState: 'pending' })]),
+
+      at Object.toHaveLength (__tests__/useSessionStore.test.ts:237:22)
+      at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+      at _next (node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 8 passed, 9 total
+Snapshots:   0 total
+Time:        2.051 s
+Ran all test suites matching /__tests__\/useSessionStore.test.ts/i.

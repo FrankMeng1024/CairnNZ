@@ -1,0 +1,122 @@
+{
+  "schema": "cairnnz.revision03.memory-scale.v1",
+  "generatedAt": "2026-09-20T02:48:56.592Z",
+  "environment": {
+    "machine": "darwin x64 Intel(R) Core(TM) i5-5350U CPU @ 1.80GHz",
+    "node": "v24.11.1",
+    "renderer": "actual FogLayer Turf helpers; no Mapbox paint"
+  },
+  "budgetsFrozenBeforeRun": {
+    "maxSynchronousGeometrySliceMs": 150,
+    "scheduledActionAcknowledgementMs": 100,
+    "incrementalGeometryUpdateMs": 350,
+    "maxEventLoopSchedulingDelayMs": 150,
+    "coldLoad2001Ms": 45000,
+    "diagnostic10000Ms": 150000,
+    "combinedFriend2000Ms": 60000,
+    "cacheSynchronousSliceMs": 150,
+    "sampledUnsupportedRevealCount": 0
+  },
+  "candidateFingerprint": "af8e736708cf31ce33a31d48fe1612904cf1f1a871a679121b458abb536fcf59",
+  "cases": [
+    {
+      "id": "DISTINCT-2001-LIVE-APPEND",
+      "rawFixes": 2041,
+      "acceptedCanonicalPoints": 2041,
+      "spatiallyUniqueCoverageFootprints": 2041,
+      "temporalWitnesses": 0,
+      "coldLoadMs": 10718.484490000003,
+      "sliceCount": 2298,
+      "coldRebuiltTileCount": 380,
+      "incrementalRebuiltTileCount": 9,
+      "coldRebuiltGroupCount": 380,
+      "incrementalRebuiltGroupCount": 9,
+      "sliceMs": {
+        "p50": 2,
+        "p95": 9,
+        "max": 13,
+        "coldMax": 13,
+        "incrementalMax": 9
+      },
+      "insertionMs": {
+        "p50": 0.0878709999997227,
+        "p95": 0.16012700000010227,
+        "max": 21.312205999999605
+      },
+      "incrementalGeometryUpdateMs": 205.8101420000021,
+      "actionAcknowledgementMs": 16.022250999999414,
+      "renderPreparationMs": 35.83956299999954,
+      "persistentCacheRoundTrip": {
+        "inputTileCount": 380,
+        "serializedTileCount": 380,
+        "skippedTileCount": 0,
+        "chunks": 48,
+        "bytes": 684386,
+        "encodeMs": 88,
+        "maxEncodeSliceMs": 1,
+        "storageMs": 5,
+        "maxChunkWriteMs": 1,
+        "read": {
+          "operation": "read",
+          "cacheHit": true,
+          "chunkCount": 48,
+          "tileCount": 380,
+          "serializedBytes": 684386,
+          "parseMs": 7,
+          "maxParseSliceMs": 1,
+          "storageMs": 4
+        },
+        "eventLoopDelayMs": {
+          "p95": 2.13470000000234,
+          "max": 3.1128180000014254
+        },
+        "rebuiltTilesAfterReload": 9,
+        "rebuiltGroupsAfterReload": 9
+      },
+      "eventLoopSchedulingDelayMs": {
+        "cold": {
+          "p95": 10.245563000000402,
+          "max": 25.135087999999996
+        },
+        "incremental": {
+          "p95": 9.751398000000336,
+          "max": 10.844790999999532
+        }
+      },
+      "composeFogShapeMs": 5.945168999998714,
+      "unsupportedReveal": {
+        "method": "8,000 deterministic low-discrepancy samples plus independent Turf ground-distance support predicate (0.005 m numeric epsilon)",
+        "sampleCount": 8000,
+        "insideDisplay": 4565,
+        "unsupportedCount": 0,
+        "sampledUnsupportedAreaEstimateM2": 0,
+        "boundingAreaM2": 3412933.6651806934
+      },
+      "sampledRetainedLoss": 0,
+      "displayedGeometry": {
+        "components": 719,
+        "holes": 0,
+        "vertices": 14259
+      }
+    },
+    {
+      "id": "COMBINED-SELF-2001-FRIEND-CELLS-2000",
+      "selfAcceptedCanonicalPoints": 2001,
+      "friendProjectionCells": 2000,
+      "sourceCachesRemainSeparate": true,
+      "totalMs": 21105.449865,
+      "composeMs": 20.642431000000215,
+      "maxSynchronousSliceMs": 79,
+      "eventLoopSchedulingDelayMs": {
+        "p95": 3.2905400000017835,
+        "max": 142.7227139999959
+      },
+      "rejectedFriendCellCount": 0,
+      "displayedGeometry": {
+        "components": 7905,
+        "holes": 0,
+        "vertices": 49981
+      }
+    }
+  ]
+}

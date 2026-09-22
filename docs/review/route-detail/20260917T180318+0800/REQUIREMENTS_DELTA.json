@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T180318+0800",
+  "card": "CARD-ROUTE-01",
+  "register_mode": "SCOPED_DELTA",
+  "requirements": [
+    {"id":"RQ-ROUTE-001","capability_ids":["ROUTE-01"],"candidate":"IMPLEMENTED_CANDIDATE","automated_proof":"PASS","visual_proof":["ROUTE-VIS-003","ROUTE-VIS-004","ROUTE-VIS-005","ROUTE-VIS-008","ROUTE-VIS-009","ROUTE-VIS-012"],"deployment":"CLIENT_OTA_NOT_PUBLISHED","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-ROUTE-002","capability_ids":["ROUTE-02"],"candidate":"IMPLEMENTED_CANDIDATE","automated_proof":"PASS","visual_proof":["ROUTE-VIS-001","ROUTE-VIS-002","ROUTE-VIS-003","ROUTE-VIS-004","ROUTE-VIS-005"],"deployment":"CLIENT_OTA_NOT_PUBLISHED","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-ROUTE-003","capability_ids":["ROUTE-03"],"candidate":"IMPLEMENTED_LOCAL_MINIMUM","automated_proof":"PASS_MODEL_PERSISTENCE_RELOAD","visual_proof":["ROUTE-VIS-003","ROUTE-VIS-005","ROUTE-VIS-007","ROUTE-VIS-014"],"deployment":"MIGRATION_036_AND_BACKEND_REQUIRED","device_loading":"UNVERIFIED","owner_acceptance":"PENDING","remaining_scope":"FULL_SEGMENT_LINEAGE_AND_VERSION_TREE_OUT_OF_SCOPE"},
+    {"id":"RQ-ROUTE-004","capability_ids":["ROUTE-04"],"candidate":"IMPLEMENTED_CANDIDATE","automated_proof":"PASS","visual_proof":["ROUTE-VIS-009","ROUTE-VIS-010","ROUTE-VIS-011"],"deployment":"CLIENT_OTA_NOT_PUBLISHED","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-ROUTE-005","capability_ids":["ROUTE-01","ROUTE-02"],"candidate":"IMPLEMENTED_CANDIDATE","automated_proof":"PASS","visual_proof":["ROUTE-VIS-002","ROUTE-VIS-006","ROUTE-VIS-008","ROUTE-VIS-012","ROUTE-VIS-016"],"deployment":"CLIENT_OTA_NOT_PUBLISHED_AND_MODERN_DELETE_BACKEND_PENDING","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-ROUTE-006","capability_ids":["ROUTE-02","ROUTE-03"],"candidate":"IMPLEMENTED_CANDIDATE","automated_proof":"PASS","visual_proof":["ROUTE-VIS-013"],"deployment":"ORIGIN_BACKEND_REQUIRED_FOR_FRESH_DEVICE_SURVIVAL","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-TRAIL-003","capability_ids":["ACT-03","ROUTE-01"],"candidate":"IMPLEMENTED_CANDIDATE","automated_proof":"PASS","visual_proof":["ROUTE-VIS-003","ROUTE-VIS-004","ROUTE-VIS-005"],"deployment":"CLIENT_OTA_NOT_PUBLISHED","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-OFFLINE-001","capability_ids":["CAIRN-01","ROUTE-02","ACT-03"],"candidate":"IMPLEMENTED_ROUTE_SCOPE","automated_proof":"PASS","visual_proof":["ROUTE-VIS-003","ROUTE-VIS-012","ROUTE-VIS-013"],"deployment":"MODERN_SERVER_FEATURES_PENDING","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-ROUTE-007","capability_ids":["ROUTE-05"],"candidate":"NOT_IMPLEMENTED_OUT_OF_SCOPE","automated_proof":"NOT_CLAIMED","visual_proof":[],"deployment":"NO","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"}
+  ],
+  "evidence_boundary": {"renderer":"EXPO_WEB_WITH_MAP_SERVICES_BLOCKED","actual_web_mapbox":false,"native_mapbox":false,"physical_device":false,"device_loading":false,"owner_acceptance":"PENDING"}
+}
+

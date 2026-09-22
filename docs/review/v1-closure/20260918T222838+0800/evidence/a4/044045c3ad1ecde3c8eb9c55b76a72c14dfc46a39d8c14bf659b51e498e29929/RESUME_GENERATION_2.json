@@ -1,0 +1,43 @@
+{
+  "schema": "cairnnz.v1-closure.a4-resume.v1",
+  "generation": 2,
+  "resumedAt": "2026-09-19T23:46:03+08:00",
+  "timestampCorrection": {
+    "rejectedValue": "2026-09-19T23:17:00+08:00",
+    "reason": "The initial value was erroneous and was rejected before acceptance.",
+    "observedWith": "date -Iseconds"
+  },
+  "agentId": "/root/rev03_a4_resume",
+  "model": "gpt-5.6-sol",
+  "reasoningEffort": "xhigh",
+  "writerOwnership": "SOLE_PRIMARY_TREE_WRITER",
+  "heavyWorkloadOwnership": "SOLE_HEAVY_LOCAL_OWNER",
+  "source": {
+    "head": "393338b5c159e7341d22b94086b5c29455386bdf",
+    "fingerprint": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+    "fileCount": 633,
+    "revalidated": true
+  },
+  "preservedFailure": {
+    "command": "cd app && npm run verify:changed",
+    "exitCode": 1,
+    "log": "verify-changed-resumed.log",
+    "logSha256": "08185c7534cde085cf69371448dc5fd2bb93cf3e435a21c06d7a74c916a821a4",
+    "performanceCounterexample": "10,000-location Memory geometry observed a 180 ms synchronous slice against the frozen less-than-150 ms ceiling",
+    "status": "FAIL_OPEN_UNRESOLVED_NON_REPRODUCED"
+  },
+  "preservedDiagnostic": {
+    "profile": "verify-changed-diagnostics/memory-scale-10000.cpuprofile",
+    "profileSha256": "8c435dab9e663fc14ef5378cdd273dc812c0be23acd841ff9c01b7df246f091d",
+    "profiledLog": "verify-changed-diagnostics/memory-scale-10000-profiled.log",
+    "profiledLogSha256": "65bf8dd06826a546b6793e9e68230145499d458afa3865007ccb2997c5954c9c",
+    "disposition": "Diagnostic PASS does not overwrite or close the 180 ms failure."
+  },
+  "processState": {
+    "ownedHeavyProcesses": 0,
+    "ownedTestRunners": 0,
+    "ownedBrowsers": 0,
+    "ownedServices": 0
+  },
+  "nextAction": "Instrument a bounded targeted 10,000-location sensitivity run so each recorded synchronous interval identifies its phase and separates on-CPU work from scheduler delay; preserve all geometry truth checks and the frozen threshold before considering a product repair."
+}

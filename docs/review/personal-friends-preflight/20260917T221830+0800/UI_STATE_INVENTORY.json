@@ -1,0 +1,281 @@
+{
+  "schema_version": "1.0",
+  "run_id": "20260917T221830+0800",
+  "scope": "Current reachable UI and material states for the proposed Personal Journal and Friends Collaboration batch",
+  "evidence_rule": "A page-level label does not imply every state is accepted. Web/fallback evidence is not native Mapbox or device proof.",
+  "visual_authority": {
+    "locked_family": [
+      "Home Day/Sunset/Night",
+      "Auth/onboarding",
+      "accepted Friends structure"
+    ],
+    "candidate_peers": [
+      "Activity Detail O57",
+      "Own Cairn Detail / All Cairns O58",
+      "Route Detail / Editor O59 revision 02"
+    ],
+    "historical_not_current": [
+      "old three-tab Trails",
+      "old Leave a mark Plant taxonomy",
+      "historical Hike/Run layouts"
+    ]
+  },
+  "surfaces": [
+    {
+      "id": "UI-HOME",
+      "surface": "Home",
+      "normal_entry": "Authenticated app root",
+      "implementation_owner": ["app/src/screens/HomeScreen.tsx", "app/src/navigation/RootNavigator.tsx"],
+      "maturity": "accepted_frozen_structure",
+      "visual_roles": "Shared Product-DNA tokens, Home artwork, primary navigation anchors",
+      "theme_evidence": {"day": "accepted reference", "sunset": "accepted reference", "night": "accepted reference"},
+      "known_gaps": ["Exploration summary uses current point-count heuristic rather than proven visit or area semantics"],
+      "overnight_action": "Preserve structure; update only truthful Personal Memory summary semantics if required by the provenance contract",
+      "states_in_scope": ["authenticated", "offline summary", "loading summary", "long/larger text"],
+      "not_demonstrable_locally": ["native touch/haptics", "physical GPS", "owner acceptance"]
+    },
+    {
+      "id": "UI-AUTH",
+      "surface": "Auth and onboarding",
+      "normal_entry": "Signed-out launch and supported account flows",
+      "implementation_owner": ["app/src/screens", "app/src/navigation/RootNavigator.tsx"],
+      "maturity": "accepted_frozen_structure",
+      "visual_roles": "Locked Home/Auth artwork and shared fields/buttons",
+      "theme_evidence": {"day": "accepted source authority", "sunset": "not a new batch surface", "night": "accepted source authority where supported"},
+      "known_gaps": ["Release account contract mismatches remain separate from this UI structure"],
+      "overnight_action": "No redesign; use disposable A/B/C/D accounts only",
+      "states_in_scope": ["sign-in", "sign-out/account switch", "network failure", "keyboard", "safe area", "long/larger text"],
+      "not_demonstrable_locally": ["production identity provider behavior", "native keyboard/safe area"]
+    },
+    {
+      "id": "UI-HIKE",
+      "surface": "Hike tracking and pre-start",
+      "normal_entry": "Home Hike or Route Detail -> Use Route -> Hike",
+      "implementation_owner": ["app/src/screens/HikingScreen.tsx", "app/src/store/useTrackingStore.ts"],
+      "maturity": "implemented_candidate_preserve",
+      "visual_roles": "Shared Activity controls, map and route-reference roles",
+      "theme_evidence": {"day": "current Web/source evidence", "sunset": "current Web/source evidence", "night": "current Web/source evidence"},
+      "known_gaps": ["Native map/GPS/permission behavior not locally proven", "O55 simulator evidence can currently enter Memory without durable simulator provenance"],
+      "overnight_action": "Preserve O54/O55; add Memory evidence provenance at the shared recording boundary and run focused regression",
+      "states_in_scope": ["pre-start selected Route", "recording", "saving/disabled", "map unavailable", "permission denied", "offline", "active-Activity guard"],
+      "not_demonstrable_locally": ["native Mapbox", "background GPS", "battery", "field precision"]
+    },
+    {
+      "id": "UI-RUN",
+      "surface": "Run tracking and pre-start",
+      "normal_entry": "Home Run or Route Detail -> Use Route -> Run",
+      "implementation_owner": ["app/src/screens/RunningScreen.tsx", "app/src/store/useTrackingStore.ts"],
+      "maturity": "implemented_candidate_preserve",
+      "visual_roles": "Shared Activity controls, pace and route-reference roles",
+      "theme_evidence": {"day": "current Web/source evidence", "sunset": "current Web/source evidence", "night": "current Web/source evidence"},
+      "known_gaps": ["Native map/GPS/pace behavior not locally proven", "Same simulator-provenance gap as Hike"],
+      "overnight_action": "Preserve pace/Live/Final; add Memory provenance only at the shared evidence boundary",
+      "states_in_scope": ["pre-start selected Route", "recording", "saving/disabled", "map unavailable", "permission denied", "offline", "active-Activity guard"],
+      "not_demonstrable_locally": ["native Mapbox", "background GPS", "battery", "field pace"]
+    },
+    {
+      "id": "UI-PLANT",
+      "surface": "Plant and Quick Cairn creation",
+      "normal_entry": "Home/Activity recording Cairn action",
+      "implementation_owner": ["app/src/screens/PlantScreen.tsx", "app/src/store/useMarkerStore.ts"],
+      "maturity": "implemented_candidate_preserve",
+      "visual_roles": "Current Plant Product-DNA, shared fields and location context",
+      "theme_evidence": {"day": "current source/Web candidate", "sunset": "current source/Web candidate", "night": "current source/Web candidate"},
+      "known_gaps": ["Native location/map and haptics pending"],
+      "overnight_action": "Preserve creation and identity; verify new Memory provenance does not rewrite Cairn truth",
+      "states_in_scope": ["Quick empty Cairn", "full Plant", "pending local", "failure/retry", "duplicate tap", "permission denied"],
+      "not_demonstrable_locally": ["native map/location", "on-device haptics"]
+    },
+    {
+      "id": "UI-ACTIVITY-DETAIL",
+      "surface": "Activity Detail",
+      "normal_entry": "Finish, Trails Activity row, or restored local Activity",
+      "implementation_owner": ["app/src/screens/MapHistoryScreen.tsx object-target mode", "app/src/store/useSessionStore.ts"],
+      "maturity": "O57_candidate_device_acceptance_pending",
+      "visual_roles": "Map plus foreground detail surface, quiet normal success, shared metrics/actions",
+      "theme_evidence": {"day": "fixture/Web candidate", "sunset": "fixture/Web candidate", "night": "fixture/Web candidate"},
+      "known_gaps": ["Earlier captures do not prove every linked-Cairn, Route, deletion, or sync transaction end-to-end", "Native map pending"],
+      "overnight_action": "Preserve; exercise actual personal handlers in integrated synthetic journey and avoid redesign",
+      "states_in_scope": ["Hike", "Run", "local/pending", "sync failure", "Gap", "linked/no Cairns", "rename/delete/save Route outcomes"],
+      "not_demonstrable_locally": ["native Mapbox", "physical-device layout", "owner acceptance"]
+    },
+    {
+      "id": "UI-OWN-CAIRN",
+      "surface": "Own Cairn Detail and edit/delete sheets",
+      "normal_entry": "Activity linked Cairn, All Cairns, personal Memory pin, or completed Plant",
+      "implementation_owner": ["app/src/screens/MarkerDetailScreen.tsx", "app/src/store/useMarkerStore.ts"],
+      "maturity": "O58_candidate_device_acceptance_pending",
+      "visual_roles": "Shared Cairn surfaces, fields, sheets, destructive confirmation",
+      "theme_evidence": {"day": "fixture/Web candidate", "sunset": "fixture/Web candidate", "night": "fixture/Web candidate"},
+      "known_gaps": ["Native map/keyboard/safe-area pending", "Owner-history backend endpoint not deployed"],
+      "overnight_action": "Preserve owner authority; verify Memory changes keep identity/edit/delete/list consistency",
+      "states_in_scope": ["empty Quick Cairn", "enriched", "editing", "unsaved stay/discard", "failed save", "pending/synced", "delete cancel/confirm", "map unavailable"],
+      "not_demonstrable_locally": ["native keyboard/map", "device haptics", "owner acceptance"]
+    },
+    {
+      "id": "UI-ALL-CAIRNS",
+      "surface": "All Cairns",
+      "normal_entry": "Home -> Memory -> All Cairns, independent of map/GPS state",
+      "implementation_owner": ["app/src/screens/AllCairnsScreen.tsx", "app/src/store/useMarkerStore.ts"],
+      "maturity": "O58_candidate_device_acceptance_pending",
+      "visual_roles": "Compact shared record rows and one search field",
+      "theme_evidence": {"day": "fixture/Web candidate", "sunset": "fixture/Web candidate", "night": "fixture/Web candidate"},
+      "known_gaps": ["Complete online owner history requires undeployed O58 backend", "Native large-list/keyboard behavior pending"],
+      "overnight_action": "Preserve own-only retrieval; verify entry survives Memory map/permission changes",
+      "states_in_scope": ["loading", "true empty", "search empty", "local with server unavailable", "pending/failed create", "deleted/unavailable", "query/list return context"],
+      "not_demonstrable_locally": ["native list performance", "native keyboard", "deployed full-history coverage"]
+    },
+    {
+      "id": "UI-TRAILS",
+      "surface": "Trails Activities and Routes",
+      "normal_entry": "Home -> Trails",
+      "implementation_owner": ["app/src/screens/RoutesScreen.tsx", "app/src/screens/MapHistoryScreen.tsx object-target routing"],
+      "maturity": "current_two-family_candidate_preserve",
+      "visual_roles": "Activities/Routes as two object families and compact records",
+      "theme_evidence": {"day": "current source/Web", "sunset": "current source/Web", "night": "current source/Web"},
+      "known_gaps": ["Whole-history/pagination limitations remain outside this batch"],
+      "overnight_action": "Preserve; use for personal Activity/Route reopen regression only",
+      "states_in_scope": ["local records", "server unavailable with cache", "rename/edit/delete update", "empty versus error", "query/list return"],
+      "not_demonstrable_locally": ["native scroll/gesture fidelity", "complete deployed history"]
+    },
+    {
+      "id": "UI-ROUTE",
+      "surface": "Own Route Detail, editor, chooser, and mutation sheets",
+      "normal_entry": "Trails Route row, Activity Save as Route, or editor save",
+      "implementation_owner": ["app/src/screens/MapHistoryScreen.tsx", "app/src/screens/RouteEditorScreen.tsx", "app/src/store/useRouteStore.ts"],
+      "maturity": "O59_revision02_candidate_device_acceptance_pending",
+      "visual_roles": "Use-first Route surface, map preview, draft editor, shared actions/sheets",
+      "theme_evidence": {"day": "updated Web/fallback evidence", "sunset": "updated Web/fallback evidence", "night": "updated Web/fallback evidence"},
+      "known_gaps": ["Native map gestures pending", "Migration 036/backend responses not deployed"],
+      "overnight_action": "Preserve corrected revision 02; exercise as part of Personal and permitted friend-reference flows",
+      "states_in_scope": ["activity-derived", "edited", "legacy origin", "local/synced", "failure", "Gap review", "unsaved", "save in flight", "delete", "Use Route chooser"],
+      "not_demonstrable_locally": ["native correction gestures", "native Mapbox", "owner acceptance"]
+    },
+    {
+      "id": "UI-MEMORY",
+      "surface": "Personal Memory",
+      "normal_entry": "Home -> Memory",
+      "implementation_owner": ["app/src/features/memory/screens/MemoryScreen.tsx", "app/src/features/memory/components/MemoryMap.tsx", "app/src/features/memory/components/HierarchyPanel.tsx", "app/src/features/memory/store/useMemoryStore.ts"],
+      "maturity": "existing_but_incomplete",
+      "visual_roles": "Map/hierarchy exploration with an All Cairns management entry",
+      "theme_evidence": {"day": "current source/Web Mapbox evidence exists", "sunset": "partial; hierarchy/local controls need semantic-role review", "night": "partial; native map unavailable"},
+      "known_gaps": ["Flat points lack source provenance", "Simulator can be persisted as passive evidence", "Hierarchy omits defensible first/last context", "Hard-coded material roles remain", "Point count must not be presented as visits"],
+      "overnight_action": "Add provenance/isolation, honest place context, bounded state copy, and three-theme role corrections without redesigning Memory",
+      "states_in_scope": ["initial loading", "true empty", "personal data", "map unavailable", "permission denied", "offline/reconnect", "historical unknown", "simulator excluded", "stale/account switch", "All Cairns always reachable"],
+      "not_demonstrable_locally": ["native Mapbox", "physical field presence", "all phone sizes"]
+    },
+    {
+      "id": "UI-FRIENDS",
+      "surface": "Friends list, requests, add, remove, and block",
+      "normal_entry": "Home -> Friends",
+      "implementation_owner": ["app/src/screens/FriendsScreen.tsx", "app/src/store/useFriendStore.ts", "backend/src/routes/friends.js"],
+      "maturity": "accepted_visual_structure_functionally_incomplete",
+      "visual_roles": "Frozen Friends structure, shared rows/modals/buttons",
+      "theme_evidence": {"day": "accepted current structure", "sunset": "accepted current structure", "night": "accepted current structure"},
+      "known_gaps": ["Network failure can resemble empty requests", "Late-response/account ordering is incomplete", "Remove/block copy implies access revocation that the current backend does not enforce"],
+      "overnight_action": "Preserve structure; connect truthful lifecycle outcomes to new grant/revocation contract",
+      "states_in_scope": ["no friends", "pending incoming/outgoing", "accepted", "request failure/retry", "remove confirm/failure", "blocked/revoked", "account switch", "long/larger text"],
+      "not_demonstrable_locally": ["production push delivery", "native haptics/accessibility"]
+    },
+    {
+      "id": "UI-FRIEND-DETAIL",
+      "surface": "Friend Detail / profile",
+      "normal_entry": "Tap a Friends row",
+      "implementation_owner": ["app/src/screens/FriendsScreen.tsx profile ModalCard"],
+      "maturity": "existing_but_incomplete",
+      "visual_roles": "Current profile modal with shared modal/card roles",
+      "theme_evidence": {"day": "current source", "sunset": "current source", "night": "current source"},
+      "known_gaps": ["No authoritative normal detail route", "Profile counts do not establish share authorization", "No authorized Cairn/Route entry sections"],
+      "overnight_action": "Extend the accepted profile structure into a normal permission-aware entry for explicitly shared content; do not add a feed",
+      "states_in_scope": ["loading", "not granted", "granted no content", "shared content", "revoked", "blocked", "failure/retry"],
+      "not_demonstrable_locally": ["native modal/navigation transitions", "owner acceptance"]
+    },
+    {
+      "id": "UI-FRIEND-MEMORY",
+      "surface": "Shared Memory scopes and friend picker",
+      "normal_entry": "Memory scope control and friend picker after current authorization",
+      "implementation_owner": ["MemoryScopeToggle.tsx", "MemoryFriendPickModal.tsx", "useMemorySubscriptionsStore.ts", "useFriendMemoryStore.ts"],
+      "maturity": "unsafe_incomplete_contract",
+      "visual_roles": "Existing picker/toggle shell; map layers must preserve source identity",
+      "theme_evidence": {"day": "partial current Web", "sunset": "partial current Web", "night": "partial current Web"},
+      "known_gaps": ["Viewer selection is conflated with authority", "Raw exact friend points", "Only mine/friends scope", "Renderer flattens sources", "No grant revision/TTL/revocation"],
+      "overnight_action": "Implement author grants, derived per-source projection, self/self-plus/single modes, versioned cache, and revoked/offline states",
+      "states_in_scope": ["self", "self plus A/B", "single A", "overlap", "not granted", "revoked", "blocked", "offline last-authorized", "reconnect changed auth", "stale/account switch"],
+      "not_demonstrable_locally": ["native map blending", "immediate offline revocation", "field presence"]
+    },
+    {
+      "id": "UI-NONOWNER-CAIRN",
+      "surface": "Authorized non-owner Cairn Detail",
+      "normal_entry": "Friend Detail or Memory only after object permission and approved Encounter/explicit access",
+      "implementation_owner": ["missing authoritative role; existing personal MarkerDetailScreen cannot be reused as owner mode without permission separation"],
+      "maturity": "missing",
+      "visual_roles": "Read-only Cairn detail using shared surface roles",
+      "theme_evidence": {"day": "none current", "sunset": "none current", "night": "none current"},
+      "known_gaps": ["No Encounter fact", "No owner grant/object permission", "No normal read-only navigation", "Legacy lower-layer screens are not product proof"],
+      "overnight_action": "Add the smallest permission-aware read-only role if Encounter is approved; otherwise exclude friend Cairn discovery from v1",
+      "states_in_scope": ["permitted", "not encountered", "revoked", "blocked", "deleted", "offline cached within policy", "map unavailable"],
+      "not_demonstrable_locally": ["physical encounter", "native map", "owner acceptance"]
+    },
+    {
+      "id": "UI-NONOWNER-ROUTE",
+      "surface": "Authorized non-owner Route preview/reference use",
+      "normal_entry": "Friend Detail explicit shared Route entry",
+      "implementation_owner": ["missing permission-aware role; personal Route components/reference snapshot are reusable"],
+      "maturity": "missing",
+      "visual_roles": "Read-only Route preview plus explicit Hike/Run reference action",
+      "theme_evidence": {"day": "none current", "sunset": "none current", "night": "none current"},
+      "known_gaps": ["No object grant", "No friend Route handler", "No grant-versioned stable snapshot"],
+      "overnight_action": "Add read-only permission role and immutable authorized reference snapshot; never transfer ownership or Memory",
+      "states_in_scope": ["permitted", "not permitted", "revoked before use", "revoked after active snapshot", "owner edited/deleted", "offline", "active-Activity guard"],
+      "not_demonstrable_locally": ["native pre-start map", "field use", "owner acceptance"]
+    },
+    {
+      "id": "UI-SETTINGS",
+      "surface": "Settings and existing account/feedback/export secondary surfaces",
+      "normal_entry": "Home -> Settings",
+      "implementation_owner": ["app/src/screens/SettingsScreen.tsx", "backend settings/account/export routes"],
+      "maturity": "source_visual_candidate_release_contract_mismatch",
+      "visual_roles": "Shared settings rows, fields, confirmations",
+      "theme_evidence": {"day": "current source/Web", "sunset": "current source/Web", "night": "current source/Web"},
+      "known_gaps": ["Local migration 035/account-feedback-export behavior is not assumed deployed", "Production release mismatch remains separate"],
+      "overnight_action": "No redesign or destructive test; include target-backend compatibility in delivery dependency table",
+      "states_in_scope": ["account switch/logout cache purge", "existing visible unsupported contract disclosure"],
+      "not_demonstrable_locally": ["production feedback/export/account deletion", "purchase flows"]
+    },
+    {
+      "id": "UI-SHARED-MUTATIONS",
+      "surface": "Shared dialogs, sheets, toasts, and mutation feedback",
+      "normal_entry": "Save/edit/delete/request/grant/revoke actions on the surfaces above",
+      "implementation_owner": ["shared ModalCard/button/field/sheet components plus feature handlers"],
+      "maturity": "mixed_by_feature",
+      "visual_roles": "Shared progress, disabled, confirmation, destructive and failure roles",
+      "theme_evidence": {"day": "candidate coverage varies", "sunset": "candidate coverage varies", "night": "candidate coverage varies"},
+      "known_gaps": ["Friends errors are not consistently distinguishable from empty", "Unknown remote outcome needs stable-id reconciliation"],
+      "overnight_action": "Use truthful progress/success/failure and one in-flight operation per action/object; preserve draft or retry state",
+      "states_in_scope": ["saving", "disabled", "selected", "duplicate tap", "timeout", "unknown outcome", "retry", "unsaved stay/discard", "late response", "account/object change"],
+      "not_demonstrable_locally": ["native haptics", "all accessibility focus behavior"]
+    }
+  ],
+  "cross_cutting_state_families": [
+    {
+      "family": "layout_and_input",
+      "states": ["long text", "larger text", "keyboard open", "safe area", "small and large phone"],
+      "local_evidence": "Browser stress is available; native proof is not."
+    },
+    {
+      "family": "map_and_location",
+      "states": ["actual Web Mapbox", "Expo/native-map fallback", "map unavailable", "permission denied", "physical field"],
+      "local_evidence": "Web/fallback states can be tested; native Mapbox and field validation cannot."
+    },
+    {
+      "family": "network_and_authority",
+      "states": ["offline", "reconnect", "stale response", "account switch", "revoked", "blocked", "server unavailable"],
+      "local_evidence": "Real local API plus controlled delay/offline is available after the Friends schema fixture exists."
+    },
+    {
+      "family": "mutation",
+      "states": ["saving", "disabled", "selected", "duplicate tap", "unsaved", "timeout", "unknown remote outcome", "retry"],
+      "local_evidence": "Real handlers and mocked transport plus real local API/database can divide these evidence levels."
+    }
+  ]
+}

@@ -157,6 +157,53 @@ function accountIsCurrent(account: { viewerId: string; generation: number }): bo
   return current.viewerId === account.viewerId && current.generation === account.generation;
 }
 
+export interface FriendContentAccountAuthority {
+  viewerId: string;
+  generation: number;
+}
+
+/** Capture the same account-generation authority used by cache reads/writes. */
+export function captureFriendContentAccountAuthority(): FriendContentAccountAuthority {
+  return syncAccountGeneration();
+}
+
+/** Recheck an authority token across caller-owned network and persistence awaits. */
+export function friendContentAccountAuthorityIsCurrent(
+  authority: FriendContentAccountAuthority,
+): boolean {
+  return accountIsCurrent(authority);
+}
+
+export interface FriendContentOwnerAuthority extends FriendContentAccountAuthority {
+  ownerId: string;
+  ownerGeneration: number;
+}
+
+/**
+ * Capture the viewer session and one borrowed-content owner generation.
+ * Block/unfriend purges bump this owner generation synchronously, so UI
+ * navigation issued before that intent cannot remain usable afterward.
+ */
+export function captureFriendContentOwnerAuthority(
+  ownerIdValue: string | number,
+): FriendContentOwnerAuthority {
+  const account = syncAccountGeneration();
+  const ownerId = String(ownerIdValue);
+  return {
+    ...account,
+    ownerId,
+    ownerGeneration: ownerGenerations.get(ownerGenerationKey(account.viewerId, ownerId)) ?? 0,
+  };
+}
+
+export function friendContentOwnerAuthorityIsCurrent(
+  authority: FriendContentOwnerAuthority,
+): boolean {
+  return accountIsCurrent(authority)
+    && (ownerGenerations.get(ownerGenerationKey(authority.viewerId, authority.ownerId)) ?? 0)
+      === authority.ownerGeneration;
+}
+
 function emptySnapshot(viewerId: string): CacheSnapshot {
   return {
     version: 3,
@@ -265,11 +312,30 @@ async function loadSnapshot(viewerId: string): Promise<CacheSnapshot> {
   try { return await work; } finally { loadPromises.delete(viewerId); }
 }
 
-async function persistSnapshot(viewerId: string): Promise<void> {
+async function persistSnapshot(
+  viewerId: string,
+  { removeCacheOnFailure = false }: { removeCacheOnFailure?: boolean } = {},
+): Promise<void> {
   const previous = writeTails.get(viewerId) ?? Promise.resolve();
   const run = previous.catch(() => {}).then(async () => {
     const snapshot = snapshots.get(viewerId) ?? emptySnapshot(viewerId);
-    await storage.setItem(`${CACHE_PREFIX}${viewerId}`, JSON.stringify(snapshot), { strict: true });
+    const key = `${CACHE_PREFIX}${viewerId}`;
+    try {
+      await storage.setItem(key, JSON.stringify(snapshot), { strict: true });
+    } catch (writeError) {
+      if (!removeCacheOnFailure) throw writeError;
+      try {
+        // A whole-cache removal is deliberately more conservative than
+        // retaining an older authorized envelope. A later successful network
+        // authorization can recreate the account-scoped cache normally.
+        await storage.removeItem(key, { strict: true });
+      } catch {
+        // No in-process strategy can make a revocation durable when both the
+        // replacement write and independent removal fail. Surface that truth
+        // rather than claiming the stale disk copy was invalidated.
+        throw new FriendContentError('storage');
+      }
+    }
   });
   writeTails.set(viewerId, run);
   try { await run; } finally {
@@ -527,7 +593,7 @@ async function fetchDetail<T extends FriendCairn | FriendRoute>(
       delete snapshot.resources[cacheKey(kind, id)];
       if (kind === 'route') removeInactiveRouteLeases(snapshot, ownerId, id);
       markResourceInvalidated(fence.viewerId, ownerId, kind, id, fence.requestId);
-      await persistSnapshot(fence.viewerId);
+      await persistSnapshot(fence.viewerId, { removeCacheOnFailure: true });
       throw new FriendContentError('revoked');
     }
     if (!response.ok) throw new FriendContentError('unavailable');
@@ -544,7 +610,8 @@ async function fetchDetail<T extends FriendCairn | FriendRoute>(
     throwIfSuperseded(fence);
     return { content: record.detailContent as T, source: 'network', expiresAt: record.expiresAt };
   } catch (error) {
-    if (error instanceof FriendContentError && (error.code === 'revoked' || error.code === 'superseded')) throw error;
+    if (error instanceof FriendContentError
+      && (error.code === 'revoked' || error.code === 'superseded' || error.code === 'storage')) throw error;
     throwIfSuperseded(fence);
     const record = snapshot.resources[cacheKey(kind, id)] as CacheRecord<T> | undefined;
     const detailMatchesEnvelope = record?.detailContent
@@ -652,7 +719,7 @@ export async function purgeFriendContent(
   for (const [key, pending] of Object.entries(snapshot.pendingHides)) {
     if (pending.ownerId === ownerId) delete snapshot.pendingHides[key];
   }
-  await persistSnapshot(account.viewerId);
+  await persistSnapshot(account.viewerId, { removeCacheOnFailure: true });
 }
 
 export function resetFriendContentForAccountBoundary(): void {
@@ -677,7 +744,7 @@ export async function leaseFriendRoute(route: FriendRoute): Promise<SharedRouteL
     delete snapshot.resources[cacheKey('route', route.id)];
     removeInactiveRouteLeases(snapshot, route.author.id, route.id);
     markResourceInvalidated(fence.viewerId, route.author.id, 'route', route.id, fence.requestId);
-    await persistSnapshot(fence.viewerId);
+    await persistSnapshot(fence.viewerId, { removeCacheOnFailure: true });
     throw new FriendContentError('revoked');
   }
   if (!response.ok) throw new FriendContentError('unavailable');

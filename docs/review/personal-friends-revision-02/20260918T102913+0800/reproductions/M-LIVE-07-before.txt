@@ -1,0 +1,49 @@
+
+> app@0.2.6 test
+> jest --watchAll=false --runInBand src/features/memory/__tests__/memoryFogContinuity.test.ts
+
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+FAIL src/features/memory/__tests__/memoryFogContinuity.test.ts
+  Memory evidence rendering continuity
+    ✓ overlapping accepted evidence footprints form a continuous component (125 ms)
+    ✓ GPS gaps and fresh Activities never gain an inferred Memory bridge (147 ms)
+    ✓ display smoothing remains clipped to the original accepted footprint (44 ms)
+    ✕ crossing the former 2000-point stride boundary cannot re-cover prior evidence (21 ms)
+
+  ● Memory evidence rendering continuity › crossing the former 2000-point stride boundary cannot re-cover prior evidence
+
+    expect(received).toContain(expected) // indexOf
+
+    Expected value: {"lat": 0, "lng": 0.01, "ts": 2}
+    Received array: [{"lat": 0, "lng": 0, "ts": 1}, {"lat": 0, "lng": 0, "ts": 3}, {"lat": 0, "lng": 0, "ts": 5}, {"lat": 0, "lng": 0, "ts": 7}, {"lat": 0, "lng": 0, "ts": 9}, {"lat": 0, "lng": 0, "ts": 11}, {"lat": 0, "lng": 0, "ts": 13}, {"lat": 0, "lng": 0, "ts": 15}, {"lat": 0, "lng": 0, "ts": 17}, {"lat": 0, "lng": 0, "ts": 19}, …]
+
+      67 |     }));
+      68 |     expect(selectFogEvidencePoints(points.slice(0, 2000))).toContain(points[1]);
+    > 69 |     expect(selectFogEvidencePoints(points)).toContain(points[1]);
+         |                                             ^
+      70 |   });
+      71 | });
+      72 |
+
+      at Object.toContain (src/features/memory/__tests__/memoryFogContinuity.test.ts:69:45)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 3 passed, 4 total
+Snapshots:   0 total
+Time:        2.623 s
+Ran all test suites matching /src\/features\/memory\/__tests__\/memoryFogContinuity.test.ts/i.

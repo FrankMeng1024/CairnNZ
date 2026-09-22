@@ -1,0 +1,334 @@
+{
+  "schema_version": 1,
+  "run_id": "20260916T164608+0800",
+  "captured_at": "2026-09-16T09:32:48.031Z",
+  "base_url": "http://127.0.0.1:8099",
+  "isolation": {
+    "fresh_browser_context": true,
+    "synthetic_identity": true,
+    "synthetic_coordinates": true,
+    "cairn_api_reads_fixture_intercepted": true,
+    "cairn_api_writes_denied": true,
+    "prevented_write_attempt_count": 89,
+    "allowed_product_write_count": 0,
+    "production_data_read": false,
+    "production_data_mutated": false
+  },
+  "evidence_boundary": {
+    "entry_mode": "FORCED_TEST_ROUTE",
+    "renderer": "EXPO_WEB_FALLBACK",
+    "native_mapbox_proven": false,
+    "normal_navigation_proven_by_capture": false,
+    "device_loading_proven": false,
+    "explicit_user_acceptance": "PENDING"
+  },
+  "captures": [
+    {
+      "evidence_id": "AD-VIS-001",
+      "page": "hike-detail",
+      "state": "summary-linked",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/hike-detail--summary-linked--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "actual_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic synced Hike with one explicitly associated own Cairn.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "AD-VIS-002",
+      "page": "hike-detail",
+      "state": "summary-no-cairns",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/hike-detail--summary-no-cairns--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "actual_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic synced Hike with no associated Cairns; section is intentionally omitted.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "AD-VIS-003",
+      "page": "hike-detail",
+      "state": "local-pending",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/hike-detail--local-pending--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "actual_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic locally usable Hike with pending server sync and explicit own Cairn.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "AD-VIS-004",
+      "page": "run-detail",
+      "state": "gap-no-cairns",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/run-detail--gap-no-cairns--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "actual_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic Run with two real segments and an explicit GPS gap.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "The disconnected SVG segments prove only the web fallback presentation."
+      ]
+    },
+    {
+      "evidence_id": "AD-VIS-005",
+      "page": "run-detail",
+      "state": "sync-failure-linked",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/run-detail--sync-failure-linked--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "actual_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic locally usable Run with sync failure and explicit own Cairn.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "Retry was not pressed; no sync job was invoked."
+      ]
+    },
+    {
+      "evidence_id": "AD-VIS-006",
+      "page": "hike-detail",
+      "state": "linked-cairns-section",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/hike-detail--linked-cairns-section--sunset--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "actual_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic explicitly associated own Cairn; tap navigation is not invoked in this capture.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "AD-VIS-007",
+      "page": "route-editor",
+      "state": "save-as-route-draft",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-editor--save-as-route-draft--day--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic copied Activity points opened in the existing Route Editor; Save was not pressed.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "This proves deterministic draft entry only, not native map rendering or a persisted Route."
+      ]
+    },
+    {
+      "evidence_id": "AD-VIS-008",
+      "page": "hike-detail",
+      "state": "delete-confirmation",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/hike-detail--delete-confirmation--night--390x844.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "actual_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic Activity; destructive confirmation is visible but deletion is not invoked.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence."
+      ]
+    },
+    {
+      "evidence_id": "AD-VIS-009",
+      "page": "hike-detail",
+      "state": "small-iphone-summary",
+      "theme": "sunset",
+      "viewport": "320x568",
+      "file": "images/hike-detail--small-iphone-summary--sunset--320x568.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "actual_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic synced Hike at the smallest supported review viewport.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "320×568 is a web viewport constraint check, not a physical-device screenshot."
+      ]
+    },
+    {
+      "evidence_id": "AD-VIS-010",
+      "page": "run-detail",
+      "state": "large-iphone-linked",
+      "theme": "day",
+      "viewport": "430x932",
+      "file": "images/run-detail--large-iphone-linked--day--430x932.png",
+      "entry_mode": "FORCED_TEST_ROUTE",
+      "data": "SYNTHETIC_FIXTURE",
+      "renderer": "EXPO_WEB_TRACK_POLYLINE_FALLBACK",
+      "actual_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic synced Run at a representative larger iPhone viewport.",
+      "notes": [
+        "Not native Mapbox evidence.",
+        "Not normal-navigation evidence.",
+        "430×932 is a web viewport constraint check, not a physical-device screenshot."
+      ]
+    }
+  ],
+  "boards": [
+    "images/board-core-themes.jpg",
+    "images/board-actions-and-layout.jpg",
+    "images/board-product-family-comparison.jpg"
+  ],
+  "request_ledger": [
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/index.ts.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag",
+      "action": "prevented-api-write"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/node_modules/expo-task-manager/build/TaskManager.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/node_modules/expo-location/build/index.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/assets/",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/node_modules/expo-updates/build/index.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/src/services/accountLocalData.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/node_modules/@react-native-async-storage/async-storage/lib/module/index.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/src/features/activitySimulator/simulatorLog.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/src/services/backgroundLocationTask.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "api.yiiling.cn",
+      "path": "/api/markers",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/node_modules/expo-file-system/legacy.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "api.yiiling.cn",
+      "path": "/api/memory/points",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8099",
+      "path": "/src/features/activity/activityRegistry.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "api.bigdatacloud.net",
+      "path": "/data/reverse-geocode-client",
+      "action": "blocked-external"
+    },
+    {
+      "method": "GET",
+      "host": "api.open-meteo.com",
+      "path": "/v1/forecast",
+      "action": "fixture-weather"
+    }
+  ],
+  "prevented_write_attempts": [
+    {
+      "method": "POST",
+      "host": "api.yiiling.cn",
+      "path": "/api/edit-diag",
+      "count": 89
+    }
+  ],
+  "runtime_errors": [],
+  "product_family_sources": [
+    "docs/qa/visual-migration/final/product-unity-board.jpg",
+    "docs/review/plant/current/03-compose-empty.png"
+  ]
+}

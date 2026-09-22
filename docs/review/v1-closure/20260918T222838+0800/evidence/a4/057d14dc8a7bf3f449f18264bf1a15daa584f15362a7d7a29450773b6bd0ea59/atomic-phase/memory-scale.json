@@ -1,0 +1,221 @@
+{
+  "schema": "cairnnz.revision03.memory-scale.v1",
+  "generatedAt": "2026-09-20T02:51:36.357Z",
+  "environment": {
+    "machine": "darwin x64 Intel(R) Core(TM) i5-5350U CPU @ 1.80GHz",
+    "node": "v24.11.1",
+    "renderer": "actual FogLayer Turf helpers; no Mapbox paint"
+  },
+  "budgetsFrozenBeforeRun": {
+    "maxSynchronousGeometrySliceMs": 150,
+    "scheduledActionAcknowledgementMs": 100,
+    "incrementalGeometryUpdateMs": 350,
+    "maxEventLoopSchedulingDelayMs": 150,
+    "coldLoad2001Ms": 45000,
+    "diagnostic10000Ms": 150000,
+    "combinedFriend2000Ms": 60000,
+    "cacheSynchronousSliceMs": 150,
+    "sampledUnsupportedRevealCount": 0
+  },
+  "candidateFingerprint": "057d14dc8a7bf3f449f18264bf1a15daa584f15362a7d7a29450773b6bd0ea59",
+  "cases": [
+    {
+      "id": "DISTINCT-2001-LIVE-APPEND",
+      "rawFixes": 2041,
+      "acceptedCanonicalPoints": 2041,
+      "spatiallyUniqueCoverageFootprints": 2041,
+      "temporalWitnesses": 0,
+      "coldLoadMs": 10621.449981999998,
+      "sliceCount": 2283,
+      "coldRebuiltTileCount": 380,
+      "incrementalRebuiltTileCount": 9,
+      "coldRebuiltGroupCount": 380,
+      "incrementalRebuiltGroupCount": 9,
+      "sliceMs": {
+        "p50": 2,
+        "p95": 9,
+        "max": 12,
+        "coldMax": 12,
+        "incrementalMax": 9
+      },
+      "insertionMs": {
+        "p50": 0.08070500000030734,
+        "p95": 0.15298500000062631,
+        "max": 33.907773999999336
+      },
+      "incrementalGeometryUpdateMs": 215.21629699999903,
+      "actionAcknowledgementMs": 14.207361000000674,
+      "renderPreparationMs": 31.94206999999915,
+      "persistentCacheRoundTrip": {
+        "inputTileCount": 380,
+        "serializedTileCount": 380,
+        "skippedTileCount": 0,
+        "chunks": 48,
+        "bytes": 684386,
+        "encodeMs": 94,
+        "maxEncodeSliceMs": 2,
+        "storageMs": 5,
+        "maxChunkWriteMs": 1,
+        "read": {
+          "operation": "read",
+          "cacheHit": true,
+          "chunkCount": 48,
+          "tileCount": 380,
+          "serializedBytes": 684386,
+          "parseMs": 8,
+          "maxParseSliceMs": 1,
+          "storageMs": 4
+        },
+        "eventLoopDelayMs": {
+          "p95": 2.254052000000229,
+          "max": 3.096650999999838
+        },
+        "rebuiltTilesAfterReload": 9,
+        "rebuiltGroupsAfterReload": 9
+      },
+      "eventLoopSchedulingDelayMs": {
+        "cold": {
+          "p95": 10.324764000000869,
+          "max": 27.04863800000021
+        },
+        "incremental": {
+          "p95": 9.42906099999891,
+          "max": 10.19387899999856
+        }
+      },
+      "composeFogShapeMs": 5.140898000001471,
+      "unsupportedReveal": {
+        "method": "8,000 deterministic low-discrepancy samples plus independent Turf ground-distance support predicate (0.005 m numeric epsilon)",
+        "sampleCount": 8000,
+        "insideDisplay": 4565,
+        "unsupportedCount": 0,
+        "sampledUnsupportedAreaEstimateM2": 0,
+        "boundingAreaM2": 3412933.6651806934
+      },
+      "sampledRetainedLoss": 0,
+      "displayedGeometry": {
+        "components": 719,
+        "holes": 0,
+        "vertices": 14259
+      }
+    },
+    {
+      "id": "COMBINED-SELF-2001-FRIEND-CELLS-2000",
+      "selfAcceptedCanonicalPoints": 2001,
+      "friendProjectionCells": 2000,
+      "sourceCachesRemainSeparate": true,
+      "totalMs": 19926.646823999996,
+      "composeMs": 22.044559000001755,
+      "maxSynchronousSliceMs": 57,
+      "eventLoopSchedulingDelayMs": {
+        "p95": 3.0505100000009406,
+        "max": 57.28923500000383
+      },
+      "rejectedFriendCellCount": 0,
+      "displayedGeometry": {
+        "components": 7905,
+        "holes": 0,
+        "vertices": 49981
+      }
+    },
+    {
+      "id": "DISTINCT-10000-DIAGNOSTIC",
+      "rawFixes": 10000,
+      "acceptedCanonicalPoints": 10000,
+      "spatiallyUniqueCoverageFootprints": 10000,
+      "temporalWitnesses": 0,
+      "totalMs": 51718.264113,
+      "sliceCount": 10963,
+      "renderPreparationMs": 104.23364500000025,
+      "composeFogShapeMs": 26.935256999990088,
+      "sliceMs": {
+        "p50": 2,
+        "p95": 9,
+        "max": 16
+      },
+      "slowestSlices": [
+        {
+          "phase": "select_points",
+          "durationMs": 16,
+          "itemCount": 10000
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 13,
+          "tileKey": "174787|-41208",
+          "itemCount": 1
+        },
+        {
+          "phase": "sort_tiles",
+          "durationMs": 11,
+          "itemCount": 1890
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174777|-41269",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174779|-41278",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174780|-41270",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174781|-41209",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174782|-41286",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174783|-41275",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174784|-41234",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174786|-41200",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 11,
+          "tileKey": "174786|-41210",
+          "itemCount": 1
+        }
+      ],
+      "eventLoopSchedulingDelayMs": {
+        "p95": 10.217829999994137,
+        "max": 16.404921000001195
+      },
+      "retainedSampleLoss": 0,
+      "displayedGeometry": {
+        "components": 3420,
+        "holes": 0,
+        "vertices": 69300
+      },
+      "claimBoundary": "diagnostic maximum tested; not an unlimited-support claim"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "schema": "cairnnz.fr-mem-hide-01.red-green.v1",
+  "summarizedAt": "2026-09-20T00:02:57+08:00",
+  "owner": "/root/rev03_a4_resume",
+  "baselineProductFingerprint": {
+    "digest": "995a402cc6ce552ed6346607c02295de50ce51b4b44fb31656f40ecc6922bac8",
+    "fileCount": 634
+  },
+  "scope": "FR-MEM-HIDE-01 circle-map action only",
+  "command": "cd app && npx jest src/features/memory/__tests__/cairnPinsLayerActions.test.tsx --runInBand --silent",
+  "red": {
+    "exitCode": 1,
+    "suitesPassed": 0,
+    "suitesFailed": 1,
+    "testsPassed": 0,
+    "testsFailed": 1,
+    "failure": "The real CairnPinsLayer to MarkDetailSheet action closed the sheet but invoked hideMark zero times; exactly one invocation was required.",
+    "implementationState": "CairnPinsLayer implementation unchanged from the baseline product fingerprint; only the focused regression owner was present.",
+    "log": "red.log",
+    "logSha256": "3e7479d05118b63b049845ff7e04921011e2c4f0fd771645b9c92841a97a05d7"
+  },
+  "green": {
+    "exitCode": 0,
+    "suitesPassed": 1,
+    "suitesFailed": 0,
+    "testsPassed": 2,
+    "testsFailed": 0,
+    "timeSeconds": 4.509,
+    "log": "green.log",
+    "logSha256": "ece436560c82d7b3b7849124c19ee8290e9eb86ead4df883f8a3b801b8eca991"
+  },
+  "openHandleDiagnosis": {
+    "cause": "CairnPinsLayer render telemetry scheduled the appLog debounced flush timer; it was unrelated to the deferred hide promise.",
+    "correction": "The focused component test mocks appLog. The final green command exits without the open-handle warning.",
+    "diagnosticLog": "open-handles-diagnostic.log",
+    "diagnosticLogSha256": "d996dc3de32a67702f306a71b56d388c17ab6e07b3b726a7b3885eabcd74bdcd"
+  },
+  "changedFiles": [
+    {
+      "path": "app/src/features/memory/__tests__/cairnPinsLayerActions.test.tsx",
+      "change": "new real CairnPinsLayer to MarkDetailSheet focused regression for immediate exactly-once Hide and unexpected rejection feedback"
+    },
+    {
+      "path": "app/src/features/memory/components/CairnPinsLayer.tsx",
+      "change": "non-owner hide invokes the existing hideMark primitive once, closes after invocation, and discloses an unexpected rejection"
+    }
+  ],
+  "semanticBoundary": "This action hides from the circle map only. It does not remove dedicated Friend Content access and adds no offline outbox claim.",
+  "finalProductFingerprint": {
+    "digest": "5f2be7d535a763ce33736b32cdf241cee129daa8957ecab2128346747ae90423",
+    "fileCount": 635
+  },
+  "boundaries": {
+    "broadVerifyRerun": false,
+    "mysqlRun": false,
+    "expoRun": false,
+    "friendContentEdited": false,
+    "offlineOutboxAdded": false,
+    "settingsEdited": false,
+    "homepageEdited": false,
+    "publicEdited": false
+  }
+}

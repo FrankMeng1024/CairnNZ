@@ -136,6 +136,7 @@ const memoryPointObjInline = Joi.object({
   cid: Joi.string().min(1).max(128).allow(null),
   evidence_source: Joi.string().valid('activity_real', 'passive_real', 'historical_unknown'),
   source_activity_client_id: clientUuid.allow(null),
+  source_segment_id: Joi.string().min(1).max(80).allow(null),
   horizontal_accuracy_m: Joi.number().min(0).max(1000).allow(null),
   continuity_state: Joi.string().valid('accepted', 'gap', 'unknown'),
 });
@@ -152,6 +153,10 @@ const sessionSave = Joi.object({
   duration_s: positiveInt.default(0),
   route_points: Joi.array().items(pointObj).min(2),
   route_points_raw: Joi.array().items(pointObj).allow(null),
+  // Accepted canonical movement is an immutable authorization input. It is
+  // deliberately distinct from route_points, which may contain a cleaned
+  // display path.
+  route_points_canonical: Joi.array().items(pointObj).min(2).required(),
   flags: Joi.object().allow(null),
   route_id: Joi.number().integer().min(1).allow(null),
   name: Joi.string().max(100).allow(null, ''),
@@ -347,6 +352,7 @@ const memoryPointObj = Joi.object({
   cid: Joi.string().min(1).max(128).allow(null),
   evidence_source: Joi.string().valid('activity_real', 'passive_real', 'historical_unknown'),
   source_activity_client_id: clientUuid.allow(null),
+  source_segment_id: Joi.string().min(1).max(80).allow(null),
   horizontal_accuracy_m: Joi.number().min(0).max(1000).allow(null),
   continuity_state: Joi.string().valid('accepted', 'gap', 'unknown'),
 });
@@ -366,6 +372,7 @@ const memoryPoints = Joi.object({
     observed_at_ms: Joi.number().integer().min(1).required(),
     evidence_source: Joi.string().valid('activity_real', 'passive_real').required(),
     source_activity_client_id: clientUuid.allow(null),
+    source_segment_id: Joi.string().min(1).max(80).allow(null),
     horizontal_accuracy_m: Joi.number().min(0).max(1000).required(),
     continuity_state: Joi.string().valid('accepted').required(),
   })).max(1000),

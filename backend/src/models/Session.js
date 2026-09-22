@@ -3,6 +3,7 @@
  */
 const pool = require('../config/db');
 const crypto = require('crypto');
+const { sourceProvenanceForRealm } = require('../services/activitySourceProvenance');
 
 const LEGACY_ZERO_SHELL_STALE_HOURS = 6;
 
@@ -153,7 +154,7 @@ const Session = {
     try {
       await conn.beginTransaction();
       const [owners] = await conn.execute(
-        'SELECT id FROM users WHERE id = ? FOR UPDATE',
+        'SELECT id,activity_source_realm FROM users WHERE id = ? FOR UPDATE',
         [userId],
       );
       if (!owners[0]) {
@@ -161,6 +162,7 @@ const Session = {
         error.code = 'ACTIVITY_OWNER_NOT_FOUND';
         throw error;
       }
+      const sourceProvenance = sourceProvenanceForRealm(owners[0].activity_source_realm);
       if (clientActivityId) {
         const [tombstones] = await conn.execute(
           `SELECT client_activity_id FROM activity_client_tombstones
@@ -273,10 +275,11 @@ const Session = {
       }
       const [result] = await conn.execute(
         `INSERT INTO sessions
-           (user_id, client_activity_id, type, start_time, end_time, distance_m, duration_s, route_points, flags)
-         VALUES (?, ?, ?, ?, ?, 0, 0, JSON_ARRAY(), NULL)
+           (user_id, client_activity_id, source_provenance, type, start_time, end_time,
+            distance_m, duration_s, route_points, flags)
+         VALUES (?, ?, ?, ?, ?, ?, 0, 0, JSON_ARRAY(), NULL)
          ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)`,
-        [userId, clientActivityId ?? null, type, startTime, startTime]
+        [userId, clientActivityId ?? null, sourceProvenance, type, startTime, startTime]
       );
       const id = result.insertId;
       if (clientActivityId) {

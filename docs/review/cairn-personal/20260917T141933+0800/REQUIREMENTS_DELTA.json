@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T141933+0800",
+  "card": "CARD-CAIRN-01",
+  "register_mode": "SCOPED_DELTA",
+  "requirements": [
+    {
+      "id": "RQ-CAIRN-001",
+      "capability_ids": ["CAIRN-01"],
+      "candidate": "PRESERVED",
+      "automated_proof": "PASS",
+      "visual_proof": ["CAIRN-VIS-003"],
+      "deployment": "NOT_REQUIRED_FOR_PRESERVED_CLIENT_FLOW",
+      "device_loading": "UNVERIFIED",
+      "owner_acceptance": "PENDING"
+    },
+    {
+      "id": "RQ-CAIRN-002",
+      "capability_ids": ["CAIRN-02"],
+      "candidate": "PRESERVED_AND_EXTENDED",
+      "automated_proof": "PASS",
+      "visual_proof": ["CAIRN-VIS-004", "CAIRN-VIS-005", "CAIRN-VIS-014"],
+      "deployment": "CREATE_REPLAY_ENHANCEMENT_PENDING",
+      "device_loading": "UNVERIFIED",
+      "owner_acceptance": "PENDING"
+    },
+    {
+      "id": "RQ-CAIRN-003",
+      "capability_ids": ["CAIRN-02", "ACT-02", "MEM-02"],
+      "candidate": "IMPLEMENTED_CANDIDATE",
+      "automated_proof": "PASS",
+      "visual_proof": ["CAIRN-VIS-004", "CAIRN-VIS-005", "CAIRN-VIS-008", "CAIRN-VIS-013"],
+      "deployment": "PARTIAL_DEPENDENCY",
+      "device_loading": "UNVERIFIED",
+      "owner_acceptance": "PENDING"
+    },
+    {
+      "id": "RQ-CAIRN-004",
+      "capability_ids": ["CAIRN-03"],
+      "candidate": "IMPLEMENTED_CANDIDATE",
+      "automated_proof": "PASS",
+      "visual_proof": ["CAIRN-VIS-005", "CAIRN-VIS-006", "CAIRN-VIS-011", "CAIRN-VIS-012", "CAIRN-VIS-013", "CAIRN-VIS-014", "CAIRN-VIS-015", "CAIRN-VIS-016", "CAIRN-VIS-019", "CAIRN-VIS-020"],
+      "deployment": "PARTIAL_DEPENDENCY",
+      "device_loading": "UNVERIFIED",
+      "owner_acceptance": "PENDING"
+    },
+    {
+      "id": "RQ-CAIRN-005",
+      "capability_ids": ["CAIRN-03", "OFFLINE-02"],
+      "candidate": "IMPLEMENTED_CANDIDATE",
+      "automated_proof": "PASS",
+      "visual_proof": ["CAIRN-VIS-006", "CAIRN-VIS-008", "CAIRN-VIS-014", "CAIRN-VIS-015", "CAIRN-VIS-016"],
+      "deployment": "CREATE_REPLAY_ENHANCEMENT_PENDING",
+      "device_loading": "UNVERIFIED",
+      "owner_acceptance": "PENDING"
+    },
+    {
+      "id": "RQ-CAIRN-006",
+      "capability_ids": ["CAIRN-04", "MEM-02"],
+      "candidate": "TASK_AUTHORIZED_IMPLEMENTED_CANDIDATE",
+      "automated_proof": "PASS",
+      "visual_proof": ["CAIRN-VIS-007", "CAIRN-VIS-008", "CAIRN-VIS-009", "CAIRN-VIS-010", "CAIRN-VIS-013", "CAIRN-VIS-017", "CAIRN-VIS-018"],
+      "deployment": "OWNER_HISTORY_ENDPOINT_NOT_DEPLOYED",
+      "device_loading": "UNVERIFIED",
+      "owner_acceptance": "PENDING"
+    },
+    {
+      "id": "RQ-CAIRN-007",
+      "capability_ids": ["CAIRN-05"],
+      "candidate": "NOT_IMPLEMENTED_OUT_OF_SCOPE",
+      "automated_proof": "NOT_CLAIMED",
+      "visual_proof": [],
+      "deployment": "NO",
+      "device_loading": "UNVERIFIED",
+      "owner_acceptance": "PENDING"
+    },
+    {
+      "id": "RQ-CAIRN-008",
+      "capability_ids": ["CAIRN-06"],
+      "candidate": "NOT_IMPLEMENTED_OUT_OF_SCOPE",
+      "automated_proof": "NOT_CLAIMED",
+      "visual_proof": [],
+      "deployment": "NO",
+      "device_loading": "UNVERIFIED",
+      "owner_acceptance": "PENDING"
+    }
+  ],
+  "evidence_boundary": {
+    "renderer": "EXPO_WEB_WITH_MAP_UNAVAILABLE_FALLBACK",
+    "actual_web_mapbox": false,
+    "native_mapbox": false,
+    "physical_device": false,
+    "device_loading": false,
+    "owner_acceptance": "PENDING"
+  }
+}

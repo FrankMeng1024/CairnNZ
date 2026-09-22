@@ -1,0 +1,42 @@
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+PASS src/components/__tests__/semanticFoundation.test.ts
+PASS src/components/__tests__/transientContracts.test.tsx (5.326 s)
+PASS src/store/__tests__/useMarkerStore.fastAck.test.ts
+PASS src/features/cairns/__tests__/cairnPersonalContracts.test.ts
+PASS src/services/__tests__/pendingSyncStore.test.ts
+PASS src/services/__tests__/offlineCommittedEntity.test.ts
+PASS src/features/trails/__tests__/trailsLibrary.test.ts
+PASS __tests__/v409-offlineQueue.test.ts
+PASS src/services/__tests__/syncDaemonOwnershipCleanup.test.ts
+PASS src/features/memory/__tests__/memoryAuthorityInitialization.test.ts
+PASS src/features/trails/__tests__/trailsScreenContracts.test.ts
+PASS src/features/activity/__tests__/activityDetailPresentation.test.ts
+PASS src/features/activity/__tests__/completedActivityIntent.test.ts
+PASS src/services/__tests__/accountLocalDataContract.test.ts
+PASS src/services/__tests__/markerTombstones.test.ts
+PASS src/features/activity/__tests__/activityRouteState.test.ts
+PASS src/features/plant/services/__tests__/noteEncoding.test.ts
+PASS __tests__/plantTitleBody.test.ts
+PASS src/features/cairns/__tests__/cairnIdentity.test.ts
+
+Test Suites: 19 passed, 19 total
+Tests:       106 passed, 106 total
+Snapshots:   0 total
+Time:        10.392 s, estimated 15 s
+Ran all test suites matching /src\/features\/activity\/__tests__\/activityDetailPresentation.test.ts|src\/features\/activity\/__tests__\/completedActivityIntent.test.ts|src\/features\/activity\/__tests__\/activityRouteState.test.ts|src\/features\/trails\/__tests__\/trailsLibrary.test.ts|src\/features\/trails\/__tests__\/trailsScreenContracts.test.ts|src\/services\/__tests__\/markerTombstones.test.ts|src\/services\/__tests__\/pendingSyncStore.test.ts|src\/services\/__tests__\/accountLocalDataContract.test.ts|src\/services\/__tests__\/syncDaemonOwnershipCleanup.test.ts|src\/features\/memory\/__tests__\/memoryAuthorityInitialization.test.ts|src\/components\/__tests__\/semanticFoundation.test.ts|src\/components\/__tests__\/transientContracts.test.ts|src\/features\/cairns\/__tests__\/cairnIdentity.test.ts|src\/features\/cairns\/__tests__\/cairnPersonalContracts.test.ts|src\/store\/__tests__\/useMarkerStore.fastAck.test.ts|src\/services\/__tests__\/offlineCommittedEntity.test.ts|src\/features\/plant\/services\/__tests__\/noteEncoding.test.ts|__tests__\/plantTitleBody.test.ts|__tests__\/v409-offlineQueue.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

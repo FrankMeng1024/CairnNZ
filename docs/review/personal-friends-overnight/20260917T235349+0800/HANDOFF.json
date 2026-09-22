@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "run_id": "20260917T235349+0800",
+  "state": "DELIVERED_READY_NATIVE_PENDING",
+  "repository": "/Users/mzm/Desktop/cairn/CairnNZ",
+  "package": "/Users/mzm/Desktop/Cairn_Overnight_Personal_Friends",
+  "source": {
+    "start_head": "ac981e1c97199984082bc3dcc885fc2d946038a7",
+    "backend_head": "9b92be3efef3a355d71491ec250cb6df62878a23",
+    "origin_master": "9b92be3efef3a355d71491ec250cb6df62878a23",
+    "client_state": "working-tree candidate preserved without sweeping unrelated dirty work",
+    "ota_marker": "O60",
+    "app_runtime_version": "0.2.6"
+  },
+  "verdicts": {
+    "personal_software": "READY",
+    "friends_software": "READY",
+    "local_scoped_verification": "PASS",
+    "real_mysql_api": "PASS",
+    "production_backend": "DEPLOYED_HEALTHY",
+    "owner_review_backend": "READY_HEALTHY",
+    "expo_web_visual": "PASS_WITH_NATIVE_EXCLUSIONS",
+    "native_device": "NOT_RUN",
+    "physical_encounter": "NOT_RUN",
+    "nz_field": "NOT_RUN",
+    "owner_acceptance": "NOT_RUN",
+    "whole_app_acceptance": "NOT_CLAIMED",
+    "ota_publication": "NOT_PERFORMED"
+  },
+  "deployed": {
+    "production_commit": "9b92be3efef3a355d71491ec250cb6df62878a23",
+    "production_image": "sha256:5a6620ff54cc5b1b5b3de0b49dab89f172fcd7590208f333b66a87384aed8f73",
+    "review_commit": "9b92be3efef3a355d71491ec250cb6df62878a23",
+    "review_image": "sha256:23d0229f41136f7e3b89c863f7f712094efffc9d9db9c2b0f3f5a4f779b3c54d",
+    "schema_ledger": "037",
+    "review_schema": "cairn_pf_review_2f8cd36",
+    "review_api": "https://api.yiiling.cn/pf-review-o60",
+    "credentials": "private mode-600 handoff outside archive"
+  },
+  "tests": {
+    "client_focused": "148/148",
+    "activity_changed": "484/484",
+    "backend_focused": "42/42",
+    "mysql_api_grouped": "14/14",
+    "visual_captures": 61,
+    "acceptance": "34 PASS / 4 NOT_RUN / 0 FAIL / 0 BLOCKED"
+  },
+  "resume_at": "OWNER_MANUAL_OTA_APPROVAL",
+  "next_action": "Owner reviews evidence, verifies installed 0.2.6 runtime and EAS review environment, then may manually publish O60 and perform OWNER_REVIEW.md.",
+  "ota_published": false
+}

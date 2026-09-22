@@ -1,0 +1,49 @@
+{
+  "privacyBoundary": "Activities remain separate; no coordinates or account email are exported.",
+  "rows": [
+    {
+      "source": "historical-back-control",
+      "pipeline": "historical saved presentation",
+      "result": "visual baseline (not a Mapbox match)",
+      "coverage": null,
+      "fallbackCoverage": null,
+      "outputLengthM": 877.356,
+      "wrongRoadRisk": "not provable from retained metadata",
+      "mixedRouteHandling": "no subsection authority"
+    },
+    {
+      "source": "historical-back-control",
+      "pipeline": "O48 matcher",
+      "result": "0 accepted; canonical fallback",
+      "coverage": 0,
+      "fallbackCoverage": 1,
+      "tracepointSuccess": "33/87 first chunk plus NoSegment tail",
+      "topology": "preserved by fallback",
+      "wrongRoadRisk": "low",
+      "mixedRouteHandling": "fails to salvage tidy islands"
+    },
+    {
+      "source": "snap",
+      "pipeline": "O48 matcher",
+      "result": "0 accepted; canonical fallback",
+      "coverage": 0,
+      "fallbackCoverage": 1,
+      "tracepointSuccess": "12/80, 3/80, NoSegment, NoSegment, 5/76",
+      "topology": "preserved by fallback",
+      "wrongRoadRisk": "low",
+      "mixedRouteHandling": "whole Segment poisoned"
+    },
+    {
+      "source": "snap",
+      "pipeline": "v6.4 historical-style matcher",
+      "result": "2 chunks accepted without modern gates",
+      "coverage": 0.3333,
+      "fallbackCoverage": 0.6667,
+      "tracepointSuccess": "legacy ignores null-tracepoint provenance",
+      "topology": "ordered input, but global dedupe/smoothing and seam bridges weaken truth",
+      "wrongRoadRisk": "material",
+      "mixedRouteHandling": "chunk fallback only; no trusted subsection provenance"
+    }
+  ],
+  "conclusion": "Dataset and pipeline both matter: back is easier in its mapped head, but O48 tidy handling and whole-chunk rejection lose useful islands. The v6.4 style looks more attached by accepting whole Mapbox geometry and smoothing globally, at unacceptable mixed-route risk."
+}

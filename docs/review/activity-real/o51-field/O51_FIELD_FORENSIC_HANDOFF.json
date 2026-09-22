@@ -1,0 +1,314 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-12",
+  "coordinate_policy": "Privacy-safe local metres. Each Activity raw point 1 is (0,0); x is east-positive and y is north-positive. Exact coordinates are intentionally omitted.",
+  "evidence_priority": [
+    "production Activity raw evidence",
+    "persisted Final geometry and session metadata",
+    "uploaded O51 QA telemetry",
+    "O51 runtime source",
+    "post-hoc Mapbox walking-network comparison"
+  ],
+  "activities": [
+    {
+      "name": "great hike",
+      "server_id": 2074,
+      "client_activity_id": "52a9fc6e-e587-4177-8dbb-cfddd4cb61ce",
+      "mode": "hiking",
+      "app_version": "0.2.6",
+      "build_number": "56",
+      "ota_marker": "O51",
+      "os": "iOS 26.6.1",
+      "start_utc": "2026-09-12T07:51:24Z",
+      "end_utc": "2026-09-12T07:54:48Z",
+      "finalized_utc": "2026-09-12T07:54:54Z",
+      "wall_elapsed_s": 204,
+      "active_duration_s": 195,
+      "saved_distance_m": 177.025,
+      "raw_callback_count": 99,
+      "canonical_count": 88,
+      "final_point_count": 18,
+      "canonical_route_length_m": 177.025,
+      "final_route_length_m": 172.516,
+      "segments": 1,
+      "gaps": 0,
+      "pause_resume": { "pause_count": 1, "resume_count": 0, "note": "Pause was the Finish-intent fence." },
+      "foreground_duration_s": 147.67,
+      "background_duration_s": 47.26,
+      "quick_cairn_count": 0,
+      "final_reconstruction": "pedestrian-final-v1 hybrid: 40.414 m Directions-derived road-offset display plus 136.611 m canonical fallback; two Map Matching requests timed out; two walking Directions requests succeeded"
+    },
+    {
+      "name": "run issue",
+      "server_id": 2075,
+      "client_activity_id": "1585cb3e-6d4f-4159-bbdf-0bca3a4e7f16",
+      "mode": "running",
+      "app_version": "0.2.6",
+      "build_number": "56",
+      "ota_marker": "O51",
+      "os": "iOS 26.6.1",
+      "start_utc": "2026-09-12T07:55:14Z",
+      "end_utc": "2026-09-12T08:02:02Z",
+      "finalized_utc": "2026-09-12T08:02:07Z",
+      "wall_elapsed_s": 408,
+      "active_duration_s": 400,
+      "saved_distance_m": 691.839,
+      "raw_callback_count": 119,
+      "canonical_count": null,
+      "canonical_count_evidence": "not recorded: QA telemetry after the first five seconds did not upload and the server stores raw plus Final, not the full canonical array",
+      "final_point_count": 53,
+      "canonical_route_length_m": 691.839,
+      "final_route_length_m": 681.065,
+      "segments": 2,
+      "gaps": 1,
+      "gap": { "from_utc": "2026-09-12T07:56:10.000Z", "to_utc": "2026-09-12T07:58:11.000Z", "duration_s": 121, "endpoint_distance_m": 11.937, "next_reason": "gps-reacquired" },
+      "pause_resume": { "pause_count": null, "resume_count": null, "note": "not recorded; current O51 Finish flow creates a Finish-intent pause, but no session telemetry survived to count it" },
+      "foreground_duration_s": null,
+      "background_duration_s": null,
+      "lifecycle_evidence": "foreground for first 4.49 s, then backgrounded; exact later foreground return was not uploaded",
+      "quick_cairn_count": 1,
+      "quick_cairn_count_evidence": "one is user-observed and later visible locally; zero matching server marker rows were present at audit time",
+      "final_reconstruction": "stored Final has two segments and length ratio 0.984; O50 request/subsection telemetry was not uploaded"
+    },
+    {
+      "name": "mstand",
+      "server_id": 2076,
+      "client_activity_id": "d041fe82-0542-4cf9-81bc-22797fe06083",
+      "mode": "running",
+      "app_version": "0.2.6",
+      "build_number": "56",
+      "ota_marker": "O51",
+      "os": "iOS 26.6.1",
+      "start_utc": "2026-09-12T08:02:57Z",
+      "end_utc": "2026-09-12T08:04:52Z",
+      "finalized_utc": "2026-09-12T08:05:00Z",
+      "wall_elapsed_s": 115,
+      "active_duration_s": 110,
+      "saved_distance_m": 251.613,
+      "raw_callback_count": 40,
+      "canonical_count": 38,
+      "final_point_count": 22,
+      "canonical_route_length_m": 251.613,
+      "final_route_length_m": 249.241,
+      "segments": 1,
+      "gaps": 0,
+      "pause_resume": { "pause_count": 1, "resume_count": 0, "note": "Pause was the Finish-intent fence." },
+      "foreground_duration_s": 4.39,
+      "background_duration_s": 106.25,
+      "quick_cairn_count": 0,
+      "final_reconstruction": "pedestrian-final-v1 canonical-derived fallback only; one Map Matching and two Directions requests timed out; no accepted network/road-offset section"
+    }
+  ],
+  "issues": [
+    { "id": "GH-1", "activity": "great hike", "observation": "abrupt stop / line catch-up", "layer": "canonical-to-Live presentation", "classification": "EXPECTED BUT UX-CONFUSING", "severity": "P2", "confidence": "HIGH", "reason": "Callbacks continued; Stationary V2 held raw 85-90, rejected one 31 m-accuracy outlier, then promoted raw 90 when raw 91 confirmed movement. The puck stayed live while the route head intentionally waited." },
+    { "id": "GH-2", "activity": "great hike", "observation": "left two steps appears right", "layer": "raw sensor evidence", "classification": "DATA QUALITY LIMITATION", "severity": "P2", "confidence": "HIGH", "reason": "The raw fixes themselves moved 1.7-2.8 m to the right while hAcc was about 14.25 m; Cairn did not transform left evidence into right evidence." },
+    { "id": "GH-3", "activity": "great hike", "observation": "Final bends inward", "layer": "O50 pedestrian Final compositor", "classification": "PRODUCT DESIGN ISSUE", "severity": "P2", "confidence": "MEDIUM-HIGH", "reason": "The compared network skeleton is nearly straight; a stable approximately -11.43 m road offset is blended from the exact -13.67 m canonical subsection endpoint and into the exact -11.93 m end, producing a bounded approximately 2.24 m inward transition." },
+    { "id": "RI-1", "activity": "run issue", "observation": "red-light disconnect", "layer": "background segment classifier schema boundary", "classification": "CONFIRMED BUG", "severity": "P1", "confidence": "HIGH", "reason": "A real 121 s/11.94 m stationary interval became gps-reacquired because a stored prior point exposes acc while shouldStartNewSegment reads accuracy and substitutes 25 m; the same interval with its recorded 14.25 m accuracy remains continuous." },
+    { "id": "RI-2", "activity": "run issue", "observation": "roadside drift", "layer": "raw sensor / Final", "classification": "DATA QUALITY LIMITATION", "severity": "P2", "confidence": "MEDIUM-HIGH", "reason": "hAcc was approximately 14.25 m for 95% of fixes, larger than lane-side separation. Final stayed near the raw corridor and shortened length only 1.6%; saved O50 network-section telemetry is missing." },
+    { "id": "RI-3", "activity": "run issue", "observation": "weak Quick Cairn feedback", "layer": "Quick Cairn UX", "classification": "UX ISSUE", "severity": "P1", "confidence": "HIGH", "reason": "The offline-first local commit completes before a 1.5 s toast, but Run renders no marker and exposes no durable in-session confirmation or recovery path." },
+    { "id": "RI-4", "activity": "run issue", "observation": "9:38/km", "layer": "metric definition/label", "classification": "PRODUCT DESIGN ISSUE", "severity": "P1", "confidence": "HIGH", "reason": "400 s / 0.691839 km = 578.17 s/km = 9:38/km, so the math is correct; the UI calls a cumulative active-session average LIVE PACE and includes unpaused red-light time." },
+    { "id": "RI-5", "activity": "run issue", "observation": "foreground map not recentered", "layer": "camera intent / lifecycle", "classification": "INSUFFICIENT EVIDENCE", "severity": "P1", "confidence": "HIGH that root cause is unresolved", "reason": "Foreground/camera events were not uploaded. Source preserves a manual-pan follow=false state across AppState return and has no foreground reassertion; it should follow automatically only if follow remained true." },
+    { "id": "RI-6", "activity": "run issue", "observation": "Finish feels frozen", "layer": "Finish feedback", "classification": "UX ISSUE", "severity": "P1", "confidence": "HIGH", "reason": "No evidence shows a blocked UI thread. Nearby sessions spent 6.23-7.89 s almost entirely awaiting O50/network; Run dismisses its sheet and shows only generic dock copy while Hike retains a spinner and phase text." },
+    { "id": "RI-7", "activity": "Hike vs Run", "observation": "lifecycle inconsistency", "layer": "Activity UX composition", "classification": "UX ISSUE", "severity": "P1", "confidence": "HIGH", "reason": "Both modes share the tracking/recovery/completion engine, but Run has a separate Finish sheet/progress presentation and a different focus-reset behavior." },
+    { "id": "RI-8", "activity": "run issue", "observation": "Untitled Cairn / no enrichment", "layer": "Quick Cairn product loop", "classification": "PRODUCT DESIGN ISSUE", "severity": "P1", "confidence": "HIGH", "reason": "Quick Cairn intentionally stores empty content as a valid private cairn, then generic display fallbacks leak Untitled cairn/(untitled); Finish knows marker IDs but offers no enrichment or explicit rediscovery handoff." },
+    { "id": "MS-1", "activity": "mstand", "observation": "roadside tracking", "layer": "raw sensor / canonical fallback", "classification": "DATA QUALITY LIMITATION", "severity": "P2", "confidence": "HIGH", "reason": "The same approximately 14.25 m hAcc cannot prove lane side; O50 accepted no network geometry and stayed within 2.33 m of canonical." },
+    { "id": "MS-2", "activity": "mstand", "observation": "crossing/avoidance", "layer": "canonical / Final", "classification": "EXPECTED / ACCEPTABLE", "severity": "NOT A DEFECT", "confidence": "HIGH", "reason": "The route remained one continuous segment with no Gap; canonical-derived Final preserved the observed turn/crossing shape to sensor resolution." }
+  ],
+  "event_windows": {
+    "great_hike": {
+      "GH-A": {
+        "label": "initial stand, crossing, 90-degree left turn",
+        "rows": [
+          { "raw": 1, "t": "07:51:26.866", "x_m": 0.0, "y_m": 0.0, "hacc_m": 14.25, "speed_mps": 0.09, "decision": "not retained; first canonical origin is evidenced by Final" },
+          { "raw": 2, "t": "07:51:32.866", "dt_s": 6, "x_m": 1.3, "y_m": -0.7, "hacc_m": 14.25, "speed_mps": 0.05, "decision": "QUARANTINE possible-stationary-jitter; timed out" },
+          { "raw": 4, "t": "07:51:43.866", "x_m": 0.5, "y_m": 2.1, "hacc_m": 14.25, "speed_mps": 0.64, "decision": "not retained" },
+          { "raw": 5, "t": "07:51:49.866", "x_m": -0.7, "y_m": 3.9, "hacc_m": 14.25, "speed_mps": 1.14, "decision": "not retained" },
+          { "raw": 9, "t": "07:51:53.866", "x_m": -4.2, "y_m": 9.1, "hacc_m": 14.25, "speed_mps": 1.51, "decision": "not retained" },
+          { "raw": 13, "t": "07:51:59.866", "x_m": -9.6, "y_m": 12.7, "hacc_m": 14.25, "speed_mps": 1.09, "decision": "not retained" }
+        ],
+        "stationary_cloud": { "raw_range": "1-4", "duration_s": 17, "max_radius_m": 1.55, "canonical_distance_added_m": null, "note": "Exact early canonical decisions were evicted from retained QA; Final remains at the origin until movement." }
+      },
+      "GH-B": {
+        "label": "15-step walk and second stationary period",
+        "rows": [
+          { "raw": 14, "t": "07:52:02.866", "x_m": -10.7, "y_m": 12.4, "hacc_m": 14.25, "speed_mps": 0.26, "decision": "QUARANTINE possible-stationary-jitter" },
+          { "raw": 15, "t": "07:52:06.866", "x_m": -11.5, "y_m": 11.7, "hacc_m": 14.25, "speed_mps": 0.07, "decision": "QUARANTINE candidate-awaiting-second-fix" },
+          { "raw": 16, "t": "07:52:12.865", "x_m": -12.7, "y_m": 10.9, "hacc_m": 14.25, "speed_mps": 0.49, "decision": "QUARANTINE possible-stationary-jitter; later promoted" },
+          { "raw": 17, "t": "07:52:14.865", "x_m": -13.7, "y_m": 10.1, "hacc_m": 14.25, "speed_mps": 0.42, "decision": "QUARANTINE candidate-awaiting-second-fix" },
+          { "raw": 18, "t": "07:52:16.865", "x_m": -14.0, "y_m": 8.8, "hacc_m": 14.25, "speed_mps": 0.65, "decision": "ACCEPT candidate-new-direction-confirmed; raw 16 promoted" },
+          { "raw": 19, "t": "07:52:17.865", "x_m": -14.9, "y_m": 7.8, "hacc_m": 14.25, "speed_mps": 0.98, "decision": "ACCEPT coherent-motion" }
+        ],
+        "stationary_cloud": { "raw_range": "14-18", "max_radius_m": 2.49, "path_length_m": 5.12, "false_canonical_excursion_m": "not directly recorded; candidate hold prevented immediate distance credit" }
+      },
+      "GH-C": {
+        "label": "resume, abrupt stop, two-step-left attempt, route catch-up",
+        "rows": [
+          { "raw": 82, "t": "07:53:38.000", "x_m": -89.1, "y_m": -51.3, "hacc_m": 14.25, "speed_mps": 0.55, "decision": "ACCEPT coherent-motion" },
+          { "raw": 83, "t": "07:53:39.000", "dt_s": 1, "x_m": -90.8, "y_m": -50.3, "hacc_m": 14.25, "speed_mps": 0.90, "decision": "ACCEPT coherent-motion", "signed_cross_track_m": -1.74 },
+          { "raw": 84, "t": "07:53:40.000", "dt_s": 1, "x_m": -91.8, "y_m": -49.6, "hacc_m": 14.25, "speed_mps": 0.85, "decision": "ACCEPT coherent-motion", "signed_cross_track_m": -2.80 },
+          { "raw": 85, "t": "07:53:43.000", "dt_s": 3, "x_m": -91.4, "y_m": -50.5, "hacc_m": 14.25, "speed_mps": 0.06, "decision": "QUARANTINE possible-stationary-jitter" },
+          { "raw": 86, "t": "07:53:48.000", "dt_s": 5, "x_m": -91.1, "y_m": -51.7, "hacc_m": 14.25, "speed_mps": 0.00, "decision": "QUARANTINE candidate-awaiting-second-fix", "puck_to_canonical_m": 2.18 },
+          { "raw": 87, "t": "07:53:49.000", "dt_s": 1, "x_m": -91.0, "y_m": -52.0, "hacc_m": 14.25, "speed_mps": 0.05, "decision": "QUARANTINE possible-stationary-jitter", "app_state": "background transition" },
+          { "raw": 88, "t": "07:53:52.844", "dt_s": 3.84, "x_m": -104.5, "y_m": -76.5, "hacc_m": 31.0, "speed_mps": null, "derived_speed_mps": 7.28, "decision": "REJECT poor-horizontal-accuracy" },
+          { "raw": 89, "t": "07:53:53.613", "dt_s": 0.77, "x_m": -99.8, "y_m": -48.3, "hacc_m": 18.28, "speed_mps": 1.26, "derived_speed_mps": 37.20, "decision": "QUARANTINE candidate-awaiting-second-fix" },
+          { "raw": 90, "t": "07:53:58.613", "dt_s": 5, "x_m": -101.8, "y_m": -54.4, "hacc_m": 14.0, "speed_mps": 1.45, "decision": "QUARANTINE possible-stationary-jitter; promoted by raw 91" },
+          { "raw": 91, "t": "07:53:59.613", "dt_s": 1, "x_m": -103.0, "y_m": -56.7, "hacc_m": 6.06, "speed_mps": 1.45, "decision": "ACCEPT candidate-new-direction-confirmed" },
+          { "raw": 92, "t": "07:54:02.613", "dt_s": 3, "x_m": -106.2, "y_m": -62.2, "hacc_m": 3.86, "speed_mps": 1.98, "decision": "ACCEPT coherent-motion" }
+        ],
+        "head_hold": { "last_pre_hold_canonical_utc": "07:53:40.000", "promoted_resume_utc": "07:53:58.613", "duration_s": 18.613, "maximum_measured_puck_to_canonical_m_before_background": 2.18, "visual_animation_ms": "approximately 720-864 per accepted head; exact GPU frame not recorded" }
+      },
+      "GH-D": {
+        "label": "Final inward-bend corridor",
+        "canonical_or_final_rows": [
+          { "t": "07:53:58.613", "x_m": -101.8, "y_m": -54.4, "signed_offset_to_network_m": -13.67, "role": "exact canonical subsection endpoint" },
+          { "t": "07:54:09.611", "x_m": -110.9, "y_m": -64.8, "signed_offset_to_network_m": -11.43, "role": "road-offset Final" },
+          { "t": "07:54:20.361", "x_m": -121.3, "y_m": -73.2, "signed_offset_to_network_m": -11.43, "role": "road-offset Final" },
+          { "t": "07:54:30.000", "x_m": -131.2, "y_m": -80.0, "signed_offset_to_network_m": -11.93, "role": "exact canonical Activity endpoint" }
+        ],
+        "post_hoc_network_skeleton_local_m": [[-93.2, -65.0], [-114.3, -82.3], [-124.2, -89.6]],
+        "note": "Negative is the raw/Final side of the stable travel vector. The skeleton is approximately straight; curvature originates in offset-to-endpoint blending, not projection."
+      }
+    },
+    "run_issue": {
+      "RI-A": { "label": "approach to red light", "rows": [
+        { "raw": 14, "t": "07:56:04.000", "x_m": -41.1, "y_m": -21.7, "hacc_m": 14.25, "speed_mps": 3.18 },
+        { "raw": 15, "t": "07:56:06.000", "x_m": -44.8, "y_m": -26.7, "hacc_m": 14.25, "speed_mps": 2.86 },
+        { "raw": 16, "t": "07:56:08.000", "x_m": -51.0, "y_m": -30.7, "hacc_m": 14.25, "speed_mps": 3.40 },
+        { "raw": 17, "t": "07:56:10.000", "x_m": -55.4, "y_m": -33.7, "hacc_m": 14.25, "speed_mps": 2.72, "final_role": "last point of segment 1" }
+      ], "canonical_decisions": "not uploaded" },
+      "RI-B": { "label": "entire red-light stationary period", "rows": [
+        { "raw": 17, "t": "07:56:10.000", "x_m": -55.4, "y_m": -33.7, "hacc_m": 14.25, "speed_mps": 2.72, "final_segment": 1 },
+        { "raw": 18, "t": "07:56:38.000", "dt_s": 28, "x_m": -61.8, "y_m": -28.2, "hacc_m": 14.25, "speed_mps": 0.01 },
+        { "raw": 19, "t": "07:57:37.000", "dt_s": 59, "x_m": -60.8, "y_m": -33.1, "hacc_m": 14.25, "speed_mps": 0.81 },
+        { "raw": 20, "t": "07:58:11.000", "dt_s": 34, "x_m": -67.2, "y_m": -31.9, "hacc_m": 14.25, "speed_mps": 1.74, "final_segment": 2, "final_reason": "gps-reacquired" }
+      ], "raw_cloud_radius_m": 6.23, "raw_callback_max_interval_s": 59, "canonical_decisions": "not uploaded", "gap": { "duration_s": 121, "distance_m": 11.937, "distance_credited_m": 0, "memory_bridge_allowed": false }, "counterfactual": { "stored_prior_field": "acc", "classifier_field": "accuracy", "classifier_prior_accuracy_fallback_m": 25, "recorded_prior_accuracy_m": 14.246, "start_new_segment_with_fallback": true, "start_new_segment_with_recorded_accuracy": false } },
+      "RI-C": { "label": "red-light exit, crossing, right-side continuation", "rows": [
+        { "raw": 20, "t": "07:58:11.000", "x_m": -67.2, "y_m": -31.9, "hacc_m": 14.25, "speed_mps": 1.74 },
+        { "raw": 22, "t": "07:58:15.000", "x_m": -78.0, "y_m": -35.7, "hacc_m": 14.25, "speed_mps": 2.75 },
+        { "raw": 25, "t": "07:58:21.000", "x_m": -94.7, "y_m": -44.3, "hacc_m": 14.25, "speed_mps": 3.17 },
+        { "raw": 28, "t": "07:58:27.000", "x_m": -111.5, "y_m": -56.0, "hacc_m": 14.25, "speed_mps": 4.13 }
+      ], "canonical_decisions": "not uploaded" },
+      "RI-D": { "label": "Quick Cairn stop/create/resume", "rows": [
+        { "raw": 47, "t": "07:59:05.999", "x_m": -215.9, "y_m": -130.6, "hacc_m": 14.25, "speed_mps": 1.15 },
+        { "raw": 48, "t": "07:59:06.999", "x_m": -215.4, "y_m": -129.6, "hacc_m": 14.25, "speed_mps": 0.18 },
+        { "raw": 49, "t": "07:59:12.999", "x_m": -217.0, "y_m": -128.9, "hacc_m": 14.25, "speed_mps": 0.06 },
+        { "raw": 50, "t": "07:59:17.999", "x_m": -217.5, "y_m": -131.4, "hacc_m": 14.25, "speed_mps": 0.00 },
+        { "raw": 51, "t": "07:59:28.000", "x_m": -217.3, "y_m": -132.0, "hacc_m": 14.25, "speed_mps": 0.01 },
+        { "raw": 52, "t": "07:59:37.000", "x_m": -221.5, "y_m": -136.6, "hacc_m": 14.25, "speed_mps": 1.94 }
+      ], "quick_cairn_exact_timestamp": null, "note": "This stationary window is data-derived context, not proof of the tap time." },
+      "RI-E": { "label": "right turn and parked-car avoidance", "rows": [
+        { "raw": 101, "t": "08:01:15.000", "x_m": -496.2, "y_m": -64.0, "hacc_m": 14.25, "speed_mps": 1.96 },
+        { "raw": 105, "t": "08:01:23.999", "x_m": -517.8, "y_m": -48.9, "hacc_m": 14.25, "speed_mps": 2.84 },
+        { "raw": 107, "t": "08:01:25.999", "x_m": -521.7, "y_m": -36.7, "hacc_m": 14.25, "speed_mps": 3.44 },
+        { "raw": 110, "t": "08:01:29.999", "x_m": -533.4, "y_m": -29.3, "hacc_m": 14.25, "speed_mps": 2.71 },
+        { "raw": 117, "t": "08:01:45.000", "x_m": -572.1, "y_m": 4.7, "hacc_m": 14.25, "speed_mps": 1.82 },
+        { "raw": 119, "t": "08:01:50.000", "x_m": -575.9, "y_m": 1.2, "hacc_m": 14.25, "speed_mps": 0.25 }
+      ], "canonical_decisions": "not uploaded", "physical_sub-event_alignment": "not recorded precisely" },
+      "RI-F": { "label": "background to foreground restore", "before_background": { "last_uploaded_app_event": "2026-09-12T07:55:19.760Z background", "camera_follow_initial": true, "manual_gesture_event": "not recorded" }, "background_duration_s": null, "foreground": { "first_app_active": null, "first_canonical_fix": null, "first_mapbox_fix": null, "camera_state": null, "first_visible_user_point": null }, "missing": "all return/camera telemetry for this session" },
+      "RI-G": { "label": "Finish/Save", "finish_tap_or_request": null, "db_end_utc": "2026-09-12T08:02:02Z", "db_finalized_utc": "2026-09-12T08:02:07Z", "phase_timings": null, "note": "Only second-resolution server timestamps survived; the approximately five-second interval cannot be partitioned into UI, O50, network, persistence, navigation or Detail render." }
+    },
+    "mstand": {
+      "MS-A": { "label": "opening roadside", "rows": [
+        { "raw": 1, "t": "08:02:57.999", "x_m": 0, "y_m": 0, "hacc_m": 14.25, "speed_mps": 0, "decision": "ACCEPT first-trusted-fix" },
+        { "raw": 2, "t": "08:03:02.999", "x_m": -5.1, "y_m": 2.0, "hacc_m": 14.25, "speed_mps": 0.42, "decision": "QUARANTINE then promoted" },
+        { "raw": 3, "t": "08:03:05.999", "x_m": -10.5, "y_m": 2.4, "hacc_m": 14.25, "speed_mps": 1.33, "decision": "ACCEPT candidate-new-direction-confirmed" },
+        { "raw": 10, "t": "08:03:22.999", "x_m": -49.7, "y_m": 31.5, "hacc_m": 14.25, "speed_mps": 3.29, "decision": "ACCEPT" },
+        { "raw": 14, "t": "08:03:31.999", "x_m": -74.5, "y_m": 38.4, "hacc_m": 14.25, "speed_mps": 2.78, "decision": "ACCEPT" }
+      ] },
+      "MS-B": { "label": "crossing", "rows": [
+        { "raw": 14, "t": "08:03:31.999", "x_m": -74.5, "y_m": 38.4, "hacc_m": 14.25 },
+        { "raw": 15, "t": "08:03:33.999", "x_m": -83.3, "y_m": 35.0, "hacc_m": 14.25 },
+        { "raw": 16, "t": "08:03:35.999", "x_m": -89.5, "y_m": 32.4, "hacc_m": 14.25 },
+        { "raw": 18, "t": "08:03:39.999", "x_m": -98.4, "y_m": 43.8, "hacc_m": 14.25 },
+        { "raw": 21, "t": "08:03:46.999", "x_m": -110.1, "y_m": 60.7, "hacc_m": 14.25 }
+      ], "result": "continuous canonical segment; no Gap" },
+      "MS-C": { "label": "temporary road-centre avoidance", "rows": [
+        { "raw": 23, "t": "08:03:50.999", "x_m": -123.1, "y_m": 65.4, "hacc_m": 14.25 },
+        { "raw": 25, "t": "08:03:53.999", "x_m": -131.1, "y_m": 72.9, "hacc_m": 14.25 },
+        { "raw": 28, "t": "08:03:59.999", "x_m": -151.3, "y_m": 86.8, "hacc_m": 14.25 },
+        { "raw": 32, "t": "08:04:08.999", "x_m": -177.9, "y_m": 99.4, "hacc_m": 14.25 }
+      ], "physical_sub-event_alignment": "approximate; no tap/event marker identifies the exact avoidance instant" },
+      "MS-D": { "label": "Final corridor", "result": "one canonical-derived subsection; canonical 251.613 m, Final 249.241 m, p50/p95/max displacement 0.388/2.299/2.325 m; no accepted network section, no seam, no Gap" }
+    }
+  },
+  "raw_health": {
+    "great hike": { "overall": { "count": 99, "span_s": 189.134, "callback_s": { "p50": 1.0, "p95": 5.999, "max": 9.0, "gt2": 21, "gt3": 15, "gt5": 6, "gt10": 0 }, "hacc_m": { "p50": 14.246, "p95": 14.246, "worst": 31.0, "le5_pct": 2.02, "5to10_pct": 1.01, "10to20_pct": 95.96, "gt20_pct": 1.01 }, "reported_speed_mps": { "p50": 0.976, "p95": 1.407, "max": 1.983 }, "derived_speed_mps": { "p50": 1.244, "p95": 1.990, "max": 37.197, "note": "max is the rejected raw 88 to raw 89 jump" } }, "foreground": { "known_raw_range": "1-86 plus 99", "pre_background_callback_s": { "p50": 1, "p95": 4.8, "max": 9 } }, "background": { "raw_range": "87-98", "callback_s": { "p50": 4, "p95": 5.5, "max": 6 } } },
+    "run issue": { "overall": { "count": 119, "span_s": 394.824, "callback_s": { "p50": 2.0, "p95": 6.45, "max": 59.0, "gt2": 17, "gt3": 8, "gt5": 7, "gt10": 5 }, "hacc_m": { "p50": 14.246, "p95": 14.246, "worst": 14.246, "le5_pct": 0.84, "5to10_pct": 4.20, "10to20_pct": 94.96, "gt20_pct": 0 }, "reported_speed_mps": { "p50": 1.946, "p95": 3.503, "max": 4.576 }, "derived_speed_mps": { "p50": 3.170, "p95": 5.185, "max": 6.564 } }, "foreground_background_split": "not recorded after 07:55:19.760Z" },
+    "mstand": { "overall": { "count": 40, "span_s": 108, "callback_s": { "p50": 2.0, "p95": 5.2, "max": 11.0, "gt2": 15, "gt3": 5, "gt5": 2, "gt10": 1 }, "hacc_m": { "p50": 14.246, "p95": 14.246, "worst": 14.246, "le5_pct": 0, "5to10_pct": 0, "10to20_pct": 100, "gt20_pct": 0 }, "reported_speed_mps": { "p50": 2.584, "p95": 3.774, "max": 3.801 }, "derived_speed_mps": { "p50": 3.166, "p95": 4.251, "max": 5.604 } }, "background": { "raw_range": "1-38", "callback_s": { "p50": 2, "p95": 4.2, "max": 7 } }, "foreground_return": { "raw_range": "39-40" } }
+  },
+  "canonical_health": {
+    "great hike": { "raw": 99, "canonical": 88, "retained_decisions": { "accept": 75, "quarantine": 11, "reject": 1, "note": "ordinary early ACCEPT events were compacted; completion count is authoritative" }, "candidate_created": 5, "candidate_confirmed": 2, "gaps": 0, "segments": 1, "longest_known_canonical_hold_with_healthy_raw_s": 18.613, "max_raw_to_canonical_displacement_m": null, "max_raw_to_canonical_note": "not recorded as a full canonical array; accepted/promoted observations preserve their raw coordinates", "memory_points_server_count_in_activity_window": 11 },
+    "run issue": { "raw": 119, "canonical": null, "candidate": null, "rejected": null, "stationary_suppressed": null, "gaps": 1, "segments": 2, "longest_canonical_silence_with_raw": { "duration_s": 121, "raw_callbacks_inside": 2 }, "max_raw_to_canonical_displacement_m": null, "memory_points_server_count_in_activity_window": 27, "note": "The Gap forbids route/elevation/Memory bridging across its endpoints." },
+    "mstand": { "raw": 40, "canonical": 38, "retained_decisions": { "accept": 37, "quarantine": 3, "reject": 0, "note": "raw 2 was promoted when raw 3 confirmed movement; ending raw 39-40 were held" }, "candidate_created": 2, "candidate_confirmed": 1, "gaps": 0, "segments": 1, "longest_known_canonical_hold_with_healthy_raw_s": 13, "max_raw_to_canonical_displacement_m": null, "memory_points_server_count_in_activity_window": 9 }
+  },
+  "stationary_analysis": [
+    { "activity": "great hike", "period": "initial", "raw_range": "1-4", "raw_cloud_radius_m": 1.55, "accepted_count": null, "candidate_behavior": "raw 2 held and expired; remaining early decisions not retained", "false_distance_m": null },
+    { "activity": "great hike", "period": "second stop", "raw_range": "14-18", "raw_cloud_radius_m": 2.49, "accepted_count": "raw 16 promoted plus raw 18 accepted", "candidate_behavior": "held until coherent exit", "false_distance_m": "not directly reconstructable" },
+    { "activity": "great hike", "period": "abrupt stop", "raw_range": "85-91", "raw_cloud_radius_m_excluding_rejected_outlier": 6.90, "accepted_count": 2, "candidate_behavior": "raw 85-90 held; raw 88 rejected; raw 90 promoted with raw 91", "false_distance_m": 0 },
+    { "activity": "run issue", "period": "red light", "raw_range": "17-20", "raw_cloud_radius_m": 6.23, "accepted_count": null, "candidate_behavior": "not uploaded", "false_distance_m": 0, "defect": "false segment break caused the 11.937 m crossing not to count" },
+    { "activity": "run issue", "period": "Quick Cairn stop", "raw_range": "47-51", "raw_cloud_radius_m": 1.67, "accepted_count": null, "candidate_behavior": "not uploaded", "false_distance_m": null },
+    { "activity": "mstand", "period": "ending stop", "raw_range": "38-40", "raw_cloud_radius_m": 1.50, "accepted_count": 1, "candidate_behavior": "raw 39-40 held", "false_distance_m": 0 }
+  ],
+  "crossing_analysis": [
+    { "activity": "great hike", "window": "GH-A", "result": "Final preserves the crossing/turn as canonical-derived geometry; exact early filter decisions not retained; no Gap." },
+    { "activity": "run issue", "window": "RI-B/RI-C", "result": "The physical red-light exit/crossing is not bridged because the confirmed false Gap starts at 07:58:11; O50 correctly preserves that segment boundary." },
+    { "activity": "mstand", "window": "MS-B", "result": "Crossing remains continuous, with no network coercion and no Gap." }
+  ],
+  "final_subsections": {
+    "great hike": { "algorithm": "pedestrian-final-v1", "geometry_source": "hybrid-matched-canonical", "canonical_points": 88, "final_points": 18, "matched_islands": 0, "directions_islands": 2, "canonical_derived_sections": 3, "free_traversal_sections": 2, "road_offset_sections": 1, "pedestrian_network_sections": 0, "accepted_matched_distance_m": 40.414, "canonical_fallback_distance_m": 136.611, "confidence": 0.758, "deviation_m": { "p50": 0.468, "p95": 1.797, "max": 2.584 }, "length_ratio": 0.97453, "seam_rejected": 0, "seam_shrunk": 0 },
+    "run issue": { "algorithm": "pedestrian-final-v1 inferred from O51 and neighboring sessions", "geometry_source": "stored two-segment Final", "canonical_points": null, "final_points": 53, "network_state": "not recorded", "length_ratio": 0.98443, "gap_preserved": true },
+    "mstand": { "algorithm": "pedestrian-final-v1", "geometry_source": "hybrid-matched-canonical label with canonical-derived fallback only", "canonical_points": 38, "final_points": 22, "matched_islands": 0, "directions_islands": 0, "canonical_derived_sections": 1, "road_offset_sections": 0, "accepted_matched_distance_m": 0, "canonical_fallback_distance_m": 251.613, "confidence": 1, "deviation_m": { "p50": 0.388, "p95": 2.299, "max": 2.325 }, "length_ratio": 0.99057, "seam_rejected": 0, "seam_shrunk": 0 }
+  },
+  "pace_analysis": {
+    "formula": "durationS / (distanceM / 1000), rounded to nearest displayed second",
+    "semantic_inputs": { "time": "active lifecycle time: explicit Pause/Finish-intent pause excluded; ordinary stationary time included", "distance": "canonical same-segment distance; Gap connectors excluded", "foreground_background": "no distinction" },
+    "run issue": { "elapsed_wall_s": 408, "paused_s": null, "effective_time_used_s": 400, "canonical_distance_m": 691.839, "saved_distance_m": 691.839, "final_display_distance_m": 681.065, "pace_shown": "9:38/km", "calculation": "400 / 0.691839 = 578.169 s/km = 9:38.17/km", "gap_effect": "Adding only the omitted 11.937 m straight connector would yield 9:28/km, about 9.8 s/km faster", "alternatives": { "wall_elapsed": "9:50/km", "subtract_user_reported_60s_red_light": "8:11/km", "moving_only": "not recorded" } },
+    "mstand": { "elapsed_wall_s": 115, "paused_s": 5, "effective_time_used_s": 110, "canonical_distance_m": 251.613, "saved_distance_m": 251.613, "final_display_distance_m": 249.241, "pace": "7:17/km", "calculation": "110 / 0.251613 = 437.18 s/km" }
+  },
+  "camera_restore": {
+    "run_issue": { "before_background": { "camera_mode": "follow initialized true", "follow_intent": "unknown at return; no gesture telemetry after upload loss", "last_camera_center": null, "last_canonical_position": null }, "background_duration_s": null, "foreground": { "first_app_active": null, "first_canonical_fix": null, "first_mapbox_location": null, "camera_state": null, "first_visible_user_point": null, "recenter_action": null }, "classification": "INSUFFICIENT EVIDENCE", "source_behavior": "AppState return does not reset Run follow. A manual pan survives; when follow remains true RNMapbox followUserLocation should continue." },
+    "mstand_control": { "app_active_utc": "08:04:44.863", "foreground_source_active_utc": "08:04:44.959", "first_mapbox_target_utc": "08:04:45.188", "mapbox_jump_from_stale_position_m": 234.86, "distance_to_latest_canonical_m": 2.48, "note": "The shared location/puck path updated promptly in this control; camera-center outcome was not captured." }
+  },
+  "finish_timeline": {
+    "great hike": { "finish_request_utc": "07:54:47.536", "source_drain_ms": 90, "o50_ms": 6234, "memory_ms": 96, "serialization_ms": 1, "local_persistence_ms": 75, "server_request_ms": 80, "server_ack_persistence_ms": 25, "navigation_ms": null, "detail_render_ms": null, "total_ms": 6623 },
+    "run issue": { "finish_request_utc": null, "source_drain_ms": null, "o50_ms": null, "network_ms": null, "persistence_ms": null, "navigation_ms": null, "detail_render_ms": null, "server_row_end_to_finalized_s_approx": 5, "total_ms": null },
+    "mstand": { "finish_request_utc": "08:04:51.492", "source_drain_ms": 51, "o50_ms": 7887, "memory_ms": 37, "serialization_ms": 1, "local_persistence_ms": 52, "server_request_ms": 78, "server_ack_persistence_ms": 12, "navigation_ms": null, "detail_render_ms": null, "total_ms": 8140 }
+  },
+  "quick_cairn": {
+    "activity": "run issue",
+    "creation_timestamp": null,
+    "data_window": "stationary raw 47-51, 07:59:05.999-07:59:28.000; tap time not recorded",
+    "location_source": "last canonically accepted Activity coordinate no older than 30 seconds",
+    "separate_gps_request": false,
+    "local_durable_save": "confirmed by success toast contract and later local Trails observation: addMarker awaits offlineMarkers.saveLocal before returning",
+    "server_sync_state": "no matching marker row was present at audit time",
+    "uuid": null,
+    "activity_provenance": "code sets originActivityClientId from live Activity; actual local object inaccessible",
+    "marker_ids_linkage": "code appends local ID to Activity markerIds after commit; actual saved local summary inaccessible and server session does not expose markerIds",
+    "title": "empty",
+    "note": "empty",
+    "visibility": "personal",
+    "later_trails_presence": "user-confirmed",
+    "detail_accessibility": "user-confirmed",
+    "feedback": "Cairn planted for 1500 ms; no Run map marker or persistent in-session indicator"
+  },
+  "hike_run_diff": {
+    "same": ["tracking store and ownership", "foreground BestForNavigation provider", "1 m foreground distance filter", "5 m background distance filter", "Stationary V2 reducer", "raw/canonical persistence", "bounded Live presentation", "HikingMap/Mapbox puck and camera primitive", "pause/resume engine", "background recovery", "O50 Final", "completion controller", "Detail navigation target"],
+    "meaningful_differences": ["continuity maximum plausible speed: Hike 4.17 m/s, Run 10 m/s", "Hike metrics prioritize distance/elevation; Run prioritizes pace", "Hike opens full Plant and displays markers; Run creates private Quick Cairn and passes an empty marker list", "visual trace/mode colors"],
+    "accidental_or_weak_differences": ["Hike retains StopSummarySheet with spinner and granular save step; Run dismisses a local sheet and falls back to generic dock copy", "Run resets follow only on navigation focus; neither mode defines explicit AppState-return camera intent"]
+  },
+  "classifications": {
+    "tracking_freeze": "NOT YET",
+    "tracking_freeze_scope": "Hold only for the confirmed background acc/accuracy false-Gap defect; do not retune GPS, Stationary V2, candidates or cadence.",
+    "final_reconstruction_freeze": "YES WITH KNOWN ACCEPTABLE LIMITATIONS",
+    "run_materially_worse_than_hike": false,
+    "one_functional_activity_system": true,
+    "ux_exceptions": ["Finish feedback divergence", "Quick Cairn confirmation/enrichment loop", "pace terminology", "foreground camera intent ambiguity"]
+  },
+  "missing_evidence": [
+    { "issue": "run issue canonical decisions/O50 sections/Finish phases", "missing": "QA events after 07:55:19.760Z", "why": "Prevents exact candidate, network, Finish and camera attribution", "best_next_capture": "ensure QA session flush/retry retains the full Activity session; no new instrumentation is automatically recommended here" },
+    { "issue": "run issue foreground camera", "missing": "gesture/follow state, app-active, first canonical, first RNMapbox location, camera-center event", "why": "Cannot distinguish preserved manual browse from lost follow intent", "best_next_capture": "existing App/Map QA events if their upload survives" },
+    { "issue": "Quick Cairn exact object", "missing": "on-device offline outbox/local marker and Activity summary", "why": "Server has no matching row, so UUID/sync/linkage cannot be proven", "best_next_capture": "read the on-device local marker/outbox via existing debug export before it is reconciled" },
+    { "issue": "moving-only pace", "missing": "defined moving-time accumulator", "why": "Current metric does not record moving-only time", "best_next_capture": "product decision first; do not infer from GPS rejection" }
+  ]
+}

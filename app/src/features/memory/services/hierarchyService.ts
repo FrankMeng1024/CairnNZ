@@ -55,7 +55,9 @@ const DEEPEST_CACHE_VERSION = 'v5';
 const PANEL_CACHE_VERSION = 'v5';
 
 async function authedFetch(path: string): Promise<Response> {
-  const token = await getToken();
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ownerId = String(require('../../../store/useAppStore').useAppStore.getState().user?.id ?? '');
+  const token = ownerId ? await getToken(ownerId) : null;
   const url = `${API_BASE_URL}${path}`;
   const t0 = Date.now();
   log('v434.hierarchy.fetch_start', { path });

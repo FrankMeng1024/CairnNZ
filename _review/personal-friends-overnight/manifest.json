@@ -1,0 +1,478 @@
+{
+  "generatedAt": "2026-09-18T18:36:13.436Z",
+  "evidenceKind": "Expo Web mobile-size visual and deterministic edge-state fixture; not device or NZ field validation",
+  "baseUrl": "http://127.0.0.1:8081",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "locale": "en-NZ",
+  "timezone": "Pacific/Auckland",
+  "themes": [
+    "day",
+    "sunset",
+    "night"
+  ],
+  "renderer": "Expo Web production screens with react-map-gl/mapbox-gl v2 adapter and synthetic NZ geometry",
+  "mapLoadedAssertion": "window.__cairnMap.loaded() returned true and the Opening your map veil was hidden before every Memory capture",
+  "accessibilityContext": "prefers-reduced-motion enabled; long-text case is browser focus/layout evidence, not an iOS keyboard claim",
+  "captures": [
+    {
+      "theme": "day",
+      "surface": "home",
+      "path": "day-home-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "hike-ready",
+      "path": "day-hike-ready-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "run-ready",
+      "path": "day-run-ready-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "trails-routes",
+      "path": "day-trails-routes-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "activity-detail-own",
+      "path": "day-activity-detail-own-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "route-detail-own",
+      "path": "day-route-detail-own-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "cairn-detail-own",
+      "path": "day-cairn-detail-own-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "cairn-detail-empty",
+      "path": "day-cairn-detail-empty-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "all-cairns-own-only",
+      "path": "day-all-cairns-own-only-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "settings",
+      "path": "day-settings-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "plant-text-only",
+      "path": "day-plant-text-only-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "memory-personal",
+      "path": "day-memory-personal-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "memory-combined",
+      "path": "day-memory-combined-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "memory-single-friend",
+      "path": "day-memory-single-friend-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "memory-sharing",
+      "path": "day-memory-sharing-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "friends-list",
+      "path": "day-friends-list-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "friend-profile",
+      "path": "day-friend-profile-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "friend-content",
+      "path": "day-friend-content-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "nonowner-cairn-readonly",
+      "path": "day-nonowner-cairn-readonly-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "nonowner-route-readonly",
+      "path": "day-nonowner-route-readonly-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "home",
+      "path": "sunset-home-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "hike-ready",
+      "path": "sunset-hike-ready-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "run-ready",
+      "path": "sunset-run-ready-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "trails-routes",
+      "path": "sunset-trails-routes-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "activity-detail-own",
+      "path": "sunset-activity-detail-own-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "route-detail-own",
+      "path": "sunset-route-detail-own-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "cairn-detail-own",
+      "path": "sunset-cairn-detail-own-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "cairn-detail-empty",
+      "path": "sunset-cairn-detail-empty-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "all-cairns-own-only",
+      "path": "sunset-all-cairns-own-only-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "settings",
+      "path": "sunset-settings-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "plant-text-only",
+      "path": "sunset-plant-text-only-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "memory-personal",
+      "path": "sunset-memory-personal-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "memory-combined",
+      "path": "sunset-memory-combined-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "memory-single-friend",
+      "path": "sunset-memory-single-friend-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "memory-sharing",
+      "path": "sunset-memory-sharing-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "friends-list",
+      "path": "sunset-friends-list-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "friend-profile",
+      "path": "sunset-friend-profile-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "friend-content",
+      "path": "sunset-friend-content-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "nonowner-cairn-readonly",
+      "path": "sunset-nonowner-cairn-readonly-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "nonowner-route-readonly",
+      "path": "sunset-nonowner-route-readonly-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "home",
+      "path": "night-home-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "hike-ready",
+      "path": "night-hike-ready-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "run-ready",
+      "path": "night-run-ready-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "trails-routes",
+      "path": "night-trails-routes-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "activity-detail-own",
+      "path": "night-activity-detail-own-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "route-detail-own",
+      "path": "night-route-detail-own-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "cairn-detail-own",
+      "path": "night-cairn-detail-own-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "cairn-detail-empty",
+      "path": "night-cairn-detail-empty-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "all-cairns-own-only",
+      "path": "night-all-cairns-own-only-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "settings",
+      "path": "night-settings-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "plant-text-only",
+      "path": "night-plant-text-only-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "memory-personal",
+      "path": "night-memory-personal-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "memory-combined",
+      "path": "night-memory-combined-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "memory-single-friend",
+      "path": "night-memory-single-friend-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "memory-sharing",
+      "path": "night-memory-sharing-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "friends-list",
+      "path": "night-friends-list-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "friend-profile",
+      "path": "night-friend-profile-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "friend-content",
+      "path": "night-friend-content-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "nonowner-cairn-readonly",
+      "path": "night-nonowner-cairn-readonly-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "nonowner-route-readonly",
+      "path": "night-nonowner-route-readonly-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "memory-after-source-removal",
+      "path": "day-memory-after-source-removal-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "memory-malformed-point-ignored",
+      "path": "day-memory-malformed-point-ignored-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "memory-geometry-recovered",
+      "path": "day-memory-geometry-recovered-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "borrowed-route-online-prestart",
+      "path": "day-borrowed-route-online-prestart-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "borrowed-route-offline-active",
+      "path": "day-borrowed-route-offline-active-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "borrowed-route-recovery",
+      "path": "day-borrowed-route-recovery-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "friend-content-revoked",
+      "path": "day-friend-content-revoked-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "friend-content-unavailable",
+      "path": "day-friend-content-unavailable-390x844.png"
+    },
+    {
+      "theme": "day",
+      "surface": "cairn-edit-long-text-browser-focus",
+      "path": "day-cairn-edit-long-text-browser-focus-320x568.png"
+    },
+    {
+      "theme": "night",
+      "surface": "memory-combined-large",
+      "path": "night-memory-combined-large-430x932.png"
+    },
+    {
+      "theme": "day",
+      "surface": "auth",
+      "path": "day-auth-390x844.png"
+    },
+    {
+      "theme": "sunset",
+      "surface": "auth",
+      "path": "sunset-auth-390x844.png"
+    },
+    {
+      "theme": "night",
+      "surface": "auth",
+      "path": "night-auth-390x844.png"
+    }
+  ],
+  "requestCount": 635,
+  "runtimeErrors": [],
+  "rendererWarnings": [],
+  "borrowedRouteJourney": {
+    "traceId": "pf-web-borrowed-route-qa-lease-701",
+    "stages": [
+      {
+        "stage": "online-authorization-prestart",
+        "route": "Hiking",
+        "trackingStatus": "idle"
+      },
+      {
+        "stage": "offline-explicit-start",
+        "route": "Hiking",
+        "trackingStatus": "tracking",
+        "provider": "simulator"
+      },
+      {
+        "stage": "durable-recovery-prompt",
+        "route": "Hiking",
+        "bodyContainsBorrowedRoute": false
+      },
+      {
+        "stage": "durable-recovery-continued",
+        "trackingStatus": "tracking",
+        "routeName": "Harbour ridge",
+        "pointCount": 4,
+        "borrowedRouteId": "friend-route-701",
+        "borrowedResourceRevision": null,
+        "borrowedAuthorizationRevision": "friendship-qa-4:friends"
+      },
+      {
+        "stage": "offline-terminal-discard",
+        "trackingStatus": "idle",
+        "friendCacheValues": [
+          {
+            "key": "cairn:friend-content:v2:100",
+            "hasTerminalOutbox": true,
+            "hasLease": true
+          }
+        ]
+      },
+      {
+        "stage": "reconnected-terminal-drained",
+        "friendCacheValues": [
+          {
+            "key": "cairn:friend-content:v2:100",
+            "hasLease": false
+          }
+        ]
+      }
+    ],
+    "requestStartIndex": 358,
+    "requests": [
+      {
+        "method": "POST",
+        "pathname": "/api/friend-content/routes/friend-route-701/lease",
+        "unavailableMode": false,
+        "offlineMode": false
+      },
+      {
+        "method": "POST",
+        "pathname": "/api/friend-content/routes/friend-route-701/lease",
+        "unavailableMode": false,
+        "offlineMode": true
+      },
+      {
+        "method": "POST",
+        "pathname": "/api/friend-content/route-leases/qa-lease-701/start",
+        "unavailableMode": false,
+        "offlineMode": true
+      },
+      {
+        "method": "POST",
+        "pathname": "/api/friend-content/route-leases/qa-lease-701/start",
+        "unavailableMode": false,
+        "offlineMode": true
+      },
+      {
+        "method": "POST",
+        "pathname": "/api/friend-content/route-leases/qa-lease-701/start",
+        "unavailableMode": false,
+        "offlineMode": false
+      },
+      {
+        "method": "POST",
+        "pathname": "/api/friend-content/route-leases/qa-lease-701/end",
+        "unavailableMode": false,
+        "offlineMode": false
+      }
+    ]
+  }
+}

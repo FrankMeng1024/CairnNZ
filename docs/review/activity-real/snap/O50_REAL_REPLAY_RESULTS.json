@@ -1,0 +1,939 @@
+{
+  "generatedAt": "2026-09-12T11:44:05.166Z",
+  "verdict": "PASS",
+  "source": {
+    "canonicalPointCount": 392,
+    "canonicalLengthM": 843.202,
+    "backupRouteHash": "3e1b6d8cdccd27c2b89e05935f0119dd6b930424f7fa8cf599a692c9ec09ac51"
+  },
+  "output": {
+    "pointCount": 97,
+    "lengthM": 823.682,
+    "fingerprint": "f4f38b0c"
+  },
+  "performance": {
+    "mapMatchingRequestCount": 8,
+    "directionsFallbackRequestCount": 3,
+    "mapMatchingApiDurationMs": 6688,
+    "directionsApiDurationMs": 537,
+    "totalApiWallDurationMs": 2887,
+    "totalApiDurationMs": 7225,
+    "finalProcessingDurationMs": 2929
+  },
+  "stats": {
+    "algorithmVersion": "pedestrian-final-v1",
+    "canonicalPointCount": 392,
+    "resampledPointCount": 162,
+    "mapMatchingRequestCount": 8,
+    "directionsRequestCount": 3,
+    "requestResults": [
+      {
+        "kind": "map-matching",
+        "sourceStart": 0,
+        "sourceEnd": 59,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          0,
+          1,
+          2,
+          5,
+          9,
+          13,
+          17,
+          21,
+          25,
+          29,
+          33,
+          37,
+          41,
+          45,
+          49,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59
+        ],
+        "durationMs": 1280,
+        "result": "accepted-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": 24,
+        "nullTracepointCount": 0,
+        "acceptedCandidateCount": 1,
+        "rejectedCandidateCount": 0,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 56,
+        "sourceEnd": 93,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          68,
+          72,
+          73,
+          74,
+          75,
+          77,
+          78,
+          79,
+          80,
+          83,
+          84,
+          85,
+          86,
+          89,
+          93
+        ],
+        "durationMs": 1104,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": 24,
+        "nullTracepointCount": 4,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 2,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 85,
+        "sourceEnd": 136,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          85,
+          86,
+          89,
+          93,
+          96,
+          100,
+          103,
+          107,
+          111,
+          115,
+          118,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          128,
+          129,
+          130,
+          131,
+          132,
+          136
+        ],
+        "durationMs": 1016,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 2,
+        "tracepointCount": 24,
+        "nullTracepointCount": 17,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 2,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 130,
+        "sourceEnd": 209,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          130,
+          131,
+          132,
+          136,
+          139,
+          143,
+          146,
+          150,
+          154,
+          158,
+          162,
+          166,
+          170,
+          174,
+          178,
+          182,
+          186,
+          190,
+          193,
+          196,
+          200,
+          203,
+          205,
+          209
+        ],
+        "durationMs": 1114,
+        "result": "NoSegment",
+        "httpStatus": 200,
+        "responseCode": "NoSegment",
+        "matchingCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 0,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 200,
+        "sourceEnd": 265,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          200,
+          203,
+          205,
+          209,
+          213,
+          217,
+          220,
+          225,
+          229,
+          233,
+          235,
+          236,
+          237,
+          238,
+          239,
+          243,
+          247,
+          251,
+          255,
+          259,
+          262,
+          263,
+          264,
+          265
+        ],
+        "durationMs": 336,
+        "result": "NoSegment",
+        "httpStatus": 200,
+        "responseCode": "NoSegment",
+        "matchingCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 0,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 262,
+        "sourceEnd": 308,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          262,
+          263,
+          264,
+          265,
+          266,
+          267,
+          268,
+          269,
+          270,
+          271,
+          272,
+          273,
+          274,
+          277,
+          281,
+          285,
+          289,
+          293,
+          297,
+          301,
+          305,
+          306,
+          307,
+          308
+        ],
+        "durationMs": 386,
+        "result": "NoSegment",
+        "httpStatus": 200,
+        "responseCode": "NoSegment",
+        "matchingCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 0,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 305,
+        "sourceEnd": 328,
+        "inputPointCount": 24,
+        "sourceIndexMap": [
+          305,
+          306,
+          307,
+          308,
+          309,
+          310,
+          311,
+          312,
+          313,
+          314,
+          315,
+          316,
+          317,
+          318,
+          319,
+          320,
+          321,
+          322,
+          323,
+          324,
+          325,
+          326,
+          327,
+          328
+        ],
+        "durationMs": 1102,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": 24,
+        "nullTracepointCount": 19,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 2,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "map-matching",
+        "sourceStart": 325,
+        "sourceEnd": 391,
+        "inputPointCount": 22,
+        "sourceIndexMap": [
+          325,
+          326,
+          327,
+          328,
+          329,
+          332,
+          336,
+          340,
+          342,
+          346,
+          350,
+          354,
+          358,
+          362,
+          366,
+          370,
+          374,
+          378,
+          382,
+          386,
+          389,
+          391
+        ],
+        "durationMs": 350,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": 22,
+        "nullTracepointCount": 2,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 2,
+        "profile": "walking",
+        "matcherTidy": false
+      },
+      {
+        "kind": "walking-directions",
+        "sourceStart": 332,
+        "sourceEnd": 391,
+        "inputPointCount": 2,
+        "sourceIndexMap": [
+          332,
+          391
+        ],
+        "durationMs": 178,
+        "result": "accepted-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": null,
+        "nullTracepointCount": null,
+        "acceptedCandidateCount": 1,
+        "rejectedCandidateCount": 0,
+        "profile": "walking",
+        "matcherTidy": null
+      },
+      {
+        "kind": "walking-directions",
+        "sourceStart": 56,
+        "sourceEnd": 73,
+        "inputPointCount": 2,
+        "sourceIndexMap": [
+          56,
+          73
+        ],
+        "durationMs": 182,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": null,
+        "nullTracepointCount": null,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 1,
+        "profile": "walking",
+        "matcherTidy": null
+      },
+      {
+        "kind": "walking-directions",
+        "sourceStart": 97,
+        "sourceEnd": 168,
+        "inputPointCount": 2,
+        "sourceIndexMap": [
+          97,
+          168
+        ],
+        "durationMs": 177,
+        "result": "no-safe-candidate",
+        "httpStatus": 200,
+        "responseCode": "Ok",
+        "matchingCount": 1,
+        "tracepointCount": null,
+        "nullTracepointCount": null,
+        "acceptedCandidateCount": 0,
+        "rejectedCandidateCount": 1,
+        "profile": "walking",
+        "matcherTidy": null
+      }
+    ],
+    "matchedIslandCount": 1,
+    "directionsIslandCount": 1,
+    "canonicalDerivedSectionCount": 2,
+    "freeTraversalSectionCount": 1,
+    "roadOffsetSectionCount": 2,
+    "pedestrianNetworkSectionCount": 0,
+    "rejectedNetworkCandidateCount": 10,
+    "displayRefined": true,
+    "acceptedMatchedDistanceM": 187.9790814984489,
+    "canonicalFallbackDistanceM": 655.2229699542984,
+    "mapMatchingApiDurationMs": 6688,
+    "directionsApiDurationMs": 537,
+    "totalApiWallDurationMs": 2887,
+    "totalApiDurationMs": 7225,
+    "durationMs": 2929,
+    "sections": [
+      {
+        "sourceStart": 0,
+        "sourceEnd": 59,
+        "state": "NETWORK_CONFIDENT",
+        "geometryMode": "B_ROAD_OFFSET",
+        "networkSource": "map-matching",
+        "decision": "refined",
+        "reason": "coherent-isolated-envelope-overrun;stable-evidence-offset",
+        "confidence": 0.8848030563618882,
+        "corridorEvidence": {
+          "score": 0.8848030563618882,
+          "mapboxConfidence": 0.9264661476411816,
+          "tracepointCoverage": 1,
+          "ambiguityKnownFraction": 1,
+          "unambiguousFraction": 0.9583333333333334,
+          "bearingAgreementScore": 0.994212322408438,
+          "bearingDeltaDeg": 0.31832226753590476,
+          "lengthAgreementScore": 0.9209348767355255,
+          "lengthRatio": 0.9739085093227234,
+          "endpointSafetyScore": 0.2761861526183824,
+          "endpointDeviationM": 14.657230409477755,
+          "lateralStabilityScore": 0.9876784613284163,
+          "temporalPersistenceScore": 1,
+          "accuracyP95M": 14.24595458902166,
+          "overlappingWindowAgreementCount": 0,
+          "acceptedByBaseGate": false,
+          "acceptedByCoherentOverrun": true,
+          "accepted": true,
+          "reason": "coherent-isolated-envelope-overrun",
+          "lateral": {
+            "sampleCount": 60,
+            "signedMedianM": 14.170376614370415,
+            "absoluteMedianM": 14.170376614370415,
+            "madM": 0.4928615468633497,
+            "p95ResidualM": 1.254736822044249,
+            "stableSignFraction": 1,
+            "plausibleForAccuracy": true,
+            "stable": true
+          }
+        },
+        "lateralOffsetM": 14.170376614370415,
+        "canonicalDistanceM": 110.38836106029964,
+        "displayDistanceM": 107.55800705073365,
+        "maximumDisplayEdgeM": 7.502417844509909,
+        "lengthRatio": 0.9743600323224302,
+        "canonicalDisplacementP50M": 0.49012307725919274,
+        "canonicalDisplacementP95M": 1.2543358050889264,
+        "canonicalDisplacementMaxM": 1.5131715518071633,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 7.688169399319349,
+          "exitHeadingDeltaDeg": 0.2344790843977762,
+          "entryEdgeM": 2.298332892401781,
+          "exitEdgeM": 6.189353458604427,
+          "maxAllowedEdgeM": 22
+        }
+      },
+      {
+        "sourceStart": 59,
+        "sourceEnd": 80,
+        "state": "FREE_TRAVERSAL",
+        "geometryMode": "FREE_TRAVERSAL",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "bounded-coherent-connector-inside-evidence-envelope",
+        "confidence": 1,
+        "corridorEvidence": null,
+        "lateralOffsetM": null,
+        "canonicalDistanceM": 73.68126487725016,
+        "displayDistanceM": 69.88661869698129,
+        "maximumDisplayEdgeM": 13.977324976734307,
+        "lengthRatio": 0.9484991715792259,
+        "canonicalDisplacementP50M": 1.1180585300373427,
+        "canonicalDisplacementP95M": 2.7305455719556337,
+        "canonicalDisplacementMaxM": 3.050523315351922,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 4.327204602650909,
+          "exitHeadingDeltaDeg": 42.99659063341119,
+          "entryEdgeM": 13.977322501744734,
+          "exitEdgeM": 13.977324976734307,
+          "maxAllowedEdgeM": 22
+        }
+      },
+      {
+        "sourceStart": 80,
+        "sourceEnd": 332,
+        "state": "OFF_NETWORK_PATH",
+        "geometryMode": "C_CANONICAL_DERIVED",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "no-safe-network-candidate;bounded-heading-aware-cleanup",
+        "confidence": 1,
+        "corridorEvidence": null,
+        "lateralOffsetM": null,
+        "canonicalDistanceM": 581.5417050770482,
+        "displayDistanceM": 569.2605091106094,
+        "maximumDisplayEdgeM": 15.222091153557152,
+        "lengthRatio": 0.9788816591153826,
+        "canonicalDisplacementP50M": 0.4894809721664666,
+        "canonicalDisplacementP95M": 1.570760491570195,
+        "canonicalDisplacementMaxM": 3.199554383909244,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 17.967347270157404,
+          "exitHeadingDeltaDeg": 4.332566634428019,
+          "entryEdgeM": 2.6063811795432117,
+          "exitEdgeM": 10.364467975779432,
+          "maxAllowedEdgeM": 22
+        }
+      },
+      {
+        "sourceStart": 332,
+        "sourceEnd": 391,
+        "state": "NETWORK_CONFIDENT",
+        "geometryMode": "B_ROAD_OFFSET",
+        "networkSource": "walking-directions",
+        "decision": "refined",
+        "reason": "composite-corridor-evidence;stable-evidence-offset",
+        "confidence": 0.87691753082403,
+        "corridorEvidence": {
+          "score": 0.87691753082403,
+          "mapboxConfidence": 0.850683148937869,
+          "tracepointCoverage": 1,
+          "ambiguityKnownFraction": 0,
+          "unambiguousFraction": 1,
+          "bearingAgreementScore": 0.9911509270920409,
+          "bearingDeltaDeg": 0.4866990099377517,
+          "lengthAgreementScore": 0.9746051147200195,
+          "lengthRatio": 0.9916196878576065,
+          "endpointSafetyScore": 0.5881109990479202,
+          "endpointDeviationM": 8.340752269279616,
+          "lateralStabilityScore": 0.9910254303352601,
+          "temporalPersistenceScore": 1,
+          "accuracyP95M": 14.2459546210736,
+          "overlappingWindowAgreementCount": 0,
+          "acceptedByBaseGate": true,
+          "acceptedByCoherentOverrun": false,
+          "accepted": true,
+          "reason": "composite-corridor-evidence",
+          "lateral": {
+            "sampleCount": 60,
+            "signedMedianM": 7.959841133813691,
+            "absoluteMedianM": 7.959841133813691,
+            "madM": 0.3589827865895927,
+            "p95ResidualM": 0.7158621589499017,
+            "stableSignFraction": 1,
+            "plausibleForAccuracy": true,
+            "stable": true
+          }
+        },
+        "lateralOffsetM": 7.959841133813691,
+        "canonicalDistanceM": 77.59072043814925,
+        "displayDistanceM": 76.97722394423602,
+        "maximumDisplayEdgeM": 12.860300310083883,
+        "lengthRatio": 0.9920931718322905,
+        "canonicalDisplacementP50M": 0.2622953664418638,
+        "canonicalDisplacementP95M": 0.7158618185286472,
+        "canonicalDisplacementMaxM": 0.8655198281512985,
+        "seam": {
+          "accepted": true,
+          "reason": "accepted",
+          "entryHeadingDeltaDeg": 9.758110900500526,
+          "exitHeadingDeltaDeg": 5.805686051873238,
+          "entryEdgeM": 12.860300310083883,
+          "exitEdgeM": 12.823302696557889,
+          "maxAllowedEdgeM": 22
+        }
+      }
+    ],
+    "preFallbackCandidateSummary": [
+      {
+        "sourceStart": 0,
+        "sourceEnd": 59,
+        "mode": "B_ROAD_OFFSET",
+        "source": "map-matching",
+        "confidence": 0.8848030563618882,
+        "maximumDisplayEdgeM": 7.502417844509909
+      },
+      {
+        "sourceStart": 332,
+        "sourceEnd": 391,
+        "mode": "B_ROAD_OFFSET",
+        "source": "walking-directions",
+        "confidence": 0.87691753082403,
+        "maximumDisplayEdgeM": 12.860300310083883
+      }
+    ],
+    "preFallbackWholeRouteValidation": {
+      "accepted": true,
+      "reason": "accepted",
+      "canonicalLengthM": 843.202051452747,
+      "finalLengthM": 823.6823588025603,
+      "lengthRatio": 0.9768505157019526,
+      "maximumCanonicalEdgeM": 14.270866417100509,
+      "maximumFinalEdgeM": 15.222091153557152
+    },
+    "wholeRouteValidation": {
+      "accepted": true,
+      "reason": "accepted",
+      "canonicalLengthM": 843.202051452747,
+      "finalLengthM": 823.6823588025603,
+      "lengthRatio": 0.9768505157019526,
+      "maximumCanonicalEdgeM": 14.270866417100509,
+      "maximumFinalEdgeM": 15.222091153557152
+    },
+    "finalGeometryFingerprint": "f4f38b0c"
+  },
+  "rangeReport": [
+    {
+      "name": "opening road",
+      "sourceRange": [
+        0,
+        61
+      ],
+      "states": [
+        "NETWORK_CONFIDENT",
+        "FREE_TRAVERSAL"
+      ],
+      "geometryModes": [
+        "B_ROAD_OFFSET",
+        "FREE_TRAVERSAL"
+      ],
+      "networkSources": [
+        "map-matching",
+        "none"
+      ],
+      "decisions": [
+        "refined",
+        "canonical-derived"
+      ],
+      "lateralOffsetsM": [
+        14.17
+      ],
+      "confidence": 0.8848,
+      "canonicalDistanceM": 121.556,
+      "canonicalDisplacementP95M": 1.254,
+      "lengthRatio": 0.972,
+      "reasons": [
+        "coherent-isolated-envelope-overrun;stable-evidence-offset",
+        "bounded-coherent-connector-inside-evidence-envelope"
+      ]
+    },
+    {
+      "name": "road crossing",
+      "sourceRange": [
+        62,
+        104
+      ],
+      "states": [
+        "FREE_TRAVERSAL",
+        "OFF_NETWORK_PATH"
+      ],
+      "geometryModes": [
+        "FREE_TRAVERSAL",
+        "C_CANONICAL_DERIVED"
+      ],
+      "networkSources": [
+        "none"
+      ],
+      "decisions": [
+        "canonical-derived"
+      ],
+      "lateralOffsetsM": [],
+      "confidence": 1,
+      "canonicalDistanceM": 97.062,
+      "canonicalDisplacementP95M": 2.323,
+      "lengthRatio": 0.9611,
+      "reasons": [
+        "bounded-coherent-connector-inside-evidence-envelope",
+        "no-safe-network-candidate;bounded-heading-aware-cleanup"
+      ]
+    },
+    {
+      "name": "internal outbound",
+      "sourceRange": [
+        105,
+        158
+      ],
+      "states": [
+        "OFF_NETWORK_PATH"
+      ],
+      "geometryModes": [
+        "C_CANONICAL_DERIVED"
+      ],
+      "networkSources": [
+        "none"
+      ],
+      "decisions": [
+        "canonical-derived"
+      ],
+      "lateralOffsetsM": [],
+      "confidence": 1,
+      "canonicalDistanceM": 130.051,
+      "canonicalDisplacementP95M": 1.589,
+      "lengthRatio": 0.9789,
+      "reasons": [
+        "no-safe-network-candidate;bounded-heading-aware-cleanup"
+      ]
+    },
+    {
+      "name": "lower/middle corridor",
+      "sourceRange": [
+        159,
+        283
+      ],
+      "states": [
+        "OFF_NETWORK_PATH"
+      ],
+      "geometryModes": [
+        "C_CANONICAL_DERIVED"
+      ],
+      "networkSources": [
+        "none"
+      ],
+      "decisions": [
+        "canonical-derived"
+      ],
+      "lateralOffsetsM": [],
+      "confidence": 1,
+      "canonicalDistanceM": 232.138,
+      "canonicalDisplacementP95M": 1.47,
+      "lengthRatio": 0.9789,
+      "reasons": [
+        "no-safe-network-candidate;bounded-heading-aware-cleanup"
+      ]
+    },
+    {
+      "name": "stop area",
+      "sourceRange": [
+        284,
+        304
+      ],
+      "states": [
+        "OFF_NETWORK_PATH"
+      ],
+      "geometryModes": [
+        "C_CANONICAL_DERIVED"
+      ],
+      "networkSources": [
+        "none"
+      ],
+      "decisions": [
+        "canonical-derived"
+      ],
+      "lateralOffsetsM": [],
+      "confidence": 1,
+      "canonicalDistanceM": 28.119,
+      "canonicalDisplacementP95M": 1.187,
+      "lengthRatio": 0.9789,
+      "reasons": [
+        "no-safe-network-candidate;bounded-heading-aware-cleanup"
+      ]
+    },
+    {
+      "name": "internal return",
+      "sourceRange": [
+        284,
+        327
+      ],
+      "states": [
+        "OFF_NETWORK_PATH"
+      ],
+      "geometryModes": [
+        "C_CANONICAL_DERIVED"
+      ],
+      "networkSources": [
+        "none"
+      ],
+      "decisions": [
+        "canonical-derived"
+      ],
+      "lateralOffsetsM": [],
+      "confidence": 1,
+      "canonicalDistanceM": 159.269,
+      "canonicalDisplacementP95M": 2.162,
+      "lengthRatio": 0.9789,
+      "reasons": [
+        "no-safe-network-candidate;bounded-heading-aware-cleanup"
+      ]
+    },
+    {
+      "name": "U-turn/repeated path",
+      "sourceRange": [
+        254,
+        327
+      ],
+      "states": [
+        "OFF_NETWORK_PATH"
+      ],
+      "geometryModes": [
+        "C_CANONICAL_DERIVED"
+      ],
+      "networkSources": [
+        "none"
+      ],
+      "decisions": [
+        "canonical-derived"
+      ],
+      "lateralOffsetsM": [],
+      "confidence": 1,
+      "canonicalDistanceM": 245.66,
+      "canonicalDisplacementP95M": 2.072,
+      "lengthRatio": 0.9789,
+      "reasons": [
+        "no-safe-network-candidate;bounded-heading-aware-cleanup"
+      ]
+    },
+    {
+      "name": "final road",
+      "sourceRange": [
+        328,
+        391
+      ],
+      "states": [
+        "OFF_NETWORK_PATH",
+        "NETWORK_CONFIDENT"
+      ],
+      "geometryModes": [
+        "C_CANONICAL_DERIVED",
+        "B_ROAD_OFFSET"
+      ],
+      "networkSources": [
+        "none",
+        "walking-directions"
+      ],
+      "decisions": [
+        "canonical-derived",
+        "refined"
+      ],
+      "lateralOffsetsM": [
+        7.96
+      ],
+      "confidence": 0.8769,
+      "canonicalDistanceM": 87.973,
+      "canonicalDisplacementP95M": 0.716,
+      "lengthRatio": 0.9905,
+      "reasons": [
+        "no-safe-network-candidate;bounded-heading-aware-cleanup",
+        "composite-corridor-evidence;stable-evidence-offset"
+      ]
+    }
+  ],
+  "scorecard": {
+    "back": {
+      "pointCount": 87,
+      "lengthM": 877.356,
+      "verticesPerKm": 99.2,
+      "shortScaleHeadingJitterP50Deg": 2.95,
+      "shortScaleHeadingJitterP95Deg": 25.97,
+      "smallZigzagCount": 0,
+      "meaningfulTurnCount": 6,
+      "canonicalDisplacementP50M": 0,
+      "canonicalDisplacementP95M": 0,
+      "canonicalDisplacementMaxM": 0,
+      "lengthRatioToCanonical": 1
+    },
+    "o49": {
+      "pointCount": 348,
+      "lengthM": 852.001,
+      "verticesPerKm": 408.5,
+      "shortScaleHeadingJitterP50Deg": 7.73,
+      "shortScaleHeadingJitterP95Deg": 36.32,
+      "smallZigzagCount": 58,
+      "meaningfulTurnCount": 14,
+      "canonicalDisplacementP50M": 0.003,
+      "canonicalDisplacementP95M": 7.962,
+      "canonicalDisplacementMaxM": 8.835,
+      "lengthRatioToCanonical": 1.01043
+    },
+    "o50": {
+      "pointCount": 97,
+      "lengthM": 823.682,
+      "verticesPerKm": 117.8,
+      "shortScaleHeadingJitterP50Deg": 0.5,
+      "shortScaleHeadingJitterP95Deg": 41.2,
+      "smallZigzagCount": 0,
+      "meaningfulTurnCount": 11,
+      "canonicalDisplacementP50M": 0.457,
+      "canonicalDisplacementP95M": 1.542,
+      "canonicalDisplacementMaxM": 3.2,
+      "lengthRatioToCanonical": 0.97685
+    }
+  }
+}

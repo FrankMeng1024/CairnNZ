@@ -135,6 +135,7 @@ scripts/r113/.testuser.json
 /docs/review/**/*semantic-check*.png
 /docs/review/**/*home-size*.png
 /docs/review/**/*validation*.png
+/app/_review/overnight-*/
 
 # These audits have no proven tracked generator and retain unique visual
 # authority; keep them eligible for tracking until reproducibility is proven.

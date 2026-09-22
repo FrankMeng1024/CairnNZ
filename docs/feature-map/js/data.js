@@ -1,11 +1,5 @@
-/* ════════════════════════════════════════════════════════════
-   data.js — Default seed data
-   Initial values derived from docs/feature-map.html (legacy snapshot).
-   App project scan results merged in via PROJECT_FACTS overlay.
-   ──────────────────────────────────────────────────────────── */
-
 const DEFAULT_DATA = {
-  "version": 18,
+  "version": 20,
   "overview": {
     "tagline": "Cairn",
     "subtitle": "在山里，留下你走过的痕迹",
@@ -32,54 +26,178 @@ const DEFAULT_DATA = {
     ],
     "personas": [
       {
-        "id": "p-passer",
+        "id": "p-jamie",
         "emoji": "🥾",
-        "name": "Jamie · 不爱说话的独行者",
-        "role": "本地 tramper · 周末日行，长假 Great Walks",
+        "name": "Jamie · 一个人的周末",
+        "role": "35 岁奥克兰程序员 · 周末徒步",
         "accent": "--persona-a",
-        "scenario": "工作日被会议追着跑。周末把车停在登山口，走进山里就只剩鸟叫和自己的脚步。走在 Mt Holdsworth 那种暴露的山脊上，长时间的空旷会压着人。",
-        "painpoint": "一个人走太久会觉得空。但又不想为此加好友、回评论、刷动态——那只会让他更累。",
-        "wants": "不需要认识谁，也不想被打扰。\n只是希望走在山里时，能感觉到——这条路上，曾有人来过。\n经过一个陌生人留下的标记，停一秒，继续走。就够了。"
+        "scenario": "工作日被会议追着跑。周末把车开到登山口或海边步道，走进去就只剩鸟叫和自己的脚步。一个人走久了，那种空旷会压着人。",
+        "painpoint": "他不想加好友，不想刷动态，不想发图——那只会让他更累。但走了两小时没遇到一个人，又确实有点空。",
+        "wants": "走着走着，撞见一个陌生人留下的标记。停一秒，知道这条路上自己之前有人来过。然后继续走。\n不需要认识谁，不需要回应谁。就这样轻轻被接住一下。"
       },
       {
-        "id": "p-hutbagger",
+        "id": "p-murray",
         "emoji": "🏕️",
-        "name": "Murray · 收集 hut book 签名的人",
-        "role": "Hut bagger · 走遍南岛 backcountry hut 网络",
+        "name": "Murray · 留东西给后来人",
+        "role": "62 岁南岛 Wanaka · 30 年走遍各种 hut",
         "accent": "--persona-b",
-        "scenario": "每年给自己定目标——再签下 20 本 hut book。从 Mid Caples 到 Welcome Flat，从无人问津的 bivvy 到 Great Walks 的山屋。这些路他走了太多遍，每一处水源、每一个岔路口，心里都有数。",
-        "painpoint": "走过太多了，他想留点什么给后来的人。但不想被认识，也不要回报。",
-        "wants": "那个让人走错的岔路口，他比任何人都清楚在哪里。\n在那里插一个标记，\"右边才是正道\"。\n下一批人不走那段冤枉路，就够了。\n——这种标记，不能乱插。他认真对待每一个。"
+        "scenario": "30 年走过太多路。每个岔路口、每处水源、每段难走的路，他心里都有数。这两年，他认识的几个老 tramper 陆续退山，一辈子的小知识也跟着没了。",
+        "painpoint": "他想把这些知识留下来，但不想被认识，也不要回报。他不写攻略——攻略太长，没人看。他要的是在那个让人走错的岔路口，留下一句话。",
+        "wants": "\"右边才是正道。\"\n下一批人不走那段冤枉路，就够了。\n这种标记，他认真对待每一个。"
       },
       {
-        "id": "p-runner",
-        "emoji": "🏃",
-        "name": "Alex · 与昨天的自己赛跑",
-        "role": "Trail runner · 步行探路，跑步重走",
+        "id": "p-lin",
+        "emoji": "👩‍👧",
+        "name": "Lin · 给未来的女儿",
+        "role": "41 岁奥克兰 · 周末带 9 岁女儿出门",
         "accent": "--persona-c",
-        "scenario": "上周末他用整整一天走完 Tararua 一段新路线，在一棵孤树下录了一句话——当时风很大，他停下来说了什么，他自己都忘了。这周末他想用跑步的速度重走那段路。",
-        "painpoint": "每次走新路，回来就是一个数字。他不想要一个跑步软件，他想要——一条真正属于自己的路，下次还能回来的那种。",
-        "wants": "一键沿用上次的路线。经过那棵孤树，30 米内手机轻震一下，当时录的那句话自动响起。\n\n他不知道说了什么。但在风里听见自己上周末的声音——\n那一刻不是在赶路，是在相遇。"
+        "scenario": "女儿 9 岁，周末她带女儿走入门级的步道。她不是户外硬核，但希望女儿成长里有一些站在风里的时刻。",
+        "painpoint": "\"家庭友好\"的步道经常有坑——一段陡坡她抱不动女儿。她不怕迷路，怕天黑前下不来。\n丈夫在家，她希望出事时不用解释，他就知道该做什么。",
+        "wants": "路上女儿喊累的时候，她拿出手机，录一段女儿的笑声，标在那个山头。\n3 年后女儿 12 岁，一起回到那里——那段笑声还在原地等她们。\n这是私人标记，永远不会被陌生人看到。但永远在那个地方等她们回来。"
+      },
+      {
+        "id": "p-sarah",
+        "emoji": "🎒",
+        "name": "Sarah · 第一次来新西兰",
+        "role": "29 岁柏林软件工程师 · 6 周自驾",
+        "accent": "--persona-a",
+        "scenario": "第一次来新西兰，6 周自驾。攻略做了一个月，越野鞋是新的，对着户外攻略评分挑路线。表面看准备齐全。",
+        "painpoint": "她不知道的事很多。这边天气从晴到雨只要 30 分钟，河水从过得去到危险只要 2 小时。户外攻略 的\"中等难度\"和这边的\"中等难度\"不是一回事。\nDOC 网站全是免责声明，看不出真实风险。",
+        "wants": "走到岔路口，看见前人留的一个标记：「右边夏天看着像路，雨季是河。」\n走到一段陡坡前，又一个：「下面有湿滑，走慢点。」\n她不需要谁来教她。她需要这条路上有人替她说一声。\n回去那天，她也想留一个标记——给下一个像她一样的人。"
       }
     ],
     "principles": [
       {
         "id": "pr-cairn",
         "icon": "🪨",
-        "title": "每一个标记，都是前人留给你的",
-        "desc": "Cairn——登山者堆在岔路口的石堆，是走过这里的人，留给下一个来的人的指引。\n\n我们把这件事做进了 Cairn 里。\n在一个让你停下脚步的位置，举起手机，AR 视角里插下一个标记。\n\n下一个走到这里的人，会在视野里突然看见它——\n那一刻知道，自己不是一个人。"
+        "title": "每一个标记，都是户外人留给彼此的",
+        "desc": "Cairn——在岔路口堆起一座小石堆，是户外人之间的传统：走过这里的人，留给后来人的指引。\n\n在让你想停下来的地方，留下一个标记。\n不为虚荣，不为攀比，无需交流——\n每一个标记，都是悄悄递出去的一份心意。\n\n下一个走到这里的人，会看见它。\n那一刻他知道，自己不是一个人在走。\n\n在同一个地方，不同的时间，知道彼此来过。"
       },
       {
         "id": "pr-solo",
         "icon": "🌿",
-        "title": "进山就是进山，不是进软件",
-        "desc": "进山之前，把手机调成飞行模式的那种人——Cairn 是为他们做的。\n\n没有通知，没有红点，没有排行榜，没有\"谁在线\"。全程离线——Fiordland、Tararua、Nelson Lakes，没有信号的地方 Cairn 照样跑。DOC 图层、步道状态、GPS 轨迹，全部内置好了。\n\n打开 Cairn，你看见的是山，不是社交动态。\n撞见陌生人留下的那个标记，是惊喜，不是任务。"
+        "title": "你走过的路，才是路",
+        "desc": "Cairn 自动记下你每一步，为你做一本户外手账。\n\n你走过的路、留下的标记、那一段值得记下来的风景——都在里面。\n\n你愿意的话，可以传给好友。也可以留在原地，给路过这里的下一个人。\n\n这本手账上，没有听说，只有走过。\n\n即使在没有信号的地方，它也会默默替你记下来。"
       },
       {
         "id": "pr-private",
         "icon": "📒",
-        "title": "你的山，先是你的",
-        "desc": "每一公里、每一个标记，默认只是你自己的。\n\n有些路只想自己记得。有些标记只想留给某个特定的人。不是每一次发现都需要变成要分享的东西，不是每一段故事都需要观众。\n\n想分享给朋友，一键即可。想公开给陌生人，你来决定。\n你的山是你的山——不是 Cairn 的，不是平台的，不是任何人的。"
+        "title": "这是你的专属 app",
+        "desc": "你可以定制任何细节——什么时候提示、什么时候播报、留下的标记给谁看。\n\n这里没有攀比，没有社交压力，没人知道是你留的。\n\n这里的一切都由你自己决定。\n\n我们想做的是——\n对你而言，这是一个属于你的 app。\n对路上的每个人而言，你也在替他们守着——你的一个点赞、一个提醒，会让信息更透明、更准确。\n\nCairn 会让真正有用的标记留得更久。"
+      }
+    ],
+    "painCards": [
+      {
+        "id": "pc-jamie",
+        "order": 0,
+        "meta": "01 · Jamie 的周六",
+        "tagline": "一个人走太久，路上会想：是不是只有自己。",
+        "frames": [
+          {
+            "id": "f1",
+            "title": "周六一早 · 进山",
+            "text": "Jamie 在奥克兰写代码，35 岁。周末喜欢一个人进山，已经五年了。一开始为了让自己歇一歇，后来习惯了——背包一甩往里走，谁也不见。"
+          },
+          {
+            "id": "f2",
+            "title": "走了两个小时 · 心里有点空",
+            "text": "那天他走了两个小时，一路没碰上人。走到一个山脊，太阳往下落，山里就剩自己一个。他喜欢一个人，但不是每时每刻都喜欢。"
+          },
+          {
+            "id": "f3",
+            "title": "手机震了一下 · 路边有人留过一句话",
+            "text": "手机忽然震了一下。他低头一看——路边石头上有人留了一句话。他读完，站在那里。留这句话的人之前也走过这里，也是一个人。然后他下山的时候，特意把这句话留给一个他不会认识的人。"
+          },
+          {
+            "id": "f4",
+            "title": "他也留了一句 · 给后来的人",
+            "text": "Jamie 往前走了一段，到一个能看到海的地方。停下来，录了一句话。他不知道下一个人是谁。但那个人到这里，会停一停，知道这条路上自己之前有人来过。"
+          }
+        ]
+      },
+      {
+        "id": "pc-murray",
+        "order": 1,
+        "meta": "02 · Murray 走过的 30 年",
+        "tagline": "在这条路上走错过的人，最知道下一个人会在哪里栽。",
+        "frames": [
+          {
+            "id": "f1",
+            "title": "30 年走遍南岛 · 户外是他的家",
+            "text": "Murray 62 岁，住南岛 Wanaka。30 年他走遍南岛的偏远角落，每个岔路、每处水源都装在脑子里。这两年他认识的几个老朋友陆续退山户外探索——一辈子记在脑子里的那些路，也跟着远去了。"
+          },
+          {
+            "id": "f2",
+            "title": "走到一个岔路口 · 他停下来",
+            "text": "那天他走到一个岔路口，停了下来。这个岔路他记得。5 年前他在这里走错过，多走了一小时。 他想告诉其他人，避免他们走错， 但他之前没有合适的工具去留下记号。"
+          },
+          {
+            "id": "f3",
+            "title": "他在石头旁留了一句话 · 没署名",
+            "text": "他打开手机，在岔路那块石头旁留了一句话：「右边才是正道。雨天涨水，左边那条会过不去。」录完，他把它公开给所有路过的人。没署名，他也不需要。"
+          },
+          {
+            "id": "f4",
+            "title": "话留在那块石头上 · 比任何都靠谱",
+            "text": "他往前走。下一批人不一定都会看到，但他知道，只要有一个人在那块石头前看一眼、少走错一次，他今天这个标记就值得。他这一辈人，进山里的机会会越来越少。但话留在那块石头上，会持续指引他人，走向正确的路。"
+          }
+        ]
+      },
+      {
+        "id": "pc-lin",
+        "order": 2,
+        "meta": "03 · Lin 和女儿的山顶",
+        "tagline": "站在风里的那一刻，她想给女儿留一个以后还能回来的地方。",
+        "frames": [
+          {
+            "id": "f1",
+            "title": "周末带女儿走 · 入门那种",
+            "text": "Lin 41 岁，奥克兰人。女儿 9 岁，周末她带女儿走那种入门的徒步。她不算户外硬核。只是想让女儿小时候有几次站在风里的记忆——她自己那会儿没有过。"
+          },
+          {
+            "id": "f2",
+            "title": "走到山顶 · 女儿笑得停不下来",
+            "text": "那天她们走到山顶，风大得吹乱头发。女儿笑得停不下来，扯着她的袖子说\"妈妈你看那边\"。Lin 看着女儿，突然想——再过几年，她可能就不愿意陪我出门了。"
+          },
+          {
+            "id": "f3",
+            "title": "悄悄录了一段笑声 · 标在山头",
+            "text": "她拿出手机，悄悄录了一段女儿的笑声。然后把它标在那个山头。这是私人 mark——永远不会被陌生人看到。只有她和女儿。也只在那个标记点会响起。"
+          },
+          {
+            "id": "f4",
+            "title": "笑声还会在原地 · 等她们回来",
+            "text": "她想，3 年后女儿 12 岁，也许会跟她吵架，也许会不想跟她出门。但如果有一天，她们一起回到这里——那段笑声还会在原地等她们。山没有变。她们也还在。"
+          }
+        ]
+      },
+      {
+        "id": "pc-sarah",
+        "order": 3,
+        "meta": "04 · Sarah 的第一次",
+        "tagline": "攻略上写\"中等难度\"——她到第二天才明白，这边的山不按攻略走。",
+        "frames": [
+          {
+            "id": "f1",
+            "title": "第一次来 NZ · 该做的功课都做了",
+            "text": "Sarah 29 岁，柏林软件工程师。第一次来 NZ，6 周自驾，攻略做了一个月。越野鞋是新的，户外攻略评分都看了——看起来该做的功课她都做了。"
+          },
+          {
+            "id": "f2",
+            "title": "走到下午她才发现 · 攻略上没有",
+            "text": "那天她按 户外攻略 4 星\"中等难度\"走了一段。走到下午她才发现，这边的天气从晴到雨只要 30 分钟，河水从过得去到危险只要 2 小时——这些攻略上都没有。"
+          },
+          {
+            "id": "f3",
+            "title": "雨里站了几秒 · 按那句话走",
+            "text": "走到一个岔路口，她不知道往哪走。雨开始下了。手机震了一下——路边石头上有人留了一句话：「右边夏天像路，雨季是河。走左边。」她在雨里站了几秒，按那句话走。下山的时候，鞋全湿了，但人没事。"
+          },
+          {
+            "id": "f4",
+            "title": "她也留了一句 · 给下一个第一次来的人",
+            "text": "回到停车场，她打开 Cairn 留了一句：「如果天气预报说下午 3 点开始下雨，记得 1 点前下来。」给下一个像她一样、第一次来 NZ 的人。她可能不会再来这条路。但下一个第一次来 NZ 的人，会先看到这句话再上山。"
+          }
+        ]
       }
     ]
   },
@@ -124,7 +242,7 @@ const DEFAULT_DATA = {
       {
         "id": "act-settings",
         "icon": "⚙️",
-        "name": "账号 · 设置",
+        "name": "账号 · 设置 · 其他",
         "sub": "登录 · 个人偏好"
       },
       {
@@ -153,7 +271,7 @@ const DEFAULT_DATA = {
         "id": "ph-ready",
         "label": "⏳ 准备进行",
         "sprint": "",
-        "status": "ready",
+        "status": "p4",
         "order": 2
       },
       {
@@ -170,65 +288,40 @@ const DEFAULT_DATA = {
         "activityId": "act-map",
         "phaseId": "ph-done",
         "status": "done",
-        "title": "打开看到新西兰全境地图",
-        "sub": "Mapbox · 新西兰全境 · 可缩放",
+        "title": "地图展示功能",
+        "sub": "Mapbox · 全球任意地图展示· 可缩放",
         "order": 0,
+        "starred": false,
         "planning": {
           "releaseId": "plr-p1",
-          "sprintIdx": 1,
+          "sprintIdx": 0,
           "planOrder": 0
         }
       },
       {
         "id": "c-map-2",
         "activityId": "act-map",
-        "phaseId": "ph-done",
-        "status": "done",
-        "title": "在地图上看到自己的标记",
-        "sub": "本人标记叠加显示 · 可点击查看",
+        "phaseId": "ph-wip1",
+        "status": "wip",
+        "title": "地图展示标记功能",
+        "sub": "本人标记叠加显示在地图 · 可点击查看",
         "order": 1,
+        "starred": true,
         "planning": {
-          "releaseId": "plr-p1",
-          "sprintIdx": 1,
+          "releaseId": "plr-p2",
+          "sprintIdx": 2,
           "planOrder": 1
         }
       },
       {
         "id": "c-map-off",
         "activityId": "act-map",
-        "phaseId": "ph-done",
-        "status": "done",
-        "title": "没信号时地图也能打开",
+        "phaseId": "ph-wip1",
+        "status": "wip",
+        "title": "离线地图功能",
         "sub": "离线地图包 · 不依赖网络",
-        "order": 2,
-        "planning": {
-          "releaseId": "plr-p1",
-          "sprintIdx": 1,
-          "planOrder": 2
-        }
-      },
-      {
-        "id": "c-map-topo",
-        "activityId": "act-map",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "看到 NZ 风格地形图",
-        "sub": "Cairn Topo 样式 · cream 底色 · 等高线",
         "order": 0,
-        "planning": {
-          "releaseId": "plr-p3",
-          "sprintIdx": 1,
-          "planOrder": 1
-        }
-      },
-      {
-        "id": "c-map-doc",
-        "activityId": "act-map",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "看到 DOC 步道状态",
-        "sub": "官方开放 / 关闭信息叠加在地图",
-        "order": 1,
+        "starred": true,
         "planning": {
           "releaseId": "plr-p3",
           "sprintIdx": 2,
@@ -238,28 +331,30 @@ const DEFAULT_DATA = {
       {
         "id": "c-map-weather",
         "activityId": "act-map",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "出发前查步道天气",
-        "sub": "接入天气 API · 和地图位置联动",
+        "phaseId": "ph-wip1",
+        "status": "wip",
+        "title": "实时天气接入",
+        "sub": "GPS点位的当前天气接入",
         "order": 2,
+        "starred": true,
         "planning": {
           "releaseId": "plr-p3",
-          "sprintIdx": 2,
+          "sprintIdx": 5,
           "planOrder": 1
         }
       },
       {
         "id": "c-map-seed",
-        "activityId": "act-map",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "第一次打开地图就有内容",
-        "sub": "DOC hut · 危险点作为初始标记",
+        "activityId": "act-flag",
+        "phaseId": "ph-ready",
+        "status": "p4",
+        "title": "数据预热",
+        "sub": "DOC hut 数据预热",
         "order": 3,
+        "starred": true,
         "planning": {
           "releaseId": "plr-p3",
-          "sprintIdx": 3,
+          "sprintIdx": 5,
           "planOrder": 0
         }
       },
@@ -268,8 +363,8 @@ const DEFAULT_DATA = {
         "activityId": "act-move",
         "phaseId": "ph-done",
         "status": "done",
-        "title": "走路时轨迹画在地图上",
-        "sub": "GPS 实时定位 · Kalman 滤波平滑 · 速度异常丢点 · 4级精度门控",
+        "title": "徒步/跑步的轨迹记录",
+        "sub": "GPS 实时定位记录轨迹",
         "order": 0,
         "planning": {
           "releaseId": "plr-p1",
@@ -282,23 +377,9 @@ const DEFAULT_DATA = {
         "activityId": "act-move",
         "phaseId": "ph-done",
         "status": "done",
-        "title": "跑步时看配速和距离",
-        "sub": "跑步模式 · 实时数据显示",
+        "title": "配速和距离记录",
+        "sub": "徒步/跑步模式 · 实时数据显示",
         "order": 1,
-        "planning": {
-          "releaseId": "plr-p1",
-          "sprintIdx": 2,
-          "planOrder": 1
-        }
-      },
-      {
-        "id": "c-hike-3",
-        "activityId": "act-move",
-        "phaseId": "ph-done",
-        "status": "done",
-        "title": "太短的走动不计入记录",
-        "sub": "too-short 过滤 · 不污染历史",
-        "order": 2,
         "planning": {
           "releaseId": "plr-p1",
           "sprintIdx": 2,
@@ -306,59 +387,61 @@ const DEFAULT_DATA = {
         }
       },
       {
+        "id": "c-hike-3",
+        "activityId": "act-flag",
+        "phaseId": "ph-done",
+        "status": "done",
+        "title": "太短的走动不计入记录",
+        "sub": "too-short 过滤 · 不污染历史",
+        "order": 2,
+        "planning": {
+          "releaseId": "plr-p1",
+          "sprintIdx": 3,
+          "planOrder": 3
+        }
+      },
+      {
         "id": "c-hike-nav",
         "activityId": "act-move",
         "phaseId": "ph-wip1",
         "status": "wip",
-        "title": "地图上叠加路线轨迹",
-        "sub": "路线折线已显示在地图 · 跟随导航 / 偏离提醒未接入",
+        "title": "路线导航/偏移播报功能",
+        "sub": "非自由徒步/跑步的情况下的语音播报，路线偏移",
         "order": 0,
+        "starred": true,
         "planning": {
-          "releaseId": "plr-r10",
-          "sprintIdx": 1,
-          "planOrder": 1
-        }
-      },
-      {
-        "id": "c-hike-offroute",
-        "activityId": "act-move",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "偏离路线时听到提醒",
-        "sub": "偏离检测算法 (offRoute.ts) 已有 · 语音播报 + UI 触发待接入",
-        "order": 0,
-        "planning": {
-          "releaseId": "plr-p3",
-          "sprintIdx": 3,
+          "releaseId": "plr-p2",
+          "sprintIdx": 5,
           "planOrder": 1
         }
       },
       {
         "id": "c-hike-watch",
         "activityId": "act-move",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "不掏手机也能感知方向",
-        "sub": "Apple Watch 震动提示",
+        "phaseId": "ph-ready",
+        "status": "p4",
+        "title": "Apple watch 接入",
+        "sub": "Apple Watch 震动提示，不掏手机也能感知方向",
         "order": 1,
         "planning": {
-          "releaseId": "plr-p4",
+          "releaseId": "plr-r10",
           "sprintIdx": 1,
           "planOrder": 0
-        }
+        },
+        "starred": true
       },
       {
         "id": "c-flag-1",
-        "activityId": "act-flag",
-        "phaseId": "ph-wip1",
-        "status": "wip",
+        "activityId": "act-move",
+        "phaseId": "ph-done",
+        "status": "done",
         "title": "在地图上留一个标记",
-        "sub": "UI 现有 4 类：危险/风景/补给/路口 · v105 重构到 5 类（danger/junction/water/hut/cairn）进行中",
-        "order": 0,
+        "sub": "Viro 3D标记 5类别",
+        "order": 2,
         "planning": {
-          "releaseId": "plr-r10",
-          "sprintIdx": 0,
-          "planOrder": 0
+          "releaseId": "plr-p1",
+          "sprintIdx": 4,
+          "planOrder": 1
         }
       },
       {
@@ -368,25 +451,26 @@ const DEFAULT_DATA = {
         "status": "done",
         "title": "用 AR 看到现实里的标记",
         "sub": "ViroReact + ARKit 世界跟踪 · GPS→ARKit 世界坐标 · 真北对齐",
-        "order": 1,
+        "order": 0,
         "planning": {
           "releaseId": "plr-p1",
-          "sprintIdx": 0,
-          "planOrder": 0
+          "sprintIdx": 1,
+          "planOrder": 2
         }
       },
       {
         "id": "c-flag-ar2",
         "activityId": "act-flag",
-        "phaseId": "ph-wip1",
-        "status": "wip",
+        "phaseId": "ph-planned",
+        "status": "planned",
         "title": "AR 标记用 Unity 重做",
-        "sub": "Phase 1 Spike 已验证（DS shader + 4柱场景通过 EAS CI） · UnityAROverlay + unityBridge 已有 · USE_UNITY_AR=false 待 EAS embed 稳定后开启",
-        "order": 0,
+        "sub": "DS实体效果",
+        "order": 1,
+        "starred": true,
         "planning": {
-          "releaseId": "plr-r10",
-          "sprintIdx": 0,
-          "planOrder": 1
+          "releaseId": "plr-r20",
+          "sprintIdx": 5,
+          "planOrder": 0
         }
       },
       {
@@ -395,40 +479,28 @@ const DEFAULT_DATA = {
         "phaseId": "ph-wip1",
         "status": "wip",
         "title": "对别人的标记说有用 / 没用",
-        "sub": "后端投票/举报接口已实现 · useCommunityStore 已有 · UI 待接入",
-        "order": 1,
+        "sub": "AR标记点赞/report功能",
+        "order": 0,
+        "starred": true,
         "planning": {
-          "releaseId": "plr-r10",
-          "sprintIdx": 1,
+          "releaseId": "plr-p2",
+          "sprintIdx": 3,
           "planOrder": 0
         }
       },
       {
         "id": "c-flag-voice",
         "activityId": "act-flag",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "录一段语音附在标记上",
+        "phaseId": "ph-ready",
+        "status": "p4",
+        "title": "语音标记功能",
         "sub": "5 秒语音留言 · 后人到达时播放",
         "order": 0,
+        "starred": true,
         "planning": {
-          "releaseId": "plr-p3",
-          "sprintIdx": 0,
+          "releaseId": "plr-p2",
+          "sprintIdx": 2,
           "planOrder": 0
-        }
-      },
-      {
-        "id": "c-flag-6th",
-        "activityId": "act-flag",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "留一个 cairn 石堆给陌生人",
-        "sub": "第6种标记类型 · sepia 棕色",
-        "order": 1,
-        "planning": {
-          "releaseId": "plr-p3",
-          "sprintIdx": 0,
-          "planOrder": 1
         }
       },
       {
@@ -437,12 +509,12 @@ const DEFAULT_DATA = {
         "phaseId": "ph-done",
         "status": "done",
         "title": "结束后看距离时长爬升",
-        "sub": "活动统计 · 轨迹地图回顾",
+        "sub": "活动统计 · 轨迹地图回顾 Activity tab",
         "order": 0,
         "planning": {
           "releaseId": "plr-p1",
-          "sprintIdx": 3,
-          "planOrder": 0
+          "sprintIdx": 2,
+          "planOrder": 1
         }
       },
       {
@@ -452,107 +524,54 @@ const DEFAULT_DATA = {
         "status": "done",
         "title": "查看所有历史活动",
         "sub": "路线/标记列表 · 地图回顾 · 类型/时间筛选未实现",
-        "order": 1,
+        "order": 2,
         "planning": {
           "releaseId": "plr-p1",
           "sprintIdx": 3,
-          "planOrder": 1
+          "planOrder": 2
         }
       },
       {
         "id": "c-rec-route",
         "activityId": "act-record",
-        "phaseId": "ph-wip1",
-        "status": "wip",
+        "phaseId": "ph-done",
+        "status": "done",
         "title": "把走过的路存成路线",
-        "sub": "复制活动轨迹 · 样式还在打磨",
-        "order": 0,
+        "sub": "复制活动轨迹 · 画笔样式编辑 250m范围\n纯Mapbox基础，确保大方向正确，城市内部道路snap正确",
+        "order": 3,
+        "starred": true,
         "planning": {
-          "releaseId": "plr-r10",
-          "sprintIdx": 2,
+          "releaseId": "plr-p1",
+          "sprintIdx": 5,
           "planOrder": 0
         }
       },
       {
         "id": "c-rec-snap",
         "activityId": "act-record",
-        "phaseId": "ph-wip1",
-        "status": "wip",
+        "phaseId": "ph-done",
+        "status": "done",
         "title": "路线编辑时 snap-to-road",
-        "sub": "RouteEditorScreen · snapToRoadAndTrim · OSM 路网贴合",
+        "sub": "山区沿用GPS，无法修改路线\n城镇沿用snap to road, 可在3结点内修改\n原则: 探索过的路才允许微调，没探索过的路，希望去探索。而非随意编译，创造。",
         "order": 1,
+        "starred": true,
         "planning": {
-          "releaseId": "plr-r10",
-          "sprintIdx": 2,
-          "planOrder": 1
-        }
-      },
-      {
-        "id": "c-rec-edit",
-        "activityId": "act-record",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "调整路线的节点",
-        "sub": "地图上拖拽调整 · 编辑功能待完善",
-        "order": 0,
-        "planning": {
-          "releaseId": "plr-p3",
-          "sprintIdx": 4,
-          "planOrder": 0
-        }
-      },
-      {
-        "id": "c-rec-gpx",
-        "activityId": "act-record",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "从其他软件导入路线",
-        "sub": "GPX 格式 · 兼容主流户外平台",
-        "order": 1,
-        "planning": {
-          "releaseId": "plr-p3",
-          "sprintIdx": 4,
+          "releaseId": "plr-p1",
+          "sprintIdx": 5,
           "planOrder": 1
         }
       },
       {
         "id": "c-fr-1",
         "activityId": "act-friend",
-        "phaseId": "ph-done",
-        "status": "done",
+        "phaseId": "ph-wip1",
+        "status": "wip",
         "title": "添加好友",
-        "sub": "用邮箱搜索 · 双方确认",
+        "sub": "用邮箱搜索 · 双方确认 好友名单 · 接受 / 拒绝申请",
         "order": 0,
+        "starred": true,
         "planning": {
-          "releaseId": "plr-p1",
-          "sprintIdx": 0,
-          "planOrder": 1
-        }
-      },
-      {
-        "id": "c-fr-list",
-        "activityId": "act-friend",
-        "phaseId": "ph-done",
-        "status": "done",
-        "title": "看好友列表",
-        "sub": "好友名单 · 接受 / 拒绝申请",
-        "order": 1,
-        "planning": {
-          "releaseId": "plr-p1",
-          "sprintIdx": 0,
-          "planOrder": 2
-        }
-      },
-      {
-        "id": "c-fr-share",
-        "activityId": "act-friend",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "把路线分享给好友",
-        "sub": "路线分享流程待实现",
-        "order": 0,
-        "planning": {
-          "releaseId": "plr-p3",
+          "releaseId": "plr-p2",
           "sprintIdx": 1,
           "planOrder": 0
         }
@@ -562,11 +581,11 @@ const DEFAULT_DATA = {
         "activityId": "act-friend",
         "phaseId": "ph-planned",
         "status": "planned",
-        "title": "知道好友此刻在哪",
+        "title": "好友实时定位",
         "sub": "实时位置共享 · 双方同意后开启",
         "order": 1,
         "planning": {
-          "releaseId": "plr-p4",
+          "releaseId": "plr-r20",
           "sprintIdx": 0,
           "planOrder": 0
         }
@@ -574,43 +593,44 @@ const DEFAULT_DATA = {
       {
         "id": "c-sos-1",
         "activityId": "act-sos",
-        "phaseId": "ph-wip1",
-        "status": "wip",
+        "phaseId": "ph-planned",
+        "status": "planned",
         "title": "SOS 按钮长按触发（组件已做）",
         "sub": "SOSButton + sosService 完整实现 · 未挂载到任何页面",
-        "order": 0,
+        "order": 2,
         "planning": {
-          "releaseId": "plr-p2",
-          "sprintIdx": 0,
+          "releaseId": "plr-r10",
+          "sprintIdx": 4,
           "planOrder": 0
         }
       },
       {
         "id": "c-sos-contact",
         "activityId": "act-sos",
-        "phaseId": "ph-wip1",
-        "status": "wip",
+        "phaseId": "ph-planned",
+        "status": "planned",
         "title": "设置紧急联系人",
         "sub": "addEmergencyContact / getEmergencyContacts 已实现 · UI 待接入",
         "order": 1,
         "planning": {
-          "releaseId": "plr-p2",
-          "sprintIdx": 1,
+          "releaseId": "plr-r10",
+          "sprintIdx": 3,
           "planOrder": 0
         }
       },
       {
         "id": "c-sos-send",
         "activityId": "act-sos",
-        "phaseId": "ph-wip1",
-        "status": "wip",
+        "phaseId": "ph-planned",
+        "status": "planned",
         "title": "遇险时发出求救",
         "sub": "sendSOS · 短信预填 + GPS 坐标 + 离线队列 · UI 待接入",
-        "order": 2,
+        "order": 0,
+        "starred": false,
         "planning": {
-          "releaseId": "plr-p2",
-          "sprintIdx": 2,
-          "planOrder": 0
+          "releaseId": "plr-r10",
+          "sprintIdx": 4,
+          "planOrder": 1
         }
       },
       {
@@ -622,9 +642,9 @@ const DEFAULT_DATA = {
         "sub": "超时自动通知联系人",
         "order": 3,
         "planning": {
-          "releaseId": "plr-p2",
+          "releaseId": "plr-r10",
           "sprintIdx": 3,
-          "planOrder": 0
+          "planOrder": 2
         }
       },
       {
@@ -632,69 +652,59 @@ const DEFAULT_DATA = {
         "activityId": "act-settings",
         "phaseId": "ph-wip1",
         "status": "wip",
-        "title": "注册 / 登录账号",
-        "sub": "邮箱 + 验证码已完成 · Google OAuth OTA crash 暂时禁用（AuthScreen.tsx:462）",
-        "order": 0,
+        "title": "第三方登录",
+        "sub": "google登录崩溃，apple登录未完成",
+        "order": 2,
+        "starred": true,
         "planning": {
-          "releaseId": "plr-r10",
-          "sprintIdx": 3,
-          "planOrder": 0
+          "releaseId": "plr-p3",
+          "sprintIdx": 0,
+          "planOrder": 1
         }
       },
       {
         "id": "c-set-mode",
         "activityId": "act-settings",
-        "phaseId": "ph-wip1",
-        "status": "wip",
-        "title": "切换 Explorer / Navigator 模式",
-        "sub": "uiMode 存储 + SettingsScreen 切换已完成 · 仅 HikingScreen 读取（bearing stat） · 其他页面未响应",
-        "order": 1,
+        "phaseId": "ph-planned",
+        "status": "planned",
+        "title": "切换经典/漫画模式",
+        "sub": "考虑模式切换",
+        "order": 0,
+        "starred": true,
         "planning": {
           "releaseId": "plr-r10",
-          "sprintIdx": 3,
-          "planOrder": 1
+          "sprintIdx": 2,
+          "planOrder": 0
         }
       },
       {
         "id": "c-set-personal",
         "activityId": "act-settings",
-        "phaseId": "ph-planned",
-        "status": "planned",
-        "title": "设置附近标记提醒距离",
-        "sub": "个性化阈值 · 偏好管理",
+        "phaseId": "ph-ready",
+        "status": "p4",
+        "title": "设置个性化定义",
+        "sub": "设置包含 标记定义，好友定义，基础定义，徒步/跑步细节定义。",
         "order": 0,
+        "starred": true,
         "planning": {
-          "releaseId": "plr-p4",
-          "sprintIdx": 3,
-          "planOrder": 0
-        }
-      },
-      {
-        "id": "c-res-offline",
-        "activityId": "act-resilience",
-        "phaseId": "ph-done",
-        "status": "done",
-        "title": "没信号时地图和 GPS 照常用",
-        "sub": "离线地图包 · GPS 不依赖网络",
-        "order": 0,
-        "planning": {
-          "releaseId": "plr-p1",
-          "sprintIdx": 3,
+          "releaseId": "plr-p3",
+          "sprintIdx": 1,
           "planOrder": 2
         }
       },
       {
         "id": "c-res-sync",
         "activityId": "act-resilience",
-        "phaseId": "ph-done",
-        "status": "done",
+        "phaseId": "ph-wip1",
+        "status": "wip",
         "title": "操作失败后自动重试上传",
         "sub": "标记和活动进离线队列 · 有信号自动补发",
-        "order": 1,
+        "order": 0,
+        "starred": true,
         "planning": {
-          "releaseId": "plr-p1",
-          "sprintIdx": 4,
-          "planOrder": 0
+          "releaseId": "plr-p3",
+          "sprintIdx": 2,
+          "planOrder": 1
         }
       },
       {
@@ -704,25 +714,361 @@ const DEFAULT_DATA = {
         "status": "done",
         "title": "GPS 点跳动时轨迹不乱",
         "sub": "滤波平滑 · 速度异常丢点 · 虚线表示无信号段",
-        "order": 2,
+        "order": 0,
         "planning": {
           "releaseId": "plr-p1",
           "sprintIdx": 4,
-          "planOrder": 1
+          "planOrder": 0
         }
       },
       {
         "id": "c-res-bg",
         "activityId": "act-resilience",
-        "phaseId": "ph-planned",
-        "status": "planned",
+        "phaseId": "ph-wip1",
+        "status": "wip",
         "title": "锁屏后轨迹记录不中断",
         "sub": "后台定位保活 · 语音播报照常",
+        "order": 1,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-p2",
+          "sprintIdx": 4,
+          "planOrder": 1
+        }
+      },
+      {
+        "id": "c-mq0y4gg8-g58r9",
+        "title": "Mapbox图层进入特效",
+        "sub": "最高层级地球图层的层层推进，直到街道",
+        "status": "done",
+        "activityId": "act-map",
+        "phaseId": "ph-done",
+        "order": 1,
+        "planning": {
+          "releaseId": "plr-p1",
+          "sprintIdx": 1,
+          "planOrder": 0
+        }
+      },
+      {
+        "id": "c-mq0yb271-03ira",
+        "title": "跑步防误触",
+        "sub": "需要双击屏幕才能点开",
+        "status": "done",
+        "activityId": "act-move",
+        "phaseId": "ph-done",
+        "order": 3,
+        "planning": {
+          "releaseId": "plr-p1",
+          "sprintIdx": 2,
+          "planOrder": 3
+        }
+      },
+      {
+        "id": "c-mq0yeqke-2oo6l",
+        "title": "跑步页面UI重构",
+        "sub": "美化 用户体验",
+        "status": "wip",
+        "activityId": "act-move",
+        "phaseId": "ph-wip1",
+        "order": 1,
+        "planning": {
+          "releaseId": "plr-p3",
+          "sprintIdx": 3,
+          "planOrder": 0
+        }
+      },
+      {
+        "id": "c-mq0yhgaa-6yr9v",
+        "title": "标记算法接入，实体参数测试",
+        "sub": "标记算法已完成 5000 chaos-monkey测试，661实际case标注测试，需要app结合",
+        "status": "wip",
+        "activityId": "act-flag",
+        "phaseId": "ph-wip1",
+        "order": 1,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-p2",
+          "sprintIdx": 3,
+          "planOrder": 1
+        }
+      },
+      {
+        "id": "c-mq0yiwrc-zsana",
+        "title": "标记类别以及权限分类",
+        "sub": "类别包含，危险/岔路/水源/避难屋/个人石堆文化\n权限包含，个人/好友/公众",
+        "status": "done",
+        "activityId": "act-flag",
+        "phaseId": "ph-done",
+        "order": 1,
+        "planning": {
+          "releaseId": "plr-p1",
+          "sprintIdx": 0,
+          "planOrder": 1
+        }
+      },
+      {
+        "id": "c-mq0ymfss-r7w1r",
+        "title": "AR根据距离改变视觉效果",
+        "sub": "远处视觉和近处视觉不一样，如何展示文字也不一样",
+        "status": "planned",
+        "activityId": "act-flag",
+        "phaseId": "ph-planned",
+        "order": 2,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-r20",
+          "sprintIdx": 5,
+          "planOrder": 1
+        }
+      },
+      {
+        "id": "c-mq0ymziw-l2pos",
+        "title": "AR留言展示",
+        "sub": "展示留言/语音",
+        "status": "planned",
+        "activityId": "act-flag",
+        "phaseId": "ph-planned",
+        "order": 3,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-r20",
+          "sprintIdx": 5,
+          "planOrder": 2
+        }
+      },
+      {
+        "id": "c-mq0yq65m-ihlk8",
+        "title": "Mock好友数据，基础UI",
+        "sub": "基础UI",
+        "status": "done",
+        "activityId": "act-friend",
+        "phaseId": "ph-done",
         "order": 0,
         "planning": {
-          "releaseId": "plr-p4",
+          "releaseId": "plr-p1",
+          "sprintIdx": 1,
+          "planOrder": 1
+        }
+      },
+      {
+        "id": "c-mq0yqiw7-y8b5k",
+        "title": "好友路线标记分享",
+        "sub": "好友之间可以分享路线/标记\n也可以禁止接受他人的分享",
+        "status": "wip",
+        "activityId": "act-friend",
+        "phaseId": "ph-wip1",
+        "order": 1,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-p2",
+          "sprintIdx": 1,
+          "planOrder": 1
+        }
+      },
+      {
+        "id": "c-mq0ytfkp-iplvd",
+        "title": "旗帜列表UI重构",
+        "sub": "旗帜列表需要UI重构",
+        "status": "wip",
+        "activityId": "act-flag",
+        "phaseId": "ph-wip1",
+        "order": 2,
+        "planning": {
+          "releaseId": "plr-p3",
+          "sprintIdx": 3,
+          "planOrder": 1
+        }
+      },
+      {
+        "id": "c-mq0yupjd-9jink",
+        "title": "好友UI重构",
+        "sub": "UI可能需要重构",
+        "status": "wip",
+        "activityId": "act-friend",
+        "phaseId": "ph-wip1",
+        "order": 2,
+        "planning": {
+          "releaseId": "plr-p3",
+          "sprintIdx": 4,
+          "planOrder": 1
+        },
+        "starred": false
+      },
+      {
+        "id": "c-mq0yvl1a-qwomy",
+        "title": "基础账号密码登录",
+        "sub": "基础账号密码登录/注册",
+        "status": "done",
+        "activityId": "act-settings",
+        "phaseId": "ph-done",
+        "order": 0,
+        "planning": {
+          "releaseId": "plr-p1",
+          "sprintIdx": 0,
+          "planOrder": 2
+        }
+      },
+      {
+        "id": "c-mq0yw4i6-ry2ku",
+        "title": "登录邮箱验证",
+        "sub": "邮箱6位密码验证",
+        "status": "wip",
+        "activityId": "act-settings",
+        "phaseId": "ph-wip1",
+        "order": 1,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-p3",
+          "sprintIdx": 0,
+          "planOrder": 0
+        }
+      },
+      {
+        "id": "c-mq0yy9qi-pkwcu",
+        "title": "设置页面UI重构",
+        "sub": "需要更结构化",
+        "status": "wip",
+        "activityId": "act-settings",
+        "phaseId": "ph-wip1",
+        "order": 4,
+        "planning": {
+          "releaseId": "plr-p3",
+          "sprintIdx": 4,
+          "planOrder": 3
+        }
+      },
+      {
+        "id": "c-mq0yytjj-agw3p",
+        "title": "设置功能实现",
+        "sub": "目前设置多为占位符",
+        "status": "wip",
+        "activityId": "act-settings",
+        "phaseId": "ph-wip1",
+        "order": 3,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-p3",
+          "sprintIdx": 1,
+          "planOrder": 1
+        }
+      },
+      {
+        "id": "c-mq0yzg85-v0f8i",
+        "title": "Logo设计",
+        "sub": "静态/动态Logo设计",
+        "status": "done",
+        "activityId": "act-settings",
+        "phaseId": "ph-done",
+        "order": 1,
+        "planning": {
+          "releaseId": "plr-p1",
+          "sprintIdx": 0,
+          "planOrder": 3
+        }
+      },
+      {
+        "id": "c-mq385dag-23may",
+        "title": "cairn世界地图",
+        "sub": "用户愿意公开他们走过的点 —— 编辑的时候其他人就可以选择\n用户不愿意公开他们走过的点 —— 属于自己的路",
+        "status": "planned",
+        "activityId": "act-record",
+        "phaseId": "ph-planned",
+        "order": 0,
+        "planning": {
+          "releaseId": "plr-r20",
+          "sprintIdx": 1,
+          "planOrder": 0
+        }
+      },
+      {
+        "id": "c-mq4l3412-xkv8d",
+        "title": "O61 非 Public 所有者真机验收",
+        "sub": "准备已完成：48项中文步骤 + 当前能力清单；待批准新native build、非Public后端匹配、O61 OTA与iPhone本人验收。Public本轮排除且不计分。",
+        "status": "wip",
+        "activityId": "act-resilience",
+        "phaseId": "ph-wip1",
+        "order": 0,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-r10",
+          "sprintIdx": 0,
+          "planOrder": 1
+        }
+      },
+      {
+        "id": "c-mqbzn00b-ukya5",
+        "title": "LINZ接入，NZ山区步道snap补全",
+        "sub": "Mapbox数据缺失 LINZ补全步道信息",
+        "status": "p4",
+        "activityId": "act-record",
+        "phaseId": "ph-ready",
+        "order": 0,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-r10",
+          "sprintIdx": 0,
+          "planOrder": 0
+        }
+      },
+      {
+        "id": "c-mqbzoecv-u27si",
+        "title": "用户个人Own Map",
+        "sub": "补全Mapbox + Linz依旧缺失的小路\n用户曾经走过的GPS点作为个人地图，第三层补全",
+        "status": "planned",
+        "activityId": "act-record",
+        "phaseId": "ph-planned",
+        "order": 1,
+        "starred": false,
+        "planning": {
+          "releaseId": "plr-r20",
           "sprintIdx": 2,
           "planOrder": 0
+        }
+      },
+      {
+        "id": "c-mqjiukrc-7imns",
+        "title": "迷雾地图",
+        "sub": "迷雾地图探索",
+        "status": "done",
+        "activityId": "act-record",
+        "phaseId": "ph-done",
+        "order": 4,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-p2",
+          "sprintIdx": 0,
+          "planOrder": 0
+        }
+      },
+      {
+        "id": "c-mqjiv97t-amhay",
+        "title": "GPS 标记算法纠正",
+        "sub": "5-15 物理GPS -> 3-5GPS算法",
+        "status": "done",
+        "activityId": "act-flag",
+        "phaseId": "ph-done",
+        "order": 3,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-p2",
+          "sprintIdx": 0,
+          "planOrder": 1
+        }
+      },
+      {
+        "id": "c-mqjix1cc-cn0db",
+        "title": "息屏后台保护",
+        "sub": "息屏或者后台需要确保APP是开着的\n如果设置开了自动迷雾探索，要实时记录GPS",
+        "status": "wip",
+        "activityId": "act-settings",
+        "phaseId": "ph-wip1",
+        "order": 0,
+        "starred": true,
+        "planning": {
+          "releaseId": "plr-p2",
+          "sprintIdx": 0,
+          "planOrder": 2
         }
       }
     ]
@@ -1454,28 +1800,12 @@ const DEFAULT_DATA = {
         ]
       },
       {
-        "id": "plr-r10",
-        "name": "Release 1.0",
-        "sub": "v1.0 修复批",
-        "color": "var(--wip)",
-        "kind": "release",
-        "order": 1,
-        "slotLabels": [
-          "Hotfix 1.0.1",
-          "Hotfix 1.0.2",
-          "Hotfix 1.0.3",
-          "Hotfix 1.0.4",
-          "Hotfix 1.0.5",
-          "Hotfix 1.0.6"
-        ]
-      },
-      {
         "id": "plr-p2",
         "name": "Phase 2",
         "sub": "主线推进",
         "color": "var(--p4)",
         "kind": "phase",
-        "order": 2,
+        "order": 1,
         "slotLabels": [
           "Sprint 66",
           "Sprint 67",
@@ -1486,28 +1816,12 @@ const DEFAULT_DATA = {
         ]
       },
       {
-        "id": "plr-r20",
-        "name": "Release 2.0",
-        "sub": "v2.0 修复批",
-        "color": "var(--wip)",
-        "kind": "release",
-        "order": 3,
-        "slotLabels": [
-          "Hotfix 2.0.1",
-          "Hotfix 2.0.2",
-          "Hotfix 2.0.3",
-          "Hotfix 2.0.4",
-          "Hotfix 2.0.5",
-          "Hotfix 2.0.6"
-        ]
-      },
-      {
         "id": "plr-p3",
         "name": "Phase 3",
         "sub": "远期规划",
         "color": "var(--plan)",
         "kind": "phase",
-        "order": 4,
+        "order": 2,
         "slotLabels": [
           "Sprint 72",
           "Sprint 73",
@@ -1515,6 +1829,38 @@ const DEFAULT_DATA = {
           "Sprint 75",
           "Sprint 76",
           "Sprint 77"
+        ]
+      },
+      {
+        "id": "plr-r10",
+        "name": "Release 1.0",
+        "sub": "v1.0 修复批",
+        "color": "var(--wip)",
+        "kind": "release",
+        "order": 3,
+        "slotLabels": [
+          "Hotfix 1.0.1",
+          "Hotfix 1.0.2",
+          "Hotfix 1.0.3",
+          "Hotfix 1.0.4",
+          "Hotfix 1.0.5",
+          "Hotfix 1.0.6"
+        ]
+      },
+      {
+        "id": "plr-r20",
+        "name": "Release 2.0",
+        "sub": "v2.0 修复批",
+        "color": "var(--wip)",
+        "kind": "release",
+        "order": 4,
+        "slotLabels": [
+          "Hotfix 2.0.1",
+          "Hotfix 2.0.2",
+          "Hotfix 2.0.3",
+          "Hotfix 2.0.4",
+          "Hotfix 2.0.5",
+          "Hotfix 2.0.6"
         ]
       },
       {
@@ -1536,5 +1882,4 @@ const DEFAULT_DATA = {
     ]
   }
 };
-
 window.DEFAULT_DATA = DEFAULT_DATA;

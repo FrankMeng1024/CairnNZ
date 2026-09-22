@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "card": "CARD-ROUTE-01",
+  "delivery_revision": "02",
+  "run_id": "20260917T203209+0800",
+  "pre_fix_command": "cd app && npx jest --runInBand src/services/__tests__/routeService.contract.test.ts src/store/__tests__/useRouteStore.offline.test.ts",
+  "pre_fix_log": "test-output/pre-fix-defect-reproduction.log",
+  "pre_fix_summary": {
+    "status": "FAIL_EXPECTED_REPRODUCED",
+    "suites_failed": 2,
+    "suites_total": 2,
+    "tests_failed": 2,
+    "tests_passed": 18,
+    "tests_total": 20
+  },
+  "findings": [
+    {
+      "id": "A_AMBIGUOUS_CLIENT_DELETE_404",
+      "pre_fix": {
+        "status": "FAIL_EXPECTED_REPRODUCED",
+        "test": "generic 404 from client-identity delete is endpoint-unsupported, not confirmed deletion",
+        "expected": "unsupported",
+        "observed": true,
+        "remote_cleanup_truth": "FALSELY_CONFIRMED"
+      },
+      "root_cause": "deleteRouteByClientId treated every 404 as successful absence, so the store skipped legacy deletion and could clear retry state.",
+      "post_fix": {
+        "status": "PASS",
+        "service_outcomes": ["deleted", "already-absent", "unsupported"],
+        "supported_deleted": "PASS",
+        "supported_already_absent_identity_bound": "PASS",
+        "unsupported_known_server_id_falls_back": "PASS",
+        "unsupported_unknown_server_id_stays_pending": "PASS",
+        "legacy_fallback_failure_stays_pending": "PASS",
+        "numeric_generic_404_is_unknown": "PASS",
+        "malformed_success_is_unknown": "PASS",
+        "authentication_server_transport_timeout_are_not_success": "PASS",
+        "late_create_ack_does_not_resurrect": "PASS",
+        "retry_converges_without_duplicate_create": "PASS",
+        "activity_cairn_memory_non_cascade": "PASS"
+      }
+    },
+    {
+      "id": "B_SAME_OWNER_STALE_READ_OVERWRITE",
+      "pre_fix": {
+        "status": "FAIL_EXPECTED_REPRODUCED",
+        "test": "a detail read started before an accepted same-owner mutation cannot overwrite store or cache",
+        "after_save_name": "New saved name",
+        "after_late_read_name": "Old",
+        "persisted_cache_name": "Old",
+        "after_save_distance_m": 410,
+        "after_late_read_distance_m": 140
+      },
+      "root_cause": "owner and request guards did not establish per-object ordering between an older read and a newer accepted mutation; the old response was published and persisted.",
+      "post_fix": {
+        "status": "PASS",
+        "old_detail_after_rename": "DROPPED",
+        "old_detail_after_geometry_save": "DROPPED",
+        "old_list_after_geometry_save": "MERGED_WITH_NEWER_ACCEPTED_TRUTH",
+        "stale_not_found_or_error": "DOES_NOT_REPLACE_NEWER_STATE",
+        "read_after_tombstone": "DOES_NOT_RESURRECT_MEMORY_OR_CACHE",
+        "account_switch": "DROPPED",
+        "out_of_order_reads": "NEWEST_REQUEST_WINS",
+        "failed_mutation": "DRAFT_NOT_PUBLISHED_AS_ACCEPTED",
+        "legitimate_later_refresh": "ACCEPTED",
+        "relaunch_cache": "NEWER_ACKNOWLEDGED_RESULT_PRESERVED",
+        "ordering_basis": "PER_OWNER_OBJECT_MUTATION_EPOCH_PLUS_SERVER_UPDATED_AT_NOT_DEVICE_CLOCK"
+      }
+    }
+  ],
+  "post_fix_command": "cd app && npx jest --runInBand <18 focused Route/Activity/Cairn/Trails/offline suites listed in client-focused-regression.log>",
+  "post_fix_log": "test-output/client-focused-regression.log",
+  "post_fix_summary": {
+    "status": "PASS",
+    "suites_passed": 18,
+    "suites_total": 18,
+    "tests_passed": 164,
+    "tests_total": 164
+  }
+}
+

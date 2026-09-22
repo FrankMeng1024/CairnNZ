@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "run_id": "20260916T164608+0800",
+  "scope": "Activity Detail convergence only",
+  "base_register": "docs/review/ui-requirements-baseline/20260916T131638+0800/REQUIREMENTS_REGISTER.json",
+  "base_capability_ids": [
+    "ACT-03",
+    "ACT-01",
+    "ACT-02",
+    "ROUTE-02",
+    "ROUTE-03",
+    "CAIRN-01",
+    "MEM-01",
+    "DIAG-01"
+  ],
+  "acceptance_boundary": {
+    "whole_page_user_acceptance": "PENDING",
+    "deployment": "NOT_PERFORMED",
+    "device_loading": "UNVERIFIED",
+    "real_field_validation": "UNVERIFIED",
+    "native_mapbox": "UNVERIFIED"
+  },
+  "requirements": [
+    {
+      "requirement_id": "RQ-ACTD-001",
+      "parent_capability_ids": ["ACT-03"],
+      "delta": "Finish, restored/local, Trails, and supported internal IDs resolve one Activity Detail projection; the page now prioritizes identity, mode/date, metrics, explicit linked Cairns, and actions.",
+      "implemented_candidate": "YES",
+      "automated_proof": "YES",
+      "automated_evidence": ["AD-TEST-CORE", "AD-TEST-SCOPED", "activityDetailPresentation.test.ts", "freeActivityIntegrationContracts.test.ts"],
+      "visual_proof": "EXPO_WEB_FIXTURE",
+      "visual_evidence": ["AD-VIS-001", "AD-VIS-002", "AD-VIS-003", "AD-VIS-005", "AD-VIS-006", "AD-VIS-010"],
+      "device_user_acceptance": "PENDING",
+      "remaining": ["Native Mapbox/legal-ornament collision", "Physical Finish/Trails identity check", "Owner acceptance"]
+    },
+    {
+      "requirement_id": "RQ-ACTD-002",
+      "parent_capability_ids": ["ACT-03"],
+      "delta": "Finish resets Home → Trails Activities → Activity Detail; Detail Back resets to Trails Activities and cannot reveal an ended recording screen.",
+      "implemented_candidate": "YES",
+      "automated_proof": "YES",
+      "automated_evidence": ["AD-TEST-CORE", "freeActivityIntegrationContracts.test.ts"],
+      "visual_proof": "NO_NORMAL_NAVIGATION_PROOF",
+      "visual_evidence": [],
+      "device_user_acceptance": "PENDING",
+      "remaining": ["Exercise both normal entry journeys and Back on a physical iPhone"]
+    },
+    {
+      "requirement_id": "RQ-ACTD-003",
+      "parent_capability_ids": ["ACT-03", "ROUTE-02"],
+      "delta": "Normal success badges and the unsupported later-enhancement promise were removed. Only local loading/unavailability, pending/syncing/error, Gap, and Route-review exceptions are surfaced; retry invokes the existing sync drain.",
+      "implemented_candidate": "YES",
+      "automated_proof": "YES",
+      "automated_evidence": ["activityDetailPresentation.test.ts", "activityRouteState.test.ts"],
+      "visual_proof": "EXPO_WEB_FIXTURE",
+      "visual_evidence": ["AD-VIS-003", "AD-VIS-004", "AD-VIS-005"],
+      "device_user_acceptance": "PENDING",
+      "remaining": ["Physical offline/reconnect check", "Owner acceptance"]
+    },
+    {
+      "requirement_id": "RQ-ACT-006",
+      "parent_capability_ids": ["ACT-01", "ACT-02", "MEM-01", "DIAG-01"],
+      "delta": "Activity Detail no longer applies a second smoothing/simplification pass. It displays persisted chosen Final points while historical metrics and Memory remain based on Activity truth.",
+      "implemented_candidate": "PARTIAL_PAGE_SCOPE",
+      "automated_proof": "YES",
+      "automated_evidence": ["AD-TEST-CORE", "freeActivityIntegrationContracts.test.ts"],
+      "visual_proof": "EXPO_WEB_FALLBACK_ONLY",
+      "visual_evidence": ["AD-VIS-001", "AD-VIS-004"],
+      "device_user_acceptance": "PENDING",
+      "remaining": ["Broader Memory evidence provenance remains outside this slice", "Native chosen-Final rendering is unverified"]
+    },
+    {
+      "requirement_id": "RQ-ACT-007",
+      "parent_capability_ids": ["ACT-01", "ACT-02", "ROUTE-02"],
+      "delta": "Native and Expo Web Detail render only real segment Feature/line sets; the dashed cross-gap connector was removed. Route creation may select one segment or explicitly reconnect only the new Route.",
+      "implemented_candidate": "YES_PAGE_PRESENTATION",
+      "automated_proof": "YES",
+      "automated_evidence": ["AD-TEST-CORE", "freeActivityIntegrationContracts.test.ts"],
+      "visual_proof": "EXPO_WEB_FALLBACK",
+      "visual_evidence": ["AD-VIS-004"],
+      "device_user_acceptance": "PENDING",
+      "remaining": ["Native Mapbox Gap rendering", "No Final algorithm retuning was performed"]
+    },
+    {
+      "requirement_id": "RQ-ROUTE-002",
+      "parent_capability_ids": ["ROUTE-02"],
+      "delta": "Save as Route deep-copies Activity geometry into the durable local Route outbox, protects duplicate taps, preserves Activity truth, and resets successful creation to canonical Route Detail.",
+      "implemented_candidate": "YES",
+      "automated_proof": "YES",
+      "automated_evidence": ["useRouteStore.offline.test.ts", "trailsScreenContracts.test.ts", "AD-TEST-SCOPED"],
+      "visual_proof": "DRAFT_ENTRY_ONLY",
+      "visual_evidence": ["AD-VIS-007"],
+      "device_user_acceptance": "PENDING",
+      "remaining": ["Physical cancel/save/success-destination review", "The capture intentionally did not persist a Route"]
+    },
+    {
+      "requirement_id": "RQ-ROUTE-003",
+      "parent_capability_ids": ["ROUTE-03"],
+      "delta": "The smallest local origin handoff now retains source Activity client/server identity and explicit Gap reconnect intent. Current backend Route schema still does not round-trip these fields to a fresh device.",
+      "implemented_candidate": "PARTIAL_LOCAL_ONLY",
+      "automated_proof": "YES_LOCAL",
+      "automated_evidence": ["useRouteStore.offline.test.ts"],
+      "visual_proof": "NOT_APPLICABLE_TO_HIDDEN_METADATA",
+      "visual_evidence": [],
+      "device_user_acceptance": "PENDING",
+      "remaining": ["Route-specific backend schema/API decision and implementation", "Fresh-device round-trip proof"]
+    },
+    {
+      "requirement_id": "RQ-CAIRN-002",
+      "parent_capability_ids": ["CAIRN-01", "ACT-02"],
+      "delta": "Activity Detail discovers Quick and Full Plant own Cairns only through explicit Activity provenance or recorded marker membership; spatial proximity cannot fabricate association. Rows open existing MarkerDetail.",
+      "implemented_candidate": "YES",
+      "automated_proof": "YES",
+      "automated_evidence": ["activityDetailPresentation.test.ts", "AD-TEST-CORE"],
+      "visual_proof": "EXPO_WEB_FIXTURE",
+      "visual_evidence": ["AD-VIS-001", "AD-VIS-005", "AD-VIS-006", "AD-VIS-010"],
+      "device_user_acceptance": "PENDING",
+      "remaining": ["Plant one Quick and one Full Cairn in a disposable Activity and reopen on device"]
+    },
+    {
+      "requirement_id": "RQ-OFFLINE-001",
+      "parent_capability_ids": ["CAIRN-01", "ROUTE-02", "ACT-03"],
+      "delta": "A local Activity remains fully readable. Rename updates the durable pending payload before local projection; delete uses a tombstone and distinguishes server acknowledgement from queued deletion; Route creation remains local-first.",
+      "implemented_candidate": "YES_ACTIVITY_DETAIL_SCOPE",
+      "automated_proof": "YES",
+      "automated_evidence": ["useSessionStore.test.ts focused cases", "useRouteStore.offline.test.ts", "activityDetailPresentation.test.ts"],
+      "visual_proof": "EXPO_WEB_FIXTURE",
+      "visual_evidence": ["AD-VIS-003", "AD-VIS-005"],
+      "device_user_acceptance": "PENDING",
+      "remaining": ["Physical offline/reconnect review in an isolated account", "Shared offline architecture outside this page remains unchanged"]
+    },
+    {
+      "requirement_id": "RQ-FINAL-001",
+      "parent_capability_ids": ["ACT-03", "ROUTE-02"],
+      "delta": "Activity Detail no longer promises that map detail will arrive later. Existing one-off Final states are not presented as a durable background worker.",
+      "implemented_candidate": "YES_COPY_BOUNDARY",
+      "automated_proof": "YES",
+      "automated_evidence": ["activityDetailPresentation.test.ts", "activityRouteState.test.ts"],
+      "visual_proof": "EXPO_WEB_FIXTURE",
+      "visual_evidence": ["AD-VIS-001", "AD-VIS-003"],
+      "device_user_acceptance": "PENDING",
+      "remaining": ["No durable later-enhancement worker was added", "Any future worker requires a separate bounded contract"]
+    }
+  ],
+  "task_clause_coverage": [
+    { "clauses": ["§3", "§19", "§20"], "result": "IMPLEMENTED_CANDIDATE", "requirements": ["RQ-ACTD-001", "RQ-ACTD-002"] },
+    { "clauses": ["§4", "§14"], "result": "IMPLEMENTED_CANDIDATE", "requirements": ["RQ-ACTD-001", "RQ-OFFLINE-001"] },
+    { "clauses": ["§5"], "result": "IMPLEMENTED_CANDIDATE", "requirements": ["RQ-ACTD-001", "RQ-ACT-006"] },
+    { "clauses": ["§6", "§12"], "result": "IMPLEMENTED_CANDIDATE_NATIVE_PENDING", "requirements": ["RQ-ACT-006", "RQ-ACT-007"] },
+    { "clauses": ["§7", "§8", "§21"], "result": "IMPLEMENTED_CANDIDATE", "requirements": ["RQ-ACTD-003", "RQ-OFFLINE-001", "RQ-FINAL-001"] },
+    { "clauses": ["§9"], "result": "IMPLEMENTED_CANDIDATE", "requirements": ["RQ-CAIRN-002", "RQ-ACTD-001"] },
+    { "clauses": ["§10", "§11"], "result": "IMPLEMENTED_CANDIDATE_WITH_BACKEND_DEPENDENCY", "requirements": ["RQ-ROUTE-002", "RQ-ROUTE-003"] },
+    { "clauses": ["§13", "§14"], "result": "IMPLEMENTED_CANDIDATE", "requirements": ["RQ-ACTD-001", "RQ-OFFLINE-001"] },
+    { "clauses": ["§15", "§16", "§17", "§18", "§28"], "result": "VISUALLY_PROVEN_EXPO_WEB_DEVICE_PENDING", "requirements": ["RQ-ACTD-001", "RQ-ACTD-003"] }
+  ]
+}

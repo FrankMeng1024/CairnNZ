@@ -1,0 +1,1000 @@
+diff --git a/backend/scripts/personal-friends-harness/abcdn-api-mysql.js b/backend/scripts/personal-friends-harness/abcdn-api-mysql.js
+index 38d9231..9bd37d1 100644
+--- a/backend/scripts/personal-friends-harness/abcdn-api-mysql.js
++++ b/backend/scripts/personal-friends-harness/abcdn-api-mysql.js
+@@ -47,12 +47,14 @@ async function becomeFriends(requester, recipient) {
+   await api(recipient, '/api/friends/accept', { method: 'POST', body: { requestId: Number(request.id) }, expected: 200 });
+ }
+ 
+-async function completeActivity(actor, { lat, lng, mode = 'hiking', pointCount = 7 }) {
++async function completeActivity(actor, {
++  lat, lng, mode = 'hiking', pointCount = 7, includeCoverage = true, lngStep = 0.003,
++}) {
+   const clientActivityId = crypto.randomUUID();
+   const startedAt = Date.now() + 1000;
+   const points = Array.from({ length: pointCount }, (_, index) => ({
+     lat,
+-    lng: lng + index * 0.003,
++    lng: lng + index * lngStep,
+     t: startedAt + index * 30_000,
+     acc: 8,
+   }));
+@@ -76,11 +78,28 @@ async function completeActivity(actor, { lat, lng, mode = 'hiking', pointCount =
+       name: `${actor.label} synthetic ${mode}`,
+       route_points: points,
+       route_points_raw: points,
+-      memory_points: memory,
++      memory_points: includeCoverage ? memory : [],
+     },
+     expected: 200,
+   });
+-  assert.equal(save.body.memory.accepted, pointCount);
++  assert.equal(save.body.memory.accepted, includeCoverage ? pointCount : 0);
++  const witnesses = points.map((point) => ({
++    cid: crypto.randomUUID(),
++    first_lat: point.lat,
++    first_lng: point.lng,
++    first_observed_at_ms: point.t,
++    lat: point.lat,
++    lng: point.lng,
++    observed_at_ms: point.t,
++    evidence_source: 'activity_real',
++    source_activity_client_id: clientActivityId,
++    horizontal_accuracy_m: 8,
++    continuity_state: 'accepted',
++  }));
++  const presence = await api(actor, '/api/memory/points', {
++    method: 'POST', body: { presence_witnesses: witnesses }, expected: 200,
++  });
++  assert.equal(presence.body.presence_witnesses.length, pointCount);
+   return { clientActivityId, sessionId: Number(start.body.id), points };
+ }
+ 
+@@ -114,10 +133,50 @@ async function main() {
+     const [schemaRows] = await admin.query(
+       `SELECT table_name FROM information_schema.tables
+         WHERE table_schema=DATABASE() AND table_name IN
+-          ('friendship_episodes','memory_share_grants','friend_cairn_encounters','shared_route_leases')`,
++          ('friendship_episodes','memory_share_grants','friend_cairn_encounters',
++           'shared_route_leases','memory_presence_witnesses')`,
+     );
+-    assert.equal(schemaRows.length, 4);
+-    pass('DEP-01.schema', '035/036/037 applied on MySQL 8 and core 037 tables exist');
++    assert.equal(schemaRows.length, 5);
++    pass('DEP-01.schema', '035-039 applied on disposable MySQL 8 and additive presence/lease columns exist');
++
++    const returnLat = -45.031;
++    const returnLng = 168.662;
++    const firstReturnAt = Date.now() - 4 * 24 * 60 * 60 * 1000;
++    const laterReturnAt = Date.now() - 24 * 60 * 60 * 1000;
++    const returnCoverageCid = crypto.randomUUID();
++    const returnWitnessA = crypto.randomUUID();
++    const returnWitnessB = crypto.randomUUID();
++    const returnUpload = await api(actors.B, '/api/memory/points', {
++      method: 'POST',
++      body: {
++        points: [{
++          lat: returnLat, lng: returnLng, ts: firstReturnAt, cid: returnCoverageCid,
++          evidence_source: 'passive_real', horizontal_accuracy_m: 8, continuity_state: 'accepted',
++        }],
++        presence_witnesses: [{
++          cid: returnWitnessA, first_lat: returnLat, first_lng: returnLng,
++          first_observed_at_ms: firstReturnAt, lat: returnLat, lng: returnLng,
++          observed_at_ms: firstReturnAt, evidence_source: 'passive_real',
++          source_activity_client_id: null, horizontal_accuracy_m: 8, continuity_state: 'accepted',
++        }, {
++          cid: returnWitnessB, first_lat: returnLat, first_lng: returnLng,
++          first_observed_at_ms: laterReturnAt, lat: returnLat, lng: returnLng,
++          observed_at_ms: laterReturnAt, evidence_source: 'passive_real',
++          source_activity_client_id: null, horizontal_accuracy_m: 8, continuity_state: 'accepted',
++        }],
++      },
++      expected: 200,
++    });
++    assert.equal(returnUpload.body.presence_witnesses.length, 2);
++    const [[returnCounts]] = await admin.execute(
++      `SELECT
++         (SELECT COUNT(*) FROM memory_points WHERE user_id=? AND lat=? AND lng=?) AS coverage_n,
++         (SELECT COUNT(*) FROM memory_presence_witnesses WHERE user_id=? AND first_lat=? AND first_lng=?) AS presence_n`,
++      [actors.B.id, returnLat, returnLng, actors.B.id, returnLat, returnLng],
++    );
++    assert.equal(Number(returnCounts.coverage_n), 1);
++    assert.equal(Number(returnCounts.presence_n), 2);
++    pass('PF-R3.presence-return', 'same-place later-day presence stores two immutable witnesses alongside one exploration-coverage row');
+ 
+     const [historicalPublicMarker] = await admin.execute(
+       `INSERT INTO markers (user_id,type,text,lat,lng,permission,created_at,updated_at)
+@@ -194,7 +253,9 @@ async function main() {
+     const markerId = String(markerCreate.body.id);
+     const beforeEvidence = await api(actors.B, '/api/friend-content/encounters/verify', { method: 'POST', body: {}, expected: 200 });
+     assert.equal(beforeEvidence.body.encountered_marker_ids.includes(markerId), false);
+-    await completeActivity(actors.B, { lat: -43.5321, lng: 172.6362, pointCount: 3 });
++    await completeActivity(actors.B, {
++      lat: -43.5321, lng: 172.6362, pointCount: 3, includeCoverage: false, lngStep: 0.00005,
++    });
+     const encounter = await api(actors.B, '/api/friend-content/encounters/verify', { method: 'POST', body: {}, expected: 200 });
+     assert.equal(encounter.body.encountered_marker_ids.includes(markerId), true);
+     await api(actors.B, '/api/friend-content/encounters/verify', { method: 'POST', body: {}, expected: 200 });
+@@ -203,8 +264,16 @@ async function main() {
+       [actors.B.id, markerId],
+     );
+     assert.equal(Number(encounterCount.n), 1);
++    const [[encounterEvidence]] = await actorConnections.B.execute(
++      'SELECT evidence_kind,evidence_source FROM friend_cairn_encounters WHERE viewer_id=? AND marker_id=?',
++      [actors.B.id, markerId],
++    );
++    assert.equal(encounterEvidence.evidence_kind, 'presence_witness');
++    assert.equal(encounterEvidence.evidence_source, 'activity_real');
+     const friendCairn = await api(actors.B, `/api/friend-content/cairns/${markerId}`, { expected: 200 });
+     assert.equal(friendCairn.body.cairn.read_only, true);
++    assert.match(friendCairn.body.cairn.resource_revision, /^[0-9a-f]{64}$/);
++    assert.match(friendCairn.body.cairn.authorization_revision, /^friendship:/);
+     await api(actors.D, `/api/friend-content/cairns/${markerId}`, { expected: 404 });
+     await api(actors.B, `/api/markers/${markerId}`, { method: 'PUT', body: { text: 'viewer mutation' }, expected: 404 });
+     pass('FR-10/FR-11.encounter', 'prospective canonical real evidence creates one idempotent encounter; non-friend denied and viewer cannot mutate');
+@@ -218,6 +287,8 @@ async function main() {
+     const routeId = String(routeCreate.body.route.id);
+     const routeDetail = await api(actors.B, `/api/friend-content/routes/${routeId}`, { expected: 200 });
+     assert.equal(routeDetail.body.route.read_only, true);
++    assert.match(routeDetail.body.route.resource_revision, /^[0-9a-f]{64}$/);
++    assert.match(routeDetail.body.route.authorization_revision, /^friendship:/);
+     await api(actors.D, `/api/friend-content/routes/${routeId}`, { expected: 404 });
+     const lease = await api(actors.B, `/api/friend-content/routes/${routeId}/lease`, { method: 'POST', body: {}, expected: 201 });
+     await api(actors.A, `/api/routes/${routeId}`, { method: 'PUT', body: { permission: 'personal' }, expected: 200 });
+@@ -233,17 +304,64 @@ async function main() {
+     });
+     const secondRouteId = String(secondRoute.body.route.id);
+     const activeLease = await api(actors.B, `/api/friend-content/routes/${secondRouteId}/lease`, { method: 'POST', body: {}, expected: 201 });
++    assert.equal(activeLease.body.route.description, undefined);
++    assert.equal(activeLease.body.route.waypoints, undefined);
++    const activeActivityId = crypto.randomUUID();
+     await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}/start`, {
+-      method: 'POST', body: { client_activity_id: crypto.randomUUID() }, expected: 200,
++      method: 'POST', body: { client_activity_id: activeActivityId }, expected: 200,
++    });
++    await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}/start`, {
++      method: 'POST', body: { client_activity_id: activeActivityId }, expected: 200,
+     });
+     await api(actors.A, `/api/routes/${secondRouteId}`, { method: 'PUT', body: { permission: 'personal' }, expected: 200 });
+     await api(actors.B, `/api/friend-content/routes/${secondRouteId}`, { expected: 404 });
+     const safety = await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}`, { expected: 200 });
+     assert.equal(safety.body.safety_snapshot, true);
+     assert.ok(safety.body.route.points.length >= 2);
+-    await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}/end`, { method: 'POST', body: {}, expected: 200 });
++    assert.equal(safety.body.route.description, undefined);
++    assert.equal(safety.body.route.waypoints, undefined);
++    const terminalBody = {
++      client_activity_id: activeActivityId, terminal: 'finished', ended_at_ms: Date.now(),
++    };
++    await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}/end`, {
++      method: 'POST', body: terminalBody, expected: 200,
++    });
++    const duplicateEnd = await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}/end`, {
++      method: 'POST', body: terminalBody, expected: 200,
++    });
++    assert.equal(duplicateEnd.body.idempotent, true);
++    const [[terminalRow]] = await admin.execute(
++      `SELECT start_acknowledged_at,end_acknowledged_at,terminal_reason
++         FROM shared_route_leases WHERE id=?`,
++      [activeLease.body.lease_id],
++    );
++    assert.ok(terminalRow.start_acknowledged_at);
++    assert.ok(terminalRow.end_acknowledged_at);
++    assert.equal(terminalRow.terminal_reason, 'finished');
+     await api(actors.B, `/api/friend-content/route-leases/${activeLease.body.lease_id}`, { expected: 404 });
+-    pass('FR-12.route-reference', 'pre-start revoke denies use; active immutable geometry survives revoke only until explicit Activity end');
++
++    const offlineRoute = await api(actors.A, '/api/routes', {
++      method: 'POST', body: {
++        client_route_id: crypto.randomUUID(), name: 'Issued offline use', permission: 'friend',
++        points: activityA.points, waypoints: [], distance_m: 1470, elevation_gain_m: 42,
++      }, expected: 201,
++    });
++    const offlineRouteId = String(offlineRoute.body.route.id);
++    const offlineLease = await api(actors.B, `/api/friend-content/routes/${offlineRouteId}/lease`, { method: 'POST', body: {}, expected: 201 });
++    const offlineStartedAt = Date.now();
++    await api(actors.A, `/api/routes/${offlineRouteId}`, { method: 'PUT', body: { permission: 'personal' }, expected: 200 });
++    const offlineActivityId = crypto.randomUUID();
++    await api(actors.B, `/api/friend-content/route-leases/${offlineLease.body.lease_id}/start`, {
++      method: 'POST',
++      body: { client_activity_id: offlineActivityId, started_at_ms: offlineStartedAt },
++      expected: 200,
++    });
++    await api(actors.B, `/api/friend-content/route-leases/${offlineLease.body.lease_id}/end`, {
++      method: 'POST',
++      body: { client_activity_id: offlineActivityId, terminal: 'discarded', ended_at_ms: Date.now() },
++      expected: 200,
++    });
++    pass('FR-12.route-reference', 'connected revoke denies new use; an in-window issued offline use binds one Activity, retains only minimal geometry, and terminal ACK is idempotent');
+ 
+     const [[firstGrant]] = await admin.execute(
+       `SELECT grant_epoch FROM memory_share_grants WHERE owner_id=? AND viewer_id=? ORDER BY id ASC LIMIT 1`,
+diff --git a/backend/scripts/run-personal-friends-harness.sh b/backend/scripts/run-personal-friends-harness.sh
+index 233a9f6..f8e9277 100755
+--- a/backend/scripts/run-personal-friends-harness.sh
++++ b/backend/scripts/run-personal-friends-harness.sh
+@@ -46,7 +46,12 @@ done
+ 
+ DB_PORT="$(docker port "$CONTAINER" 3306/tcp | sed -E 's/.*:([0-9]+)$/\1/' | head -1)"
+ docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$SCRIPT_DIR/personal-friends-harness/current-schema-fixture.sql"
+-for migration in 035_settings_correctness.sql 036_route_origin_identity.sql 037_personal_friends_v1.sql; do
++for migration in \
++  035_settings_correctness.sql \
++  036_route_origin_identity.sql \
++  037_personal_friends_v1.sql \
++  038_memory_presence_witnesses.sql \
++  039_borrowed_route_terminal_ack.sql; do
+   docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/$migration"
+ done
+ 
+diff --git a/backend/src/middleware/schemas.js b/backend/src/middleware/schemas.js
+index cb1fcad..01d73a3 100644
+--- a/backend/src/middleware/schemas.js
++++ b/backend/src/middleware/schemas.js
+@@ -355,8 +355,21 @@ const memoryPoints = Joi.object({
+   // O1 batch 27 revert: 恢复 max=5000。POST /api/memory/points client 侧
+   // MAX_BATCH=500 所以真实 batch 不会 >500,但 initial reveal 或 backfill
+   // 可能一次 push 数千点,1000 太紧。
+-  points: Joi.array().items(memoryPointObj).min(1).max(5000).required(),
+-});
++  points: Joi.array().items(memoryPointObj).max(5000),
++  presence_witnesses: Joi.array().items(Joi.object({
++    cid: clientUuid.required(),
++    first_lat: lat.required(),
++    first_lng: lng.required(),
++    first_observed_at_ms: Joi.number().integer().min(1).required(),
++    lat: lat.required(),
++    lng: lng.required(),
++    observed_at_ms: Joi.number().integer().min(1).required(),
++    evidence_source: Joi.string().valid('activity_real', 'passive_real').required(),
++    source_activity_client_id: clientUuid.allow(null),
++    horizontal_accuracy_m: Joi.number().min(0).max(1000).required(),
++    continuity_state: Joi.string().valid('accepted').required(),
++  })).max(1000),
++}).or('points', 'presence_witnesses');
+ 
+ module.exports = {
+   marker: {
+diff --git a/backend/src/routes/friend-content.js b/backend/src/routes/friend-content.js
+index 925c7b4..ac3dce1 100644
+--- a/backend/src/routes/friend-content.js
++++ b/backend/src/routes/friend-content.js
+@@ -9,6 +9,11 @@ const {
+   authorizedFriendCairn,
+   authorizedFriendRoute,
+ } = require('../services/friendAuthorization');
++const {
++  ENCOUNTER_RADIUS_M,
++  MAX_HORIZONTAL_ACCURACY_M,
++  selectQualifyingEncounterEvidence,
++} = require('../services/encounterPolicy');
+ 
+ const router = express.Router();
+ router.use(authenticate);
+@@ -23,6 +28,19 @@ function parseJson(value, fallback) {
+   try { return JSON.parse(value); } catch { return fallback; }
+ }
+ 
++const SHARED_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
++
++function sharedContentMetadata(kind, row) {
++  const issuedAt = new Date();
++  const revisionInput = [kind, row.id, row.updated_at, row.audience_epoch].join(':');
++  return {
++    resource_revision: crypto.createHash('sha256').update(revisionInput).digest('hex'),
++    authorization_revision: `friendship:${row.friendship_episode_id}:audience:${row.audience_epoch}`,
++    authorization_issued_at: issuedAt.toISOString(),
++    authorization_expires_at: new Date(issuedAt.getTime() + SHARED_CACHE_TTL_MS).toISOString(),
++  };
++}
++
+ function publicCairn(row) {
+   return {
+     id: Number(row.id),
+@@ -36,6 +54,7 @@ function publicCairn(row) {
+     created_at: row.created_at,
+     updated_at: row.updated_at,
+     encountered_at: row.encountered_at,
++    ...sharedContentMetadata('cairn', row),
+     read_only: true,
+     role: 'viewer',
+   };
+@@ -55,6 +74,7 @@ function publicRoute(row, includeGeometry = false) {
+       points: parseJson(row.points, []),
+       waypoints: parseJson(row.waypoints, []),
+     } : {}),
++    ...sharedContentMetadata('route', row),
+     read_only: true,
+     role: 'viewer',
+   };
+@@ -124,39 +144,67 @@ router.post('/encounters/verify', async (req, res) => {
+       );
+       if (blocks[0]) continue;
+       const [evidenceRows] = await conn.execute(
+-        `SELECT mp.id, mp.lat, mp.lng, mp.ts, mp.evidence_source
+-           FROM memory_points mp
+-          WHERE mp.user_id = ?
+-            AND mp.evidence_source IN ('activity_real','passive_real')
+-            AND mp.continuity_state = 'accepted'
+-            AND mp.horizontal_accuracy_m IS NOT NULL
+-            AND mp.horizontal_accuracy_m <= 50
+-            AND mp.lat BETWEEN ? - 0.0005 AND ? + 0.0005
+-            AND mp.lng BETWEEN ? - 0.0008 AND ? + 0.0008
+-            AND ST_Distance_Sphere(POINT(mp.lng, mp.lat), POINT(?, ?)) <= 50
+-            AND FROM_UNIXTIME(mp.ts / 1000) >= GREATEST(?, ?, ?)
+-            AND (mp.evidence_source = 'passive_real' OR EXISTS (
++        `SELECT evidence.id, evidence.lat, evidence.lng, evidence.ts,
++                evidence.evidence_source, evidence.evidence_kind,
++                evidence.source_activity_client_id
++           FROM (
++             SELECT witness.id, witness.first_lat AS lat, witness.first_lng AS lng,
++                    witness.first_observed_at_ms AS ts, witness.evidence_source,
++                    witness.source_activity_client_id,
++                    'presence_witness' AS evidence_kind
++               FROM memory_presence_witnesses witness
++              WHERE witness.user_id = ?
++                AND witness.continuity_state = 'accepted'
++                AND witness.horizontal_accuracy_m <= ?
++             UNION ALL
++             SELECT witness.id, witness.lat, witness.lng,
++                    witness.observed_at_ms AS ts, witness.evidence_source,
++                    witness.source_activity_client_id,
++                    'presence_witness' AS evidence_kind
++               FROM memory_presence_witnesses witness
++              WHERE witness.user_id = ?
++                AND witness.continuity_state = 'accepted'
++                AND witness.horizontal_accuracy_m <= ?
++                AND witness.observed_at_ms > witness.first_observed_at_ms
++             UNION ALL
++             SELECT point.id, point.lat, point.lng, point.ts,
++                    point.evidence_source, point.source_activity_client_id,
++                    'legacy_coverage' AS evidence_kind
++               FROM memory_points point
++              WHERE point.user_id = ?
++                AND point.evidence_source IN ('activity_real','passive_real')
++                AND point.continuity_state = 'accepted'
++                AND point.horizontal_accuracy_m IS NOT NULL
++                AND point.horizontal_accuracy_m <= ?
++           ) evidence
++          WHERE ST_Distance_Sphere(POINT(evidence.lng, evidence.lat), POINT(?, ?)) <= ?
++            AND FROM_UNIXTIME(evidence.ts / 1000) >= GREATEST(?, ?, ?)
++            AND evidence.ts <= (UNIX_TIMESTAMP(UTC_TIMESTAMP(3)) * 1000) + 300000
++            AND (evidence.evidence_source = 'passive_real' OR EXISTS (
+               SELECT 1 FROM sessions session
+-               WHERE session.user_id = mp.user_id
+-                 AND session.client_activity_id = mp.source_activity_client_id
++               WHERE session.user_id = ?
++                 AND session.client_activity_id = evidence.source_activity_client_id
+                  AND session.finalized_at IS NOT NULL
+                  AND session.abandoned_at IS NULL
+             ))
+-          ORDER BY mp.ts DESC, mp.id DESC
+-          LIMIT 1`,
+-        [viewerId, marker.lat, marker.lat, marker.lng, marker.lng, marker.lng, marker.lat,
+-          episode.started_at, marker.created_at, marker.starts_at],
++          ORDER BY evidence.ts DESC, evidence.id DESC
++          LIMIT 100`,
++        [viewerId, MAX_HORIZONTAL_ACCURACY_M,
++          viewerId, MAX_HORIZONTAL_ACCURACY_M,
++          viewerId, MAX_HORIZONTAL_ACCURACY_M,
++          marker.lng, marker.lat, ENCOUNTER_RADIUS_M,
++          episode.started_at, marker.created_at, marker.starts_at, viewerId],
+       );
+-      const evidence = evidenceRows[0];
++      const evidence = selectQualifyingEncounterEvidence(evidenceRows);
+       if (!evidence) continue;
+       await conn.execute(
+         `INSERT INTO friend_cairn_encounters
+            (viewer_id, author_id, marker_id, friendship_episode_id, audience_epoch,
+-            evidence_point_id, evidence_source, observed_at)
+-         VALUES (?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(? / 1000))
++            evidence_point_id, evidence_kind, evidence_source, observed_at)
++         VALUES (?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(? / 1000))
+          ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+         [viewerId, marker.user_id, marker.id, episode.id, marker.audience_epoch,
+-          evidence.id, evidence.evidence_source, evidence.ts],
++          evidence.id, evidence.evidence_kind, evidence.evidence_source, evidence.ts],
+       );
+       encountered.push(String(marker.id));
+     }
+@@ -182,7 +230,8 @@ router.get('/cairns', async (req, res) => {
+     if (friendId !== null) params.push(friendId);
+     const [rows] = await pool.execute(
+       `SELECT m.id, m.user_id, m.type, m.text, m.lat, m.lng, m.alt, m.approximate,
+-              m.created_at, m.updated_at, u.name AS author_name,
++              m.created_at, m.updated_at, m.audience_epoch, u.name AS author_name,
++              encounter.friendship_episode_id,
+               encounter.created_at AS encountered_at
+          FROM friend_cairn_encounters encounter
+          JOIN markers m
+@@ -262,9 +311,14 @@ router.get('/routes', async (req, res) => {
+     if (friendId !== null) params.push(friendId);
+     const [rows] = await pool.execute(
+       `SELECT route.id, route.user_id, route.name, route.description, route.distance_m,
+-              route.elevation_gain_m, route.created_at, route.updated_at, u.name AS author_name
++              route.elevation_gain_m, route.created_at, route.updated_at,
++              route.audience_epoch, episode.id AS friendship_episode_id, u.name AS author_name
+          FROM routes route
+          JOIN friends f ON f.user_id = ? AND f.friend_id = route.user_id
++         JOIN friendship_episodes episode
++           ON episode.user_low_id = LEAST(f.user_id, f.friend_id)
++          AND episode.user_high_id = GREATEST(f.user_id, f.friend_id)
++          AND episode.ended_at IS NULL
+          JOIN users u ON u.id = route.user_id AND u.deleted_at IS NULL
+          LEFT JOIN hidden_items hidden
+            ON hidden.user_id = ? AND hidden.item_type = 'route' AND hidden.item_id = route.id
+@@ -323,30 +377,41 @@ router.post('/routes/:id/lease', async (req, res) => {
+     const route = await authorizedFriendRoute(pool, req.user.userId, routeId);
+     if (!route) return opaqueUnavailable(res);
+     const points = parseJson(route.points, []);
+-    const waypoints = parseJson(route.waypoints, []);
+     const snapshot = {
+       name: route.name,
+-      description: route.description,
+       distance_m: Number(route.distance_m),
+       elevation_gain_m: Number(route.elevation_gain_m),
+       points,
+-      waypoints,
+     };
+     const contentVersion = crypto.createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+     const leaseId = crypto.randomUUID();
++    const issuedAtMs = Date.now();
++    const expiresAtMs = issuedAtMs + 12 * 60 * 60 * 1000;
+     await pool.execute(
+       `INSERT INTO shared_route_leases
+          (id, viewer_id, owner_id, route_id, audience_epoch, authorization_version,
+           content_version, geometry_snapshot, issued_at, expires_at)
+-       VALUES (?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), UTC_TIMESTAMP(3), DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 12 HOUR))`,
++       VALUES (?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON),
++               FROM_UNIXTIME(? / 1000), FROM_UNIXTIME(? / 1000))`,
+       [leaseId, req.user.userId, route.user_id, route.id, route.audience_epoch,
+-        route.audience_epoch, contentVersion, JSON.stringify(snapshot)],
++        route.audience_epoch, contentVersion, JSON.stringify(snapshot), issuedAtMs, expiresAtMs],
+     );
+     return res.status(201).json({
+       lease_id: leaseId,
+       content_version: contentVersion,
++      authorization_revision: `friendship:${route.friendship_episode_id}:audience:${route.audience_epoch}`,
++      issued_at: new Date(issuedAtMs).toISOString(),
++      expires_at: new Date(expiresAtMs).toISOString(),
+       expires_in_seconds: 12 * 60 * 60,
+-      route: { ...publicRoute(route, true), points, waypoints },
++      route: {
++        id: Number(route.id),
++        author: { id: String(route.user_id), name: route.author_name },
++        name: route.name,
++        distance_m: Number(route.distance_m),
++        elevation_gain_m: Number(route.elevation_gain_m),
++        points,
++        read_only: true,
++      },
+     });
+   } catch (error) {
+     console.error('[friend-content/routes:lease]', error.message);
+@@ -357,13 +422,13 @@ router.post('/routes/:id/lease', async (req, res) => {
+ router.post('/route-leases/:id/start', async (req, res) => {
+   const activityId = typeof req.body?.client_activity_id === 'string' ? req.body.client_activity_id : '';
+   if (!/^[0-9a-f-]{36}$/i.test(activityId)) return res.status(400).json({ error: 'client_activity_id required' });
++  const requestedStartedAtMs = Number(req.body?.started_at_ms);
+   const conn = await pool.getConnection();
+   try {
+     await conn.beginTransaction();
+     const [leases] = await conn.execute(
+       `SELECT * FROM shared_route_leases
+-        WHERE id = ? AND viewer_id = ? AND use_started_at IS NULL
+-          AND revoked_at IS NULL AND expires_at > UTC_TIMESTAMP(3)
++        WHERE id = ? AND viewer_id = ? AND revoked_at IS NULL
+         LIMIT 1 FOR UPDATE`,
+       [req.params.id, req.user.userId],
+     );
+@@ -372,8 +437,35 @@ router.post('/route-leases/:id/start', async (req, res) => {
+       await conn.rollback();
+       return opaqueUnavailable(res);
+     }
++    if (lease.use_started_at) {
++      if (String(lease.active_activity_client_id) !== activityId) {
++        await conn.rollback();
++        return opaqueUnavailable(res);
++      }
++      await conn.commit();
++      return res.json({
++        started: true,
++        ended: Boolean(lease.use_ended_at),
++        lease_id: lease.id,
++        content_version: lease.content_version,
++        idempotent: true,
++      });
++    }
++    const issuedAtMs = new Date(lease.issued_at).getTime();
++    const expiresAtMs = new Date(lease.expires_at).getTime();
++    const nowMs = Date.now();
++    const startedAtMs = Number.isFinite(requestedStartedAtMs) ? requestedStartedAtMs : nowMs;
++    if (startedAtMs < issuedAtMs || startedAtMs > expiresAtMs || startedAtMs > nowMs + 5 * 60 * 1000) {
++      await conn.rollback();
++      return opaqueUnavailable(res);
++    }
+     const route = await authorizedFriendRoute(conn, req.user.userId, lease.route_id);
+-    if (!route || Number(route.audience_epoch) !== Number(lease.audience_epoch)) {
++    // A connected start always checks current authorization. A delayed
++    // acknowledgement for an offline start is bounded by the previously
++    // issued lease instead; it never grants any content beyond the immutable
++    // minimal geometry snapshot already downloaded to that viewer.
++    if (!Number.isFinite(requestedStartedAtMs)
++        && (!route || Number(route.audience_epoch) !== Number(lease.audience_epoch))) {
+       await conn.execute(
+         `UPDATE shared_route_leases SET revoked_at = UTC_TIMESTAMP(3) WHERE id = ?`,
+         [lease.id],
+@@ -383,9 +475,10 @@ router.post('/route-leases/:id/start', async (req, res) => {
+     }
+     await conn.execute(
+       `UPDATE shared_route_leases
+-          SET active_activity_client_id = ?, use_started_at = UTC_TIMESTAMP(3)
++          SET active_activity_client_id = ?, use_started_at = FROM_UNIXTIME(? / 1000),
++              start_acknowledged_at = UTC_TIMESTAMP(3)
+         WHERE id = ?`,
+-      [activityId, lease.id],
++      [activityId, startedAtMs, lease.id],
+     );
+     await conn.commit();
+     return res.json({ started: true, lease_id: lease.id, content_version: lease.content_version });
+@@ -399,14 +492,30 @@ router.post('/route-leases/:id/start', async (req, res) => {
+ });
+ 
+ router.post('/route-leases/:id/end', async (req, res) => {
++  const activityId = typeof req.body?.client_activity_id === 'string' ? req.body.client_activity_id : '';
++  const terminal = req.body?.terminal === 'discarded' ? 'discarded' : 'finished';
++  const requestedEndedAtMs = Number(req.body?.ended_at_ms);
+   try {
+-    const [result] = await pool.execute(
+-      `UPDATE shared_route_leases SET use_ended_at = UTC_TIMESTAMP(3)
+-        WHERE id = ? AND viewer_id = ? AND use_started_at IS NOT NULL AND use_ended_at IS NULL`,
++    const [rows] = await pool.execute(
++      `SELECT id, active_activity_client_id, use_started_at, use_ended_at
++         FROM shared_route_leases WHERE id = ? AND viewer_id = ? LIMIT 1`,
+       [req.params.id, req.user.userId],
+     );
+-    if (!result.affectedRows) return opaqueUnavailable(res);
+-    return res.json({ ended: true });
++    const lease = rows[0];
++    if (!lease || !lease.use_started_at
++        || (activityId && String(lease.active_activity_client_id) !== activityId)) return opaqueUnavailable(res);
++    if (lease.use_ended_at) return res.json({ ended: true, idempotent: true });
++    const nowMs = Date.now();
++    const startMs = new Date(lease.use_started_at).getTime();
++    const endedAtMs = Number.isFinite(requestedEndedAtMs) ? requestedEndedAtMs : nowMs;
++    if (endedAtMs < startMs || endedAtMs > nowMs + 5 * 60 * 1000) return res.status(400).json({ error: 'Invalid ended_at_ms' });
++    await pool.execute(
++      `UPDATE shared_route_leases
++          SET use_ended_at = FROM_UNIXTIME(? / 1000), end_acknowledged_at = UTC_TIMESTAMP(3), terminal_reason = ?
++        WHERE id = ? AND viewer_id = ? AND use_ended_at IS NULL`,
++      [endedAtMs, terminal, req.params.id, req.user.userId],
++    );
++    return res.json({ ended: true, idempotent: false });
+   } catch (error) {
+     console.error('[friend-content/route-leases:end]', error.message);
+     return res.status(500).json({ error: 'Server error' });
+diff --git a/backend/src/routes/memory.js b/backend/src/routes/memory.js
+index b3ebd78..f7d1da5 100644
+--- a/backend/src/routes/memory.js
++++ b/backend/src/routes/memory.js
+@@ -55,23 +55,21 @@ const pointsLimiter = rateLimit({
+  * v0.2.6.2 (no cid) can backfill locally on next pull. Null placeholders
+  * in the echo array preserve request/response index alignment.
+  */
+-router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.points), async (req, res) => {
+-  const userId = req.user.userId;
+-  const { points } = req.body;
+-
+-  if (!Array.isArray(points)) {
+-    return res.status(400).json({ error: 'points must be an array' });
+-  }
+-  if (points.length === 0) {
+-    return res.json({ points: [] });
+-  }
++router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.points), async (req, res) => {
++  const userId = req.user.userId;
++  const points = Array.isArray(req.body?.points) ? req.body.points : [];
++  const presenceWitnesses = Array.isArray(req.body?.presence_witnesses) ? req.body.presence_witnesses : [];
++
++  if (points.length === 0 && presenceWitnesses.length === 0) {
++    return res.json({ points: [], presence_witnesses: [] });
++  }
+   if (points.length > 1000) {
+     return res.status(400).json({ error: 'batch too large (max 1000 points)' });
+   }
+ 
+   const tsUpperBound = Date.now() + 24 * 60 * 60 * 1000;
+-  const rows = [];
+-  const echo = [];
++  const rows = [];
++  const echo = [];
+   for (let i = 0; i < points.length; i++) {
+     const p = points[i];
+     if (
+@@ -116,9 +114,42 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
+     echo.push({ batch_index: i, ts: p.ts, cid });
+   }
+ 
+-  if (rows.length === 0) {
+-    return res.json({ points: [] });
+-  }
++  const presenceRows = [];
++  const presenceEcho = [];
++  for (const witness of presenceWitnesses) {
++    const firstObservedAtMs = Number(witness?.first_observed_at_ms);
++    const observedAtMs = Number(witness?.observed_at_ms);
++    const source = witness?.evidence_source;
++    const sourceActivityClientId = source === 'activity_real'
++      && typeof witness?.source_activity_client_id === 'string'
++      ? witness.source_activity_client_id
++      : null;
++    if (!Number.isFinite(firstObservedAtMs) || !Number.isInteger(firstObservedAtMs)
++      || !Number.isFinite(observedAtMs) || !Number.isInteger(observedAtMs)
++      || firstObservedAtMs <= 0 || observedAtMs < firstObservedAtMs || observedAtMs > tsUpperBound
++      || !['activity_real', 'passive_real'].includes(source)
++      || (source === 'activity_real' && !sourceActivityClientId)
++      || witness?.continuity_state !== 'accepted') continue;
++    presenceRows.push([
++      userId,
++      witness.cid,
++      witness.first_lat,
++      witness.first_lng,
++      firstObservedAtMs,
++      witness.lat,
++      witness.lng,
++      observedAtMs,
++      source,
++      sourceActivityClientId,
++      witness.horizontal_accuracy_m,
++      'accepted',
++    ]);
++    presenceEcho.push({ cid: witness.cid, observed_at_ms: observedAtMs });
++  }
++
++  if (rows.length === 0 && presenceRows.length === 0) {
++    return res.json({ points: [], presence_witnesses: [] });
++  }
+ 
+   try {
+     // M2 fix (v0.2.6.3): use INSERT ... ON DUPLICATE KEY UPDATE so non-
+@@ -129,8 +160,9 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
+     // The ON DUPLICATE clause is a no-op (`client_id=client_id`) — we
+     // just need any expression so MySQL doesn't error on the conflict.
+     // Then we SELECT the affected cids to confirm what really landed.
+-    await pool.query(
+-      `INSERT INTO memory_points
++    if (rows.length > 0) {
++      await pool.query(
++        `INSERT INTO memory_points
+          (user_id, lat, lng, ts, client_id, evidence_source,
+           source_activity_client_id, horizontal_accuracy_m, continuity_state)
+        VALUES ?
+@@ -144,12 +176,15 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
+          continuity_state = CASE
+            WHEN VALUES(continuity_state) = 'accepted' THEN 'accepted'
+            ELSE continuity_state END`,
+-      [rows]
+-    );
++        [rows]
++      );
++    }
+     // memory_points is already committed. Region attribution is a derived,
+     // idempotent projection and must not block the source upload response.
+-    const tsList = rows.map((r) => r[3]); // rows[i] = [user_id, lat, lng, ts, client_id]
+-    scheduleMemoryAttribution(pool, userId, Math.min(...tsList), Math.max(...tsList));
++    if (rows.length > 0) {
++      const tsList = rows.map((r) => r[3]); // rows[i] = [user_id, lat, lng, ts, client_id]
++      scheduleMemoryAttribution(pool, userId, Math.min(...tsList), Math.max(...tsList));
++    }
+     // Confirm storage by selecting back the cids we just inserted.
+     const validEcho = echo.filter((e) => e !== null);
+     const cidList = validEcho.map((e) => e.cid);
+@@ -161,13 +196,44 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
+       : [[]];
+     const confirmedSet = new Set(confirmedRows.map((r) => r.client_id));
+     // Emit echo preserving null placeholders so client can align by index.
+-    const finalEcho = echo.map((e) => {
++    const finalEcho = echo.map((e) => {
+       if (e === null) return null;
+-      return confirmedSet.has(e.cid) ? e : null;
+-    });
++      return confirmedSet.has(e.cid) ? e : null;
++    });
++    if (presenceRows.length > 0) {
++      await pool.query(
++        `INSERT INTO memory_presence_witnesses
++           (user_id, client_id, first_lat, first_lng, first_observed_at_ms,
++            lat, lng, observed_at_ms, evidence_source, source_activity_client_id,
++            horizontal_accuracy_m, continuity_state)
++         VALUES ?
++         ON DUPLICATE KEY UPDATE
++           first_lat = IF(VALUES(first_observed_at_ms) < first_observed_at_ms, VALUES(first_lat), first_lat),
++           first_lng = IF(VALUES(first_observed_at_ms) < first_observed_at_ms, VALUES(first_lng), first_lng),
++           first_observed_at_ms = LEAST(first_observed_at_ms, VALUES(first_observed_at_ms)),
++           lat = IF(VALUES(observed_at_ms) > observed_at_ms, VALUES(lat), lat),
++           lng = IF(VALUES(observed_at_ms) > observed_at_ms, VALUES(lng), lng),
++           horizontal_accuracy_m = IF(
++             VALUES(observed_at_ms) > observed_at_ms,
++             VALUES(horizontal_accuracy_m),
++             horizontal_accuracy_m
++           ),
++           observed_at_ms = GREATEST(observed_at_ms, VALUES(observed_at_ms))`,
++        [presenceRows],
++      );
++    }
++    const presenceCids = presenceEcho.map(entry => entry.cid);
++    const [confirmedPresenceRows] = presenceCids.length > 0
++      ? await pool.query(
++        'SELECT client_id FROM memory_presence_witnesses WHERE user_id = ? AND client_id IN (?)',
++        [userId, presenceCids],
++      )
++      : [[]];
++    const confirmedPresence = new Set(confirmedPresenceRows.map(row => row.client_id));
++    const finalPresenceEcho = presenceEcho.filter(entry => confirmedPresence.has(entry.cid));
+     // O1: dropped accepted/duplicates/rejected — client 只用 points echo,
+     // 三个数字纯 debug 遗留(memorySync 从不 read)。
+-    return res.json({ points: finalEcho });
++    return res.json({ points: finalEcho, presence_witnesses: finalPresenceEcho });
+   } catch (err) {
+     console.error('[memory/points:insert]', err.message);
+     return res.status(500).json({ error: 'Server error' });
+@@ -268,10 +334,15 @@ router.delete('/points', authenticate, wipeLimiter, async (req, res) => {
+       'DELETE FROM memory_points WHERE user_id = ?',
+       [userId]
+     );
++    const [presenceResult] = await conn.query(
++      'DELETE FROM memory_presence_witnesses WHERE user_id = ?',
++      [userId]
++    );
+     await conn.commit();
+     scheduleMemoryProjectionReset(pool, userId);
+     return res.json({
+       deleted: result.affectedRows ?? 0,
++      presence_witnesses_deleted: presenceResult.affectedRows ?? 0,
+       unlocked_regions_deleted: regionsResult.affectedRows ?? 0,
+     });
+   } catch (err) {
+diff --git a/backend/src/services/__tests__/friendProjection.test.js b/backend/src/services/__tests__/friendProjection.test.js
+index 2991a20..65e39d0 100644
+--- a/backend/src/services/__tests__/friendProjection.test.js
++++ b/backend/src/services/__tests__/friendProjection.test.js
+@@ -8,12 +8,53 @@ const path = require('node:path');
+ const {
+   CELL_SIZE_M,
+   MASK_RADIUS_M,
++  MASK_DISTANCE_TOLERANCE_M,
+   cellFor,
+   cellPolygon,
+   cellIntersectsMask,
+   deriveFriendProjection,
+ } = require('../friendProjection');
+ 
++const TEST_EARTH_RADIUS_M = 6371008.8;
++
++// Independent spherical oracle used only by the test. It deliberately does
++// not reuse friendProjection's coordinate helpers.
++function haversineMeters(a, b) {
++  const radians = value => value * Math.PI / 180;
++  const dLat = radians(b.lat - a.lat);
++  const dLng = radians((((b.lng - a.lng) + 540) % 360) - 180);
++  const lat1 = radians(a.lat);
++  const lat2 = radians(b.lat);
++  const h = Math.sin(dLat / 2) ** 2
++    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
++  return 2 * TEST_EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
++}
++
++function pointDueEast(origin, metres) {
++  return {
++    lat: origin.lat,
++    lng: origin.lng + metres / (TEST_EARTH_RADIUS_M * Math.cos(origin.lat * Math.PI / 180)) * 180 / Math.PI,
++  };
++}
++
++function pointAtBearing(origin, metres, bearingDegrees) {
++  const radians = value => value * Math.PI / 180;
++  const degrees = value => value * 180 / Math.PI;
++  const angular = metres / TEST_EARTH_RADIUS_M;
++  const bearing = radians(bearingDegrees);
++  const lat1 = radians(origin.lat);
++  const lng1 = radians(origin.lng);
++  const lat2 = Math.asin(
++    Math.sin(lat1) * Math.cos(angular)
++      + Math.cos(lat1) * Math.sin(angular) * Math.cos(bearing),
++  );
++  const lng2 = lng1 + Math.atan2(
++    Math.sin(bearing) * Math.sin(angular) * Math.cos(lat1),
++    Math.cos(angular) - Math.sin(lat1) * Math.sin(lat2),
++  );
++  return { lat: degrees(lat2), lng: ((degrees(lng2) + 540) % 360) - 180 };
++}
++
+ test('projection cells are fixed coarse polygons and a 250 m mask removes intersecting cells', () => {
+   assert.equal(CELL_SIZE_M, 200);
+   assert.equal(MASK_RADIUS_M, 250);
+@@ -25,6 +66,48 @@ test('projection cells are fixed coarse polygons and a 250 m mask removes inters
+   assert.equal(cellIntersectsMask(cell, { lat: -41.0, lng: 174.0, radius_m: 250 }), false);
+ });
+ 
++test('privacy mask radius is ground distance at representative NZ latitudes', () => {
++  for (const lat of [-35, -41, -45, -47]) {
++    const cell = cellFor(lat, 174.75);
++    const ring = cellPolygon(cell);
++    const eastEdge = {
++      lng: Math.max(...ring.slice(0, 4).map(coordinate => coordinate[0])),
++      lat: (ring[1][1] + ring[2][1]) / 2,
++    };
++    const inside = pointDueEast(eastEdge, 249);
++    const onBoundary = pointDueEast(eastEdge, 250);
++    const outside = pointDueEast(eastEdge, 252);
++    assert.ok(haversineMeters(eastEdge, inside) > 248.5);
++    assert.ok(haversineMeters(eastEdge, inside) < 249.5);
++    assert.equal(cellIntersectsMask(cell, { ...inside, radius_m: 250 }), true, `inside at ${lat}`);
++    assert.equal(cellIntersectsMask(cell, { ...onBoundary, radius_m: 250 }), true, `on boundary at ${lat}`);
++    assert.equal(cellIntersectsMask(cell, { ...outside, radius_m: 250 }), false, `outside at ${lat}`);
++  }
++});
++
++test('privacy predicate measures nearest cell corner rather than only centre or edges', () => {
++  const cell = cellFor(-45, 170.5);
++  const ring = cellPolygon(cell);
++  const southWest = { lng: ring[0][0], lat: ring[0][1] };
++  const justInside = pointAtBearing(southWest, 249, 225);
++  const justOutside = pointAtBearing(southWest, 252, 225);
++  assert.ok(haversineMeters(southWest, justInside) > 248.5);
++  assert.equal(cellIntersectsMask(cell, { ...justInside, radius_m: 250 }), true);
++  assert.equal(cellIntersectsMask(cell, { ...justOutside, radius_m: 250 }), false);
++});
++
++test('privacy mask handles an NZ-adjacent antimeridian wrap conservatively', () => {
++  const cell = cellFor(-47, 179.999);
++  const ring = cellPolygon(cell);
++  const eastEdge = {
++    lng: Math.max(...ring.slice(0, 4).map(coordinate => coordinate[0])),
++    lat: (ring[1][1] + ring[2][1]) / 2,
++  };
++  const wrappedMask = { lat: eastEdge.lat, lng: -179.999, radius_m: 250 };
++  assert.ok(haversineMeters(eastEdge, wrappedMask) < 250);
++  assert.equal(cellIntersectsMask(cell, wrappedMask), true);
++});
++
+ test('server projection excludes whole endpoint/private cells and emits no source rows', async () => {
+   const rows = [
+     { id: 1, lat: -41.2865, lng: 174.7762, ts: 1000, source_activity_client_id: 'activity-a', session_id: 9 },
+@@ -52,6 +135,11 @@ test('server projection excludes whole endpoint/private cells and emits no sourc
+   });
+   assert.equal(projection.source_friend_id, '7');
+   assert.equal(projection.cell_size_m, 200);
++  assert.equal(projection.grid_cell_size_mercator_m, 200);
++  assert.equal(projection.cell_size_basis, 'EPSG:3857_projected_grid');
++  assert.equal(projection.mask_radius_ground_m, 250);
++  assert.equal(projection.mask_distance_tolerance_m, MASK_DISTANCE_TOLERANCE_M);
++  assert.equal(projection.mask_distance_model, 'local_tangent_ground_distance');
+   assert.equal(projection.authorization_version, 3);
+   assert.match(projection.projection_version, /^[0-9a-f]{64}$/);
+   assert.ok(projection.cells.length < new Set(rows.map(row => cellFor(row.lat, row.lng).id)).size);
+diff --git a/backend/src/services/friendAuthorization.js b/backend/src/services/friendAuthorization.js
+index 2b7deb7..bdde05c 100644
+--- a/backend/src/services/friendAuthorization.js
++++ b/backend/src/services/friendAuthorization.js
+@@ -140,7 +140,8 @@ async function authorizedFriendCairn(db, viewerId, markerId, { includeHidden = f
+     `SELECT m.id, m.user_id, m.type, m.text, m.lat, m.lng, m.alt,
+             m.permission, m.approximate, m.created_at, m.updated_at,
+             m.audience_epoch, u.name AS author_name,
+-            encounter.created_at AS encountered_at, encounter.opened_at, encounter.hidden_at
++            encounter.created_at AS encountered_at, encounter.opened_at, encounter.hidden_at,
++            episode.id AS friendship_episode_id
+        FROM friend_cairn_encounters encounter
+        JOIN markers m
+          ON m.id = encounter.marker_id
+@@ -169,9 +170,14 @@ async function authorizedFriendRoute(db, viewerId, routeId, { includeHidden = fa
+   const [rows] = await db.execute(
+     `SELECT r.id, r.user_id, r.name, r.description, r.points, r.waypoints,
+             r.distance_m, r.elevation_gain_m, r.permission, r.audience_epoch,
+-            r.created_at, r.updated_at, u.name AS author_name
++            r.created_at, r.updated_at, u.name AS author_name,
++            episode.id AS friendship_episode_id
+        FROM routes r
+        JOIN friends f ON f.user_id = ? AND f.friend_id = r.user_id
++       JOIN friendship_episodes episode
++         ON episode.user_low_id = LEAST(f.user_id, f.friend_id)
++        AND episode.user_high_id = GREATEST(f.user_id, f.friend_id)
++        AND episode.ended_at IS NULL
+        JOIN users u ON u.id = r.user_id AND u.deleted_at IS NULL
+        LEFT JOIN hidden_items hidden
+          ON hidden.user_id = ? AND hidden.item_type = 'route' AND hidden.item_id = r.id
+diff --git a/backend/src/services/friendProjection.js b/backend/src/services/friendProjection.js
+index b0d01f9..4ef4091 100644
+--- a/backend/src/services/friendProjection.js
++++ b/backend/src/services/friendProjection.js
+@@ -5,6 +5,12 @@ const crypto = require('crypto');
+ const CELL_SIZE_M = 200;
+ const MASK_RADIUS_M = 250;
+ const EARTH_RADIUS_M = 6378137;
++const GROUND_EARTH_RADIUS_M = 6371008.8;
++// Cell edges are at most 200 EPSG:3857 metres. Across the NZ latitude
++// range, a local tangent-plane distance over a cell plus a 250 m mask has
++// sub-metre spherical approximation error. This explicit margin makes the
++// privacy predicate conservative at the numerical boundary.
++const MASK_DISTANCE_TOLERANCE_M = 1;
+ 
+ function toMercator(lat, lng) {
+   const clampedLat = Math.max(-85.05112878, Math.min(85.05112878, Number(lat)));
+@@ -40,15 +46,39 @@ function cellPolygon(cell) {
+   return [[sw.lng, sw.lat], [se.lng, se.lat], [ne.lng, ne.lat], [nw.lng, nw.lat], [sw.lng, sw.lat]];
+ }
+ 
++function normalizedLongitudeDeltaDegrees(lng, originLng) {
++  return ((Number(lng) - Number(originLng) + 540) % 360) - 180;
++}
++
++/**
++ * Minimum ground distance from a point to the cell's geographic rectangle.
++ *
++ * The grid itself remains EPSG:3857 for stable cell identities. Privacy is
++ * different: its promised radius is a ground distance. Each small cell is
++ * projected into a local tangent plane centred on the protected point, with
++ * wrapped longitude deltas for the antimeridian. We compare the closest point
++ * on that rectangle using spherical ground metres, never Mercator metres.
++ */
++function minimumGroundDistanceToCellMeters(cell, point) {
++  const ring = cellPolygon(cell).slice(0, 4);
++  const latitudes = ring.map(coordinate => Number(coordinate[1]));
++  const longitudeDeltas = ring.map(coordinate => normalizedLongitudeDeltaDegrees(coordinate[0], point.lng));
++  const minLat = Math.min(...latitudes);
++  const maxLat = Math.max(...latitudes);
++  const minLngDelta = Math.min(...longitudeDeltas);
++  const maxLngDelta = Math.max(...longitudeDeltas);
++  const closestLat = Math.max(minLat, Math.min(maxLat, Number(point.lat)));
++  const closestLngDelta = Math.max(minLngDelta, Math.min(maxLngDelta, 0));
++  const radians = Math.PI / 180;
++  const northM = (closestLat - Number(point.lat)) * radians * GROUND_EARTH_RADIUS_M;
++  const eastM = closestLngDelta * radians * GROUND_EARTH_RADIUS_M
++    * Math.cos(Number(point.lat) * radians);
++  return Math.hypot(eastM, northM);
++}
++
+ function cellIntersectsMask(cell, mask) {
+-  const point = toMercator(mask.lat, mask.lng);
+-  const minX = cell.x * CELL_SIZE_M;
+-  const minY = cell.y * CELL_SIZE_M;
+-  const maxX = minX + CELL_SIZE_M;
+-  const maxY = minY + CELL_SIZE_M;
+-  const closestX = Math.max(minX, Math.min(maxX, point.x));
+-  const closestY = Math.max(minY, Math.min(maxY, point.y));
+-  return Math.hypot(point.x - closestX, point.y - closestY) <= Math.max(MASK_RADIUS_M, Number(mask.radius_m || 0));
++  const radiusM = Math.max(MASK_RADIUS_M, Number(mask.radius_m || 0));
++  return minimumGroundDistanceToCellMeters(cell, mask) <= radiusM + MASK_DISTANCE_TOLERANCE_M;
+ }
+ 
+ async function deriveFriendProjection(db, ownerId, viewerId, grant) {
+@@ -116,7 +146,14 @@ async function deriveFriendProjection(db, ownerId, viewerId, grant) {
+     source_friend_id: String(ownerId),
+     authorization_version: Number(grant.authorization_version),
+     projection_version: projectionVersion,
++    // Kept for older clients. This is the EPSG:3857 grid interval, not a
++    // claim that every returned cell edge spans 200 ground metres.
+     cell_size_m: CELL_SIZE_M,
++    cell_size_basis: 'EPSG:3857_projected_grid',
++    grid_cell_size_mercator_m: CELL_SIZE_M,
++    mask_radius_ground_m: MASK_RADIUS_M,
++    mask_distance_tolerance_m: MASK_DISTANCE_TOLERANCE_M,
++    mask_distance_model: 'local_tangent_ground_distance',
+     cells: sortedCells.map(cell => ({
+       id: cell.id,
+       polygon: cellPolygon(cell),
+@@ -124,4 +161,13 @@ async function deriveFriendProjection(db, ownerId, viewerId, grant) {
+   };
+ }
+ 
+-module.exports = { CELL_SIZE_M, MASK_RADIUS_M, cellFor, cellPolygon, cellIntersectsMask, deriveFriendProjection };
++module.exports = {
++  CELL_SIZE_M,
++  MASK_RADIUS_M,
++  MASK_DISTANCE_TOLERANCE_M,
++  cellFor,
++  cellPolygon,
++  minimumGroundDistanceToCellMeters,
++  cellIntersectsMask,
++  deriveFriendProjection,
++};

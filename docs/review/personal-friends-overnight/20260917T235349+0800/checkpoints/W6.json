@@ -1,0 +1,10 @@
+{
+  "work_package":"W6",
+  "status":"completed",
+  "verdict":"DEPLOYED_HEALTHY",
+  "completed_at":"2026-09-18T02:23:17+08:00",
+  "production":{"commit":"9b92be3efef3a355d71491ec250cb6df62878a23","image":"sha256:5a6620ff54cc5b1b5b3de0b49dab89f172fcd7590208f333b66a87384aed8f73","ledger":"037","health":"PASS"},
+  "review":{"api":"https://api.yiiling.cn/pf-review-o60","schema":"cairn_pf_review_2f8cd36","image":"sha256:23d0229f41136f7e3b89c863f7f712094efffc9d9db9c2b0f3f5a4f779b3c54d","health":"PASS","synthetic_only":true},
+  "ota":{"marker":"O60","published":false},
+  "evidence":["OPERATIONS_RECEIPT.md","DEPLOYMENT_COMPATIBILITY.md","OTA_READY_NOT_PUBLISHED.md","operations/"]
+}

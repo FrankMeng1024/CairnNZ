@@ -1,0 +1,241 @@
+{
+  "schema_version": "1.0",
+  "run_id": "20260917T221830+0800",
+  "generated_at": "2026-09-17T22:18:30+08:00",
+  "task": "Personal Journal + Friends Collaboration overnight execution readiness preflight",
+  "language": "English",
+  "mode": "read_only_preflight",
+  "implementation_performed": false,
+  "deployment_performed": false,
+  "ota_published": false,
+  "production_or_external_mutation": false,
+  "candidate_marker": {
+    "expected": "O59",
+    "actual": "O59",
+    "source": "app/src/components/OtaBadge.tsx",
+    "changed_by_preflight": false,
+    "meaning": "Local unaccepted Route revision-02 candidate; not proof of OTA, device loading, or owner acceptance."
+  },
+  "source_identity": {
+    "repository": "/Users/mzm/Desktop/cairn/CairnNZ",
+    "branch": "master",
+    "head": "12fa1cd0ef599e53a81cd30537ce761c5e2150ce",
+    "origin_master": "12fa1cd0ef599e53a81cd30537ce761c5e2150ce",
+    "worktree_is_dirty": true,
+    "start_status_entries": 481,
+    "tracked_modified_entries": 112,
+    "untracked_entries": 369,
+    "unmerged_entries": 0,
+    "start_status_sha256": "c2c6e87a1619ab6fad12a2a56fab27c7d167869516fe17d4e2f32c27c34efbf3",
+    "competing_writer_check": "No Cairn API, Expo, Playwright, disposable Cairn MySQL process, or unmerged index entry was present at initial inspection. Dirty shared files remain a collision risk.",
+    "preservation_rule": "Use one primary writer and a task-start source snapshot. Do not reset, clean, mass-format, mass-stage, or replace unrelated card work."
+  },
+  "route_revision_02": {
+    "package": "/Users/mzm/Desktop/cairn_route_detail_02.zip",
+    "package_exists": true,
+    "sha256_expected_from_sidecar": "1fbd78ce5718e98cd093d6dd22721514e99de85c594661261cbaa8de2ee0ee63",
+    "sha256_verified": true,
+    "report_folder": "docs/review/route-detail/20260917T203209+0800",
+    "touched_file_hashes_match_current_source": true,
+    "corrections_present": [
+      "ambiguous delete endpoint 404 does not falsely confirm remote deletion",
+      "same-owner stale reads cannot overwrite newer accepted Route state/cache",
+      "real MySQL migration 036/origin round trip evidence",
+      "genuine geometry edit, cancel, retry, save-in-flight, and deletion evidence",
+      "raw vertex count removed from primary metrics",
+      "shared chooser action labelled Use Route"
+    ],
+    "previous_evidence_attributable": true,
+    "limits": ["not deployed", "not native-device validated", "not owner accepted"]
+  },
+  "material_source_hashes_sha256": {
+    "AGENTS.md": "18c4f64914723e728a6d0d25b19c8234df2be6d5638c626ce273725eb2b2b873",
+    "app/src/components/OtaBadge.tsx": "b346b7a6d2ef52d73dda5537cbfb8d4c4096d5454824086bd19aebdacd5a18ad",
+    "app/src/features/memory/screens/MemoryScreen.tsx": "0731f2f81c0c434346aa87e359562769121e25f6bbd3ff3d04e9b97f36a13e1e",
+    "app/src/features/memory/store/useMemoryStore.ts": "4038dc646515b6285070238164ddff7e916dd9db66d1a919890fe18d18d70224",
+    "app/src/features/memory/store/useFriendMemoryStore.ts": "1b47dd3f94125aca657dd7ca4d50019a76b5ece5d5860460aee7df84c6fe9081",
+    "app/src/features/memory/store/useMemorySubscriptionsStore.ts": "57c26123244d5893730cad814e4425571060b53cd78e8f96d0ed57add542011c",
+    "app/src/features/memory/store/useMemoryScopeStore.ts": "4ef82520a1f08a434ebac128351df2bf2cf1c045a33108bfdf8fde0b5dda51ca",
+    "app/src/features/memory/services/recordMemoryEvidence.ts": "df7008f5821896c1ddece29f5be4133db01d5221e354761568ffa4e8482989c1",
+    "app/src/features/memory/components/PassiveMemoryRecorder.tsx": "1af05d073ee97c5925b7660de915615e9d00c11014477130dca529f22c70fc6a",
+    "app/src/screens/FriendsScreen.tsx": "82381dcd465d5c6bd1569a31913bc690958f8f0367c3f53a8666484f7ddb2a21",
+    "app/src/store/useFriendStore.ts": "9371e8f9f50eda2e458e027820703b82768c82af3a9ca28861635941ecc27147",
+    "app/src/store/useMarkerStore.ts": "9ff7369b18584b19d95ebc247168c6667f454d8e71154108b65a27e9530bd2a0",
+    "app/src/store/useRouteStore.ts": "2ba074f9dccf1503e137255728c2c15a5170bcd05a32c81563127e1b9eaaff09",
+    "app/src/navigation/RootNavigator.tsx": "96196cb627cf57b0c88d470bdadce6f84c64565e166099acc0e58119ab35a987",
+    "backend/src/routes/friends.js": "ec9a0ec054bdb4b609dbea86813dfc0ffbf55ef59fad71826d0210a9445965a0",
+    "backend/src/routes/circle.js": "52c21c3e721ca52527f48cf6ea491e20a44cd6cb97fa616c181cab63497f7369",
+    "backend/src/routes/memory-subscriptions.js": "92a457b033497e229b8778588000a2fe25e9b40e89e48faba3548b8d1823cd95",
+    "backend/src/routes/memory.js": "7b6f73a93e05e123e9afcdf26b16e83778e769b411ad19b8fd70c54f7022e0e6",
+    "backend/src/routes/hierarchy.js": "db5e5777790710b67f39bbdfa1a4cad662287070dbc0c7ad88ddb469269a7dff",
+    "backend/src/migrations/018_friend_system_v4.sql": "b8ce5cc4211a69d19e6b65b399dc27f888b454412629141dfb5857e1d8d83067",
+    "backend/src/migrations/036_route_origin_identity.sql": "e3988c0801cdae8409614f4bbb2cadca24acf778b6ae85cbc90fe8e06c68d3d0"
+  },
+  "evidence_authority": [
+    "docs/review/ui-requirements-baseline/20260916T131638+0800",
+    "docs/review/activity-detail/20260916T164608+0800",
+    "docs/review/cairn-personal/20260917T141933+0800",
+    "docs/review/route-detail/20260917T203209+0800",
+    "docs/review/product-system-v1-audit/01_MEMORY_FRIENDS_PERMISSIONS.md",
+    "docs/review/product-system-v1-audit/02_CAIRN_ENCOUNTERS_ROUTE_TRUST.md",
+    "docs/VISUAL_SYSTEM.md",
+    "docs/VISUAL_MIGRATION_STATE.md",
+    "docs/VISUAL_ASSET_MANIFEST.json"
+  ],
+  "status_dimensions": {
+    "personal_implementation": "PARTIAL_REUSABLE_BASELINE",
+    "personal_automated_proof": "PARTIAL_STRONG_CARD_EVIDENCE",
+    "personal_database_proof": "PARTIAL_ROUTE_AND_SMOKE_ONLY",
+    "personal_visual_proof": "WEB_AND_FALLBACK_ONLY",
+    "friend_implementation": "INCOMPLETE_UNSAFE_CURRENT_CONTRACT",
+    "friend_automated_proof": "INSUFFICIENT_FOR_PROPOSED_SCOPE",
+    "friend_database_proof": "SMOKE_ENVIRONMENT_ONLY",
+    "friend_visual_proof": "CURRENT_SHELL_ONLY",
+    "deployment": "NOT_PERFORMED",
+    "device_loading": "NOT_RUN",
+    "native_validation": "BLOCKED_LOCAL",
+    "owner_acceptance": "NOT_REQUESTED_NOT_GRANTED"
+  },
+  "scope_classification": {
+    "personal": {
+      "already_proven": [
+        "O57 Activity Detail local identity/metrics/Final/Gap/linked Cairn contracts",
+        "O58 Own Cairn Detail and normally reachable All Cairns",
+        "O59 revision-02 Route Detail/Edit/Use local contract",
+        "O54/O55 canonical, Final, Clean Path, and Raw GPS separation"
+      ],
+      "existing_but_incomplete": ["Personal Memory hierarchy/state/theme semantics", "technical offline/reconnect integration"],
+      "small_extension": ["honest first/last recorded evidence context", "simulator exclusion after provenance", "grouped real-handler regression"],
+      "new_shared_contract": ["durable Memory evidence provenance and historical unknown"],
+      "owner_decision_required": []
+    },
+    "friends": {
+      "already_proven": ["basic friend lifecycle primitives and accepted Friends visual structure"],
+      "existing_but_incomplete": ["viewer selection", "mine/friends scope", "profile modal", "circle marker/route read primitives"],
+      "small_extension": ["Friend Detail normal entry shell", "three-theme/recoverable states after authorization exists"],
+      "new_shared_contract": ["author grants", "derived projections", "request-time authorization", "revocation and versioned cache", "read-only object permissions", "stable Route reference", "optional prospective Encounter"],
+      "owner_decision_required": ["history scope", "projection/sensitive policy", "offline TTL", "single-friend visual semantics", "Encounter inclusion"]
+    }
+  },
+  "current_friend_contract_facts": {
+    "owner_grant": "none",
+    "viewer_selection": "memory_subscriptions controlled by viewer",
+    "fog_response": "exact lat/lng/ts rows, not derived projection",
+    "historical_vs_new": "not distinguished",
+    "sensitive_locations": "no inspected exclusion contract",
+    "unfriend_or_block": "friend/request rows removed but subscriptions not transactionally revoked",
+    "delayed_response_protection": "insufficient in useFriendMemoryStore",
+    "offline_policy": "implicit RAM behavior, no stated TTL",
+    "shared_object_semantics": "read response exists but no authoritative reference/copy lifecycle",
+    "direct_api_bypass": "current legacy endpoints do not enforce the proposed full authorization"
+  },
+  "owner_decisions": [
+    {
+      "id": "DEC-01",
+      "question": "What history becomes shareable when an owner grants a friend?",
+      "recommended_default": "Prospective from that per-friend grant's effective time; unknown historical evidence is not retrospectively shared."
+    },
+    {
+      "id": "DEC-02",
+      "question": "What projection and sensitive-place policy should Friends use?",
+      "recommended_default": "Server-derived coarse cell/region projection, no raw points/timestamps, sensitive places excluded by default; approve the product resolution before implementation."
+    },
+    {
+      "id": "DEC-03",
+      "question": "How long may last-authorized friend data remain available offline?",
+      "recommended_default": "At most 24 hours with last-checked context; purge on account switch and online revocation; no new shared data offline. Alternative: no shared offline cache."
+    },
+    {
+      "id": "DEC-04",
+      "question": "What should single-friend and overlap views mean?",
+      "recommended_default": "Single friend shows only that source; self remains separately selectable; union preserves per-source identity and overlap."
+    },
+    {
+      "id": "DEC-05",
+      "question": "Is prospective presence-gated friend Cairn Encounter included in v1?",
+      "recommended_default": "Yes: canonical real evidence only, no automatic author notification, and explicit Route access remains separate. If declined, exclude friend Cairn discovery from v1."
+    }
+  ],
+  "environment_checks": [
+    {
+      "id": "ENV-MYSQL-API-SMOKE",
+      "status": "PASS",
+      "evidence": "Disposable MySQL 8.0.44 container/database plus local API with DISABLE_CRON=1; migration 036 applied; two synthetic .invalid JWT sessions each received HTTP 200 with zero routes.",
+      "isolation": "Unique container, volume, database, ports 33308/33082; exact container/volume removed after test; unrelated cc-builder-mysql untouched.",
+      "limitations": "Legitimate pre-036 Route fixture only, not a complete Friends schema integration test."
+    },
+    {
+      "id": "ENV-FRIENDS-SCHEMA",
+      "status": "BLOCKED",
+      "evidence": "No safe one-command current full-schema bootstrap: docker/init.sql is old; migration 018 hard-codes USE cairn; runner/database-name assumptions require a targeted fixture or test-only repair.",
+      "required_checkpoint": "WP1 must establish the legitimate A/B/C/D Friends fixture before authorization implementation is accepted."
+    },
+    {
+      "id": "ENV-BROWSER",
+      "status": "PASS",
+      "evidence": "Playwright 1.62 plus system Chrome 150; two isolated contexts retained separate A/B cookies.",
+      "limitations": "Bundled Playwright Chromium is absent; configure explicit executable path."
+    },
+    {
+      "id": "ENV-NATIVE-IOS",
+      "status": "BLOCKED",
+      "evidence": "Only Command Line Tools are active; xcodebuild requires full Xcode and simctl/xctrace are unavailable.",
+      "impact": "No native simulator automation, native RN Mapbox proof, native keyboard/safe-area/haptics, or physical field proof."
+    },
+    {
+      "id": "ENV-MAPS",
+      "status": "PARTIAL",
+      "evidence": "Existing actual Web Mapbox evidence exists for earlier Memory/Plant references; recent card captures accurately label fallback/map-unavailable states.",
+      "limitations": "Web and blank Expo fallback do not prove native Mapbox."
+    },
+    {
+      "id": "ENV-STARTUP-WRITERS",
+      "status": "PASS_WITH_CONTROLS",
+      "evidence": "Backend supports DISABLE_CRON=1; local API URL and external-write interception can be explicit.",
+      "risks": ["EAS development/preview profiles target https://api.yiiling.cn", "client passive Memory/background writers", "push/telemetry/geocoding/export jobs if not intercepted"],
+      "rule": "A preview profile name is not isolation."
+    },
+    {
+      "id": "ENV-O55",
+      "status": "SOURCE_REACHABLE_DATA_GAP",
+      "evidence": "EXPO_PUBLIC_ACTIVITY_SIMULATOR_ENABLED gates the capability and preview/test source includes it.",
+      "limitations": "PassiveMemoryRecorder can persist simulator samples as passive Memory evidence until provenance is corrected."
+    },
+    {
+      "id": "ENV-OWNER-DELIVERY",
+      "status": "BLOCKED",
+      "evidence": "Manual EAS/OTA mechanics exist, but current profiles target production and no isolated HTTPS owner-review backend was found.",
+      "rule": "Requires separate deployment and OTA approval after local implementation."
+    }
+  ],
+  "release_dependencies": [
+    "O58 owned-Cairn history and create-replay backend changes are local, not assumed deployed",
+    "O59 migration 036 and Route origin/delete response changes are local, not assumed deployed",
+    "migration 035/settings feedback/account-deletion/export contract mismatch remains open",
+    "new Memory provenance/reflection backend is required",
+    "new Friends grants/projection/revocation/object permissions/optional Encounter backend is required",
+    "current EAS profiles target production and are not an isolated review environment"
+  ],
+  "recommended_sequence": [
+    "WP1 snapshot baseline and build disposable A/B/C/D Friends harness",
+    "WP2 complete Personal Memory provenance/reflection/theme states",
+    "WP3 implement grant/projection/revocation/versioned cache",
+    "WP4 connect read-only friend content and optional Encounter/reference use",
+    "WP5 apply scoped three-theme/state consistency",
+    "WP6 run integrated/adversarial matrix with separate Personal and Friends verdicts",
+    "WP7 prepare coherent backend deployment/rollback and grouped owner review evidence"
+  ],
+  "feasibility": {
+    "personal": "EXECUTABLE_AS_BOUNDED_LOCAL_WORK_AFTER_WP1_ISOLATION",
+    "friends": "CONDITIONAL_ON_FIVE_DECISIONS_AND_REAL_SCHEMA_HARNESS",
+    "combined_unattended_completion_as_defined": "NOT_YET_FROZEN",
+    "native_device_acceptance": "NOT_EXECUTABLE_ON_CURRENT_MAC"
+  },
+  "package": {
+    "requested_path": "/Users/mzm/Desktop/cairn_personal_friends_preflight_01.zip",
+    "archive_revision": 1,
+    "overwrite_policy": "Do not overwrite different content; increment the two-digit suffix if occupied.",
+    "contents": ["SUMMARY.md", "SCOPE_AND_GAPS.md", "UI_STATE_INVENTORY.json", "ACCEPTANCE_MATRIX.json", "HANDOFF.json"],
+    "exclusions": ["secrets", ".env files", "credentials", "private databases", "real private coordinates", "node_modules", "unrelated artifacts"]
+  }
+}

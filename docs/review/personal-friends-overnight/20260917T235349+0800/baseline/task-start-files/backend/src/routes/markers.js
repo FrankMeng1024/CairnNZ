@@ -1,0 +1,863 @@
+/**
+ * Markers Routes — /api/markers
+ *
+ * Endpoints:
+ * GET    /api/markers          — Get user's markers
+ * POST   /api/markers          — Create a marker
+ * PUT    /api/markers/:id      — Update a marker (note, permission)
+ * DELETE /api/markers/:id      — Delete a marker
+ *
+ * v199 community endpoints (canon §一-4: 1 user 1 mark 1 vote, mutex,
+ * permanent — no DELETE, no UPDATE):
+ * GET    /api/markers/:id/community-state — read counts + user's vote
+ * GET    /api/markers/:id/interact-nonce  — short-lived HMAC for /vote
+ * POST   /api/markers/:id/vote            — submit like or report
+ */
+const express = require('express');
+const rateLimit = require('express-rate-limit');
+const router = express.Router();
+const pool = require('../config/db');
+const authenticate = require('../middleware/authenticate');
+const idempotency = require('../middleware/idempotency');
+const { haversineM } = require('../utils/haversine');
+const nonceUtil = require('../utils/nonce');
+const abuseSignals = require('../utils/abuseSignals');
+const { isClientWriteable, PERMISSION } = require('../constants/permission');
+const { validateBody } = require('../middleware/validate');
+const schemas = require('../middleware/schemas');
+const {
+  buildOwnedCairnLibraryQuery,
+  decodeCursor,
+  encodeCursor,
+} = require('../services/ownedCairnLibrary');
+
+router.use(authenticate);
+
+// ── Server-side gates (per V2.C6) ─────────────────────────────────────
+const SERVER_INTERACT_RANGE_M = 50; // 30 client + 20 GPS noise margin
+const MAX_GPS_ACCURACY_M = 100;
+const MAX_TIMESTAMP_SKEW_MS = 60_000;
+const IMPOSSIBLE_TRAVEL_KM = 5;
+const IMPOSSIBLE_TRAVEL_WINDOW_MS = 60_000;
+const REPORT_HIDE_THRESHOLD = 5;
+const VALID_REASONS = new Set(['fake_ad', 'info_mismatch', 'dislike']);
+const VALID_TYPES = new Set(['like', 'report']);
+
+// ── Rate limiters (per V2.C5) ─────────────────────────────────────────
+// Keyed by req.user.userId, NOT IP, so corporate-NAT users don't share a
+// bucket. Skip on idempotent replays so genuine retries aren't penalized.
+function userKey(prefix) {
+  return (req) => `${prefix}:${req.user?.userId || req.ip}`;
+}
+// O1 (2026-07-26): removed skipReplay helper — 逻辑上永远 no-op。
+// idempotency middleware (idempotency.js:67-73) 在 cache hit 时直接
+// res.json return,replay 请求根本走不到 rateLimit 下游。且 client
+// 从不 set X-Idempotent-Replay request header (它是 response header)。
+// skip: skipReplay 3 处引用同步删。
+
+const likeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userKey('like'),
+  handler: (req, res) => {
+    abuseSignals.log(req, { kind: 'rate_limit', userId: req.user?.userId, payload: { route: 'vote.like' } });
+    res.status(429).json({ error: 'Too many like actions. Slow down.' });
+  },
+});
+const reportLimiterMin = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userKey('reportMin'),
+  handler: (req, res) => {
+    abuseSignals.log(req, { kind: 'rate_limit', userId: req.user?.userId, payload: { route: 'vote.report.min' } });
+    res.status(429).json({ error: 'Too many report actions. Slow down.' });
+  },
+});
+const reportLimiterHour = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userKey('reportHour'),
+  handler: (req, res) => {
+    abuseSignals.log(req, { kind: 'rate_limit', userId: req.user?.userId, payload: { route: 'vote.report.hour' } });
+    res.status(429).json({ error: 'Hourly report limit reached.' });
+  },
+});
+
+// Wrap two limiters per request body type ('like' uses likeLimiter,
+// 'report' uses both reportLimiterMin + reportLimiterHour).
+function voteRateLimit(req, res, next) {
+  const t = req.body?.type;
+  if (t === 'like') return likeLimiter(req, res, next);
+  if (t === 'report') {
+    return reportLimiterMin(req, res, (err) => {
+      if (err) return next(err);
+      return reportLimiterHour(req, res, next);
+    });
+  }
+  // Unknown type — let validation in handler catch it (returns 400)
+  return next();
+}
+
+// ── Get user's markers ──────────────────────────────────────────────────────
+router.get('/', async (req, res) => {
+  try {
+    // BUG-001 fix (Sprint 71 post-review): include user_id so the client can
+    // populate Marker.authorId with the real owner id instead of the literal
+    // 'server' fallback. Without user_id in the response, viewerId vs
+    // markUserId comparison in markVisibility/markTier returns 'stranger'
+    // for the user's OWN marks, making own Personal marks invisible after
+    // backend hydrate.
+    // Sprint 6 R73: hard cap own-marker list at 5000. Pre-fix, no LIMIT
+    // meant a user with N markers downloaded all N at once. Typical
+    // hikers have 10-100; sim-walker abuse or an unhinged tester could
+    // create thousands, producing multi-MB responses that stall the
+    // app on cold-start hydrate. 5000 is well beyond any realistic
+    // legitimate use (a hiker leaving one mark per hike, 3 hikes/week,
+    // for 30 years = ~4700). Client already sorts by created_at DESC
+    // so the newest 5000 win.
+    const [markers] = await pool.execute(
+      `SELECT id, user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
+              type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at
+       FROM markers WHERE user_id = ? ORDER BY created_at DESC LIMIT 5000`,
+      [req.user.userId]
+    );
+    res.json(markers);
+  } catch (err) {
+    console.error('[markers/get]', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── Paginated owner library ────────────────────────────────────────────────
+// GET /api/markers/library?limit=40&cursor=...&q=...
+// This is owner-only by construction: the authenticated user id is the first
+// SQL predicate and no user id is accepted from the client. Search runs over
+// the owner's whole server history before pagination. The legacy GET / route
+// remains unchanged for existing clients.
+router.get('/library', async (req, res) => {
+  const limitRaw = Number(req.query.limit ?? 40);
+  const limit = Number.isInteger(limitRaw) ? Math.min(100, Math.max(1, limitRaw)) : NaN;
+  const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 80) : '';
+  if (!Number.isFinite(limit)) return res.status(400).json({ error: 'Invalid limit.' });
+
+  let cursor = null;
+  try {
+    cursor = decodeCursor(req.query.cursor);
+  } catch {
+    return res.status(400).json({ error: 'Invalid cursor.' });
+  }
+
+  try {
+    const built = buildOwnedCairnLibraryQuery({
+      userId: req.user.userId,
+      limit,
+      query,
+      cursor,
+    });
+    const [rows] = await pool.execute(built.sql, built.values);
+    const hasMore = rows.length > limit;
+    const markers = hasMore ? rows.slice(0, limit) : rows;
+    const last = markers[markers.length - 1];
+    return res.json({
+      markers,
+      has_more: hasMore,
+      next_cursor: hasMore && last ? encodeCursor(last) : null,
+      scope: 'all_owned_history',
+      query_scope: query ? 'all_owned_history' : null,
+    });
+  } catch (err) {
+    console.error('[markers/library]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── Get Public markers within bbox (strangers' marks for Memory tab) ────────
+// GET /api/markers/public?bbox=lat1,lng1,lat2,lng2
+//   bbox corners: (lat1,lng1) = SW, (lat2,lng2) = NE
+//   - Returns permission='public' marks from other users within bbox
+//   - Excludes viewer's own marks (user_id != viewer)
+//   - Excludes items the viewer has hidden (LEFT JOIN hidden_items)
+//   - Anonymous: no author info returned (v4 §10 design)
+//   - Max 50 results, ordered by created_at DESC
+router.get('/public', async (req, res) => {
+  try {
+    const { bbox } = req.query;
+    if (!bbox || typeof bbox !== 'string') {
+      return res.status(400).json({ error: 'bbox query param required (lat1,lng1,lat2,lng2)' });
+    }
+    const parts = bbox.split(',').map(Number);
+    if (parts.length !== 4 || parts.some((v) => !Number.isFinite(v))) {
+      return res.status(400).json({ error: 'bbox must be 4 comma-separated numbers' });
+    }
+    const [lat1, lng1, lat2, lng2] = parts;
+    const minLat = Math.min(lat1, lat2);
+    const maxLat = Math.max(lat1, lat2);
+    const minLng = Math.min(lng1, lng2);
+    const maxLng = Math.max(lng1, lng2);
+
+    // Cap bbox span to ~22 km per side (0.2°) to prevent full-table scans
+    if (maxLat - minLat > 0.2 || maxLng - minLng > 0.2) {
+      return res.status(400).json({ error: 'bbox span too large (max 0.2° per side)' });
+    }
+
+    const userId = req.user.userId;
+    // Sprint 6 round-52 R52: also filter soft-deleted owners. Same class
+    // as R37 / R47 (soft-deleted user filter across circle + friends
+    // endpoints). Pre-fix, a public marker whose owner soft-deleted
+    // their account still appeared in the /public bbox feed for the
+    // 7-day grace period. Their content going away is signaled by the
+    // authSweep cascade — surfacing it in the meantime is stale UX.
+    const [rows] = await pool.execute(
+      `SELECT m.id, m.type, m.lat, m.lng, m.created_at
+       FROM markers m
+       JOIN users u ON u.id = m.user_id AND u.deleted_at IS NULL
+       LEFT JOIN hidden_items h
+         ON h.user_id = ? AND h.item_type = 'mark' AND h.item_id = m.id
+       WHERE m.permission = 'public'
+         AND m.status != 'hidden'
+         AND m.user_id != ?
+         AND m.lat BETWEEN ? AND ?
+         AND m.lng BETWEEN ? AND ?
+         AND h.user_id IS NULL
+       ORDER BY m.created_at DESC
+       LIMIT 50`,
+      [userId, userId, minLat, maxLat, minLng, maxLng],
+    );
+
+    res.json({ markers: rows });
+  } catch (err) {
+    console.error('[markers/public]', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── Create marker ───────────────────────────────────────────────────────────
+router.post('/', validateBody(schemas.marker.create), idempotency, async (req, res) => {
+  let conn = null;
+  try {
+    const {
+      client_cairn_id,
+      origin_activity_client_id,
+      type, text, lat, lng, alt, permission, approximate,
+    } = req.body;
+
+    if (!type || lat == null || lng == null) {
+      return res.status(400).json({ error: 'type, lat, lng required' });
+    }
+    // v300: bumped 50→250 to fit plant-flow title (30) + sep + body (200).
+    if (text && text.length > 250) {
+      return res.status(400).json({ error: 'Text max 250 characters' });
+    }
+
+    // v4 H1: client can never write permission='public'. Only seed scripts do.
+    // Accept 'personal' | 'group' (legacy) | 'friend' (modern alias). Map
+    // 'friend' → DB 'group' to keep the ENUM stable. Reject anything else.
+    if (permission === PERMISSION.PUBLIC) {
+      return res.status(400).json({
+        error: "permission='public' is not allowed for client writes",
+      });
+    }
+    if (permission !== undefined && !isClientWriteable(permission)) {
+      return res.status(400).json({ error: 'Invalid permission' });
+    }
+    const perm =
+      permission === PERMISSION.FRIEND ? PERMISSION.GROUP_LEGACY :
+      permission || PERMISSION.PERSONAL;
+    const approx = approximate ? 1 : 0;
+
+    // v300 snapshot logic only applied to public — H1 now blocks the public
+    // write path at the API layer, so the snapshot branch below is unreachable
+    // from client POST. Retained as null for column write consistency.
+    let publicSnapshotJson = null;
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    // One durable per-user lock gives Create and both delete shapes a common
+    // ordering across backend processes. Tombstone visibility can therefore
+    // never depend on which HTTP handler wins an in-process race.
+    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [req.user.userId]);
+    if (client_cairn_id) {
+      const [tombstones] = await conn.execute(
+        `SELECT client_cairn_id FROM marker_client_tombstones
+         WHERE user_id = ? AND client_cairn_id = ? FOR UPDATE`,
+        [req.user.userId, client_cairn_id],
+      );
+      if (tombstones[0]) {
+        await conn.rollback();
+        return res.status(409).json({
+          error: 'Cairn was deleted by the client.',
+          code: 'CAIRN_TOMBSTONED',
+          client_cairn_id,
+        });
+      }
+    }
+    let originSessionId = null;
+    if (origin_activity_client_id) {
+      const [originRows] = await conn.execute(
+        `SELECT id FROM sessions WHERE user_id = ? AND client_activity_id = ? LIMIT 1`,
+        [req.user.userId, origin_activity_client_id],
+      );
+      originSessionId = originRows[0]?.id ?? null;
+    }
+
+    const [result] = await conn.execute(
+      `INSERT INTO markers
+         (user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
+          type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE
+         id=LAST_INSERT_ID(id),
+         origin_session_id=COALESCE(origin_session_id, VALUES(origin_session_id))`,
+      [
+        req.user.userId, client_cairn_id ?? null,
+        origin_activity_client_id ?? null, originSessionId,
+        type, text || '', lat, lng, alt ?? null, perm, approx, publicSnapshotJson,
+      ]
+    );
+    const [storedRows] = await conn.execute(
+      `SELECT id, user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
+              type, text, lat, lng, alt, permission, approximate, public_snapshot, created_at
+       FROM markers WHERE id = ? AND user_id = ? FOR UPDATE`,
+      [result.insertId, req.user.userId],
+    );
+    const stored = storedRows[0];
+    if (!stored) throw new Error('Cairn reconciliation row missing.');
+    if (client_cairn_id) {
+      const sameImmutableFacts =
+        stored.client_cairn_id === client_cairn_id &&
+        (stored.origin_activity_client_id ?? null) === (origin_activity_client_id ?? null) &&
+        Number(stored.lat) === Number(lat) && Number(stored.lng) === Number(lng) &&
+        (stored.alt == null ? null : Number(stored.alt)) === (alt == null ? null : Number(alt));
+      if (!sameImmutableFacts) {
+        const mismatch = new Error('Cairn client identity was reused for different facts.');
+        mismatch.code = 'CAIRN_IDENTITY_MISMATCH';
+        throw mismatch;
+      }
+      // A pending local Cairn may be enriched while its first create request
+      // is in flight. Replaying the same owner-scoped business identity keeps
+      // immutable place/provenance, but is allowed to converge supported
+      // content instead of rejecting the newer durable payload.
+      const contentChanged =
+        stored.type !== type
+        || stored.text !== (text || '')
+        || stored.permission !== perm
+        || Boolean(stored.approximate) !== Boolean(approx);
+      if (contentChanged) {
+        await conn.execute(
+          `UPDATE markers
+           SET type = ?, text = ?, permission = ?, approximate = ?, updated_at = NOW()
+           WHERE id = ? AND user_id = ?`,
+          [type, text || '', perm, approx, stored.id, req.user.userId],
+        );
+        stored.type = type;
+        stored.text = text || '';
+        stored.permission = perm;
+        stored.approximate = approx;
+      }
+    }
+    await conn.commit();
+    res.status(201).json({
+      id: stored.id,
+      client_cairn_id: stored.client_cairn_id ?? null,
+      origin_activity_client_id: stored.origin_activity_client_id ?? null,
+      origin_session_id: stored.origin_session_id ?? null,
+      // BUG-006 fix (Sprint 71 post-review round 2): echo user_id so the
+      // client addMarker post-sync can populate Marker.authorId with the
+      // real owner id instead of preserving the caller-passed 'local' /
+      // 'server' literal. Without this, in-session new marks remain
+      // tier='stranger' until the next app restart triggers GET (BUG-001).
+      user_id: stored.user_id,
+      type: stored.type, text: stored.text, lat: Number(stored.lat), lng: Number(stored.lng),
+      alt: stored.alt == null ? null : Number(stored.alt), permission: stored.permission,
+      approximate: Boolean(stored.approximate), public_snapshot: stored.public_snapshot,
+      created_at: stored.created_at,
+    });
+  } catch (err) {
+    if (conn) try { await conn.rollback(); } catch { /* ignore */ }
+    if (err.code === 'CAIRN_IDENTITY_MISMATCH') {
+      return res.status(409).json({ error: err.message, code: err.code });
+    }
+    console.error('[markers/create]', err.message);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// ── Update marker ───────────────────────────────────────────────────────────
+router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
+  try {
+    const { text, permission, type } = req.body;
+    const markerId = req.params.id;
+
+    // Verify ownership AND fetch current state for snapshot logic.
+    const [existing] = await pool.execute(
+      'SELECT id, type, lat, lng, text, permission, public_snapshot FROM markers WHERE id = ? AND user_id = ?',
+      [markerId, req.user.userId]
+    );
+    if (existing.length === 0) return res.status(404).json({ error: 'Marker not found' });
+    const current = existing[0];
+
+    const updates = [];
+    const values = [];
+
+    if (type !== undefined) {
+      // v300: valid type list updated to v105 marker types
+      // (was the stale ['danger','scenic','supply','junction','free']).
+      const validTypes = ['danger', 'junction', 'water', 'hut', 'cairn'];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ error: 'Invalid type' });
+      }
+      updates.push('type = ?');
+      values.push(type);
+    }
+    if (text !== undefined) {
+      if (text.length > 250) return res.status(400).json({ error: 'Text max 250 characters' });
+      updates.push('text = ?');
+      values.push(text);
+    }
+    if (permission !== undefined) {
+      // v4 H1: client can never set permission='public'.
+      if (permission === PERMISSION.PUBLIC) {
+        return res.status(400).json({
+          error: "permission='public' is not allowed for client writes",
+        });
+      }
+      if (!isClientWriteable(permission)) {
+        return res.status(400).json({ error: 'Invalid permission' });
+      }
+      const dbPerm =
+        permission === PERMISSION.FRIEND ? PERMISSION.GROUP_LEGACY : permission;
+      updates.push('permission = ?');
+      values.push(dbPerm);
+
+      // v300 snapshot branch was: "first transition to public → snapshot".
+      // Under v4 H1 this branch is unreachable from a client PATCH because
+      // permission='public' is rejected above. Removed to keep the code
+      // honest about what client paths can do.
+    }
+
+    if (updates.length === 0) return res.status(400).json({ error: 'No updates provided' });
+
+    updates.push('updated_at = NOW()');
+    values.push(markerId, req.user.userId);
+
+    await pool.execute(
+      `UPDATE markers SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`,
+      values
+    );
+
+    // BUG-006 fix: echo user_id on update too. Updating a mark currently
+    // does not refresh client-side authorId — but to keep response shape
+    // consistent across POST/PUT/GET, include user_id here as well.
+    res.json({ message: 'Marker updated', user_id: req.user.userId, id: Number(markerId) });
+  } catch (err) {
+    console.error('[markers/update]', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── Delete marker ───────────────────────────────────────────────────────────
+router.delete('/client/:clientCairnId', async (req, res) => {
+  const clientCairnId = String(req.params.clientCairnId || '');
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(clientCairnId)) {
+    return res.status(400).json({ error: 'Invalid client Cairn ID.' });
+  }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [req.user.userId]);
+    await conn.execute(
+      `INSERT INTO marker_client_tombstones (user_id, client_cairn_id)
+       VALUES (?, ?) ON DUPLICATE KEY UPDATE deleted_at = deleted_at`,
+      [req.user.userId, clientCairnId],
+    );
+    const [result] = await conn.execute(
+      `DELETE FROM markers WHERE user_id = ? AND client_cairn_id = ?`,
+      [req.user.userId, clientCairnId],
+    );
+    await conn.commit();
+    return res.json({ ok: true, deleted: result.affectedRows > 0, client_cairn_id: clientCairnId });
+  } catch (err) {
+    try { await conn.rollback(); } catch { /* ignore */ }
+    console.error('[markers/delete-client]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [req.user.userId]);
+    const [rows] = await conn.execute(
+      `SELECT client_cairn_id FROM markers
+       WHERE id = ? AND user_id = ? FOR UPDATE`,
+      [req.params.id, req.user.userId],
+    );
+    if (!rows[0]) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Marker not found' });
+    }
+    if (rows[0].client_cairn_id) {
+      await conn.execute(
+        `INSERT INTO marker_client_tombstones (user_id, client_cairn_id)
+         VALUES (?, ?) ON DUPLICATE KEY UPDATE deleted_at = deleted_at`,
+        [req.user.userId, rows[0].client_cairn_id],
+      );
+    }
+    await conn.execute(
+      'DELETE FROM markers WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.userId],
+    );
+    await conn.commit();
+    res.json({ message: 'Marker deleted' });
+  } catch (err) {
+    try { await conn.rollback(); } catch { /* ignore */ }
+    console.error('[markers/delete]', err.message);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// v199 Community endpoints (canon §一-4)
+// ─────────────────────────────────────────────────────────────────────
+
+// GET /api/markers/:id/community-state — read counts + user's existing vote.
+// Sprint 6 round-17 R17F5: gate by permission + hidden status. Pre-fix,
+// any authenticated user could pass any markerId and read helpful_count,
+// report_count, status, hidden_at for any marker in the DB — including
+// permission='personal' markers belonging to other users, and markers
+// auto-hidden as abusive. Since marker IDs are sequential auto-increment,
+// this was trivially enumerable. Now: 404 if the caller doesn't own the
+// marker AND the marker is either personal (owner-only visible) or hidden.
+router.get('/:id/community-state', async (req, res) => {
+  const markerId = Number(req.params.id);
+  if (!Number.isInteger(markerId) || markerId <= 0) {
+    return res.status(400).json({ error: 'Invalid marker id' });
+  }
+  try {
+    const [[marker]] = await pool.execute(
+      `SELECT id, user_id, permission, helpful_count, report_count, status, hidden_at
+         FROM markers WHERE id = ?`,
+      [markerId],
+    );
+    if (!marker) return res.status(404).json({ error: 'Marker not found' });
+    // R17F5: enforce visibility. Owner can always read. Non-owner: reject
+    // personal markers (never their business) + hidden markers (moderator
+    // signal, don't leak).
+    const isOwner = String(marker.user_id) === String(req.user.userId);
+    if (!isOwner) {
+      if (marker.permission === 'personal') {
+        return res.status(404).json({ error: 'Marker not found' });
+      }
+      if (marker.status === 'hidden') {
+        return res.status(404).json({ error: 'Marker not found' });
+      }
+    }
+    const [voteRows] = await pool.execute(
+      `SELECT type, reason FROM marker_votes WHERE marker_id = ? AND user_id = ?`,
+      [markerId, req.user.userId],
+    );
+    const userVote = voteRows[0]
+      ? { type: voteRows[0].type, reason: voteRows[0].reason }
+      : null;
+    res.json({
+      marker_id: markerId,
+      helpful_count: marker.helpful_count ?? 0,
+      report_count: marker.report_count ?? 0,
+      status: marker.status || 'healthy',
+      hidden_at: marker.hidden_at,
+      user_vote: userVote,
+    });
+  } catch (err) {
+    console.error('[markers/community-state]', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/markers/:id/interact-nonce — short-lived HMAC nonce for /vote.
+// Sprint 6 round-17 R17F5: same visibility gate as /community-state. Pre-fix,
+// this endpoint minted valid HMAC nonces for ANY marker id regardless of
+// permission or hidden status — the /vote endpoint would then honor them,
+// letting an attacker vote on personal or hidden markers they shouldn't
+// even know exist.
+router.get('/:id/interact-nonce', async (req, res) => {
+  const markerId = Number(req.params.id);
+  if (!Number.isInteger(markerId) || markerId <= 0) {
+    return res.status(400).json({ error: 'Invalid marker id' });
+  }
+  try {
+    const [[marker]] = await pool.execute(
+      `SELECT user_id, permission, status FROM markers WHERE id = ?`,
+      [markerId],
+    );
+    if (!marker) return res.status(404).json({ error: 'Marker not found' });
+    const isOwner = String(marker.user_id) === String(req.user.userId);
+    if (!isOwner) {
+      if (marker.permission === 'personal' || marker.status === 'hidden') {
+        return res.status(404).json({ error: 'Marker not found' });
+      }
+    }
+    const issued = nonceUtil.issue(req.user.userId, markerId);
+    res.json({ marker_id: markerId, ...issued });
+  } catch (err) {
+    console.error('[markers/interact-nonce]', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/markers/:id/vote — single canon-correct endpoint for like+report.
+// Body: { type: 'like'|'report', reason?: string, lat: number, lng: number,
+//         accuracy?: number, client_ts?: number, nonce: string,
+//         client_op_id?: string (UUIDv4 for idempotency middleware) }
+router.post('/:id/vote', voteRateLimit, idempotency, async (req, res) => {
+  const markerId = Number(req.params.id);
+  const { type, reason, lat, lng, accuracy, client_ts, nonce } = req.body || {};
+  const userId = req.user.userId;
+
+  // ── Input validation ──────────────────────────────────────────────
+  if (!Number.isInteger(markerId) || markerId <= 0) {
+    return res.status(400).json({ error: 'Invalid marker id' });
+  }
+  if (!VALID_TYPES.has(type)) {
+    return res.status(400).json({ error: 'type must be like or report' });
+  }
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    return res.status(400).json({ error: 'lat, lng required as numbers' });
+  }
+  if (type === 'report') {
+    if (!VALID_REASONS.has(reason)) {
+      return res.status(400).json({ error: 'reason must be fake_ad, info_mismatch, or dislike' });
+    }
+  }
+
+  // GPS quality gate
+  // Sprint 6 R83 BUG-2: NaN bypass. typeof NaN === 'number' is true,
+  // NaN > MAX is false, so a client sending accuracy=NaN escaped the
+  // gate entirely. Require Number.isFinite before the comparison.
+  if (typeof accuracy === 'number') {
+    if (!Number.isFinite(accuracy) || accuracy > MAX_GPS_ACCURACY_M) {
+      abuseSignals.log(req, { kind: 'gps_low_accuracy', userId, markerId, payload: { accuracy } });
+      return res.status(400).json({ error: 'GPS accuracy too low' });
+    }
+  }
+  // Clock skew gate
+  // Sprint 6 R83 BUG-1: previously `if (typeof client_ts === 'number')`
+  // let a client that OMITS client_ts skip the skew check entirely,
+  // opening a replay window. Now: REQUIRE client_ts to be a finite
+  // number, reject if missing or invalid.
+  if (!Number.isFinite(client_ts)) {
+    abuseSignals.log(req, { kind: 'client_ts_missing', userId, markerId });
+    return res.status(400).json({ error: 'client_ts required as finite number' });
+  }
+  {
+    const skew = Math.abs(Date.now() - client_ts);
+    if (skew > MAX_TIMESTAMP_SKEW_MS) {
+      abuseSignals.log(req, { kind: 'clock_skew', userId, markerId, payload: { skew } });
+      return res.status(400).json({ error: 'Clock skew too large' });
+    }
+  }
+  // Nonce gate
+  const nonceCheck = nonceUtil.verify(nonce, userId, markerId);
+  if (!nonceCheck.valid) {
+    abuseSignals.log(req, {
+      kind: 'replay_nonce_invalid',
+      userId, markerId, payload: { reason: nonceCheck.reason },
+    });
+    return res.status(401).json({ error: 'Invalid or expired nonce' });
+  }
+
+  // ── Transaction: lock marker, insert vote (mutex), increment counter ──
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [[marker]] = await conn.execute(
+      `SELECT id, user_id, lat, lng, helpful_count, report_count, status, permission
+         FROM markers WHERE id = ? FOR UPDATE`,
+      [markerId],
+    );
+    if (!marker) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Marker not found' });
+    }
+    // Sprint 6 R83 BUG-3: reject votes on already-hidden markers.
+    // Pre-fix, votes kept incrementing helpful_count/report_count on
+    // status='hidden' markers (auto-hidden by 5-report threshold or
+    // admin-hidden). Wasted DB writes and produced misleading
+    // per-marker stats. 404 preserves the R17F5 pattern (don't leak
+    // hidden state to non-owners).
+    if (marker.status === 'hidden') {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Marker not found' });
+    }
+    // Sprint 6 R83 BUG-4: defense-in-depth against permission='personal'
+    // votes by non-owners. R17F5 gated /interact-nonce so a non-owner
+    // shouldn't get a valid nonce for a personal marker in the first
+    // place, but permission-flip race (owner marks public → nonce
+    // issued → owner flips to personal → non-owner still holds the
+    // nonce) or leaked nonce would bypass. Mirror the R17F5 gate here:
+    // non-owner + personal marker = 404 (same as R17F5).
+    if (marker.permission === 'personal' && String(marker.user_id) !== String(userId)) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Marker not found' });
+    }
+    // Sprint 6 round-38 R38B1: reject votes on markers whose owner has
+    // soft-deleted their account. Pre-fix, the marker row survived the
+    // owner's soft-delete (owner has 7-day grace before hard-delete
+    // cascades), and votes kept accumulating on this orphan marker —
+    // helpful_count / report_count would then vanish when authSweep
+    // hard-deletes the owner. Now: check user existence + not-deleted
+    // as part of the tx (no FOR UPDATE on users, we just need a
+    // snapshot; hard-delete happens outside this request's window).
+    const [[owner]] = await conn.execute(
+      `SELECT 1 AS ok FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+      [marker.user_id],
+    );
+    if (!owner) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Marker not found' });
+    }
+
+    // Users cannot vote on their own markers.
+    // Sprint 6 round-38 R38B2: fix type-coercion bypass. marker.user_id
+    // comes from mysql2 as a Number (BIGINT UNSIGNED for small values);
+    // req.user.userId comes from JWT payload as a String (per
+    // User.toPublic `id: String(user.id)`). Strict `===` between number
+    // and string is always false → the own-marker guard silently
+    // failed, letting a user like their own marker to boost helpful_count.
+    // Interact-nonce and /community-state already coerce via String() —
+    // this endpoint didn't. Coerce both sides to String for consistency.
+    if (String(marker.user_id) === String(userId)) {
+      await conn.rollback();
+      return res.status(403).json({ error: 'Cannot vote on your own marker' });
+    }
+
+    // Server-side haversine gate (50m). Authoritative — client gate
+    // exists for UX but server is the only enforcement.
+    const distM = haversineM(lat, lng, marker.lat, marker.lng);
+    if (distM > SERVER_INTERACT_RANGE_M) {
+      await conn.rollback();
+      abuseSignals.log(req, {
+        kind: 'gps_too_far', userId, markerId,
+        payload: { dist_m: distM, lat, lng },
+      });
+      return res.status(403).json({
+        error: 'Too far from marker to interact',
+        distance_m: Math.round(distM),
+      });
+    }
+
+    // Impossible-travel: any vote from same user >5km away in <60s = reject
+    const [[recent]] = await conn.execute(
+      `SELECT reporter_lat, reporter_lng, created_at
+         FROM marker_votes
+        WHERE user_id = ?
+          AND reporter_lat IS NOT NULL
+          AND created_at > (NOW() - INTERVAL ? MICROSECOND)
+        ORDER BY created_at DESC LIMIT 1`,
+      [userId, IMPOSSIBLE_TRAVEL_WINDOW_MS * 1000],
+    );
+    if (recent) {
+      const traveledKm = haversineM(lat, lng, recent.reporter_lat, recent.reporter_lng) / 1000;
+      if (traveledKm > IMPOSSIBLE_TRAVEL_KM) {
+        await conn.rollback();
+        abuseSignals.log(req, {
+          kind: 'impossible_travel', userId, markerId,
+          payload: { traveled_km: traveledKm },
+        });
+        return res.status(429).json({ error: 'Impossible travel detected' });
+      }
+    }
+
+    // Atomic INSERT IGNORE — UNIQUE(user_id, marker_id) enforces canon
+    // mutex. affectedRows===1 means a fresh insert; 0 means existing
+    // vote (any type) blocks this one.
+    const [ins] = await conn.execute(
+      `INSERT IGNORE INTO marker_votes
+         (user_id, marker_id, type, reason, reporter_lat, reporter_lng, distance_m)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [userId, markerId, type, type === 'report' ? reason : null, lat, lng, distM],
+    );
+
+    if (ins.affectedRows === 0) {
+      // 409 Conflict — fetch existing vote so client can render correct state
+      const [[existing]] = await conn.execute(
+        `SELECT type, reason FROM marker_votes WHERE user_id = ? AND marker_id = ?`,
+        [userId, markerId],
+      );
+      await conn.rollback();
+      return res.status(409).json({
+        error: 'You already voted on this marker',
+        existing_vote: existing
+          ? { type: existing.type, reason: existing.reason }
+          : null,
+        helpful_count: marker.helpful_count ?? 0,
+        report_count: marker.report_count ?? 0,
+        status: marker.status || 'healthy',
+      });
+    }
+
+    // Increment counter atomically (only when fresh insert succeeded).
+    let newStatus = marker.status || 'healthy';
+    let hiddenAtSet = false;
+    if (type === 'like') {
+      await conn.execute(
+        `UPDATE markers SET helpful_count = helpful_count + 1 WHERE id = ?`,
+        [markerId],
+      );
+    } else {
+      await conn.execute(
+        `UPDATE markers SET report_count = report_count + 1 WHERE id = ?`,
+        [markerId],
+      );
+      // Auto-hide threshold
+      if ((marker.report_count ?? 0) + 1 >= REPORT_HIDE_THRESHOLD && newStatus !== 'hidden') {
+        await conn.execute(
+          `UPDATE markers SET status = 'hidden', hidden_at = NOW() WHERE id = ?`,
+          [markerId],
+        );
+        newStatus = 'hidden';
+        hiddenAtSet = true;
+      }
+    }
+
+    // Read final counts in same tx
+    const [[counts]] = await conn.execute(
+      `SELECT helpful_count, report_count, status, hidden_at FROM markers WHERE id = ?`,
+      [markerId],
+    );
+
+    await conn.commit();
+
+    return res.status(201).json({
+      marker_id: markerId,
+      type,
+      reason: type === 'report' ? reason : null,
+      helpful_count: counts.helpful_count ?? 0,
+      report_count: counts.report_count ?? 0,
+      status: counts.status || 'healthy',
+      hidden_at: counts.hidden_at,
+      already_voted: false,
+    });
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) {}
+    console.error('[markers/vote]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
+  }
+});
+
+module.exports = router;

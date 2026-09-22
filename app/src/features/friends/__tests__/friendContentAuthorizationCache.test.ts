@@ -1,4 +1,6 @@
 const mockStorageValues = new Map<string, string>();
+const mockPurgeFriendMemory = jest.fn(async () => undefined);
+const mockMarkerSetState = jest.fn();
 
 jest.mock('../../../store/useAppStore', () => ({
   useAppStore: { getState: () => {
@@ -7,9 +9,19 @@ jest.mock('../../../store/useAppStore', () => ({
   } },
 }));
 jest.mock('../../../store/storage', () => ({
-  storage: { getItem: jest.fn(), setItem: jest.fn() },
+  storage: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() },
 }));
 jest.mock('../../../services/apiService', () => ({ authenticatedFetch: jest.fn() }));
+jest.mock('../../memory/store/useFriendMemoryStore', () => ({
+  useFriendMemoryStore: { getState: () => ({ purgeFriend: mockPurgeFriendMemory }) },
+}));
+jest.mock('../../../store/useMarkerStore', () => ({
+  useMarkerStore: { setState: mockMarkerSetState },
+}));
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  setItem: jest.fn(async () => undefined),
+  removeItem: jest.fn(async () => undefined),
+}));
 
 import {
   __friendContentTest,
@@ -25,11 +37,22 @@ import {
   resetFriendContentForAccountBoundary,
   type FriendRoute,
 } from '../services/friendContent';
+import {
+  blockUser,
+  fetchFriendProfileForNavigation,
+  friendProfileNavigationAuthorityIsCurrent,
+  removeFriendAPI,
+  useFriendStore,
+} from '../../../store/useFriendStore';
 
 const mockFetch = jest.requireMock('../../../services/apiService').authenticatedFetch as jest.Mock;
 const mockStorage = jest.requireMock('../../../store/storage').storage;
 const mockGetItem = mockStorage.getItem as jest.Mock;
 const mockSetItem = mockStorage.setItem as jest.Mock;
+const mockRemoveItem = mockStorage.removeItem as jest.Mock;
+const mockFriendListStorage = jest.requireMock('@react-native-async-storage/async-storage');
+const mockFriendListSetItem = mockFriendListStorage.setItem as jest.Mock;
+const mockFriendListRemoveItem = mockFriendListStorage.removeItem as jest.Mock;
 
 function setMockViewer(id: string): void {
   (globalThis as any).__friendContentViewerId = id;
@@ -86,8 +109,15 @@ describe('downloaded friend content authorization cache', () => {
     mockFetch.mockReset();
     mockGetItem.mockClear();
     mockSetItem.mockClear();
+    mockRemoveItem.mockClear();
+    mockPurgeFriendMemory.mockClear();
+    mockMarkerSetState.mockClear();
+    mockFriendListSetItem.mockReset().mockResolvedValue(undefined);
+    mockFriendListRemoveItem.mockReset().mockResolvedValue(undefined);
+    useFriendStore.setState({ friends: [] });
     mockGetItem.mockImplementation(async (key: string) => mockStorageValues.get(key) ?? null);
     mockSetItem.mockImplementation(async (key: string, value: string) => { mockStorageValues.set(key, value); });
+    mockRemoveItem.mockImplementation(async (key: string) => { mockStorageValues.delete(key); });
     __friendContentTest.reset();
     jest.spyOn(Date, 'now').mockReturnValue(BASE + 1_000);
   });
@@ -189,12 +219,63 @@ describe('downloaded friend content authorization cache', () => {
     expect(mockStorageValues.get(`${__friendContentTest.cachePrefix}viewer-a`)).not.toContain('Route current');
   });
 
-  test('a queued older disk write cannot recreate content after purge', async () => {
+  test('C1: a rejected denial write removes the stale cache and later authorization can restore it', async () => {
+    const key = `${__friendContentTest.cachePrefix}viewer-a`;
+    mockFetch.mockResolvedValueOnce(response(200, { route: route('v1', true) }));
+    await fetchFriendRoute('202', 'owner-a');
+    expect(mockStorageValues.get(key)).toContain('Route v1');
+
+    mockSetItem.mockRejectedValueOnce(new Error('replacement write failed'));
+    mockFetch.mockResolvedValueOnce(response(404, { error: 'Content not available' }));
+    await expect(fetchFriendRoute('202', 'owner-a')).rejects.toMatchObject({ code: 'revoked' });
+    expect(mockRemoveItem).toHaveBeenCalledWith(key, { strict: true });
+    expect(mockStorageValues.has(key)).toBe(false);
+
+    __friendContentTest.reset();
+    mockFetch.mockReset().mockRejectedValue(new Error('offline'));
+    await expect(fetchFriendRoute('202', 'owner-a')).rejects.toMatchObject({ code: 'unavailable' });
+
+    mockFetch.mockReset().mockResolvedValueOnce(response(200, { route: route('v2', true, {
+      authorization_revision: 'episode-2:audience-1',
+    }) }));
+    await expect(fetchFriendRoute('202', 'owner-a')).resolves.toMatchObject({
+      content: { resourceRevision: 'v2', authorizationRevision: 'episode-2:audience-1' },
+    });
+
+    __friendContentTest.reset();
+    mockFetch.mockReset().mockRejectedValue(new Error('offline'));
+    await expect(fetchFriendRoute('202', 'owner-a')).resolves.toMatchObject({
+      source: 'offline-cache',
+      content: { resourceRevision: 'v2', authorizationRevision: 'episode-2:audience-1' },
+    });
+  });
+
+  test('C1: if replacement and removal both fail, invalidation reports storage and cannot promise relaunch safety', async () => {
+    const key = `${__friendContentTest.cachePrefix}viewer-a`;
+    mockFetch.mockResolvedValueOnce(response(200, { route: route('v1', true) }));
+    await fetchFriendRoute('202', 'owner-a');
+    const staleDisk = mockStorageValues.get(key);
+
+    mockSetItem.mockRejectedValueOnce(new Error('replacement write failed'));
+    mockRemoveItem.mockRejectedValueOnce(new Error('removal failed'));
+    mockFetch.mockResolvedValueOnce(response(404, { error: 'Content not available' }));
+    await expect(fetchFriendRoute('202', 'owner-a')).rejects.toMatchObject({ code: 'storage' });
+    expect(mockStorageValues.get(key)).toBe(staleDisk);
+
+    __friendContentTest.reset();
+    mockFetch.mockReset().mockRejectedValue(new Error('offline'));
+    await expect(fetchFriendRoute('202', 'owner-a')).resolves.toMatchObject({
+      source: 'offline-cache', content: { resourceRevision: 'v1' },
+    });
+  });
+
+  test('C1: queued older write plus rejected purge write ends in strict cache removal', async () => {
     let releaseWrite!: () => void;
     let writes = 0;
     mockSetItem.mockImplementation(async (key: string, value: string) => {
       writes += 1;
       if (writes === 1) await new Promise<void>(resolve => { releaseWrite = resolve; });
+      if (writes === 2) throw new Error('purge replacement failed');
       mockStorageValues.set(key, value);
     });
     listResponses();
@@ -203,8 +284,16 @@ describe('downloaded friend content authorization cache', () => {
     const purge = purgeFriendContent('owner-a');
     releaseWrite();
     await expect(read).resolves.toMatchObject({ code: 'superseded' });
-    await purge;
-    expect(mockStorageValues.get(`${__friendContentTest.cachePrefix}viewer-a`)).not.toContain('Alice');
+    await expect(purge).resolves.toBeUndefined();
+    expect(mockRemoveItem).toHaveBeenCalledWith(
+      `${__friendContentTest.cachePrefix}viewer-a`,
+      { strict: true },
+    );
+    expect(mockStorageValues.get(`${__friendContentTest.cachePrefix}viewer-a`) ?? '').not.toContain('Alice');
+
+    __friendContentTest.reset();
+    mockFetch.mockReset().mockRejectedValue(new Error('offline'));
+    await expect(fetchFriendContent('owner-a')).rejects.toMatchObject({ code: 'unavailable' });
   });
 
   test('C1: a late owner list cannot resurrect a Route after authoritative Detail denial', async () => {
@@ -383,6 +472,374 @@ describe('downloaded friend content authorization cache', () => {
     expect(mockStorageValues.get(`${__friendContentTest.cachePrefix}viewer-a`) ?? '').not.toContain('Route v1');
     expect(mockStorageValues.get(`${__friendContentTest.cachePrefix}viewer-b`) ?? '').not.toContain('Route v1');
   });
+
+  test.each([
+    ['block', async () => blockUser('owner-a')],
+    ['unfriend', async () => removeFriendAPI('owner-a')],
+  ])('C1: %s intent fences simultaneous owner list and Detail through the real caller', async (_label, act) => {
+    mockFetch.mockResolvedValueOnce(response(200, { route: route('v1', true) }));
+    await fetchFriendRoute('202', 'owner-a');
+
+    let releaseCairns!: (value: any) => void;
+    let releaseRoutes!: (value: any) => void;
+    let releaseDetail!: (value: any) => void;
+    mockFetch.mockReset().mockImplementation((path: string) => {
+      if (path.includes('/friend-content/cairns?')) {
+        return new Promise(resolve => { releaseCairns = resolve; });
+      }
+      if (path.includes('/friend-content/routes?')) {
+        return new Promise(resolve => { releaseRoutes = resolve; });
+      }
+      if (path.endsWith('/friend-content/routes/202')) {
+        return new Promise(resolve => { releaseDetail = resolve; });
+      }
+      if (path === '/api/friends/owner-a/block') return Promise.resolve(response(200, { blocked: true }));
+      if (path === '/api/friends/owner-a') return Promise.resolve(response(200, { removed: true }));
+      if (path === '/api/friends') return Promise.resolve(response(200, []));
+      throw new Error(`unexpected ${path}`);
+    });
+    const list = fetchFriendContent('owner-a').catch(error => error);
+    const detailRead = fetchFriendRoute('202', 'owner-a').catch(error => error);
+    while (!releaseCairns || !releaseRoutes || !releaseDetail) await Promise.resolve();
+
+    const action = await act();
+    expect(action).toMatchObject({ success: true });
+    releaseCairns(response(200, { cairns: [cairn()] }));
+    releaseRoutes(response(200, { routes: [route('v1')] }));
+    releaseDetail(response(200, { route: route('v1', true) }));
+    await expect(list).resolves.toMatchObject({ code: 'superseded' });
+    await expect(detailRead).resolves.toMatchObject({ code: 'superseded' });
+
+    __friendContentTest.reset();
+    mockFetch.mockReset().mockRejectedValue(new Error('offline'));
+    await expect(fetchFriendContent('owner-a')).rejects.toMatchObject({ code: 'unavailable' });
+    expect(mockStorageValues.get(`${__friendContentTest.cachePrefix}viewer-a`) ?? '').not.toContain('Route v1');
+  });
+
+  test.each([
+    ['block', async () => blockUser('owner-a')],
+    ['unfriend', async () => removeFriendAPI('owner-a')],
+  ])('C1 R2: stale %s completion cannot purge or mutate account B', async (_label, act) => {
+    mockFetch.mockResolvedValueOnce(response(200, { route: route('a', true) }));
+    await fetchFriendRoute('202', 'owner-a');
+    setMockViewer('viewer-b');
+    resetFriendContentForAccountBoundary();
+    mockFetch.mockResolvedValueOnce(response(200, { route: route('b', true) }));
+    await fetchFriendRoute('202', 'owner-a');
+    const viewerBKey = `${__friendContentTest.cachePrefix}viewer-b`;
+    expect(mockStorageValues.get(viewerBKey)).toContain('Route b');
+
+    setMockViewer('viewer-a');
+    resetFriendContentForAccountBoundary();
+    useFriendStore.setState({ friends: [{ id: 'owner-a', name: 'A friend' } as any] });
+    let releaseAction!: (value: any) => void;
+    let actionOptions: any;
+    mockFetch.mockReset().mockImplementation((path: string, options?: any) => {
+      if (path === '/api/friends/owner-a/block' || path === '/api/friends/owner-a') {
+        actionOptions = options;
+        return new Promise(resolve => { releaseAction = resolve; });
+      }
+      if (path === '/api/friends') return Promise.resolve(response(200, []));
+      throw new Error(`unexpected ${path}`);
+    });
+    mockPurgeFriendMemory.mockClear();
+    mockMarkerSetState.mockClear();
+    const action = act();
+    while (!releaseAction) await Promise.resolve();
+    expect(actionOptions?.expectedUserId).toBe('viewer-a');
+    expect(mockPurgeFriendMemory).toHaveBeenCalledWith('owner-a', 'viewer-a');
+
+    setMockViewer('viewer-b');
+    resetFriendContentForAccountBoundary();
+    useFriendStore.setState({ friends: [{ id: 'viewer-b-friend', name: 'B friend' } as any] });
+    releaseAction(response(200, { success: true }));
+    await expect(action).resolves.toEqual({ success: false, superseded: true });
+
+    expect(mockStorageValues.get(viewerBKey)).toContain('Route b');
+    expect(useFriendStore.getState().friends.map(friend => friend.id)).toEqual(['viewer-b-friend']);
+    expect(mockPurgeFriendMemory).toHaveBeenCalledTimes(1);
+    expect(mockMarkerSetState).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['block', async () => blockUser('owner-a')],
+    ['unfriend', async () => removeFriendAPI('owner-a')],
+  ])('C1 R2: stale %s completion fails an A to B to A generation rollover', async (_label, act) => {
+    let releaseAction!: (value: any) => void;
+    mockFetch.mockImplementation((path: string) => {
+      if (path === '/api/friends/owner-a/block' || path === '/api/friends/owner-a') {
+        return new Promise(resolve => { releaseAction = resolve; });
+      }
+      if (path === '/api/friends') return Promise.resolve(response(200, []));
+      throw new Error(`unexpected ${path}`);
+    });
+    mockPurgeFriendMemory.mockClear();
+    mockMarkerSetState.mockClear();
+    useFriendStore.setState({ friends: [{ id: 'owner-a', name: 'old A friend' } as any] });
+    const action = act();
+    while (!releaseAction) await Promise.resolve();
+
+    setMockViewer('viewer-b');
+    resetFriendContentForAccountBoundary();
+    setMockViewer('viewer-a');
+    resetFriendContentForAccountBoundary();
+    useFriendStore.setState({ friends: [{ id: 'owner-a', name: 'new A session friend' } as any] });
+    releaseAction(response(200, { success: true }));
+    await expect(action).resolves.toEqual({ success: false, superseded: true });
+
+    expect(useFriendStore.getState().friends.map(friend => friend.name)).toEqual(['new A session friend']);
+    expect(mockPurgeFriendMemory).toHaveBeenCalledTimes(1);
+    expect(mockPurgeFriendMemory).toHaveBeenCalledWith('owner-a', 'viewer-a');
+    expect(mockMarkerSetState).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['A to B', () => {
+      setMockViewer('viewer-b');
+      resetFriendContentForAccountBoundary();
+    }],
+    ['A to B to A', () => {
+      setMockViewer('viewer-b');
+      resetFriendContentForAccountBoundary();
+      setMockViewer('viewer-a');
+      resetFriendContentForAccountBoundary();
+    }],
+  ])('C1 R3: a delayed friend-list response cannot publish across %s', async (_label, changeAccount) => {
+    let releaseRows!: (rows: any[]) => void;
+    let listOptions: any;
+    mockFetch.mockImplementation((path: string, options?: any) => {
+      if (path !== '/api/friends') throw new Error(`unexpected ${path}`);
+      listOptions = options;
+      return Promise.resolve({
+        ok: true,
+        json: jest.fn(() => new Promise<any[]>(resolve => { releaseRows = resolve; })),
+      });
+    });
+    useFriendStore.setState({ friends: [{ id: 'old-a', name: 'Old A' } as any] });
+    const load = useFriendStore.getState().loadFriendsFromBackend();
+    while (!releaseRows) await Promise.resolve();
+    expect(listOptions?.expectedUserId).toBe('viewer-a');
+
+    changeAccount();
+    useFriendStore.setState({ friends: [{ id: 'current-session', name: 'Current session' } as any] });
+    releaseRows([{ id: 17, name: 'Late A', email: 'late-a@example.com', added_at: new Date(BASE).toISOString() }]);
+    await load;
+
+    expect(useFriendStore.getState().friends.map(friend => friend.name)).toEqual(['Current session']);
+    expect(mockFriendListSetItem).not.toHaveBeenCalled();
+  });
+
+  test('C1 R3: a friend-list persistence crossing an account boundary is removed before any publish', async () => {
+    let releaseWrite!: () => void;
+    mockFriendListSetItem.mockImplementation(() => new Promise<void>(resolve => { releaseWrite = resolve; }));
+    mockFetch.mockResolvedValueOnce(response(200, [
+      { id: 17, name: 'Persisting A', email: 'a@example.com', added_at: new Date(BASE).toISOString() },
+    ]));
+    useFriendStore.setState({ friends: [{ id: 'old-a', name: 'Old A' } as any] });
+    const load = useFriendStore.getState().loadFriendsFromBackend();
+    while (!releaseWrite) await Promise.resolve();
+
+    setMockViewer('viewer-b');
+    resetFriendContentForAccountBoundary();
+    useFriendStore.setState({ friends: [{ id: 'b', name: 'Current B' } as any] });
+    releaseWrite();
+    await load;
+
+    expect(useFriendStore.getState().friends.map(friend => friend.name)).toEqual(['Current B']);
+    expect(mockFriendListRemoveItem).toHaveBeenCalledWith('cairn_friends');
+  });
+
+  test.each([
+    ['A to B', () => {
+      setMockViewer('viewer-b');
+      resetFriendContentForAccountBoundary();
+    }],
+    ['A to B to A', () => {
+      setMockViewer('viewer-b');
+      resetFriendContentForAccountBoundary();
+      setMockViewer('viewer-a');
+      resetFriendContentForAccountBoundary();
+    }],
+  ])('C1 R3: non-OK Unfriend body parsing cannot roll back or return stale feedback across %s', async (_label, changeAccount) => {
+    let releaseBody!: (body: any) => void;
+    let bodyStarted = false;
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: jest.fn(() => {
+        bodyStarted = true;
+        return new Promise(resolve => { releaseBody = resolve; });
+      }),
+    });
+    useFriendStore.setState({ friends: [{ id: 'owner-a', name: 'Old A friend' } as any] });
+    const action = removeFriendAPI('owner-a');
+    while (!bodyStarted) await Promise.resolve();
+
+    changeAccount();
+    useFriendStore.setState({ friends: [{ id: 'current-session', name: 'Current session friend' } as any] });
+    releaseBody({ error: 'Late A conflict' });
+
+    await expect(action).resolves.toEqual({ success: false, superseded: true });
+    expect(useFriendStore.getState().friends.map(friend => friend.name)).toEqual(['Current session friend']);
+  });
+
+  test.each([
+    ['Block', async () => blockUser('owner-a')],
+    ['Unfriend', async () => removeFriendAPI('owner-a')],
+  ])('C1 R3: committed %s reports durable cleanup uncertainty instead of success', async (label, act) => {
+    const key = `${__friendContentTest.cachePrefix}viewer-a`;
+    mockFetch.mockResolvedValueOnce(response(200, { route: route('stale', true) }));
+    await fetchFriendRoute('202', 'owner-a');
+    const staleDisk = mockStorageValues.get(key);
+
+    mockSetItem.mockRejectedValue(new Error('replacement write failed'));
+    mockRemoveItem.mockRejectedValue(new Error('strict removal failed'));
+    mockFetch.mockReset().mockResolvedValueOnce(response(200, { committed: true }));
+    useFriendStore.setState({ friends: [{ id: 'owner-a', name: 'A friend' } as any] });
+
+    await expect(act()).resolves.toMatchObject({
+      success: false,
+      serverCommitted: true,
+      localCleanup: 'storage-uncertain',
+      error: expect.stringContaining(`${label} completed`),
+    });
+    expect(mockStorageValues.get(key)).toBe(staleDisk);
+    expect(useFriendStore.getState().friends).toEqual([]);
+  });
+
+  test('C3 P1: a current friend gets an ephemeral offline profile-navigation fallback without durable authorization writes', async () => {
+    useFriendStore.setState({ friends: [{
+      id: 'owner-a', userId: 'owner-a', name: 'Alice', email: 'alice@example.com',
+      addedAt: BASE - 10_000, shareMarkers: true,
+    }] });
+    mockFetch.mockRejectedValueOnce(new TypeError('Network request failed'));
+
+    const result = await fetchFriendProfileForNavigation('owner-a');
+
+    expect(result).toMatchObject({
+      status: 'offline-fallback',
+      identity: { id: 'owner-a', name: 'Alice', email: 'alice@example.com' },
+      authority: { viewerId: 'viewer-a', friendId: 'owner-a', friendAddedAt: BASE - 10_000 },
+    });
+    if (result.status !== 'offline-fallback') throw new Error('expected offline fallback');
+    expect(friendProfileNavigationAuthorityIsCurrent(result.authority)).toBe(true);
+    expect(mockFetch.mock.calls[0][1]).toMatchObject({ expectedUserId: 'viewer-a' });
+    expect(mockSetItem).not.toHaveBeenCalled();
+    expect(mockRemoveItem).not.toHaveBeenCalled();
+    expect(mockFriendListSetItem).not.toHaveBeenCalled();
+  });
+
+  test('C3 P1: an account switch fences a delayed profile transport failure and cannot publish A fallback under B', async () => {
+    let rejectProfile!: (reason: Error) => void;
+    useFriendStore.setState({ friends: [{
+      id: 'owner-a', userId: 'owner-a', name: 'Alice', email: 'alice@example.com',
+      addedAt: BASE - 10_000, shareMarkers: true,
+    }] });
+    mockFetch.mockImplementationOnce(() => new Promise((_, reject) => { rejectProfile = reject; }));
+    const read = fetchFriendProfileForNavigation('owner-a');
+    while (!rejectProfile) await Promise.resolve();
+
+    setMockViewer('viewer-b');
+    resetFriendContentForAccountBoundary();
+    useFriendStore.setState({ friends: [{
+      id: 'owner-b', userId: 'owner-b', name: 'Bob', email: 'bob@example.com',
+      addedAt: BASE, shareMarkers: true,
+    }] });
+    rejectProfile(new TypeError('Network request failed'));
+
+    await expect(read).resolves.toEqual({ status: 'superseded' });
+    expect(useFriendStore.getState().friends.map(friend => friend.id)).toEqual(['owner-b']);
+    expect(mockSetItem).not.toHaveBeenCalled();
+  });
+
+  test('C3 P1: nonfriends and explicit server revocation cannot obtain the offline navigation fallback', async () => {
+    await expect(fetchFriendProfileForNavigation('owner-a')).resolves.toEqual({ status: 'unavailable' });
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    useFriendStore.setState({ friends: [{
+      id: 'owner-a', userId: 'owner-a', name: 'Alice', email: 'alice@example.com',
+      addedAt: BASE - 10_000, shareMarkers: true,
+    }] });
+    mockFetch.mockResolvedValueOnce(response(404, { error: 'Not found' }));
+    await expect(fetchFriendProfileForNavigation('owner-a')).resolves.toEqual({ status: 'unavailable' });
+    expect(mockSetItem).not.toHaveBeenCalled();
+  });
+
+  test('C3 P1 R2: same-viewer token-owner mismatch is superseded rather than treated as offline', async () => {
+    useFriendStore.setState({ friends: [{
+      id: 'owner-a', userId: 'owner-a', name: 'Alice', email: 'alice@example.com',
+      addedAt: BASE - 10_000, shareMarkers: true,
+    }] });
+    const mismatch: any = new Error('authenticated_fetch_account_changed');
+    mismatch.code = 'ACCOUNT_CHANGED';
+    mockFetch.mockRejectedValueOnce(mismatch);
+
+    await expect(fetchFriendProfileForNavigation('owner-a')).resolves.toEqual({ status: 'superseded' });
+    expect(useFriendStore.getState().friends.map(friend => friend.id)).toEqual(['owner-a']);
+    expect(mockSetItem).not.toHaveBeenCalled();
+  });
+
+  test('C3 P1 R2: coded authority and uncoded non-transport exceptions fail closed', async () => {
+    useFriendStore.setState({ friends: [{
+      id: 'owner-a', userId: 'owner-a', name: 'Alice', email: 'alice@example.com',
+      addedAt: BASE - 10_000, shareMarkers: true,
+    }] });
+    const authorityFailure: any = new TypeError('Network request failed');
+    authorityFailure.code = 'AUTHORITY_UNAVAILABLE';
+    mockFetch.mockRejectedValueOnce(authorityFailure);
+    await expect(fetchFriendProfileForNavigation('owner-a')).resolves.toEqual({ status: 'unavailable' });
+
+    mockFetch.mockRejectedValueOnce(new Error('token authority unavailable'));
+    await expect(fetchFriendProfileForNavigation('owner-a')).resolves.toEqual({ status: 'unavailable' });
+    expect(mockSetItem).not.toHaveBeenCalled();
+  });
+
+  test('C3 P1 R2: incomplete 2xx profile bodies fail closed while the backend schema remains accepted', async () => {
+    useFriendStore.setState({ friends: [{
+      id: 'owner-a', userId: 'owner-a', name: 'Alice', email: 'alice@example.com',
+      addedAt: BASE - 10_000, shareMarkers: true,
+    }] });
+    mockFetch.mockResolvedValueOnce(response(200, { id: 'owner-a' }));
+    await expect(fetchFriendProfileForNavigation('owner-a')).resolves.toEqual({ status: 'unavailable' });
+
+    useFriendStore.setState({ friends: [{
+      id: '17', userId: '17', name: 'Alice', email: 'alice@example.com',
+      addedAt: BASE - 10_000, shareMarkers: true,
+    }] });
+    mockFetch.mockResolvedValueOnce(response(200, {
+      id: 17,
+      name: 'Alice',
+      email: 'alice@example.com',
+      memberSince: new Date(BASE - 100_000).toISOString(),
+      permittedContent: { encounteredCairns: 2, sharedRoutes: 1, memoryAvailable: true },
+    }));
+    await expect(fetchFriendProfileForNavigation('17')).resolves.toMatchObject({
+      status: 'online',
+      profile: {
+        id: 17,
+        permittedContent: { encounteredCairns: 2, sharedRoutes: 1, memoryAvailable: true },
+      },
+    });
+    expect(mockSetItem).not.toHaveBeenCalled();
+  });
+
+  test('C3 P1: block intent invalidates an already-issued profile-navigation fallback before server completion', async () => {
+    useFriendStore.setState({ friends: [{
+      id: 'owner-a', userId: 'owner-a', name: 'Alice', email: 'alice@example.com',
+      addedAt: BASE - 10_000, shareMarkers: true,
+    }] });
+    mockFetch.mockRejectedValueOnce(new TypeError('Network request failed'));
+    const result = await fetchFriendProfileForNavigation('owner-a');
+    if (result.status !== 'offline-fallback') throw new Error('expected offline fallback');
+
+    let releaseBlock!: (value: any) => void;
+    mockFetch.mockImplementationOnce(() => new Promise(resolve => { releaseBlock = resolve; }));
+    const blocking = blockUser('owner-a');
+    expect(friendProfileNavigationAuthorityIsCurrent(result.authority)).toBe(false);
+    releaseBlock(response(200, { blocked: true }));
+    await expect(blocking).resolves.toMatchObject({ success: true });
+    expect(useFriendStore.getState().friends).toEqual([]);
+  });
 });
 
 describe('borrowed Route authorization lifecycle', () => {
@@ -392,8 +849,10 @@ describe('borrowed Route authorization lifecycle', () => {
     mockFetch.mockReset();
     mockGetItem.mockClear();
     mockSetItem.mockClear();
+    mockRemoveItem.mockClear();
     mockGetItem.mockImplementation(async (key: string) => mockStorageValues.get(key) ?? null);
     mockSetItem.mockImplementation(async (key: string, value: string) => { mockStorageValues.set(key, value); });
+    mockRemoveItem.mockImplementation(async (key: string) => { mockStorageValues.delete(key); });
     __friendContentTest.reset();
     jest.spyOn(Date, 'now').mockReturnValue(BASE + 1_000);
   });

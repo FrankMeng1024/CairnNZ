@@ -1,0 +1,34 @@
+timestampShanghai,eventType,rnSourceTimestampMs,rnIntervalMs,rnAccuracyM,rnDisplacementM,rnToLatestCairnRawM,rnToLatestCanonicalM,rawOrdinal,rawDtMs,rawDisplacementM,rawAccuracyM,rawSpeedMps,canonicalDecision,decisionReason,latestRawAgeMs,latestCanonicalAgeMs,sourceHealth,canonicalHealth,gpsUiState,shapeCanonicalVersion,shapeRoutePointCount,notes
+2026-09-11T09:45:57.089,rnmapbox_location_source,1789091156000,1000,14.25,1.66,5.88,5.88,,,,14.25,1.22,,,6090,6090,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:45:57.108,activity_observation_received_v2,,,14.25,,,,18,6000,5.88,14.25,1.22,ACCEPT,coherent-motion,109,6109,fresh,fresh,GPS good,,,
+2026-09-11T09:45:57.154,activity_live_trace_update_v2,,,,,,,,,,,,,,155,155,fresh,fresh,GPS good,14,14,last route advance before stall
+2026-09-11T09:45:58.092,rnmapbox_location_source,1789091157000,1000,14.25,0.78,0.78,0.78,,,,14.25,0.91,,,1093,1093,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:45:59.101,rnmapbox_location_source,1789091158000,1000,14.25,0.94,1.70,1.70,,,,14.25,0.77,,,2102,2102,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:00.086,rnmapbox_location_source,1789091159000,1000,14.25,1.29,2.99,2.99,,,,14.25,0.76,,,3087,3087,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:01.085,rnmapbox_location_source,1789091160000,1000,14.25,0.94,3.91,3.91,,,,14.25,0.54,,,4086,4086,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:02.087,rnmapbox_location_source,1789091161000,1000,14.25,0.63,4.45,4.45,,,,14.25,0.32,,,5088,5088,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:03.087,rnmapbox_location_source,1789091162000,1000,14.25,1.19,5.37,5.37,,,,14.25,0.40,,,6088,6088,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:03.104,activity_observation_received_v2,,,14.25,,,,19,6000,5.37,14.25,0.40,QUARANTINE,possible-stationary-jitter,105,6105,fresh,fresh,GPS good,,,first Cairn raw after 6 s; no route publication
+2026-09-11T09:46:03.104,activity_candidate_transition_v1,,,,,,,19,,,,,,,105,6105,fresh,fresh,GPS good,,,candidate_created
+2026-09-11T09:46:04.091,rnmapbox_location_source,1789091163000,1000,14.25,0.88,0.88,6.06,,,,14.25,0.48,,,1092,7092,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:05.088,rnmapbox_location_source,1789091164000,1000,14.25,1.25,2.10,6.88,,,,14.25,0.43,,,2089,8089,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:06.092,rnmapbox_location_source,1789091165000,1000,14.25,0.60,2.70,7.36,,,,14.25,0.32,,,3093,9093,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:07.090,rnmapbox_location_source,1789091166000,1000,14.25,1.52,4.21,8.76,,,,14.25,0.67,,,4091,10091,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:08.086,rnmapbox_location_source,1789091167000,1000,14.25,0.66,4.84,9.24,,,,14.25,0.52,,,5087,11087,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:08.121,candidate_timeout,,,14.25,,,,,,,14.25,,,,5122,11122,fresh,fresh,GPS good,,,raw 19 dropped at 5 s wall-clock bound; no canonical publication
+2026-09-11T09:46:09.091,rnmapbox_location_source,1789091168000,1000,14.25,0.23,4.97,9.28,,,,14.25,0.20,,,6092,12092,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:10.086,rnmapbox_location_source,1789091169000,1000,14.25,0.16,5.13,9.38,,,,14.25,0.10,,,7087,13087,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:10.103,activity_observation_received_v2,,,14.25,,,,20,7000,5.13,14.25,0.10,QUARANTINE,possible-stationary-jitter,104,13104,fresh,fresh,GPS good,,,second Cairn raw after 7 s; no route publication
+2026-09-11T09:46:10.104,activity_candidate_transition_v1,,,,,,,20,,,,,,,105,13105,fresh,fresh,GPS good,,,candidate_created
+2026-09-11T09:46:11.086,rnmapbox_location_source,1789091170000,1000,14.25,0.41,0.41,9.09,,,,14.25,0.03,,,1087,14087,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:12.086,rnmapbox_location_source,1789091171000,1000,14.25,0.77,0.94,9.54,,,,14.25,0.17,,,2087,15087,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:13.082,rnmapbox_location_source,1789091172000,1000,14.25,1.10,2.01,10.18,,,,14.25,0.37,,,3083,16083,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:14.089,rnmapbox_location_source,1789091173000,1000,14.25,1.19,2.79,11.38,,,,14.25,0.57,,,4090,17090,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:15.088,rnmapbox_location_source,1789091174000,1000,14.25,1.12,3.78,12.48,,,,14.25,0.78,,,5089,18089,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:15.108,candidate_timeout,,,14.25,,,,,,,14.25,,,,5109,18109,fresh,fresh,GPS good,,,raw 20 dropped at 5 s wall-clock bound; no canonical publication
+2026-09-11T09:46:16.085,rnmapbox_location_source,1789091175000,1000,14.25,1.13,4.43,13.45,,,,14.25,0.87,,,6086,19086,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:17.092,rnmapbox_location_source,1789091176000,1000,14.25,0.72,4.86,14.03,,,,14.25,0.86,,,7093,20093,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:18.086,rnmapbox_location_source,1789091177000,1000,14.25,0.89,5.73,14.92,,,,14.25,0.87,,,8087,21087,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate
+2026-09-11T09:46:18.104,activity_observation_received_v2,,,14.25,,,,21,8000,5.73,14.25,0.87,ACCEPT,coherent-motion,105,21105,fresh,fresh,GPS good,,,third Cairn raw; accepted immediately
+2026-09-11T09:46:18.152,activity_live_trace_update_v2,,,,,,,,,,,,,,153,153,fresh,fresh,GPS good,15,15,route catches up by a 14.92 m canonical edge
+2026-09-11T09:46:19.092,rnmapbox_location_source,1789091178000,1000,14.25,0.20,0.20,0.20,,,,14.25,0.61,,,1093,1093,fresh,fresh,GPS good,,,genuinely new source timestamp and coordinate

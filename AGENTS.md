@@ -5,3 +5,7 @@ Before visual work, read `docs/VISUAL_SYSTEM.md` and `docs/VISUAL_MIGRATION_STAT
 For production backend deployment, follow `docs/operations/PRODUCTION_BACKEND_DEPLOY.md`. If there is no backend change, do not push or deploy merely for client OTA work.
 
 Generated QA screenshots, boards, and captures should not normally be committed to deploy-bearing `master`. Keep textual/JSON review authority in Git, use ignored local outputs for reproducible visuals, and use external artifact storage when long-term visual retention is required.
+
+For a validated, human-testable client OTA candidate, increment the one existing Home `O<number>` marker by exactly one. Do not increment it for investigation, backend/docs-only work, failed validation, or a HOLD verdict. Do not change app/runtime/build versions; the human publishes OTA manually.
+
+For Activity changes, start with `cd app && npm run verify:changed`; do not default to repo-wide tests. Product-contract changes require an explicit regression audit, flaky tests must be diagnosed rather than retried to green, and native GPS changes still require native telemetry evidence. See `docs/operations/ACTIVITY_VERIFICATION.md`.

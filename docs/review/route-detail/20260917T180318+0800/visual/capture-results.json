@@ -1,0 +1,532 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T180318+0800",
+  "captured_at": "2026-09-17T11:10:34.996Z",
+  "base_url": "http://127.0.0.1:8102",
+  "isolation": {
+    "fresh_browser_context": true,
+    "synthetic_identity": true,
+    "synthetic_coordinates": true,
+    "api_reads_fixture_intercepted": true,
+    "api_writes_fixture_intercepted": true,
+    "external_requests_blocked": true,
+    "production_data_read": false,
+    "production_data_mutated": false,
+    "telemetry_enabled": false
+  },
+  "evidence_boundary": {
+    "renderer": "EXPO_WEB_WITH_MAP_SERVICES_BLOCKED",
+    "actual_web_mapbox_proven": false,
+    "native_mapbox_proven": false,
+    "physical_device_proven": false,
+    "initial_activity_fixture_route_forced": true,
+    "real_handler_flows": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E"
+    ],
+    "explicit_user_acceptance": "PENDING"
+  },
+  "required_flow": [
+    {
+      "step": "activity-save-as-route-to-editor",
+      "route": "RouteEditor",
+      "handler": "Activity Detail Save as Route button"
+    },
+    {
+      "step": "editor-save-to-canonical-detail",
+      "route": "MapHistory",
+      "handler": "RouteEditor Save Route button"
+    },
+    {
+      "step": "activity-route-created",
+      "route": "MapHistory",
+      "handler": "durable addRoute + canonical reset",
+      "stableRouteId": "c582b6f6-dda4-49eb-9513-036746640bbc"
+    },
+    {
+      "step": "route-detail-back-home",
+      "route": "Home",
+      "handler": "shared Back control"
+    },
+    {
+      "step": "home-to-trails",
+      "route": "Routes",
+      "handler": "Home Trails control"
+    },
+    {
+      "step": "trails-row-to-route-detail",
+      "route": "MapHistory",
+      "handler": "Trails Route row onPress"
+    },
+    {
+      "step": "detail-to-existing-editor",
+      "route": "RouteEditor",
+      "handler": "Route Detail Edit control"
+    },
+    {
+      "step": "existing-editor-save-back-to-detail",
+      "route": "MapHistory",
+      "handler": "RouteEditor Save Route with isolated PUT acknowledgement"
+    },
+    {
+      "step": "route-detail-to-hike-prestart",
+      "route": "Hiking",
+      "handler": "Use Route > Hike control"
+    },
+    {
+      "step": "hike-prestart-back-to-detail",
+      "route": "MapHistory",
+      "handler": "shared Back control"
+    },
+    {
+      "step": "route-detail-to-run-prestart",
+      "route": "Running",
+      "handler": "Use Route > Run control"
+    },
+    {
+      "step": "run-prestart-back-to-detail",
+      "route": "MapHistory",
+      "handler": "shared Back control"
+    },
+    {
+      "step": "detail-to-editor-for-failure",
+      "route": "RouteEditor",
+      "handler": "Route Detail Edit control"
+    },
+    {
+      "step": "failed-save-retry-to-detail",
+      "route": "MapHistory",
+      "handler": "same retained editor draft retried through Save Route"
+    }
+  ],
+  "captures": [
+    {
+      "evidence_id": "ROUTE-VIS-001",
+      "page": "route-editor",
+      "state": "activity-derived-draft-map-unavailable",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-editor--activity-derived-draft-map-unavailable--day--390x844.png",
+      "entry_mode": "NORMAL_ACTIVITY_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Synthetic Activity was injected; Save as Route and editor entry used actual handlers.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-002",
+      "page": "route-editor",
+      "state": "draft-applied-awaiting-save",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-editor--draft-applied-awaiting-save--day--390x844.png",
+      "entry_mode": "NORMAL_EDITOR_APPLY_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Apply changed only the editor draft; no Route was committed at this capture.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-003",
+      "page": "route-detail",
+      "state": "activity-derived-synced",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-detail--activity-derived-synced--day--390x844.png",
+      "entry_mode": "NORMAL_EDITOR_SAVE_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NON_NATIVE_MAP_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Actual local-first create handler; POST was fulfilled by isolated modern-origin fixture server.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-004",
+      "page": "trails",
+      "state": "route-retrieved-by-stable-identity",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/trails--route-retrieved-by-stable-identity--day--390x844.png",
+      "entry_mode": "NORMAL_HOME_AND_TRAILS_HANDLERS",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NON_NATIVE_MAP_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Actual Trails route tab and local/server identity merge.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-005",
+      "page": "route-detail",
+      "state": "trails-reopened-origin",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/route-detail--trails-reopened-origin--sunset--390x844.png",
+      "entry_mode": "NORMAL_TRAILS_ROW_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NON_NATIVE_MAP_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Same stable Route reopened from Trails through actual row handler.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-006",
+      "page": "route-editor",
+      "state": "existing-unsaved-edit",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/route-editor--existing-unsaved-edit--night--390x844.png",
+      "entry_mode": "NORMAL_DETAIL_EDIT_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Actual existing editor; saved Route is unchanged while this independent draft is open.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-007",
+      "page": "route-detail",
+      "state": "edited-since-creation",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/route-detail--edited-since-creation--night--390x844.png",
+      "entry_mode": "NORMAL_EDITOR_SAVE_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NON_NATIVE_MAP_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "PUT acknowledged by isolated fixture; original Activity and origin fields were not rewritten.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-008",
+      "page": "route-detail",
+      "state": "delete-confirmation-non-cascade",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-detail--delete-confirmation-non-cascade--day--390x844.png",
+      "entry_mode": "NORMAL_DETAIL_DELETE_OPEN_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NON_NATIVE_MAP_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Shared confirmation rendered; Delete Route was not invoked.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-009",
+      "page": "route-detail",
+      "state": "use-route-mode-picker",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-detail--use-route-mode-picker--day--390x844.png",
+      "entry_mode": "NORMAL_DETAIL_USE_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NON_NATIVE_MAP_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Actual mode picker; no recording starts from this surface.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-010",
+      "page": "hike-prestart",
+      "state": "selected-route-no-auto-start",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/hike-prestart--selected-route-no-auto-start--day--390x844.png",
+      "entry_mode": "NORMAL_USE_ROUTE_HIKE_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NON_NATIVE_MAP_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Actual Hike pre-start with selected stable Route; Start was not pressed.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-011",
+      "page": "run-prestart",
+      "state": "selected-route-no-auto-start",
+      "theme": "night",
+      "viewport": "390x844",
+      "file": "images/run-prestart--selected-route-no-auto-start--night--390x844.png",
+      "entry_mode": "NORMAL_USE_ROUTE_RUN_HANDLER",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NON_NATIVE_MAP_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Actual Run pre-start with selected stable Route; Start was not pressed.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-012",
+      "page": "route-editor",
+      "state": "failed-save-retains-draft",
+      "theme": "sunset",
+      "viewport": "390x844",
+      "file": "images/route-editor--failed-save-retains-draft--sunset--390x844.png",
+      "entry_mode": "NORMAL_EDITOR_SAVE_HANDLER_WITH_FIXTURE_503",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Actual PUT returned isolated 503; editor remained open with the intended draft.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-013",
+      "page": "route-detail",
+      "state": "local-pending-planned-gap-connection",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-detail--local-pending-planned-gap-connection--day--390x844.png",
+      "entry_mode": "FORCED_FIXTURE_ROUTE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NON_NATIVE_MAP_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Injected pending Route with explicit Route-only connection provenance; not a map gesture proof.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-014",
+      "page": "route-detail",
+      "state": "legacy-unknown-origin",
+      "theme": "day",
+      "viewport": "390x844",
+      "file": "images/route-detail--legacy-unknown-origin--day--390x844.png",
+      "entry_mode": "FORCED_FIXTURE_ROUTE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NON_NATIVE_MAP_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "Injected legacy Route intentionally carries no inferred historical origin.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-015",
+      "page": "route-detail",
+      "state": "small-web-long-name",
+      "theme": "night",
+      "viewport": "375x667",
+      "file": "images/route-detail--small-web-long-name--night--375x667.png",
+      "entry_mode": "FORCED_FIXTURE_ROUTE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NON_NATIVE_MAP_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "375x667 browser constraint check for the actual Detail implementation.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence.",
+        "Not a small physical iPhone or native safe-area check."
+      ]
+    },
+    {
+      "evidence_id": "ROUTE-VIS-016",
+      "page": "route-editor",
+      "state": "large-web-focused-name",
+      "theme": "sunset",
+      "viewport": "430x932",
+      "file": "images/route-editor--large-web-focused-name--sunset--430x932.png",
+      "entry_mode": "FORCED_FIXTURE_ROUTE",
+      "data": "SYNTHETIC_DISPOSABLE_FIXTURE",
+      "renderer": "EXPO_WEB_MAP_UNAVAILABLE_FALLBACK",
+      "actual_web_mapbox": false,
+      "native_screenshot": false,
+      "fixture_boundary": "430x932 browser constraint with the actual editor name field focused.",
+      "notes": [
+        "Not physical-device evidence.",
+        "Not native RN Mapbox evidence.",
+        "Web focus only; not iOS keyboard evidence."
+      ]
+    }
+  ],
+  "boards": [
+    "images/board-route-detail-themes.jpg",
+    "images/board-editor-and-mutations.jpg",
+    "images/board-use-and-exceptions.jpg",
+    "images/board-before-after.jpg"
+  ],
+  "request_ledger": [
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/index.ts.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:8102",
+      "path": "/api/edit-diag",
+      "action": "fixture-api-write"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/node_modules/expo-task-manager/build/TaskManager.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/node_modules/expo-location/build/index.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/assets/",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/node_modules/expo-updates/build/index.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/src/services/accountLocalData.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/node_modules/@react-native-async-storage/async-storage/lib/module/index.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/src/features/activitySimulator/simulatorLog.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/src/services/backgroundLocationTask.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/api/markers",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/node_modules/expo-file-system/legacy.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/api/memory/points",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/src/features/activity/activityRegistry.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "GET",
+      "host": "api.open-meteo.com",
+      "path": "/v1/forecast",
+      "action": "fixture-weather"
+    },
+    {
+      "method": "GET",
+      "host": "api.bigdatacloud.net",
+      "path": "/data/reverse-geocode-client",
+      "action": "blocked-external"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/src/utils/geo.bundle",
+      "action": "allowed-local-runtime"
+    },
+    {
+      "method": "POST",
+      "host": "127.0.0.1:8102",
+      "path": "/api/routes",
+      "action": "fixture-api-write"
+    },
+    {
+      "method": "GET",
+      "host": "127.0.0.1:8102",
+      "path": "/api/routes",
+      "action": "fixture-api-read"
+    },
+    {
+      "method": "PUT",
+      "host": "127.0.0.1:8102",
+      "path": "/api/routes/501",
+      "action": "fixture-api-write"
+    }
+  ],
+  "runtime_errors": []
+}

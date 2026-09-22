@@ -1,0 +1,12 @@
+{
+  "work_package":"W7",
+  "status":"completed",
+  "verdict":"READY_FOR_ARCHIVE",
+  "started_at":"2026-09-18T02:35:00+08:00",
+  "completed_at":"2026-09-18T02:40:00+08:00",
+  "target":"/Users/mzm/Desktop/cairn_personal_friends_01.zip",
+  "hash_sidecar":"/Users/mzm/Desktop/cairn_personal_friends_01.zip.sha256",
+  "contents":["English verdicts and reports","38-case results","source fingerprints and actual patches","real MySQL/API proof","61 current screenshots and boards","deployment and backup receipts","five owner checks","five preflight authority inputs","task source snapshot"],
+  "secrets_in_archive":false,
+  "ota_published":false
+}

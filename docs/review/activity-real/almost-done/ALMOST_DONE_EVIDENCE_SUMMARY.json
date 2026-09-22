@@ -1,0 +1,1400 @@
+{
+  "generatedAt": "2026-09-11T06:38:32.483Z",
+  "session": {
+    "id": 2072,
+    "user_id": 72,
+    "client_activity_id": "99e48b0d-ad87-4aba-a94f-0d033393d0e6",
+    "type": "hiking",
+    "start_time": "2026-09-11T05:08:46.000Z",
+    "end_time": "2026-09-11T05:08:46.000Z",
+    "finalized_at": null,
+    "abandoned_at": null,
+    "distance_m": 0,
+    "duration_s": 0,
+    "name": null,
+    "flags": null,
+    "created_at": "2026-09-11T05:08:46.000Z",
+    "active_slot": 1
+  },
+  "telemetry": {
+    "id": 3855,
+    "session_id": "qa-mtwhxdio-22iczr8v",
+    "device_model": "iOS-or-Android",
+    "device_os": "ios",
+    "os_version": "26.6.1",
+    "app_version": "0.2.6",
+    "build_number": "56",
+    "started_at": 1789103326128,
+    "ended_at": 1789103739046,
+    "duration_ms": 412918,
+    "events_count": 2256,
+    "raw_size_bytes": 2015973,
+    "activity_mode": "qa_activity",
+    "uploaded_at": "2026-09-11T05:16:00.000Z",
+    "upload_source": "retry"
+  },
+  "eventCounts": {
+    "qa_session_started": 1,
+    "activity_provider_selected": 1,
+    "activity_start_requested": 1,
+    "activity_location_cadence_experiment_v1": 1,
+    "qa_upload_checkpoint": 3,
+    "background_location_authorization_refreshed": 10,
+    "activity_background_authority_v2": 31,
+    "real_activity_background_task_stopped": 11,
+    "real_activity_location_source_activated": 10,
+    "activity_tracking_started": 1,
+    "activity_telemetry_health_v2": 9,
+    "activity_filter_decision_v2": 221,
+    "activity_candidate_transition_v1": 10,
+    "candidate_created": 5,
+    "activity_sampling_metadata_updated_v1": 7,
+    "candidate_confirmed": 3,
+    "activity_journal_commit_v2": 29,
+    "candidate_timeout": 2,
+    "candidate_rejected": 1,
+    "map_user_location_target": 240,
+    "activity_observation_received_v2": 204,
+    "activity_confirmed_head_animation_interrupted": 234,
+    "activity_confirmed_head_animation_target": 270,
+    "activity_live_trace_update_v2": 198,
+    "activity_elevation_decision_v1": 198,
+    "rnmapbox_location_source": 239,
+    "activity_confirmed_head_animation_completed": 38,
+    "activity_store_publish_v2": 14,
+    "activity_trace_state_received": 14,
+    "activity_trace_map_source_update_requested": 14,
+    "activity_point_committed": 14,
+    "activity_metrics_derived": 14,
+    "activity_memory_evidence_committed": 14,
+    "location_sample_accepted": 14,
+    "hike_map_idle": 14,
+    "real_activity_location_callback": 13,
+    "app_backgrounded": 11,
+    "app_inactive": 4,
+    "activity_location_lifecycle_plan_v1": 12,
+    "real_activity_background_registration_attempted": 5,
+    "real_activity_background_registration_result": 5,
+    "real_activity_background_task_started": 5,
+    "real_activity_background_callback_checkpoint": 24,
+    "real_activity_background_journal_result": 24,
+    "activity_background_batch_v2": 24,
+    "location_sample_rejected": 5,
+    "app_foregrounded": 5,
+    "real_activity_foreground_takeover": 8,
+    "real_activity_background_drain": 4,
+    "activity_paused": 1,
+    "activity_finish_requested": 1,
+    "activity_save_phase_timing": 6,
+    "activity_match_preflight_v2": 1,
+    "activity_map_matching_started": 1,
+    "activity_map_matching_raw_fallback": 1,
+    "activity_match_segment_v2": 1,
+    "activity_final_geometry_v2": 1,
+    "activity_save_started": 1,
+    "activity_save_pending": 1,
+    "activity_completion_finished": 1,
+    "qa_session_ended": 1
+  },
+  "stationaryDecisions": [
+    {
+      "timestamp": 1789103335830,
+      "fields": {
+        "filterVersion": 2,
+        "rawOrdinal": 10,
+        "sampleSource": "foreground",
+        "sampleTimestamp": 1789103335748,
+        "horizontalAccuracyM": 6.78,
+        "verticalAccuracyM": 9.39,
+        "reportedSpeedValid": true,
+        "reportedSpeedMps": 0.19,
+        "reportedCourseValid": false,
+        "dtFromTrustedMs": 1001,
+        "displacementFromTrustedM": 5.46,
+        "impliedSpeedMps": 5.46,
+        "accuracyAdjustedSpeedMps": 0,
+        "trajectoryInnovationM": null,
+        "headingDeltaDeg": null,
+        "motionState": "uncertain",
+        "motionStateBefore": "acquiring",
+        "windowCount": 2,
+        "windowDurationMs": 1001,
+        "cumulativeProgressM": 5.46,
+        "netProgressM": 5.46,
+        "progressRatio": 1,
+        "clusterRadiusM": 2.73,
+        "directionVariabilityDeg": 0,
+        "reportedSpeedContradiction": false,
+        "decision": "QUARANTINE",
+        "decisionReason": "possible-stationary-jitter",
+        "candidateId": "3393d0e6:10:candidate",
+        "candidateRawOrdinal": 10,
+        "corroboratingRawOrdinal": 10,
+        "candidateEvidenceCount": 1,
+        "decisionLatencyMs": 0,
+        "segmentId": "99e48b0d-ad87-4aba-a94f-0d033393d0e6:1789103326128:3062a00b"
+      }
+    },
+    {
+      "timestamp": 1789103664132,
+      "fields": {
+        "filterVersion": 2,
+        "rawOrdinal": 224,
+        "sampleSource": "foreground",
+        "sampleTimestamp": 1789103663999,
+        "horizontalAccuracyM": 14.25,
+        "verticalAccuracyM": 13.9,
+        "reportedSpeedValid": true,
+        "reportedSpeedMps": 0.1,
+        "reportedCourseValid": true,
+        "dtFromTrustedMs": 3000,
+        "displacementFromTrustedM": 1.11,
+        "impliedSpeedMps": 0.37,
+        "accuracyAdjustedSpeedMps": 0,
+        "trajectoryInnovationM": null,
+        "headingDeltaDeg": null,
+        "motionState": "moving",
+        "motionStateBefore": "moving",
+        "windowCount": 6,
+        "windowDurationMs": 8000,
+        "cumulativeProgressM": 6.86,
+        "netProgressM": 6.79,
+        "progressRatio": 0.99,
+        "clusterRadiusM": 3.74,
+        "directionVariabilityDeg": 5.64,
+        "reportedSpeedContradiction": true,
+        "decision": "ACCEPT",
+        "decisionReason": "coherent-motion",
+        "candidateId": null,
+        "candidateRawOrdinal": null,
+        "corroboratingRawOrdinal": null,
+        "candidateEvidenceCount": null,
+        "decisionLatencyMs": 0,
+        "segmentId": "99e48b0d-ad87-4aba-a94f-0d033393d0e6:1789103326128:3062a00b"
+      }
+    },
+    {
+      "timestamp": 1789103687141,
+      "fields": {
+        "filterVersion": 2,
+        "rawOrdinal": 225,
+        "sampleSource": "foreground",
+        "sampleTimestamp": 1789103686999,
+        "horizontalAccuracyM": 14.25,
+        "verticalAccuracyM": 14.36,
+        "reportedSpeedValid": true,
+        "reportedSpeedMps": 0.07,
+        "reportedCourseValid": true,
+        "dtFromTrustedMs": 23000,
+        "displacementFromTrustedM": 3.23,
+        "impliedSpeedMps": 0.14,
+        "accuracyAdjustedSpeedMps": 0,
+        "trajectoryInnovationM": null,
+        "headingDeltaDeg": null,
+        "motionState": "moving",
+        "motionStateBefore": "moving",
+        "windowCount": 1,
+        "windowDurationMs": 0,
+        "cumulativeProgressM": 0,
+        "netProgressM": 0,
+        "progressRatio": 0,
+        "clusterRadiusM": 0,
+        "directionVariabilityDeg": 0,
+        "reportedSpeedContradiction": false,
+        "decision": "ACCEPT",
+        "decisionReason": "coherent-motion",
+        "candidateId": null,
+        "candidateRawOrdinal": null,
+        "corroboratingRawOrdinal": null,
+        "candidateEvidenceCount": null,
+        "decisionLatencyMs": 0,
+        "segmentId": "99e48b0d-ad87-4aba-a94f-0d033393d0e6:1789103326128:3062a00b"
+      }
+    },
+    {
+      "timestamp": 1789103705148,
+      "fields": {
+        "filterVersion": 2,
+        "rawOrdinal": 226,
+        "sampleSource": "foreground",
+        "sampleTimestamp": 1789103704998,
+        "horizontalAccuracyM": 14.25,
+        "verticalAccuracyM": 13.78,
+        "reportedSpeedValid": true,
+        "reportedSpeedMps": 0.05,
+        "reportedCourseValid": true,
+        "dtFromTrustedMs": 17999,
+        "displacementFromTrustedM": 2.12,
+        "impliedSpeedMps": 0.12,
+        "accuracyAdjustedSpeedMps": 0,
+        "trajectoryInnovationM": null,
+        "headingDeltaDeg": null,
+        "motionState": "moving",
+        "motionStateBefore": "moving",
+        "windowCount": 1,
+        "windowDurationMs": 0,
+        "cumulativeProgressM": 0,
+        "netProgressM": 0,
+        "progressRatio": 0,
+        "clusterRadiusM": 0,
+        "directionVariabilityDeg": 0,
+        "reportedSpeedContradiction": false,
+        "decision": "ACCEPT",
+        "decisionReason": "coherent-motion",
+        "candidateId": null,
+        "candidateRawOrdinal": null,
+        "corroboratingRawOrdinal": null,
+        "candidateEvidenceCount": null,
+        "decisionLatencyMs": 0,
+        "segmentId": "99e48b0d-ad87-4aba-a94f-0d033393d0e6:1789103326128:3062a00b"
+      }
+    }
+  ],
+  "lifecycle": [
+    {
+      "timestamp": 1789103326240,
+      "eventName": "real_activity_location_source_activated",
+      "fields": {
+        "sampleSource": "foreground",
+        "androidTimeIntervalMs": 3000,
+        "requestedDistanceM": 1,
+        "cadenceVariant": "distanceFilter1",
+        "iosTimeIntervalApplied": false
+      }
+    },
+    {
+      "timestamp": 1789103491120,
+      "eventName": "app_backgrounded",
+      "fields": {
+        "from": "active",
+        "to": "inactive",
+        "trackingActive": true
+      }
+    },
+    {
+      "timestamp": 1789103491120,
+      "eventName": "app_inactive",
+      "fields": {
+        "appState": "inactive",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "latestAcceptedAgeMs": 2121,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103491126,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "inactive",
+        "action": "hold-transient-inactive",
+        "reason": "ios-inactive-is-not-background",
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103491173,
+      "eventName": "app_backgrounded",
+      "fields": {
+        "from": "inactive",
+        "to": "background",
+        "trackingActive": true
+      }
+    },
+    {
+      "timestamp": 1789103491174,
+      "eventName": "app_backgrounded",
+      "fields": {
+        "appState": "background",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "latestAcceptedAgeMs": 2175,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103491178,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "background",
+        "action": "transition-to-background",
+        "reason": "background-ownership-required",
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103491583,
+      "eventName": "real_activity_location_source_activated",
+      "fields": {
+        "sampleSource": "background",
+        "androidTimeIntervalMs": 1000,
+        "iosTimeIntervalApplied": false,
+        "requestedDistanceM": 5
+      }
+    },
+    {
+      "timestamp": 1789103491750,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 1,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 203075,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103491841,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103495628,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 2,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 206953,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103495720,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 0,
+        "rejectedCount": 1,
+        "journalCommitted": false
+      }
+    },
+    {
+      "timestamp": 1789103495774,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 3,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 207099,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103495852,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103499674,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 4,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 210999,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103499779,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103503706,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 5,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 215031,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103503828,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103512091,
+      "eventName": "app_foregrounded",
+      "fields": {
+        "appState": "active",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": false,
+        "backgroundTaskActive": true,
+        "latestAcceptedAgeMs": 8467,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103512092,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "active",
+        "action": "transition-to-foreground",
+        "reason": "foreground-ownership-required",
+        "foregroundWatcherActive": false,
+        "backgroundTaskActive": true,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103512092,
+      "eventName": "real_activity_foreground_takeover",
+      "fields": {
+        "phase": "started",
+        "appState": "active",
+        "backgroundTaskActive": true,
+        "latestAcceptedAgeMs": 8468
+      }
+    },
+    {
+      "timestamp": 1789103512224,
+      "eventName": "real_activity_background_drain",
+      "fields": {
+        "reason": "foreground-takeover",
+        "drainedCount": 0,
+        "ordered": true
+      }
+    },
+    {
+      "timestamp": 1789103512297,
+      "eventName": "real_activity_location_source_activated",
+      "fields": {
+        "sampleSource": "foreground",
+        "androidTimeIntervalMs": 1000,
+        "requestedDistanceM": 1,
+        "cadenceVariant": "distanceFilter1",
+        "iosTimeIntervalApplied": false
+      }
+    },
+    {
+      "timestamp": 1789103512297,
+      "eventName": "real_activity_foreground_takeover",
+      "fields": {
+        "phase": "completed",
+        "drainedCount": 0,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false
+      }
+    },
+    {
+      "timestamp": 1789103559792,
+      "eventName": "app_backgrounded",
+      "fields": {
+        "from": "active",
+        "to": "inactive",
+        "trackingActive": true
+      }
+    },
+    {
+      "timestamp": 1789103559792,
+      "eventName": "app_inactive",
+      "fields": {
+        "appState": "inactive",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "latestAcceptedAgeMs": 793,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103559802,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "inactive",
+        "action": "hold-transient-inactive",
+        "reason": "ios-inactive-is-not-background",
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103559895,
+      "eventName": "app_backgrounded",
+      "fields": {
+        "from": "inactive",
+        "to": "background",
+        "trackingActive": true
+      }
+    },
+    {
+      "timestamp": 1789103559896,
+      "eventName": "app_backgrounded",
+      "fields": {
+        "appState": "background",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "latestAcceptedAgeMs": 897,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103559914,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "background",
+        "action": "transition-to-background",
+        "reason": "background-ownership-required",
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103560039,
+      "eventName": "real_activity_location_source_activated",
+      "fields": {
+        "sampleSource": "background",
+        "androidTimeIntervalMs": 1000,
+        "iosTimeIntervalApplied": false,
+        "requestedDistanceM": 5
+      }
+    },
+    {
+      "timestamp": 1789103560102,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 6,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 271427,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103560409,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103560581,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 7,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 271906,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103560665,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103563513,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 8,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 274838,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103563607,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 0,
+        "rejectedCount": 1,
+        "journalCommitted": false
+      }
+    },
+    {
+      "timestamp": 1789103563776,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 9,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 275101,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103563859,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103564831,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 10,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 276156,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103564909,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103566786,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 11,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 278111,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103566905,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103569811,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 12,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 281136,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103569928,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103573818,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 13,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 285143,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103573939,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103579108,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 14,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 290433,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103579210,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103580945,
+      "eventName": "app_foregrounded",
+      "fields": {
+        "appState": "active",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": false,
+        "backgroundTaskActive": true,
+        "latestAcceptedAgeMs": 1946,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103580946,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "active",
+        "action": "transition-to-foreground",
+        "reason": "foreground-ownership-required",
+        "foregroundWatcherActive": false,
+        "backgroundTaskActive": true,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103580946,
+      "eventName": "real_activity_foreground_takeover",
+      "fields": {
+        "phase": "started",
+        "appState": "active",
+        "backgroundTaskActive": true,
+        "latestAcceptedAgeMs": 1947
+      }
+    },
+    {
+      "timestamp": 1789103581070,
+      "eventName": "real_activity_background_drain",
+      "fields": {
+        "reason": "foreground-takeover",
+        "drainedCount": 0,
+        "ordered": true
+      }
+    },
+    {
+      "timestamp": 1789103581158,
+      "eventName": "real_activity_location_source_activated",
+      "fields": {
+        "sampleSource": "foreground",
+        "androidTimeIntervalMs": 1000,
+        "requestedDistanceM": 1,
+        "cadenceVariant": "distanceFilter1",
+        "iosTimeIntervalApplied": false
+      }
+    },
+    {
+      "timestamp": 1789103581158,
+      "eventName": "real_activity_foreground_takeover",
+      "fields": {
+        "phase": "completed",
+        "drainedCount": 0,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false
+      }
+    },
+    {
+      "timestamp": 1789103585176,
+      "eventName": "app_backgrounded",
+      "fields": {
+        "from": "active",
+        "to": "inactive",
+        "trackingActive": true
+      }
+    },
+    {
+      "timestamp": 1789103585176,
+      "eventName": "app_inactive",
+      "fields": {
+        "appState": "inactive",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "latestAcceptedAgeMs": 1177,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103585176,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "inactive",
+        "action": "hold-transient-inactive",
+        "reason": "ios-inactive-is-not-background",
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103585876,
+      "eventName": "app_backgrounded",
+      "fields": {
+        "from": "inactive",
+        "to": "background",
+        "trackingActive": true
+      }
+    },
+    {
+      "timestamp": 1789103585878,
+      "eventName": "app_backgrounded",
+      "fields": {
+        "appState": "background",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "latestAcceptedAgeMs": 879,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103585878,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "background",
+        "action": "transition-to-background",
+        "reason": "background-ownership-required",
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103586344,
+      "eventName": "real_activity_location_source_activated",
+      "fields": {
+        "sampleSource": "background",
+        "androidTimeIntervalMs": 1000,
+        "iosTimeIntervalApplied": false,
+        "requestedDistanceM": 5
+      }
+    },
+    {
+      "timestamp": 1789103586411,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 15,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 297736,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103586502,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103586608,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 16,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 297933,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103586687,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103590083,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 17,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 301408,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103590205,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103595086,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 18,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 306411,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103595195,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103595823,
+      "eventName": "app_foregrounded",
+      "fields": {
+        "appState": "active",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": false,
+        "backgroundTaskActive": true,
+        "latestAcceptedAgeMs": 5824,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103595824,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "active",
+        "action": "transition-to-foreground",
+        "reason": "foreground-ownership-required",
+        "foregroundWatcherActive": false,
+        "backgroundTaskActive": true,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103595824,
+      "eventName": "real_activity_foreground_takeover",
+      "fields": {
+        "phase": "started",
+        "appState": "active",
+        "backgroundTaskActive": true,
+        "latestAcceptedAgeMs": 5825
+      }
+    },
+    {
+      "timestamp": 1789103596309,
+      "eventName": "real_activity_background_drain",
+      "fields": {
+        "reason": "foreground-takeover",
+        "drainedCount": 1,
+        "ordered": true
+      }
+    },
+    {
+      "timestamp": 1789103596396,
+      "eventName": "real_activity_location_source_activated",
+      "fields": {
+        "sampleSource": "foreground",
+        "androidTimeIntervalMs": 1000,
+        "requestedDistanceM": 1,
+        "cadenceVariant": "distanceFilter1",
+        "iosTimeIntervalApplied": false
+      }
+    },
+    {
+      "timestamp": 1789103596396,
+      "eventName": "real_activity_foreground_takeover",
+      "fields": {
+        "phase": "completed",
+        "drainedCount": 1,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false
+      }
+    },
+    {
+      "timestamp": 1789103600332,
+      "eventName": "app_backgrounded",
+      "fields": {
+        "from": "active",
+        "to": "inactive",
+        "trackingActive": true
+      }
+    },
+    {
+      "timestamp": 1789103600332,
+      "eventName": "app_inactive",
+      "fields": {
+        "appState": "inactive",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "latestAcceptedAgeMs": 1333,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103600342,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "inactive",
+        "action": "hold-transient-inactive",
+        "reason": "ios-inactive-is-not-background",
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103600389,
+      "eventName": "app_backgrounded",
+      "fields": {
+        "appState": "background",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "latestAcceptedAgeMs": 1390,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103600395,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "background",
+        "action": "transition-to-background",
+        "reason": "background-ownership-required",
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103600572,
+      "eventName": "real_activity_location_source_activated",
+      "fields": {
+        "sampleSource": "background",
+        "androidTimeIntervalMs": 1000,
+        "iosTimeIntervalApplied": false,
+        "requestedDistanceM": 5
+      }
+    },
+    {
+      "timestamp": 1789103600873,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 19,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 312198,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103600967,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103604801,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 20,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 316126,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103604925,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103606629,
+      "eventName": "real_activity_location_source_activated",
+      "fields": {
+        "sampleSource": "background",
+        "androidTimeIntervalMs": 500,
+        "iosTimeIntervalApplied": false,
+        "requestedDistanceM": 5
+      }
+    },
+    {
+      "timestamp": 1789103606825,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 21,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 318150,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103606917,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103607832,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 22,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 319157,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103607953,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103612836,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 23,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 324161,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103612962,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 1,
+        "rejectedCount": 0,
+        "journalCommitted": true
+      }
+    },
+    {
+      "timestamp": 1789103619833,
+      "eventName": "real_activity_background_callback_checkpoint",
+      "fields": {
+        "nativeBatchSize": 1,
+        "nativeBatchSequence": 24,
+        "eligibleSampleCount": 1,
+        "taskElapsedSinceModuleLoadMs": 331158,
+        "activeLease": true,
+        "backgroundPermissionState": "granted",
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103619953,
+      "eventName": "real_activity_background_journal_result",
+      "fields": {
+        "batchCount": 1,
+        "acceptedCount": 0,
+        "rejectedCount": 1,
+        "journalCommitted": false
+      }
+    },
+    {
+      "timestamp": 1789103621598,
+      "eventName": "app_foregrounded",
+      "fields": {
+        "from": "background",
+        "to": "active",
+        "trackingActive": true
+      }
+    },
+    {
+      "timestamp": 1789103621599,
+      "eventName": "app_foregrounded",
+      "fields": {
+        "appState": "active",
+        "backgroundPermissionState": "granted",
+        "cachedBackgroundGranted": true,
+        "foregroundWatcherActive": false,
+        "backgroundTaskActive": true,
+        "latestAcceptedAgeMs": 8844,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103621599,
+      "eventName": "activity_location_lifecycle_plan_v1",
+      "fields": {
+        "appState": "active",
+        "action": "transition-to-foreground",
+        "reason": "foreground-ownership-required",
+        "foregroundWatcherActive": false,
+        "backgroundTaskActive": true,
+        "ownerGenerationSuffix": "1f45fcdb"
+      }
+    },
+    {
+      "timestamp": 1789103621599,
+      "eventName": "real_activity_foreground_takeover",
+      "fields": {
+        "phase": "started",
+        "appState": "active",
+        "backgroundTaskActive": true,
+        "latestAcceptedAgeMs": 8844
+      }
+    },
+    {
+      "timestamp": 1789103621739,
+      "eventName": "real_activity_background_drain",
+      "fields": {
+        "reason": "foreground-takeover",
+        "drainedCount": 0,
+        "ordered": true
+      }
+    },
+    {
+      "timestamp": 1789103621807,
+      "eventName": "real_activity_location_source_activated",
+      "fields": {
+        "sampleSource": "foreground",
+        "androidTimeIntervalMs": 500,
+        "requestedDistanceM": 1,
+        "cadenceVariant": "distanceFilter1",
+        "iosTimeIntervalApplied": false
+      }
+    },
+    {
+      "timestamp": 1789103621808,
+      "eventName": "real_activity_foreground_takeover",
+      "fields": {
+        "phase": "completed",
+        "drainedCount": 0,
+        "foregroundWatcherActive": true,
+        "backgroundTaskActive": false
+      }
+    }
+  ]
+}

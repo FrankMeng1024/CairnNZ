@@ -109,6 +109,8 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress, testID
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={1}
+        accessibilityRole="button"
+        accessibilityLabel={label}
       >
         {BlurView ? (
           <BlurView intensity={30} tint={theme.mode === 'night' ? 'dark' : 'light'} style={[styles.pillBlur, { backgroundColor: theme.scenicSurface, borderColor: theme.border }]}>

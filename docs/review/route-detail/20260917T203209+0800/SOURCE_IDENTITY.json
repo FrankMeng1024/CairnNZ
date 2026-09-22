@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T203209+0800",
+  "branch_at_start": "master",
+  "head_at_start": "12fa1cd0ef599e53a81cd30537ce761c5e2150ce",
+  "worktree_at_start": "DIRTY_INTENTIONAL",
+  "baseline_status": "baseline/git-status-before.txt",
+  "baseline_scoped_hashes": "baseline/scoped-hashes-before.sha256",
+  "revision_01_touched_hashes": "baseline/revision-01-touched-hashes.sha256",
+  "revision_01_archive_sha256": "1ad5c5084873df71665208edbca1abaa7ca04b0968717db3fbf0859139ca4f43",
+  "revision_01_material_source_drift": false,
+  "candidate_marker_at_start": "O59",
+  "candidate_marker_at_delivery": "O59",
+  "marker_changed": false,
+  "task_scoped_patch": "TASK_SCOPED.patch",
+  "touched_file_hashes": "TOUCHED_FILE_HASHES.sha256",
+  "unrelated_changes_preserved": true,
+  "commit_created": false
+}
+

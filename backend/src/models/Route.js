@@ -154,6 +154,7 @@ const Route = {
              SET name = ?, description = ?, points = CAST(? AS JSON),
                  waypoints = CAST(? AS JSON), distance_m = ?, elevation_gain_m = ?,
                  permission = ?, geometry_edited_since_creation = GREATEST(geometry_edited_since_creation, ?),
+                 content_revision = content_revision + 1,
                  audience_epoch = audience_epoch + ?,
                  audience_changed_at = CASE WHEN ? = 1 THEN UTC_TIMESTAMP(3) ELSE audience_changed_at END,
                  updated_at = NOW()
@@ -205,7 +206,8 @@ const Route = {
       `SELECT id, user_id, client_route_id, creation_origin,
               source_activity_client_id, source_session_id, origin_geometry_hash,
               created_geometry_hash, geometry_edited_since_creation, origin_gap_reconnected,
-              name, description, distance_m, elevation_gain_m, run_count, last_run_at, permission, created_at, updated_at
+              name, description, distance_m, elevation_gain_m, run_count, last_run_at,
+              permission, content_revision, created_at, updated_at
        FROM routes WHERE user_id = ? ORDER BY run_count DESC, created_at DESC`,
       [userId]
     );
@@ -218,7 +220,8 @@ const Route = {
       `SELECT id, user_id, client_route_id, creation_origin,
               source_activity_client_id, source_session_id, origin_geometry_hash,
               created_geometry_hash, geometry_edited_since_creation, origin_gap_reconnected,
-              name, description, points, waypoints, distance_m, elevation_gain_m, run_count, last_run_at, permission, created_at, updated_at
+              name, description, points, waypoints, distance_m, elevation_gain_m,
+              run_count, last_run_at, permission, content_revision, created_at, updated_at
        FROM routes WHERE id = ? AND user_id = ?`,
       [id, userId]
     );
@@ -275,6 +278,7 @@ const Route = {
         await conn.rollback();
         return 0;
       }
+      updates.push('content_revision = content_revision + 1');
       updates.push('updated_at = NOW()');
       values.push(id, userId);
       const [result] = await conn.execute(

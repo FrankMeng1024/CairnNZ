@@ -3,6 +3,8 @@ const mockPurgeFriend = jest.fn(async () => undefined);
 const mockPurgeFriendContent = jest.fn(async () => undefined);
 const mockFriendSetState = jest.fn();
 const mockMarkerSetState = jest.fn();
+let mockAuthenticatedOwnerId: string | null = 'viewer-a';
+let mockIsLoggedIn = true;
 
 jest.mock('../../../store/storage', () => ({
   storage: {
@@ -11,6 +13,14 @@ jest.mock('../../../store/storage', () => ({
   },
 }));
 jest.mock('../../../services/apiService', () => ({ authenticatedFetch: jest.fn() }));
+jest.mock('../../../store/useAppStore', () => ({
+  useAppStore: {
+    getState: () => ({
+      isLoggedIn: mockIsLoggedIn,
+      user: mockAuthenticatedOwnerId === null ? null : { id: mockAuthenticatedOwnerId },
+    }),
+  },
+}));
 jest.mock('../../memory/store/useFriendMemoryStore', () => ({
   useFriendMemoryStore: { getState: () => ({ purgeFriend: mockPurgeFriend }) },
 }));
@@ -21,6 +31,7 @@ jest.mock('../../../store/useMarkerStore', () => ({ useMarkerStore: { setState: 
 import { __publicCairnTest, usePublicCairnStore } from '../services/publicCairns';
 
 const mockFetch = jest.requireMock('../../../services/apiService').authenticatedFetch as jest.Mock;
+const mockSetItem = jest.requireMock('../../../store/storage').storage.setItem as jest.Mock;
 const BASE = 1_800_000_000_000;
 
 function response(status: number, body: any): any {
@@ -57,10 +68,34 @@ function scene(entries = [summary()]) {
 }
 
 async function initialize(entries = [summary()]): Promise<void> {
+  mockAuthenticatedOwnerId = 'viewer-a';
   mockFetch
     .mockResolvedValueOnce(response(200, { enabled: true, scene_limit: 3, scene_author_limit: 1, new_card_limit: 1 }))
     .mockResolvedValueOnce(response(200, scene(entries)));
   await usePublicCairnStore.getState().initialize('viewer-a');
+}
+
+function holdAcknowledgementPersistence(actionPrefix: string) {
+  let releaseWrite!: () => void;
+  let markStarted!: () => void;
+  let sawPending = false;
+  let held = false;
+  const started = new Promise<void>(resolve => { markStarted = resolve; });
+  const released = new Promise<void>(resolve => { releaseWrite = resolve; });
+  mockSetItem.mockImplementation(async (key: string, value: string) => {
+    if (key === `${__publicCairnTest.cachePrefix}viewer-a`) {
+      const parsed = JSON.parse(value);
+      const ids = Object.keys(parsed.pendingActions ?? {});
+      if (ids.some(id => id.startsWith(actionPrefix))) sawPending = true;
+      if (sawPending && !held && !ids.some(id => id.startsWith(actionPrefix))) {
+        held = true;
+        markStarted();
+        await released;
+      }
+    }
+    mockValues.set(key, value);
+  });
+  return { started, release: () => releaseWrite() };
 }
 
 describe('Public Cairn shared list/detail authority', () => {
@@ -71,6 +106,10 @@ describe('Public Cairn shared list/detail authority', () => {
     mockPurgeFriendContent.mockClear();
     mockFriendSetState.mockClear();
     mockMarkerSetState.mockClear();
+    mockSetItem.mockReset();
+    mockSetItem.mockImplementation(async (key: string, value: string) => { mockValues.set(key, value); });
+    mockAuthenticatedOwnerId = 'viewer-a';
+    mockIsLoggedIn = true;
     __publicCairnTest.reset();
     jest.spyOn(Date, 'now').mockReturnValue(BASE + 1_000);
   });
@@ -167,7 +206,7 @@ describe('Public Cairn shared list/detail authority', () => {
     const sceneRead = usePublicCairnStore.getState().refreshScene();
     const detailRead = usePublicCairnStore.getState().loadDetail('1').catch(error => error);
     while (!releaseScene || !releaseDetail) await Promise.resolve();
-    await expect(usePublicCairnStore.getState().hide('1')).resolves.toBe(false);
+    await expect(usePublicCairnStore.getState().hide('1')).resolves.toEqual({ status: 'queued_offline' });
     releaseScene(response(200, scene([summary()])));
     releaseDetail(response(200, { cairn: detail() }));
     await sceneRead;
@@ -187,12 +226,209 @@ describe('Public Cairn shared list/detail authority', () => {
     mockFetch
       .mockResolvedValueOnce(response(200, { enabled: true }))
       .mockResolvedValueOnce(response(200, scene([])));
+    mockAuthenticatedOwnerId = 'viewer-b';
     await usePublicCairnStore.getState().initialize('viewer-b');
     release(response(200, scene([summary('old-account')])));
     await old;
     expect(usePublicCairnStore.getState().viewerId).toBe('viewer-b');
     expect(usePublicCairnStore.getState().entries).toEqual([]);
     expect(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-b`) ?? '').not.toContain('old-account');
+  });
+
+  test('every Public transport binds the authenticated owner behaviorally', async () => {
+    mockFetch.mockImplementation(async (path: string, options?: { expectedUserId?: string }) => {
+      if (options?.expectedUserId !== mockAuthenticatedOwnerId) {
+        const error: any = new Error('authenticated_fetch_account_changed');
+        error.code = 'ACCOUNT_CHANGED';
+        throw error;
+      }
+      if (path === '/api/public-cairns/capabilities') return response(200, { enabled: true });
+      if (path === '/api/public-cairns/scene') return response(200, scene());
+      if (path === '/api/public-cairns/cairns/1') return response(200, { cairn: detail() });
+      if (path === '/api/public-cairns/cairns/1/thanks') return response(200, { thanked: true });
+      throw new Error(`unexpected ${path}`);
+    });
+
+    await usePublicCairnStore.getState().initialize('viewer-a');
+    await expect(usePublicCairnStore.getState().loadDetail('1')).resolves.toMatchObject({ id: '1' });
+    await expect(usePublicCairnStore.getState().thanks('1')).resolves.toEqual({ status: 'confirmed' });
+
+    expect(mockFetch.mock.calls.map(([path, options]) => [path, options?.expectedUserId])).toEqual([
+      ['/api/public-cairns/capabilities', 'viewer-a'],
+      ['/api/public-cairns/scene', 'viewer-a'],
+      ['/api/public-cairns/cairns/1', 'viewer-a'],
+      ['/api/public-cairns/cairns/1/thanks', 'viewer-a'],
+    ]);
+  });
+
+  test('a stale initialize invoked after authenticated owner B cannot steal the store or dispatch', async () => {
+    mockAuthenticatedOwnerId = 'viewer-b';
+    mockFetch.mockImplementation(async (path: string, options?: { expectedUserId?: string }) => {
+      expect(options?.expectedUserId).toBe('viewer-b');
+      expect(path).toBe('/api/public-cairns/capabilities');
+      return response(200, { enabled: false });
+    });
+    await usePublicCairnStore.getState().initialize('viewer-b');
+    const callsBeforeStaleInvocation = mockFetch.mock.calls.length;
+
+    await usePublicCairnStore.getState().initialize('viewer-a');
+
+    expect(mockFetch).toHaveBeenCalledTimes(callsBeforeStaleInvocation);
+    expect(usePublicCairnStore.getState()).toMatchObject({
+      viewerId: 'viewer-b', enabled: false, capabilityChecked: true, entries: [], details: {},
+    });
+  });
+
+  test('a populated user during signed-out pre-publish cannot initialize or dispatch Public state', async () => {
+    mockAuthenticatedOwnerId = 'viewer-a';
+    mockIsLoggedIn = false;
+
+    await usePublicCairnStore.getState().initialize('viewer-a');
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(usePublicCairnStore.getState()).toMatchObject({
+      viewerId: null, enabled: false, capabilityChecked: false, entries: [], details: {},
+    });
+  });
+
+  test('authenticated owner change fences a delayed capability completion without another initialize', async () => {
+    let releaseCapability!: (value: any) => void;
+    let jsonStarted!: () => void;
+    const jsonReady = new Promise<void>(resolve => { jsonStarted = resolve; });
+    mockFetch.mockImplementationOnce(async (_path: string, options?: { expectedUserId?: string }) => {
+      expect(options?.expectedUserId).toBe('viewer-a');
+      return {
+        ok: true,
+        status: 200,
+        json: jest.fn(() => {
+          jsonStarted();
+          return new Promise(resolve => { releaseCapability = resolve; });
+        }),
+      };
+    });
+    const staleInitialize = usePublicCairnStore.getState().initialize('viewer-a');
+    await jsonReady;
+
+    mockAuthenticatedOwnerId = 'viewer-b';
+    releaseCapability({ enabled: true });
+    await staleInitialize;
+
+    expect(mockFetch.mock.calls.filter(([path]) => path === '/api/public-cairns/scene')).toHaveLength(0);
+    expect(usePublicCairnStore.getState()).toMatchObject({
+      viewerId: 'viewer-a', enabled: false, capabilityChecked: false, entries: [], details: {},
+    });
+    expect(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`) ?? '').not.toContain('"pilotEnabled":true');
+  });
+
+  test('refresh and Detail refuse delayed invocation after authenticated owner changes', async () => {
+    await initialize();
+    const callsBeforeSwitch = mockFetch.mock.calls.length;
+    mockAuthenticatedOwnerId = 'viewer-b';
+
+    await usePublicCairnStore.getState().refreshScene();
+    await expect(usePublicCairnStore.getState().loadDetail('1'))
+      .rejects.toMatchObject({ code: 'superseded' });
+
+    expect(mockFetch).toHaveBeenCalledTimes(callsBeforeSwitch);
+    expect(usePublicCairnStore.getState().details).toEqual({});
+  });
+
+  test('authenticated owner change fences delayed refresh and Detail completions', async () => {
+    await initialize();
+    let releaseScene!: (value: any) => void;
+    mockFetch.mockImplementationOnce((_path: string, options?: { expectedUserId?: string }) => {
+      expect(options?.expectedUserId).toBe('viewer-a');
+      return new Promise(resolve => { releaseScene = resolve; });
+    });
+    const staleScene = usePublicCairnStore.getState().refreshScene();
+    while (!releaseScene) await Promise.resolve();
+    mockAuthenticatedOwnerId = 'viewer-b';
+    releaseScene(response(200, scene([summary('stale-revision', 'public:1:9:9')])));
+    await staleScene;
+    expect(usePublicCairnStore.getState().entries[0].resourceRevision).toBe('v1');
+    expect(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`) ?? '').not.toContain('stale-revision');
+
+    mockAuthenticatedOwnerId = 'viewer-a';
+    let releaseDetail!: (value: any) => void;
+    mockFetch.mockImplementationOnce((_path: string, options?: { expectedUserId?: string }) => {
+      expect(options?.expectedUserId).toBe('viewer-a');
+      return new Promise(resolve => { releaseDetail = resolve; });
+    });
+    const staleDetail = usePublicCairnStore.getState().loadDetail('1');
+    while (!releaseDetail) await Promise.resolve();
+    mockAuthenticatedOwnerId = 'viewer-b';
+    releaseDetail(response(200, { cairn: detail() }));
+    await expect(staleDetail).rejects.toMatchObject({ code: 'superseded' });
+    expect(usePublicCairnStore.getState().details).toEqual({});
+    expect(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`) ?? '').not.toContain('quiet note');
+  });
+
+  test.each([
+    ['thanks', 'thanks:1', '/api/public-cairns/cairns/1/thanks',
+      () => usePublicCairnStore.getState().thanks('1')],
+    ['hide', 'hide:1', '/api/public-cairns/cairns/1/hide',
+      () => usePublicCairnStore.getState().hide('1')],
+    ['block', 'block:10', '/api/friends/10/block',
+      () => usePublicCairnStore.getState().blockAuthor('10')],
+    ['report', 'report:1:', '/api/public-cairns/cairns/1/report',
+      () => usePublicCairnStore.getState().report('1', 'other', 'account fence')],
+    ['encounter', 'encounter:11111111-1111-4111-8111-111111111111',
+      '/api/public-cairns/encounters/verify',
+      () => usePublicCairnStore.getState().verifyCompletedActivity('11111111-1111-4111-8111-111111111111')],
+  ])('action %s cannot report A success after acknowledgement persistence crosses into B', async (
+    _label, actionPrefix, actionPath, invoke,
+  ) => {
+    await initialize();
+    const held = holdAcknowledgementPersistence(actionPrefix);
+    mockFetch.mockImplementation(async (path: string, options?: { expectedUserId?: string }) => {
+      if (path === actionPath) {
+        expect(options?.expectedUserId).toBe('viewer-a');
+        return response(200, { accepted: true });
+      }
+      expect(options?.expectedUserId).toBe('viewer-b');
+      if (path === '/api/public-cairns/capabilities') return response(200, { enabled: true });
+      if (path === '/api/public-cairns/scene') return response(200, scene());
+      throw new Error(`unexpected ${path}`);
+    });
+
+    const staleAction = invoke();
+    await held.started;
+    mockAuthenticatedOwnerId = 'viewer-b';
+    await usePublicCairnStore.getState().initialize('viewer-b');
+    const callsBeforeRelease = mockFetch.mock.calls.length;
+    expect(usePublicCairnStore.getState()).toMatchObject({ viewerId: 'viewer-b', newlySurfacedId: '1' });
+
+    held.release();
+    await expect(staleAction).resolves.toEqual(
+      _label === 'encounter' ? false : { status: 'superseded' },
+    );
+    expect(usePublicCairnStore.getState()).toMatchObject({ viewerId: 'viewer-b', newlySurfacedId: '1' });
+    expect(mockFetch).toHaveBeenCalledTimes(callsBeforeRelease);
+  });
+
+  test('present cannot clear B newlySurfacedId after A acknowledgement persistence completes late', async () => {
+    await initialize();
+    const held = holdAcknowledgementPersistence('present:1:');
+    mockFetch.mockImplementation(async (path: string, options?: { expectedUserId?: string }) => {
+      if (path === '/api/public-cairns/cairns/1/present') {
+        expect(options?.expectedUserId).toBe('viewer-a');
+        return response(200, { presented: true });
+      }
+      expect(options?.expectedUserId).toBe('viewer-b');
+      if (path === '/api/public-cairns/capabilities') return response(200, { enabled: true });
+      if (path === '/api/public-cairns/scene') return response(200, scene());
+      throw new Error(`unexpected ${path}`);
+    });
+
+    const stalePresent = usePublicCairnStore.getState().present('1');
+    await held.started;
+    mockAuthenticatedOwnerId = 'viewer-b';
+    await usePublicCairnStore.getState().initialize('viewer-b');
+    expect(usePublicCairnStore.getState()).toMatchObject({ viewerId: 'viewer-b', newlySurfacedId: '1' });
+
+    held.release();
+    await stalePresent;
+    expect(usePublicCairnStore.getState()).toMatchObject({ viewerId: 'viewer-b', newlySurfacedId: '1' });
   });
 
   test('Block is one durable author fence across Public, Friend content and Friend Memory', async () => {
@@ -212,7 +448,7 @@ describe('Public Cairn shared list/detail authority', () => {
     const oldDetail = usePublicCairnStore.getState().loadDetail('2').catch(error => error);
     while (!releaseScene || !releaseDetail) await Promise.resolve();
 
-    await expect(usePublicCairnStore.getState().blockAuthor('10')).resolves.toBe(false);
+    await expect(usePublicCairnStore.getState().blockAuthor('10')).resolves.toEqual({ status: 'queued_offline' });
     expect(mockPurgeFriend).toHaveBeenCalledWith('10', 'viewer-a');
     expect(mockPurgeFriendContent).toHaveBeenCalledWith('10', 'viewer-a');
     expect(mockFriendSetState).toHaveBeenCalledTimes(1);
@@ -244,6 +480,29 @@ describe('Public Cairn shared list/detail authority', () => {
     expect(usePublicCairnStore.getState().entries[0]).toMatchObject({ resourceRevision: 'v2', authorizationRevision: 'public:1:2:2' });
   });
 
+  test('encounter verification rechecks authority after the refresh it triggered', async () => {
+    await initialize();
+    let releaseRefresh!: () => void;
+    let markRefreshStarted!: () => void;
+    const refreshStarted = new Promise<void>(resolve => { markRefreshStarted = resolve; });
+    const refreshReleased = new Promise<void>(resolve => { releaseRefresh = resolve; });
+    const heldRefresh = jest.fn(async () => {
+      markRefreshStarted();
+      await refreshReleased;
+    });
+    usePublicCairnStore.setState({ refreshScene: heldRefresh });
+    mockFetch.mockResolvedValueOnce(response(200, { accepted: true }));
+
+    const verification = usePublicCairnStore.getState()
+      .verifyCompletedActivity('11111111-1111-4111-8111-111111111111');
+    await refreshStarted;
+    mockAuthenticatedOwnerId = 'viewer-b';
+    releaseRefresh();
+
+    await expect(verification).resolves.toBe(false);
+    expect(heldRefresh).toHaveBeenCalledTimes(1);
+  });
+
   test('feature-disabled environment purges old Public cache and denies presentation', async () => {
     await initialize();
     __publicCairnTest.reset();
@@ -265,6 +524,7 @@ describe('Public Cairn shared list/detail authority', () => {
     await initialize([summary(`v${revision}`, `public:1:1:${revision}`)]);
 
     const initializeAccount = async (viewer: 'viewer-a' | 'viewer-b') => {
+      mockAuthenticatedOwnerId = viewer;
       mockFetch.mockResolvedValueOnce(response(200, { enabled: true }));
       if (viewer === 'viewer-a' && pendingHide) {
         mockFetch.mockResolvedValueOnce(response(200, { hidden: true }));

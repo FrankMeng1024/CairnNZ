@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "card": "CARD-CAIRN-01",
+  "module": "OWN_CAIRN_DETAIL_AND_PERSONAL_ALL_CAIRNS",
+  "run_id": "20260917T141933+0800",
+  "run_date_local": "2026-09-17",
+  "timezone": "Asia/Shanghai",
+  "repository": "/Users/mzm/Desktop/cairn/CairnNZ",
+  "source_identity": {
+    "branch": "master",
+    "head_at_start": "12fa1cd0ef599e53a81cd30537ce761c5e2150ce",
+    "worktree_was_dirty": true,
+    "unrelated_dirty_work": "PRESERVED",
+    "task_changes_committed": false
+  },
+  "candidate": {
+    "baseline_marker": "O57",
+    "marker": "O58",
+    "increment_count": 1,
+    "meaning": "LOCAL_CLIENT_CANDIDATE_IDENTITY_ONLY",
+    "ota_published": false,
+    "device_loaded": false,
+    "owner_accepted": false,
+    "native_app_version_changed": false,
+    "runtime_version_changed": false,
+    "build_number_changed": false,
+    "dependencies_changed": false
+  },
+  "verdict": "IMPLEMENTATION_COMPLETE_DEVICE_REVIEW_REQUIRED",
+  "implementation": {
+    "normal_entry": "Home -> Memory -> All Cairns",
+    "authoritative_detail_route": "MarkerDetail",
+    "owner_only_library": true,
+    "stable_identity_merge": true,
+    "empty_quick_cairn_valid": true,
+    "explicit_activity_provenance_only": true,
+    "spatial_proximity_association": false,
+    "pending_edit_durable": true,
+    "synced_edit_waits_for_acknowledgement": true,
+    "failed_edit_retains_draft": true,
+    "delete_non_cascade": true,
+    "late_acknowledgement_non_resurrection": true,
+    "friend_public_rows_included": false
+  },
+  "retrieval": {
+    "page_size": 40,
+    "ordering": "CREATED_AT_DESC_THEN_ID_DESC",
+    "server_search_scope_when_new_endpoint_available": "COMPLETE_AUTHENTICATED_OWNER_HISTORY",
+    "old_backend_fallback_scope": "LOCAL_AND_PREVIOUSLY_DOWNLOADED_PARTIAL_HISTORY",
+    "offline_scope": "DURABLE_LOCAL_PLUS_PREVIOUSLY_DOWNLOADED_OWNER_ROWS",
+    "region_cache_claimed_as_all_history": false,
+    "unbounded_download_on_mount": false
+  },
+  "backend": {
+    "code_changed_locally": true,
+    "migration_added": false,
+    "deployed": false,
+    "deployment_dependencies": [
+      "Authenticated GET /api/markers/library for complete owner-history search and pagination",
+      "Idempotent create replay convergence for newer pending supported content"
+    ],
+    "old_backend_client_compatibility": "SUPPORTED_WITH_TRUTHFUL_PARTIAL_COVERAGE"
+  },
+  "tests": {
+    "app_scoped": {"suites_passed": 19, "suites_total": 19, "tests_passed": 106, "tests_total": 106},
+    "backend_scoped": {"tests_passed": 20, "tests_total": 20},
+    "activity_verify_changed": {"checks_passed": 542, "checks_total": 542},
+    "full_typescript": {"exit_code": 2, "baseline_diagnostic_lines": 257, "touched_file_diagnostic_lines": 0},
+    "raw_results": "TEST_RESULTS.json"
+  },
+  "visual_evidence": {
+    "capture_count": 20,
+    "board_count": 3,
+    "normal_handler_flow_step_count": 13,
+    "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_MAP_UNAVAILABLE_FALLBACK",
+    "initial_activity_fixture_route_forced": true,
+    "actual_web_mapbox_proven": false,
+    "native_mapbox_proven": false,
+    "physical_device_proven": false,
+    "native_small_screen_proven": false,
+    "device_loading_proven": false,
+    "explicit_user_acceptance": "PENDING",
+    "manifest": "visual/capture-results.json",
+    "offline_board": "visual/index.html"
+  },
+  "runtime_isolation": {
+    "api_base_url": "http://127.0.0.1:9",
+    "fresh_browser_context": true,
+    "synthetic_identity": true,
+    "synthetic_coordinates": true,
+    "api_reads_fixture_intercepted": true,
+    "api_writes_intercepted": true,
+    "attempted_write_count": 123,
+    "allowed_product_write_count": 0,
+    "production_data_read": false,
+    "production_data_mutated": false,
+    "telemetry_enabled": false
+  },
+  "requirements": {
+    "delta_markdown": "REQUIREMENTS_DELTA.md",
+    "delta_json": "REQUIREMENTS_DELTA.json",
+    "rq_cairn_001": "PRESERVED",
+    "rq_cairn_002": "PRESERVED_AND_EXTENDED",
+    "rq_cairn_003": "IMPLEMENTED_CANDIDATE",
+    "rq_cairn_004": "IMPLEMENTED_CANDIDATE",
+    "rq_cairn_005": "IMPLEMENTED_CANDIDATE",
+    "rq_cairn_006": "TASK_AUTHORIZED_IMPLEMENTED_CANDIDATE",
+    "rq_cairn_007": "NOT_IMPLEMENTED_OUT_OF_SCOPE",
+    "rq_cairn_008": "NOT_IMPLEMENTED_OUT_OF_SCOPE"
+  },
+  "activity_detail_carry_forward": {
+    "card_ad_01_preserved": true,
+    "artifact_modified": false,
+    "evidence_addendum": "EVIDENCE_PROVENANCE_ADDENDUM.md",
+    "linked_own_cairn_navigation_exercised": true,
+    "linked_cairn_edit_then_library_retrieval_exercised": true,
+    "activity_save_as_route_reproved": false,
+    "activity_delete_reproved": false,
+    "activity_sync_retry_reproved": false
+  },
+  "source_sha256": {
+    "app/src/components/OtaBadge.tsx": "d39d48a680a9a73363c6a77c2a5760d9a0f6c7adea1e28aab3088189c13859ca",
+    "app/src/features/cairns/cairnIdentity.ts": "2f4049178f3d7b55d4b84a20b38ff5064eb9773eca67cee4fc1012e8bd414492",
+    "app/src/features/memory/screens/MemoryScreen.tsx": "0731f2f81c0c434346aa87e359562769121e25f6bbd3ff3d04e9b97f36a13e1e",
+    "app/src/features/memory/services/mapboxAdapter.web.tsx": "479a7e7af388f5f07f02bc147afbffaa277f81f0c6aefd79a4f43d152de98aaa",
+    "app/src/features/plant/services/noteEncoding.ts": "0ab6c200a49d978fc065652c5381d88180c8d08046cef33eced598273a022f18",
+    "app/src/navigation/RootNavigator.tsx": "96196cb627cf57b0c88d470bdadce6f84c64565e166099acc0e58119ab35a987",
+    "app/src/screens/AllCairnsScreen.tsx": "ce1cf664c128c8c3e1d7a841d91dd244b0b85aad4f48cb902274c6f11e97d055",
+    "app/src/screens/MarkerDetailScreen.tsx": "d4333a9957fe0a1c506ba73f28a0f63e09eac728f76ca013a3b06f60af06b3ea",
+    "app/src/services/offlineEntity.ts": "eb197d4cad2164dd568c91194b0b14f84980d62893e3511a7d7a64cfc0d62e0e",
+    "app/src/store/useMarkerStore.ts": "9ff7369b18584b19d95ebc247168c6667f454d8e71154108b65a27e9530bd2a0",
+    "backend/src/routes/markers.js": "e1f4f123e7bfbb8e89fd9c420c17b0e32364c39c6359d88ecec8e9df6d557f18",
+    "backend/src/services/ownedCairnLibrary.js": "8209f3682f45b6eea5372f4fbf213f3fac8982f7590a5fa8fca53b78c8a9db60"
+  },
+  "artifacts": {
+    "report_root": "docs/review/cairn-personal/20260917T141933+0800",
+    "archive_path": "/Users/mzm/Desktop/cairn_personal_01.zip",
+    "archive_revision": "01",
+    "archive_manifest": "MANIFEST.sha256",
+    "archive_hash_sidecar": "/Users/mzm/Desktop/cairn_personal_01.zip.sha256"
+  },
+  "prohibited_actions": {
+    "backend_deployment": false,
+    "production_migration": false,
+    "ota_publication": false,
+    "external_service_mutation": false,
+    "production_data_mutation": false
+  },
+  "next_action": "OWNER_PHYSICAL_DEVICE_REVIEW_USING_OWNER_REVIEW_CARD"
+}
+

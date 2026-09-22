@@ -139,7 +139,7 @@ async function authorizedFriendCairn(db, viewerId, markerId, { includeHidden = f
   const [rows] = await db.execute(
     `SELECT m.id, m.user_id, m.type, m.text, m.lat, m.lng, m.alt,
             m.permission, m.approximate, m.created_at, m.updated_at,
-            m.audience_epoch, u.name AS author_name,
+            m.audience_epoch, m.content_revision, u.name AS author_name,
             encounter.created_at AS encountered_at, encounter.opened_at, encounter.hidden_at,
             episode.id AS friendship_episode_id
        FROM friend_cairn_encounters encounter
@@ -170,6 +170,7 @@ async function authorizedFriendRoute(db, viewerId, routeId, { includeHidden = fa
   const [rows] = await db.execute(
     `SELECT r.id, r.user_id, r.name, r.description, r.points, r.waypoints,
             r.distance_m, r.elevation_gain_m, r.permission, r.audience_epoch,
+            r.content_revision,
             r.created_at, r.updated_at, u.name AS author_name,
             episode.id AS friendship_episode_id
        FROM routes r

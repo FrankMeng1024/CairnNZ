@@ -1,14 +1,39 @@
+const mockToken = { value: null as string | null };
+const mockAppState = {
+  user: { id: 'settings-owner' } as null | { id: string },
+  isLoggedIn: true,
+  logout: jest.fn(async ({ expectedUserId }: { expectedUserId: string }) => {
+    if (mockAppState.user?.id !== expectedUserId) return false;
+    mockAppState.user = null;
+    mockAppState.isLoggedIn = false;
+    return true;
+  }),
+};
+jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(async () => 'settings-token'),
-  setItemAsync: jest.fn(async () => undefined),
-  deleteItemAsync: jest.fn(async () => undefined),
+  getItemAsync: jest.fn(async () => mockToken.value),
+  setItemAsync: jest.fn(async (_key: string, value: string) => { mockToken.value = value; }),
+  deleteItemAsync: jest.fn(async () => { mockToken.value = null; }),
   AFTER_FIRST_UNLOCK: 1,
 }));
 jest.mock('../crashLogger', () => ({ crashLogger: { breadcrumb: jest.fn() } }));
 jest.mock('../../config/api', () => ({ API_BASE_URL: 'https://settings.test' }));
+jest.mock('../../store/useAppStore', () => ({ useAppStore: { getState: () => mockAppState } }));
+jest.mock('../accountLocalData', () => ({
+  resumeScheduledDeletedAccountLocalPurge: jest.fn(async () => false),
+  reserveDeletedAccountLocalPurge: jest.fn(async () => undefined),
+  markDeletedAccountLocalPurgeUnknown: jest.fn(async () => undefined),
+  clearDeletedAccountPurgeReservation: jest.fn(async () => undefined),
+  scheduleDeletedAccountLocalPurge: jest.fn(async () => undefined),
+  completeDeletedAccountLocalPurge: jest.fn(async () => undefined),
+  purgeDeletedAccountLocalData: jest.fn(async () => undefined),
+  purgeDeletedAccountDeviceGlobalData: jest.fn(async () => undefined),
+}));
 
 import {
   changePassword,
+  deleteAccount,
+  refreshToken,
   fetchExportHistory,
   requestDataExport,
   submitFeedback,
@@ -16,6 +41,17 @@ import {
 import * as SecureStore from 'expo-secure-store';
 
 const originalFetch = global.fetch;
+
+beforeEach(async () => {
+  mockToken.value = null;
+  mockAppState.user = { id: 'settings-owner' };
+  mockAppState.isLoggedIn = true;
+  const transitions = require('../accountTransitionAuthority');
+  const tokens = require('../tokenStore');
+  const transition = transitions.beginAccountTransition({ kind: 'login' }).authority;
+  await tokens.installTokenForAccountTransition(transition, 'settings-token', 'settings-owner');
+  transitions.finishAccountTransition(transition);
+});
 
 function response(ok: boolean, status: number, body: unknown) {
   return {
@@ -86,14 +122,52 @@ describe('truthful Settings server actions', () => {
   });
 
   test('password change requires a fresh confirmed session token', async () => {
-    global.fetch = jest
-      .fn()
-      .mockResolvedValueOnce(response(true, 200, {}))
-      .mockResolvedValueOnce(response(true, 200, { token: 'fresh-token' }));
-    await expect(changePassword('current password', 'new password')).resolves.toEqual({
-      error: 'Password changed, but the new session could not be confirmed. Please sign in again.',
+    global.fetch = jest.fn().mockResolvedValueOnce(response(true, 200, { token: 'fresh-token' }));
+    await expect(changePassword('current password', 'new password', 'settings-owner')).resolves.toEqual({
+      commitState: 'committed', sessionTransitioned: true,
     });
-    await expect(changePassword('current password', 'new password')).resolves.toEqual({});
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('cairn_jwt', 'fresh-token');
+  });
+
+  test('password HTTP success remains committed when post-commit local logout throws', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response(true, 200, {}));
+    mockAppState.logout.mockRejectedValueOnce(new Error('local cleanup failed'));
+
+    await expect(changePassword('current password', 'new password', 'settings-owner')).resolves.toEqual({
+      commitState: 'committed',
+      sessionTransitioned: false,
+      error: expect.stringContaining('Password updated on the server'),
+    });
+  });
+
+  test('account DELETE HTTP success is committed even though local cleanup is still pending', async () => {
+    global.fetch = jest.fn(async () => response(true, 200, {
+      deleted_at: '2026-09-20T00:00:00.000Z',
+      restore_deadline: '2026-09-27T00:00:00.000Z',
+    })) as unknown as typeof fetch;
+    const result = await deleteAccount('settings-owner');
+    expect(result).toMatchObject({
+      commitState: 'committed',
+      deletedAt: '2026-09-20T00:00:00.000Z',
+      restoreDeadline: '2026-09-27T00:00:00.000Z',
+      localCleanup: 'complete',
+      durableCleanupScheduled: true,
+    });
+  });
+
+  test('refresh response cannot unconditionally overwrite a newer authority', async () => {
+    const tokenStore = require('../tokenStore');
+    const captured = await tokenStore.getTokenAuthority();
+    const replaceSpy = jest.spyOn(tokenStore, 'replaceTokenIfCurrent').mockResolvedValueOnce(null);
+    global.fetch = jest.fn(async () => response(true, 200, { token: 'late-refresh-token' })) as unknown as typeof fetch;
+
+    await expect(refreshToken('settings-owner')).resolves.toEqual({ error: 'authority_changed' });
+    expect(replaceSpy).toHaveBeenCalledWith(expect.objectContaining({
+      token: captured.token,
+      generation: captured.generation,
+    }), 'late-refresh-token', 'settings-owner', expect.objectContaining({
+      kind: 'refresh-token',
+      expectedOwnerUserId: 'settings-owner',
+    }));
   });
 });

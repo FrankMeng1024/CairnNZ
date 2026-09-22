@@ -14,6 +14,9 @@ const {
   MAX_HORIZONTAL_ACCURACY_M,
   selectQualifyingEncounterEvidence,
 } = require('../services/encounterPolicy');
+const { sharedContentMetadata } = require('../services/resourceRevision');
+const { eligibleSourceProvenanceSql } = require('../services/activitySourceProvenance');
+const { buildFriendDiscoveryCandidatePage } = require('../services/friendDiscoveryCandidates');
 
 const router = express.Router();
 router.use(authenticate);
@@ -26,19 +29,6 @@ function parseJson(value, fallback) {
   if (value == null) return fallback;
   if (typeof value !== 'string') return value;
   try { return JSON.parse(value); } catch { return fallback; }
-}
-
-const SHARED_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
-function sharedContentMetadata(kind, row) {
-  const issuedAt = new Date();
-  const revisionInput = [kind, row.id, row.updated_at, row.audience_epoch].join(':');
-  return {
-    resource_revision: crypto.createHash('sha256').update(revisionInput).digest('hex'),
-    authorization_revision: `friendship:${row.friendship_episode_id}:audience:${row.audience_epoch}`,
-    authorization_issued_at: issuedAt.toISOString(),
-    authorization_expires_at: new Date(issuedAt.getTime() + SHARED_CACHE_TTL_MS).toISOString(),
-  };
 }
 
 function publicCairn(row) {
@@ -95,26 +85,10 @@ router.post('/encounters/verify', async (req, res) => {
     // asks the server to consider current friend-visible candidates without
     // disclosing any candidate identity unless encounter evidence qualifies.
     if (markerIds.length === 0) {
-      const [candidates] = await conn.execute(
-        `SELECT m.id
-           FROM markers m
-           JOIN friends f ON f.user_id = ? AND f.friend_id = m.user_id
-           JOIN marker_audience_epochs audience
-             ON audience.marker_id = m.id
-            AND audience.audience_epoch = m.audience_epoch
-            AND audience.visibility = 'group'
-            AND audience.ends_at IS NULL
-           JOIN users owner ON owner.id = m.user_id AND owner.deleted_at IS NULL
-          WHERE m.permission = 'group' AND m.status <> 'hidden'
-            AND NOT EXISTS (
-              SELECT 1 FROM blocked_users b
-               WHERE (b.blocker_id = ? AND b.blocked_id = m.user_id)
-                  OR (b.blocker_id = m.user_id AND b.blocked_id = ?)
-            )
-          ORDER BY m.updated_at DESC, m.id DESC
-          LIMIT 500`,
-        [viewerId, viewerId, viewerId],
-      );
+      // Authority, space, and source-session eligibility precede canonical
+      // JSON expansion; stable selection is bounded only after qualification.
+      const candidatePage = buildFriendDiscoveryCandidatePage(viewerId);
+      const [candidates] = await conn.execute(candidatePage.sql, candidatePage.params);
       markerIds = candidates.map(row => Number(row.id));
     }
     for (const markerId of markerIds) {
@@ -144,15 +118,15 @@ router.post('/encounters/verify', async (req, res) => {
       );
       if (blocks[0]) continue;
       const [evidenceRows] = await conn.execute(
-        `SELECT evidence.id, evidence.lat, evidence.lng, evidence.ts,
+        `SELECT DISTINCT evidence.id, evidence.lat, evidence.lng, evidence.ts,
                 evidence.evidence_source, evidence.evidence_kind,
-                evidence.source_activity_client_id
+                evidence.source_activity_client_id,evidence.source_segment_id
            FROM (
              SELECT witness.id, witness.first_lat AS lat, witness.first_lng AS lng,
                     witness.first_observed_at_ms AS ts,
                     CAST(witness.evidence_source AS CHAR CHARACTER SET utf8mb4)
                       COLLATE utf8mb4_unicode_ci AS evidence_source,
-                    witness.source_activity_client_id,
+                    witness.source_activity_client_id,witness.source_segment_id,
                     'presence_witness' AS evidence_kind
                FROM memory_presence_witnesses witness
               WHERE witness.user_id = ?
@@ -163,7 +137,7 @@ router.post('/encounters/verify', async (req, res) => {
                     witness.observed_at_ms AS ts,
                     CAST(witness.evidence_source AS CHAR CHARACTER SET utf8mb4)
                       COLLATE utf8mb4_unicode_ci AS evidence_source,
-                    witness.source_activity_client_id,
+                    witness.source_activity_client_id,witness.source_segment_id,
                     'presence_witness' AS evidence_kind
                FROM memory_presence_witnesses witness
               WHERE witness.user_id = ?
@@ -174,7 +148,7 @@ router.post('/encounters/verify', async (req, res) => {
              SELECT point.id, point.lat, point.lng, point.ts,
                     CAST(point.evidence_source AS CHAR CHARACTER SET utf8mb4)
                       COLLATE utf8mb4_unicode_ci AS evidence_source,
-                    point.source_activity_client_id,
+                    point.source_activity_client_id,point.source_segment_id,
                     'legacy_coverage' AS evidence_kind
                FROM memory_points point
               WHERE point.user_id = ?
@@ -183,23 +157,33 @@ router.post('/encounters/verify', async (req, res) => {
                 AND point.horizontal_accuracy_m IS NOT NULL
                 AND point.horizontal_accuracy_m <= ?
            ) evidence
+           LEFT JOIN sessions session
+             ON session.user_id = ?
+            AND session.client_activity_id = evidence.source_activity_client_id
+            AND session.finalized_at IS NOT NULL
+            AND session.abandoned_at IS NULL
+            AND ${eligibleSourceProvenanceSql('session.source_provenance')}
+           LEFT JOIN JSON_TABLE(
+             COALESCE(session.route_points_canonical, JSON_ARRAY()), '$[*]' COLUMNS(
+               lat DOUBLE PATH '$.lat', lng DOUBLE PATH '$.lng',
+               observed_ms BIGINT PATH '$.t', segment_id VARCHAR(80) PATH '$.segment_id'
+             )
+           ) canonical
+             ON ABS(CAST(canonical.observed_ms AS SIGNED)-CAST(evidence.ts AS SIGNED)) <= 1000
+            AND ST_Distance_Sphere(POINT(canonical.lng,canonical.lat),POINT(evidence.lng,evidence.lat)) <= 5
+            AND COALESCE(canonical.segment_id,'legacy-0') = COALESCE(evidence.source_segment_id,'legacy-0')
           WHERE ST_Distance_Sphere(POINT(evidence.lng, evidence.lat), POINT(?, ?)) <= ?
             AND FROM_UNIXTIME(evidence.ts / 1000) >= GREATEST(?, ?, ?)
             AND evidence.ts <= (UNIX_TIMESTAMP(UTC_TIMESTAMP(3)) * 1000) + 300000
-            AND (evidence.evidence_source = 'passive_real' OR EXISTS (
-              SELECT 1 FROM sessions session
-               WHERE session.user_id = ?
-                 AND session.client_activity_id = evidence.source_activity_client_id
-                 AND session.finalized_at IS NOT NULL
-                 AND session.abandoned_at IS NULL
-            ))
-          ORDER BY evidence.ts DESC, evidence.id DESC
+            AND (evidence.evidence_source = 'passive_real' OR canonical.observed_ms IS NOT NULL)
+          ORDER BY evidence.ts DESC, evidence.id DESC, evidence.evidence_kind DESC
           LIMIT 100`,
         [viewerId, MAX_HORIZONTAL_ACCURACY_M,
           viewerId, MAX_HORIZONTAL_ACCURACY_M,
           viewerId, MAX_HORIZONTAL_ACCURACY_M,
+          viewerId,
           marker.lng, marker.lat, ENCOUNTER_RADIUS_M,
-          episode.started_at, marker.created_at, marker.starts_at, viewerId],
+          episode.started_at, marker.created_at, marker.starts_at],
       );
       const evidence = selectQualifyingEncounterEvidence(evidenceRows);
       if (!evidence) continue;
@@ -236,7 +220,8 @@ router.get('/cairns', async (req, res) => {
     if (friendId !== null) params.push(friendId);
     const [rows] = await pool.execute(
       `SELECT m.id, m.user_id, m.type, m.text, m.lat, m.lng, m.alt, m.approximate,
-              m.created_at, m.updated_at, m.audience_epoch, u.name AS author_name,
+              m.created_at, m.updated_at, m.audience_epoch, m.content_revision,
+              u.name AS author_name,
               encounter.friendship_episode_id,
               encounter.created_at AS encountered_at
          FROM friend_cairn_encounters encounter
@@ -318,7 +303,8 @@ router.get('/routes', async (req, res) => {
     const [rows] = await pool.execute(
       `SELECT route.id, route.user_id, route.name, route.description, route.distance_m,
               route.elevation_gain_m, route.created_at, route.updated_at,
-              route.audience_epoch, episode.id AS friendship_episode_id, u.name AS author_name
+              route.audience_epoch, route.content_revision,
+              episode.id AS friendship_episode_id, u.name AS author_name
          FROM routes route
          JOIN friends f ON f.user_id = ? AND f.friend_id = route.user_id
          JOIN friendship_episodes episode
@@ -390,6 +376,7 @@ router.post('/routes/:id/lease', async (req, res) => {
       points,
     };
     const contentVersion = crypto.createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+    const metadata = sharedContentMetadata('route', route);
     const leaseId = crypto.randomUUID();
     const issuedAtMs = Date.now();
     const expiresAtMs = issuedAtMs + 12 * 60 * 60 * 1000;
@@ -405,7 +392,8 @@ router.post('/routes/:id/lease', async (req, res) => {
     return res.status(201).json({
       lease_id: leaseId,
       content_version: contentVersion,
-      authorization_revision: `friendship:${route.friendship_episode_id}:audience:${route.audience_epoch}`,
+      resource_revision: metadata.resource_revision,
+      authorization_revision: metadata.authorization_revision,
       issued_at: new Date(issuedAtMs).toISOString(),
       expires_at: new Date(expiresAtMs).toISOString(),
       expires_in_seconds: 12 * 60 * 60,

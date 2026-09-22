@@ -75,6 +75,8 @@ CREATE TABLE markers (
   origin_session_id BIGINT UNSIGNED NULL,
   type VARCHAR(20) NOT NULL DEFAULT 'free',
   text VARCHAR(250) DEFAULT '',
+  voice_memo_url VARCHAR(512) NULL DEFAULT NULL,
+  voice_memo_duration_ms SMALLINT UNSIGNED NULL DEFAULT NULL,
   lat DOUBLE NOT NULL,
   lng DOUBLE NOT NULL,
   alt DOUBLE NULL,
@@ -191,20 +193,161 @@ CREATE TABLE idempotency_keys (
 
 CREATE TABLE telemetry_sessions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  owner_user_id BIGINT UNSIGNED NULL,
   session_id VARCHAR(64) UNIQUE NOT NULL,
-  uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_telemetry_owner (owner_user_id, uploaded_at),
+  CONSTRAINT fk_telemetry_owner FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE regions (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  parent_id VARCHAR(64) NULL,
+  name_en VARCHAR(160) NOT NULL,
+  level TINYINT NOT NULL,
+  bbox_min_lng DOUBLE NOT NULL,
+  bbox_min_lat DOUBLE NOT NULL,
+  bbox_max_lng DOUBLE NOT NULL,
+  bbox_max_lat DOUBLE NOT NULL,
+  geom GEOMETRY NOT NULL SRID 4326,
+  source VARCHAR(40) NULL,
+  INDEX idx_parent (parent_id),
+  INDEX idx_level (level),
+  SPATIAL INDEX idx_geom (geom)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE unlocked_regions (
   user_id BIGINT UNSIGNED NOT NULL,
-  region_id VARCHAR(191) NOT NULL,
-  unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY(user_id,region_id)
+  region_id VARCHAR(64) NOT NULL,
+  region_level TINYINT NOT NULL,
+  parent_id VARCHAR(64) NULL,
+  first_unlocked_at BIGINT NOT NULL,
+  last_visit_ts BIGINT NOT NULL,
+  point_count INT UNSIGNED NOT NULL DEFAULT 0,
+  regions_version SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+  PRIMARY KEY(user_id,region_id),
+  INDEX idx_user_level (user_id,region_level),
+  INDEX idx_user_parent (user_id,parent_id),
+  CONSTRAINT fk_unlocked_regions_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Startup compatibility sentinels; test-unneeded workers stay disabled.
-CREATE TABLE pending_registrations (email VARCHAR(255) PRIMARY KEY, date_of_birth DATE NULL);
-CREATE TABLE password_reset_codes (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);
-CREATE TABLE device_tokens (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id BIGINT UNSIGNED NULL);
-CREATE TABLE notification_log (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, recipient_user_id BIGINT UNSIGNED NULL, actor_user_id BIGINT UNSIGNED NULL);
-CREATE TABLE user_push_prefs (user_id BIGINT UNSIGNED PRIMARY KEY);
-CREATE TABLE data_exports (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id BIGINT UNSIGNED NULL);
+-- Current ancillary account/push/export contract. These tables are exercised
+-- by the API harness (account feedback/export/deletion) and must not be
+-- reduced to startup-only sentinels: doing so masks schema drift in the
+-- isolated MySQL proof.
+CREATE TABLE pending_registrations (
+  email VARCHAR(255) PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  date_of_birth DATE NULL,
+  code CHAR(6) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  attempts TINYINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE password_reset_codes (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(255) NOT NULL,
+  code CHAR(6) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  attempts TINYINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_reset_email_code (email, code),
+  INDEX idx_reset_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE password_reset_email_events (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  request_id CHAR(36) NOT NULL,
+  user_id BIGINT UNSIGNED NULL,
+  event_type VARCHAR(32) NOT NULL,
+  provider VARCHAR(32) NOT NULL DEFAULT 'resend',
+  provider_message_id VARCHAR(255) NULL,
+  send_status VARCHAR(32) NOT NULL,
+  error_code VARCHAR(64) NULL,
+  error_summary VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_reset_email_event_request (request_id, created_at),
+  INDEX idx_reset_email_event_user (user_id, created_at),
+  CONSTRAINT fk_reset_email_event_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE device_tokens (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  token VARCHAR(255) NOT NULL,
+  platform ENUM('ios','android','web') NOT NULL,
+  pref_friend_requests TINYINT(1) NOT NULL DEFAULT 1,
+  pref_marker_replies TINYINT(1) NOT NULL DEFAULT 1,
+  pref_memory_hits TINYINT(1) NOT NULL DEFAULT 1,
+  pref_announcements TINYINT(1) NOT NULL DEFAULT 1,
+  registered_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_user_token (user_id, token),
+  INDEX idx_device_user (user_id),
+  INDEX idx_last_seen (last_seen_at),
+  CONSTRAINT fk_device_tokens_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE notification_log (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  recipient_user_id BIGINT UNSIGNED NOT NULL,
+  actor_user_id BIGINT UNSIGNED NULL,
+  kind VARCHAR(40) NOT NULL,
+  related_id BIGINT UNSIGNED NULL,
+  title VARCHAR(120) NOT NULL,
+  body VARCHAR(400) NULL,
+  status VARCHAR(24) NOT NULL DEFAULT 'queued',
+  error_msg VARCHAR(200) NULL,
+  dedupe_key VARCHAR(120) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  sent_at TIMESTAMP NULL,
+  UNIQUE KEY uniq_dedupe (recipient_user_id, dedupe_key),
+  INDEX idx_recipient (recipient_user_id, created_at),
+  INDEX idx_kind (kind, created_at),
+  CONSTRAINT fk_notif_recipient FOREIGN KEY(recipient_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_notif_actor FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE user_push_prefs (
+  user_id BIGINT UNSIGNED PRIMARY KEY,
+  pref_friend_requests TINYINT(1) NOT NULL DEFAULT 1,
+  pref_marker_replies TINYINT(1) NOT NULL DEFAULT 1,
+  pref_memory_hits TINYINT(1) NOT NULL DEFAULT 1,
+  pref_announcements TINYINT(1) NOT NULL DEFAULT 1,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_prefs_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE data_exports (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'queued',
+  file_path VARCHAR(500) NULL,
+  download_token VARCHAR(64) NULL,
+  size_bytes BIGINT NULL,
+  requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  built_at TIMESTAMP NULL,
+  sent_at TIMESTAMP NULL,
+  expires_at TIMESTAMP NULL,
+  error_msg VARCHAR(300) NULL,
+  UNIQUE KEY uniq_token (download_token),
+  INDEX idx_user_status (user_id, status),
+  INDEX idx_expires (expires_at),
+  CONSTRAINT fk_data_exports_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE feedback_messages (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  client_submission_id CHAR(36) NOT NULL,
+  kind ENUM('feedback','bug') NOT NULL,
+  message TEXT NOT NULL,
+  app_version VARCHAR(32) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_feedback_user_submission (user_id, client_submission_id),
+  INDEX idx_feedback_user_created (user_id, created_at),
+  CONSTRAINT fk_feedback_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

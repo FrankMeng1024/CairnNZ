@@ -266,6 +266,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     name,
     route_points,
     route_points_raw,
+    route_points_canonical,
     memory_points,
   } = req.body;
 
@@ -305,6 +306,21 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
           typeof p.t !== 'number' || !isFinite(p.t) || p.t <= 0) {
         return res.status(400).json({ error: `route_points_raw[${i}] invalid: expect {lat, lng, t, ...}` });
       }
+    }
+  }
+  if (!Array.isArray(route_points_canonical) || route_points_canonical.length < 2) {
+    return res.status(400).json({ error: 'route_points_canonical must contain at least two accepted points.' });
+  }
+  for (let i = 0; i < route_points_canonical.length; i++) {
+    const p = route_points_canonical[i];
+    if (!p || typeof p !== 'object' ||
+        typeof p.lat !== 'number' || !isFinite(p.lat) || p.lat < -90 || p.lat > 90 ||
+        typeof p.lng !== 'number' || !isFinite(p.lng) || p.lng < -180 || p.lng > 180 ||
+        typeof p.t !== 'number' || !isFinite(p.t) || p.t <= 0 ||
+        typeof p.segment_id !== 'string' || p.segment_id.length < 1 || p.segment_id.length > 80) {
+      return res.status(400).json({
+        error: `route_points_canonical[${i}] invalid: expect {lat, lng, t, segment_id}`,
+      });
     }
   }
   // memory_points: schema 已限 max(1000) + allow(null),此处不再重复检查。
@@ -384,7 +400,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     await conn.execute(
       `UPDATE sessions SET
          end_time=?, distance_m=?, duration_s=?, name=?,
-         route_points=?, route_points_raw=?, finalized_at=?
+         route_points=?, route_points_raw=?, route_points_canonical=?, finalized_at=?
        WHERE id=? AND user_id=?`,
       [
         new Date(end_time),
@@ -395,6 +411,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
         route_points_raw && route_points_raw.length > 0
           ? JSON.stringify(route_points_raw)
           : null,
+        JSON.stringify(route_points_canonical),
         finalizedAtDate,
         id,
         userId,
@@ -427,6 +444,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
         validRows.push([
           userId, p.lat, p.lng, p.ts, cid, 'activity_real',
           rows[0].client_activity_id ?? client_activity_id ?? null,
+          typeof p.source_segment_id === 'string' ? p.source_segment_id.slice(0, 80) : null,
           Number.isFinite(p.horizontal_accuracy_m) ? p.horizontal_accuracy_m : null,
           p.continuity_state === 'gap' ? 'gap' : 'accepted',
         ]);
@@ -437,11 +455,12 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
         await conn.query(
           `INSERT INTO memory_points
              (user_id, lat, lng, ts, client_id, evidence_source,
-              source_activity_client_id, horizontal_accuracy_m, continuity_state)
+              source_activity_client_id, source_segment_id, horizontal_accuracy_m, continuity_state)
            VALUES ?
            ON DUPLICATE KEY UPDATE
              evidence_source='activity_real',
              source_activity_client_id=COALESCE(VALUES(source_activity_client_id), source_activity_client_id),
+             source_segment_id=COALESCE(VALUES(source_segment_id), source_segment_id),
              horizontal_accuracy_m=COALESCE(VALUES(horizontal_accuracy_m), horizontal_accuracy_m),
              continuity_state=VALUES(continuity_state)`,
           [slice],

@@ -1,0 +1,122 @@
+{
+  "schema": "cairnnz.revision03.memory-scale.v1",
+  "generatedAt": "2026-09-20T02:38:35.242Z",
+  "environment": {
+    "machine": "darwin x64 Intel(R) Core(TM) i5-5350U CPU @ 1.80GHz",
+    "node": "v24.11.1",
+    "renderer": "actual FogLayer Turf helpers; no Mapbox paint"
+  },
+  "budgetsFrozenBeforeRun": {
+    "maxSynchronousGeometrySliceMs": 150,
+    "scheduledActionAcknowledgementMs": 100,
+    "incrementalGeometryUpdateMs": 350,
+    "maxEventLoopSchedulingDelayMs": 150,
+    "coldLoad2001Ms": 45000,
+    "diagnostic10000Ms": 150000,
+    "combinedFriend2000Ms": 60000,
+    "cacheSynchronousSliceMs": 150,
+    "sampledUnsupportedRevealCount": 0
+  },
+  "candidateFingerprint": "34f89ebbd8191c217daa66e0bdb3fd41f8c53f8e49db031e77f8cbe332f7f576",
+  "cases": [
+    {
+      "id": "DISTINCT-10000-DIAGNOSTIC",
+      "rawFixes": 10000,
+      "acceptedCanonicalPoints": 10000,
+      "spatiallyUniqueCoverageFootprints": 10000,
+      "temporalWitnesses": 0,
+      "totalMs": 74991.58012700001,
+      "sliceCount": 13371,
+      "renderPreparationMs": 115.69289800000115,
+      "composeFogShapeMs": 12.794724000006681,
+      "sliceMs": {
+        "p50": 3,
+        "p95": 9,
+        "max": 107
+      },
+      "slowestSlices": [
+        {
+          "phase": "sort_tiles",
+          "durationMs": 107,
+          "itemCount": 1890
+        },
+        {
+          "phase": "select_points",
+          "durationMs": 25,
+          "itemCount": 10000
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 21,
+          "tileKey": "174779|-41282",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 18,
+          "tileKey": "174775|-41198",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 15,
+          "tileKey": "174781|-41257",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 14,
+          "tileKey": "174777|-41218",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 14,
+          "tileKey": "174786|-41220",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 14,
+          "tileKey": "174788|-41198",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 14,
+          "tileKey": "174792|-41271",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 13,
+          "tileKey": "174780|-41229",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 13,
+          "tileKey": "174780|-41232",
+          "itemCount": 1
+        },
+        {
+          "phase": "tile_geometry",
+          "durationMs": 13,
+          "tileKey": "174785|-41207",
+          "itemCount": 1
+        }
+      ],
+      "eventLoopSchedulingDelayMs": {
+        "p95": 10.892025999994075,
+        "max": 108.17265100000077
+      },
+      "retainedSampleLoss": 0,
+      "displayedGeometry": {
+        "components": 3420,
+        "holes": 0,
+        "vertices": 69300
+      },
+      "claimBoundary": "diagnostic maximum tested; not an unlimited-support claim"
+    }
+  ]
+}

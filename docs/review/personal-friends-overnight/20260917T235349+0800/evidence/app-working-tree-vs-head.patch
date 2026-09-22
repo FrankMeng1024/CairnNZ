@@ -1,0 +1,2816 @@
+diff --git a/app/__tests__/useTrackingStore.test.ts b/app/__tests__/useTrackingStore.test.ts
+index 01e9486..ccb8ae0 100644
+--- a/app/__tests__/useTrackingStore.test.ts
++++ b/app/__tests__/useTrackingStore.test.ts
+@@ -296,7 +296,7 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
+     expect(state.distanceM).toBeLessThan(40);
+     const memoryCalls = require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence.mock.calls
+       .map((call: any[]) => call[0])
+-      .filter((item: any) => item.source === 'activity');
++      .filter((item: any) => item.source === 'activity_real');
+     expect(memoryCalls.slice(-fixes.length).map((item: any) => item.lat)).toEqual(fixes.map(item => item.lat));
+   });
+ 
+@@ -482,14 +482,14 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
+     seedSimulatorActivity();
+   });
+ 
+-  it('journals an accepted Simulator sample and commits Memory through normal authorities', async () => {
++  it('journals an accepted Simulator sample into the isolated QA Memory realm', async () => {
+     const decision = await useTrackingStore.getState().addTrackPoint(sample(), 1_000);
+     expect(decision).toMatchObject({ accepted: true, reason: 'accepted', memoryCommitted: true });
+     expect(require('../src/services/hikeTrackWriter').appendHikePoint).toHaveBeenCalledWith(
+       expect.objectContaining({ src: 'sim', clientActivityId: 'simulator-activity' }),
+     );
+     expect(require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence).toHaveBeenCalledWith(
+-      expect.objectContaining({ source: 'activity', ownerUserId: 'tracking-test-user' }),
++      expect.objectContaining({ source: 'simulator_test', ownerUserId: 'tracking-test-user' }),
+     );
+   });
+ 
+@@ -739,7 +739,7 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
+     }
+     const activityEvidenceTimes = recordMemoryEvidence.mock.calls
+       .map((call: any[]) => call[0])
+-      .filter((args: any) => args.source === 'activity')
++      .filter((args: any) => args.source === 'simulator_test')
+       .map((args: any) => args.atMs);
+     expect(activityEvidenceTimes).toEqual([...activityEvidenceTimes].sort((a, b) => a - b));
+     expect(new Set(activityEvidenceTimes).size).toBe(activityEvidenceTimes.length);
+diff --git a/app/src/components/OtaBadge.tsx b/app/src/components/OtaBadge.tsx
+index 3af3707..e493d30 100644
+--- a/app/src/components/OtaBadge.tsx
++++ b/app/src/components/OtaBadge.tsx
+@@ -350,7 +350,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
+ // All Cairns retrieval, durable words/delete truth, and stable identity.
+ // O59 (2026-09-17): authoritative Own Route Detail, truthful existing-draft
+ // editing, durable Activity origin, and explicit Hike/Run pre-start handoff.
+-export const OTA_VERSION = 'O59';
++export const OTA_VERSION = 'O60';
+ 
+ 
+ type OtaState =
+diff --git a/app/src/features/activity/__tests__/activityRecoveryMemory.test.ts b/app/src/features/activity/__tests__/activityRecoveryMemory.test.ts
+index f6eb337..f05e2a8 100644
+--- a/app/src/features/activity/__tests__/activityRecoveryMemory.test.ts
++++ b/app/src/features/activity/__tests__/activityRecoveryMemory.test.ts
+@@ -3,6 +3,10 @@ const mockOrder: string[] = [];
+ jest.mock('../../../store/useTrackingStore', () => ({
+   useTrackingStore: { setState: jest.fn(), getState: jest.fn() },
+ }));
++const mockRouteSetState = jest.fn();
++jest.mock('../../../store/useRouteStore', () => ({
++  useRouteStore: { setState: mockRouteSetState },
++}));
+ jest.mock('../../../services/hikeTrackWriter', () => ({
+   discardActiveHike: jest.fn(async () => { mockOrder.push('journal-delete'); }),
+   listActiveHikes: jest.fn(async () => []),
+@@ -83,9 +87,10 @@ describe('Activity journal as crash-recoverable Memory intent', () => {
+       lng: 174,
+       atMs: 1_000,
+       ownerUserId: 'account-a',
+-      source: 'reconciliation',
++      source: 'activity_real',
+     }));
+     expect(mockOrder).toEqual(['fence', 'memory', 'memory-flush', 'tombstone', 'pending-delete', 'journal-delete']);
++    expect(mockRouteSetState).toHaveBeenCalledWith({ activityRouteReference: null });
+   });
+ 
+   test('Memory persistence failure preserves the recoverable Activity journal', async () => {
+diff --git a/app/src/features/activity/__tests__/activityRegistry.test.ts b/app/src/features/activity/__tests__/activityRegistry.test.ts
+index 312a032..a1d704a 100644
+--- a/app/src/features/activity/__tests__/activityRegistry.test.ts
++++ b/app/src/features/activity/__tests__/activityRegistry.test.ts
+@@ -77,6 +77,38 @@ describe('bounded durable Activity registry', () => {
+     expect(registry.completed[0]).toMatchObject({ clientActivityId: id, syncState: 'pending' });
+   });
+ 
++  test('borrowed Route geometry survives unfinished recovery and is dropped at completion', async () => {
++    const id = '43434343-4343-4343-8343-434343434343';
++    await registerUnfinishedActivity({
++      ...unfinished('user-borrowed-route', id),
++      borrowedRouteReference: {
++        routeId: 'friend:route-7:lease-9',
++        name: 'Shared ridge line',
++        points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
++        distanceM: 140,
++        elevationGainM: 8,
++        capturedAt: 123,
++      },
++    });
++    expect((await getUnfinishedActivity('user-borrowed-route'))?.borrowedRouteReference).toMatchObject({
++      routeId: 'friend:route-7:lease-9',
++      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
++    });
++
++    await completeActivity({
++      clientActivityId: id,
++      serverActivityId: null,
++      userId: 'user-borrowed-route',
++      activityMode: 'hiking',
++      startedAt: 100,
++      endedAt: 200,
++      lifecycle: 'completed_local',
++      syncState: 'pending',
++    });
++    expect(await getUnfinishedActivity('user-borrowed-route')).toBeNull();
++    expect(JSON.stringify(await getActivityRegistry('user-borrowed-route'))).not.toContain('Shared ridge line');
++  });
++
+   test('late Start acknowledgement maps a completed-local Activity without marking it synced', async () => {
+     const id = '45454545-4545-4545-8545-454545454545';
+     await completeActivity({
+diff --git a/app/src/features/activity/__tests__/freeActivityIntegrationContracts.test.ts b/app/src/features/activity/__tests__/freeActivityIntegrationContracts.test.ts
+index b768569..f9e24ad 100644
+--- a/app/src/features/activity/__tests__/freeActivityIntegrationContracts.test.ts
++++ b/app/src/features/activity/__tests__/freeActivityIntegrationContracts.test.ts
+@@ -53,6 +53,17 @@ describe('Free Activity integration contracts', () => {
+     expect(modal).toContain('disabled={data.saveEligible === false}');
+   });
+ 
++  test('borrowed friend Route geometry is durable only for unfinished Activity recovery', () => {
++    const store = read('src/store/useTrackingStore.ts');
++    const registry = read('src/features/activity/activityRegistry.ts');
++    const recovery = read('src/features/activity/activityRecovery.ts');
++    expect(store).toContain('borrowedRouteReference: captureBorrowedRouteForRecovery()');
++    expect(registry).toContain('borrowedRouteReference?: ActivityRouteReference');
++    expect(recovery).toContain('publishRecoveredBorrowedRoute(activity.borrowedRouteReference)');
++    expect(recovery).toContain('publishRecoveredBorrowedRoute();');
++    expect(store.match(/clearActivityRouteReferenceAfterTerminal\(\)/g)?.length).toBeGreaterThanOrEqual(4);
++  });
++
+   test('a failed durable completion remains paused and explains that Save did not complete', () => {
+     const source = read('src/store/useTrackingStore.ts');
+     const failure = source.slice(
+@@ -267,7 +278,7 @@ describe('Free Activity integration contracts', () => {
+     expect(source).toContain('const sourceSegments = canonicalSegments');
+     expect(source).toContain('const snapRes = await reconstructPedestrianFinalRoute(canonicalInput');
+     expect(source).toContain('for (const point of s.trackPoints)');
+-    expect(source).toContain("source: 'activity'");
++    expect(source).toContain("'simulator_test' : 'activity_real'");
+     expect(source).not.toContain('for (const point of finalDisplayTrackPoints)');
+   });
+ 
+diff --git a/app/src/features/activity/activityRecovery.ts b/app/src/features/activity/activityRecovery.ts
+index 5ff9b7b..fcbec86 100644
+--- a/app/src/features/activity/activityRecovery.ts
++++ b/app/src/features/activity/activityRecovery.ts
+@@ -32,6 +32,7 @@ import type { ActivityLocationSource } from '../activitySimulator/types';
+ import { activityFreshnessNow, activityTimestampForSource } from '../activitySimulator/simulatorTime';
+ import { endSimulatorProvider } from '../activitySimulator/activityLocationProvider';
+ import { appendSimulatorLog } from '../activitySimulator/simulatorLog';
++import type { ActivityRouteReference } from '../route/routeContracts';
+ 
+ export interface RecoverableActivity {
+   sessionId: string;
+@@ -47,6 +48,22 @@ export interface RecoverableActivity {
+   saveEligible: boolean;
+   lastPointAt: number;
+   locationProviderSource?: ActivityLocationSource;
++  borrowedRouteReference?: ActivityRouteReference;
++}
++
++function publishRecoveredBorrowedRoute(reference?: ActivityRouteReference): void {
++  try {
++    // Lazy import avoids making Route-store initialization part of the
++    // headless Activity recovery discovery path.
++    // eslint-disable-next-line @typescript-eslint/no-require-imports
++    const { useRouteStore } = require('../../store/useRouteStore');
++    useRouteStore.setState({
++      activityRouteReference: reference ? {
++        ...reference,
++        points: reference.points.map(point => ({ ...point })),
++      } : null,
++    });
++  } catch { /* Route presentation is unavailable in this runtime. */ }
+ }
+ 
+ /** One-time bounded migration from the former file-only discovery model. */
+@@ -158,6 +175,9 @@ export async function findRecoverableActivity(
+       saveEligible: eligibility.eligible,
+       lastPointAt,
+       locationProviderSource,
++      borrowedRouteReference: registered?.clientActivityId === exactId
++        ? registered.borrowedRouteReference
++        : undefined,
+     };
+   }
+   // Registry commit precedes native source activation. If the process died in
+@@ -186,6 +206,7 @@ export async function findRecoverableActivity(
+       saveEligible: false,
+       lastPointAt: registered.lastMeaningfulAt,
+       locationProviderSource: registered.locationProviderSource ?? 'real',
++      borrowedRouteReference: registered.borrowedRouteReference,
+     };
+   }
+   return null;
+@@ -209,6 +230,7 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
+   const newOwnerGeneration = newSegmentId(`${activity.sessionId}-owner`);
+   const recoverySegmentId = newSegmentId(activity.sessionId);
+   const locationProviderSource = activity.locationProviderSource ?? 'real';
++  publishRecoveredBorrowedRoute(activity.borrowedRouteReference);
+   useTrackingStore.setState({
+     sessionId: activity.sessionId,
+     ownerUserId: activity.userId,
+@@ -274,9 +296,12 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
+       lat: point.lat,
+       lng: point.lng,
+       atMs: point.t,
+-      source: 'reconciliation',
++      source: locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
+       ownerUserId: activity.userId,
+       durability: 'deferred',
++      sourceActivityClientId: activity.clientActivityId,
++      horizontalAccuracyM: point.accuracy ?? undefined,
++      continuityState: 'accepted',
+     });
+   }
+   if (points.length > 0) await flushRecordedMemoryEvidence();
+@@ -325,9 +350,12 @@ export async function discardRecoverableActivity(activity: RecoverableActivity):
+       lat: point.lat,
+       lng: point.lng,
+       atMs: point.t,
+-      source: 'reconciliation',
++      source: activity.locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
+       ownerUserId: activity.userId,
+       durability: 'deferred',
++      sourceActivityClientId: activity.clientActivityId,
++      horizontalAccuracyM: point.accuracy ?? undefined,
++      continuityState: 'accepted',
+     });
+   }
+   if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
+@@ -336,6 +364,7 @@ export async function discardRecoverableActivity(activity: RecoverableActivity):
+     clientActivityId: activity.clientActivityId,
+     serverActivityId: activity.remoteId,
+   });
++  publishRecoveredBorrowedRoute();
+   await removePending(activity.clientActivityId, activity.userId);
+   await discardActiveHike(activity.sessionId);
+   // Install the server-side business tombstone even when a numeric shell is
+diff --git a/app/src/features/activity/activityRegistry.ts b/app/src/features/activity/activityRegistry.ts
+index 55808cc..ae4214e 100644
+--- a/app/src/features/activity/activityRegistry.ts
++++ b/app/src/features/activity/activityRegistry.ts
+@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
+ import type { ActivityMode } from '../../store/useSessionStore';
+ import type { SegmentStartReason } from './activityContracts';
+ import type { ActivityLocationSource } from '../activitySimulator/types';
++import type { ActivityRouteReference } from '../route/routeContracts';
+ 
+ export type ActivityLifecycle = 'unfinished' | 'completed_local' | 'discarded';
+ export type ActivitySyncState = 'pending' | 'syncing' | 'sync_error' | 'synced';
+@@ -22,6 +23,12 @@ export interface UnfinishedActivityRecord {
+   nextSegmentStartReason?: SegmentStartReason;
+   /** Local diagnostic/recovery metadata; never changes server Activity shape. */
+   locationProviderSource?: ActivityLocationSource;
++  /**
++   * Immutable geometry from a previously authorized friend Route. This is
++   * retained only while this Activity is unfinished so process recovery does
++   * not erase the hiker's sole safety reference mid-outing.
++   */
++  borrowedRouteReference?: ActivityRouteReference;
+   lifecycle: 'unfinished';
+ }
+ 
+diff --git a/app/src/features/activitySimulator/__tests__/simulatorContracts.test.ts b/app/src/features/activitySimulator/__tests__/simulatorContracts.test.ts
+index f8fcc8d..b4ff9c3 100644
+--- a/app/src/features/activitySimulator/__tests__/simulatorContracts.test.ts
++++ b/app/src/features/activitySimulator/__tests__/simulatorContracts.test.ts
+@@ -152,8 +152,9 @@ describe('Activity Simulator integration and safety contracts', () => {
+     const passive = read('src/features/memory/components/PassiveMemoryRecorder.tsx');
+     expect(markers.indexOf('await offlineMarkers.saveLocal')).toBeLessThan(markers.indexOf("appendSimulatorLog('CAIRN_COMMIT'"));
+     expect(markers).toContain('originActivityClientId: activeActivityClientId');
+-    expect(tracking).toContain("source: 'activity'");
+-    expect(passive).toContain("source: 'passive'");
++    expect(tracking).toContain("'simulator_test' : 'activity_real'");
++    expect(passive).toContain("source: 'simulator_test'");
++    expect(passive).toContain("source: 'passive_real'");
+     expect(passive).toContain("status !== 'idle'");
+     expect(passive).toContain('MAX_ACCEPTABLE_HORIZONTAL_ACCURACY_M');
+   });
+diff --git a/app/src/features/cairns/__tests__/cairnPersonalContracts.test.ts b/app/src/features/cairns/__tests__/cairnPersonalContracts.test.ts
+index 42a6b78..c7d81de 100644
+--- a/app/src/features/cairns/__tests__/cairnPersonalContracts.test.ts
++++ b/app/src/features/cairns/__tests__/cairnPersonalContracts.test.ts
+@@ -47,7 +47,9 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
+ 
+   test('Detail edits only supported content and preserves drafts on failure or close', () => {
+     expect(detail).toContain('showTypePicker={false}');
+-    expect(detail).toContain('showVisibilityPicker={false}');
++    expect(detail).toContain('showVisibilityPicker');
++    expect(detail).toContain('disableVisibilityPublic');
++    expect(detail).toContain('permission: editPermission');
+     expect(detail).toContain('Your draft is still here so you can try again.');
+     expect(detail).toContain('Discard changes?');
+     expect(detail).toContain('disabled={!editDirty}');
+diff --git a/app/src/features/marks/components/MarkForm.tsx b/app/src/features/marks/components/MarkForm.tsx
+index 96fddd1..274e979 100644
+--- a/app/src/features/marks/components/MarkForm.tsx
++++ b/app/src/features/marks/components/MarkForm.tsx
+@@ -35,7 +35,7 @@ export interface MarkFormProps {
+ 
+   // Mode & config
+   mode: 'create' | 'edit';
+-  /** When true the Anyone chip is rendered but disabled (v1: public hidden). */
++  /** When true the deferred public option is omitted from the v1 author UI. */
+   disableVisibilityPublic?: boolean;
+   /** Edit mode = true; create mode = false. */
+   showLocationLockedNotice?: boolean;
+@@ -193,28 +193,32 @@ export function MarkForm(props: MarkFormProps) {
+       <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Who can see this</Text>
+       <View style={styles.visRow}>
+         <VisChip
+-          label="Just me"
++          label="Only me"
+           iconName="Lock"
+           active={visibility === 'personal'}
+           activeTone="neutral"
+           onPress={() => { haptic.selection(); onVisibilityChange('personal'); }}
+         />
+         <VisChip
+-          label="Friends"
++          label="Friends can discover"
+           iconName="Users"
+           active={visibility === 'group'}
+           activeTone="primary"
+           onPress={() => { haptic.selection(); onVisibilityChange('group'); }}
+         />
+-        <VisChip
+-          label="Anyone"
+-          iconName="Globe"
+-          active={visibility === 'public'}
+-          activeTone="info"
+-          disabled={disableVisibilityPublic}
+-          onPress={() => { haptic.selection(); onVisibilityChange('public'); }}
+-        />
++        {!disableVisibilityPublic ? (
++          <VisChip
++            label="Anyone"
++            iconName="Globe"
++            active={visibility === 'public'}
++            activeTone="info"
++            onPress={() => { haptic.selection(); onVisibilityChange('public'); }}
++          />
++        ) : null}
+       </View>
++      {visibility === 'group' ? (
++        <Text style={[styles.visibilityHelp, { color: theme.foregroundSecondary }]}>Friends can discover this when they pass nearby. No notification is sent.</Text>
++      ) : null}
+       </> : null}
+ 
+       {/* LOCATION LOCKED — edit mode only. */}
+@@ -347,6 +351,11 @@ const styles = StyleSheet.create({
+     flexDirection: 'row',
+     gap: Spacing.sm,
+   },
++  visibilityHelp: {
++    marginTop: Spacing.sm,
++    fontSize: FontSize.caption,
++    lineHeight: 18,
++  },
+   visChip: {
+     flex: 1,
+     flexDirection: 'row',
+diff --git a/app/src/features/memory/__tests__/memoryAuthorityInitialization.test.ts b/app/src/features/memory/__tests__/memoryAuthorityInitialization.test.ts
+index 158c111..32a8710 100644
+--- a/app/src/features/memory/__tests__/memoryAuthorityInitialization.test.ts
++++ b/app/src/features/memory/__tests__/memoryAuthorityInitialization.test.ts
+@@ -31,7 +31,7 @@ describe('shared Memory authority initialization', () => {
+ 
+   test('an authoritative empty Memory snapshot invalidates cached fog geometry', () => {
+     const fogLayer = read('src/features/memory/components/FogLayer.tsx');
+-    const emptyBranchStart = fogLayer.lastIndexOf('if (points.length === 0)');
++    const emptyBranchStart = fogLayer.lastIndexOf('if (points.length === 0 && friendCells.length === 0)');
+     const emptyBranch = fogLayer.slice(
+       emptyBranchStart,
+       fogLayer.indexOf('// v356: content-hash short-circuit', emptyBranchStart),
+diff --git a/app/src/features/memory/__tests__/memoryDurabilityBoundary.test.ts b/app/src/features/memory/__tests__/memoryDurabilityBoundary.test.ts
+index 0d355de..294c4dd 100644
+--- a/app/src/features/memory/__tests__/memoryDurabilityBoundary.test.ts
++++ b/app/src/features/memory/__tests__/memoryDurabilityBoundary.test.ts
+@@ -30,7 +30,7 @@ describe('Memory durable ownership boundary', () => {
+     }));
+ 
+     const { recordMemoryEvidence } = require('../services/recordMemoryEvidence');
+-    const commit = recordMemoryEvidence({ lat: -41, lng: 174, atMs: 1_000, source: 'activity' });
++    const commit = recordMemoryEvidence({ lat: -41, lng: 174, atMs: 1_000, source: 'activity_real' });
+     for (let tick = 0; tick < 10 && ensureMemoryPersistenceForUser.mock.calls.length === 0; tick += 1) {
+       await Promise.resolve();
+     }
+diff --git a/app/src/features/memory/components/CairnPinsLayer.tsx b/app/src/features/memory/components/CairnPinsLayer.tsx
+index 38ad470..bcac337 100644
+--- a/app/src/features/memory/components/CairnPinsLayer.tsx
++++ b/app/src/features/memory/components/CairnPinsLayer.tsx
+@@ -31,8 +31,6 @@ import React, { useMemo, useState, useCallback } from 'react';
+ import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+ import { getMapbox } from '../services/mapboxAdapter';
+ import { useMemoryStore } from '../store/useMemoryStore';
+-import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
+-import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
+ import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
+ import { useMarkerStore, Marker, type MarkerPermission } from '../../../store/useMarkerStore';
+ import { useFriendStore } from '../../../store/useFriendStore';
+@@ -111,30 +109,6 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
+     [likedSetForSheet, likedIds],
+   );
+ 
+-  // v413: friend memory union — 勾选 friend 后, friend 走过的地方也应视为 explored
+-  // (marker "?" 会变成真实内容). 反勾即时回缩.
+-  // v413 (4-eye fix E2): union 只在 Friends tab 生效, Mine tab 保 self-only.
+-  const scope = useMemoryScopeStore((s) => s.scope);
+-  const friendMemoryVersion = useFriendMemoryStore((s) => s.version);
+-  const friendPointsExploredCheck = useMemo(() => {
+-    if (scope !== 'friends') return (_lat: number, _lng: number) => false;
+-    const fpts = useFriendMemoryStore.getState().getEnabledFriendPoints();
+-    // R114 (2026-08-07): friend memory unlock radius kept in sync with
+-    // UnlockConfig.radiusMeters (memoryConfig.ts) — 25m → 30m per user
+-    // report that walking around a large building leaves a black stripe.
+-    const R2 = 30 * 30;
+-    return (lat: number, lng: number): boolean => {
+-      // 简单线性扫描 (friend points 数量通常 < 1000)
+-      for (const p of fpts) {
+-        const dLat = (p.lat - lat) * 111000;
+-        const dLng = (p.lng - lng) * 111000 * Math.cos(lat * Math.PI / 180);
+-        if (dLat * dLat + dLng * dLng <= R2) return true;
+-      }
+-      return false;
+-    };
+-    // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [friendMemoryVersion, scope]);
+-
+   const classified = useMemo<Classified[]>(
+     () => markers.map((m) => {
+       const isOwn = ownIds.has(m.id);
+@@ -146,8 +120,10 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
+         // FogLayer 单点 buffer 25m). 现在 owner 无条件视为 explored 是正确的产品语义:
+         // "?" = "未知内容, 去探索" 只对 friend/public 观察者有意义, owner 知道自己 marker
+         // 里放了什么. 也顺带覆盖 memorySync.replacePoints([]) reconcile 场景 (defense in depth).
+-        // v413: friend memory union — 非 owner marker 也可能因为勾选的 friend 走过而被 explored.
+-        isExplored: isOwn ? true : (isExplored(m.lat, m.lng) || friendPointsExploredCheck(m.lat, m.lng)),
++        // Non-owner Cairns only enter this collection through the server's
++        // current, friend-only Encounter authorization. Shared Memory cells
++        // are deliberately not consulted here.
++        isExplored: isOwn ? true : resolveTier(m, ownIds) === 'friend' ? true : isExplored(m.lat, m.lng),
+         distanceM: haversineM(
+           { lat: centerLat, lng: centerLng },
+           { lat: m.lat, lng: m.lng }
+@@ -155,7 +131,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
+       };
+     }),
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-    [markers, centerLat, centerLng, geometryVersion, ownIds, friendMemoryVersion]
++    [markers, centerLat, centerLng, geometryVersion, ownIds]
+   );
+ 
+   const visible = useMemo(
+diff --git a/app/src/features/memory/components/FogLayer.tsx b/app/src/features/memory/components/FogLayer.tsx
+index 86758be..913d58d 100644
+--- a/app/src/features/memory/components/FogLayer.tsx
++++ b/app/src/features/memory/components/FogLayer.tsx
+@@ -85,6 +85,7 @@ export function smoothMemoryDisplayEvidence(
+  */
+ export function buildFogShape(
+   points: Array<{ lat: number; lng: number; ts: number }>,
++  friendCellPolygons: Array<Array<[number, number]>> = [],
+ ): Feature<Polygon | MultiPolygon> | null {
+   // World rect — slightly inset from poles to avoid Mapbox projection edge cases.
+   const world = polygon([[
+@@ -95,7 +96,7 @@ export function buildFogShape(
+     [-180, -85],
+   ]]);
+ 
+-  if (points.length === 0) {
++  if (points.length === 0 && friendCellPolygons.length === 0) {
+     // No hikes yet — return solid fog with no holes.
+     return world;
+   }
+@@ -119,10 +120,16 @@ export function buildFogShape(
+       err: String(error?.message ?? error).slice(0, 100),
+     });
+   }
+-  if (!evidence) return world;
++  const cutouts: Array<Feature<Polygon | MultiPolygon>> = [];
++  if (evidence) cutouts.push(evidence);
++  for (const ring of friendCellPolygons) {
++    if (ring.length < 4) continue;
++    try { cutouts.push(polygon([ring])); } catch { /* invalid server cell stays covered */ }
++  }
++  if (cutouts.length === 0) return world;
+ 
+   try {
+-    const fc = featureCollection([world as any, evidence as any]);
++    const fc = featureCollection([world as any, ...cutouts as any]);
+     const fog = differenceTurf(fc as any);
+     if (fog && fog.geometry) {
+       return fog as Feature<Polygon | MultiPolygon>;
+@@ -148,28 +155,23 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
+   // v413 (4-eye fix E2): union 只在 Friends tab 生效, Mine tab 保 self-only
+   // 尊重 useMemoryScopeStore.ts:5-8 已文档化的契约 + 用户口述"打开 Memory 首先看到自己"
+   const scope = useMemoryScopeStore((s) => s.scope);
++  const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
+   const friendMemoryVersion = useFriendMemoryStore((s) => s.version);
+   const friendMemoryRef = useFriendMemoryStore.getState;
+ 
+   // v413: union self ∪ enabled friend points. 每次 self 或 friend 变化都重算.
+   // 用 useMemo 只依赖 version 号避免 array ref instability.
+   const points = useMemo(() => {
+-    // Mine tab: 严格 self-only, 不 union friend
+-    if (scope !== 'friends') return selfPoints;
+-    const enabledPts = friendMemoryRef().getEnabledFriendPoints();
+-    if (enabledPts.length === 0) return selfPoints;
+-    // 转成 VisitedPoint 结构 (加 cid + synced 占位) 才能与 selfPoints 混
+-    // cid 用 lat,lng,ts 组合作为 stable key 供 sig 缓存
+-    const asVisited = enabledPts.map((p) => ({
+-      lat: p.lat,
+-      lng: p.lng,
+-      ts: p.ts,
+-      cid: `fr-${p.lat.toFixed(6)}-${p.lng.toFixed(6)}-${p.ts}`,
+-      synced: true,
+-    }));
+-    return [...selfPoints, ...asVisited];
++    return scope === 'friend' ? [] : selfPoints;
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [selfPoints, scope]);
++  const friendCells = useMemo(
++    () => scope === 'self'
++      ? []
++      : friendMemoryRef().getVisibleCells(scope === 'friend' ? selectedFriendId : null),
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [selfPoints, friendMemoryVersion, scope]);
++    [friendMemoryVersion, scope, selectedFriendId],
++  );
+ 
+   // v351: SYNCHRONOUS fog shape via useMemo. Replaces v347's
+   // useState(worldRect) + useEffect(buildFogShape) async pattern, which
+@@ -209,7 +211,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
+   const fogReadyFiredRef = useRef(false);
+   // v357 diagnostic: mount/unmount of this FogLayer instance.
+   useEffect(() => {
+-    log('v357.fog_layer_mount', { points_n: points.length });
++    log('v357.fog_layer_mount', { points_n: points.length, friend_cells_n: friendCells.length });
+     return () => {
+       log('v357.fog_layer_unmount', {});
+     };
+@@ -231,7 +233,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
+     // Two stages instead of three. The 'no holes' middle stage is
+     // now visually identical to the final state outside corridors,
+     // so the holes appearing is the only visible transition.
+-    if (points.length === 0) {
++    if (points.length === 0 && friendCells.length === 0) {
+       // Empty is authoritative after account switch/server reset as well as
+       // during first hydration. Reusing the module cache here would keep the
+       // previous Memory holes visible after a successful reset (and could
+@@ -254,7 +256,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
+     // count + first 3 + last 3 cids. If unchanged from last build,
+     // return cached shape — same reference → ShapeSource doesn't see
+     // shape change → Mapbox layer doesn't rebuild → no flicker.
+-    const sig = `${points.length}|${points.slice(0, 3).map((p) => p.cid).join(',')}|${points.slice(-3).map((p) => p.cid).join(',')}`;
++    const sig = `${scope}|${selectedFriendId ?? ''}|${points.length}|${points.slice(0, 3).map((p) => p.cid).join(',')}|${points.slice(-3).map((p) => p.cid).join(',')}|${friendCells.map((cell) => cell.id).join(',')}`;
+     if (sig === lastSigRef.current && lastShapeRef.current) {
+       buildCountRef.current += 1;
+       // v357 diagnostic: short-circuit hit means useMemo dep changed but
+@@ -267,7 +269,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
+       return lastShapeRef.current;
+     }
+     const t0 = Date.now();
+-    const shape = buildFogShape(points);
++    const shape = buildFogShape(points, friendCells.map((cell) => cell.polygon));
+     buildCountRef.current += 1;
+     // v356 fix: has_holes telemetry was lying — only checked Polygon
+     // case (outer ring + inner ring count > 1) but turf.difference
+@@ -325,7 +327,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady }: Props) {
+     _moduleFogShape = shape;
+     return shape;
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [points, geometryVersion]);
++  }, [points, geometryVersion, friendCells, scope, selectedFriendId]);
+ 
+   // v359: detect when fogShape first contains holes (corridor cutouts from
+   // GPS data), then fire onFogReady ONCE. This is one of two gates the
+diff --git a/app/src/features/memory/components/ForegroundUnlockManager.tsx b/app/src/features/memory/components/ForegroundUnlockManager.tsx
+index 40e1f81..0bfc549 100644
+--- a/app/src/features/memory/components/ForegroundUnlockManager.tsx
++++ b/app/src/features/memory/components/ForegroundUnlockManager.tsx
+@@ -166,7 +166,9 @@ export function ForegroundUnlockManager({ managePassiveGps = false }: { managePa
+             lat: loc.coords.latitude,
+             lng: loc.coords.longitude,
+             atMs: loc.timestamp ?? Date.now(),
+-            source: 'passive',
++            source: 'passive_real',
++            horizontalAccuracyM: loc.coords.accuracy ?? undefined,
++            continuityState: 'accepted',
+           });
+         });
+         log('memory.watcher_started', { mode: 'foreground-opt-in' });
+diff --git a/app/src/features/memory/components/MemoryFriendPickModal.tsx b/app/src/features/memory/components/MemoryFriendPickModal.tsx
+index 13e28c2..5255a8c 100644
+--- a/app/src/features/memory/components/MemoryFriendPickModal.tsx
++++ b/app/src/features/memory/components/MemoryFriendPickModal.tsx
+@@ -20,8 +20,8 @@
+  */
+ import React, { useEffect, useRef } from 'react';
+ import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, ActivityIndicator, Animated, Easing } from 'react-native';
+-import { useFriendStore } from '../../../store/useFriendStore';
+ import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
++import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
+ import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
+ import { Icon } from '../../../components/Icon';
+ import { useVisualTheme } from '../../../hooks/useVisualTheme';
+@@ -36,7 +36,7 @@ interface Props {
+ 
+ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
+   const theme = useVisualTheme();
+-  const friends = useFriendStore((s) => s.friends);
++  const sources = useMemorySubscriptionsStore((s) => s.availableSources);
+   const subs = useMemorySubscriptionsStore((s) => s.subscriptions);
+   const limit = useMemorySubscriptionsStore((s) => s.limit);
+   const loading = useMemorySubscriptionsStore((s) => s.loading);
+@@ -44,6 +44,8 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
+   const subscribe = useMemorySubscriptionsStore((s) => s.subscribe);
+   const unsubscribe = useMemorySubscriptionsStore((s) => s.unsubscribe);
+   const isSubscribed = useMemorySubscriptionsStore((s) => s.isSubscribed);
++  const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
++  const setScope = useMemoryScopeStore((s) => s.setScope);
+ 
+   // UX-E fix: Animated values for smooth slide + backdrop fade matching
+   // Hiking choose-a-route. Mount Modal in 'fade' mode (instant) and own
+@@ -97,6 +99,7 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
+   const onTap = async (friendId: number) => {
+     if (isSubscribed(friendId)) {
+       await unsubscribe(friendId);
++      if (String(friendId) === selectedFriendId) setScope('combined');
+       return;
+     }
+     if (atCap) {
+@@ -137,24 +140,28 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
+ 
+           {loading ? (
+             <View style={styles.loadingBox}><ActivityIndicator color={theme.primary} /></View>
+-          ) : friends.length === 0 ? (
+-            <Text style={[styles.emptyHint, { color: theme.muted }]}>No friends yet. Add a friend in the Friends tab first.</Text>
++          ) : sources.length === 0 ? (
++            <Text style={[styles.emptyHint, { color: theme.muted }]}>No shared Memory is available yet. Friends choose whether new completed Activities can appear here.</Text>
+           ) : (
+             <FlatList
+-              data={friends}
+-              keyExtractor={(f) => String(f.id)}
++              data={sources}
++              keyExtractor={(f) => String(f.friend_id)}
+               renderItem={({ item }) => {
+-                const subscribed = isSubscribed(Number(item.id));
++                const friendId = Number(item.friend_id);
++                const subscribed = isSubscribed(friendId);
+                 const locked = !subscribed && atCap;
+                 return (
+                   <TouchableOpacity
+                     style={[styles.row, subscribed && { backgroundColor: theme.surface }]}
+-                    onPress={() => onTap(Number(item.id))}
+-                    testID={`memory-friend-row-${item.id}`}
++                    onPress={() => onTap(friendId)}
++                    onLongPress={() => subscribed && setScope('friend', String(friendId))}
++                    testID={`memory-friend-row-${item.friend_id}`}
+                   >
+                     <View style={styles.rowMain}>
+-                      <Text style={[styles.rowName, { color: theme.foreground }]}>{item.name || item.email}</Text>
+-                      {item.email && item.email !== item.name ? <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>{item.email}</Text> : null}
++                      <Text style={[styles.rowName, { color: theme.foreground }]}>{item.friend_name}</Text>
++                      <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>
++                        {subscribed ? 'Shown in Together · hold for this friend only' : 'New completed Activities only'}
++                      </Text>
+                     </View>
+                     {subscribed ? (
+                       <Icon name="Check" size={18} color={Colors.success} strokeWidth={2.5} />
+diff --git a/app/src/features/memory/components/MemoryMap.tsx b/app/src/features/memory/components/MemoryMap.tsx
+index 35ae974..0243f02 100644
+--- a/app/src/features/memory/components/MemoryMap.tsx
++++ b/app/src/features/memory/components/MemoryMap.tsx
+@@ -12,10 +12,11 @@
+  * doesn't follow centerCoordinate prop updates after first mount.
+  */
+ 
+-import React, { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
++import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+ import { StyleSheet, View, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
+ import { getMapbox } from '../services/mapboxAdapter';
+-import { useMarkerStore } from '../../../store/useMarkerStore';
++import { useMarkerStore } from '../../../store/useMarkerStore';
++import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
+ import { MemoryColors } from '../config/memoryConfig';
+ import { FogLayer } from './FogLayer';
+ // O1: MemoryFogBurstOverlay deleted (v303 Skia burst overlay, replaced by
+@@ -105,7 +106,17 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
+   const memoryResolvedMapStyle = getMapStyleForTheme('outdoors', memoryMapTheme);
+   const memoryLightPreset = themeToStandardPreset(memoryMapTheme);
+   const Mapbox = getMapbox();
+-  const allMarkers = useMarkerStore((s) => s.markers);
++  const ownMarkers = useMarkerStore((s) => s.markers);
++  const friendMarkers = useMarkerStore((s) => s.circleMarkers);
++  const memoryScope = useMemoryScopeStore((s) => s.scope);
++  const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
++  const allMarkers = useMemo(() => {
++    if (memoryScope === 'self') return ownMarkers;
++    if (memoryScope === 'friend') {
++      return friendMarkers.filter(marker => String(marker.authorId) === String(selectedFriendId));
++    }
++    return [...ownMarkers, ...friendMarkers];
++  }, [friendMarkers, memoryScope, ownMarkers, selectedFriendId]);
+   const mapViewRef = useRef<any>(null);
+ 
+   // v447: expose getCurrentCenter so parent can pull the true current
+diff --git a/app/src/features/memory/components/MemoryScopeToggle.tsx b/app/src/features/memory/components/MemoryScopeToggle.tsx
+index b2ecd83..8d0badb 100644
+--- a/app/src/features/memory/components/MemoryScopeToggle.tsx
++++ b/app/src/features/memory/components/MemoryScopeToggle.tsx
+@@ -26,6 +26,7 @@ import { useMemoryScopeStore, type MemoryScope } from '../store/useMemoryScopeSt
+ import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
+ import { Icon } from '../../../components/Icon';
+ import { useVisualTheme } from '../../../hooks/useVisualTheme';
++import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
+ 
+ interface Props {
+   /** When provided, a Pick icon is shown as a third segment that
+@@ -39,14 +40,15 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
+   const theme = useVisualTheme();
+   const scope = useMemoryScopeStore((s) => s.scope);
+   const setScope = useMemoryScopeStore((s) => s.setScope);
++  const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
+ 
+   // v376: third-segment expand animation. Width grows from 0→44 and
+   // opacity 0→1 when scope flips to friends. Reverses on flip back.
+-  const expand = useRef(new Animated.Value(scope === 'friends' ? 1 : 0)).current;
++  const expand = useRef(new Animated.Value(scope === 'self' ? 0 : 1)).current;
+ 
+   useEffect(() => {
+     Animated.timing(expand, {
+-      toValue: scope === 'friends' ? 1 : 0,
++      toValue: scope === 'self' ? 0 : 1,
+       duration: 220,
+       easing: Easing.out(Easing.cubic),
+       // width animation requires JS driver (layout prop).
+@@ -58,8 +60,9 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
+   const expandOpacity = expand;
+ 
+   const opts: { id: MemoryScope; label: string }[] = [
+-    { id: 'mine', label: 'Mine' },
+-    { id: 'friends', label: 'Friends' },
++    { id: 'self', label: 'Mine' },
++    { id: 'combined', label: 'Together' },
++    { id: 'friend', label: 'Friend' },
+   ];
+ 
+   return (
+@@ -70,7 +73,15 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
+           <TouchableOpacity
+             key={o.id}
+             style={[styles.segment, active && styles.segmentActive, active ? { backgroundColor: theme.surface } : null]}
+-            onPress={() => setScope(o.id)}
++            onPress={() => {
++              if (o.id !== 'friend') {
++                setScope(o.id);
++                return;
++              }
++              const selected = subscriptions[0];
++              if (selected) setScope('friend', String(selected.friend_id));
++              else onPickPress?.();
++            }}
+             activeOpacity={0.7}
+             testID={`memory-scope-${o.id}`}
+           >
+@@ -85,11 +96,11 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
+         <Animated.View style={{ width: expandWidth, opacity: expandOpacity, overflow: 'hidden' }}>
+           <TouchableOpacity
+             style={styles.pickSegment}
+-            onPress={() => { if (scope === 'friends') onPickPress(); }}
+-            disabled={scope !== 'friends'}
++            onPress={() => { if (scope !== 'self') onPickPress(); }}
++            disabled={scope === 'self'}
+             activeOpacity={0.7}
+-            accessibilityElementsHidden={scope !== 'friends'}
+-            importantForAccessibility={scope === 'friends' ? 'yes' : 'no-hide-descendants'}
++            accessibilityElementsHidden={scope === 'self'}
++            importantForAccessibility={scope !== 'self' ? 'yes' : 'no-hide-descendants'}
+             testID="memory-scope-pick"
+           >
+             <Icon name="Users" size={16} color={theme.iconActive} strokeWidth={2.2} />
+diff --git a/app/src/features/memory/components/PassiveMemoryRecorder.tsx b/app/src/features/memory/components/PassiveMemoryRecorder.tsx
+index 1be14f0..18e80cf 100644
+--- a/app/src/features/memory/components/PassiveMemoryRecorder.tsx
++++ b/app/src/features/memory/components/PassiveMemoryRecorder.tsx
+@@ -56,8 +56,10 @@ export function PassiveMemoryRecorder() {
+             lat: sample.lat,
+             lng: sample.lng,
+             atMs: sample.timestamp,
+-            source: 'passive',
++            source: 'simulator_test',
+             ownerUserId: String(userId),
++            horizontalAccuracyM: sample.accuracy,
++            continuityState: 'accepted',
+           }).then(result => {
+             appendSimulatorLog('MEMORY_EVIDENCE', 'passive_memory_evidence_committed', {
+               committed: result.committed,
+@@ -89,7 +91,9 @@ export function PassiveMemoryRecorder() {
+           lat: location.coords.latitude,
+           lng: location.coords.longitude,
+           atMs,
+-          source: 'passive',
++          source: 'passive_real',
++          horizontalAccuracyM: accuracy ?? undefined,
++          continuityState: 'accepted',
+         });
+       });
+       if (cancelled) watcher.remove();
+diff --git a/app/src/features/memory/screens/MemoryScreen.tsx b/app/src/features/memory/screens/MemoryScreen.tsx
+index f0f9486..3b3b28e 100644
+--- a/app/src/features/memory/screens/MemoryScreen.tsx
++++ b/app/src/features/memory/screens/MemoryScreen.tsx
+@@ -16,8 +16,8 @@
+  *       per 5 seconds.
+  */
+ 
+-import React, { useCallback, useEffect, useRef, useState } from 'react';
+-import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Animated, InteractionManager } from 'react-native';
++import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
++import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Animated, InteractionManager } from 'react-native';
+ import AsyncStorage from '@react-native-async-storage/async-storage';
+ import { useSafeAreaInsets } from 'react-native-safe-area-context';
+ import * as Location from 'expo-location';
+@@ -32,7 +32,8 @@ import { readLastFix } from '../services/lastFixCache';
+ import { MemoryColors } from '../config/memoryConfig';
+ import { MemoryMap, type MemoryMapHandle } from '../components/MemoryMap';
+ import { MemoryScopeToggle } from '../components/MemoryScopeToggle';
+-import { MemoryFriendPickModal } from '../components/MemoryFriendPickModal';
++import { MemoryFriendPickModal } from '../components/MemoryFriendPickModal';
++import { MemorySharingSheet } from '../components/MemorySharingSheet';
+ import { PaywallSheet } from '../components/PaywallSheet';
+ import { BackButton } from '../../../components/BackButton';
+ import { Icon } from '../../../components/Icon';
+@@ -49,7 +50,8 @@ import { ForegroundUnlockManager } from '../components/ForegroundUnlockManager';
+ // v425: fly to real explored point inside sibling region (bug 2 fix)
+ import { ModalCard } from '../../../components/ModalCard';
+ import { AppButton } from '../../../components/AppButton';
+-import { useMarkerStore } from '../../../store/useMarkerStore';
++import { useMarkerStore } from '../../../store/useMarkerStore';
++import { useAppStore } from '../../../store/useAppStore';
+ // v427: async hierarchy from /api/hierarchy (world-wide data)
+ import { fetchDeepest } from '../services/hierarchyService';
+ // v424 hierarchy panel
+@@ -130,7 +132,16 @@ export function MemoryScreen() {
+   const insets = useSafeAreaInsets();
+   const watcherFix = useMemoryStore((s) => s.lastWatcherFix);
+   const initialDone = useMemoryStore((s) => s.initialRevealDone);
+-  const memoryPoints = useMemoryStore((s) => s.points);
++  const memoryPoints = useMemoryStore((s) => s.points);
++  const memoryEvidenceContext = useMemo(() => {
++    const times = memoryPoints.map(point => Number(point.ts)).filter(Number.isFinite).sort((a, b) => a - b);
++    if (times.length === 0) return null;
++    return {
++      count: times.length,
++      first: new Date(times[0]).toLocaleDateString(),
++      last: new Date(times[times.length - 1]).toLocaleDateString(),
++    };
++  }, [memoryPoints]);
+   const firstVisitDone = useMemorySettingsStore((s) => s.firstVisitDone);
+   const settingsHydrated = useMemorySettingsStore((s) => s.hydrated);
+   const setSetting = useMemorySettingsStore((s) => s.set);
+@@ -188,15 +199,19 @@ export function MemoryScreen() {
+   const [loadingStage, setLoadingStage] = useState<0 | 1 | 2>(0); // 0..2s / 2..5s / 5s+
+   const [mapReady, setMapReady] = useState(false);
+   // Sprint 70 STORY-00540 + 542: 5-friend pick modal + paywall when 6+.
+-  const [pickModalOpen, setPickModalOpen] = useState(false);
+-  const [paywallOpen, setPaywallOpen] = useState(false);
+-  const memoryScope = useMemoryScopeStore((s) => s.scope);
+-  const setScope = useMemoryScopeStore((s) => s.setScope);
+-  const [fogReady, setFogReady] = useState(false);
++  const [pickModalOpen, setPickModalOpen] = useState(false);
++  const [paywallOpen, setPaywallOpen] = useState(false);
++  const [sharingOpen, setSharingOpen] = useState(false);
++  const memoryScope = useMemoryScopeStore((s) => s.scope);
++  const [fogReady, setFogReady] = useState(false);
+   // v413: friend memory 加载 — Memory 页 mount + subscribed friends 变化时拉 /api/circle/fog
+   const subscriptionsCount = useMemorySubscriptionsStore((s) => s.subscriptions.length);
+   const loadSubs = useMemorySubscriptionsStore((s) => s.load);
+-  const loadFriendFog = useFriendMemoryStore((s) => s.loadFriendFog);
++  const loadFriendProjections = useFriendMemoryStore((s) => s.loadSelectedProjections);
++  const hydrateFriendProjections = useFriendMemoryStore((s) => s.hydrate);
++  const friendProjectionError = useFriendMemoryStore((s) => s.error);
++  const userId = useAppStore((s) => s.user?.id ?? null);
++  const loadCircleMarkers = useMarkerStore((s) => s.loadCircleMarkers);
+   // Bug-5 fix: pre-load friend list on Memory mount so friend picker always
+   // has data immediately (previously required visiting Friends tab first).
+   const loadFriendsFromBackend = useFriendStore((s) => s.loadFriendsFromBackend);
+@@ -215,9 +230,12 @@ export function MemoryScreen() {
+     const now = Date.now();
+     if (now - lastFriendLoadRef.current < 30_000) return;
+     lastFriendLoadRef.current = now;
+-    void loadSubs();
+-    void loadFriendFog();
+-  }, [loadSubs, loadFriendFog, loadFriendsFromBackend]);
++    void (async () => {
++      if (userId) await hydrateFriendProjections(String(userId));
++      await loadSubs();
++      await Promise.all([loadFriendProjections(), loadCircleMarkers()]);
++    })();
++  }, [hydrateFriendProjections, loadCircleMarkers, loadFriendProjections, loadSubs, loadFriendsFromBackend, userId]);
+   // Track previous subscriptions count to detect changes when picker closes.
+   const prevSubsCountRef = useRef(0);
+   useEffect(() => {
+@@ -246,7 +264,7 @@ export function MemoryScreen() {
+       InteractionManager.runAfterInteractions(() => {
+         const fetchStart = Date.now();
+         log('memory.picker_close.fetch_start', { queued_ms: fetchStart - startTs });
+-        loadFriendFog().then(() => {
++        Promise.all([loadFriendProjections(), loadCircleMarkers()]).then(() => {
+           const fetchDone = Date.now();
+           log('memory.picker_close.fetch_done', { fetch_ms: fetchDone - fetchStart, total_ms: fetchDone - startTs });
+           if (friendFogToastTimerRef.current) clearTimeout(friendFogToastTimerRef.current);
+@@ -261,30 +279,14 @@ export function MemoryScreen() {
+         now: subscriptionsCount,
+       });
+     }
+-  }, [subscriptionsCount, loadFriendFog]);
+-
+-  // R2: public stranger markers. Subscribe to the store slice and provide
+-  // a debounced loader triggered whenever the map camera center changes.
+-  const publicMarkers = useMarkerStore((s) => s.publicMarkers);
+-  const loadPublicMarkers = useMarkerStore((s) => s.loadPublicMarkers);
+-  const publicLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+-  const handleCameraCenter = useCallback(
+-    (lat: number, lng: number) => {
+-      cameraCenterRef.current = { lat, lng };
+-      // Debounce: only fire 2s after the user stops panning.
+-      if (publicLoadTimerRef.current) clearTimeout(publicLoadTimerRef.current);
+-      publicLoadTimerRef.current = setTimeout(() => {
+-        void loadPublicMarkers(lat, lng);
+-      }, 2000);
+-    },
+-    [loadPublicMarkers],
+-  );
+-  // Cleanup debounce timer on unmount.
+-  useEffect(() => {
+-    return () => {
+-      if (publicLoadTimerRef.current) clearTimeout(publicLoadTimerRef.current);
+-    };
+-  }, []);
++  }, [subscriptionsCount, loadCircleMarkers, loadFriendProjections]);
++
++  const handleCameraCenter = useCallback(
++    (lat: number, lng: number) => {
++      cameraCenterRef.current = { lat, lng };
++    },
++    [],
++  );
+   // v363: user-dismissed banner state. When user taps the X close on
+   // the slow-network banner, hide it for the rest of this Memory tab
+   // session. Resets on mountKey bump.
+@@ -555,7 +557,7 @@ export function MemoryScreen() {
+       const now = Date.now();
+       // Reset scope to 'mine' on every focus — per product spec, social
+       // view is a deliberate switch, not a persistent default.
+-      useMemoryScopeStore.getState().setScope('mine');
++      useMemoryScopeStore.getState().setScope('self');
+       // S3 fix: debounce map remount separately. Cheap to keep the
+       // map mounted across rapid back-and-forth; expensive to tear
+       // it down and reload Mapbox tiles.
+@@ -812,6 +814,37 @@ export function MemoryScreen() {
+         <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>All Cairns</Text>
+         <Icon name="ChevronRight" size={14} color={theme.iconInactive} strokeWidth={2} />
+       </TouchableOpacity>
++      <TouchableOpacity
++        testID="memory-sharing-entry"
++        style={[
++          styles.sharingEntry,
++          {
++            top: insets.top + 72,
++            backgroundColor: theme.mapOverlay,
++            borderColor: theme.borderStrong,
++            shadowColor: theme.shadow,
++          },
++        ]}
++        onPress={() => setSharingOpen(true)}
++        activeOpacity={0.86}
++        accessibilityRole="button"
++        accessibilityLabel="Open Memory sharing"
++      >
++        <Icon name="Users" size={15} color={theme.iconActive} strokeWidth={2} />
++        <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>Sharing</Text>
++      </TouchableOpacity>
++      <View
++        testID="memory-evidence-context"
++        pointerEvents="none"
++        style={[styles.evidenceContext, { top: insets.top + 120, backgroundColor: theme.mapOverlay, borderColor: theme.borderStrong }]}
++      >
++        <Text style={[styles.evidenceContextTitle, { color: theme.foreground }]}>Personal Memory</Text>
++        <Text style={[styles.evidenceContextText, { color: theme.foregroundSecondary }]}>
++          {memoryEvidenceContext
++            ? `${memoryEvidenceContext.count} recorded evidence points · first ${memoryEvidenceContext.first} · last ${memoryEvidenceContext.last}`
++            : 'No recorded movement evidence yet.'}
++        </Text>
++      </View>
+ 
+       {/* v352 zoom-flicker fix: render MemoryMap with persistentCoord
+           (last-rendered coord, kept in ref across re-renders) instead of
+@@ -840,16 +873,7 @@ export function MemoryScreen() {
+             _fogEverReady = true;
+             setFogReady(true);
+           }}
+-          // BUG-008 fix (Sprint 71 post-review round 2): close the
+-          // strangerMarks prop chain with an explicit empty list. F5
+-          // STORY-00543 follow-up will add a loadPublicMarksBbox action
+-          // and populate this prop. Closing the prop chain now means F5
+-          // only needs to populate the source, not also touch MemoryMap.
+-          // Without this, CairnPinsLayer's strangerMarks defaulted to
+-          // undefined and Sprint 70 STORY-00543's visual layer was
+-          // structurally inert — caught by Devil's Advocate round 2.
+-          strangerMarks={publicMarkers}
+-          key={`map-${mountKey}`}
++          key={`map-${mountKey}`}
+         />
+       ) : failReason === 'permission' ? (
+         <View style={styles.emptyState}>
+@@ -1068,7 +1092,7 @@ export function MemoryScreen() {
+       )}
+ 
+       {/* Friend fog loaded toast — brief non-blocking confirmation */}
+-      {friendFogToast !== null && (
++      {friendFogToast !== null && (
+         <View
+           style={[styles.slowBanner, { top: insets.top + 8, left: 80, right: 12 }]}
+           pointerEvents="none"
+@@ -1078,7 +1102,16 @@ export function MemoryScreen() {
+           </View>
+           <Text style={styles.slowBannerText} numberOfLines={1}>{friendFogToast}</Text>
+         </View>
+-      )}
++      )}
++
++      {friendProjectionError === 'offline' && memoryScope !== 'self' ? (
++        <View style={[styles.slowBanner, { top: insets.top + 8, left: 80, right: 12 }]}>
++          <Icon name="CloudOff" size={13} color={theme.iconInactive} strokeWidth={2.2} />
++          <Text style={[styles.slowBannerText, { marginLeft: 6 }]} numberOfLines={1}>
++            Connect to refresh shared content
++          </Text>
++        </View>
++      ) : null}
+ 
+       <ModalCard visible={showHint && isMemoryFocused} onDismiss={dismissHint} testID="memory-unlock-guidance">
+           <View>
+@@ -1105,7 +1138,8 @@ export function MemoryScreen() {
+           setPaywallOpen(true);
+         }}
+       />
+-      <PaywallSheet visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
++      <PaywallSheet visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
++      <MemorySharingSheet visible={sharingOpen} onClose={() => setSharingOpen(false)} />
+ 
+       {/* v434: Hierarchy popover — 2-layer tree (World → Country → City).
+           Fetches panel data from /api/hierarchy/panel. */}
+@@ -1225,6 +1259,34 @@ const styles = StyleSheet.create({
+     elevation: 4,
+   },
+   allCairnsEntryText: { fontSize: 12, fontWeight: '700' },
++  sharingEntry: {
++    position: 'absolute',
++    right: 12,
++    zIndex: 12,
++    minHeight: 40,
++    borderRadius: 20,
++    borderWidth: 1,
++    paddingHorizontal: 12,
++    flexDirection: 'row',
++    alignItems: 'center',
++    gap: 7,
++    shadowOpacity: 0.14,
++    shadowRadius: 8,
++    shadowOffset: { width: 0, height: 3 },
++    elevation: 4,
++  },
++  evidenceContext: {
++    position: 'absolute',
++    left: 12,
++    right: 12,
++    zIndex: 11,
++    borderWidth: 1,
++    borderRadius: 14,
++    paddingHorizontal: 12,
++    paddingVertical: 9,
++  },
++  evidenceContextTitle: { fontSize: 12, fontWeight: '700' },
++  evidenceContextText: { fontSize: 11, lineHeight: 16, marginTop: 2 },
+   // Concept-aligned empty state (2026-08-16 sleep-run redesign):
+   //   - Centered vertically on paper background
+   //   - Title: 18px, dark textPrimary, weight 500
+diff --git a/app/src/features/memory/services/memoryPersistence.ts b/app/src/features/memory/services/memoryPersistence.ts
+index 49e5925..575a9c8 100644
+--- a/app/src/features/memory/services/memoryPersistence.ts
++++ b/app/src/features/memory/services/memoryPersistence.ts
+@@ -88,23 +88,35 @@ interface SerializedPoint {
+   s: 0 | 1;
+   /** cid (uuid v4 or sha1-derived). v3 schema; absent in v2. */
+   c?: string;
++  /** Evidence source: activity, passive, or historical/unknown. */
++  e?: 'a' | 'p' | 'h';
++  /** Stable client Activity identity. */
++  i?: string;
++  /** Horizontal accuracy in metres. */
++  h?: number;
++  /** Continuity: accepted, gap, unknown. */
++  n?: 'a' | 'g' | 'u';
+ }
+ 
+-interface SerializedMemoryV3 {
+-  v: 3 | 2;
++interface SerializedMemoryV4 {
++  v: 4 | 3 | 2;
+   points: SerializedPoint[];
+   initialRevealDone: boolean;
+ }
+ 
+-function serialize(points: VisitedPoint[], initialRevealDone: boolean): SerializedMemoryV3 {
++function serialize(points: VisitedPoint[], initialRevealDone: boolean): SerializedMemoryV4 {
+   return {
+-    v: 3,
++    v: 4,
+     points: points.map((p) => ({
+       a: p.lat,
+       o: p.lng,
+       t: p.ts,
+       s: p.synced ? 1 : 0,
+       c: p.cid,
++      e: p.evidenceSource === 'activity_real' ? 'a' : p.evidenceSource === 'passive_real' ? 'p' : 'h',
++      i: p.sourceActivityClientId,
++      h: p.horizontalAccuracyM,
++      n: p.continuityState === 'accepted' ? 'a' : p.continuityState === 'gap' ? 'g' : 'u',
+     })),
+     initialRevealDone,
+   };
+@@ -128,15 +140,16 @@ function legacyDeterministicCid(_lat: number, _lng: number, _ts: number): string
+ 
+ function deserialize(raw: string): { points: VisitedPoint[]; initialRevealDone: boolean } | null {
+   try {
+-    const parsed = JSON.parse(raw) as SerializedMemoryV3;
+-    if ((parsed.v !== 2 && parsed.v !== 3) || !Array.isArray(parsed.points)) return null;
++    const parsed = JSON.parse(raw) as SerializedMemoryV4;
++    if ((parsed.v !== 2 && parsed.v !== 3 && parsed.v !== 4) || !Array.isArray(parsed.points)) return null;
+     const points: VisitedPoint[] = [];
+     for (const p of parsed.points) {
+       if (typeof p?.a !== 'number' || typeof p?.o !== 'number') return null;
+       if (!isFinite(p.a) || p.a < -90 || p.a > 90 || !isFinite(p.o) || p.o < -180 || p.o > 180) return null;
+       if (typeof p.t !== 'number' || !Number.isFinite(p.t) || p.t <= 0) return null;
+       if (p.s !== 0 && p.s !== 1) return null;
+-      if (parsed.v === 3 && (typeof p.c !== 'string' || p.c.length === 0)) return null;
++      if ((parsed.v === 3 || parsed.v === 4) && (typeof p.c !== 'string' || p.c.length === 0)) return null;
++      if (parsed.v === 4 && p.e !== 'a' && p.e !== 'p' && p.e !== 'h') return null;
+       const ts = p.t;
+       const cid = (typeof p.c === 'string' && p.c.length > 0)
+         ? p.c
+@@ -147,6 +160,10 @@ function deserialize(raw: string): { points: VisitedPoint[]; initialRevealDone:
+         ts,
+         cid,
+         synced: p.s === 1,
++        evidenceSource: p.e === 'a' ? 'activity_real' : p.e === 'p' ? 'passive_real' : 'historical_unknown',
++        sourceActivityClientId: typeof p.i === 'string' && p.i.length > 0 ? p.i : undefined,
++        horizontalAccuracyM: typeof p.h === 'number' && Number.isFinite(p.h) ? p.h : undefined,
++        continuityState: p.n === 'a' ? 'accepted' : p.n === 'g' ? 'gap' : 'unknown',
+       });
+     }
+     return { points, initialRevealDone: Boolean(parsed.initialRevealDone) };
+diff --git a/app/src/features/memory/services/recordMemoryEvidence.ts b/app/src/features/memory/services/recordMemoryEvidence.ts
+index b14363d..e459f67 100644
+--- a/app/src/features/memory/services/recordMemoryEvidence.ts
++++ b/app/src/features/memory/services/recordMemoryEvidence.ts
+@@ -1,9 +1,7 @@
+-import { useMemoryStore } from '../store/useMemoryStore';
++import { MemoryEvidenceSource, useMemoryStore } from '../store/useMemoryStore';
+ import { ensureMemoryPersistenceForUser, flushMemoryNow } from './memoryPersistence';
+ import { attachMemorySync } from '../../../services/memorySync';
+ 
+-export type MemoryEvidenceSource = 'activity' | 'passive' | 'cairn' | 'reconciliation';
+-
+ let commitTail: Promise<void> = Promise.resolve();
+ let evidenceMetrics = { calls: 0, mutations: 0, deduplicated: 0, batchFlushes: 0 };
+ 
+@@ -30,6 +28,9 @@ export function recordMemoryEvidence(args: {
+   source: MemoryEvidenceSource;
+   ownerUserId?: string;
+   durability?: 'immediate' | 'deferred';
++  sourceActivityClientId?: string;
++  horizontalAccuracyM?: number;
++  continuityState?: 'accepted' | 'gap' | 'unknown';
+ }): Promise<{ committed: boolean; deduplicated: boolean }> {
+   // Capture ownership at invocation, before this operation waits behind an
+   // earlier commit. Reading the active user from inside commitTail allowed an
+@@ -50,18 +51,26 @@ export function recordMemoryEvidence(args: {
+     if (String(useAppStore.getState().user?.id ?? '') !== ownerUserId) {
+       throw new Error('memory_owner_changed');
+     }
+-    attachMemorySync(ownerUserId);
++    if (args.source !== 'simulator_test') attachMemorySync(ownerUserId);
+     const store = useMemoryStore.getState();
+-    const before = store.points.length;
+-    store.recordPoint(args.lat, args.lng, args.atMs ?? Date.now());
+-    const after = useMemoryStore.getState().points.length;
++    const before = args.source === 'simulator_test' ? store.testPoints.length : store.points.length;
++    store.recordPoint(args.lat, args.lng, args.atMs ?? Date.now(), {
++      source: args.source,
++      sourceActivityClientId: args.sourceActivityClientId,
++      horizontalAccuracyM: args.horizontalAccuracyM,
++      continuityState: args.continuityState,
++    });
++    const afterState = useMemoryStore.getState();
++    const after = args.source === 'simulator_test' ? afterState.testPoints.length : afterState.points.length;
+     if (after === before) {
+       evidenceMetrics.deduplicated += 1;
+       result = { committed: true, deduplicated: true };
+       return;
+     }
+     evidenceMetrics.mutations += 1;
+-    if (args.source !== 'activity' && args.durability !== 'deferred') await flushMemoryNow();
++    if (args.source !== 'activity_real' && args.source !== 'simulator_test' && args.durability !== 'deferred') {
++      await flushMemoryNow();
++    }
+     result = { committed: true, deduplicated: false };
+   });
+   commitTail = run.catch(() => {});
+diff --git a/app/src/features/memory/store/useFriendMemoryStore.ts b/app/src/features/memory/store/useFriendMemoryStore.ts
+index 2e0f651..fcf870f 100644
+--- a/app/src/features/memory/store/useFriendMemoryStore.ts
++++ b/app/src/features/memory/store/useFriendMemoryStore.ts
+@@ -1,151 +1,244 @@
+-/**
+- * useFriendMemoryStore — v413 friend memory 渲染 union
+- *
+- * 产品语义 (用户口述, 2026-07-08):
+- * - Memory 页永远显示 union(self ∪ subscribed_friends) 的解锁 fog
+- * - 未订阅任何 friend = 只看自己
+- * - 订阅 friend X = fog 立即扩展 (显示 X 走过的地方也解锁)
+- * - 取消订阅 X = fog 立即回缩 (借来的解锁还回去)
+- * - 多 friend 订阅 = union (重叠不加成)
+- * - 反选不动 self.points, 只是纯前端 render 层临时 merge
+- *
+- * 架构:
+- * - "enabled" 的真源 = useMemorySubscriptionsStore.subscriptions (已存 DB)
+- * - 此 store 只负责: (a) 缓存 friend memory points (GET /api/circle/fog),
+- *   (b) 提供 getEnabledFriendPoints() 供 FogLayer / CairnPinsLayer union
+- * - unsubscribe (DB 删) → subscriptions 变 → getEnabledFriendPoints 返回变 → fog 回缩
+- *
+- * 数据流:
+- * 1. Memory 页 mount / 或 subscriptions 变化 → loadFriendFog() 拉 /api/circle/fog
+- * 2. friendMemory[friendId] = points 存本地
+- * 3. FogLayer / CairnPinsLayer union self.points + subscribed_friends 的 points
+- * 4. subscribe/unsubscribe 走 useMemorySubscriptionsStore (它写 DB)
+- */
+ import { create } from 'zustand';
+ import { authenticatedFetch } from '../../../services/apiService';
++import { storage } from '../../../store/storage';
+ 
+-interface FriendMemoryPoint {
+-  lat: number;
+-  lng: number;
+-  ts: number;
++export interface FriendProjectionCell {
++  id: string;
++  polygon: Array<[number, number]>;
+ }
+ 
+-interface FriendMemoryState {
+-  /**
+-   * Map<friendId, points[]>. Server 返回的每个 subscribed friend 的 memory_points.
+-   * Load 时覆盖; 幂等.
+-   */
+-  friendMemory: Record<string, FriendMemoryPoint[]>;
++export interface FriendProjection {
++  friendId: string;
++  authorizationVersion: number;
++  projectionVersion: string;
++  cellSizeM: number;
++  cells: FriendProjectionCell[];
++  serverAuthorizedAtMs: number;
++  authorizationExpiresAtMs: number;
++}
+ 
+-  /** 递增版本号, 供 FogLayer / CairnPinsLayer useMemo 依赖数组用. */
+-  version: number;
++interface PersistedCache {
++  v: 1;
++  userId: string;
++  savedAtMs: number;
++  lastObservedWallClockMs: number;
++  projections: Record<string, FriendProjection>;
++}
+ 
++interface FriendMemoryState {
++  userId: string | null;
++  projections: Record<string, FriendProjection>;
++  version: number;
+   loading: boolean;
+-  // O1 batch 37: loadError removed — written internally but 0 external readers.
++  error: 'offline' | 'unavailable' | null;
++  lastObservedWallClockMs: number;
++  hydrate: (userId: string) => Promise<void>;
++  loadSelectedProjections: () => Promise<void>;
++  purgeFriend: (friendId: string | number) => Promise<void>;
++  getVisibleCells: (friendId?: string | null) => FriendProjectionCell[];
++  reset: () => void;
++}
++
++const CACHE_PREFIX = 'cairn:friend-memory-projections:v1:';
++const MAX_CACHE_AGE_MS = 24 * 60 * 60 * 1000;
++let hydrationSequence = 0;
+ 
+-  /**
+-   * 从 backend 拉 GET /api/circle/fog, 填充 friendMemory.
+-   * Server 返回 shape: { friend_points: [{ friend_id, points: [{lat,lng,ts}] }] }.
+-   */
+-  loadFriendFog: () => Promise<void>;
++function cacheKey(userId: string) {
++  return `${CACHE_PREFIX}${userId}`;
++}
+ 
+-  /**
+-   * 返回当前 subscribed friends 的所有 points (flat array).
+-   * "谁 subscribed" 从 useMemorySubscriptionsStore 拉, 保持真源单一.
+-   */
+-  getEnabledFriendPoints: () => FriendMemoryPoint[];
++function validProjection(value: any, now: number): value is FriendProjection {
++  return value
++    && typeof value.friendId === 'string'
++    && Number.isInteger(value.authorizationVersion)
++    && typeof value.projectionVersion === 'string'
++    && Number.isFinite(value.serverAuthorizedAtMs)
++    && Number.isFinite(value.authorizationExpiresAtMs)
++    && value.authorizationExpiresAtMs > now
++    && value.authorizationExpiresAtMs - value.serverAuthorizedAtMs <= MAX_CACHE_AGE_MS
++    && Array.isArray(value.cells)
++    && value.cells.every((cell: any) => typeof cell?.id === 'string'
++      && Array.isArray(cell?.polygon)
++      && cell.polygon.every((coordinate: any) => Array.isArray(coordinate)
++        && coordinate.length === 2
++        && Number.isFinite(coordinate[0])
++        && Number.isFinite(coordinate[1])));
++}
+ 
+-  /** 用户切换 / 登出时清空. */
+-  reset: () => void;
++async function persist(state: FriendMemoryState): Promise<void> {
++  if (!state.userId) return;
++  const payload: PersistedCache = {
++    v: 1,
++    userId: state.userId,
++    savedAtMs: Date.now(),
++    lastObservedWallClockMs: state.lastObservedWallClockMs,
++    projections: state.projections,
++  };
++  await storage.setItem(cacheKey(state.userId), JSON.stringify(payload), { strict: true });
+ }
+ 
+ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
+-  friendMemory: {},
++  userId: null,
++  projections: {},
+   version: 0,
+   loading: false,
++  error: null,
++  lastObservedWallClockMs: 0,
++
++  hydrate: async (userId) => {
++    const requestSequence = ++hydrationSequence;
++    const now = Date.now();
++    let projections: Record<string, FriendProjection> = {};
++    let lastObservedWallClockMs = now;
++    try {
++      const raw = await storage.getItem(cacheKey(userId));
++      if (raw) {
++        const parsed = JSON.parse(raw) as PersistedCache;
++        const clockRolledBack = parsed.v !== 1
++          || parsed.userId !== userId
++          || now < Number(parsed.savedAtMs)
++          || now < Number(parsed.lastObservedWallClockMs);
++        if (!clockRolledBack && parsed.projections && typeof parsed.projections === 'object') {
++          projections = Object.fromEntries(
++            Object.entries(parsed.projections).filter(([, projection]) => validProjection(projection, now)),
++          );
++          lastObservedWallClockMs = Math.max(now, Number(parsed.lastObservedWallClockMs) || 0);
++        }
++      }
++    } catch {
++      projections = {};
++    }
++    if (requestSequence !== hydrationSequence) return;
++    set({ userId, projections, lastObservedWallClockMs, version: get().version + 1, loading: false, error: null });
++  },
+ 
+-  loadFriendFog: async () => {
++  loadSelectedProjections: async () => {
+     if (get().loading) return;
+-    set({ loading: true });
++    // eslint-disable-next-line @typescript-eslint/no-require-imports
++    const { useAppStore } = require('../../../store/useAppStore');
++    // eslint-disable-next-line @typescript-eslint/no-require-imports
++    const { useMemorySubscriptionsStore } = require('./useMemorySubscriptionsStore');
++    const userId = String(useAppStore.getState().user?.id ?? '');
++    if (!userId) return;
++    if (get().userId !== userId) await get().hydrate(userId);
++    if (get().userId !== userId) return;
++    const selectedIds: number[] = useMemorySubscriptionsStore.getState().subscriptions
++      .map((subscription: { friend_id: number }) => Number(subscription.friend_id))
++      .filter(Number.isInteger);
++    const now = Date.now();
++    if (now < get().lastObservedWallClockMs) {
++      set({ projections: {}, version: get().version + 1, lastObservedWallClockMs: now });
++      await persist(get()).catch(() => {});
++    }
++    set({ loading: true, error: null, lastObservedWallClockMs: Math.max(now, get().lastObservedWallClockMs) });
+     try {
+-      const res = await authenticatedFetch('/api/circle/fog', { method: 'GET' });
+-      if (!res.ok) {
+-        throw new Error(`circle/fog HTTP ${res.status}`);
++      const response = await authenticatedFetch('/api/friend-sharing/projections', {
++        method: 'POST',
++        body: JSON.stringify({ friend_ids: selectedIds }),
++      });
++      if (!response.ok) throw new Error(`HTTP ${response.status}`);
++      const body = await response.json();
++      if (String(useAppStore.getState().user?.id ?? '') !== userId || get().userId !== userId) return;
++      const next = { ...get().projections };
++      for (const revokedId of Array.isArray(body?.revoked_friend_ids) ? body.revoked_friend_ids : []) {
++        delete next[String(revokedId)];
+       }
+-      const data = await res.json();
+-      const arr = Array.isArray(data?.friend_points) ? data.friend_points : [];
+-      const next: Record<string, FriendMemoryPoint[]> = {};
+-      for (const entry of arr) {
+-        if (entry == null || entry.friend_id == null) continue;
+-        const fid = String(entry.friend_id);
+-        const pts = Array.isArray(entry.points) ? entry.points : [];
+-        next[fid] = pts.map((p: any) => ({
+-          lat: Number(p.lat),
+-          lng: Number(p.lng),
+-          ts: Number(p.ts) || 0,
+-        })).filter((p: { lat: number; lng: number; ts: number }) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
++      const receivedAt = Date.now();
++      for (const incoming of Array.isArray(body?.projections) ? body.projections : []) {
++        const friendId = String(incoming?.source_friend_id ?? '');
++        const serverAuthorizedAtMs = Date.parse(incoming?.server_authorized_at);
++        const parsedExpiry = Date.parse(incoming?.authorization_expires_at);
++        const candidate: FriendProjection = {
++          friendId,
++          authorizationVersion: Number(incoming?.authorization_version),
++          projectionVersion: String(incoming?.projection_version ?? ''),
++          cellSizeM: Number(incoming?.cell_size_m),
++          cells: (Array.isArray(incoming?.cells) ? incoming.cells : []).map((cell: any) => ({
++            id: String(cell.id),
++            polygon: cell.polygon,
++          })),
++          serverAuthorizedAtMs,
++          authorizationExpiresAtMs: Math.min(parsedExpiry, serverAuthorizedAtMs + MAX_CACHE_AGE_MS),
++        };
++        if (!friendId || !validProjection(candidate, receivedAt)) continue;
++        const existing = next[friendId];
++        const isNewer = !existing
++          || candidate.authorizationVersion > existing.authorizationVersion
++          || (candidate.authorizationVersion === existing.authorizationVersion
++            && candidate.serverAuthorizedAtMs >= existing.serverAuthorizedAtMs);
++        if (isNewer) next[friendId] = candidate;
++      }
++      const selected = new Set(selectedIds.map(String));
++      for (const friendId of Object.keys(next)) {
++        if (!selected.has(friendId) || !validProjection(next[friendId], receivedAt)) delete next[friendId];
+       }
+       set({
+-        friendMemory: next,
+-        loading: false,
++        projections: next,
+         version: get().version + 1,
++        loading: false,
++        error: null,
++        lastObservedWallClockMs: Math.max(receivedAt, get().lastObservedWallClockMs),
+       });
+-    } catch (err: any) {
++      await persist(get());
++    } catch {
++      if (String(useAppStore.getState().user?.id ?? '') !== userId || get().userId !== userId) return;
++      const currentTime = Date.now();
++      const retained = Object.fromEntries(
++        Object.entries(get().projections).filter(([, projection]) => validProjection(projection, currentTime)),
++      );
+       set({
++        projections: retained,
++        version: get().version + 1,
+         loading: false,
+-        // O1 batch 37: loadError removed
++        error: 'offline',
++        lastObservedWallClockMs: Math.max(currentTime, get().lastObservedWallClockMs),
+       });
++      await persist(get()).catch(() => {});
+     }
+   },
+ 
+-  getEnabledFriendPoints: () => {
+-    // "enabled" = subscriptions store 里的 friend ids
+-    // 通过 require 避 module cycle
+-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+-    const { useMemorySubscriptionsStore } = require('./useMemorySubscriptionsStore');
+-    const subs = useMemorySubscriptionsStore.getState().subscriptions;
+-    const friendMem = get().friendMemory;
+-    const out: FriendMemoryPoint[] = [];
+-    for (const s of subs) {
+-      const pts = friendMem[String(s.friend_id)];
+-      if (pts) out.push(...pts);
++  purgeFriend: async (friendId) => {
++    const next = { ...get().projections };
++    delete next[String(friendId)];
++    set({ projections: next, version: get().version + 1 });
++    await persist(get()).catch(() => {});
++  },
++
++  getVisibleCells: (friendId) => {
++    const now = Date.now();
++    if (now < get().lastObservedWallClockMs) {
++      set({ projections: {}, version: get().version + 1, lastObservedWallClockMs: now });
++      void persist(get()).catch(() => {});
++      return [];
++    }
++    const current = get().projections;
++    const retained = Object.fromEntries(
++      Object.entries(current).filter(([, projection]) => validProjection(projection, now)),
++    );
++    if (Object.keys(retained).length !== Object.keys(current).length) {
++      set({ projections: retained, version: get().version + 1, lastObservedWallClockMs: Math.max(now, get().lastObservedWallClockMs) });
++      void persist(get()).catch(() => {});
+     }
+-    return out;
++    const selected = friendId
++      ? [retained[friendId]].filter(Boolean)
++      : Object.values(retained);
++    const cells = new Map<string, FriendProjectionCell>();
++    for (const projection of selected) {
++      if (!validProjection(projection, now)) continue;
++      for (const cell of projection.cells) cells.set(`${projection.friendId}:${cell.id}`, cell);
++    }
++    return [...cells.values()];
+   },
+ 
+   reset: () => {
++    hydrationSequence += 1;
+     set({
+-      friendMemory: {},
+-      version: 0,
+-      loading: false,
+-      // O1 batch 37: loadError removed
++    userId: null,
++    projections: {},
++    version: get().version + 1,
++    loading: false,
++    error: null,
++    lastObservedWallClockMs: 0,
+     });
+   },
+ }));
+-
+-/**
+- * 订阅 useMemorySubscriptionsStore 变化, 触发 version bump 让 FogLayer 重算.
+- * 这是 store-to-store 桥梁: subscribe/unsubscribe → subscriptions 变 →
+- * bump version → FogLayer useMemo 重算 → fog 回缩/扩展.
+- *
+- * 注意: 只 bump version, 不 refetch (friend memory 已 cache 在 friendMemory).
+- * 这样 unsubscribe 后 fog 立即变化, 不等网络. subscribe 需要 refetch 拿新 friend
+- * points → 在 UI 层显式调 loadFriendFog() (见 MemoryScreen).
+- */
+-if (typeof globalThis !== 'undefined') {
+-  // 延迟 require 避 module cycle
+-  setTimeout(() => {
+-    try {
+-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+-      const { useMemorySubscriptionsStore } = require('./useMemorySubscriptionsStore');
+-      let lastSubsRef = useMemorySubscriptionsStore.getState().subscriptions;
+-      useMemorySubscriptionsStore.subscribe((state: any) => {
+-        if (state.subscriptions !== lastSubsRef) {
+-          lastSubsRef = state.subscriptions;
+-          const fm = useFriendMemoryStore.getState();
+-          useFriendMemoryStore.setState({ version: fm.version + 1 });
+-        }
+-      });
+-    } catch {/* ignore module init race */}
+-  }, 0);
+-}
+diff --git a/app/src/features/memory/store/useMemoryScopeStore.ts b/app/src/features/memory/store/useMemoryScopeStore.ts
+index 3600c18..e3b7867 100644
+--- a/app/src/features/memory/store/useMemoryScopeStore.ts
++++ b/app/src/features/memory/store/useMemoryScopeStore.ts
+@@ -1,30 +1,18 @@
+-/**
+- * useMemoryScopeStore — Friend System v1 / Sprint 70 / STORY-00539
+- *
+- * Memory tab scope: 'mine' or 'friends'.
+- *
+- * 'mine'    = viewer's own fog + own marks (existing v346 pipeline)
+- * 'friends' = viewer's fog UNION subscribed-friend fogs (Story-541) +
+- *             friend-tier + Public marks visible per iron law 1
+- *
+- * State lives in its own tiny store so FogLayer + MarkLayer + the
+- * Memory top-bar toggle all share one source of truth without prop
+- * drilling through MemoryScreen.
+- *
+- * Default: 'mine' — first visit shows the viewer's own fog only.
+- * No persistence: scope resets to 'mine' on app restart per product
+- * (the social view is a deliberate switch, not a habit).
+- */
+ import { create } from 'zustand';
+ 
+-export type MemoryScope = 'mine' | 'friends';
++export type MemoryScope = 'self' | 'combined' | 'friend';
+ 
+ interface MemoryScopeState {
+   scope: MemoryScope;
+-  setScope: (s: MemoryScope) => void;
++  selectedFriendId: string | null;
++  setScope: (scope: MemoryScope, selectedFriendId?: string | null) => void;
+ }
+ 
+ export const useMemoryScopeStore = create<MemoryScopeState>((set) => ({
+-  scope: 'mine',
+-  setScope: (s) => set({ scope: s }),
++  scope: 'self',
++  selectedFriendId: null,
++  setScope: (scope, selectedFriendId = null) => set({
++    scope,
++    selectedFriendId: scope === 'friend' ? selectedFriendId : null,
++  }),
+ }));
+diff --git a/app/src/features/memory/store/useMemoryStore.ts b/app/src/features/memory/store/useMemoryStore.ts
+index f53c342..7315fc2 100644
+--- a/app/src/features/memory/store/useMemoryStore.ts
++++ b/app/src/features/memory/store/useMemoryStore.ts
+@@ -34,16 +34,34 @@ import { UnlockConfig } from '../config/memoryConfig';
+ // loop reported by user in v325 testing.
+ import { persistLastFix } from '../services/lastFixCache';
+ 
+-export interface VisitedPoint {
++export interface VisitedPoint {
+   lat: number;
+   lng: number;
+   /** Unix ms when the user was here. */
+   ts: number;
+   /** Stable cid (uuid v4 client OR sha1-based for legacy) — server's UNIQUE key. */
+   cid: string;
+-  /** True iff successfully uploaded to server. */
+-  synced?: boolean;
+-}
++  /** True iff successfully uploaded to server. */
++  synced?: boolean;
++  /** Why this point is allowed to exist in Personal Memory. */
++  evidenceSource: PersonalMemoryEvidenceSource;
++  /** Stable Activity identity used by the server to prove completed-Activity sharing. */
++  sourceActivityClientId?: string;
++  /** Accuracy captured at observation time; absent for historical rows. */
++  horizontalAccuracyM?: number;
++  /** Direct-observation continuity classification. */
++  continuityState?: 'accepted' | 'gap' | 'unknown';
++}
++
++export type PersonalMemoryEvidenceSource = 'activity_real' | 'passive_real' | 'historical_unknown';
++export type MemoryEvidenceSource = PersonalMemoryEvidenceSource | 'simulator_test';
++
++export interface MemoryEvidenceMetadata {
++  source: MemoryEvidenceSource;
++  sourceActivityClientId?: string;
++  horizontalAccuracyM?: number;
++  continuityState?: 'accepted' | 'gap' | 'unknown';
++}
+ 
+ interface SyncState {
+   /** Number of pushes currently in flight. > 0 means "syncing now". */
+@@ -52,8 +70,10 @@ interface SyncState {
+   lastSyncAt: number;
+ }
+ 
+-interface MemoryState {
+-  points: VisitedPoint[];
++interface MemoryState {
++  points: VisitedPoint[];
++  /** Explicitly isolated QA realm. Never rendered, synchronized, or shared as Personal Memory. */
++  testPoints: VisitedPoint[];
+   /** Spatial bucket index for fast isExplored. Internal — null = rebuild on use. */
+   _bucketIndex: Map<string, VisitedPoint[]> | null;
+   /** Bumped on geometry mutations. FogLayer keys its memo on this. */
+@@ -78,7 +98,7 @@ interface MemoryState {
+   syncState: SyncState;
+ 
+   /** Record one GPS point as visited. Idempotent. */
+-  recordPoint: (lat: number, lng: number, atMs?: number) => void;
++  recordPoint: (lat: number, lng: number, atMs?: number, metadata?: MemoryEvidenceMetadata) => void;
+ 
+   /** Read API — is this lat/lng within `unlockRadius` of any visited point? */
+   isExplored: (lat: number, lng: number) => boolean;
+@@ -200,8 +220,9 @@ function uuidv4(): string {
+   return `${r()}${r()}-${r()}-4${r().slice(0, 3)}-${d4()}-${d12()}`;
+ }
+ 
+-export const useMemoryStore = create<MemoryState>((set, get) => ({
+-  points: [],
++export const useMemoryStore = create<MemoryState>((set, get) => ({
++  points: [],
++  testPoints: [],
+   _bucketIndex: null,
+   geometryVersion: 0,
+   _unsyncedCount: 0,
+@@ -209,7 +230,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
+   syncState: { inFlightCount: 0, lastSyncAt: 0 },
+   lastWatcherFix: null,
+ 
+-  recordPoint: (lat, lng, atMs = Date.now()) => {
++  recordPoint: (lat, lng, atMs = Date.now(), metadata = { source: 'historical_unknown' }) => {
+     if (!isFinite(lat) || !isFinite(lng)) return;
+     // O17 D-MEM-03: reject non-positive / non-finite timestamps at boundary.
+     // Prevents negative ts (some legacy replay paths pass 0 or NaN) from
+@@ -219,22 +240,42 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
+     // and client agree on the deterministic-cid hash input. Fractional
+     // ts breaks echo lookup → infinite retry.
+     const ts = Math.floor(atMs);
+-    const points = get().points;
++    const isTestEvidence = metadata.source === 'simulator_test';
++    const points = isTestEvidence ? get().testPoints : get().points;
+     // O1: CULL 从 slice(-32) 改成走 bucket index 全量查 (9-cell sweep).
+     // 之前 32-tail scan 在长 hike 后段的邻近点 dedup 失败 → 服务器 UNIQUE
+     // 拦不住 (每个 uuid 不同),同一 cell 存多份。走 bucket index O(1) 查
+     // 附近所有已 recordPoint 的点,同 12.5m 内 skip。
+-    const idxRef = get()._bucketIndex ?? buildBucketIndex(points);
++    const idxRef = isTestEvidence ? buildBucketIndex(points) : (get()._bucketIndex ?? buildBucketIndex(points));
+     const targetBuckets = computeBucketsForRadius({ lat, lng });
+     for (const k of targetBuckets) {
+       const bucketPts = idxRef.get(k);
+       if (!bucketPts) continue;
+       for (const p of bucketPts) {
+-        if (distanceSqMeters({ lat, lng }, p) < CULL_THRESHOLD_SQ) return;
+-      }
+-    }
+-    const newPoint: VisitedPoint = { lat, lng, ts, cid: uuidv4(), synced: false };
+-    const newPoints = [...points, newPoint];
++        if (distanceSqMeters({ lat, lng }, p) >= CULL_THRESHOLD_SQ) continue;
++        // A stronger real-Activity observation must not be erased by a
++        // nearby passive/legacy point. Equal or stronger evidence dedupes.
++        const rank = (source: PersonalMemoryEvidenceSource): number =>
++          source === 'activity_real' ? 3 : source === 'passive_real' ? 2 : 1;
++        if (isTestEvidence || rank(p.evidenceSource) >= rank(metadata.source as PersonalMemoryEvidenceSource)) return;
++      }
++    }
++    const newPoint: VisitedPoint = {
++      lat,
++      lng,
++      ts,
++      cid: uuidv4(),
++      synced: false,
++      evidenceSource: isTestEvidence ? 'historical_unknown' : metadata.source as PersonalMemoryEvidenceSource,
++      sourceActivityClientId: metadata.sourceActivityClientId,
++      horizontalAccuracyM: metadata.horizontalAccuracyM,
++      continuityState: metadata.continuityState ?? 'unknown',
++    };
++    const newPoints = [...points, newPoint];
++    if (isTestEvidence) {
++      set({ testPoints: newPoints });
++      return;
++    }
+     // The bucket index is internal and never a render selector. Mutate this
+     // derived index in place so a new explored increment does not clone every
+     // historical bucket; the public points array remains immutable.
+@@ -373,7 +414,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
+   // O1: applyServerEchoForPush (M11 legacy) removed — memorySync uses
+   // the Aligned variant only, and grep confirms 0 external callers.
+ 
+-  replacePoints: (points, initialRevealDone) => {
++  replacePoints: (points, initialRevealDone) => {
+     try {
+       // eslint-disable-next-line @typescript-eslint/no-require-imports
+       require('../../../services/bootDiagnostics').markBootPhase('replacepoints_entry', { points_n: points.length });
+@@ -429,9 +470,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
+     }
+   },
+ 
+-  clearAll: () => {
+-    set({
+-      points: [],
++  clearAll: () => {
++    set({
++      points: [],
++      testPoints: [],
+       _bucketIndex: null,
+       geometryVersion: get().geometryVersion + 1,
+       _unsyncedCount: 0,
+@@ -485,9 +527,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
+    * Calls clearAll's logic plus syncState reset. Use anywhere a
+    * caller previously had to update multiple slices.
+    */
+-  resetForUserSwitch: () => {
+-    set({
+-      points: [],
++  resetForUserSwitch: () => {
++    set({
++      points: [],
++      testPoints: [],
+       _bucketIndex: null,
+       geometryVersion: get().geometryVersion + 1,
+       _unsyncedCount: 0,
+diff --git a/app/src/features/memory/store/useMemorySubscriptionsStore.ts b/app/src/features/memory/store/useMemorySubscriptionsStore.ts
+index 9aea71a..04403a3 100644
+--- a/app/src/features/memory/store/useMemorySubscriptionsStore.ts
++++ b/app/src/features/memory/store/useMemorySubscriptionsStore.ts
+@@ -19,9 +19,18 @@ interface MemorySubscription {
+   subscribed_at?: string;
+ }
+ 
++export interface AvailableMemorySource {
++  friend_id: string;
++  friend_name: string;
++  selected: boolean;
++  authorization_version: number;
++  effective_at: string;
++}
++
+ interface State {
+   limit: number;        // server-side memory_subscription_limit (default 5)
+   subscriptions: MemorySubscription[];
++  availableSources: AvailableMemorySource[];
+   loading: boolean;
+   error: string | null;
+   /** Last raw HTTP status from a mutation, for UI to map 409 → paywall trigger. */
+@@ -42,6 +51,7 @@ interface State {
+ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
+   limit: 5,
+   subscriptions: [],
++  availableSources: [],
+   loading: false,
+   error: null,
+   // O1 batch 37: lastMutationStatus removed
+@@ -75,6 +85,8 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
+       }
+       if (!res.ok) { set({ loading: false, error: `HTTP ${res.status}` }); return; }
+       const data = await res.json();
++      const sourcesResponse = await authenticatedFetch('/api/friend-sharing/sources');
++      const sourcesBody = sourcesResponse.ok ? await sourcesResponse.json() : { sources: [] };
+       // Re-check viewer after the json() await — another potential yield point.
+       const viewerAfterJson: string | null = useMarkerStore.getState().userId;
+       if (viewerAfterJson !== viewerAtStart) {
+@@ -84,6 +96,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
+       set({
+         limit: data.limit ?? 5,
+         subscriptions: Array.isArray(data.subscriptions) ? data.subscriptions : [],
++        availableSources: Array.isArray(sourcesBody.sources) ? sourcesBody.sources : [],
+         loading: false,
+       });
+     } catch (e: any) {
+@@ -111,6 +124,10 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
+           subscribed_at: new Date().toISOString(),
+         };
+         set({ subscriptions: [...get().subscriptions, newSub] });
++        set({
++          availableSources: get().availableSources.map(source =>
++            Number(source.friend_id) === friendId ? { ...source, selected: true } : source),
++        });
+       }
+       return res.status;
+     } catch {
+@@ -125,6 +142,15 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
+       });
+       if (res.ok) {
+         set({ subscriptions: get().subscriptions.filter((s) => s.friend_id !== friendId) });
++        set({
++          availableSources: get().availableSources.map(source =>
++            Number(source.friend_id) === friendId ? { ...source, selected: false } : source),
++        });
++        // Known viewer-side removal is an immediate cache purge. A later
++        // render or failed refresh cannot resurrect this projection.
++        // eslint-disable-next-line @typescript-eslint/no-require-imports
++        const { useFriendMemoryStore } = require('./useFriendMemoryStore');
++        await useFriendMemoryStore.getState().purgeFriend(friendId);
+       }
+       return res.status;
+     } catch {
+@@ -139,6 +165,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
+     set({
+       limit: 5,
+       subscriptions: [],
++      availableSources: [],
+       loading: false,
+       error: null,
+       // O1 batch 37: lastMutationStatus removed
+diff --git a/app/src/features/plant/components/ContentStep.tsx b/app/src/features/plant/components/ContentStep.tsx
+index 34f30af..9ba127e 100644
+--- a/app/src/features/plant/components/ContentStep.tsx
++++ b/app/src/features/plant/components/ContentStep.tsx
+@@ -130,11 +130,6 @@ export function ContentStep({
+               showVisibilityPicker={false}
+             />
+ 
+-            {__DEV__ && (
+-              <View style={[styles.voiceBox, { backgroundColor: theme.surface, borderColor: theme.border }] }>
+-                <Text style={[styles.voiceTodo, { color: theme.foregroundSecondary }]}>Voice memo (dev-only preview — coming in a later release)</Text>
+-              </View>
+-            )}
+           </ScrollView>
+ 
+           <View style={styles.bottomBar}>
+diff --git a/app/src/features/plant/services/__tests__/noteEncoding.test.ts b/app/src/features/plant/services/__tests__/noteEncoding.test.ts
+index c74f01a..f662e82 100644
+--- a/app/src/features/plant/services/__tests__/noteEncoding.test.ts
++++ b/app/src/features/plant/services/__tests__/noteEncoding.test.ts
+@@ -13,17 +13,20 @@ describe('Cairn note presentation', () => {
+     });
+   });
+ 
+-  test('a one-tap Cairn receives a useful date identity', () => {
++  test('a one-tap Cairn receives the shared non-persisted fallback', () => {
+     const label = cairnDisplayTitle('', '', Date.UTC(2026, 8, 13));
+-    expect(label).toMatch(/^Cairn · /);
+-    expect(label).not.toMatch(/untitled/i);
++    expect(label).toBe('A moment here');
+   });
+ 
+-  test('legacy body content remains rediscoverable as the display name', () => {
+-    expect(cairnDisplayTitle('', 'Water after the bridge\nSeasonal', 0)).toBe('Water after the bridge');
++  test('legacy body content is preserved but never promoted into the title', () => {
++    expect(cairnDisplayTitle('', 'Water after the bridge\nSeasonal', 0)).toBe('A moment here');
+     expect(splitTitleBody('Water after the bridge\nSeasonal')).toEqual({
+       title: '',
+       body: 'Water after the bridge\nSeasonal',
+     });
+   });
++
++  test('authored names are returned verbatim apart from blank detection', () => {
++    expect(cairnDisplayTitle('  Wind shelf  ', 'ignored', 0)).toBe('  Wind shelf  ');
++  });
+ });
+diff --git a/app/src/features/plant/services/noteEncoding.ts b/app/src/features/plant/services/noteEncoding.ts
+index a6c32d9..da6beef 100644
+--- a/app/src/features/plant/services/noteEncoding.ts
++++ b/app/src/features/plant/services/noteEncoding.ts
+@@ -34,14 +34,10 @@ export function splitTitleBody(note: string): { title: string; body: string } {
+ /** Give a quick, content-free Cairn a stable rediscovery name. */
+ export function cairnDisplayTitle(
+   title: string,
+-  body: string,
+-  createdAt: number,
++  _body: string,
++  _createdAt: number,
+ ): string {
+   const explicit = title.trim();
+-  if (explicit) return explicit;
+-  const bodyLead = body.trim().split(/\r?\n/, 1)[0];
+-  if (bodyLead) return bodyLead.slice(0, 30);
+-  const date = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' })
+-    .format(new Date(createdAt));
+-  return `Cairn · ${date}`;
++  if (explicit) return title;
++  return 'A moment here';
+ }
+diff --git a/app/src/navigation/RootNavigator.tsx b/app/src/navigation/RootNavigator.tsx
+index 80824c4..3f3959b 100644
+--- a/app/src/navigation/RootNavigator.tsx
++++ b/app/src/navigation/RootNavigator.tsx
+@@ -33,7 +33,8 @@ import { RoutesScreen } from '../screens/RoutesScreen';
+ import { RouteEditorScreen } from '../screens/RouteEditorScreen';
+ import { DebugScreen } from '../screens/DebugScreen';
+ import { PlantScreen } from '../screens/PlantScreen';
+-import { FriendsScreen } from '../screens/FriendsScreen';
++import { FriendsScreen } from '../screens/FriendsScreen';
++import { FriendContentScreen } from '../screens/FriendContentScreen';
+ import { FriendsPreviewScreen } from '../screens/FriendsPreviewScreen';
+ import { HomePreviewScreen } from '../screens/HomePreviewScreen';
+ import { HikingPreviewScreen } from '../screens/HikingPreviewScreen';
+@@ -58,11 +59,11 @@ import { useVisualTheme } from '../hooks/useVisualTheme';
+ // `navigator_module_loaded` (here), some Screen's module-level code crashed.
+ markBootPhase('navigator_module_loaded');
+ 
+-export type RootStackParamList = {
++export type RootStackParamList = {
+   Auth: undefined;
+   Home: undefined;
+-  Hiking: { recoverClientActivityId?: string; routeId?: string } | undefined;
+-  Running: { recoverClientActivityId?: string; routeId?: string } | undefined;
++  Hiking: { recoverClientActivityId?: string; routeId?: string; sharedRouteLease?: SharedRouteLaunch } | undefined;
++  Running: { recoverClientActivityId?: string; routeId?: string; sharedRouteLease?: SharedRouteLaunch } | undefined;
+   MapHistory: { sessionId?: string; routeId?: string; qaReviewClone?: 'almost-done-v1' } | undefined;
+   Routes: { initialTab?: 'routes' | 'activities' } | undefined;
+   RouteEditor: {
+@@ -75,7 +76,8 @@ export type RootStackParamList = {
+   Plant: undefined;
+   MarkerDetail: { markerId: string };
+   AllCairns: undefined;
+-  Friends: undefined;
++  Friends: undefined;
++  FriendContent: { friendId: string; friendName: string };
+   /** dev-only preview: renders the auto-generated FriendsScreen from spec.json.
+    *  Query param 'state' picks which of F0-F6 to render. */
+   FriendsPreview: { state?: string } | undefined;
+@@ -100,7 +102,16 @@ export type RootStackParamList = {
+   /** Phase B-1: dev-only three-theme production-primitive lab. */
+   ThreeThemeComponentLab: undefined;
+   Gate1IconSheet: undefined;
+-};
++};
++
++export interface SharedRouteLaunch {
++  leaseId: string;
++  routeId: string;
++  name: string;
++  points: Array<{ lat: number; lng: number; alt?: number | null }>;
++  distanceM: number;
++  elevationGainM: number;
++}
+ 
+ const Stack = createNativeStackNavigator<RootStackParamList>();
+ 
+@@ -235,7 +246,8 @@ export function RootNavigator() {
+             <Stack.Screen name="Plant"       component={PlantScreen} />
+             <Stack.Screen name="MarkerDetail" component={MarkerDetailScreen} />
+             <Stack.Screen name="AllCairns" component={AllCairnsScreen} />
+-            <Stack.Screen name="Friends"     component={FriendsScreen} />
++            <Stack.Screen name="Friends"     component={FriendsScreen} />
++            <Stack.Screen name="FriendContent" component={FriendContentScreen} />
+             {__DEV__ && <Stack.Screen name="FriendsPreview" component={FriendsPreviewScreen} />}
+             {__DEV__ && <Stack.Screen name="HomePreview" component={HomePreviewScreen} />}
+             {__DEV__ && <Stack.Screen name="HikingPreview" component={HikingPreviewScreen} />}
+diff --git a/app/src/screens/FriendsScreen.tsx b/app/src/screens/FriendsScreen.tsx
+index d90123d..f4edf60 100644
+--- a/app/src/screens/FriendsScreen.tsx
++++ b/app/src/screens/FriendsScreen.tsx
+@@ -855,18 +855,30 @@ export function FriendsScreen() {
+               <View style={[s.profileStats, { borderColor: theme.borderSubtle }]}>
+                 <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                   <View style={{ alignItems: 'center' }}>
+-                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.placesExplored}</Text>
++                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.permittedContent.encounteredCairns}</Text>
+                     <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>
+-                      {profileData.placesExplored === 1 ? 'place explored' : 'places explored'}
++                      {profileData.permittedContent.encounteredCairns === 1 ? 'encountered Cairn' : 'encountered Cairns'}
+                     </Text>
+                   </View>
+                   <View style={{ alignItems: 'center' }}>
+-                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.cairnsPlanted}</Text>
++                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.permittedContent.sharedRoutes}</Text>
+                     <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>
+-                      {profileData.cairnsPlanted === 1 ? 'cairn planted' : 'cairns planted'}
++                      {profileData.permittedContent.sharedRoutes === 1 ? 'shared Route' : 'shared Routes'}
+                     </Text>
+                   </View>
+                 </View>
++                <Text style={[s.cardMeta, { color: theme.foregroundSecondary, textAlign: 'center', marginTop: Spacing.md }]}>
++                  {profileData.permittedContent.memoryAvailable ? 'Memory sharing is available' : 'No shared Memory layer'}
++                </Text>
++                <PrimaryButton
++                  label="Open shared content"
++                  onPress={() => {
++                    const target = profileFriend;
++                    closeProfile();
++                    nav.navigate('FriendContent', { friendId: target.id, friendName: target.name });
++                  }}
++                  style={{ marginTop: Spacing.md }}
++                />
+               </View>
+             ) : (
+               <StateSurface
+diff --git a/app/src/screens/HikingScreen.tsx b/app/src/screens/HikingScreen.tsx
+index eb5afe9..4805af7 100644
+--- a/app/src/screens/HikingScreen.tsx
++++ b/app/src/screens/HikingScreen.tsx
+@@ -15,7 +15,9 @@ import {
+   View, Text, StyleSheet, TouchableOpacity, ScrollView,
+   Alert, Animated, Easing, Linking,
+ } from 'react-native';
+-import { haptic } from '../services/hapticService';
++import { haptic } from '../services/hapticService';
++import { authenticatedFetch } from '../services/apiService';
++import { uuidv4 } from '../services/offlineQueue';
+ import { useSafeAreaInsets } from 'react-native-safe-area-context';
+ import * as Location from 'expo-location';
+ import { useNavigation, useRoute, CommonActions, useFocusEffect, useIsFocused } from '@react-navigation/native';
+@@ -118,6 +120,9 @@ export function HikingScreen() {
+   const nav = useNavigation<Nav>();
+   const entryRoute = useRoute<any>();
+   const requestedRouteId = entryRoute.params?.routeId as string | undefined;
++  const sharedRouteLease = entryRoute.params?.sharedRouteLease as any;
++  const sharedRouteKey = sharedRouteLease ? `shared:${sharedRouteLease.leaseId}` : null;
++  const sharedLeaseStartedRef = useRef(false);
+   const isFocused = useIsFocused();
+   useFocusEffect(
+     React.useCallback(() => {
+@@ -303,13 +308,14 @@ export function HikingScreen() {
+   // avoids racing with useTrackingStore.stopTracking's own lastStopReason
+   // pathway and always shows the confirmation sheet before any teardown.
+   const [showTooShortConfirm, setShowTooShortConfirm] = useState(false);
+-  const [selectedRoute, setSelectedRoute] = useState<string | null>(requestedRouteId ?? null);
++  const [selectedRoute, setSelectedRoute] = useState<string | null>(sharedRouteKey ?? requestedRouteId ?? null);
+ 
+   const routes = useRouteStore(s => s.routes);
+   const loadRoutes = useRouteStore(s => s.loadRoutes);
+   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
+   const activityRouteReference = useRouteStore(s => s.activityRouteReference);
+   const captureActivityRouteReference = useRouteStore(s => s.captureActivityRouteReference);
++  const captureExternalActivityRouteReference = useRouteStore(s => s.captureExternalActivityRouteReference);
+   const clearActivityRouteReference = useRouteStore(s => s.clearActivityRouteReference);
+   const isTracking = status === 'tracking';
+   // v120: paused state behaves like tracking for layout purposes (the
+@@ -343,6 +349,16 @@ export function HikingScreen() {
+     if (!requestedRouteId) return;
+     setSelectedRoute(requestedRouteId);
+   }, [requestedRouteId]);
++  useEffect(() => {
++    if (sharedRouteKey) setSelectedRoute(sharedRouteKey);
++  }, [sharedRouteKey]);
++  useEffect(() => {
++    if (status !== 'idle' || !sharedRouteLease || !sharedLeaseStartedRef.current) return;
++    sharedLeaseStartedRef.current = false;
++    void authenticatedFetch(`/api/friend-content/route-leases/${encodeURIComponent(sharedRouteLease.leaseId)}/end`, {
++      method: 'POST', body: JSON.stringify({}),
++    }).catch(() => null);
++  }, [sharedRouteLease, status]);
+   useEffect(() => {
+     const selected = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+     if (!selected || selected.points.length >= 2) return;
+@@ -610,14 +626,39 @@ export function HikingScreen() {
+       setUnfinishedResolutionRequested(true);
+       return;
+     }
+-    if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
++    const usingSharedRoute = Boolean(sharedRouteLease && selectedRoute === sharedRouteKey);
++    let requestedActivityId: string | undefined;
++    if (usingSharedRoute) {
++      requestedActivityId = uuidv4();
++      const authorization = await authenticatedFetch(`/api/friend-content/route-leases/${encodeURIComponent(sharedRouteLease.leaseId)}/start`, {
++        method: 'POST', body: JSON.stringify({ client_activity_id: requestedActivityId }),
++      }).catch(() => null);
++      if (!authorization?.ok) {
++        Alert.alert('Shared Route unavailable', 'Connect and reopen this Route from your friend before starting.');
++        return;
++      }
++      captureExternalActivityRouteReference({
++        routeId: `friend:${sharedRouteLease.routeId}:${sharedRouteLease.leaseId}`,
++        name: sharedRouteLease.name,
++        points: sharedRouteLease.points,
++        distanceM: sharedRouteLease.distanceM,
++        elevationGainM: sharedRouteLease.elevationGainM,
++        capturedAt: Date.now(),
++      });
++    } else if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
+       Alert.alert('Route unavailable', 'This Route is not ready on this device yet.');
+       return;
+     }
+     if (!selectedRoute) clearActivityRouteReference();
+-    const started = await startTracking();
++    const started = await startTracking(requestedActivityId);
++    if (usingSharedRoute) sharedLeaseStartedRef.current = started;
+     if (!started) {
+       clearActivityRouteReference();
++      if (usingSharedRoute) {
++        void authenticatedFetch(`/api/friend-content/route-leases/${encodeURIComponent(sharedRouteLease.leaseId)}/end`, {
++          method: 'POST', body: JSON.stringify({}),
++        }).catch(() => null);
++      }
+       const authoritative = await findRecoverableActivity('hiking');
+       if (authoritative) {
+         setUnfinished(authoritative);
+@@ -872,7 +913,9 @@ export function HikingScreen() {
+     closeRoutePicker();
+   };
+ 
+-  const selectedRouteName = routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Hike';
++  const selectedRouteName = sharedRouteLease && selectedRoute === sharedRouteKey
++    ? sharedRouteLease.name
++    : routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Hike';
+ 
+   // v412: 两个 return 分支 (phase='select' early return + Phase 2 主 return) 都需要挂
+   // UnfinishedRecoveryModal, 抽成一个 node 避免复制粘贴导致 onContinue/onDiscard 逻辑分叉。
+@@ -966,7 +1009,7 @@ export function HikingScreen() {
+   const activeRoute = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+   const routePolyline = activitySessionVisible && activityRouteReference
+     ? activityRouteReference.points
+-    : (activeRoute?.points ?? []);
++    : (sharedRouteLease && selectedRoute === sharedRouteKey ? sharedRouteLease.points : (activeRoute?.points ?? []));
+   const hikeMapSurface = (
+     <HikingMap
+       key="hike-map-surface"
+diff --git a/app/src/screens/MarkerDetailScreen.tsx b/app/src/screens/MarkerDetailScreen.tsx
+index 18f9547..510b066 100644
+--- a/app/src/screens/MarkerDetailScreen.tsx
++++ b/app/src/screens/MarkerDetailScreen.tsx
+@@ -16,8 +16,7 @@
+  *     see is frozen. If the owner has edited away from the snapshot,
+  *     a small banner shows "Others see: [snapshot.note], pinned as
+  *     [snapshot.type]" so the owner is reminded of the divergence.
+- * Existing type/visibility and public-snapshot behavior remain readable but
+- * are not exposed as editing controls in this personal-management slice.
++ * Cairn visibility is an owner control independent from Memory sharing.
+  */
+ import React, { useMemo, useState, useCallback } from 'react';
+ import {
+@@ -107,10 +106,10 @@ const MAP_H = Math.min(300, Math.max(220, Math.round(H * 0.32)));
+ type DetailRoute = RouteProp<RootStackParamList, 'MarkerDetail'>;
+ type Nav = NativeStackNavigationProp<RootStackParamList>;
+ 
+-const VISIBILITY_LABEL: Record<MarkerPermission, { label: string; iconName: IconName }> = {
+-  personal: { label: 'Just me', iconName: 'Lock' },
+-  group:    { label: 'Friends', iconName: 'Users' },
+-  public:   { label: 'Anyone',  iconName: 'Globe' },
++const VISIBILITY_LABEL: Record<MarkerPermission, { label: string; iconName: IconName }> = {
++  personal: { label: 'Only me', iconName: 'Lock' },
++  group:    { label: 'Friends can discover', iconName: 'Users' },
++  public:   { label: 'Historical public',  iconName: 'Globe' },
+ };
+ 
+ export function MarkerDetailScreen() {
+@@ -171,7 +170,8 @@ export function MarkerDetailScreen() {
+   }, []);
+ 
+   const editDirty = Boolean(marker) && (
+-    encodeTitleBody(editTitle.trim(), editBody) !== marker?.note
++    encodeTitleBody(editTitle, editBody) !== marker?.note
++    || editPermission !== marker?.permission
+   );
+ 
+   const requestCloseEdit = useCallback(() => {
+@@ -195,9 +195,10 @@ export function MarkerDetailScreen() {
+     setSaveError(null);
+     setSaving(true);
+     try {
+-      const newNote = encodeTitleBody(editTitle.trim(), editBody);
++      const newNote = encodeTitleBody(editTitle, editBody);
+       await updateMarker(marker.id, {
+         note: newNote,
++        permission: editPermission,
+       });
+       log('marker.edit_save', { id: marker.id });
+       setIsEditing(false);
+@@ -206,7 +207,7 @@ export function MarkerDetailScreen() {
+     } finally {
+       setSaving(false);
+     }
+-  }, [marker, editTitle, editBody, updateMarker]);
++  }, [marker, editTitle, editBody, editPermission, updateMarker]);
+ 
+   const handleDelete = useCallback(async () => {
+     if (!marker || deleting) return;
+@@ -248,9 +249,7 @@ export function MarkerDetailScreen() {
+ 
+   const meta = MARKER_TYPES[marker.type] ?? MARKER_TYPES.cairn;
+   const { title: privateTitle, body: privateBody } = splitTitleBody(marker.note);
+-  const displayTitle = privateTitle.trim()
+-    ? privateTitle.trim()
+-    : cairnDisplayTitle('', '', marker.createdAt);
++  const displayTitle = cairnDisplayTitle(privateTitle, privateBody, marker.createdAt);
+   const vis = VISIBILITY_LABEL[marker.permission] ?? VISIBILITY_LABEL.personal;
+   const localOnlyCairn = !marker.synced && Boolean(marker.clientCairnId ?? marker.localId);
+   const dateStr = formatDate(marker.createdAt);
+@@ -524,7 +523,8 @@ export function MarkerDetailScreen() {
+             onVisibilityChange={setEditPermission}
+             mode="edit"
+             showTypePicker={false}
+-            showVisibilityPicker={false}
++            showVisibilityPicker
++            disableVisibilityPublic
+             showLocationLockedNotice
+             autoFocus={null}
+             titleMaxChars={ContentConfig.titleMaxChars}
+diff --git a/app/src/screens/PlantScreen.tsx b/app/src/screens/PlantScreen.tsx
+index 1fd7691..e2ee5b0 100644
+--- a/app/src/screens/PlantScreen.tsx
++++ b/app/src/screens/PlantScreen.tsx
+@@ -229,7 +229,7 @@ export function PlantScreen() {
+           const isOnline = networkMonitor.getState()?.state === 'online';
+           if (!isOnline) {
+             Alert.alert(
+-              'Cairn planted (offline)',
++              'Cairn saved offline',
+               "Saved locally. We'll upload it as soon as you're back online.",
+               [{ text: 'OK' }],
+             );
+diff --git a/app/src/screens/RunningScreen.tsx b/app/src/screens/RunningScreen.tsx
+index 68d60c9..3af46b0 100644
+--- a/app/src/screens/RunningScreen.tsx
++++ b/app/src/screens/RunningScreen.tsx
+@@ -17,6 +17,8 @@ import {
+   Platform, TextInput, KeyboardAvoidingView, Keyboard, Linking, Alert,
+ } from 'react-native';
+ import { haptic } from '../services/hapticService';
++import { authenticatedFetch } from '../services/apiService';
++import { uuidv4 } from '../services/offlineQueue';
+ import { useSafeAreaInsets } from 'react-native-safe-area-context';
+ import { useNavigation, useRoute, useFocusEffect, useIsFocused, CommonActions } from '@react-navigation/native';
+ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+@@ -108,12 +110,16 @@ export function RunningScreen() {
+   const nav = useNavigation<Nav>();
+   const entryRoute = useRoute<any>();
+   const requestedRouteId = entryRoute.params?.routeId as string | undefined;
++  const sharedRouteLease = entryRoute.params?.sharedRouteLease as any;
++  const sharedRouteKey = sharedRouteLease ? `shared:${sharedRouteLease.leaseId}` : null;
++  const sharedLeaseStartedRef = useRef(false);
+   const isFocused = useIsFocused();
+   const routes = useRouteStore(s => s.routes);
+   const loadRoutes = useRouteStore(s => s.loadRoutes);
+   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
+   const activityRouteReference = useRouteStore(s => s.activityRouteReference);
+   const captureActivityRouteReference = useRouteStore(s => s.captureActivityRouteReference);
++  const captureExternalActivityRouteReference = useRouteStore(s => s.captureExternalActivityRouteReference);
+   const clearActivityRouteReference = useRouteStore(s => s.clearActivityRouteReference);
+   const [unfinishedRun, setUnfinishedRun] = useState<RecoverableActivity | null>(null);
+   const [unfinishedResolutionRequested, setUnfinishedResolutionRequested] = useState(false);
+@@ -156,7 +162,7 @@ export function RunningScreen() {
+   const runRecenterImperativeRef = useRef<(() => void) | null>(null);
+   // O18 ONB-04: shared permission-denied modal state.
+   const [permissionDeniedVisible, setPermissionDeniedVisible] = useState(false);
+-  const [selectedRoute, setSelectedRoute] = useState<string | null>(requestedRouteId ?? null);
++  const [selectedRoute, setSelectedRoute] = useState<string | null>(sharedRouteKey ?? requestedRouteId ?? null);
+   const [showRoutePicker, setShowRoutePicker] = useState(false);
+   // foregroundGranted gates UserLocation rendering on the pre-start map.
+   // Without this, Mapbox UserLocation silently fails (no blue dot) and the
+@@ -178,6 +184,9 @@ export function RunningScreen() {
+     if (!requestedRouteId) return;
+     setSelectedRoute(requestedRouteId);
+   }, [requestedRouteId]);
++  useEffect(() => {
++    if (sharedRouteKey) setSelectedRoute(sharedRouteKey);
++  }, [sharedRouteKey]);
+   useEffect(() => {
+     const selected = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+     if (!selected || selected.points.length >= 2) return;
+@@ -202,6 +211,13 @@ export function RunningScreen() {
+ 
+   // Real tracking store
+   const status = useTrackingStore(s => s.status);
++  useEffect(() => {
++    if (status !== 'idle' || !sharedRouteLease || !sharedLeaseStartedRef.current) return;
++    sharedLeaseStartedRef.current = false;
++    void authenticatedFetch(`/api/friend-content/route-leases/${encodeURIComponent(sharedRouteLease.leaseId)}/end`, {
++      method: 'POST', body: JSON.stringify({}),
++    }).catch(() => null);
++  }, [sharedRouteLease, status]);
+   const locationProviderSource = useTrackingStore(s => s.locationProviderSource);
+   useSimulatorKeepAwake(
+     activitySimulatorBuildCapable
+@@ -404,7 +420,9 @@ export function RunningScreen() {
+     closeRoutePicker();
+   };
+ 
+-  const selectedRouteName = routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Run';
++  const selectedRouteName = sharedRouteLease && selectedRoute === sharedRouteKey
++    ? sharedRouteLease.name
++    : routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Run';
+ 
+   useFocusEffect(React.useCallback(() => {
+     setRunFollowUser(true);
+@@ -459,14 +477,39 @@ export function RunningScreen() {
+       return;
+     }
+     setActivityMode('running');
+-    if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
++    const usingSharedRoute = Boolean(sharedRouteLease && selectedRoute === sharedRouteKey);
++    let requestedActivityId: string | undefined;
++    if (usingSharedRoute) {
++      requestedActivityId = uuidv4();
++      const authorization = await authenticatedFetch(`/api/friend-content/route-leases/${encodeURIComponent(sharedRouteLease.leaseId)}/start`, {
++        method: 'POST', body: JSON.stringify({ client_activity_id: requestedActivityId }),
++      }).catch(() => null);
++      if (!authorization?.ok) {
++        Alert.alert('Shared Route unavailable', 'Connect and reopen this Route from your friend before starting.');
++        return;
++      }
++      captureExternalActivityRouteReference({
++        routeId: `friend:${sharedRouteLease.routeId}:${sharedRouteLease.leaseId}`,
++        name: sharedRouteLease.name,
++        points: sharedRouteLease.points,
++        distanceM: sharedRouteLease.distanceM,
++        elevationGainM: sharedRouteLease.elevationGainM,
++        capturedAt: Date.now(),
++      });
++    } else if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
+       Alert.alert('Route unavailable', 'This Route is not ready on this device yet.');
+       return;
+     }
+     if (!selectedRoute) clearActivityRouteReference();
+-    const started = await startTracking();
++    const started = await startTracking(requestedActivityId);
++    if (usingSharedRoute) sharedLeaseStartedRef.current = started;
+     if (!started) {
+       clearActivityRouteReference();
++      if (usingSharedRoute) {
++        void authenticatedFetch(`/api/friend-content/route-leases/${encodeURIComponent(sharedRouteLease.leaseId)}/end`, {
++          method: 'POST', body: JSON.stringify({}),
++        }).catch(() => null);
++      }
+       const authoritative = await findRecoverableActivity('running');
+       if (authoritative) {
+         setUnfinishedRun(authoritative);
+@@ -588,7 +631,7 @@ export function RunningScreen() {
+         virtualTimestamp: locationProviderSource === 'simulator' ? simulatorVirtualTimestamp : null,
+       });
+       if (sessionId) linkMarker(marker.id);
+-      setPlantToast('Cairn planted');
++      setPlantToast('Cairn saved');
+       setTimeout(() => setPlantToast(null), 1500);
+     } catch {
+       setPlantToast('Failed to plant cairn');
+@@ -676,8 +719,8 @@ export function RunningScreen() {
+   if (plantToast) {
+     runNotices.push({
+       label: plantToast,
+-      tone: plantToast === 'Cairn planted' ? 'healthy' : 'warning',
+-      icon: plantToast === 'Cairn planted' ? 'Flag' : 'TriangleAlert',
++      tone: plantToast === 'Cairn saved' ? 'healthy' : 'warning',
++      icon: plantToast === 'Cairn saved' ? 'Flag' : 'TriangleAlert',
+     });
+   }
+   // Pace: min/km (or min/mi if imperial) — seconds per meter → minutes per unit
+@@ -703,7 +746,7 @@ export function RunningScreen() {
+   const activeRoute = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+   const plannedRoutePoints = isActivitySessionVisible(operationalState) && activityRouteReference
+     ? activityRouteReference.points
+-    : (activeRoute?.points ?? []);
++    : (sharedRouteLease && selectedRoute === sharedRouteKey ? sharedRouteLease.points : (activeRoute?.points ?? []));
+   const runMapSurface = (
+     <View key="run-map-surface" style={StyleSheet.absoluteFillObject}>
+       <HikingMap
+diff --git a/app/src/services/memorySync.ts b/app/src/services/memorySync.ts
+index 0f5e767..3a75bbf 100644
+--- a/app/src/services/memorySync.ts
++++ b/app/src/services/memorySync.ts
+@@ -56,11 +56,15 @@ export function getMemorySyncMetrics(): typeof syncMetrics {
+ /** O7 fix: persistent pull cursor so an aborted pull resumes from where it stopped. */
+ let pullCursor: { afterTs: number; afterCid: string } = { afterTs: 0, afterCid: '' };
+ 
+-interface ServerPoint {
++interface ServerPoint {
+   lat: number;
+   lng: number;
+   ts: number;
+-  cid: string;
++  cid: string;
++  evidence_source?: 'activity_real' | 'passive_real' | 'historical_unknown';
++  source_activity_client_id?: string | null;
++  horizontal_accuracy_m?: number | null;
++  continuity_state?: 'accepted' | 'gap' | 'unknown';
+ }
+ 
+ interface EchoEntry {
+@@ -228,8 +232,14 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?:
+     return;
+   }
+ 
+-  const serverPoints: VisitedPoint[] = accumulated.map((p) => ({
+-    lat: p.lat, lng: p.lng, ts: p.ts, cid: p.cid, synced: true,
++  const serverPoints: VisitedPoint[] = accumulated.map((p) => ({
++    lat: p.lat, lng: p.lng, ts: p.ts, cid: p.cid, synced: true,
++    evidenceSource: p.evidence_source === 'activity_real' || p.evidence_source === 'passive_real'
++      ? p.evidence_source
++      : 'historical_unknown',
++    sourceActivityClientId: p.source_activity_client_id ?? undefined,
++    horizontalAccuracyM: typeof p.horizontal_accuracy_m === 'number' ? p.horizontal_accuracy_m : undefined,
++    continuityState: p.continuity_state ?? 'unknown',
+   }));
+   const serverCidSet = new Set(serverPoints.map((p) => p.cid));
+   const serverGeoTsSet = new Set(
+@@ -333,7 +343,11 @@ function sameContent(a: VisitedPoint[], b: VisitedPoint[]): boolean {
+     if (a[i].cid !== b[i].cid) return false;
+     if (a[i].synced !== b[i].synced) return false;
+     if (a[i].ts !== b[i].ts) return false;
+-    if (a[i].lat !== b[i].lat || a[i].lng !== b[i].lng) return false;
++    if (a[i].lat !== b[i].lat || a[i].lng !== b[i].lng) return false;
++    if (a[i].evidenceSource !== b[i].evidenceSource) return false;
++    if (a[i].sourceActivityClientId !== b[i].sourceActivityClientId) return false;
++    if (a[i].horizontalAccuracyM !== b[i].horizontalAccuracyM) return false;
++    if (a[i].continuityState !== b[i].continuityState) return false;
+   }
+   return true;
+ }
+@@ -382,8 +396,16 @@ async function pushPendingPoints(): Promise<void> {
+     const res = await fetchWithTimeout('/api/memory/points', {
+       method: 'POST',
+       body: JSON.stringify({
+-        points: batch.map((p) => p.cid ? ({ lat: p.lat, lng: p.lng, ts: p.ts, cid: p.cid })
+-                                       : ({ lat: p.lat, lng: p.lng, ts: p.ts })),
++        points: batch.map((p) => ({
++          lat: p.lat,
++          lng: p.lng,
++          ts: p.ts,
++          ...(p.cid ? { cid: p.cid } : {}),
++          evidence_source: p.evidenceSource,
++          source_activity_client_id: p.sourceActivityClientId,
++          horizontal_accuracy_m: p.horizontalAccuracyM,
++          continuity_state: p.continuityState,
++        })),
+       }),
+     }, myCtrl);
+     if (myEpoch !== epoch || myUserId !== activeUserId) return;
+diff --git a/app/src/services/pendingSyncStore.ts b/app/src/services/pendingSyncStore.ts
+index ed125be..ff74f39 100644
+--- a/app/src/services/pendingSyncStore.ts
++++ b/app/src/services/pendingSyncStore.ts
+@@ -66,7 +66,13 @@ export interface PendingHike {
+       segment_id?: string;
+       segment_start_reason?: PendingSegmentStartReason;
+     }>;
+-    memory_points: Array<{ lat: number; lng: number; ts: number; cid?: string }>;
++    memory_points: Array<{
++      lat: number; lng: number; ts: number; cid?: string;
++      evidence_source?: 'activity_real' | 'passive_real' | 'historical_unknown';
++      source_activity_client_id?: string;
++      horizontal_accuracy_m?: number;
++      continuity_state?: 'accepted' | 'gap' | 'unknown';
++    }>;
+   };
+   createdAt: number;
+   lastAttemptAt: number | null;
+diff --git a/app/src/services/sessionService.ts b/app/src/services/sessionService.ts
+index e3b558c..24149a5 100644
+--- a/app/src/services/sessionService.ts
++++ b/app/src/services/sessionService.ts
+@@ -303,7 +303,13 @@ interface SaveHikeAtomicPayload {
+     v_acc?: number | null; speed_mps?: number | null; course_deg?: number | null; raw_ordinal?: number;
+     segment_id?: string; segment_start_reason?: string;
+   }>;
+-  memory_points: Array<{ lat: number; lng: number; ts: number; cid?: string }>;
++  memory_points: Array<{
++    lat: number; lng: number; ts: number; cid?: string;
++    evidence_source?: 'activity_real' | 'passive_real' | 'historical_unknown';
++    source_activity_client_id?: string;
++    horizontal_accuracy_m?: number;
++    continuity_state?: 'accepted' | 'gap' | 'unknown';
++  }>;
+ }
+ 
+ interface SaveHikeAtomicResult {
+diff --git a/app/src/store/useFriendStore.ts b/app/src/store/useFriendStore.ts
+index 8fd1ef4..eb85158 100644
+--- a/app/src/store/useFriendStore.ts
++++ b/app/src/store/useFriendStore.ts
+@@ -183,10 +183,11 @@ export interface FriendProfile {
+   name: string;
+   email: string;
+   memberSince: string | null;
+-  friendCount: number;
+-  hikeCount: number;
+-  placesExplored: number;
+-  cairnsPlanted: number;
++  permittedContent: {
++    encounteredCairns: number;
++    sharedRoutes: number;
++    memoryAvailable: boolean;
++  };
+ }
+ 
+ export async function fetchFriendProfile(friendId: number | string): Promise<FriendProfile | null> {
+@@ -218,6 +219,16 @@ export async function removeFriendAPI(
+       const data = await res.json().catch(() => ({}));
+       return { success: false, error: (data as any).error || 'Remove failed' };
+     }
++    try {
++      // eslint-disable-next-line @typescript-eslint/no-require-imports
++      const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
++      await useFriendMemoryStore.getState().purgeFriend(friendId);
++      // eslint-disable-next-line @typescript-eslint/no-require-imports
++      const { useMarkerStore } = require('./useMarkerStore');
++      useMarkerStore.setState((state: any) => ({
++        circleMarkers: state.circleMarkers.filter((marker: any) => String(marker.userId) !== String(friendId)),
++      }));
++    } catch { /* server revocation remains authoritative */ }
+     return { success: true };
+   } catch (err: any) {
+     useFriendStore.setState({ friends: prev });
+@@ -252,6 +263,16 @@ export async function blockUser(
+     try {
+       await useFriendStore.getState().loadFriendsFromBackend();
+     } catch { /* silent */ }
++    try {
++      // eslint-disable-next-line @typescript-eslint/no-require-imports
++      const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
++      await useFriendMemoryStore.getState().purgeFriend(targetId);
++      // eslint-disable-next-line @typescript-eslint/no-require-imports
++      const { useMarkerStore } = require('./useMarkerStore');
++      useMarkerStore.setState((state: any) => ({
++        circleMarkers: state.circleMarkers.filter((marker: any) => String(marker.userId) !== String(targetId)),
++      }));
++    } catch { /* server revocation remains authoritative */ }
+     return { success: true };
+   } catch (err: any) {
+     return { success: false, error: err?.message || 'Network error' };
+diff --git a/app/src/store/useMarkerStore.ts b/app/src/store/useMarkerStore.ts
+index 1f48c01..fc664ea 100644
+--- a/app/src/store/useMarkerStore.ts
++++ b/app/src/store/useMarkerStore.ts
+@@ -744,10 +744,17 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
+     // captured at the moment of the fetch are honoured regardless of when
+     // their POST finally settles.
+     if (get().loadingCircle) return;
+-    const hidingSnapshot = new Set(get().hidingIds);
+-    set({ loadingCircle: true });
+-    try {
+-      const res = await authenticatedFetch('/api/circle/markers');
++    const hidingSnapshot = new Set(get().hidingIds);
++    set({ loadingCircle: true });
++    try {
++      // The client never downloads a catalogue of undiscovered friend Cairns.
++      // Ask the server to derive eligible encounters from authoritative real
++      // Memory evidence, then fetch only the resulting read-authorized facts.
++      await authenticatedFetch('/api/friend-content/encounters/verify', {
++        method: 'POST',
++        body: JSON.stringify({}),
++      }).catch(() => null);
++      const res = await authenticatedFetch('/api/circle/markers');
+       if (!res.ok) { set({ loadingCircle: false }); return; }
+       const data = await res.json();
+       const rows: any[] = Array.isArray(data?.markers) ? data.markers : [];
+diff --git a/app/src/store/useRouteStore.ts b/app/src/store/useRouteStore.ts
+index cf44f62..46b4aff 100644
+--- a/app/src/store/useRouteStore.ts
++++ b/app/src/store/useRouteStore.ts
+@@ -304,6 +304,7 @@ interface RouteStore {
+   setFollowingRoute: (id: string | null) => void;
+   activityRouteReference: ActivityRouteReference | null;
+   captureActivityRouteReference: (id: string | null) => ActivityRouteReference | null;
++  captureExternalActivityRouteReference: (reference: ActivityRouteReference) => ActivityRouteReference;
+   clearActivityRouteReference: () => void;
+ 
+   // Load from backend
+@@ -361,6 +362,15 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
+     set({ activityRouteReference: snapshot });
+     return snapshot;
+   },
++  captureExternalActivityRouteReference: (reference) => {
++    const snapshot: ActivityRouteReference = {
++      ...reference,
++      points: reference.points.map(point => ({ ...point })),
++      capturedAt: Date.now(),
++    };
++    set({ activityRouteReference: snapshot });
++    return snapshot;
++  },
+   clearActivityRouteReference: () => set({ activityRouteReference: null }),
+ 
+   loadRoutes: async () => {
+diff --git a/app/src/store/useTrackingStore.ts b/app/src/store/useTrackingStore.ts
+index c7202d9..e76fa9a 100644
+--- a/app/src/store/useTrackingStore.ts
++++ b/app/src/store/useTrackingStore.ts
+@@ -152,6 +152,7 @@ import {
+ import { deriveActivityLocationHealth } from '../features/activity/activityLocationHealth';
+ import type { ActivityTransitionState } from '../features/activity/activityOperationalState';
+ import { appendCausalLivePoint } from '../features/activity/causalLiveRoute';
++import type { ActivityRouteReference } from '../features/route/routeContracts';
+ 
+ // Lazy import expo-location to avoid crash on web
+ let Location: typeof import('expo-location') | null = null;
+@@ -188,6 +189,27 @@ let realForegroundCadenceExperiment: LocationCadenceExperiment = {
+ let previousRealRawDiagnostic: { lat: number; lng: number; t: number } | null = null;
+ let latestRealCanonicalDecisionReason: string | null = null;
+ 
++function captureBorrowedRouteForRecovery(): ActivityRouteReference | undefined {
++  try {
++    // The Route store deliberately remains session-scoped. Only borrowed
++    // geometry receives the narrow durable recovery exception.
++    // eslint-disable-next-line @typescript-eslint/no-require-imports
++    const reference = require('./useRouteStore').useRouteStore.getState()
++      .activityRouteReference as ActivityRouteReference | null;
++    if (!reference?.routeId.startsWith('friend:') || reference.points.length < 2) return undefined;
++    return { ...reference, points: reference.points.map(point => ({ ...point })) };
++  } catch {
++    return undefined;
++  }
++}
++
++function clearActivityRouteReferenceAfterTerminal(): void {
++  try {
++    // eslint-disable-next-line @typescript-eslint/no-require-imports
++    require('./useRouteStore').useRouteStore.getState().clearActivityRouteReference();
++  } catch { /* Route presentation is unavailable in this runtime. */ }
++}
++
+ function settleWithin<T>(work: Promise<T>, budgetMs: number, fallback: T): Promise<T> {
+   return new Promise(resolve => {
+     let settled = false;
+@@ -916,7 +938,7 @@ interface TrackingState {
+   setActivityMode: (mode: ActivityMode) => void;
+   /** Refresh the actual native background permission without prompting. */
+   refreshBackgroundLocationPermission: () => Promise<void>;
+-  startTracking: () => Promise<boolean>;
++  startTracking: (requestedClientActivityId?: string) => Promise<boolean>;
+   // Optional sessionName: when supplied (from the post-stop summary sheet)
+   // the saved session is tagged with this name; otherwise the session
+   // gets a default name on the consumer side ("Hike — DD/MM/YYYY").
+@@ -1029,7 +1051,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
+     await refreshRealBackgroundAuthorization(false);
+   },
+ 
+-  startTracking: async () => {
++  startTracking: async (requestedClientActivityId) => {
+     const beforeStart = get();
+     // Store-boundary idempotency: the synchronous requesting transition is
+     // the lock. A second tap/caller cannot initialize another writer,
+@@ -1069,7 +1091,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
+           startWallClockTimestamp,
+         )
+       : startWallClockTimestamp;
+-    const localSessionId = uuidv4();
++    const localSessionId = requestedClientActivityId ?? uuidv4();
+     const ownerGeneration = uuidv4();
+     const initialSegmentId = newSegmentId(localSessionId, startedAt);
+     resetRealGpsDiagnosticState(locationProviderSource === 'real' ? localSessionId : null);
+@@ -1164,6 +1186,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
+         currentSegmentId: initialSegmentId,
+         nextSegmentStartReason: 'start',
+         locationProviderSource,
++        borrowedRouteReference: captureBorrowedRouteForRecovery(),
+         lifecycle: 'unfinished',
+       });
+     } catch {
+@@ -2019,6 +2042,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
+           lng: point.lng,
+           ts: Math.floor(point.ts),
+           cid: point.cid,
++          evidence_source: point.evidenceSource,
++          source_activity_client_id: point.sourceActivityClientId,
++          horizontal_accuracy_m: point.horizontalAccuracyM,
++          continuity_state: point.continuityState,
+         }));
+       let finishIdempotencyKey: string;
+       try {
+@@ -2411,9 +2438,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
+             lat: point.lat,
+             lng: point.lng,
+             atMs: point.t,
+-            source: 'reconciliation',
++            source: s.locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
+             ownerUserId,
+             durability: 'deferred',
++            sourceActivityClientId: s.sessionId ?? undefined,
++            horizontalAccuracyM: point.accuracy ?? undefined,
++            continuityState: 'accepted',
+           });
+           if (result.committed && !result.deduplicated) memoryNewCells += 1;
+         }
+@@ -2484,7 +2514,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
+       // 采样 memory_points: 从 memoryStore 里拉这次 hike 期间产生的 unsynced points
+       const memoryUnsynced = useMemoryStore.getState().points
+         .filter((p: any) => !p.synced && p.ts >= s.startedAt! && p.ts <= endedAt)
+-        .map((p: any) => ({ lat: p.lat, lng: p.lng, ts: Math.floor(p.ts), cid: p.cid }));
++        .map((p: any) => ({
++          lat: p.lat,
++          lng: p.lng,
++          ts: Math.floor(p.ts),
++          cid: p.cid,
++          evidence_source: p.evidenceSource,
++          source_activity_client_id: p.sourceActivityClientId,
++          horizontal_accuracy_m: p.horizontalAccuracyM,
++          continuity_state: p.continuityState,
++        }));
+ 
+       const v412Payload = {
+         end_time: new Date(endedAt).toISOString(),
+@@ -3009,6 +3048,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
+       realActivityQaSessionId = null;
+     }
+     finishAcceptanceSnapshotClosed = false;
++    clearActivityRouteReferenceAfterTerminal();
+     set((prev) => ({
+       ...initialState,
+       lastStopReason: stopReason,
+@@ -4192,8 +4232,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
+             lat: point.lat,
+             lng: point.lng,
+             atMs: point.t,
+-            source: 'activity',
++            source: isSimulatorSample ? 'simulator_test' : 'activity_real',
+             ownerUserId: before.ownerUserId,
++            sourceActivityClientId: before.sessionId ?? undefined,
++            horizontalAccuracyM: point.accuracy ?? undefined,
++            continuityState: 'accepted',
+           });
+           memoryResult = {
+             committed: memoryResult.committed || pointMemoryResult.committed,
+@@ -4775,6 +4818,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
+         await new Promise<void>((resolve) => setTimeout(resolve, 25));
+       }
+     }
++    clearActivityRouteReferenceAfterTerminal();
+     set({ ...initialState, activityMode: activity.activityMode });
+ 
+     networkMonitor.stop();
+@@ -4844,9 +4888,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
+           lat: point.lat,
+           lng: point.lng,
+           atMs: point.t,
+-          source: 'reconciliation',
++          source: s.locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
+           ownerUserId,
+           durability: 'deferred',
++          sourceActivityClientId: s.sessionId ?? undefined,
++          horizontalAccuracyM: point.accuracy ?? undefined,
++          continuityState: 'accepted',
+         });
+       }
+       if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
+@@ -4908,6 +4955,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
+       await endQaTelemetrySession(ownerUserId, 'real-activity-discarded');
+       realActivityQaSessionId = null;
+     }
++    clearActivityRouteReferenceAfterTerminal();
+     set({ ...initialState });
+   },
+ }));

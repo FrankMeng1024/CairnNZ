@@ -1,0 +1,961 @@
+diff --git a/app/scripts/personal-friends-overnight-qa.mjs b/app/scripts/personal-friends-overnight-qa.mjs
+new file mode 100644
+index 0000000..750f83e
+--- /dev/null
++++ b/app/scripts/personal-friends-overnight-qa.mjs
+@@ -0,0 +1,343 @@
++#!/usr/bin/env node
++
++import fs from 'node:fs';
++import path from 'node:path';
++import { chromium } from 'playwright';
++import sharp from 'sharp';
++
++const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8081';
++const outputDir = path.resolve(process.env.CAIRN_PF_QA_DIR || '_review/personal-friends-overnight');
++const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
++const themes = ['day', 'sunset', 'night'];
++const viewport = { width: 390, height: 844 };
++fs.mkdirSync(outputDir, { recursive: true });
++
++let unavailableMode = false;
++const now = Date.parse('2026-09-18T08:30:00+12:00');
++const friends = [
++  { id: 11, name: 'Mia Rangi', email: 'mia@example.org', added_at: '2026-09-01T08:00:00.000Z' },
++  { id: 12, name: 'Theo Walker', email: 'theo@example.org', added_at: '2026-09-02T08:00:00.000Z' },
++];
++const cairn = {
++  id: 'friend-cairn-901', author: { id: 11, name: 'Mia Rangi' }, type: 'viewpoint',
++  text: 'Harbour light\u001EA quiet place above the track.', lat: -41.2872, lng: 174.7762,
++  created_at: '2026-09-15T03:20:00.000Z', encountered_at: '2026-09-17T04:05:00.000Z', read_only: true,
++};
++const routeSummary = {
++  id: 'friend-route-701', author: { id: 11, name: 'Mia Rangi' }, name: 'Harbour ridge',
++  description: 'A steady climb with a sheltered return.', distance_m: 6400, elevation_gain_m: 310, read_only: true,
++};
++const routeDetail = {
++  ...routeSummary,
++  points: [
++    { lat: -41.2911, lng: 174.7731, alt: 22 },
++    { lat: -41.2889, lng: 174.7750, alt: 98 },
++    { lat: -41.2865, lng: 174.7778, alt: 146 },
++    { lat: -41.2848, lng: 174.7801, alt: 111 },
++  ],
++};
++const ownRouteWire = {
++  id: 601, user_id: 100, client_route_id: 'own-route-601', name: 'Town belt loop',
++  description: 'A sheltered loop through the green belt.', distance_m: 5800, elevation_gain_m: 245,
++  run_count: 2, last_run_at: '2026-09-17T00:00:00.000Z', created_at: '2026-09-16T00:00:00.000Z',
++  updated_at: '2026-09-17T00:00:00.000Z', permission: 'friend', creation_origin: 'manual',
++  points: routeDetail.points, waypoints: [],
++};
++
++const browser = await chromium.launch({
++  headless: true,
++  executablePath: chromePath,
++  args: ['--disable-web-security'],
++});
++const context = await browser.newContext({
++  viewport,
++  deviceScaleFactor: 1,
++  locale: 'en-NZ',
++  timezoneId: 'Pacific/Auckland',
++  geolocation: { latitude: -41.2865, longitude: 174.7762, accuracy: 18 },
++  permissions: ['geolocation'],
++  reducedMotion: 'reduce',
++});
++const page = await context.newPage();
++const runtimeErrors = [];
++const requests = [];
++page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
++page.on('console', message => {
++  const text = message.text();
++  if (message.type() === 'error' && !text.includes('Failed to load resource') && !text.includes('Mapbox')) {
++    runtimeErrors.push(`console: ${text}`);
++  }
++});
++page.on('dialog', dialog => dialog.dismiss());
++
++await page.route('**/api/**', async route => {
++  const request = route.request();
++  const url = new URL(request.url());
++  const pathname = url.pathname;
++  requests.push({ method: request.method(), pathname, unavailableMode });
++  const json = (body, status = 200) => route.fulfill({
++    status, contentType: 'application/json', body: JSON.stringify(body),
++  });
++
++  if (unavailableMode && pathname.startsWith('/api/friend-content/')) {
++    return json({ error: 'synthetic_weak_network_fixture' }, 503);
++  }
++  if (pathname === '/api/auth/me') return json({ user: { id: 100, name: 'Aroha', email: 'aroha@example.org' } });
++  if (pathname === '/api/friends') return json(friends);
++  if (pathname === '/api/friends/requests' || pathname === '/api/friends/requests/outbound') return json([]);
++  if (/^\/api\/friends\/\d+\/profile$/.test(pathname)) return json({
++    id: 11, name: 'Mia Rangi', email: 'mia@example.org', memberSince: '2025-11-10T08:00:00.000Z',
++    permittedContent: { encounteredCairns: 1, sharedRoutes: 1, memoryAvailable: true },
++  });
++  if (pathname === '/api/memory-subscriptions') return json({
++    limit: 5, count: 1,
++    subscriptions: [{ friend_id: 11, friend_name: 'Mia Rangi', subscribed_at: '2026-09-17T03:00:00.000Z' }],
++  });
++  if (pathname === '/api/friend-sharing/sources') return json({ sources: [
++    { friend_id: 11, friend_name: 'Mia Rangi', selected: true, authorization_version: 4, effective_at: '2026-09-17T03:00:00.000Z' },
++    { friend_id: 12, friend_name: 'Theo Walker', selected: false, authorization_version: 2, effective_at: '2026-09-17T03:00:00.000Z' },
++  ] });
++  if (pathname === '/api/friend-sharing/projections') return json({
++    revoked_friend_ids: [],
++    projections: [{
++      source_friend_id: 11, authorization_version: 4, projection_version: 'qa-projection-1', cell_size_m: 200,
++      server_authorized_at: '2026-09-18T00:00:00.000Z', authorization_expires_at: '2026-09-19T00:00:00.000Z',
++      cells: [{ id: 'qa-cell-1', polygon: [[174.774, -41.288], [174.778, -41.288], [174.778, -41.285], [174.774, -41.285], [174.774, -41.288]] }],
++    }],
++  });
++  if (pathname === '/api/friend-sharing/policy' && request.method() === 'GET') return json({
++    enabled: true, policy_epoch: 3, enabled_at: '2026-09-17T03:00:00.000Z',
++  });
++  if (pathname === '/api/friend-sharing/private-places' && request.method() === 'GET') return json({
++    private_places: [{ id: 1, label: 'Home area', lat: -41.2865, lng: 174.7762, radius_m: 250, created_at: '2026-09-17T03:10:00.000Z' }],
++  });
++  if (pathname === '/api/friend-content/cairns') return json({ cairns: [cairn] });
++  if (pathname === '/api/friend-content/routes') return json({ routes: [routeSummary] });
++  if (pathname === '/api/friend-content/routes/friend-route-701') return json({ route: routeDetail });
++  if (pathname === '/api/routes' && request.method() === 'GET') return json({ routes: [{ ...ownRouteWire, points: undefined, waypoints: undefined }] });
++  if (pathname === '/api/routes/601') return json({ route: ownRouteWire });
++  if (pathname === '/api/circle/markers') return json({ markers: [] });
++  if (pathname === '/api/memory/sync' || pathname === '/api/memory/points') return json({ points: [] });
++  if (pathname.startsWith('/api/hierarchy')) return json({ data: [], children: [] });
++  return json({ data: [], routes: [], markers: [], notifications: [], count: 0 });
++});
++
++const settle = (ms = 700) => page.waitForTimeout(ms);
++const capture = async name => {
++  const target = path.join(outputDir, `${name}-390x844.png`);
++  await page.screenshot({ path: target, fullPage: false });
++  return target;
++};
++const resetRoute = async (name, params) => {
++  await page.evaluate(({ routeName, routeParams }) => {
++    globalThis.__cairnStores.navigationRef.reset({ index: 0, routes: [{ name: routeName, params: routeParams }] });
++  }, { routeName: name, routeParams: params });
++  await page.waitForFunction(expected => globalThis.__cairnStores?.getCurrentRoute?.() === expected, name, { timeout: 20_000 });
++  await settle(1000);
++};
++const setTheme = async theme => {
++  await page.evaluate(next => {
++    const stores = globalThis.__cairnStores;
++    stores.useSettingsStore.getState().saveAll({ appearance: next, debugMode: false, mapLayer: 'outdoors' });
++    stores.useWeatherStore.getState().setConditionOverride('sunny');
++    stores.useWeatherStore.getState().setDayNightOverride(next);
++  }, theme);
++  await settle(500);
++};
++
++await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
++await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.useAppStore), null, { timeout: 120_000 });
++await page.waitForFunction(() => globalThis.__cairnStores.useAppStore.getState().hydrated === true, null, { timeout: 120_000 });
++await page.evaluate(fixtureNow => {
++  localStorage.setItem('cairn_jwt', 'personal-friends-visual-fixture');
++  localStorage.setItem('cairn_onboarding_v1_done', 'true');
++  localStorage.setItem('cairn_onboarding_v1_done_pf-qa', 'true');
++  const stores = globalThis.__cairnStores;
++  stores.useAppStore.setState({
++    user: { id: '100', name: 'Aroha', email: 'aroha@example.org', createdAt: '2026-01-01T00:00:00.000Z', hasPassword: true, providers: ['email'] },
++    isLoggedIn: true, hydrated: true, sessionExpired: false, logout: () => {},
++  });
++  const routePoints = [
++    { lat: -41.2911, lng: 174.7731, alt: 22 },
++    { lat: -41.2889, lng: 174.7750, alt: 98 },
++    { lat: -41.2865, lng: 174.7778, alt: 146 },
++    { lat: -41.2848, lng: 174.7801, alt: 111 },
++  ];
++  stores.useMarkerStore.setState({ userId: '100', markers: [{
++    id: 'own-cairn-501', clientCairnId: 'own-cairn-501', type: 'viewpoint', regionCode: 'nz',
++    lat: -41.2865, lng: 174.7762, note: 'Harbour pause\u001EA moment between the wind and the water.',
++    authorId: '100', createdAt: fixtureNow - 86_400_000, permission: 'friend', synced: true, alt: 46,
++  }], circleMarkers: [], publicMarkers: [], loadingCircle: false });
++  stores.useRouteStore.setState({ routes: [{
++    id: 'own-route-601', remoteId: '601', clientRouteId: 'own-route-601', name: 'Town belt loop',
++    description: 'A sheltered loop through the green belt.', createdAt: fixtureNow - 172_800_000,
++    updatedAt: fixtureNow - 86_400_000, points: routePoints, originalPoints: routePoints,
++    waypoints: [], distanceM: 5800, elevationGainM: 245, runCount: 2,
++    lastRunAt: fixtureNow - 86_400_000, isActive: false, activityMode: 'hiking', permission: 'friend',
++  }] });
++  stores.useSessionStore.setState({ currentUserId: '100', sessions: [{
++    id: 'own-activity-401', clientActivityId: 'own-activity-401', activityMode: 'hiking', regionCode: 'nz',
++    startedAt: fixtureNow - 10_800_000, endedAt: fixtureNow - 7_200_000, durationS: 3600,
++    distanceM: 6100, elevationGainM: 268,
++    trackPoints: routePoints.map((point, index) => ({ ...point, t: fixtureNow - (4 - index) * 900_000, segmentId: 'segment-1', segmentStartReason: index === 0 ? 'start' : undefined })),
++    markerIds: ['own-cairn-501'], name: 'Morning over the harbour', memoryNewCells: 12, syncState: 'synced',
++  }] });
++  stores.useTrackingStore.setState({ status: 'idle', sessionId: null, locationAvailable: false, lastCoordinate: null, lastCoordinateTime: null });
++  stores.useMemoryStore.setState({
++    points: [
++      { lat: -41.2892, lng: 174.7738, ts: fixtureNow - 7_200_000, cid: 'pf-evidence-1', synced: true, evidenceSource: 'activity_real', sourceActivityClientId: 'pf-activity-1', horizontalAccuracyM: 12, continuityState: 'continuous' },
++      { lat: -41.2875, lng: 174.7754, ts: fixtureNow - 5_400_000, cid: 'pf-evidence-2', synced: true, evidenceSource: 'activity_real', sourceActivityClientId: 'pf-activity-1', horizontalAccuracyM: 14, continuityState: 'continuous' },
++      { lat: -41.2865, lng: 174.7762, ts: fixtureNow - 3_600_000, cid: 'pf-evidence-3', synced: true, evidenceSource: 'activity_real', sourceActivityClientId: 'pf-activity-1', horizontalAccuracyM: 18, continuityState: 'continuous' },
++    ],
++    testPoints: [{ lat: -41.28, lng: 174.77, ts: fixtureNow, cid: 'simulator-isolated', synced: false, evidenceSource: 'simulator_test' }],
++    lastWatcherFix: { lat: -41.2865, lng: 174.7762, ts: fixtureNow }, geometryVersion: 1, initialRevealDone: true,
++  });
++}, now);
++await resetRoute('Home');
++
++const captures = [];
++for (const theme of themes) {
++  await setTheme(theme);
++  const supportingScreens = [
++    { surface: 'home', route: 'Home' },
++    { surface: 'hike-ready', route: 'Hiking' },
++    { surface: 'run-ready', route: 'Running' },
++    { surface: 'trails-routes', route: 'Routes', params: { initialTab: 'routes' } },
++    { surface: 'activity-detail-own', route: 'MapHistory', params: { sessionId: 'own-activity-401' } },
++    { surface: 'route-detail-own', route: 'MapHistory', params: { routeId: 'own-route-601' } },
++    { surface: 'cairn-detail-own', route: 'MarkerDetail', params: { markerId: 'own-cairn-501' } },
++    { surface: 'all-cairns-own-only', route: 'AllCairns' },
++    { surface: 'settings', route: 'Settings' },
++  ];
++  for (const screen of supportingScreens) {
++    await resetRoute(screen.route, screen.params);
++    captures.push({ theme, surface: screen.surface, path: await capture(`${theme}-${screen.surface}`) });
++  }
++  await resetRoute('Plant');
++  const confirmSpot = page.getByText(/^Confirm(?: this spot)?$/, { exact: false }).last();
++  if (await confirmSpot.isVisible().catch(() => false)) {
++    await confirmSpot.click();
++    await settle(800);
++  }
++  captures.push({ theme, surface: 'plant-text-only', path: await capture(`${theme}-plant-text-only`) });
++
++  await resetRoute('Memory');
++  const gotIt = page.getByText('Got it', { exact: true }).last();
++  if (await gotIt.isVisible().catch(() => false)) {
++    await gotIt.click();
++    await settle();
++  }
++  captures.push({ theme, surface: 'memory-personal', path: await capture(`${theme}-memory-personal`) });
++  await page.getByTestId('memory-scope-combined').click();
++  await settle();
++  captures.push({ theme, surface: 'memory-combined', path: await capture(`${theme}-memory-combined`) });
++  await page.getByTestId('memory-scope-friend').click();
++  await settle();
++  captures.push({ theme, surface: 'memory-single-friend', path: await capture(`${theme}-memory-single-friend`) });
++  await page.getByTestId('memory-sharing-entry').click();
++  await page.getByTestId('memory-sharing-sheet').waitFor({ state: 'visible', timeout: 10_000 });
++  await settle();
++  captures.push({ theme, surface: 'memory-sharing', path: await capture(`${theme}-memory-sharing`) });
++  await page.getByLabel('Close Memory sharing').click();
++  await settle();
++
++  await resetRoute('Friends');
++  await page.getByTestId('friend-card-11').waitFor({ state: 'visible', timeout: 10_000 });
++  captures.push({ theme, surface: 'friends-list', path: await capture(`${theme}-friends-list`) });
++  await page.getByTestId('friend-card-11').click();
++  await page.getByTestId('friend-profile-modal').waitFor({ state: 'visible', timeout: 10_000 });
++  await page.getByText('Open shared content', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
++  captures.push({ theme, surface: 'friend-profile', path: await capture(`${theme}-friend-profile`) });
++  await page.getByText('Open shared content', { exact: true }).click();
++  await page.waitForFunction(() => globalThis.__cairnStores?.getCurrentRoute?.() === 'FriendContent', null, { timeout: 20_000 });
++  await page.getByText('Harbour light', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
++  captures.push({ theme, surface: 'friend-content', path: await capture(`${theme}-friend-content`) });
++  await page.getByText('Harbour light', { exact: true }).click();
++  await page.getByTestId('friend-cairn-detail').waitFor({ state: 'visible', timeout: 10_000 });
++  await settle(900);
++  captures.push({ theme, surface: 'nonowner-cairn-readonly', path: await capture(`${theme}-nonowner-cairn-readonly`) });
++  await page.getByLabel('Close').last().click().catch(() => page.keyboard.press('Escape'));
++  await settle();
++  await page.getByText('Harbour ridge', { exact: true }).click();
++  await page.getByTestId('friend-route-detail').waitFor({ state: 'visible', timeout: 10_000 });
++  await settle();
++  captures.push({ theme, surface: 'nonowner-route-readonly', path: await capture(`${theme}-nonowner-route-readonly`) });
++}
++
++unavailableMode = true;
++await setTheme('day');
++await resetRoute('FriendContent', { friendId: '11', friendName: 'Mia Rangi' });
++await page.getByText('Shared content unavailable', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
++captures.push({ theme: 'day', surface: 'friend-content-unavailable', path: await capture('day-friend-content-unavailable') });
++
++// Auth is conditionally mounted by the production navigator. Capture it last,
++// after all authenticated surfaces, so no visual fixture bypass is required.
++await page.evaluate(() => globalThis.__cairnStores.useAppStore.setState({ user: null, isLoggedIn: false, hydrated: true }));
++await page.waitForFunction(() => globalThis.__cairnStores?.getCurrentRoute?.() === 'Auth', null, { timeout: 20_000 });
++for (const theme of themes) {
++  await setTheme(theme);
++  captures.push({ theme, surface: 'auth', path: await capture(`${theme}-auth`) });
++}
++
++const uniqueErrors = [...new Set(runtimeErrors)];
++const manifest = {
++  generatedAt: new Date().toISOString(),
++  evidenceKind: 'Expo Web mobile-size visual and deterministic edge-state fixture; not device or NZ field validation',
++  baseUrl,
++  viewport,
++  locale: 'en-NZ',
++  timezone: 'Pacific/Auckland',
++  themes,
++  captures: captures.map(item => ({ ...item, path: path.basename(item.path) })),
++  requestCount: requests.length,
++  runtimeErrors: uniqueErrors,
++};
++fs.writeFileSync(path.join(outputDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
++fs.writeFileSync(path.join(outputDir, 'requests.json'), `${JSON.stringify(requests, null, 2)}\n`);
++fs.writeFileSync(path.join(outputDir, 'runtime-errors.txt'), uniqueErrors.length ? `${uniqueErrors.join('\n')}\n` : 'none\n');
++
++const boardSurfaces = ['memory-personal', 'memory-sharing', 'friends-list', 'friend-profile', 'friend-content', 'nonowner-cairn-readonly', 'nonowner-route-readonly'];
++const tileW = viewport.width;
++const tileH = viewport.height;
++const labelH = 38;
++const gap = 16;
++const margin = 32;
++const boardW = margin * 2 + boardSurfaces.length * tileW + (boardSurfaces.length - 1) * gap;
++const boardH = margin * 2 + themes.length * (tileH + labelH) + (themes.length - 1) * gap;
++const composites = [];
++for (let row = 0; row < themes.length; row += 1) {
++  for (let col = 0; col < boardSurfaces.length; col += 1) {
++    const theme = themes[row];
++    const surface = boardSurfaces[col];
++    const left = margin + col * (tileW + gap);
++    const top = margin + row * (tileH + labelH + gap);
++    const label = `${surface.replaceAll('-', ' ')} · ${theme}`;
++    composites.push({ input: Buffer.from(`<svg width="${tileW}" height="${labelH}"><rect width="100%" height="100%" fill="#202927"/><text x="${tileW / 2}" y="25" text-anchor="middle" font-family="Arial" font-size="14" font-weight="600" fill="#F5F3EC">${label}</text></svg>`), left, top });
++    composites.push({ input: path.join(outputDir, `${theme}-${surface}-390x844.png`), left, top: top + labelH });
++  }
++}
++await sharp({ create: { width: boardW, height: boardH, channels: 3, background: '#151A19' } })
++  .composite(composites).jpeg({ quality: 91, chromaSubsampling: '4:4:4' })
++  .toFile(path.join(outputDir, 'personal-friends-three-theme-board.jpg'));
++
++const inventorySurfaces = ['home', 'auth', 'hike-ready', 'run-ready', 'plant-text-only', 'activity-detail-own', 'cairn-detail-own', 'all-cairns-own-only', 'trails-routes', 'route-detail-own', 'settings'];
++const inventoryW = margin * 2 + inventorySurfaces.length * tileW + (inventorySurfaces.length - 1) * gap;
++const inventoryComposites = [];
++for (let row = 0; row < themes.length; row += 1) {
++  for (let col = 0; col < inventorySurfaces.length; col += 1) {
++    const theme = themes[row];
++    const surface = inventorySurfaces[col];
++    const left = margin + col * (tileW + gap);
++    const top = margin + row * (tileH + labelH + gap);
++    const label = `${surface.replaceAll('-', ' ')} · ${theme}`;
++    inventoryComposites.push({ input: Buffer.from(`<svg width="${tileW}" height="${labelH}"><rect width="100%" height="100%" fill="#202927"/><text x="${tileW / 2}" y="25" text-anchor="middle" font-family="Arial" font-size="14" font-weight="600" fill="#F5F3EC">${label}</text></svg>`), left, top });
++    inventoryComposites.push({ input: path.join(outputDir, `${theme}-${surface}-390x844.png`), left, top: top + labelH });
++  }
++}
++await sharp({ create: { width: inventoryW, height: boardH, channels: 3, background: '#151A19' } })
++  .composite(inventoryComposites).jpeg({ quality: 91, chromaSubsampling: '4:4:4' })
++  .toFile(path.join(outputDir, 'full-surface-three-theme-board.jpg'));
++
++await browser.close();
++console.log(JSON.stringify({ outputDir, captures: captures.length, runtimeErrors: uniqueErrors }, null, 2));
++if (uniqueErrors.length) process.exitCode = 1;
+diff --git a/app/src/features/friends/services/friendContent.ts b/app/src/features/friends/services/friendContent.ts
+new file mode 100644
+index 0000000..9a8374d
+--- /dev/null
++++ b/app/src/features/friends/services/friendContent.ts
+@@ -0,0 +1,78 @@
++import { authenticatedFetch } from '../../../services/apiService';
++
++export interface FriendCairn {
++  id: string;
++  author: { id: string; name: string };
++  type: string;
++  text: string;
++  lat: number;
++  lng: number;
++  createdAt: number;
++  encounteredAt: number;
++  readOnly: true;
++}
++
++export interface FriendRoute {
++  id: string;
++  author: { id: string; name: string };
++  name: string;
++  description: string;
++  distanceM: number;
++  elevationGainM: number;
++  points?: Array<{ lat: number; lng: number; alt?: number | null }>;
++  readOnly: true;
++}
++
++function cairnFromWire(row: any): FriendCairn {
++  return {
++    id: String(row.id), author: { id: String(row.author?.id), name: String(row.author?.name ?? '') },
++    type: String(row.type ?? 'cairn'), text: String(row.text ?? ''), lat: Number(row.lat), lng: Number(row.lng),
++    createdAt: Date.parse(row.created_at), encounteredAt: Date.parse(row.encountered_at), readOnly: true,
++  };
++}
++
++function routeFromWire(row: any): FriendRoute {
++  return {
++    id: String(row.id), author: { id: String(row.author?.id), name: String(row.author?.name ?? '') },
++    name: String(row.name ?? 'Route'), description: String(row.description ?? ''),
++    distanceM: Number(row.distance_m ?? 0), elevationGainM: Number(row.elevation_gain_m ?? 0),
++    points: Array.isArray(row.points) ? row.points : undefined, readOnly: true,
++  };
++}
++
++export async function fetchFriendContent(friendId: string): Promise<{ cairns: FriendCairn[]; routes: FriendRoute[] }> {
++  const suffix = `?friend_id=${encodeURIComponent(friendId)}`;
++  const [cairnResponse, routeResponse] = await Promise.all([
++    authenticatedFetch(`/api/friend-content/cairns${suffix}`),
++    authenticatedFetch(`/api/friend-content/routes${suffix}`),
++  ]);
++  if (!cairnResponse.ok || !routeResponse.ok) throw new Error('friend_content_unavailable');
++  const [cairnBody, routeBody] = await Promise.all([cairnResponse.json(), routeResponse.json()]);
++  return {
++    cairns: (Array.isArray(cairnBody?.cairns) ? cairnBody.cairns : []).map(cairnFromWire),
++    routes: (Array.isArray(routeBody?.routes) ? routeBody.routes : []).map(routeFromWire),
++  };
++}
++
++export async function fetchFriendRoute(routeId: string): Promise<FriendRoute | null> {
++  const response = await authenticatedFetch(`/api/friend-content/routes/${encodeURIComponent(routeId)}`);
++  if (response.status === 404) return null;
++  if (!response.ok) throw new Error('friend_route_unavailable');
++  const body = await response.json();
++  return body?.route ? routeFromWire(body.route) : null;
++}
++
++export async function leaseFriendRoute(routeId: string): Promise<any> {
++  const response = await authenticatedFetch(`/api/friend-content/routes/${encodeURIComponent(routeId)}/lease`, {
++    method: 'POST', body: JSON.stringify({}),
++  });
++  if (!response.ok) throw new Error('friend_route_unavailable');
++  return response.json();
++}
++
++export async function hideFriendContent(kind: 'cairns' | 'routes', id: string): Promise<boolean> {
++  const response = await authenticatedFetch(`/api/friend-content/${kind}/${encodeURIComponent(id)}/hide`, {
++    method: 'POST', body: JSON.stringify({}),
++  });
++  return response.ok;
++}
+diff --git a/app/src/features/memory/__tests__/friendMemoryAuthorizationOrdering.test.ts b/app/src/features/memory/__tests__/friendMemoryAuthorizationOrdering.test.ts
+new file mode 100644
+index 0000000..ef600df
+--- /dev/null
++++ b/app/src/features/memory/__tests__/friendMemoryAuthorizationOrdering.test.ts
+@@ -0,0 +1,145 @@
++const CACHE_PREFIX = 'cairn:friend-memory-projections:v1:';
++
++function projection(friendId = '11', authorizedAt = 1_000_000) {
++  return {
++    friendId,
++    authorizationVersion: 4,
++    projectionVersion: 'projection-4',
++    cellSizeM: 200,
++    cells: [{ id: 'coarse-cell', polygon: [[174.7, -41.3], [174.8, -41.3], [174.8, -41.2], [174.7, -41.2], [174.7, -41.3]] }],
++    serverAuthorizedAtMs: authorizedAt,
++    authorizationExpiresAtMs: authorizedAt + 24 * 60 * 60 * 1000,
++  };
++}
++
++function persisted(userId: string, value: ReturnType<typeof projection>, savedAtMs = 1_000_000) {
++  return JSON.stringify({
++    v: 1,
++    userId,
++    savedAtMs,
++    lastObservedWallClockMs: savedAtMs,
++    projections: { [value.friendId]: value },
++  });
++}
++
++describe('friend Memory authorization cache ordering', () => {
++  afterEach(() => {
++    jest.restoreAllMocks();
++    jest.resetModules();
++  });
++
++  test('accepts an account-scoped projection only until its server-bounded expiry', async () => {
++    let now = 1_000_100;
++    jest.spyOn(Date, 'now').mockImplementation(() => now);
++    const values = new Map([[`${CACHE_PREFIX}viewer-a`, persisted('viewer-a', projection())]]);
++    jest.doMock('../../../store/storage', () => ({
++      storage: {
++        getItem: jest.fn(async (key: string) => values.get(key) ?? null),
++        setItem: jest.fn(async (key: string, value: string) => { values.set(key, value); }),
++      },
++    }));
++    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch: jest.fn() }));
++
++    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
++    await useFriendMemoryStore.getState().hydrate('viewer-a');
++    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
++
++    now = 1_000_000 + 24 * 60 * 60 * 1000 + 1;
++    expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
++    expect(useFriendMemoryStore.getState().projections).toEqual({});
++  });
++
++  test('fails closed when the wall clock moves behind the last observed server cache time', async () => {
++    jest.spyOn(Date, 'now').mockReturnValue(999_000);
++    const value = projection();
++    const cache = persisted('viewer-a', value, 1_000_000);
++    jest.doMock('../../../store/storage', () => ({
++      storage: {
++        getItem: jest.fn(async () => cache),
++        setItem: jest.fn(async () => undefined),
++      },
++    }));
++    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch: jest.fn() }));
++
++    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
++    await useFriendMemoryStore.getState().hydrate('viewer-a');
++    expect(useFriendMemoryStore.getState().userId).toBe('viewer-a');
++    expect(useFriendMemoryStore.getState().projections).toEqual({});
++    expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
++  });
++
++  test('drops a slower prior-account hydration after a newer account switch', async () => {
++    jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
++    let releaseViewerA!: (value: string) => void;
++    const viewerARead = new Promise<string>(resolve => { releaseViewerA = resolve; });
++    const viewerA = projection('11');
++    const viewerB = projection('22');
++    jest.doMock('../../../store/storage', () => ({
++      storage: {
++        getItem: jest.fn((key: string) => {
++          if (key === `${CACHE_PREFIX}viewer-a`) return viewerARead;
++          return Promise.resolve(persisted('viewer-b', viewerB));
++        }),
++        setItem: jest.fn(async () => undefined),
++      },
++    }));
++    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch: jest.fn() }));
++
++    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
++    const slow = useFriendMemoryStore.getState().hydrate('viewer-a');
++    const fast = useFriendMemoryStore.getState().hydrate('viewer-b');
++    await fast;
++    releaseViewerA(persisted('viewer-a', viewerA));
++    await slow;
++
++    expect(useFriendMemoryStore.getState().userId).toBe('viewer-b');
++    expect(Object.keys(useFriendMemoryStore.getState().projections)).toEqual(['22']);
++  });
++
++  test('an old-account network response cannot populate or strand the new account cache', async () => {
++    jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
++    const appState: { user: { id: string } } = { user: { id: 'viewer-a' } };
++    let releaseResponse!: (value: any) => void;
++    const response = new Promise(resolve => { releaseResponse = resolve; });
++    const authenticatedFetch = jest.fn(() => response);
++    jest.doMock('../../../store/storage', () => ({
++      storage: {
++        getItem: jest.fn(async () => null),
++        setItem: jest.fn(async () => undefined),
++      },
++    }));
++    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch }));
++    jest.doMock('../../../store/useAppStore', () => ({
++      useAppStore: { getState: () => appState },
++    }));
++    jest.doMock('../store/useMemorySubscriptionsStore', () => ({
++      useMemorySubscriptionsStore: { getState: () => ({ subscriptions: [{ friend_id: 11 }] }) },
++    }));
++
++    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
++    const oldLoad = useFriendMemoryStore.getState().loadSelectedProjections();
++    await Promise.resolve();
++    appState.user = { id: 'viewer-b' };
++    await useFriendMemoryStore.getState().hydrate('viewer-b');
++    releaseResponse({
++      ok: true,
++      json: async () => ({
++        revoked_friend_ids: [],
++        projections: [{
++          source_friend_id: 11,
++          authorization_version: 4,
++          projection_version: 'stale-a',
++          cell_size_m: 200,
++          server_authorized_at: new Date(1_000_000).toISOString(),
++          authorization_expires_at: new Date(1_000_000 + 24 * 60 * 60 * 1000).toISOString(),
++          cells: projection().cells,
++        }],
++      }),
++    });
++    await oldLoad;
++
++    expect(useFriendMemoryStore.getState().userId).toBe('viewer-b');
++    expect(useFriendMemoryStore.getState().projections).toEqual({});
++    expect(useFriendMemoryStore.getState().loading).toBe(false);
++  });
++});
+diff --git a/app/src/features/memory/components/MemorySharingSheet.tsx b/app/src/features/memory/components/MemorySharingSheet.tsx
+new file mode 100644
+index 0000000..58562d7
+--- /dev/null
++++ b/app/src/features/memory/components/MemorySharingSheet.tsx
+@@ -0,0 +1,120 @@
++import React, { useEffect } from 'react';
++import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
++import { ModalCard } from '../../../components/ModalCard';
++import { Icon } from '../../../components/Icon';
++import { Radius, Spacing } from '../../../components/tokens';
++import { useVisualTheme } from '../../../hooks/useVisualTheme';
++import { useMemoryStore } from '../store/useMemoryStore';
++import { useMemorySharingStore } from '../store/useMemorySharingStore';
++
++export function MemorySharingSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
++  const theme = useVisualTheme();
++  const enabled = useMemorySharingStore(state => state.enabled);
++  const enabledAt = useMemorySharingStore(state => state.enabledAt);
++  const places = useMemorySharingStore(state => state.privatePlaces);
++  const loading = useMemorySharingStore(state => state.loading);
++  const error = useMemorySharingStore(state => state.error);
++  const load = useMemorySharingStore(state => state.load);
++  const setEnabled = useMemorySharingStore(state => state.setEnabled);
++  const addPrivatePlace = useMemorySharingStore(state => state.addPrivatePlace);
++  const removePrivatePlace = useMemorySharingStore(state => state.removePrivatePlace);
++  const lastFix = useMemoryStore(state => state.lastWatcherFix);
++
++  useEffect(() => {
++    if (visible) void load();
++  }, [load, visible]);
++
++  return (
++    <ModalCard visible={visible} onDismiss={onClose} testID="memory-sharing-sheet">
++      <ScrollView style={{ maxHeight: 560 }} contentContainerStyle={styles.content}>
++        <View style={styles.header}>
++          <View style={{ flex: 1 }}>
++            <Text style={[styles.title, { color: theme.foreground }]}>Memory sharing</Text>
++            <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>You decide what begins sharing.</Text>
++          </View>
++          <TouchableOpacity onPress={onClose} accessibilityLabel="Close Memory sharing">
++            <Icon name="X" size={20} color={theme.iconInactive} />
++          </TouchableOpacity>
++        </View>
++
++        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
++          <View style={styles.row}>
++            <View style={{ flex: 1, paddingRight: 12 }}>
++              <Text style={[styles.rowTitle, { color: theme.foreground }]}>Share new exploration with friends</Text>
++              <Text style={[styles.body, { color: theme.foregroundSecondary }]}>New completed recorded Activities only—not live location, passive exploration, or old history.</Text>
++            </View>
++            <Switch
++              value={enabled}
++              disabled={loading}
++              onValueChange={value => void setEnabled(value)}
++              trackColor={{ false: theme.borderStrong, true: theme.primary }}
++            />
++          </View>
++          <Text style={[styles.context, { color: theme.muted }]}>
++            {enabledAt
++              ? `Sharing started ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(enabledAt))}`
++              : 'Sharing is off. New exploration stays only yours.'}
++          </Text>
++        </View>
++
++        <View style={[styles.preview, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
++          <Icon name="Map" size={18} color={theme.iconActive} />
++          <View style={{ flex: 1 }}>
++            <Text style={[styles.rowTitle, { color: theme.foreground }]}>What friends receive</Text>
++            <Text style={[styles.body, { color: theme.foregroundSecondary }]}>Coarse areas with start, end, and protected places removed. Never your route line or timestamps.</Text>
++          </View>
++        </View>
++
++        <View style={styles.sectionHeader}>
++          <View style={{ flex: 1 }}>
++            <Text style={[styles.rowTitle, { color: theme.foreground }]}>Protected places</Text>
++            <Text style={[styles.body, { color: theme.foregroundSecondary }]}>At least 250 m around each place is withheld.</Text>
++          </View>
++          <TouchableOpacity
++            style={[styles.addButton, { borderColor: theme.borderStrong }]}
++            disabled={loading || !lastFix}
++            onPress={() => lastFix && void addPrivatePlace(lastFix.lat, lastFix.lng, 'Protected place')}
++          >
++            <Icon name="Plus" size={15} color={lastFix ? theme.iconActive : theme.iconInactive} />
++            <Text style={[styles.addLabel, { color: lastFix ? theme.primary : theme.muted }]}>Current</Text>
++          </TouchableOpacity>
++        </View>
++        {places.length === 0 ? (
++          <Text style={[styles.empty, { color: theme.muted }]}>{lastFix ? 'No protected places yet.' : 'A reliable location is needed to add this place.'}</Text>
++        ) : places.map(place => (
++          <View key={place.id} style={[styles.placeRow, { borderColor: theme.border }]}>
++            <Icon name="Shield" size={16} color={theme.iconActive} />
++            <View style={{ flex: 1 }}>
++              <Text style={[styles.rowTitle, { color: theme.foreground }]}>{place.label || 'Protected place'}</Text>
++              <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{place.radius_m} m minimum mask</Text>
++            </View>
++            <TouchableOpacity onPress={() => void removePrivatePlace(place.id)} accessibilityLabel="Remove protected place">
++              <Icon name="Trash2" size={16} color={theme.iconInactive} />
++            </TouchableOpacity>
++          </View>
++        ))}
++        {loading ? <ActivityIndicator color={theme.primary} /> : null}
++        {error ? <Text style={[styles.error, { color: theme.destructive }]}>{error}</Text> : null}
++      </ScrollView>
++    </ModalCard>
++  );
++}
++
++const styles = StyleSheet.create({
++  content: { gap: Spacing.md },
++  header: { flexDirection: 'row', alignItems: 'flex-start' },
++  title: { fontSize: 22, fontWeight: '700' },
++  subtitle: { fontSize: 13, marginTop: 3 },
++  card: { borderWidth: 1, borderRadius: Radius.card, padding: Spacing.md, gap: 8 },
++  row: { flexDirection: 'row', alignItems: 'center' },
++  rowTitle: { fontSize: 14, fontWeight: '700' },
++  body: { fontSize: 12, lineHeight: 17, marginTop: 3 },
++  context: { fontSize: 11 },
++  preview: { borderWidth: 1, borderRadius: Radius.card, padding: Spacing.md, flexDirection: 'row', gap: 10 },
++  sectionHeader: { flexDirection: 'row', alignItems: 'center' },
++  addButton: { borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', gap: 5 },
++  addLabel: { fontSize: 12, fontWeight: '700' },
++  empty: { fontSize: 12, paddingVertical: 8 },
++  placeRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
++  error: { fontSize: 12, lineHeight: 17 },
++});
+diff --git a/app/src/features/memory/store/useMemorySharingStore.ts b/app/src/features/memory/store/useMemorySharingStore.ts
+new file mode 100644
+index 0000000..83a471b
+--- /dev/null
++++ b/app/src/features/memory/store/useMemorySharingStore.ts
+@@ -0,0 +1,112 @@
++import { create } from 'zustand';
++import { authenticatedFetch } from '../../../services/apiService';
++
++export interface MemoryPrivatePlace {
++  id: number;
++  label: string | null;
++  lat: number;
++  lng: number;
++  radius_m: number;
++  created_at?: string;
++}
++
++interface State {
++  enabled: boolean;
++  policyEpoch: number;
++  enabledAt: string | null;
++  privatePlaces: MemoryPrivatePlace[];
++  loading: boolean;
++  error: string | null;
++  load: () => Promise<void>;
++  setEnabled: (enabled: boolean) => Promise<boolean>;
++  addPrivatePlace: (lat: number, lng: number, label?: string) => Promise<boolean>;
++  removePrivatePlace: (id: number) => Promise<boolean>;
++  reset: () => void;
++}
++
++export const useMemorySharingStore = create<State>((set, get) => ({
++  enabled: false,
++  policyEpoch: 1,
++  enabledAt: null,
++  privatePlaces: [],
++  loading: false,
++  error: null,
++
++  load: async () => {
++    if (get().loading) return;
++    set({ loading: true, error: null });
++    try {
++      const [policyResponse, placesResponse] = await Promise.all([
++        authenticatedFetch('/api/friend-sharing/policy'),
++        authenticatedFetch('/api/friend-sharing/private-places'),
++      ]);
++      if (!policyResponse.ok || !placesResponse.ok) throw new Error('sharing_unavailable');
++      const policy = await policyResponse.json();
++      const places = await placesResponse.json();
++      set({
++        enabled: Boolean(policy.enabled),
++        policyEpoch: Number(policy.policy_epoch ?? 1),
++        enabledAt: policy.enabled_at ?? null,
++        privatePlaces: Array.isArray(places.private_places) ? places.private_places : [],
++        loading: false,
++      });
++    } catch {
++      set({ loading: false, error: 'Connect to manage sharing.' });
++    }
++  },
++
++  setEnabled: async (enabled) => {
++    const previous = get().enabled;
++    set({ loading: true, error: null });
++    try {
++      const response = await authenticatedFetch('/api/friend-sharing/policy', {
++        method: 'PUT',
++        body: JSON.stringify({ enabled }),
++      });
++      if (!response.ok) throw new Error('sharing_update_failed');
++      const policy = await response.json();
++      set({
++        enabled: Boolean(policy.enabled),
++        policyEpoch: Number(policy.policy_epoch ?? get().policyEpoch),
++        enabledAt: policy.enabled_at ?? null,
++        loading: false,
++      });
++      return true;
++    } catch {
++      set({ enabled: previous, loading: false, error: 'Connect and try again. Your previous setting is unchanged.' });
++      return false;
++    }
++  },
++
++  addPrivatePlace: async (lat, lng, label) => {
++    set({ loading: true, error: null });
++    try {
++      const response = await authenticatedFetch('/api/friend-sharing/private-places', {
++        method: 'POST',
++        body: JSON.stringify({ lat, lng, radius_m: 250, label }),
++      });
++      if (!response.ok) throw new Error('private_place_failed');
++      const place = await response.json();
++      set({ privatePlaces: [place, ...get().privatePlaces], loading: false });
++      return true;
++    } catch {
++      set({ loading: false, error: 'Could not protect this place. Connect and try again.' });
++      return false;
++    }
++  },
++
++  removePrivatePlace: async (id) => {
++    set({ loading: true, error: null });
++    try {
++      const response = await authenticatedFetch(`/api/friend-sharing/private-places/${id}`, { method: 'DELETE' });
++      if (!response.ok) throw new Error('private_place_remove_failed');
++      set({ privatePlaces: get().privatePlaces.filter(place => place.id !== id), loading: false });
++      return true;
++    } catch {
++      set({ loading: false, error: 'Could not update protected places.' });
++      return false;
++    }
++  },
++
++  reset: () => set({ enabled: false, policyEpoch: 1, enabledAt: null, privatePlaces: [], loading: false, error: null }),
++}));
+diff --git a/app/src/screens/FriendContentScreen.tsx b/app/src/screens/FriendContentScreen.tsx
+new file mode 100644
+index 0000000..ef6d97b
+--- /dev/null
++++ b/app/src/screens/FriendContentScreen.tsx
+@@ -0,0 +1,127 @@
++import React, { useCallback, useEffect, useMemo, useState } from 'react';
++import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
++import { SafeAreaView } from 'react-native-safe-area-context';
++import { useNavigation, useRoute } from '@react-navigation/native';
++import type { RouteProp } from '@react-navigation/native';
++import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
++import Svg, { Polyline } from 'react-native-svg';
++import type { RootStackParamList } from '../navigation/RootNavigator';
++import { BackButton } from '../components/BackButton';
++import { ContentSurface } from '../components/ContentSurface';
++import { Icon } from '../components/Icon';
++import { ModalCard, ModalCardHeader } from '../components/ModalCard';
++import { PrimaryButton } from '../components/PrimaryButton';
++import { StateSurface } from '../components/StateSurface';
++import { FontSize, Radius, Spacing } from '../components/tokens';
++import { useVisualTheme } from '../hooks/useVisualTheme';
++import { cairnDisplayTitle, splitTitleBody } from '../features/plant/services/noteEncoding';
++import {
++  fetchFriendContent, fetchFriendRoute, hideFriendContent, leaseFriendRoute,
++  type FriendCairn, type FriendRoute,
++} from '../features/friends/services/friendContent';
++
++type ScreenRoute = RouteProp<RootStackParamList, 'FriendContent'>;
++type Nav = NativeStackNavigationProp<RootStackParamList>;
++
++function RoutePreview({ points }: { points: Array<{ lat: number; lng: number }> }) {
++  const theme = useVisualTheme();
++  const path = useMemo(() => {
++    if (points.length < 2) return '';
++    const lats = points.map(point => point.lat);
++    const lngs = points.map(point => point.lng);
++    const minLat = Math.min(...lats); const maxLat = Math.max(...lats);
++    const minLng = Math.min(...lngs); const maxLng = Math.max(...lngs);
++    const latSpan = Math.max(maxLat - minLat, 0.000001);
++    const lngSpan = Math.max(maxLng - minLng, 0.000001);
++    return points.map(point => `${12 + ((point.lng - minLng) / lngSpan) * 276},${128 - ((point.lat - minLat) / latSpan) * 116}`).join(' ');
++  }, [points]);
++  return (
++    <View style={[styles.preview, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }]}>
++      {path ? <Svg width="100%" height={140} viewBox="0 0 300 140"><Polyline points={path} fill="none" stroke={theme.primary} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" /></Svg> : <Text style={{ color: theme.muted }}>Route geometry unavailable.</Text>}
++    </View>
++  );
++}
++
++export function FriendContentScreen() {
++  const theme = useVisualTheme();
++  const nav = useNavigation<Nav>();
++  const route = useRoute<ScreenRoute>();
++  const { friendId, friendName } = route.params;
++  const [state, setState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
++  const [cairns, setCairns] = useState<FriendCairn[]>([]);
++  const [routes, setRoutes] = useState<FriendRoute[]>([]);
++  const [selectedCairn, setSelectedCairn] = useState<FriendCairn | null>(null);
++  const [selectedRoute, setSelectedRoute] = useState<FriendRoute | null>(null);
++  const [routeLoading, setRouteLoading] = useState(false);
++  const [leaseLoading, setLeaseLoading] = useState<'hike' | 'run' | null>(null);
++  const [actionError, setActionError] = useState('');
++
++  const load = useCallback(async () => {
++    setState('loading');
++    try {
++      const content = await fetchFriendContent(friendId);
++      setCairns(content.cairns); setRoutes(content.routes); setState('ready');
++    } catch { setState('unavailable'); }
++  }, [friendId]);
++  useEffect(() => { void load(); }, [load]);
++
++  const openRoute = async (summary: FriendRoute) => {
++    setSelectedRoute(summary); setRouteLoading(true); setActionError('');
++    try {
++      const detail = await fetchFriendRoute(summary.id);
++      if (!detail) setActionError('This Route is no longer available.');
++      else setSelectedRoute(detail);
++    } catch { setActionError('Connect and try this Route again.'); }
++    finally { setRouteLoading(false); }
++  };
++
++  const useSharedRoute = async (mode: 'hike' | 'run') => {
++    if (!selectedRoute) return;
++    setLeaseLoading(mode); setActionError('');
++    try {
++      const body = await leaseFriendRoute(selectedRoute.id);
++      const leased = body?.route;
++      const points = Array.isArray(leased?.points) ? leased.points : [];
++      if (points.length < 2) throw new Error('geometry_missing');
++      nav.navigate(mode === 'hike' ? 'Hiking' : 'Running', {
++        sharedRouteLease: {
++          leaseId: String(body.lease_id), routeId: String(leased.id), name: String(leased.name ?? 'Shared Route'),
++          points, distanceM: Number(leased.distance_m ?? 0), elevationGainM: Number(leased.elevation_gain_m ?? 0),
++        },
++      });
++    } catch { setActionError('This shared Route cannot be started now. Connect and try again.'); }
++    finally { setLeaseLoading(null); }
++  };
++
++  return (
++    <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
++      <View style={styles.header}><BackButton onPress={() => nav.goBack()} /><View><Text style={[styles.title, { color: theme.foreground }]}>{friendName}</Text><Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>Shared with you · read only</Text></View></View>
++      {state === 'loading' ? <StateSurface variant="loading" title="Loading shared content…" material="embedded" alignment="center" style={styles.state} /> : null}
++      {state === 'unavailable' ? <StateSurface variant="unavailable" title="Shared content unavailable" body="Connect and try again. Previously opened content is not treated as current authorization." actions={<PrimaryButton label="Try again" onPress={() => void load()} />} material="embedded" alignment="center" style={styles.state} /> : null}
++      {state === 'ready' ? <ScrollView contentContainerStyle={styles.content}>
++        <Text style={[styles.section, { color: theme.foregroundSecondary }]}>Encountered Cairns</Text>
++        {cairns.length === 0 ? <Text style={[styles.empty, { color: theme.muted }]}>No Cairns have been encountered from this friend yet.</Text> : cairns.map(cairn => {
++          const words = splitTitleBody(cairn.text);
++          return <TouchableOpacity key={cairn.id} onPress={() => setSelectedCairn(cairn)}><ContentSurface style={styles.row}><Icon name="MapPin" size={18} color={theme.primary} /><View style={styles.rowText}><Text style={[styles.rowTitle, { color: theme.foreground }]}>{cairnDisplayTitle(words.title, words.body, cairn.createdAt)}</Text><Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Encountered · {new Date(cairn.encounteredAt).toLocaleDateString()}</Text></View><Icon name="ChevronRight" size={16} color={theme.iconInactive} /></ContentSurface></TouchableOpacity>;
++        })}
++        <Text style={[styles.section, { color: theme.foregroundSecondary }]}>Shared Routes</Text>
++        {routes.length === 0 ? <Text style={[styles.empty, { color: theme.muted }]}>No Routes are currently shared with you.</Text> : routes.map(item => <TouchableOpacity key={item.id} onPress={() => void openRoute(item)}><ContentSurface style={styles.row}><Icon name="Route" size={18} color={theme.primary} /><View style={styles.rowText}><Text style={[styles.rowTitle, { color: theme.foreground }]}>{item.name}</Text><Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{(item.distanceM / 1000).toFixed(1)} km · +{Math.round(item.elevationGainM)} m</Text></View><Icon name="ChevronRight" size={16} color={theme.iconInactive} /></ContentSurface></TouchableOpacity>)}
++      </ScrollView> : null}
++
++      {selectedCairn ? <ModalCard visible onDismiss={() => setSelectedCairn(null)} testID="friend-cairn-detail"><ModalCardHeader title={cairnDisplayTitle(splitTitleBody(selectedCairn.text).title, '', selectedCairn.createdAt)} body={`By ${selectedCairn.author.name} · read only`} onClose={() => setSelectedCairn(null)} /><Text style={[styles.detailBody, { color: theme.foreground }]}>{splitTitleBody(selectedCairn.text).body || 'No note was added.'}</Text><Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Encountered {new Date(selectedCairn.encounteredAt).toLocaleString()}</Text><PrimaryButton label="Hide from my view" variant="secondary" onPress={async () => { if (await hideFriendContent('cairns', selectedCairn.id)) { setCairns(value => value.filter(item => item.id !== selectedCairn.id)); setSelectedCairn(null); } }} /></ModalCard> : null}
++      {selectedRoute ? <ModalCard visible onDismiss={() => setSelectedRoute(null)} testID="friend-route-detail"><ModalCardHeader title={selectedRoute.name} body={`By ${selectedRoute.author.name} · read-only reference`} onClose={() => setSelectedRoute(null)} />{routeLoading ? <StateSurface variant="loading" title="Loading Route…" material="embedded" alignment="center" /> : <><RoutePreview points={selectedRoute.points ?? []} /><Text style={[styles.detailBody, { color: theme.foregroundSecondary }]}>{selectedRoute.description || `${(selectedRoute.distanceM / 1000).toFixed(1)} km · +${Math.round(selectedRoute.elevationGainM)} m`}</Text>{actionError ? <Text style={[styles.error, { color: theme.destructive }]}>{actionError}</Text> : null}<View style={styles.actions}><PrimaryButton label="Use for Hike" onPress={() => void useSharedRoute('hike')} loading={leaseLoading === 'hike'} /><PrimaryButton label="Use for Run" variant="secondary" onPress={() => void useSharedRoute('run')} loading={leaseLoading === 'run'} /></View><PrimaryButton label="Hide from my view" variant="secondary" onPress={async () => { if (await hideFriendContent('routes', selectedRoute.id)) { setRoutes(value => value.filter(item => item.id !== selectedRoute.id)); setSelectedRoute(null); } }} /></>}</ModalCard> : null}
++    </SafeAreaView>
++  );
++}
++
++const styles = StyleSheet.create({
++  root: { flex: 1 }, header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.base },
++  title: { fontSize: FontSize.h2, fontWeight: '700' }, subtitle: { fontSize: FontSize.caption, marginTop: 2 },
++  content: { padding: Spacing.base, paddingBottom: 48, gap: Spacing.sm }, state: { margin: Spacing.base },
++  section: { marginTop: Spacing.base, fontSize: FontSize.small, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
++  empty: { paddingVertical: Spacing.lg, lineHeight: 20 }, row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.base },
++  rowText: { flex: 1 }, rowTitle: { fontSize: FontSize.body, fontWeight: '600' }, meta: { fontSize: FontSize.caption, marginTop: 4 },
++  detailBody: { fontSize: FontSize.body, lineHeight: 22, marginVertical: Spacing.base },
++  preview: { height: 140, borderWidth: 1, borderRadius: Radius.card, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
++  actions: { gap: Spacing.sm, marginVertical: Spacing.md }, error: { marginTop: Spacing.sm, fontSize: FontSize.caption },
++});

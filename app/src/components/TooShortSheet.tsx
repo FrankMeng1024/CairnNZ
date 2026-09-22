@@ -89,6 +89,8 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
           style={[styles.btnPrimary, { backgroundColor: theme.primary }]}
           activeOpacity={0.85}
           onPress={() => dismiss(onContinue)}
+          accessibilityRole="button"
+          accessibilityLabel="Got it — keep going"
         >
           <Text style={[styles.btnPrimaryText, { color: theme.onPrimary }]}>Got it — keep going</Text>
         </TouchableOpacity>
@@ -96,6 +98,8 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
           style={styles.btnSecondary}
           activeOpacity={0.7}
           onPress={() => dismiss(onDiscard)}
+          accessibilityRole="button"
+          accessibilityLabel={`End ${label.toLowerCase()} anyway`}
         >
           <Text style={[styles.btnSecondaryText, { color: theme.foregroundSecondary }]}>End {label.toLowerCase()} anyway</Text>
         </TouchableOpacity>

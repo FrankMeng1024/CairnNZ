@@ -11,12 +11,12 @@
           "note": "[R113 auto-correct 2026-08-06] Spec said \"Get started\"; app says \"Continue\" since long before R113. Verified via app/src/features/onboarding/OnboardingModal.tsx:250. Reverted to match production copy.",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/3 条期望文字, 缺: \"Discover Cairn\", \"Your quiet companion for the outdoors.\", \"Continue\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "R5 fail: 0/3 tokens. Missing: \"Discover Cairn\",\"Your quiet companion for the outdoors.\",\"Continue\". Body: \"\n\n\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/N01-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:17:54.745Z"
+          "ai_tested_at": "2026-08-06T07:51:05.637Z"
         },
         {
           "id": "N02",
@@ -25,13 +25,13 @@
           "expect": "屏幕淡入切换到第 2 屏。图标变成 hiking icon (一个走路的人图形)。标题 “Track every hike”。副标题 “Cairn quietly records your route, distance, and elevation. No chatter, no leaderboards.” (两行)。底部 4 个圆点，第二个变绿色长条。底部按钮变成 “Continue”。",
           "note": "[R113 auto-correct 2026-08-06] Spec said \"Next\"; app says \"Continue\" — same rule as N01.",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"Track every hike\", \"Continue\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_status": "pass",
+          "ai_reason": "期望的 2 条文字全找到: \"Track every hike\",\"Continue\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/N02-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:18:08.388Z"
+          "ai_tested_at": "2026-08-06T07:51:22.047Z"
         },
         {
           "id": "N03",
@@ -40,13 +40,13 @@
           "expect": "淡入切换第 3 屏。图标变成 flag marker icon (一面小旗子插在石堆上)。标题 “Leave a cairn”。副标题 “Drop a small marker with a note. Keep it for yourself, or share with friends walking the same trail.”。4 个圆点第三个绿色长条。按钮 “Continue”。",
           "note": "[R113 auto-correct 2026-08-06] Spec said \"Next\"; app says \"Continue\" — same rule as N01.",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "找到 1/2 条期望文字, 缺: \"Continue\" (执行了: tap\"Next\"=false). 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_status": "pass",
+          "ai_reason": "期望的 2 条文字全找到: \"Leave a cairn\",\"Continue\" (执行了: tap\"Next\"=false)",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/N03-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:18:21.839Z"
+          "ai_tested_at": "2026-08-06T07:51:38.920Z"
         },
         {
           "id": "N04",
@@ -55,13 +55,13 @@
           "expect": "淡入切换第 4 屏。图标变成脚印图形 (Footprints icon)。标题 “Uncover your map”。副标题 “Every step reveals fog on your map. Over months, you build a personal atlas of where you have walked.”。4 个圆点第四个绿色长条。底部按钮 “Enable Location”，按钮下方还有一行灰色小字 “iOS will ask for permission next.”",
           "note": "",
           "tested": false,
-          "ai_status": "fail",
-          "ai_reason": "找到 0/3 条期望文字, 缺: \"Uncover your map\", \"Enable Location\", \"iOS will ask for permission next.\" (执行了: tap\"Next\"=false). 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_status": "pass",
+          "ai_reason": "期望的 3 条文字全找到: \"Uncover your map\",\"Enable Location\",\"iOS will ask for permission next.\" (执行了: tap\"Next\"=true)",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/N04-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:18:35.840Z"
+          "ai_tested_at": "2026-08-06T07:51:56.753Z"
         },
         {
           "id": "N05",
@@ -71,12 +71,12 @@
           "note": "",
           "tested": false,
           "ai_status": "blocked",
-          "ai_reason": "阻塞: iOS 系统权限弹窗 — web 没有 iOS 权限对话框, 只能真机测. 到达页面: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your p\". 期望文字命中 0/2",
+          "ai_reason": "阻塞: iOS 系统权限弹窗 — web 没有 iOS 权限对话框, 只能真机测. 到达页面: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your\". 期望文字命中 0/2",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/N05-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:18:47.675Z"
+          "ai_tested_at": "2026-08-06T07:52:12.205Z"
         },
         {
           "id": "N06",
@@ -86,12 +86,12 @@
           "note": "",
           "tested": false,
           "ai_status": "blocked",
-          "ai_reason": "阻塞: iOS 系统权限弹窗 — web 没有 iOS 权限对话框, 只能真机测. 到达页面: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your p\". 期望文字命中 0/4",
+          "ai_reason": "阻塞: iOS 系统权限弹窗 — web 没有 iOS 权限对话框, 只能真机测. 到达页面: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your\". 期望文字命中 0/4",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/N06-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:18:59.515Z"
+          "ai_tested_at": "2026-08-06T07:52:27.461Z"
         },
         {
           "id": "N07",
@@ -101,12 +101,12 @@
           "note": "",
           "tested": false,
           "ai_status": "blocked",
-          "ai_reason": "阻塞: 跳转 iOS 设置 app — web 里没有 iOS 系统设置, 只能真机测. 到达页面: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your p\". 期望文字命中 0/0",
+          "ai_reason": "阻塞: 跳转 iOS 设置 app — web 里没有 iOS 系统设置, 只能真机测. 到达页面: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your\". 期望文字命中 0/0",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/N07-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:19:11.301Z"
+          "ai_tested_at": "2026-08-06T07:52:42.578Z"
         },
         {
           "id": "N08",
@@ -116,12 +116,12 @@
           "note": "",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过 (执行了: tap\"Later\"=false). 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute pl\"",
+          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute \" (执行了: tap\"Later\"=false)",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/N08-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:19:23.240Z"
+          "ai_tested_at": "2026-08-06T07:52:57.560Z"
         },
         {
           "id": "N09",
@@ -131,12 +131,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"Discover Cairn\" (执行了: reload). 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"Discover Cairn\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\" (执行了: reload)",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/N09-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:19:37.617Z"
+          "ai_tested_at": "2026-08-06T07:53:16.472Z"
         },
         {
           "id": "N10",
@@ -146,12 +146,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/4 条期望文字, 缺: \"Done\", \"Enable Location\", \"iOS will ask for permission next.\", \"都完整看 4 屏, 我要自己测\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "R5 fail: 0/4 tokens. Missing: \"Done\",\"Enable Location\",\"iOS will ask for permission next.\",\"都完整看 4 屏, 我要自己测\". Body: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/N10-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:19:49.405Z"
+          "ai_tested_at": "2026-08-06T07:53:31.101Z"
         }
       ]
     },
@@ -166,14 +166,14 @@
           "note": "❓ 待你确认: 老用户每次打开 app 都要看完 2.5 秒动画才能点 Sign In, 你觉得可以吗?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 5/6 条期望文字, 缺: \"Your hiking data is securely stored...\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
+          "ai_reason": "R5 fail: 5/6 tokens. Missing: \"Your hiking data is securely stored...\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L01-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:19:56.111Z"
+          "ai_tested_at": "2026-08-06T07:53:39.563Z"
         },
         {
           "id": "L02",
@@ -190,7 +190,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L02-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:20:02.959Z"
+          "ai_tested_at": "2026-08-06T07:53:47.844Z"
         },
         {
           "id": "L03",
@@ -200,14 +200,14 @@
           "note": "❓ 待你确认: \"Sign In\" 按钮高度是 56px, \"Continue with Apple\" 和 \"Continue with Google\" 都是 52px, 三个按钮竖着排一起视觉上不齐, 差 4px, 要不要统一?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 7/9 条期望文字, 缺: \"You'll stay signed in for 30 days.\", \"Continue with Google\". 页面显示: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\"",
+          "ai_reason": "R5 fail: 7/9 tokens. Missing: \"You'll stay signed in for 30 days.\",\"Continue with Google\". Body: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L03-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:20:11.210Z"
+          "ai_tested_at": "2026-08-06T07:53:57.784Z"
         },
         {
           "id": "L04",
@@ -224,7 +224,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L04-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:20:19.596Z"
+          "ai_tested_at": "2026-08-06T07:54:07.604Z"
         },
         {
           "id": "L05",
@@ -234,14 +234,14 @@
           "note": "❓ 待你确认: 眼睛图标的可点击区域很小 (只有 4px 内边距), 手指经常点不准, 要不要放大到 44px?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"闭着一条斜线的眼睛\", \"睁开的眼睛\" (执行了: tap\"Password\"=true). 页面显示: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"闭着一条斜线的眼睛\",\"睁开的眼睛\". 页面显示: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\" (执行了: tap\"Password\"=true)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L05-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:20:27.978Z"
+          "ai_tested_at": "2026-08-06T07:54:17.531Z"
         },
         {
           "id": "L06",
@@ -251,14 +251,14 @@
           "note": "❓ 待你确认: 注册页面**没有** \"or continue with\" + \"Continue with Apple\" + \"Continue with Google\" 三个东西. 登录页有但注册页没有. 想用 Google 注册的用户找不到入口, 是否要补上?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 10/12 条期望文字, 缺: \"Your name\", \"I agree to the Privacy Policy\". 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
+          "ai_reason": "找到 10/12 条期望文字, 缺: \"Your name\",\"I agree to the Privacy Policy\". 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L06-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:20:36.342Z"
+          "ai_tested_at": "2026-08-06T07:54:27.451Z"
         },
         {
           "id": "L07",
@@ -268,14 +268,14 @@
           "note": "❓ 待你确认: 如果之后输错了(密码少于 8 位), 这行灰色 \"Minimum 8 characters\" 会**消失**, 位置上换成一行红色错误提示. 用户会觉得画面在抖. 是否要拆开成两条独立文字?",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望的 2 条文字全找到: \"Password\", \"Minimum 8 characters\"",
+          "ai_reason": "期望的 2 条文字全找到: \"Password\",\"Minimum 8 characters\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L07-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:20:44.820Z"
+          "ai_tested_at": "2026-08-06T07:54:37.360Z"
         },
         {
           "id": "L08",
@@ -285,14 +285,14 @@
           "note": "❓ 待你确认: 验证码是一个单独输入框(提示文字 \"123456\"), 不是 6 个独立方格. iOS 微信/银行 app 都是 6 个方格样式. 是否要改成 6 个方格?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/6 条期望文字, 缺: \"Check your email\", \"We sent a 6-digit code to your@email.com\", \"Verification Code\", \"123456\", \"Verify Email\", \"Resend in 60s\". 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
+          "ai_reason": "R5 fail: 0/6 tokens. Missing: \"Check your email\",\"We sent a 6-digit code to your@email.com\",\"Verification Code\",\"123456\",\"Verify Email\",\"Resend in 60s\". Body: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L08-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:20:53.191Z"
+          "ai_tested_at": "2026-08-06T07:54:47.219Z"
         },
         {
           "id": "L09",
@@ -302,14 +302,14 @@
           "note": "❓ 待你确认: 灰色不可点但手指按下去有轻微反馈, 可能让用户以为按到了. 是否要彻底不响应?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/3 条期望文字, 缺: \"Verify Email\", \"Resend in 59s\", \"Resend in 58s\". 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
+          "ai_reason": "找到 0/3 条期望文字, 缺: \"Verify Email\",\"Resend in 59s\",\"Resend in 58s\". 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L09-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:21:01.596Z"
+          "ai_tested_at": "2026-08-06T07:54:57.188Z"
         },
         {
           "id": "L10",
@@ -319,14 +319,14 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"Resend in 1s\", \"Resend code\". 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"Resend in 1s\",\"Resend code\". 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L10-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:21:10.092Z"
+          "ai_tested_at": "2026-08-06T07:55:07.190Z"
         },
         {
           "id": "L11",
@@ -336,14 +336,14 @@
           "note": "❓ 待你确认: 名字很大(56pt), 如果注册时填了长名字(比如 \"Christopher Alexander\"), 会挤到两行甚至溢出. 是否要限制单行/自动缩小字号?\n❓ 待你确认: 欢迎页只停 1.8 秒, 用户可能还没读完 \"Your track starts now.\" 就被跳走了. 是否要延长, 或加一个 \"Continue\" 按钮让用户自己点?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/3 条期望文字, 缺: \"Welcome, [你注册时填的名字]!\", \"Nau mai, haere mai\", \"Your track starts now.\". 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
+          "ai_reason": "R5 fail: 0/3 tokens. Missing: \"Welcome, [你注册时填的名字]!\",\"Nau mai, haere mai\",\"Your track starts now.\". Body: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L11-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:21:18.690Z"
+          "ai_tested_at": "2026-08-06T07:55:16.666Z"
         },
         {
           "id": "L12",
@@ -360,7 +360,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L12-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:21:26.913Z"
+          "ai_tested_at": "2026-08-06T07:55:25.183Z"
         },
         {
           "id": "L13",
@@ -370,14 +370,14 @@
           "note": "❓ 上架 blocker: Apple 上架规则规定, 只要 app 支持第三方登录(比如 Google), 就必须同时支持 Apple 登录, 否则 App Store 会拒审. 当前只能弹 \"Coming soon\", 上架会被拒. 是否要在上架前接好真 Apple 登录?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"Coming soon\", \"OK\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"Coming soon\",\"OK\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L13-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:21:33.788Z"
+          "ai_tested_at": "2026-08-06T07:55:33.780Z"
         },
         {
           "id": "L14",
@@ -387,14 +387,14 @@
           "note": "❓ 待你确认: 按钮上的 \"G\" logo 是我们自己画的一个蓝色实心 G 字, 但 Google 官方 logo 是 4 色多彩 G. 用自制 logo 违反 Google 品牌指南, 有商标风险. 是否要换成 Google 官方多彩 SVG?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/3 条期望文字, 缺: \"Google Sign In\", \"Coming in next app update...\", \"OK\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
+          "ai_reason": "R5 fail: 0/3 tokens. Missing: \"Google Sign In\",\"Coming in next app update...\",\"OK\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L14-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:21:40.602Z"
+          "ai_tested_at": "2026-08-06T07:55:42.108Z"
         },
         {
           "id": "L15",
@@ -404,7 +404,7 @@
           "note": "❓ 待你确认: 登录页面(L03)在点 \"Sign In\" 时**不做**邮箱格式检查, 用户输个 \"abc\" 也会送到后端才被拒. 是否要在登录页也加同样的本地邮箱格式检查?",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望的 2 条文字全找到: \"Email\", \"Please enter a valid email\" (执行了: type\"notavalidemail\"=true, tap\"Create Account\"=true)",
+          "ai_reason": "期望的 2 条文字全找到: \"Email\",\"Please enter a valid email\" (执行了: type\"notavalidemail\"=true,tap\"Create Account\"=true)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
@@ -412,7 +412,7 @@
             "https://map.yiiling.cn/flows/screenshots/round-1/L15-1.png",
             "https://map.yiiling.cn/flows/screenshots/round-1/L15-2.png"
           ],
-          "ai_tested_at": "2026-08-06T12:21:51.904Z"
+          "ai_tested_at": "2026-08-06T07:55:56.041Z"
         },
         {
           "id": "L16",
@@ -422,7 +422,7 @@
           "note": "❓ 待你确认: 灰色提示和红色错误共用一个位置, 用户输错时看到的是画面上文字颜色突变而不是新文字出现, 视觉抖动. (同 L07 的问题)",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望的 2 条文字全找到: \"Password\", \"Minimum 8 characters\" (执行了: type\"abc\"=true, tap\"Create Account\"=true)",
+          "ai_reason": "期望的 2 条文字全找到: \"Password\",\"Minimum 8 characters\" (执行了: type\"abc\"=true,tap\"Create Account\"=true)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
@@ -430,7 +430,7 @@
             "https://map.yiiling.cn/flows/screenshots/round-1/L16-1.png",
             "https://map.yiiling.cn/flows/screenshots/round-1/L16-2.png"
           ],
-          "ai_tested_at": "2026-08-06T12:22:03.454Z"
+          "ai_tested_at": "2026-08-06T07:56:09.405Z"
         },
         {
           "id": "L17",
@@ -440,14 +440,14 @@
           "note": "",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望的 2 条文字全找到: \"Confirm Password\", \"Passwords do not match\" (执行了: tap\"Create Account\"=true)",
+          "ai_reason": "期望的 2 条文字全找到: \"Confirm Password\",\"Passwords do not match\" (执行了: tap\"Create Account\"=true)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L17-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:22:14.380Z"
+          "ai_tested_at": "2026-08-06T07:56:20.303Z"
         },
         {
           "id": "L18",
@@ -464,7 +464,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L18-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:22:24.887Z"
+          "ai_tested_at": "2026-08-06T07:56:30.875Z"
         },
         {
           "id": "L19",
@@ -474,14 +474,14 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"Incorrect email or password\" (执行了: tap\"Sign In\"=true). 页面显示: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"Incorrect email or password\". 页面显示: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\" (执行了: tap\"Sign In\"=true)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L19-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:22:33.284Z"
+          "ai_tested_at": "2026-08-06T07:56:39.614Z"
         },
         {
           "id": "L20",
@@ -491,14 +491,14 @@
           "note": "❓ 待你确认: 只有 \"邮箱已被注册\" 这种情况我们做了友好文案, 其他错误(比如限流)都是把后端原始英文直接给用户看. 是否要建一份错误码到中文/友好英文的映射表?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"Too Many Requests\", \"Rate limit exceeded, try again in 60s\" (执行了: tap\"Sign In\"=true). 页面显示: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"Too Many Requests\",\"Rate limit exceeded, try again in 60s\". 页面显示: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\" (执行了: tap\"Sign In\"=true)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L20-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:22:41.662Z"
+          "ai_tested_at": "2026-08-06T07:56:48.276Z"
         },
         {
           "id": "L21",
@@ -508,14 +508,14 @@
           "note": "❓ 待你确认: 输错后验证码输入框里的错误数字**不会自动清空**, 用户要手动一个一个删掉再重输. 是否要输错后自动清空?",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过 (执行了: tap\"Verify Email\"=false). 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to s\"",
+          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to s\" (执行了: tap\"Verify Email\"=false)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L21-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:22:50.100Z"
+          "ai_tested_at": "2026-08-06T07:56:57.190Z"
         },
         {
           "id": "L22",
@@ -525,14 +525,14 @@
           "note": "❓ 待你确认: 过期和错码用的是同一条红色 banner, 文字全靠后端返回. 是否要区分成 \"验证码已过期, 请点重发\" 这种更明确的引导?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"Code expired\" (执行了: tap\"Verify Email\"=false). 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"Code expired\". 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\" (执行了: tap\"Verify Email\"=false)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L22-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:22:58.448Z"
+          "ai_tested_at": "2026-08-06T07:57:06.991Z"
         },
         {
           "id": "L23",
@@ -542,14 +542,14 @@
           "note": "❓ 待你确认: 断网友好提示只在登录/注册接了, 邮箱验证页面(L08)的 \"Verify Email\" 按钮和 \"Resend code\" 链接都**没接**断网处理, 断网点了会显示后端原始报错. 是否要补上?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"Cannot reach the server...\" (执行了: tap\"Sign In\"=true). 页面显示: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\"",
+          "ai_reason": "R5 fail: 0/1 tokens. Missing: \"Cannot reach the server...\". Body: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\" [tap\"Sign In\"=true]",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L23-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:23:06.655Z"
+          "ai_tested_at": "2026-08-06T07:57:15.527Z"
         },
         {
           "id": "L24",
@@ -566,7 +566,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L24-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:23:15.070Z"
+          "ai_tested_at": "2026-08-06T07:57:24.174Z"
         },
         {
           "id": "L25",
@@ -576,14 +576,14 @@
           "note": "❓ 待你确认: 由于 Google 登录还没接好(L14), 点了后立刻弹 \"Coming soon\" 提示框, 转圈状态实际只闪一帧就没了, 用户几乎看不到. 是否要在真接好 Google 登录之前先隐藏 loading?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"会瞬间变成转圈图标, 右侧文字从\", \"变成\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"会瞬间变成转圈图标, 右侧文字从\",\"变成\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L25-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:23:21.806Z"
+          "ai_tested_at": "2026-08-06T07:57:32.016Z"
         },
         {
           "id": "L26",
@@ -600,7 +600,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L26-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:23:32.473Z"
+          "ai_tested_at": "2026-08-06T07:57:44.624Z"
         },
         {
           "id": "L27",
@@ -617,7 +617,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L27-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:23:40.814Z"
+          "ai_tested_at": "2026-08-06T07:57:53.893Z"
         },
         {
           "id": "L28",
@@ -627,14 +627,14 @@
           "note": "❓ 待你确认: 如果用户点了 \"Privacy Policy\" 链接展开完整协议(变成一个内嵌的滚动区域), 加上键盘弹起, 页面里出现 \"外层滚动 + 内层协议滚动\" 两层嵌套, iOS 上手势会打架, 用户可能滚不动. 是否要改成打开外链或全屏协议页?",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望的 2 条文字全找到: \"Confirm Password\", \"Create Account\" (执行了: tap\"Confirm Password\"=true)",
+          "ai_reason": "期望的 2 条文字全找到: \"Confirm Password\",\"Create Account\" (执行了: tap\"Confirm Password\"=true)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L28-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:23:49.267Z"
+          "ai_tested_at": "2026-08-06T07:58:03.824Z"
         },
         {
           "id": "L29",
@@ -651,7 +651,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L29-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:23:55.976Z"
+          "ai_tested_at": "2026-08-06T07:58:12.312Z"
         },
         {
           "id": "L30",
@@ -668,7 +668,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L30-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:24:02.720Z"
+          "ai_tested_at": "2026-08-06T07:58:20.913Z"
         },
         {
           "id": "L31",
@@ -685,7 +685,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L31-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:24:09.611Z"
+          "ai_tested_at": "2026-08-06T07:58:29.436Z"
         },
         {
           "id": "L32",
@@ -702,7 +702,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L32-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:24:16.403Z"
+          "ai_tested_at": "2026-08-06T07:58:38.059Z"
         },
         {
           "id": "L33",
@@ -712,14 +712,14 @@
           "note": "只能在真 iPhone 上测, web 版和模拟器可能测不出.",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"Passwords\" (执行了: tap\"Email\"=true). 页面显示: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"Passwords\". 页面显示: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nContinue with Apple\nyour@email.co\" (执行了: tap\"Email\"=true)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L33-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:24:24.808Z"
+          "ai_tested_at": "2026-08-06T07:58:48.328Z"
         },
         {
           "id": "L34",
@@ -729,14 +729,14 @@
           "note": "只能在真 iPhone 上测.",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"Suggest Strong Password\" (执行了: tap\"Password\"=true). 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"Suggest Strong Password\". 页面显示: \"Back\nCreate Account\nName\nEmail\nPassword\nMinimum 8 characters\nConfirm Password\nDate of birth\nTap to select\nYou must be 13+ to use C\" (执行了: tap\"Password\"=true)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L34-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:24:33.205Z"
+          "ai_tested_at": "2026-08-06T07:58:58.631Z"
         },
         {
           "id": "L35",
@@ -753,7 +753,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L35-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:24:41.535Z"
+          "ai_tested_at": "2026-08-06T07:59:08.709Z"
         },
         {
           "id": "L36",
@@ -770,7 +770,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L36-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:24:49.941Z"
+          "ai_tested_at": "2026-08-06T07:59:19.022Z"
         },
         {
           "id": "L37",
@@ -787,7 +787,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L37-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:24:56.691Z"
+          "ai_tested_at": "2026-08-06T07:59:27.760Z"
         },
         {
           "id": "L38",
@@ -797,14 +797,14 @@
           "note": "❓ 待你确认: 这段小字的字号(12px) 和上边距(12px) 都是硬编码写死的, 不走全局设计规范里的字号变量. 其他地方文本都用 11 或 13. 是否要统一到设计规范里?",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"Your hiking data is securely stored...\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
+          "ai_reason": "R5 fail: 0/1 tokens. Missing: \"Your hiking data is securely stored...\". Body: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/L38-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:25:03.528Z"
+          "ai_tested_at": "2026-08-06T07:59:36.219Z"
         }
       ]
     },
@@ -819,14 +819,14 @@
           "note": "登出状态下 AuthGate 拦截,主页不会显示",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute pl\"",
+          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute \"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H01-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:25:09.998Z"
+          "ai_tested_at": "2026-08-06T07:59:44.438Z"
         },
         {
           "id": "H02",
@@ -836,14 +836,14 @@
           "note": "首次登录空状态,没有 '开始你的第一次徒步' 引导语",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 1/9 条期望文字, 缺: \"Kia ora, Explorer\", \"Good afternoon, Explorer\", \"Running\", \"Leave a Cairn here\", \"Trails\", \"Friends\", \"Memory\", \"Settings\" (执行了: reload). 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
+          "ai_reason": "找到 1/9 条期望文字, 缺: \"Kia ora, Explorer\",\"Good afternoon, Explorer\",\"Running\",\"Leave a Cairn here\",\"Trails\",\"Friends\",\"Memory\",\"Settings\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\" (执行了: reload)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H02-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:25:18.819Z"
+          "ai_tested_at": "2026-08-06T07:59:56.970Z"
         },
         {
           "id": "H03",
@@ -853,14 +853,14 @@
           "note": "24 小时内的最近一次会显示回访条",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 1/7 条期望文字, 缺: \"1 session\", \"FlagMarker\", \"0 flags\", \"1.2 km · 15:00\", \"1 hour ago\", \"。再下面是三张 Hiking/Running/\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "R5 fail: 1/7 tokens. Missing: \"1 session\",\"FlagMarker\",\"0 flags\",\"1.2 km · 15:00\",\"1 hour ago\",\"。再下面是三张 Hiking/Running/\". Body: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H03-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:25:35.375Z"
+          "ai_tested_at": "2026-08-06T08:00:05.381Z"
         },
         {
           "id": "H04",
@@ -870,14 +870,14 @@
           "note": "只展示最新一条,历史看不到,得点 'Trails' 才能翻",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/4 条期望文字, 缺: \"Route 图标 · 25 sessions\", \"FlagMarker 图标 · 0 flags\", \"3.2 km · 25:00\", \"3 hours ago\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "R5 fail: 0/4 tokens. Missing: \"Route 图标 · 25 sessions\",\"FlagMarker 图标 · 0 flags\",\"3.2 km · 25:00\",\"3 hours ago\". Body: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H04-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:25:44.799Z"
+          "ai_tested_at": "2026-08-06T08:00:13.953Z"
         },
         {
           "id": "H05",
@@ -887,14 +887,14 @@
           "note": "24 小时以上的最近记录被过滤掉,'昨天' 这种描述不显示",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"1 session · 0 flags\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"1 session · 0 flags\". 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H05-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:25:52.085Z"
+          "ai_tested_at": "2026-08-06T08:00:22.295Z"
         },
         {
           "id": "H06",
@@ -904,14 +904,14 @@
           "note": "点这一条会跳回 Hiking 页继续记录",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/3 条期望文字, 缺: \"Hiking in progress\", \"1.23 km · 05:00\", \"Resume\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "R5 fail: 0/3 tokens. Missing: \"Hiking in progress\",\"1.23 km · 05:00\",\"Resume\". Body: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H06-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:25:59.273Z"
+          "ai_tested_at": "2026-08-06T08:00:30.517Z"
         },
         {
           "id": "H07",
@@ -921,14 +921,14 @@
           "note": "距离 0 但时长过 5 秒也算在跑,不会藏起来",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/3 条期望文字, 缺: \"Hiking in progress\", \"0.00 km · 00:07\", \"Resume\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "R5 fail: 0/3 tokens. Missing: \"Hiking in progress\",\"0.00 km · 00:07\",\"Resume\". Body: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H07-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:26:06.587Z"
+          "ai_tested_at": "2026-08-06T08:00:38.648Z"
         },
         {
           "id": "H08",
@@ -938,14 +938,14 @@
           "note": "这里其实是个 bug:数据条数得不对,应该跟回访条用同一套过滤",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"2 sessions\", \"1 hour ago\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"2 sessions\",\"1 hour ago\". 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H08-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:26:13.270Z"
+          "ai_tested_at": "2026-08-06T08:00:46.925Z"
         },
         {
           "id": "H09",
@@ -955,14 +955,14 @@
           "note": "这个横条只在有等待上传的记录时才出现",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"云 + 斜线\", \"1 hike pending sync — will complete when online\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"云 + 斜线\",\"1 hike pending sync — will complete when online\". 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H09-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:26:19.785Z"
+          "ai_tested_at": "2026-08-06T08:00:55.078Z"
         },
         {
           "id": "H10",
@@ -972,14 +972,14 @@
           "note": "复数文案切换",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"3 hikes pending sync — will complete when online\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"3 hikes pending sync — will complete when online\". 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H10-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:26:26.288Z"
+          "ai_tested_at": "2026-08-06T08:01:03.248Z"
         },
         {
           "id": "H11",
@@ -989,14 +989,14 @@
           "note": "'静默直到有内容告诉你' 的策略",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute pl\"",
+          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute \"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H11-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:26:32.971Z"
+          "ai_tested_at": "2026-08-06T08:01:11.362Z"
         },
         {
           "id": "H12",
@@ -1006,14 +1006,14 @@
           "note": "iPhone 14/15 Pro 的挖孔屏胶囊应该不被挡住",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"O16 · Downloading update\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"O16 · Downloading update\". 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H12-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:26:39.673Z"
+          "ai_tested_at": "2026-08-06T08:01:19.495Z"
         },
         {
           "id": "H13",
@@ -1023,14 +1023,14 @@
           "note": "弹窗风格跟设置页的输入确认弹窗是一家的",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/3 条期望文字, 缺: \"O16 · Update downloaded\", \"Restart now\", \"Later\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "找到 0/3 条期望文字, 缺: \"O16 · Update downloaded\",\"Restart now\",\"Later\". 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H13-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:26:46.334Z"
+          "ai_tested_at": "2026-08-06T08:01:27.822Z"
         },
         {
           "id": "H14",
@@ -1040,14 +1040,14 @@
           "note": "登录页的那个 OTA 提示是显示 'Couldn't check · tap to retry',主页这个不显示——两个地方行为不一致",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute pl\"",
+          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute \"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H14-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:26:53.074Z"
+          "ai_tested_at": "2026-08-06T08:01:36.114Z"
         },
         {
           "id": "H15",
@@ -1057,14 +1057,14 @@
           "note": "标题是写死的,不会因数据变长",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望的 3 条文字全找到: \"Hiking\", \"Running\", \"Leave a Cairn here\"",
+          "ai_reason": "期望的 3 条文字全找到: \"Hiking\",\"Running\",\"Leave a Cairn here\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H15-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:26:59.805Z"
+          "ai_tested_at": "2026-08-06T08:01:44.217Z"
         },
         {
           "id": "H16",
@@ -1074,14 +1074,14 @@
           "note": "数字再多这一格也不炸",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"250 sessions\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"250 sessions\". 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H16-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:27:06.321Z"
+          "ai_tested_at": "2026-08-06T08:01:52.402Z"
         },
         {
           "id": "H17",
@@ -1091,14 +1091,14 @@
           "note": "英制/公制切换主页立刻生效",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 1/3 条期望文字, 缺: \"1.0 mi · 15:00\", \"mi\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "R5 fail: 1/3 tokens. Missing: \"1.0 mi · 15:00\",\"mi\". Body: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H17-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:27:12.871Z"
+          "ai_tested_at": "2026-08-06T08:02:00.467Z"
         },
         {
           "id": "H18",
@@ -1108,14 +1108,14 @@
           "note": "5:00 到 11:59 走早上问候",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"Kia ora, Explorer\" (执行了: reload). 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"Kia ora, Explorer\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\" (执行了: reload)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H18-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:27:22.053Z"
+          "ai_tested_at": "2026-08-06T08:02:12.544Z"
         },
         {
           "id": "H19",
@@ -1125,14 +1125,14 @@
           "note": "12:00 到 17:59 走下午问候",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"Good afternoon, Explorer\" (执行了: reload). 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"Good afternoon, Explorer\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\" (执行了: reload)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H19-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:27:31.291Z"
+          "ai_tested_at": "2026-08-06T08:02:24.474Z"
         },
         {
           "id": "H20",
@@ -1142,14 +1142,14 @@
           "note": "凌晨看到 Good evening 有点怪,可以考虑加一个 'Good night'",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"Good evening, Explorer\" (执行了: reload). 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"Good evening, Explorer\". 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour hiking data is securely stored\" (执行了: reload)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H20-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:27:41.897Z"
+          "ai_tested_at": "2026-08-06T08:02:36.658Z"
         },
         {
           "id": "H21",
@@ -1159,14 +1159,14 @@
           "note": "小屏第三张卡挤扁风险",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望的 2 条文字全找到: \"Leave a Cairn here\", \"Drop a note for friends or your future self\"",
+          "ai_reason": "期望的 2 条文字全找到: \"Leave a Cairn here\",\"Drop a note for friends or your future self\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H21-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:27:49.106Z"
+          "ai_tested_at": "2026-08-06T08:02:44.729Z"
         },
         {
           "id": "H22",
@@ -1183,7 +1183,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H22-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:27:56.268Z"
+          "ai_tested_at": "2026-08-06T08:02:52.895Z"
         },
         {
           "id": "H23",
@@ -1193,14 +1193,14 @@
           "note": "上线前必须删掉这个后门",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute pl\"",
+          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute \"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H23-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:28:02.828Z"
+          "ai_tested_at": "2026-08-06T08:03:01.077Z"
         },
         {
           "id": "H24",
@@ -1210,14 +1210,14 @@
           "note": "延迟 800 毫秒是为了让用户先看到主页再问权限",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 1/2 条期望文字, 缺: \"Allow \"Cairn\" to use your location?\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "找到 1/2 条期望文字, 缺: \"Allow \"Cairn\" to use your location?\". 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H24-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:28:09.322Z"
+          "ai_tested_at": "2026-08-06T08:03:09.181Z"
         },
         {
           "id": "H25",
@@ -1227,14 +1227,14 @@
           "note": "点卡片按下有个小缩放反馈",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute pl\"",
+          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute \"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H25-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:28:15.756Z"
+          "ai_tested_at": "2026-08-06T08:03:17.454Z"
         },
         {
           "id": "H26",
@@ -1244,14 +1244,14 @@
           "note": "跟 Hiking 卡的动效一致",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过 (执行了: tap\"Running\"=true). 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to chan\"",
+          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute \" (执行了: tap\"Running\"=false)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H26-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:28:22.251Z"
+          "ai_tested_at": "2026-08-06T08:03:31.710Z"
         },
         {
           "id": "H27",
@@ -1261,14 +1261,14 @@
           "note": "只有这张卡有点击日志上报 home.tap_plant,另外两张卡没有——观测口径不一致",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute pl\"",
+          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute \"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H27-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:28:28.656Z"
+          "ai_tested_at": "2026-08-06T08:03:40.102Z"
         },
         {
           "id": "H28",
@@ -1278,14 +1278,14 @@
           "note": "Trails 图标和 Route 图标共用,可以考虑换成罗盘或地图钉",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望的 2 条文字全找到: \"Trails\", \"Route\"",
+          "ai_reason": "期望的 2 条文字全找到: \"Trails\",\"Route\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H28-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:28:35.313Z"
+          "ai_tested_at": "2026-08-06T08:03:48.458Z"
         },
         {
           "id": "H29",
@@ -1302,7 +1302,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H29-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:28:41.812Z"
+          "ai_tested_at": "2026-08-06T08:03:56.779Z"
         },
         {
           "id": "H30",
@@ -1312,14 +1312,14 @@
           "note": "冷启动那 250 毫秒是一片空白米黄色,像卡死了",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "期望里没写具体文字, 但页面还停在登录首屏没进 app (执行了: reload). 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour \"",
+          "ai_reason": "期望里没写具体文字, 但页面还停在登录首屏没进 app. 页面显示: \"Cairn\nLeave a mark.\nGuide the next.\nO20 · Couldn't check · tap to retry\nSign In\nCreate Account\nYour \" (执行了: reload)",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H30-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:28:50.988Z"
+          "ai_tested_at": "2026-08-06T08:04:09.081Z"
         },
         {
           "id": "H31",
@@ -1329,14 +1329,14 @@
           "note": "断网时唯一告诉你的是'待上传'那条,OTA 失败完全静默",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"pending sync\", \"1 hike pending sync — will complete when online\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"pending sync\",\"1 hike pending sync — will complete when online\". 页面显示: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H31-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:28:57.540Z"
+          "ai_tested_at": "2026-08-06T08:04:17.437Z"
         },
         {
           "id": "H32",
@@ -1346,14 +1346,14 @@
           "note": "iPhone SE 上最挤情况,第三张卡副标题会被切,应该是 Critical bug",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 2/6 条期望文字, 缺: \"pending sync\", \"1 hike pending sync ...\", \"25 sessions · 1 flag\", \"30 minutes ago\". 页面显示: \"Cairn\nGood evening\nRun\n0.5 km\n5h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a Cai\"",
+          "ai_reason": "R5 fail: 2/6 tokens. Missing: \"pending sync\",\"1 hike pending sync ...\",\"25 sessions · 1 flag\",\"30 minutes ago\". Body: \"Cairn\nGood afternoon\nRun\n0.5 km\n1h ago\nHiking\nTrack your route · Explore at your pace\nRunning\nRoute planning · Lock mode\nLeave a C\"",
           "ai_screenshot": "",
           "manual_status": "untested",
           "manual_reason": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/H32-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:29:04.101Z"
+          "ai_tested_at": "2026-08-06T08:04:25.862Z"
         }
       ]
     },
@@ -1368,12 +1368,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/6 条期望文字, 缺: \"准备开始\", \",右边一个琥珀黄色的小胶囊,上面是一个黄色圆点加上文字\", \"(因为还没开始记录,位置服务处在\", \"这一步)。\n\n屏幕最下方也浮着一层控件:\n- 上面一个白色圆角胶囊(路线选择条):最左侧一个圆形图标底(默认是靶心图标),中间粗体路线名\", \"(还没选路线时),下面一行小字\", \",最右侧一个向上的小箭头(V 字倒过来)\n- 下面一个绿色大圆角胖按钮(高度约一根手指),左边一个播放三角图标 + 白字\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/6 条期望文字, 缺: \"准备开始\",\",右边一个琥珀黄色的小胶囊,上面是一个黄色圆点加上文字\",\"(因为还没开始记录,位置服务处在\",\"这一步)。\n\n屏幕最下方也浮着一层控件:\n- 上面一个白色圆角胶囊(路线选择条):最左侧一个圆形图标底(默认是靶心图标),中间粗体路线名\",\"(还没选路线时),下面一行小字\",\",最右侧一个向上的小箭头(V 字倒过来)\n- 下面一个绿色大圆角胖按钮(高度约一根手指),左边一个播放三角图标 + 白字\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K01-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:29:12.900Z"
+          "ai_tested_at": "2026-08-06T08:04:36.100Z"
         },
         {
           "id": "K02",
@@ -1388,7 +1388,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K02-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:29:22.360Z"
+          "ai_tested_at": "2026-08-06T08:04:46.418Z"
         },
         {
           "id": "K03",
@@ -1398,12 +1398,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 1/13 条期望文字, 缺: \"准备开始\", \"记录中\", \"GPS Offline\", \"km\", \"mi\", \"00:00\", \"elapsed\", \"+0m\", \"elev\", \"Pause\", \"Stop\", \"合起来\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 2/13 条期望文字, 缺: \"准备开始\",\"记录中\",\"GPS Offline\",\"km\",\"mi\",\"00:00\",\"elapsed\",\"+0m\",\"Pause\",\"Stop\",\"合起来\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K03-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:29:30.996Z"
+          "ai_tested_at": "2026-08-06T08:04:56.628Z"
         },
         {
           "id": "K04",
@@ -1413,12 +1413,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/4 条期望文字, 缺: \"记录中\", \"已暂停\", \"Pause\", \"Resume\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/4 条期望文字, 缺: \"记录中\",\"已暂停\",\"Pause\",\"Resume\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K04-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:29:39.416Z"
+          "ai_tested_at": "2026-08-06T08:05:07.001Z"
         },
         {
           "id": "K05",
@@ -1428,12 +1428,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/5 条期望文字, 缺: \"已暂停\", \"记录中\", \"信号丢失的空档\", \"Resume\", \"Pause\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/5 条期望文字, 缺: \"已暂停\",\"记录中\",\"信号丢失的空档\",\"Resume\",\"Pause\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K05-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:29:47.825Z"
+          "ai_tested_at": "2026-08-06T08:05:17.445Z"
         },
         {
           "id": "K06",
@@ -1443,12 +1443,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/5 条期望文字, 缺: \"走得太短\", \"走得再多一点\", \"Keep going a little longer\", \"。绿色胖按钮\", \"(点它 = 继续走,这次记录还保留);下方灰色链接\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/5 条期望文字, 缺: \"走得太短\",\"走得再多一点\",\"Keep going a little longer\",\"。绿色胖按钮\",\"(点它 = 继续走,这次记录还保留);下方灰色链接\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K06-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:29:56.351Z"
+          "ai_tested_at": "2026-08-06T08:05:27.957Z"
         },
         {
           "id": "K07",
@@ -1458,12 +1458,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/9 条期望文字, 缺: \"Hike complete\", \"Run complete\", \"You revealed X.XX km² of new ground.\", \"Familiar ground\", \"Just getting started — we'll add to your memory map next hike.\", \"Hike — Aug 5\", \"Discard\", \"Save\", \"记录中\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "R5 fail: 0/9 tokens. Missing: \"Hike complete\",\"Run complete\",\"You revealed X.XX km² of new ground.\",\"Familiar ground\",\"Just getting started — we'll add to your memory map next hike.\",\"Hike — Aug 5\",\"Discard\",\"Save\",\"记录中\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K07-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:30:05.044Z"
+          "ai_tested_at": "2026-08-06T08:05:38.141Z"
         },
         {
           "id": "K08",
@@ -1473,12 +1473,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/4 条期望文字, 缺: \"处理中\", \"Saving…\", \"准备开始\", \"等待同步\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/4 条期望文字, 缺: \"处理中\",\"Saving…\",\"准备开始\",\"等待同步\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K08-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:30:13.540Z"
+          "ai_tested_at": "2026-08-06T08:05:48.393Z"
         },
         {
           "id": "K09",
@@ -1488,12 +1488,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"准备开始\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"准备开始\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K09-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:30:22.150Z"
+          "ai_tested_at": "2026-08-06T08:05:58.838Z"
         },
         {
           "id": "K10",
@@ -1503,12 +1503,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"Hiking in progress\", \"Resume\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"Hiking in progress\",\"Resume\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K10-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:30:30.609Z"
+          "ai_tested_at": "2026-08-06T08:06:09.193Z"
         },
         {
           "id": "K11",
@@ -1523,7 +1523,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K11-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:30:39.190Z"
+          "ai_tested_at": "2026-08-06T08:06:19.919Z"
         },
         {
           "id": "K12",
@@ -1533,12 +1533,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"你好像停下来了,要暂停吗?\", \"自动暂停\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"你好像停下来了,要暂停吗?\",\"自动暂停\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K12-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:30:47.723Z"
+          "ai_tested_at": "2026-08-06T08:06:30.183Z"
         },
         {
           "id": "K13",
@@ -1548,12 +1548,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/5 条期望文字, 缺: \"是否恢复这次徒步\", \"Resume this hike?\", \"+ 三列数据(距离/时长/最后一个点是多久前的) + 绿色\", \"+ 灰色\", \"。点 Continue 恢复到之前的\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/5 条期望文字, 缺: \"是否恢复这次徒步\",\"Resume this hike?\",\"+ 三列数据(距离/时长/最后一个点是多久前的) + 绿色\",\"+ 灰色\",\"。点 Continue 恢复到之前的\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K13-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:30:56.363Z"
+          "ai_tested_at": "2026-08-06T08:06:40.489Z"
         },
         {
           "id": "K14",
@@ -1563,12 +1563,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"详情\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/1 条期望文字, 缺: \"详情\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K14-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:31:04.895Z"
+          "ai_tested_at": "2026-08-06T08:06:50.859Z"
         },
         {
           "id": "K15",
@@ -1578,12 +1578,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"以最后一次点击为准\", \"Stop\" (执行了: tap\"Pause\"=false). 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"以最后一次点击为准\",\"Stop\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\" (执行了: tap\"Pause\"=false)",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K15-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:31:13.478Z"
+          "ai_tested_at": "2026-08-06T08:07:01.314Z"
         },
         {
           "id": "K16",
@@ -1593,12 +1593,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"Saving…\", \"We couldn't save this hike\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\n\nHiking\"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"Saving…\",\"We couldn't save this hike\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K16-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:31:22.008Z"
+          "ai_tested_at": "2026-08-06T08:07:11.485Z"
         },
         {
           "id": "K17",
@@ -1608,12 +1608,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 1/4 条期望文字, 缺: \"GPS ±<N>m\", \"Signal lost\", \"Signal lost · N min\" (执行了: tap\"Start Hiking\"=true). 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nGPS Offline\n0.0\nkm\n00:00\nelapsed\n+0m\nelev\nPause\nStop\nHiking n\"",
+          "ai_reason": "找到 0/4 条期望文字, 缺: \"GPS Offline\",\"GPS ±<N>m\",\"Signal lost\",\"Signal lost · N min\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nDiscove\" (执行了: tap\"Start Hiking\"=false)",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K17-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:31:30.706Z"
+          "ai_tested_at": "2026-08-06T08:07:27.233Z"
         },
         {
           "id": "K18",
@@ -1623,12 +1623,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"进行中的这次徒步\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nResume \"",
+          "ai_reason": "脚本运行出错: Error: macroEnsureLoggedIn: unexpected route undefined",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K18-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:31:39.281Z"
+          "ai_tested_at": "2026-08-06T08:07:33.473Z"
         },
         {
           "id": "K19",
@@ -1637,13 +1637,13 @@
           "expect": "徒步不受影响:GPS 继续,计时继续,路径继续。控制中心不会杀 app,震动和屏幕不锁的状态都保留。",
           "note": "",
           "tested": false,
-          "ai_status": "pass",
-          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to cha\"",
+          "ai_status": "fail",
+          "ai_reason": "脚本运行出错: Error: macroEnsureLoggedIn: unexpected route undefined",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K19-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:31:47.949Z"
+          "ai_tested_at": "2026-08-06T08:07:39.502Z"
         },
         {
           "id": "K20",
@@ -1653,12 +1653,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/3 条期望文字, 缺: \"是否恢复这次徒步\", \"没结束的徒步\", \"准备开始\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nResume \"",
+          "ai_reason": "脚本运行出错: Error: macroEnsureLoggedIn: unexpected route undefined",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K20-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:31:56.698Z"
+          "ai_tested_at": "2026-08-06T08:07:45.687Z"
         },
         {
           "id": "K21",
@@ -1668,12 +1668,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/1 条期望文字, 缺: \"插一个 cairn 标记 + 写留言\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nResume \"",
+          "ai_reason": "脚本运行出错: Error: macroEnsureLoggedIn: unexpected route undefined",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K21-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:32:19.303Z"
+          "ai_tested_at": "2026-08-06T08:07:51.852Z"
         },
         {
           "id": "K22",
@@ -1683,12 +1683,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/5 条期望文字, 缺: \"切成\", \"。按钮里的图标从\", \"换成一个实时的指北针针体:一根北红南灰的针 + 一个静态字母\", \"。针会跟着手机方向转动(经过平滑处理,不会一直抖)。再点一次关掉,回到\", \"的图标(省电)。如果没给位置授权、或者手机的方向传感器不可用,针不会显示,退回到\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Hike\nTap to change route\nStart Hiking\nResume \"",
+          "ai_reason": "脚本运行出错: Error: macroEnsureLoggedIn: unexpected route undefined",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/K22-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:32:34.489Z"
+          "ai_tested_at": "2026-08-06T08:07:58.308Z"
         }
       ]
     },
@@ -1702,13 +1702,13 @@
           "expect": "整屏是户外地图, 中间蓝点是自己当前位置。屏幕底部一张白色圆角卡片, 左边一个圆图标框 (跑鞋色底 + 靶子图标), 中间黑字 \"Free Run\", 下面一行淡橙小字 \"Tap to change route\", 右边一个向上小箭头。卡片下方一条绿色大按钮, 白色三角图标 + 白字 \"Start Running\"。按钮下方居中一行灰字小锁图标 + \"Screen locks automatically\"。右上角一个白色小胶囊, 里面一个橙色圆点 + 橙色小字 \"Enable GPS\" (哪怕权限已给, 这里也一直是橙色 \"Enable GPS\", 不会变绿, 这是一个已知 bug)",
           "note": "",
           "tested": false,
-          "ai_status": "pass",
-          "ai_reason": "期望的 5 条文字全找到: \"Free Run\", \"Tap to change route\", \"Start Running\", \"Screen locks automatically\", \"Enable GPS\"",
+          "ai_status": "fail",
+          "ai_reason": "脚本运行出错: Error: macroEnsureLoggedIn: unexpected route undefined",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R01-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:32:46.176Z"
+          "ai_tested_at": "2026-08-06T08:08:04.791Z"
         },
         {
           "id": "R02",
@@ -1718,12 +1718,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 1/2 条期望文字, 缺: \"记住上一次选的路线\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "脚本运行出错: Error: macroEnsureLoggedIn: unexpected route undefined",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R02-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:32:56.426Z"
+          "ai_tested_at": "2026-08-06T08:08:10.996Z"
         },
         {
           "id": "R03",
@@ -1733,12 +1733,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 1/2 条期望文字, 缺: \"你还没有保存的路线, 去规划一条\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "脚本运行出错: Error: macroEnsureLoggedIn: unexpected route undefined",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R03-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:33:06.560Z"
+          "ai_tested_at": "2026-08-06T08:08:17.407Z"
         },
         {
           "id": "R04",
@@ -1748,12 +1748,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 1/2 条期望文字, 缺: \"距离 · ↑爬升 · × 完成次数\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "脚本运行出错: Error: macroEnsureLoggedIn: unexpected route undefined",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R04-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:33:16.860Z"
+          "ai_tested_at": "2026-08-06T08:08:23.865Z"
         },
         {
           "id": "R05",
@@ -1762,13 +1762,13 @@
           "expect": "那一行的名字会自动换行到 2-3 行, 把整行撑得比其他行高很多。因为代码没限制这行只显示一行, 会导致 sheet 内部布局挤到不整齐——名字应该被截断成一行加省略号, 但现在没有",
           "note": "",
           "tested": false,
-          "ai_status": "pass",
-          "ai_reason": "期望里没写具体文字, 到达了非登录首屏就当通过. 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to chan\"",
+          "ai_status": "fail",
+          "ai_reason": "脚本运行出错: Error: macroEnsureLoggedIn: unexpected route undefined",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R05-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:33:26.939Z"
+          "ai_tested_at": "2026-08-06T08:08:30.371Z"
         },
         {
           "id": "R06",
@@ -1783,7 +1783,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R06-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:33:37.033Z"
+          "ai_tested_at": "2026-08-06T08:08:41.026Z"
         },
         {
           "id": "R07",
@@ -1798,7 +1798,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R07-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:33:47.308Z"
+          "ai_tested_at": "2026-08-06T08:08:51.494Z"
         },
         {
           "id": "R08",
@@ -1808,12 +1808,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 3/5 条期望文字, 缺: \"1 秒后锁屏\", \"点开始后立刻锁屏\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "找到 3/5 条期望文字, 缺: \"1 秒后锁屏\",\"点开始后立刻锁屏\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R08-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:33:57.469Z"
+          "ai_tested_at": "2026-08-06T08:09:01.488Z"
         },
         {
           "id": "R09",
@@ -1823,12 +1823,12 @@
           "note": "",
           "tested": false,
           "ai_status": "pass",
-          "ai_reason": "期望的 3 条文字全找到: \"Real Map (EAS Build)\", \"Build with EAS to enable live tracking map\", \"EAS Build\"",
+          "ai_reason": "期望的 3 条文字全找到: \"Real Map (EAS Build)\",\"Build with EAS to enable live tracking map\",\"EAS Build\"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R09-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:34:07.647Z"
+          "ai_tested_at": "2026-08-06T08:09:11.624Z"
         },
         {
           "id": "R10",
@@ -1843,7 +1843,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R10-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:34:17.811Z"
+          "ai_tested_at": "2026-08-06T08:09:20.837Z"
         },
         {
           "id": "R11",
@@ -1853,12 +1853,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/6 条期望文字, 缺: \"距离/时长/配速/GPS 状态\", \"00:00\", \"-- km\", \"-- min/km\", \"Double-tap to unlock\", \"GPS 搜索中\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "找到 0/6 条期望文字, 缺: \"距离/时长/配速/GPS 状态\",\"00:00\",\"-- km\",\"-- min/km\",\"Double-tap to unlock\",\"GPS 搜索中\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R11-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:34:27.992Z"
+          "ai_tested_at": "2026-08-06T08:09:30.862Z"
         },
         {
           "id": "R12",
@@ -1868,12 +1868,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/3 条期望文字, 缺: \"13:02\", \"2.34 km\", \"6'42\\\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "R5 fail: 0/3 tokens. Missing: \"13:02\",\"2.34 km\",\"6'42\\\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R12-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:34:38.072Z"
+          "ai_tested_at": "2026-08-06T08:09:40.870Z"
         },
         {
           "id": "R13",
@@ -1883,12 +1883,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"45.62\", \"9'12\\\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "R5 fail: 0/2 tokens. Missing: \"45.62\",\"9'12\\\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R13-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:34:48.206Z"
+          "ai_tested_at": "2026-08-06T08:09:50.738Z"
         },
         {
           "id": "R14",
@@ -1903,7 +1903,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R14-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:34:58.257Z"
+          "ai_tested_at": "2026-08-06T08:10:00.567Z"
         },
         {
           "id": "R15",
@@ -1913,12 +1913,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/4 条期望文字, 缺: \"1.24 mi\", \"8'32\\\", \", 单位标签写\", \"(不是\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "R5 fail: 0/4 tokens. Missing: \"1.24 mi\",\"8'32\\\",\", 单位标签写\",\"(不是\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R15-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:35:08.516Z"
+          "ai_tested_at": "2026-08-06T08:10:10.873Z"
         },
         {
           "id": "R16",
@@ -1933,7 +1933,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R16-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:35:18.676Z"
+          "ai_tested_at": "2026-08-06T08:10:21.017Z"
         },
         {
           "id": "R17",
@@ -1943,12 +1943,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"Offline\", \"网络断了\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"Offline\",\"网络断了\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R17-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:35:28.732Z"
+          "ai_tested_at": "2026-08-06T08:10:31.169Z"
         },
         {
           "id": "R18",
@@ -1963,7 +1963,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R18-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:35:39.026Z"
+          "ai_tested_at": "2026-08-06T08:10:41.328Z"
         },
         {
           "id": "R19",
@@ -1973,12 +1973,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/2 条期望文字, 缺: \"已经点过一下\", \"点了一下不算数\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "找到 0/2 条期望文字, 缺: \"已经点过一下\",\"点了一下不算数\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R19-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:35:49.166Z"
+          "ai_tested_at": "2026-08-06T08:10:51.196Z"
         },
         {
           "id": "R20",
@@ -1988,12 +1988,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 1/4 条期望文字, 缺: \"Stop\", \"Plant\", \"Stop 最重要, Lock 最次要\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "找到 1/4 条期望文字, 缺: \"Stop\",\"Plant\",\"Stop 最重要, Lock 最次要\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R20-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:35:58.878Z"
+          "ai_tested_at": "2026-08-06T08:11:01.042Z"
         },
         {
           "id": "R21",
@@ -2008,7 +2008,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R21-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:36:09.147Z"
+          "ai_tested_at": "2026-08-06T08:11:11.118Z"
         },
         {
           "id": "R22",
@@ -2018,12 +2018,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "脚本运行出错: Error: macroLoginViaUI: expected Home, got Auth. Body: \"Back\nSign In\nEmail\nPassword\nRemember me on this device\nForgot password?\nSign In\nor continue with\nCon\"",
+          "ai_reason": "脚本运行出错: Error: macroEnsureLoggedIn: unexpected route undefined",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R22-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:36:29.269Z"
+          "ai_tested_at": "2026-08-06T08:11:17.125Z"
         },
         {
           "id": "R23",
@@ -2033,12 +2033,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/3 条期望文字, 缺: \"跑得太短\", \"Got it — keep going\", \"End anyway\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "找到 0/3 条期望文字, 缺: \"跑得太短\",\"Got it — keep going\",\"End anyway\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R23-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:37:02.827Z"
+          "ai_tested_at": "2026-08-06T08:11:27.179Z"
         },
         {
           "id": "R24",
@@ -2048,12 +2048,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/4 条期望文字, 缺: \"0.00 km / 00:00 / --\", \"Session saved\", \"Run discarded\", \"没有保存\" (执行了: tap\"End anyway\"=false). 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "R5 fail: 0/4 tokens. Missing: \"0.00 km / 00:00 / --\",\"Session saved\",\"Run discarded\",\"没有保存\". Body: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \" [tap\"End anyway\"=false]",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R24-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:37:24.033Z"
+          "ai_tested_at": "2026-08-06T08:11:37.336Z"
         },
         {
           "id": "R25",
@@ -2068,7 +2068,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R25-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:37:38.344Z"
+          "ai_tested_at": "2026-08-06T08:11:47.227Z"
         },
         {
           "id": "R26",
@@ -2083,7 +2083,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R26-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:37:53.122Z"
+          "ai_tested_at": "2026-08-06T08:11:57.232Z"
         },
         {
           "id": "R27",
@@ -2098,7 +2098,7 @@
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R27-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:38:04.939Z"
+          "ai_tested_at": "2026-08-06T08:12:07.456Z"
         },
         {
           "id": "R28",
@@ -2108,12 +2108,12 @@
           "note": "",
           "tested": false,
           "ai_status": "fail",
-          "ai_reason": "找到 0/11 条期望文字, 缺: \"Run Complete\", \"Session saved\", \"距离\", \"km\", \"mi\", \"时长\", \"elapsed\", \"配速\", \"pace\", \"View activity detail →\", \"New Run\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
+          "ai_reason": "找到 0/11 条期望文字, 缺: \"Run Complete\",\"Session saved\",\"距离\",\"km\",\"mi\",\"时长\",\"elapsed\",\"配速\",\"pace\",\"View activity detail →\",\"New Run\". 页面显示: \"Real Map (EAS Build)\nBuild with EAS to enable live tracking map\nBack\nEnable GPS\nFree Run\nTap to change route\nStart Running\nScreen \"",
           "ai_screenshot": "",
           "ai_screenshots": [
             "https://map.yiiling.cn/flows/screenshots/round-1/R28-1.png"
           ],
-          "ai_tested_at": "2026-08-06T12:38:14.386Z"
+          "ai_tested_at": "2026-08-06T08:12:17.661Z"
         },
         {
           "id": "R29",
@@ -6694,6 +6694,683 @@
             "https://map.yiiling.cn/flows/screenshots/round-1/G10-1.png"
           ],
           "ai_tested_at": "2026-08-06T07:41:47.476Z"
+        }
+      ]
+    },
+    {
+      "name": "🧪 O61 非 Public 本人验收 03",
+      "rows": [
+        {
+          "id": "OT03-ENV01",
+          "pre": "先取得所有者批准并完成新 native build、O61 OTA；手机随后记录真实值。",
+          "action": "1. 打开 App，在 Home 记录可见 O 标记；在 TestFlight 记录 build 号。\n2. 把手机值与 VERSION_AND_ENVIRONMENT.md 的 target channel/runtime/API 对照。",
+          "expect": "1. 目标必须是 O61，且 build 不是仅凭源码猜测；若仍为 O56，停止其余 O61 验收。\n2. 更新、runtime、binary 与 API 属于同一获批候选；手机加载 identity 仍由本步骤补齐。",
+          "note": "闸门：ENVIRONMENT_BLOCKED；依据：S1/S2。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-ENV02",
+          "pre": "先由获批部署把非 Public backend 提升到 O61 兼容提交与迁移 043，并留下部署回执。",
+          "action": "1. 查看部署回执中的 commit、image、migration ledger 和 health。\n2. 登录 A/B 测试账号，分别打开 Activities、Routes、Friends。",
+          "expect": "1. 不再是当前 393338… / 039；040、042、043 后置条件明确通过。\n2. 正常空态/数据可加载；Friends 不再出现当前 production 的 encounter 501 能力缺口。",
+          "note": "闸门：ENVIRONMENT_BLOCKED；依据：S1/S2。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-HOME01",
+          "pre": "环境闸门已通过；Home 实际显示 O61。当前目标 Sunny Day 文件为 sunny-day-final-micro-3x.jpg（q95）。天气/时段只用 App 已有状态，不伪造通过。",
+          "action": "1. 打开Home，对照原图看水面、近处树叶、山林。\n2. 记录“更舒服 / 仍刺眼 / 变糊”，附一张同屏截图。",
+          "expect": "1. 构图和颜色保持，局部细节不应更刺眼。\n2. 这是你的视觉验收，不因自动测试通过而默认满意。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S3。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-HOME02",
+          "pre": "已登录；本轮不进入Public。",
+          "action": "1. 从Home进入Hike后返回，再进入Run后返回。\n2. 依次打开Memory、Trails、Friends、Settings再回Home。",
+          "expect": "1. 没有重复导航、残留上一页弹层或错误开始活动。\n2. 入口清楚、返回符合预期、首页不重置成另一账号。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-AUTH01",
+          "pre": "使用已有 Cairn 邮箱测试账号（不是 Codex/OpenAI 账号）；本轮不验证 Apple/Google provider。",
+          "action": "1. 在登录页输入正确邮箱密码并继续。\n2. 进入Settings退出，然后重新登录同一账号。",
+          "expect": "1. 进入自己的Home，无重复登录弹层。\n2. 历史按当前策略恢复；不会混入另一个用户。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-AUTH02",
+          "pre": "专用测试账号；不重复暴力尝试。",
+          "action": "1. 输入一次错误密码。\n2. 按提示改成正确密码后重试。",
+          "expect": "1. 可理解的错误，没有假成功。\n2. 按钮重新可用，正确登录。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-HIKE01",
+          "pre": "Debug/Simulator均OFF；安全步行路线。",
+          "action": "1. Home → Hike，等待真实位置就绪，点Start。\n2. 原地站一会，再沿弯路走一段并原路折返。\n3. 暂停，停留后继续。",
+          "expect": "1. 起点是真实位置，未提前自动开始。\n2. 线大致对应实际经过，停留不应持续虚增，折返保留。\n3. 暂停/继续状态清楚，不跨缺口凭空画线。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S4。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-HIKE02",
+          "pre": "已有一条进行中的真实Hike。",
+          "action": "1. 锁屏继续安全走一段。\n2. 解锁回App，再切到另一个App后返回。",
+          "expect": "1. 后台是否连续由实际轨迹判定，勿盯屏走路。\n2. 活动仍正确，不错绑起点，不以直线补缺口。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-HIKE03",
+          "pre": "安全的普通遮挡路段；不为测试去危险环境。",
+          "action": "1. 经过一段自然遮挡，再回到开阔处。\n2. 走一个小回环，再走同一段。",
+          "expect": "1. 差定位时状态真实，恢复后不瞬移乱连。\n2. 回环/重复经过可见，个人探索不会被重复刷大。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-RUN01",
+          "pre": "Debug OFF；可先步行验证交互。",
+          "action": "1. Home → Run → Start。\n2. 走一段，暂停/继续并留一条Quick Cairn。\n3. 按Run页面的结束入口保存，打开详情。",
+          "expect": "1. 确实进入Run，不沿用Hike残留状态。\n2. 操作可达，Cairn归属本次活动。\n3. 名称、类型、轨迹及Cairn一致；步行不算配速准确性验证。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S4。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-END01",
+          "pre": "已有一次有效Hike或Run。",
+          "action": "1. 结束并保存；保存中不要重复操作，观察忙碌状态。\n2. 从历史重开该活动，再返回重开。",
+          "expect": "1. 保存中有反馈；只完成一次。\n2. 同一条活动和Cairn可重开，没有重复记录。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-END02",
+          "pre": "另开可丢弃的极短测试活动。",
+          "action": "1. 立即尝试结束，阅读当前出现的确认/保存弹层。\n2. 先取消回活动，再选择真正丢弃。",
+          "expect": "1. Hike/Run各自流程清楚；取消不会暗中保存。\n2. 回正常空闲页；历史中无幽灵记录。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S4。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-ACT01",
+          "pre": "完成上一组一次活动。",
+          "action": "1. Home → Trails → Activities。\n2. 找到刚才命名的记录，打开后返回列表。",
+          "expect": "1. 对应记录存在，列表信息可信。\n2. 返回列表不再次打开旧详情，定位到同一条记录。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-DETAIL01",
+          "pre": "活动内已留一条文字Cairn。",
+          "action": "1. 打开Activity Detail，查看关联Cairn。\n2. 点开Cairn，编辑文字后回到活动并重开它。",
+          "expect": "1. 显示属于该活动的那条，而非附近任意一条。\n2. 文字更新、地点和活动来源不被改写。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S4。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-DETAIL02",
+          "pre": "可丢弃活动。",
+          "action": "1. 从详情的真实改名入口输入新名称并保存。\n2. 离开后重开；再改一次但取消。",
+          "expect": "1. 保存成功或失败有真实反馈。\n2. 首次名称保留；取消内容不泄漏到列表。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-DETAIL03",
+          "pre": "测试副本；先把活动存成Route。",
+          "action": "1. 删除该Activity。\n2. 查看已保存Route和活动历史。",
+          "expect": "1. 只删除选中的活动，无错误对象。\n2. 既存Route按实际独立所有权规则保留；不允许从已删除源新建幽灵Route。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S7。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-CAIRN01",
+          "pre": "进行中的活动；不选择Public。",
+          "action": "1. 点击快速留Cairn，不填正文。\n2. 结束活动后打开关联条目。",
+          "expect": "1. 按当前产品支持保存，默认私有。\n2. 空标题显示既定回退文字；不写入假标题，不变为Public。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-CAIRN02",
+          "pre": "进行中的Hike或Run。",
+          "action": "1. 打开完整创建页，输入标题和较长正文。\n2. 收起键盘，确认可见性，保存。\n3. 从活动和All Cairns分别重开。",
+          "expect": "1. 输入和按钮不被键盘/安全区遮住。\n2. 只保存一条，失败时能重试。\n3. 两入口指向同一记录，文字、地点、活动来源一致。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-CAIRN03",
+          "pre": "专用测试活动，已有登录。",
+          "action": "1. 断网后创建一条Cairn。\n2. 保留页面/历史可见状态，再联网。\n3. 重开同一条记录。",
+          "expect": "1. 提示本地/待同步等真实状态，不假装服务器成功。\n2. 同步处理一次，不出现重复。\n3. 仍是同一条Cairn及归属。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-CAIRN04",
+          "pre": "从All Cairns打开自己的记录。",
+          "action": "1. 编辑文字并保存。\n2. 重开后检查地点、时间、来源活动。",
+          "expect": "1. 只有允许编辑的字段改变。\n2. 原本来源不因编辑被重写。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-CAIRN05",
+          "pre": "已有多条不同名字Cairn。",
+          "action": "1. 从Memory的All Cairns入口打开列表。\n2. 若当前页面提供搜索，搜索刚才那条；否则记录无此功能。\n3. 点开，再返回。",
+          "expect": "1. 显示自己的数据或准确空态。\n2. 搜索结果/无此功能按实际记录，不把不存在当bug。\n3. 列表与详情是同一条，不错开隐藏条目。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S5。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-ROUTE01",
+          "pre": "已保存的Activity有有效轨迹。",
+          "action": "1. Activity Detail → Save as Route。\n2. 先按已证实的流程Beautify → Apply to draft → Save Route。\n3. Home → Trails → Routes，打开新路线。",
+          "expect": "1. 进入编辑草稿，Activity本身不改变。\n2. 预览/应用/保存步骤清楚，不重复创建。\n3. 路线可重开，和刚保存的编辑结果一致。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S4。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-ROUTE02",
+          "pre": "有一条自己的Route。",
+          "action": "1. Route Detail → Use Route → Hike。\n2. 先看预开始页，再点击Start。\n3. 结束后对Run重复预览/Start检查。",
+          "expect": "1. 路线作为参考显示，未自动记录或解锁Memory。\n2. Start后才绑定本次活动的路线参考。\n3. Run遵守同样的参考与事实边界。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S4。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-ROUTE03",
+          "pre": "自己的Route，不是好友只读Route。",
+          "action": "1. Route Detail → Edit Route → Beautify。\n2. 查看结果，Apply to draft → Save Route。\n3. 离开并重新打开Route及原Activity。",
+          "expect": "1. 展示待应用变化，不能无提示保存。\n2. 保存过程可理解。\n3. Route保留新结果；Activity的真实记录仍原样。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S4。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-ROUTE04",
+          "pre": "已有一条自己的 Route；已进入 Route Detail → Edit；环境闸门已通过。",
+          "action": "1. 点 Trim，拖左、右滑柄向内。\n2. 点地图外部再重新打开 Trim。\n3. 点 Apply to draft，再点外层 Save Route；回到 Trails 重开。",
+          "expect": "1. 滑柄可操作；上方显示保留距离 / 原距离；只有头尾被裁掉。\n2. 面板收起后可重开，裁切值仍在当前草稿。\n3. 持久化的是裁后 Route；源 Activity、Cairn 与 Memory 不变。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S4。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-ROUTE05",
+          "pre": "已有自己的 Route；进入 Edit。",
+          "action": "1. 点 Draw，从原路线附近按住连续画一段，并在原路线附近结束。\n2. 点 Preview，等待 snap；必要时 Undo 或 Reset。\n3. 检查 Move，并尝试寻找 waypoint、拖顶点、整体平移、Redo、Eraser。",
+          "expect": "1. 出现一条连续 stroke；不是逐点点选；未 Preview 前提示 Preview。\n2. 校验通过后显示预览；Undo 回一步，Reset 清空 strokes/trim。\n3. Move 只平移地图；其余控件当前不存在，不记为失败。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S4。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-ROUTE06",
+          "pre": "进入自己的 Route Editor；另知 Debug Simulator 是独立能力。",
+          "action": "1. 查看 Route Editor 可见工具。\n2. 在 simulator-capable build 中使用 Debug 摇杆（另见 DBG02）。",
+          "expect": "1. 只有 Beautify / Trim / Draw / Move、Undo / Reset 与保存流程；没有编辑摇杆。\n2. 它只让虚拟 Activity 移动；完成后可另存 Route，但不会直接改既有 Route。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S4/S7。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-MEM01",
+          "pre": "真实Hike正在进行；Simulator OFF。",
+          "action": "1. 走一段实际新路，在活动未结束时进入Memory。\n2. 返回继续走，稍后再次查看。\n3. Finish后重开App再看。",
+          "expect": "1. 已接受的真实经过区域在途中出现。\n2. 随新增实际移动更新，不靠手拖地图解锁。\n3. 保存前后事实一致，不扩大到没走过的地方。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-MEM02",
+          "pre": "已有个人记录及好友共享区域。",
+          "action": "1. 查看个人层，记录边界。\n2. 切合并/某一好友层，再切回个人。\n3. 重复经过旧路线后再看个人层。",
+          "expect": "1. 记住原来真正到访范围。\n2. 好友的区域不变成自己的。\n3. 重复到访可更新到访信息，但不会无依据扩大覆盖。",
+          "note": "闸门：O61_BACKEND_AND_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-MEM03",
+          "pre": "已有个人Memory。",
+          "action": "1. 拖动/缩放到没走过的地方。\n2. 退出再进入Memory。",
+          "expect": "1. 仅浏览地图，不新增探索或好友发现资格。\n2. 已保存区域能恢复；卡顿、图层缝隙如实记。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-FRI01",
+          "pre": "环境闸门通过；准备可丢弃 A/B 邮箱测试账号，并有第二合法操作端或分阶段退出/登录。",
+          "action": "1. A向B发请求；B在正常页面接受。\n2. B明确开启本轮要测的Memory/Cairn/Route分享。\n3. A重新打开好友内容。",
+          "expect": "1. 关系状态一致，不重复建好友。\n2. 好友关系不等于所有内容自动公开。\n3. 只出现当前有权看到的内容/入口。",
+          "note": "闸门：O61_BACKEND_AND_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-FRI02",
+          "pre": "B 在真实 Activity 中留下 Friends 可见 Cairn；A/B 已建立好友关系；B 已完成相应前瞻分享。A 使用真实 GPS，Simulator 关闭。",
+          "action": "1. A先只拖地图看附近位置。\n2. A关闭模拟器，实际接近并经过该处。\n3. 记录路过、停留、活动中/结束后的首次出现时间，打开详情。",
+          "expect": "1. 拖图不应获得新的真实到访资格。\n2. 按照真实距离/精度/时间窗口判断，不能只看地图交叉。\n3. 显示的是正确作者/记录；具体发现时机以当前实现记录，不套用Public。",
+          "note": "闸门：O61_BACKEND_AND_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-FRI03",
+          "pre": "B共享Route；A在线完整打开且获得当前授权。",
+          "action": "1. A从好友的正常Route详情入口打开。\n2. 断网后从同样入口重开并Use。\n3. 继续/结束活动后联网。",
+          "expect": "1. 是只读参考，不转成A所有，也不能直接编辑B路线。\n2. 有效缓存按当前授权和期限工作；缺条件时明确提示。\n3. 终止清理/确认可重试，路线不变为A的个人Memory。",
+          "note": "闸门：O61_BACKEND_AND_OTA_REQUIRED；依据：S1。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-FRI04",
+          "pre": "只用测试A/B和测试共享数据。",
+          "action": "1. B撤回共享或A屏蔽B。\n2. A在线刷新列表并打开旧入口。\n3. 重开App；断网重开已有缓存的限制另记录。",
+          "expect": "1. 动作有明确结果。\n2. 已知撤权的内容不能靠旧入口/迟到响应复活。\n3. 对已经获知的撤权及时清理；不能假称断网立即知道远端变化。",
+          "note": "闸门：O61_BACKEND_AND_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-SET01",
+          "pre": "环境闸门已通过。Settings 当前可见 Units、Appearance（Auto / Day / Sunset / Night）、Haptics 与 Explore while Cairn is open。",
+          "action": "1. Settings → 外观，依次选择现有Day/Sunset/Night或对应选项。\n2. 回Home/Memory/Detail分别查看，再测试单位和触感选项。\n3. 重开Settings。",
+          "expect": "1. 所有支持页面按同一语义切换，选项未存在则不硬找。\n2. 数字单位和反馈跟随设置，不改变底层真实数据。\n3. 已保存选择保留，说明清楚。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-SET02",
+          "pre": "可丢弃A/B账号。",
+          "action": "1. A在Settings修改名字并保存。\n2. 退出A、登录B，再打开Settings。",
+          "expect": "1. 成功/失败反馈真实，不重复提交。\n2. 不残留A名字、导出、弹层、草稿或迟到成功提示。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-SET03",
+          "pre": "当前后端已核对支持这些入口。",
+          "action": "1. 从Settings发送一条标明QA的反馈。\n2. 请求导出并重开导出记录。",
+          "expect": "1. 有明确提交/错误/重试结果，不无限转圈。\n2. 只属于当前账号，任务/下载实际可用或明确等待；勿在公开任务图上传内容。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-SET04",
+          "pre": "在主轮之前只取消，不真正删除。",
+          "action": "1. 进入删除账号/Memory现有确认入口。\n2. 不确认，点击取消/Back。",
+          "expect": "1. 清楚说明影响范围，不一点击入口就删除。\n2. 内容仍在，回到正确页面。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-SET05",
+          "pre": "只用专用可丢弃账号；主轮证据已导出。",
+          "action": "1. 按当前确认步骤删除。\n2. 重开App尝试访问刚才账号页面。",
+          "expect": "1. 只删除当前测试账号；网络失败不假成功。\n2. 退出/清理真实完成，不泄漏旧用户信息。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-DBG01",
+          "pre": "必须是另行获批的 simulator-capable iOS build；当前 production build 56 不满足。使用隔离 QA 账号。",
+          "action": "1. 先保持 Debug OFF 与 Simulator OFF，打开 Hiking/Running。\n2. Home 右上点 QA → 打开 Enable QA tools → 打开 Activity Simulator。\n3. 回 Home → Hiking/Running，选 Clean Path 或 Raw GPS，把地图中心移到合成 NZ 坐标，点 从这里开始，再点正常 Start。",
+          "expect": "1. 使用真实 GPS；没有摇杆或虚拟 provider。\n2. 只有 internal/simulator-capable build 能看到；生产能力关闭时不应强找。\n3. 选点本身不开始记录；显式 Start 后第一条证据来自虚拟起点，不从物理位置画连接线。",
+          "note": "闸门：SIMULATOR_CAPABLE_NATIVE_BUILD_REQUIRED；依据：S10/S11。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-DBG02",
+          "pre": "simulator-capable iPhone build；已在隔离账号显式开始模拟 Activity；Auto Move 已停止。",
+          "action": "1. 按住右侧“移动”摇杆向北、向东、转弯并做 U-turn；改变离中心的距离。\n2. 松手并等待两个采样周期。\n3. 打开 Diagnostic，观察 raw、accepted、provider、owner、segment。",
+          "expect": "1. 方向跟随手指；离中心越远幅度越大；改变的是模拟 ground truth，不只是镜头。\n2. joystickActive 释放到中立，不继续手动推动；如果 Auto Move 开着需先停止，不能误判。\n3. 证据进入正常 Activity sink；Raw GPS 可有拒绝点；身份与 segment 不串。",
+          "note": "闸门：SIMULATOR_CAPABLE_NATIVE_BUILD_REQUIRED；依据：S10/S11。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-DBG03",
+          "pre": "隔离QA，不能混入真实朋友数据。",
+          "action": "1. 模拟弯路/折返，中途留Quick和文字Cairn。\n2. 未Finish进入Memory，再回活动保存重开。",
+          "expect": "1. Cairn绑定最后有效模拟位置和本次模拟活动。\n2. 测试Memory按当前隔离规则显示；不成为真实个人到访资格。",
+          "note": "闸门：SIMULATOR_CAPABLE_NATIVE_BUILD_REQUIRED；依据：S10/S11。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-DBG04",
+          "pre": "simulator-capable build；Raw GPS Activity 已开始。面板 GPS 状态为 正常 / 较差 / 丢失 / 卡住；丢失时显示 重新定位。",
+          "action": "1. 在Raw GPS模式走弯路、停留、切弱信号/丢失。\n2. 恢复信号或按现有重新定位功能继续。",
+          "expect": "1. 有抖动/精度变化，不靠完美直线证明算法。\n2. 缺口不被当成真实经过，恢复不瞬移连线。",
+          "note": "闸门：SIMULATOR_CAPABLE_NATIVE_BUILD_REQUIRED；依据：S10/S11。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-DBG05",
+          "pre": "隔离模拟活动完成/丢弃。",
+          "action": "1. 结束保存或丢弃，然后关闭Simulator/Debug。\n2. 新开真实Hike。",
+          "expect": "1. 旧虚拟起点/输入不残留到新真实活动。\n2. 来自实际位置，不用模拟轨迹继续增加真实Memory。",
+          "note": "闸门：SIMULATOR_CAPABLE_NATIVE_BUILD_REQUIRED；依据：S10/S11。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-DBG06",
+          "pre": "simulator-capable build；模拟 Activity 已开始。",
+          "action": "1. 展开 Simulator walk；查看 Movement speed、Replay time acceleration、GPS 状态、自动移动、路线纠正。\n2. 点 自动前往，选目的地；再点 停止。\n3. 分别试 poor / lost / frozen 与 重新定位；再试回退 10m。",
+          "expect": "1. Raw GPS 倍速最高可选 10×；Clean Path 有更高 QA 倍速；倍速不改变物理速度含义。\n2. 沿 bounded walking geometry 自动移动；与手动摇杆明确分开。\n3. lost 不发样本；恢复建立正确连续性边界；回退只修模拟 Activity 尾部，不倒写真实 Memory/Cairn。",
+          "note": "闸门：SIMULATOR_CAPABLE_NATIVE_BUILD_REQUIRED；依据：S10/S11。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-UI01",
+          "pre": "完成主路径时顺手看。",
+          "action": "1. 对比Home/Activity/Cairn/Route/Friends/Settings的按钮、返回、输入和弹层。\n2. 切到三种当前主题再次抽查相同角色。",
+          "expect": "1. 主要/次要/危险操作容易区分，同类控件语言统一。\n2. 不是只改背景；文字、边框、禁用、错误态均可读。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-UI02",
+          "pre": "真机、长文字、可用的大字体设置。",
+          "action": "1. 在Cairn和Settings输入长文字、收起键盘、打开底部弹层。\n2. 实际点击返回/关闭/保存；需要时用VoiceOver读取按钮。",
+          "expect": "1. 输入和操作不被遮挡，滚动可达。\n2. 触摸与辅助语义明确；Web鼠标PASS不代替此项。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
+        },
+        {
+          "id": "OT03-UI03",
+          "pre": "只用已确认不会损坏数据的网络切换。",
+          "action": "1. 查看没有记录的列表；对有网请求断网一次。\n2. 重新联网点击重试。",
+          "expect": "1. 空态不说错误；离线不说成功；错误说明下一步。\n2. 恢复可用，不重复执行副作用。",
+          "note": "闸门：O61_NATIVE_BUILD_OTA_REQUIRED；依据：S1/S6。步骤按 O61 当前源码核对；未作为产品执行证据。",
+          "tested": false,
+          "manual_status": "untested",
+          "ai_status": "not_run",
+          "ai_reason": "未运行：这是本人验收步骤，不把源码核对或旧证据冒充真机结果。",
+          "ai_screenshot": "",
+          "ai_screenshots": [],
+          "ai_tested_at": ""
         }
       ]
     }

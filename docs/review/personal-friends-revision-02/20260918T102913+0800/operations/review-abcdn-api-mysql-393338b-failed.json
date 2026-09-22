@@ -1,0 +1,104 @@
+{
+  "started_at": "2026-09-18T05:12:32.662Z",
+  "assertions": [
+    {
+      "id": "FR-15.separate-connections",
+      "result": "PASS",
+      "detail": "A/B/C/D hold four distinct real MySQL connections"
+    },
+    {
+      "id": "DEP-01.schema",
+      "result": "PASS",
+      "detail": "035-039 applied on disposable MySQL 8 and additive presence/lease columns exist"
+    },
+    {
+      "id": "PF-R3.presence-return",
+      "result": "PASS",
+      "detail": "same-place later-day presence stores two immutable witnesses alongside one exploration-coverage row"
+    },
+    {
+      "id": "FR-02.default-deny",
+      "result": "PASS",
+      "detail": "non-friends receive no Memory projection and opaque content denial"
+    },
+    {
+      "id": "FR-03.author-policy",
+      "result": "PASS",
+      "detail": "A standing author policy provisions only A→B; no reciprocal grant appears"
+    },
+    {
+      "id": "PJ-06/FR-03.provenance-projection",
+      "result": "PASS",
+      "detail": "only post-grant finalized activity_real becomes coarse cells; no raw source/times"
+    },
+    {
+      "id": "SAFE-01.private-mask",
+      "result": "PASS",
+      "detail": "private-place change bumps authorization version and removes intersecting whole cells"
+    },
+    {
+      "id": "FR-10/FR-11.encounter",
+      "result": "PASS",
+      "detail": "prospective canonical real evidence creates one idempotent encounter; non-friend denied and viewer cannot mutate"
+    },
+    {
+      "id": "FR-12.route-reference",
+      "result": "PASS",
+      "detail": "connected revoke denies new use; an in-window issued offline use binds one Activity, retains only minimal geometry, and terminal ACK is idempotent"
+    },
+    {
+      "id": "FR-07.re-friend",
+      "result": "PASS",
+      "detail": "unfriend revokes selection; re-friend under standing policy creates a fresh empty prospective grant epoch"
+    },
+    {
+      "id": "FR-05.non-transitive",
+      "result": "PASS",
+      "detail": "A→C grant does not expose A to unrelated D"
+    },
+    {
+      "id": "FR-01.block-unblock",
+      "result": "PASS",
+      "detail": "block transaction ends access; unblock does not recreate friendship or grants"
+    },
+    {
+      "id": "SAFE-02/FR-13.legacy-containment",
+      "result": "PASS",
+      "detail": "historical Public row remains stored while Public discovery and legacy raw fog fail closed"
+    }
+  ],
+  "actors": {
+    "A": {
+      "id": "132",
+      "email_domain": "example.org"
+    },
+    "B": {
+      "id": "133",
+      "email_domain": "example.org"
+    },
+    "C": {
+      "id": "134",
+      "email_domain": "example.org"
+    },
+    "D": {
+      "id": "135",
+      "email_domain": "example.org"
+    }
+  },
+  "connection_ids": {
+    "A": 1523639,
+    "B": 1523640,
+    "C": 1523641,
+    "D": 1523642
+  },
+  "finished_at": "2026-09-18T05:12:33.858Z",
+  "summary": {
+    "passed": 13,
+    "failed": 1
+  },
+  "failure": {
+    "name": "AssertionError",
+    "message": "Expected values to be strictly equal:\n\nfalse !== true\n",
+    "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\nfalse !== true\n\n    at main (/harness/abcdn-api-mysql.js:460:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)"
+  }
+}

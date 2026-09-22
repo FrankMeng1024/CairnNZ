@@ -29,6 +29,15 @@ export const storage = {
       return null;
     }
   },
+  /** Critical-authority reads must distinguish absence from I/O failure. */
+  getItemStrict: async (key: string): Promise<string | null> => {
+    if (isWeb) {
+      return typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage.getItem(key)
+        : null;
+    }
+    return AsyncStorage.getItem(key);
+  },
   setItem: async (key: string, value: string, opts?: { strict?: boolean }): Promise<void> => {
     try {
       if (isWeb) {
@@ -46,7 +55,7 @@ export const storage = {
       if (opts?.strict) throw err;
     }
   },
-  removeItem: async (key: string): Promise<void> => {
+  removeItem: async (key: string, opts?: { strict?: boolean }): Promise<void> => {
     try {
       if (isWeb) {
         if (typeof window !== 'undefined' && window.localStorage) {
@@ -58,6 +67,10 @@ export const storage = {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(`[storage] removeItem(${key}) failed:`, err);
+      // Security-sensitive cache invalidation needs to distinguish a durable
+      // removal from an unavailable storage backend. Default callers retain
+      // the boot-resilient swallow behavior.
+      if (opts?.strict) throw err;
     }
   },
 };

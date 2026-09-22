@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T203209+0800",
+  "comparison": "CORRECTION_TASK_START_SNAPSHOT",
+  "modified": [
+    "app/src/services/routeService.ts",
+    "app/src/services/routeTombstones.ts",
+    "app/src/store/useRouteStore.ts",
+    "app/src/screens/RouteEditorScreen.tsx",
+    "app/src/screens/MapHistoryScreen.tsx",
+    "app/src/features/route/__tests__/routeContracts.test.ts",
+    "app/src/services/__tests__/routeService.contract.test.ts",
+    "app/src/store/__tests__/useRouteStore.offline.test.ts",
+    "backend/src/routes/routes.js",
+    "backend/src/migrations/036_route_origin_identity.sql"
+  ],
+  "new": [
+    "app/src/features/route/routeEditorSaveCoordinator.ts",
+    "app/src/features/route/__tests__/routeEditorSaveCoordinator.test.ts",
+    "backend/scripts/verify-migration-036.sh",
+    "backend/src/routes/__tests__/fixtures/route-origin-pre036.sql",
+    "backend/src/routes/__tests__/routeOriginMySql.integration.js"
+  ],
+  "review_artifact_root": "docs/review/route-detail/20260917T203209+0800",
+  "exact_packaged_artifact_inventory": "PACKAGE_MANIFEST.json",
+  "unrelated_dirty_work": "PRESERVED",
+  "dependencies_changed": false,
+  "candidate_marker_changed": false
+}

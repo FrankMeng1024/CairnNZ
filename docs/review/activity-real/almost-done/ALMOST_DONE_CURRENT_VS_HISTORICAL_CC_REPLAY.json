@@ -1,0 +1,801 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-11T06:38:32.466Z",
+  "authority": {
+    "requestedInput": "exact ordered 239-point raw pending payload",
+    "availableRemoteInput": "222-point canonical server append plus privacy-redacted per-observation telemetry",
+    "exactRawReplayComplete": false,
+    "evidenceGap": "The 239 coordinates remain only in the immutable on-device pending payload after HTTP 400; QA telemetry intentionally redacts coordinates.",
+    "sourceTimestampAccuracySpeedOrderingPreservedForAvailablePoints": true
+  },
+  "source": {
+    "serverId": 2072,
+    "clientActivityId": "99e48b0d-ad87-4aba-a94f-0d033393d0e6",
+    "qaSessionId": "qa-mtwhxdio-22iczr8v",
+    "rawCount": 239,
+    "rawOrdinalMax": 241,
+    "duplicateOrdinalTransitions": [
+      162,
+      176
+    ],
+    "canonicalCount": 222,
+    "canonicalDistanceM": 428.59
+  },
+  "windows": {
+    "firstStationary": {
+      "definition": "raw ordinals 9..14, before the approximately 45 s physical departure",
+      "pointCount": 6,
+      "pathDistanceM": 11.79,
+      "netDistanceM": 9.538,
+      "acceptedOrdinals": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ]
+    },
+    "secondStationary": {
+      "definition": "raw ordinals 224..226, low-speed minute-six stop before speed resumes at ordinal 227",
+      "pointCount": 3,
+      "pathDistanceM": 5.35,
+      "netDistanceM": 4.642,
+      "acceptedOrdinals": [
+        224,
+        225,
+        226
+      ]
+    }
+  },
+  "replayA_currentO46": {
+    "method": "Recorded O46 v2 decision telemetry plus persisted canonical output; this is stronger than a synthetic rerun for available decisions.",
+    "decisionEventCount": 221,
+    "canonicalAcceptedCount": 222,
+    "distanceM": 428.59,
+    "firstStationaryAcceptedCount": 6,
+    "firstStationaryPathM": 11.79,
+    "firstStationaryNetM": 9.538,
+    "secondStationaryAcceptedCount": 3,
+    "secondStationaryPathM": 5.35,
+    "secondStationaryNetM": 4.642,
+    "reversalsDetected": [
+      3,
+      4,
+      5,
+      107,
+      145,
+      165,
+      168,
+      177
+    ]
+  },
+  "replayB_d7ea3b0": {
+    "method": "Counterfactual replay over all 222 remotely available ordered points; 17 raw-only coordinates were unavailable.",
+    "k8IndoorDeadband": false,
+    "acceptedCount": 211,
+    "distanceM": 418.877,
+    "firstStationary": {
+      "pointCount": 2,
+      "pathDistanceM": 8.203587882887671,
+      "netDistanceM": 8.203587882887671,
+      "acceptedOrdinals": [
+        9,
+        11
+      ]
+    },
+    "secondStationary": {
+      "pointCount": 0,
+      "pathDistanceM": 0,
+      "netDistanceM": 0,
+      "acceptedOrdinals": []
+    }
+  },
+  "replayB_738286b_95302b8_a9157af": {
+    "method": "Counterfactual replay over all 222 remotely available ordered points; these commits share the K8 stationary gate.",
+    "k8IndoorDeadband": true,
+    "acceptedCount": 28,
+    "distanceM": 365.524,
+    "firstStationary": {
+      "pointCount": 2,
+      "pathDistanceM": 8.203587882887671,
+      "netDistanceM": 8.203587882887671,
+      "acceptedOrdinals": [
+        9,
+        11
+      ]
+    },
+    "secondStationary": {
+      "pointCount": 0,
+      "pathDistanceM": 0,
+      "netDistanceM": 0,
+      "acceptedOrdinals": []
+    }
+  },
+  "scenarioAudit": {
+    "authority": "Counterfactual ordinal windows over the 222 remotely available canonical observations; exact raw-only decisions remain on device.",
+    "currentO46Recorded": {
+      "initialStationary": {
+        "rawOrdinalRange": [
+          9,
+          14
+        ],
+        "interpretation": "approximately 45 s startup stationary leak",
+        "acceptedCount": 6,
+        "pathDistanceM": 11.79,
+        "netDistanceM": 9.538,
+        "acceptedOrdinals": [
+          9,
+          10,
+          11,
+          12,
+          13,
+          14
+        ]
+      },
+      "stopToStart": {
+        "rawOrdinalRange": [
+          9,
+          30
+        ],
+        "interpretation": "startup anchor through established walking",
+        "acceptedCount": 15,
+        "pathDistanceM": 37.202,
+        "netDistanceM": 12.307,
+        "acceptedOrdinals": [
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          18,
+          19,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30
+        ]
+      },
+      "oneMetreCadenceStraightWalk": {
+        "rawOrdinalRange": [
+          24,
+          118
+        ],
+        "interpretation": "long approximately straight outbound progression",
+        "acceptedCount": 95,
+        "pathDistanceM": 135.265,
+        "netDistanceM": 90.566,
+        "acceptedOrdinals": [
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118
+        ]
+      },
+      "uTurn": {
+        "rawOrdinalRange": [
+          119,
+          130
+        ],
+        "interpretation": "sharp out-and-back reversal around raw ordinal 124",
+        "acceptedCount": 11,
+        "pathDistanceM": 33.859,
+        "netDistanceM": 4.969,
+        "acceptedOrdinals": [
+          119,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130
+        ]
+      },
+      "diagonalAndDeliberateZ": {
+        "rawOrdinalRange": [
+          163,
+          188
+        ],
+        "interpretation": "diagonal crossing and deliberate angular geometry",
+        "acceptedCount": 24,
+        "pathDistanceM": 91.581,
+        "netDistanceM": 54.844,
+        "acceptedOrdinals": [
+          163,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          174,
+          175,
+          177,
+          178,
+          179,
+          180,
+          181,
+          182,
+          183,
+          184,
+          185,
+          186,
+          187,
+          188
+        ]
+      },
+      "repeatedInternalCorridor": {
+        "rawOrdinalRange": [
+          188,
+          210
+        ],
+        "interpretation": "later visits to the already traversed internal corridor",
+        "acceptedCount": 23,
+        "pathDistanceM": 43.587,
+        "netDistanceM": 1.655,
+        "acceptedOrdinals": [
+          188,
+          189,
+          190,
+          191,
+          192,
+          193,
+          194,
+          195,
+          196,
+          197,
+          198,
+          199,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          210
+        ]
+      },
+      "secondStationary": {
+        "rawOrdinalRange": [
+          224,
+          226
+        ],
+        "interpretation": "minute-six low-speed stop",
+        "acceptedCount": 3,
+        "pathDistanceM": 5.35,
+        "netDistanceM": 4.642,
+        "acceptedOrdinals": [
+          224,
+          225,
+          226
+        ]
+      },
+      "secondStopToStart": {
+        "rawOrdinalRange": [
+          224,
+          236
+        ],
+        "interpretation": "minute-six stop through resumed progression",
+        "acceptedCount": 13,
+        "pathDistanceM": 19.54,
+        "netDistanceM": 17.877,
+        "acceptedOrdinals": [
+          224,
+          225,
+          226,
+          227,
+          228,
+          229,
+          230,
+          231,
+          232,
+          233,
+          234,
+          235,
+          236
+        ]
+      }
+    },
+    "d7ea3b0": {
+      "initialStationary": {
+        "rawOrdinalRange": [
+          9,
+          14
+        ],
+        "interpretation": "approximately 45 s startup stationary leak",
+        "acceptedCount": 2,
+        "pathDistanceM": 8.204,
+        "netDistanceM": 8.204,
+        "acceptedOrdinals": [
+          9,
+          11
+        ]
+      },
+      "stopToStart": {
+        "rawOrdinalRange": [
+          9,
+          30
+        ],
+        "interpretation": "startup anchor through established walking",
+        "acceptedCount": 9,
+        "pathDistanceM": 28.733,
+        "netDistanceM": 12.307,
+        "acceptedOrdinals": [
+          9,
+          11,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30
+        ]
+      },
+      "oneMetreCadenceStraightWalk": {
+        "rawOrdinalRange": [
+          24,
+          118
+        ],
+        "interpretation": "long approximately straight outbound progression",
+        "acceptedCount": 95,
+        "pathDistanceM": 135.265,
+        "netDistanceM": 90.566,
+        "acceptedOrdinals": [
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118
+        ]
+      },
+      "uTurn": {
+        "rawOrdinalRange": [
+          119,
+          130
+        ],
+        "interpretation": "sharp out-and-back reversal around raw ordinal 124",
+        "acceptedCount": 11,
+        "pathDistanceM": 33.859,
+        "netDistanceM": 4.969,
+        "acceptedOrdinals": [
+          119,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130
+        ]
+      },
+      "diagonalAndDeliberateZ": {
+        "rawOrdinalRange": [
+          163,
+          188
+        ],
+        "interpretation": "diagonal crossing and deliberate angular geometry",
+        "acceptedCount": 24,
+        "pathDistanceM": 91.581,
+        "netDistanceM": 54.844,
+        "acceptedOrdinals": [
+          163,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          174,
+          175,
+          177,
+          178,
+          179,
+          180,
+          181,
+          182,
+          183,
+          184,
+          185,
+          186,
+          187,
+          188
+        ]
+      },
+      "repeatedInternalCorridor": {
+        "rawOrdinalRange": [
+          188,
+          210
+        ],
+        "interpretation": "later visits to the already traversed internal corridor",
+        "acceptedCount": 22,
+        "pathDistanceM": 43.581,
+        "netDistanceM": 1.655,
+        "acceptedOrdinals": [
+          188,
+          190,
+          191,
+          192,
+          193,
+          194,
+          195,
+          196,
+          197,
+          198,
+          199,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          210
+        ]
+      },
+      "secondStationary": {
+        "rawOrdinalRange": [
+          224,
+          226
+        ],
+        "interpretation": "minute-six low-speed stop",
+        "acceptedCount": 0,
+        "pathDistanceM": 0,
+        "netDistanceM": 0,
+        "acceptedOrdinals": []
+      },
+      "secondStopToStart": {
+        "rawOrdinalRange": [
+          224,
+          236
+        ],
+        "interpretation": "minute-six stop through resumed progression",
+        "acceptedCount": 10,
+        "pathDistanceM": 12.262,
+        "netDistanceM": 11.736,
+        "acceptedOrdinals": [
+          227,
+          228,
+          229,
+          230,
+          231,
+          232,
+          233,
+          234,
+          235,
+          236
+        ]
+      }
+    },
+    "k8_738286b_95302b8_a9157af": {
+      "initialStationary": {
+        "rawOrdinalRange": [
+          9,
+          14
+        ],
+        "interpretation": "approximately 45 s startup stationary leak",
+        "acceptedCount": 2,
+        "pathDistanceM": 8.204,
+        "netDistanceM": 8.204,
+        "acceptedOrdinals": [
+          9,
+          11
+        ]
+      },
+      "stopToStart": {
+        "rawOrdinalRange": [
+          9,
+          30
+        ],
+        "interpretation": "startup anchor through established walking",
+        "acceptedCount": 3,
+        "pathDistanceM": 23.63,
+        "netDistanceM": 8.199,
+        "acceptedOrdinals": [
+          9,
+          11,
+          27
+        ]
+      },
+      "oneMetreCadenceStraightWalk": {
+        "rawOrdinalRange": [
+          24,
+          118
+        ],
+        "interpretation": "long approximately straight outbound progression",
+        "acceptedCount": 9,
+        "pathDistanceM": 125.297,
+        "netDistanceM": 93.292,
+        "acceptedOrdinals": [
+          27,
+          39,
+          51,
+          62,
+          73,
+          84,
+          97,
+          108,
+          118
+        ]
+      },
+      "uTurn": {
+        "rawOrdinalRange": [
+          119,
+          130
+        ],
+        "interpretation": "sharp out-and-back reversal around raw ordinal 124",
+        "acceptedCount": 3,
+        "pathDistanceM": 11.972,
+        "netDistanceM": 11.806,
+        "acceptedOrdinals": [
+          121,
+          122,
+          123
+        ]
+      },
+      "diagonalAndDeliberateZ": {
+        "rawOrdinalRange": [
+          163,
+          188
+        ],
+        "interpretation": "diagonal crossing and deliberate angular geometry",
+        "acceptedCount": 7,
+        "pathDistanceM": 73.257,
+        "netDistanceM": 51.026,
+        "acceptedOrdinals": [
+          167,
+          168,
+          169,
+          178,
+          185,
+          187,
+          188
+        ]
+      },
+      "repeatedInternalCorridor": {
+        "rawOrdinalRange": [
+          188,
+          210
+        ],
+        "interpretation": "later visits to the already traversed internal corridor",
+        "acceptedCount": 3,
+        "pathDistanceM": 31.99,
+        "netDistanceM": 1.673,
+        "acceptedOrdinals": [
+          188,
+          194,
+          209
+        ]
+      },
+      "secondStationary": {
+        "rawOrdinalRange": [
+          224,
+          226
+        ],
+        "interpretation": "minute-six low-speed stop",
+        "acceptedCount": 0,
+        "pathDistanceM": 0,
+        "netDistanceM": 0,
+        "acceptedOrdinals": []
+      },
+      "secondStopToStart": {
+        "rawOrdinalRange": [
+          224,
+          236
+        ],
+        "interpretation": "minute-six stop through resumed progression",
+        "acceptedCount": 1,
+        "pathDistanceM": 0,
+        "netDistanceM": 0,
+        "acceptedOrdinals": [
+          230
+        ]
+      }
+    }
+  }
+}

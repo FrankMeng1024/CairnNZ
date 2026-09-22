@@ -1,0 +1,45 @@
+{
+  "tracking": {
+    "status": "tracking",
+    "transitionState": "idle",
+    "startError": null,
+    "sessionId": "04273c97-0d23-454f-a36b-29758642373c",
+    "ownerUserId": "100",
+    "provider": "simulator"
+  },
+  "simulator": {
+    "enabled": true,
+    "startConfigured": true,
+    "hydratedUserId": "100",
+    "boundActivityClientId": "04273c97-0d23-454f-a36b-29758642373c",
+    "lastFailure": "stationary-suppressed"
+  },
+  "reference": {
+    "name": "Harbour ridge",
+    "pointCount": 4,
+    "borrowedUse": {
+      "leaseId": "qa-lease-701",
+      "viewerId": "100",
+      "ownerId": "11",
+      "routeId": "friend-route-701",
+      "contentVersion": "qa-route-r1",
+      "authorizationRevision": "friendship-qa-4:friends",
+      "issuedAt": 1789689600000,
+      "expiresAt": 1789776000000,
+      "clientActivityId": "04273c97-0d23-454f-a36b-29758642373c",
+      "startedAt": 1789756542764,
+      "startNeedsAcknowledgement": true
+    }
+  },
+  "durableKeys": [
+    "@cairn:activity_registry:v1:100",
+    "@cairn:activity_simulator:v1:100",
+    "@cairn:activity_simulator_logs:index:v1:100",
+    "@cairn:activity_simulator_logs:v1:100:qa-mu7arzv3-bpgdn77l",
+    "@cairn:activity_simulator_logs:v1:100:qa-mu7au0al-uej3pez2",
+    "@cairn:activity_simulator_logs:v1:100:qa-mu7au6h2-i0lvxa93",
+    "@cairn:activity_simulator_upload:v1:100:qa-mu7arzv3-bpgdn77l",
+    "@cairn:activity_simulator_upload:v1:100:qa-mu7au0al-uej3pez2",
+    "@cairn:activity_simulator_upload:v1:100:qa-mu7au6h2-i0lvxa93"
+  ]
+}

@@ -1,0 +1,271 @@
+{
+  "identity": "historical-back-control",
+  "serverId": 46,
+  "clientActivityId": null,
+  "dateShanghai": "2026-05-29",
+  "type": "hiking",
+  "rawCount": 178,
+  "storedTrackCount": 87,
+  "distanceM": 877.4,
+  "durationS": 1073,
+  "segmentMetadata": "not present",
+  "gapMetadata": "not present",
+  "rawCadence": {
+    "temporalP50S": 5.016,
+    "temporalP95S": 9.02,
+    "spatialP50M": 5.444,
+    "spatialP95M": 6.653
+  },
+  "storedTrackLengthM": 877.356,
+  "lineage": {
+    "exactProducer": "unrecoverable: recording predates repository root",
+    "earliestRepositorySnapshot": "aad6fd2 (2026-06-03)",
+    "closestExplicitMatcherControl": "9de77bd v6.4 (2026-06-17; source comment says validated on session 46)"
+  },
+  "originalSaveMapboxMatch": false,
+  "likelyVisualMechanism": [
+    "approximately 5s raw cadence",
+    "low-Q Kalman live/stored smoothing family",
+    "Detail cleanup/smoothing"
+  ],
+  "storedRouteToNearestRaw": {
+    "p50M": 3.828265,
+    "maxM": 18.01079
+  },
+  "closestV77Replay": {
+    "count": 166,
+    "lengthM": 965.765,
+    "provesExactLineage": false
+  },
+  "o48Matcher": {
+    "name": "O48_MATCHER_ON_HISTORICAL_BACK",
+    "inputCount": 87,
+    "cadence": {
+      "temporalP50S": 10.027,
+      "temporalP95S": 48.119,
+      "spatialP50M": 10.297,
+      "spatialP95M": 16.946
+    },
+    "chunkCount": 2,
+    "okResponses": 1,
+    "noSegmentResponses": 1,
+    "totalTracepoints": 80,
+    "nullTracepoints": 47,
+    "acceptedSubsections": 0,
+    "acceptedObservationCoverage": 0,
+    "acceptedSourceDistanceM": 0,
+    "acceptedRanges": [],
+    "requestSummaries": [
+      {
+        "sourceStart": 0,
+        "sourceEnd": 79,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 170,
+        "inputCount": 80,
+        "timestampsIncluded": false,
+        "tidy": true,
+        "radiusMinM": 14,
+        "radiusMaxM": 25,
+        "matchingsCount": 1,
+        "tracepointCount": 80,
+        "nullTracepointCount": 47,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.98388,
+            "distanceM": 651,
+            "geometryPointCount": 50
+          }
+        ],
+        "submatches": [
+          {
+            "matchingIndex": 0,
+            "sourceStart": 0,
+            "sourceEnd": 51,
+            "sourceCount": 33,
+            "contiguous": false,
+            "confidence": 0.98388,
+            "quality": {
+              "accepted": false,
+              "reason": "max_raw_deviation",
+              "p50DeviationM": 0.026,
+              "p95DeviationM": 9.873,
+              "maxDeviationM": 29.222,
+              "endpointDeviationM": 29.189,
+              "rawLengthM": 650.413,
+              "matchedLengthM": 650.934,
+              "lengthRatio": 1.0008,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": false,
+              "headM": 0,
+              "tailM": 29.189,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "noncontiguous-or-too-short"
+          }
+        ]
+      },
+      {
+        "sourceStart": 79,
+        "sourceEnd": 86,
+        "httpStatus": 200,
+        "code": "NoSegment",
+        "message": "Could not find a matching segment for input coordinates",
+        "durationMs": 168,
+        "inputCount": 8,
+        "timestampsIncluded": false,
+        "tidy": true,
+        "radiusMinM": 17,
+        "radiusMaxM": 31,
+        "matchingsCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "matchings": [],
+        "submatches": []
+      }
+    ]
+  },
+  "o48TidyFalseControl": {
+    "name": "BACK_TIDY_FALSE_CONTROL",
+    "inputCount": 87,
+    "cadence": {
+      "temporalP50S": 10.027,
+      "temporalP95S": 48.119,
+      "spatialP50M": 10.297,
+      "spatialP95M": 16.946
+    },
+    "chunkCount": 2,
+    "okResponses": 1,
+    "noSegmentResponses": 1,
+    "totalTracepoints": 80,
+    "nullTracepoints": 28,
+    "acceptedSubsections": 0,
+    "acceptedObservationCoverage": 0,
+    "acceptedSourceDistanceM": 0,
+    "acceptedRanges": [],
+    "requestSummaries": [
+      {
+        "sourceStart": 0,
+        "sourceEnd": 79,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 173,
+        "inputCount": 80,
+        "timestampsIncluded": false,
+        "tidy": false,
+        "radiusMinM": 14,
+        "radiusMaxM": 25,
+        "matchingsCount": 1,
+        "tracepointCount": 80,
+        "nullTracepointCount": 28,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.981102,
+            "distanceM": 651.5,
+            "geometryPointCount": 69
+          }
+        ],
+        "submatches": [
+          {
+            "matchingIndex": 0,
+            "sourceStart": 0,
+            "sourceEnd": 51,
+            "sourceCount": 52,
+            "contiguous": true,
+            "confidence": 0.981102,
+            "quality": {
+              "accepted": false,
+              "reason": "max_raw_deviation",
+              "p50DeviationM": 0.034,
+              "p95DeviationM": 9.873,
+              "maxDeviationM": 29.222,
+              "endpointDeviationM": 29.189,
+              "rawLengthM": 650.413,
+              "matchedLengthM": 650.937,
+              "lengthRatio": 1.0008,
+              "deviationEnvelopeM": 15
+            },
+            "endpoints": {
+              "accepted": false,
+              "headM": 0,
+              "tailM": 29.189,
+              "envelopeM": 17.807
+            },
+            "accepted": false,
+            "rejectReason": "quality-max_raw_deviation"
+          }
+        ]
+      },
+      {
+        "sourceStart": 79,
+        "sourceEnd": 86,
+        "httpStatus": 200,
+        "code": "NoSegment",
+        "message": "Could not find a matching segment for input coordinates",
+        "durationMs": 169,
+        "inputCount": 8,
+        "timestampsIncluded": false,
+        "tidy": false,
+        "radiusMinM": 17,
+        "radiusMaxM": 31,
+        "matchingsCount": 0,
+        "tracepointCount": 0,
+        "nullTracepointCount": 0,
+        "matchings": [],
+        "submatches": []
+      }
+    ]
+  },
+  "v64Control": {
+    "name": "BACK_V64_CONTROL",
+    "sourceCount": 87,
+    "outputCount": 61,
+    "goodRuns": 1,
+    "lostRuns": 1,
+    "chunksOk": 1,
+    "chunksFallback": 0,
+    "seamBridges": 0,
+    "sourceLengthM": 877.356,
+    "outputLengthM": 816.842,
+    "lengthRatio": 0.931,
+    "sourceToOutputP50M": 0.398,
+    "sourceToOutputP95M": 16.714,
+    "sourceToOutputMaxM": 24.723,
+    "requests": [
+      {
+        "runStart": 0,
+        "sourceStart": 0,
+        "sourceEnd": 70,
+        "accepted": true,
+        "confidence": 0.98388,
+        "httpStatus": 200,
+        "code": "Ok",
+        "message": null,
+        "durationMs": 171,
+        "inputCount": 71,
+        "timestampsIncluded": false,
+        "tidy": true,
+        "radiusMinM": 14,
+        "radiusMaxM": 16,
+        "matchingsCount": 1,
+        "tracepointCount": 71,
+        "nullTracepointCount": 38,
+        "matchings": [
+          {
+            "index": 0,
+            "confidence": 0.98388,
+            "distanceM": 651,
+            "geometryPointCount": 50
+          }
+        ]
+      }
+    ]
+  }
+}

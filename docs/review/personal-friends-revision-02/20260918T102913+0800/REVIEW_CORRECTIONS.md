@@ -1,0 +1,15 @@
+# Revision 02 review corrections
+
+| Finding | Before evidence | Correction | Final evidence | Result |
+|---|---|---|---|---|
+| PF-R1 late friend projection resurrection | `reproductions/PF-R1-before.txt` shows a deselected source returning to memory and durable cache | Account/source/request generations, post-await grant/selection checks, serialized writes, purge invalidation, and fresh-reselection semantics | `friendMemoryAuthorizationOrdering.test.ts`; 9 ordering cases in `logs/app-affected-tests-final-pass.log` | PASS |
+| PF-R2 projected metres used as ground metres | `reproductions/PF-R2-before.txt` fails NZ latitude and antimeridian cases | Local ground-metric rectangle/circle intersection with longitude wrapping and 1 m conservative tolerance; full intersecting cell suppressed | `friendProjection.test.js`; `logs/backend-final-tests-393338b.log` | PASS |
+| PF-R3 spatial duplicate erased later presence | `reproductions/PF-R3-before.txt` shows no mutation result or later witness | Bounded witness journal, immutable first/latest fields, explicit coverage/presence/metadata mutation signals, independent persistence/sync | Memory authority/persistence tests and real review MySQL `PF-R3.presence-return` | PASS |
+| M-LIVE-07 global stride could remove old coverage | `reproductions/M-LIVE-07-before.txt` loses a previously represented point at 2001 | Removed the global stride, exact-coordinate presentation dedupe, incremental stable union | Explicit 1999/2000/2001 assertion in `memoryFogContinuity.test.ts` | PASS |
+| Equal-count/outer-sample cache signature stale | Review lead, then executable equal-count test | Full geometry plus owner/account/scope/authorization/projection revisions in signature; authority-scoped persisted display cache | `memoryFogContinuity.test.ts` | PASS |
+| Geometry failure could hide valid Memory | Review lead reproduced with malformed display-only input | Keep last valid shape only in the same authority; show reachable retry; never fall back to solid world | `qa/web-loaded/day-memory-geometry-unavailable-390x844.png` and recovered state | PASS |
+| Map unavailable left loading veil active | Prior screenshot evidence | Adapter reports unavailability, loading retires, personal management remains usable | `qa/web-map-unavailable/` | PASS |
+| Encounter MySQL UNION collation mismatch | Real review harness returned HTTP 500; retained in `operations/review-abcdn-api-mysql-final.json` | Query-boundary canonical `utf8mb4_unicode_ci` casts; no schema rewrite | Final 17/17 real harness and production/review health | PASS |
+
+The first isolated container replacement omitted a pre-existing host-gateway mapping and briefly returned 503. The old container was restored immediately, the mapping was diagnosed, and the corrected replacement was health-checked before any production action. Both receipts are retained. The first post-correction harness lacked the shared export volume; that environment failure is retained, and the correctly mounted rerun passed.
+

@@ -1,0 +1,7 @@
+episode,algorithm,input_coverage,accepted_count,path_distance_m,net_distance_m,classification
+initial_approximately_45s,O46 recorded,exact accepted output,6,11.79,9.538,false traversal
+initial_approximately_45s,d7ea3b0,222/239 coordinate lower-bound,2,8.204,8.204,counterfactual
+initial_approximately_45s,738286b/95302b8/a9157af K8,222/239 coordinate lower-bound,2,8.204,8.204,counterfactual
+minute_6_stop,O46 recorded,exact accepted output,3,5.35,4.642,false traversal
+minute_6_stop,d7ea3b0,222/239 coordinate lower-bound,0,0,0,counterfactual
+minute_6_stop,738286b/95302b8/a9157af K8,222/239 coordinate lower-bound,0,0,0,counterfactual

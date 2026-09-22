@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-09-11T07:01:31.331Z",
+  "activityId": 2072,
+  "clientActivityId": "99e48b0d-ad87-4aba-a94f-0d033393d0e6",
+  "baseline": {
+    "routePointsSha256": "37ce27c441f0b43d549307fd13d193615a79cacd9553d5018f3ff9a949373a7c",
+    "routePointsChars": 70780,
+    "routePointsRawSha256": null,
+    "ownerSessionRows": 12,
+    "ownerFinalizedDistanceM": 3959.167984008789,
+    "ownerFinalizedDurationS": 3894,
+    "ownerMemoryPointRows": 141
+  },
+  "observed": {
+    "routePointsSha256": "37ce27c441f0b43d549307fd13d193615a79cacd9553d5018f3ff9a949373a7c",
+    "routePointsChars": 70780,
+    "routePointsRawSha256": null,
+    "ownerSessionRows": 12,
+    "ownerFinalizedDistanceM": 3959.167984008789,
+    "ownerFinalizedDurationS": 3894,
+    "ownerMemoryPointRows": 141
+  },
+  "checks": {
+    "routePointsSha256": true,
+    "routePointsChars": true,
+    "routePointsRawSha256": true,
+    "ownerSessionRows": true,
+    "ownerFinalizedDistanceM": true,
+    "ownerFinalizedDurationS": true,
+    "ownerMemoryPointRows": true
+  },
+  "allUnchanged": true,
+  "sessionState": {
+    "id": 2072,
+    "userId": 72,
+    "type": "hiking",
+    "startTime": "2026-09-11T05:08:46.000Z",
+    "endTime": "2026-09-11T05:08:46.000Z",
+    "finalizedAt": null,
+    "abandonedAt": null,
+    "distanceM": 0,
+    "durationS": 0,
+    "name": null,
+    "activeSlot": 1
+  }
+}

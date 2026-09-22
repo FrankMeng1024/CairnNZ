@@ -103,13 +103,16 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
     const sourceActivityClientId = evidenceSource === 'activity_real' && typeof p.source_activity_client_id === 'string'
       ? p.source_activity_client_id
       : null;
+    const sourceSegmentId = evidenceSource === 'activity_real' && typeof p.source_segment_id === 'string'
+      ? p.source_segment_id.slice(0, 80)
+      : null;
     const horizontalAccuracyM = Number.isFinite(p.horizontal_accuracy_m) ? p.horizontal_accuracy_m : null;
     const continuityState = ['accepted', 'gap', 'unknown'].includes(p.continuity_state)
       ? p.continuity_state
       : 'unknown';
     rows.push([
       userId, p.lat, p.lng, p.ts, cid, evidenceSource,
-      sourceActivityClientId, horizontalAccuracyM, continuityState,
+      sourceActivityClientId, sourceSegmentId, horizontalAccuracyM, continuityState,
     ]);
     echo.push({ batch_index: i, ts: p.ts, cid });
   }
@@ -124,11 +127,15 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
       && typeof witness?.source_activity_client_id === 'string'
       ? witness.source_activity_client_id
       : null;
+    const sourceSegmentId = source === 'activity_real'
+      && typeof witness?.source_segment_id === 'string'
+      ? witness.source_segment_id.slice(0, 80)
+      : null;
     if (!Number.isFinite(firstObservedAtMs) || !Number.isInteger(firstObservedAtMs)
       || !Number.isFinite(observedAtMs) || !Number.isInteger(observedAtMs)
       || firstObservedAtMs <= 0 || observedAtMs < firstObservedAtMs || observedAtMs > tsUpperBound
       || !['activity_real', 'passive_real'].includes(source)
-      || (source === 'activity_real' && !sourceActivityClientId)
+      || (source === 'activity_real' && (!sourceActivityClientId || !sourceSegmentId))
       || witness?.continuity_state !== 'accepted') continue;
     presenceRows.push([
       userId,
@@ -141,6 +148,7 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
       observedAtMs,
       source,
       sourceActivityClientId,
+      sourceSegmentId,
       witness.horizontal_accuracy_m,
       'accepted',
     ]);
@@ -164,7 +172,7 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
       await pool.query(
         `INSERT INTO memory_points
          (user_id, lat, lng, ts, client_id, evidence_source,
-          source_activity_client_id, horizontal_accuracy_m, continuity_state)
+          source_activity_client_id, source_segment_id, horizontal_accuracy_m, continuity_state)
        VALUES ?
        ON DUPLICATE KEY UPDATE
          evidence_source = CASE
@@ -172,6 +180,7 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
            WHEN evidence_source = 'historical_unknown' AND VALUES(evidence_source) = 'passive_real' THEN 'passive_real'
            ELSE evidence_source END,
          source_activity_client_id = COALESCE(VALUES(source_activity_client_id), source_activity_client_id),
+         source_segment_id = COALESCE(VALUES(source_segment_id), source_segment_id),
          horizontal_accuracy_m = COALESCE(VALUES(horizontal_accuracy_m), horizontal_accuracy_m),
          continuity_state = CASE
            WHEN VALUES(continuity_state) = 'accepted' THEN 'accepted'
@@ -205,7 +214,7 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
         `INSERT INTO memory_presence_witnesses
            (user_id, client_id, first_lat, first_lng, first_observed_at_ms,
             lat, lng, observed_at_ms, evidence_source, source_activity_client_id,
-            horizontal_accuracy_m, continuity_state)
+            source_segment_id, horizontal_accuracy_m, continuity_state)
          VALUES ?
          ON DUPLICATE KEY UPDATE
            first_lat = IF(VALUES(first_observed_at_ms) < first_observed_at_ms, VALUES(first_lat), first_lat),
@@ -218,6 +227,7 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
              VALUES(horizontal_accuracy_m),
              horizontal_accuracy_m
            ),
+           source_segment_id = COALESCE(VALUES(source_segment_id), source_segment_id),
            observed_at_ms = GREATEST(observed_at_ms, VALUES(observed_at_ms))`,
         [presenceRows],
       );
@@ -274,7 +284,7 @@ router.get('/points', authenticate, async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT lat, lng, ts, client_id, evidence_source, source_activity_client_id,
-              horizontal_accuracy_m, continuity_state
+              source_segment_id, horizontal_accuracy_m, continuity_state
        FROM memory_points
        WHERE user_id = ?
          AND ts <= ?
@@ -291,6 +301,7 @@ router.get('/points', authenticate, async (req, res) => {
         cid: r.client_id,
         evidence_source: r.evidence_source || 'historical_unknown',
         source_activity_client_id: r.source_activity_client_id || null,
+        source_segment_id: r.source_segment_id || null,
         horizontal_accuracy_m: r.horizontal_accuracy_m === null ? null : Number(r.horizontal_accuracy_m),
         continuity_state: r.continuity_state || 'unknown',
       })),

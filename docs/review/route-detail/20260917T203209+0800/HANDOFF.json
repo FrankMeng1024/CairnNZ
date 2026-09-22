@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "card": "CARD-ROUTE-01",
+  "delivery_revision": "02",
+  "run_id": "20260917T203209+0800",
+  "run_date_local": "2026-09-17",
+  "timezone": "Asia/Shanghai",
+  "repository": "/Users/mzm/Desktop/cairn/CairnNZ",
+  "source_identity": {
+    "branch": "master",
+    "head_at_start": "12fa1cd0ef599e53a81cd30537ce761c5e2150ce",
+    "worktree_was_dirty": true,
+    "unrelated_dirty_work": "PRESERVED",
+    "task_changes_committed": false,
+    "revision_01_archive_sha256_verified": "1ad5c5084873df71665208edbca1abaa7ca04b0968717db3fbf0859139ca4f43",
+    "material_revision_01_source_drift": false,
+    "task_scoped_patch": "TASK_SCOPED.patch"
+  },
+  "candidate": {
+    "marker": "O59",
+    "marker_changed_in_revision_02": false,
+    "meaning": "LOCAL_UNACCEPTED_CLIENT_CANDIDATE_IDENTITY_ONLY",
+    "ota_published": false,
+    "device_loaded": false,
+    "owner_accepted": false,
+    "native_app_version_changed": false,
+    "runtime_version_changed": false,
+    "build_number_changed": false,
+    "dependencies_changed": false
+  },
+  "verdict": "REVISION_02_COMPLETE_READY_FOR_GROUPED_PERSONAL_FLOW_QA",
+  "implementation": {
+    "ambiguous_client_delete_404_fixed": true,
+    "legacy_numeric_delete_fallback": true,
+    "unknown_remote_delete_remains_pending": true,
+    "late_ack_tombstone_non_resurrection": true,
+    "same_owner_stale_read_protection": true,
+    "memory_and_cache_protected": true,
+    "valid_later_refresh_supported": true,
+    "save_in_flight_navigation_guard": true,
+    "raw_vertex_primary_metric_removed": true,
+    "shared_action_label": "Use Route",
+    "route_structure_redesigned": false
+  },
+  "automated_evidence": {
+    "pre_fix_reproduction": {"status":"FAIL_EXPECTED_REPRODUCED","tests_failed":2,"tests_passed":18},
+    "client_focused": {"status":"PASS","suites_passed":18,"suites_total":18,"tests_passed":164,"tests_total":164},
+    "backend_focused": {"status":"PASS","tests_passed":18,"tests_total":18},
+    "activity_verify_changed": {"status":"PASS","checks_passed":552,"checks_total":552},
+    "typescript": {"status":"FAIL_PRE_EXISTING_BASELINE","diagnostic_lines":253,"revision_02_touched_path_diagnostics":0},
+    "interaction_matrix": "INTERACTION_RESULTS.json"
+  },
+  "database_proof": {
+    "status": "PASS",
+    "engine": "MySQL 8.0.45",
+    "database": "cairn_route_rev02_20260917t203209",
+    "disposable": true,
+    "migration": "036_route_origin_identity.sql",
+    "migration_runner_first_run": "PASS",
+    "migration_runner_rerun": "PASS_ZERO_NEW_LAST_036",
+    "real_driver_model_handlers": true,
+    "separate_connection_race": true,
+    "cleanup": "PASS_DISPOSABLE_DATABASE_CONTAINER_AND_TASK_VOLUMES_REMOVED",
+    "production_database_touched": false
+  },
+  "visual_proof": {
+    "status": "PASS_WITH_RENDERER_BOUNDARY",
+    "capture_count": 6,
+    "assertions_passed": 13,
+    "assertions_total": 13,
+    "runtime_errors": 0,
+    "renderer": "EXPO_WEB_REACT_NATIVE_DOM_WITH_NATIVE_MAP_UNAVAILABLE",
+    "actual_web_mapbox_proven": false,
+    "native_mapbox_proven": false,
+    "physical_device_proven": false,
+    "native_small_screen_proven": false,
+    "fixture": "SYNTHETIC_DISPOSABLE",
+    "offline_board": "visual/index.html"
+  },
+  "deployment": {
+    "backend_changed_locally": true,
+    "migration_036_changed_before_any_known_deployment": true,
+    "backend_deployed": false,
+    "migration_executed_in_production": false,
+    "client_ota_published": false,
+    "old_backend_compatibility": "AMBIGUOUS_CLIENT_DELETE_404_FALLS_BACK_WHEN_KNOWN_SERVER_ID_OTHERWISE_REMAINS_PENDING",
+    "required_for_grouped_server_review": ["O58 owner-history/create-replay backend changes", "migration 036", "O59 origin/delete structured response backend changes"]
+  },
+  "device_loading": "UNVERIFIED",
+  "owner_acceptance": "PENDING",
+  "native_device_validation": {
+    "map_gestures": "NOT_RUN",
+    "safe_area_and_touch": "NOT_RUN",
+    "keyboard_and_haptics": "NOT_RUN",
+    "native_mapbox": "NOT_RUN",
+    "ota_loading": "NOT_RUN"
+  },
+  "requirements": {
+    "markdown": "REQUIREMENTS_DELTA.md",
+    "json": "REQUIREMENTS_DELTA.json",
+    "rq_route_001": "CORRECTED_IMPLEMENTED_CANDIDATE",
+    "rq_route_002": "PRESERVED_IMPLEMENTED_CANDIDATE",
+    "rq_route_003": "IMPLEMENTED_LOCAL_MINIMUM_REAL_MYSQL_PROOF_DEPLOYMENT_PENDING",
+    "rq_route_004": "CORRECTED_IMPLEMENTED_CANDIDATE",
+    "rq_route_005": "CORRECTED_IMPLEMENTED_CANDIDATE",
+    "rq_route_006": "PRESERVED_IMPLEMENTED_CANDIDATE",
+    "rq_route_007": "NOT_IMPLEMENTED_OUT_OF_SCOPE"
+  },
+  "carry_forward": {
+    "card_ad_01_preserved": true,
+    "card_cairn_01_preserved": true,
+    "revision_01_package_modified": false,
+    "activity_tracking_algorithms_changed": false,
+    "memory_friends_public_changed": false,
+    "whole_personal_flow_qa_executed": false
+  },
+  "artifacts": {
+    "report_root": "docs/review/route-detail/20260917T203209+0800",
+    "archive_path": "/Users/mzm/Desktop/cairn_route_detail_02.zip",
+    "archive_revision": "02",
+    "archive_hash_sidecar": "/Users/mzm/Desktop/cairn_route_detail_02.zip.sha256",
+    "manifest": "PACKAGE_MANIFEST.json",
+    "manifest_sha256": "MANIFEST.sha256",
+    "touched_hashes": "TOUCHED_FILE_HASHES.sha256"
+  },
+  "prohibited_actions": {
+    "backend_deployment": false,
+    "production_migration": false,
+    "ota_publication": false,
+    "production_data_mutation": false,
+    "external_service_mutation": false
+  },
+  "next_action": "GROUPED_PERSONAL_FLOW_QA_AFTER_REQUIRED_BACKEND_PATCHES_ARE_AVAILABLE"
+}

@@ -3,11 +3,10 @@
  *
  * Friend System v1 / Sprint 67 / STORY-00528
  *
- * v4 §5 "Hide from me": per-viewer blacklist of other people's marks/routes.
- * - For my own items, the UI exposes real DELETE (handled in markers.js / routes.js).
- * - For other-user items, the UI calls /api/hide. The row stays in the
- *   source table; only this viewer stops seeing it (filtered in circle/* and
- *   markers/public).
+ * Legacy compatibility endpoint for already-authorized Friend content.
+ * Current Friend Content and Public clients use their resource-specific
+ * endpoints, which also update their encounter state. A numeric database id
+ * alone is never authority to create a hidden_items row.
  *
  * Schema (migration 018):
  *   hidden_items PK(user_id, item_type, item_id)
@@ -28,6 +27,10 @@ const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { validateBody } = require('../middleware/validate');
 const schemas = require('../middleware/schemas');
+const {
+  authorizedFriendCairn,
+  authorizedFriendRoute,
+} = require('../services/friendAuthorization');
 
 router.use(authenticate);
 
@@ -45,6 +48,10 @@ const hideLimiter = rateLimit({
 });
 
 const VALID_TYPES = new Set(['mark', 'route']);
+const opaqueUnavailable = res => res.status(404).json({
+  error: 'Content unavailable.',
+  code: 'CONTENT_UNAVAILABLE',
+});
 
 router.post('/', hideLimiter, validateBody(schemas.hide.create), async (req, res) => {
   const userId = req.user.userId;
@@ -59,26 +66,15 @@ router.post('/', hideLimiter, validateBody(schemas.hide.create), async (req, res
   }
 
   try {
-    // Validate the target actually exists in the relevant table (and isn't
-    // the viewer's own item — hiding your own item is meaningless; use DELETE).
-    const targetTable = item_type === 'mark' ? 'markers' : 'routes';
-    const [[target]] = await pool.execute(
-      `SELECT user_id FROM ${targetTable} WHERE id = ?`,
-      [itemId]
-    );
-    if (!target) return res.status(404).json({ error: `${item_type} not found` });
-    // Sprint 6 round-46 R46: fix type-coercion self-hide bypass. Same
-    // class as R38B2 / R45. target.user_id is Number (mysql2 for BIGINT
-    // UNSIGNED); userId is String (JWT payload). Strict `===` always
-    // false → user could hide their own marker/route, inserting a
-    // self-hide row that filters their own item out of /circle/markers
-    // and /circle/routes for themselves. UX bug (they'd wonder why
-    // their content vanished from the shared feed).
-    if (String(target.user_id) === String(userId)) {
-      return res.status(400).json({
-        error: `Cannot hide your own ${item_type}. Use DELETE to remove it.`,
-      });
-    }
+    // Preserve this endpoint only for current Circle/Friend projections.
+    // Public Cairns must use /api/public-cairns/cairns/:id/hide, where the
+    // feature gate and version-current encounter authority are enforced.
+    // Personal, revoked, blocked, unencountered, and arbitrary known IDs all
+    // receive one opaque denial without a hidden_items write.
+    const target = item_type === 'mark'
+      ? await authorizedFriendCairn(pool, userId, itemId, { includeHidden: true })
+      : await authorizedFriendRoute(pool, userId, itemId, { includeHidden: true });
+    if (!target) return opaqueUnavailable(res);
 
     const [result] = await pool.execute(
       `INSERT INTO hidden_items (user_id, item_type, item_id) VALUES (?, ?, ?)

@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T203209+0800",
+  "fixture_boundary": {
+    "data": "SYNTHETIC_DISPOSABLE",
+    "api": "INTERCEPTED_LOCAL_MOCK_FOR_UI; REAL_LOCAL_MYSQL_FOR_DATABASE_INTEGRATION",
+    "external_requests": "BLOCKED",
+    "telemetry": "DISABLED",
+    "native_map": "NOT_AVAILABLE",
+    "production_access": false
+  },
+  "checks": [
+    {"id":"GEO-01","check":"Start with accepted geometry G0","status":"PASS","evidence":"useRouteStore.offline real trim transaction test"},
+    {"id":"GEO-02","check":"Supported trim command produces distinct draft G1","status":"PASS","evidence":"useRouteEditStore trimStart/trimEnd command path"},
+    {"id":"GEO-03","check":"Apply commits draft only; accepted Route remains G0","status":"PASS","evidence":"commitEditDraft assertion"},
+    {"id":"GEO-04","check":"Save accepts G1 and relaunch/cache reload retains G1","status":"PASS","evidence":"store/service/cache regression"},
+    {"id":"GEO-05","check":"Activity geometry/metrics and personal Memory remain unchanged","status":"PASS","evidence":"byte-stable synthetic truth assertions"},
+    {"id":"GEO-06","check":"Edit G0 to G1 then Cancel/Discard leaves G0","status":"PASS","evidence":"cancelEdit regression"},
+    {"id":"GEO-07","check":"Failed save retains G1 draft and G0 accepted truth","status":"PASS","evidence":"rejected update regression"},
+    {"id":"GEO-08","check":"Retry commits one accepted result","status":"PASS","evidence":"two-attempt/one-accepted regression"},
+    {"id":"GEO-09","check":"Undo/reset contract regression","status":"PASS","evidence":"undoWalkedIndex, validateStrokes, strokeGate focused suites"},
+    {"id":"GEO-10","check":"Planned Gap reconnect remains Route-only and origin language remains honest","status":"PASS","evidence":"route contracts plus non-cascade geometry transaction"},
+    {"id":"GEO-11","check":"Physical native drawing gesture","status":"NOT RUN","evidence":"native tooling/device not used; reducer/command behavior only"},
+
+    {"id":"NAV-01","check":"Unsaved edit -> Back -> Stay","status":"PASS","evidence":"actual screen leave-choice helper regression"},
+    {"id":"NAV-02","check":"Unsaved edit -> Back -> Discard","status":"PASS","evidence":"actual screen leave-choice helper regression"},
+    {"id":"NAV-03","check":"Save -> immediate Back","status":"PASS","evidence":"beforeRemove decision and leave handler regression"},
+    {"id":"NAV-04","check":"Save -> repeated Save","status":"PASS","evidence":"save coordinator rejects parallel begin"},
+    {"id":"NAV-05","check":"Save failure -> Back","status":"PASS","evidence":"draft retention plus unsaved leave decision"},
+    {"id":"NAV-06","check":"Save timeout -> Retry","status":"PASS","evidence":"bounded service timeout plus coordinator releases token"},
+    {"id":"NAV-07","check":"Successful save -> exactly one intended navigation","status":"PASS","evidence":"single navigation claim regression"},
+    {"id":"NAV-08","check":"Account/object change before delayed completion","status":"PASS","evidence":"store owner mutation guard plus coordinator object-key guard"},
+    {"id":"NAV-09","check":"Deliberate leave during save suppresses late unsolicited navigation","status":"PASS","evidence":"leave-saving handler regression"},
+
+    {"id":"DEL-01","check":"Delete -> Cancel","status":"PASS","evidence":"actual Expo Web delete confirmation cancel handler"},
+    {"id":"DEL-02","check":"Delete -> Confirm removes local Route","status":"PASS","evidence":"actual Expo Web confirm handler"},
+    {"id":"DEL-03","check":"Supported remote deletion","status":"PASS","evidence":"service/backend/MySQL HTTP tests"},
+    {"id":"DEL-04","check":"Unsupported client endpoint with known server ID uses legacy delete","status":"PASS","evidence":"store regression and actual Web handler requests"},
+    {"id":"DEL-05","check":"Unconfirmed remote completion retains queued tombstone/retry","status":"PASS","evidence":"store regression"},
+    {"id":"DEL-06","check":"Late create/update/read after deletion cannot resurrect","status":"PASS","evidence":"store deferred-response tests and MySQL race"},
+    {"id":"DEL-07","check":"Relaunch/reload non-resurrection","status":"PASS","evidence":"Web local storage reload plus cache regression"},
+    {"id":"DEL-08","check":"Route delete does not cascade to Activity, Cairn, or Memory","status":"PASS","evidence":"Web synthetic sentinels retained; store geometry truth assertions"},
+
+    {"id":"USE-01","check":"Primary shared action is Use Route","status":"PASS","evidence":"Day/Sunset/Night current-source captures and contract test"},
+    {"id":"USE-02","check":"Hike/Run chooser opens through actual Route Detail action","status":"PASS","evidence":"ROUTE-R02-VIS-004"},
+    {"id":"USE-03","check":"Correct selected reference reaches Hike and Run pre-start without auto-recording","status":"PASS","evidence":"routeContracts plus retained revision-01 handler evidence"},
+    {"id":"USE-04","check":"Later Route edits cannot mutate active reference snapshot","status":"PASS","evidence":"deep-copy store regression"}
+  ],
+  "summary": {"pass":31,"fail":0,"blocked":0,"not_run":1}
+}
+

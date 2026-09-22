@@ -1,0 +1,288 @@
+{
+  "schema": "cairnnz.v1-closure.evidence-index.v1",
+  "updatedAt": "2026-09-21T21:32:00+08:00",
+  "source": {
+    "head": "0520b102eae78a1dd77aa39418a919d85f5648c1",
+    "revision03StartTree": "f40b740bddbf2c67cf9362512cf945c38f0965a8",
+    "continuationStartTree": "efaae41a06104af272b4b9b772d9c5e107a2e6bb",
+    "currentProductFingerprint": "46aa7e1af18fb8187512991bd3a3d3450f892eebd2bb01867a03c0cd8d534040",
+    "currentProductFileCount": 664,
+    "recoverOnlyPreFinalReceiptTree": "e35b1c389671e411174d49e90aa0253204a5b6b5"
+  },
+  "entries": [
+    {"id":"E-C1C2-RED","kind":"sensitivity/reproduction","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/c1-c2-before-failing.log","status":"exists"},
+    {"id":"E-C4-RED","kind":"sensitivity/reproduction","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/c4-before-failing.log","status":"exists"},
+    {"id":"E-C1C3-GREEN","kind":"focused client runner","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/c1-c2-c3-final-focused.log","status":"exists"},
+    {"id":"E-C4PROJ-GREEN","kind":"focused backend runner","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/c4-revisit-final-focused.log","status":"exists"},
+    {"id":"E-ACTIVITY-PRE","kind":"Activity CORE regression","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/verify-changed-pre-gps.log","status":"exists"},
+    {"id":"E-R03-GPS-TOPOLOGY","kind":"O55 actual store/persistence runner JSON","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/raw-gps-pipeline-topology.json","status":"exists"},
+    {"id":"E-R03-PF-MYSQL-PRECAPTURE","kind":"fresh disposable MySQL/API runner","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/pf-canonical-join-final/backend.log","status":"runner stdout observed 18/18; final JSON recapture pending"},
+    {"id":"E-PUB-MYSQL-PRECAPTURE","kind":"fresh disposable MySQL/API runner","path":"/Users/mzm/Desktop/cairn_v1_closure_work/evidence/public-canonical-join-final/backend.log","status":"runner stdout observed 16/16; expanded final JSON recapture pending"},
+    {"id":"E-R03-LOADED-HOT-RELOAD","kind":"retained invalid loaded run","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/raw-gps-loaded-final","status":"invalidated by source hot reload before theme/manifest completion"},
+    {"id":"E-R03-A4-LOADED-044045C3","kind":"exact-fingerprint loaded Web Raw GPS journey","path":"docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/loaded-web/manifest.json","status":"24/24 PASS; zero runtime errors; exact fingerprint match"},
+    {"id":"E-R03-A4-VERIFY-INTERRUPTED","kind":"owner-interrupted changed-Activity gate receipt","path":"docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-interrupted.json","status":"NOT_RUN_TO_COMPLETION; exit 130; never a PASS"},
+    {"id":"E-FR-CIRCLE-ACCOUNT-01","kind":"normal store deferred-response focused RED/GREEN receipt","path":"docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-diagnostics/fr-circle-account-01/receipt.json","status":"focused PASS; final exact-source regression pending"},
+    {"id":"E-FR-MEM-HIDE-01","kind":"normal Memory sheet action focused RED/GREEN receipt","path":"docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-diagnostics/fr-mem-hide-01/receipt.json","status":"focused PASS; no durable server/outbox claim"},
+    {"id":"E-SETTINGS-OWNER-RED","kind":"normal SettingsScreen deferred-handler reproduction","path":"docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-diagnostics/settings-owner/red.log","status":"historical RED exit 1; 3/3 expected behavioral failures; stale for product fingerprint a695bdf5 after focused F6 integration"},
+    {"id":"E-F6-SETTINGS-GREEN","kind":"exact-source focused Settings normal-handler verification","path":"docs/review/v1-closure/20260918T222838+0800/evidence/f6/a695bdf5c1db67110f0638d3c0f7e8247ff60d47461ee1a37296c9c23d229c5d/F6_DISPOSITION.md","status":"focused PASS; account boundary 3/3, product convergence 11/11, changed-scope router PASS; not broad acceptance"},
+    {"id":"E-T08-LIVE","kind":"owner-live pause/recovery drill","path":"docs/review/v1-closure/20260918T222838+0800/supervision/LIVE_DRILL_RESULTS.json","status":"PASS after same-root resume and useful new artifact"},
+    {"id":"E-CANARY30-INTERRUPTED","kind":"read-only observer and recovery disposition","path":"docs/review/v1-closure/20260918T222838+0800/supervision/CANARY_REPORT.json","status":"INTERRUPTED_NOT_PASS; fresh no-owner-prompt window required"},
+    {"id":"E-RECOVER-20260920","kind":"recoverable supervision checkpoint","path":"docs/review/v1-closure/20260918T222838+0800/supervision/RECOVER_ONLY_CHECKPOINT.json","status":"historical recovery receipt preserved; stale runtime intent cleared"},
+    {"id":"E-UNATTENDED-STOP-GUARD","kind":"supervision disposition","path":"docs/review/v1-closure/20260918T222838+0800/supervision/LIVE_DRILL_RESULTS.json","status":"FAIL / DISABLED_FOR_NOW; T08 remains independently PASS"},
+    {"id":"E-F1F2-CONNECTED-WEB-FA986","kind":"fixture-backed connected Expo Web journey disposition","path":"docs/review/v1-closure/20260918T222838+0800/evidence/f1/fa986cc808e067b98563d9cf72fa6cd885d038d414fafe342d98a9f701b1bff5/F1_F2_CONNECTED_PASS.md","sha256":"d6a34edfd2ca4ebfbe3d753fea313ea139e24171a973a1840c3cf78ecc8f59ce","status":"PASS with explicit Web/API/Mapbox/native/GPS/performance limits; prior failures retained"},
+    {"id":"E-A4-CONTROLLING-162MS","kind":"changed-Activity controlling performance disposition","path":"docs/review/v1-closure/20260918T222838+0800/evidence/a4/7b495374e3b2362444aaf9e6f082c10376c4101310317277b71923856822a823/A4_PERFORMANCE_DEFERRED.md","sha256":"5a66c43b364e26ac4bf83dc5db966896cf4feed8d3c6fa1856f080fe0daa013e","status":"FAIL/HOLD; tile_geometry 162 ms > unchanged 150 ms; 123/124 suites and 1170/1174 tests passed"},
+    {"id":"E-A4-DIAGNOSTIC-DEFERRED","kind":"instrumented diagnostic disposition","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/a4/7b495374e3b2362444aaf9e6f082c10376c4101310317277b71923856822a823/slice-diagnostic/DIAGNOSTIC_DISPOSITION.md","sha256":"0f5156e0caf6d0687cddb97aa6f24bd8446e266d96ed27854471f34c7d0c38c9","status":"DEFERRED_ENVIRONMENT/HARNESS; UNVERIFIED; does not erase controlling FAIL"},
+    {"id":"E-FR-DISCOVERY-V2-R2-FAIL","kind":"real isolated MySQL 8.0.36 plan-gate disposition","path":"docs/review/v1-closure/20260918T222838+0800/evidence/f4/bcd168db8240d24302e6559451d0f0e1af5d2957d17b651bc177524b6d6ae698/FR_DISCOVERY_500_V2_PLAN_FAIL.md","sha256":"d18ac1f86fd6a2405430d34463f539daca8c099732aa40e2f7d97006fa467581","status":"v2 integrated; N=2001 FAIL/HOLD; N=10000 and E/F NOT_RUN"},
+    {"id":"E-FR-DISCOVERY-R4-PENDING","kind":"external evidence-preserving plan runner","path":"/Users/mzm/Desktop/cairn_revision03_work/canary-friend-discovery-500/product-fix-v2-plan-runner-r4-20260920T182333+0800/MANIFEST.json","sha256":"c63504050da0f55e3e76d5512fd692781ff39408ab46fe2623eb623191f1db7a","status":"pending independent static review; MySQL/API/browser NOT_RUN; r2 failure preserved"},
+    {"id":"E-C1C2-FOCUSED-23","kind":"current focused friend-content cache/authorization runner","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/friend-content-c1-c2-20260920T182200+0800/jest.log","sha256":"1907fc68709534a145aa68306a50982a2f9ef5b6d91dfde57ee79ea3db9e8703","status":"PASS 23/23; does not close full C1 durable/account-switch gate"},
+    {"id":"E-C1-R1-INDEPENDENT-BLOCK","kind":"independent durable-invalidation candidate review","path":"/Users/mzm/Desktop/cairn_revision03_work/candidates/f3-friend-content-durable-invalidation-r1-independent-review-20260920T184603+0800/REVIEW.md","sha256":"479fababe5ee66b337f42e65c915a93b27c54d6d8ca4fd277b4ba896b18fe22e","status":"BLOCKED / NOT INTEGRATED; stale block/unfriend account-switch counterexamples"},
+    {"id":"E-F6-R13-INDEPENDENT-BLOCK","kind":"independent Auth/Settings candidate review","path":"/Users/mzm/Desktop/cairn_revision03_work/candidates/f6-auth-authority-r13-independent-review-20260920T185314+0800/REVIEW.md","sha256":"43a3c3d86bbb0d98ae08e6a37b73d5c366de5eddb390b24a55a1916c5f0f9edc","status":"BLOCKED / NOT INTEGRATED; Feedback owner/draft/completion fences missing"},
+    {"id":"E-F7-1-V4-PENDING","kind":"external Public Detail focused candidate","path":"/Users/mzm/Desktop/cairn_revision03_work/candidates/f7-public-detail-v4-20260920T184540+0800/REVIEW.md","sha256":"ce0ae255ef743a1b1d20f2ef84e8aee3e4ab998e4d70036d53aa7170771c1222","status":"external focused GREEN 9/9; pending independent review/integration; loaded/native NOT_RUN"},
+    {"id":"E-HOMEPAGE-F5-V3","kind":"fixture-backed isolated loaded Web comparison","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/homepage-f5-isolation-v3-20260920T160109+0800/COMMAND_RECEIPT.json","sha256":"9220c9787b28363fb6cc41d87970e1823f8938f419834d92bb2151f5fd5fe518","status":"10/10 programmatic assertions PASS; owner visual pending; native NOT_RUN; no performance claim"},
+    {"id":"E-F8-PHASE1-INVENTORY","kind":"external read-only cleanup inventory","path":"/Users/mzm/Desktop/cairn_revision03_work/candidates/f8-inventory-20260920T133908+0800/CLEANUP_INVENTORY.md","sha256":"ae3ded4580cd8df94e7c1462a3e7e0933af7f6f0d2394c9a176ff26975c17ac5","status":"Phase 1 complete; no cleanup/delete/move/archive/database mutation performed"},
+    {"id":"E-PUBLIC-R2-BLOCKED","kind":"external Public authority candidate review","path":"/Users/mzm/Desktop/cairn_revision03_work/candidates/f4-public-authority-r2-20260920T183950+0800/REVIEW.md","sha256":"4324bd9eada46ba71e08ee92f7c7f1bc301ec6f953966bb161511c9b2f0d791e","status":"BLOCKED / NOT INTEGRATED; stale completion and signed-out authority gaps; Public default OFF"},
+    {
+      "id": "E-C3-R14-CONNECTED",
+      "kind": "connected Personal/Friends borrowed-route run",
+      "path": "/Users/mzm/Desktop/cairn_revision03_work/evidence/c3-borrowed-route-connected-r14-run-20260921T005352Z-r14one01/final-evidence.json",
+      "sha256": "e5acd544e1501689a6c5e142ba07ff26d600ec181ec968297a26359d354cf6fe",
+      "status": "PASS at 9cbe9617/661; current dependency equivalence is derived from the retained 49-file ledger",
+      "registry": {
+        "runId": "c3-r14-connected",
+        "terminalReceipt": "/Users/mzm/Desktop/cairn_revision03_work/evidence/c3-borrowed-route-connected-r14-run-20260921T005352Z-r14one01/gate-receipt.json",
+        "terminalReceiptSha256": "b805d12a742ad1c515d537972f202fe3d9668d9d5f6231925de148fdeea35a01",
+        "sourceHashLedger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/c3-borrowed-route-connected-r14-browser-provenance-20260921T083254+0800/SOURCE_HASHES.sha256",
+        "covers": ["R03-C3"],
+        "proofs": {
+          "R03-C3": [
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/c3-borrowed-route-connected-r14-run-20260921T005352Z-r14one01/final-evidence.json","sha256":"e5acd544e1501689a6c5e142ba07ff26d600ec181ec968297a26359d354cf6fe"},
+            {"kind":"jsonValue","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/c3-borrowed-route-connected-r14-run-20260921T005352Z-r14one01/final-evidence.json","sha256":"e5acd544e1501689a6c5e142ba07ff26d600ec181ec968297a26359d354cf6fe","pointer":"fixture.identityGate","expected":true},
+            {"kind":"jsonValue","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/c3-borrowed-route-connected-r14-run-20260921T005352Z-r14one01/final-evidence.json","sha256":"e5acd544e1501689a6c5e142ba07ff26d600ec181ec968297a26359d354cf6fe","pointer":"controls.noInjectedAccount","expected":true}
+          ]
+        }
+      }
+    },
+    {
+      "id": "E-PUBLIC-R15-CONNECTED",
+      "kind": "connected Public API/MySQL/loaded-Web run",
+      "path": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/gate-receipt.json",
+      "sha256": "70ef2e081c15353b69b35e5742ef01fb6d023aa64d37097b08fcb47b67e66dc1",
+      "status": "PASS at aef22db2/662; current dependency equivalence is derived from the retained 30-file ledger",
+      "registry": {
+        "runId": "public-r15-connected",
+        "terminalReceipt": "/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/gate-receipt.json",
+        "terminalReceiptSha256": "70ef2e081c15353b69b35e5742ef01fb6d023aa64d37097b08fcb47b67e66dc1",
+        "sourceHashLedger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/public-connected-run-r15-feedback-evidence-order-20260921T131136+0800/SOURCE_HASHES.sha256",
+        "covers": ["PUB-01","PUB-02","PUB-03","PUB-04","PUB-05","PUB-06","PUB-07","PUB-08","PUB-09","PUB-10","PUB-11","PUB-12","PUB-13","E2E-PUBLIC"],
+        "proofs": {
+          "PUB-01": [
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-01.capability"},
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-13.empty-save"}
+          ],
+          "PUB-02": [
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-02.submit-approve"},
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-07.revision-race"}
+          ],
+          "PUB-03": [
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-03.prepublication-negative"},
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-04.encounter"}
+          ],
+          "PUB-04": [{"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-05b.bounded-selection"}],
+          "PUB-05": [
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-05.scene-detail"},
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json","sha256":"507ab24ed70308d5466775d41e40562d2f3aa06a1f4e52b256e13e06c5db4539"}
+          ],
+          "PUB-06": [
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-08.withdrawal-race"},
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json","sha256":"507ab24ed70308d5466775d41e40562d2f3aa06a1f4e52b256e13e06c5db4539"}
+          ],
+          "PUB-07": [
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-06.interactions"},
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-02a.unknown-commit-retry"}
+          ],
+          "PUB-08": [
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-09.hide"},
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-10.block"},
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json","sha256":"507ab24ed70308d5466775d41e40562d2f3aa06a1f4e52b256e13e06c5db4539"}
+          ],
+          "PUB-09": [
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-12.operator-state"},
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json","sha256":"507ab24ed70308d5466775d41e40562d2f3aa06a1f4e52b256e13e06c5db4539"}
+          ],
+          "PUB-10": [
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-12.operator-state"},
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json","sha256":"507ab24ed70308d5466775d41e40562d2f3aa06a1f4e52b256e13e06c5db4539"}
+          ],
+          "PUB-11": [
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-02b.text-contract"},
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json","sha256":"507ab24ed70308d5466775d41e40562d2f3aa06a1f4e52b256e13e06c5db4539"}
+          ],
+          "PUB-12": [{"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json","sha256":"507ab24ed70308d5466775d41e40562d2f3aa06a1f4e52b256e13e06c5db4539"}],
+          "PUB-13": [
+            {"kind":"assertion","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736","assertionId":"PUB-11.legacy-containment"},
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-disabled-result.json","sha256":"808593aac96058adf692204eb3c97bc9b95a823345fae2924165f16f8124b534"}
+          ],
+          "E2E-PUBLIC": [
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/gate-receipt.json","sha256":"70ef2e081c15353b69b35e5742ef01fb6d023aa64d37097b08fcb47b67e66dc1"},
+            {"kind":"allAssertionsPass","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/api-authority-result.json","sha256":"7a8c0ed2e159e04a962e403b254ca55062489d239eddad17753a8655c013b736"},
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-enabled-result.json","sha256":"507ab24ed70308d5466775d41e40562d2f3aa06a1f4e52b256e13e06c5db4539"},
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/public-connected-r15-run-20260921T063200Z-r15one01/connected-disabled-result.json","sha256":"808593aac96058adf692204eb3c97bc9b95a823345fae2924165f16f8124b534"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "E-FR-DISCOVERY-R5.1-HOLD",
+      "kind": "real isolated MySQL plan gate",
+      "path": "/Users/mzm/Desktop/cairn_revision03_work/evidence/fr-discovery-500-r5.1-n2001-dbba51a1-20260921T004320+0800/RELEASE.json",
+      "sha256": "67188e86817c008b2f87ec20d71a04a8213f9249d9b758d539b5c4bed652e744",
+      "status": "FAIL/HOLD; one-shot N2001 result retained with cleanup complete",
+      "registry": {
+        "runId": "fr-discovery-r5.1-n2001",
+        "terminalReceipt": "/Users/mzm/Desktop/cairn_revision03_work/evidence/fr-discovery-500-r5.1-n2001-dbba51a1-20260921T004320+0800/RELEASE.json",
+        "terminalReceiptSha256": "67188e86817c008b2f87ec20d71a04a8213f9249d9b758d539b5c4bed652e744",
+        "sourceHashLedger": "/Users/mzm/Desktop/cairn_revision03_work/evidence/fr-discovery-500-r5.1-n2001-dbba51a1-20260921T004320+0800/SOURCE_HASHES.sha256",
+        "covers": [],
+        "controlsClosure": true
+      }
+    },
+    {
+      "id": "E-FINAL-PF-R4-FAIL-PREFLIGHT",
+      "kind": "superseded final Personal/Friends pre-side-effect run",
+      "path": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r4-run-20260921T094935Z-finalpfr4/operator-ledger.json",
+      "sha256": "0443855bf04ada8275389079042258aede011c9016f4b8f0211625003b9a4d89",
+      "status": "FAIL_PRE_SIDE_EFFECT_PREFLIGHT; no browser/profile/schema/container/journey materialized; retained as diagnosis, not allocated",
+      "registry": {
+        "runId": "final-pf-r4-preflight-fail",
+        "terminalReceipt": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r4-run-20260921T094935Z-finalpfr4/operator-ledger.json",
+        "terminalReceiptSha256": "0443855bf04ada8275389079042258aede011c9016f4b8f0211625003b9a4d89",
+        "sourceHashLedger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/final-personal-friends-current-r4-too-short-source-binding-20260921T173317+0800/SOURCE_HASHES.sha256",
+        "covers": [],
+        "controlsClosure": false
+      }
+    },
+    {
+      "id": "E-FINAL-PF-R5-FAIL-SOURCE-DRIFT",
+      "kind": "superseded final Personal/Friends connected run",
+      "path": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r5-run-20260921T100213Z-finalpfr5/operator-ledger.json",
+      "sha256": "e40bb248c9ed8bc66f655f0669ff0cc5f8e9a98995f77e889976acb25196dd06",
+      "status": "FAIL_SOURCE_DRIFT_AFTER_COMPLETE_CONNECTED_EVIDENCE; final source fence failed, so the completed journey is not allocated as PASS",
+      "registry": {
+        "runId": "final-pf-r5-source-drift-fail",
+        "terminalReceipt": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r5-run-20260921T100213Z-finalpfr5/operator-ledger.json",
+        "terminalReceiptSha256": "e40bb248c9ed8bc66f655f0669ff0cc5f8e9a98995f77e889976acb25196dd06",
+        "sourceHashLedger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/final-personal-friends-current-r5-provenance-manifest-20260921T175347+0800/SOURCE_HASHES.sha256",
+        "covers": [],
+        "controlsClosure": false
+      }
+    },
+    {
+      "id": "E-FINAL-PF-R7-FAIL-CONSOLE-CORRELATION",
+      "kind": "superseded final Personal/Friends connected run",
+      "path": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r7-run-20260921T104800Z-finalpfr7/operator-ledger.json",
+      "sha256": "42267b0ae590407841dff79482393320f2e92359561f32d63c7d78af66115e8a",
+      "status": "FAIL; delayed deliberate-offline console event was misclassified after mutable offline state changed; cleanup complete and no formal gate PASS",
+      "registry": {
+        "runId": "final-pf-r7-console-correlation-fail",
+        "terminalReceipt": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r7-run-20260921T104800Z-finalpfr7/operator-ledger.json",
+        "terminalReceiptSha256": "42267b0ae590407841dff79482393320f2e92359561f32d63c7d78af66115e8a",
+        "sourceFingerprint": {
+          "digest": "d7f7b4242ddf185332ccfac92b3c5e77cc89f88af3b2fd561109c3259e81ead2",
+          "fileCount": 663
+        },
+        "sourceHashLedger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/final-personal-friends-current-r7-source-fence-ordering-20260921T190200+0800/SOURCE_HASHES.sha256",
+        "covers": [],
+        "controlsClosure": false
+      }
+    },
+    {
+      "id": "E-CURRENT-FOCUSED-REGRESSION-AEF22DB2",
+      "kind": "focused current-lineage client/backend regression",
+      "path": "/Users/mzm/Desktop/cairn_revision03_work/evidence/current-focused-regression-aef22db2-20260921T064152Z/REGRESSION_RESULT.json",
+      "sha256": "17da47dd6667ff69edabac3ffe70fb61b37f9c1a043145007367f5373baf8c2c",
+      "status": "PASS 23 files / 255 tests at aef22db2/662; retained as supplemental focused evidence, not a substitute for R8 exact-current connected evidence",
+      "registry": {
+        "runId": "current-focused-regression-aef22db2",
+        "terminalReceipt": "/Users/mzm/Desktop/cairn_revision03_work/evidence/current-focused-regression-aef22db2-20260921T064152Z/REGRESSION_RESULT.json",
+        "terminalReceiptSha256": "17da47dd6667ff69edabac3ffe70fb61b37f9c1a043145007367f5373baf8c2c",
+        "sourceFingerprint": {
+          "digest": "aef22db2e2ce3f417fa63b8659daad9c9b3d9a755965b687994be9f03a71a614",
+          "fileCount": 662
+        },
+        "covers": [],
+        "controlsClosure": false,
+        "note": "Supplemental PASS is preserved at its exact source; current applicability is used only where paired with exact-current R8 execution and immutable proof hashes."
+      }
+    },
+    {
+      "id": "E-FINAL-PF-R8-PASS",
+      "kind": "exact-current final Personal/Friends connected run",
+      "path": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/operator-ledger.json",
+      "sha256": "10896dd777ed3c0cb316e5c44227f6b3ee3af7edbccb31f042ea839f1468c1ca",
+      "status": "PASS; one invocation at d7f7b424/663, now dependency-equivalent 82/82 after the isolated O61 marker/test and closeout-tool changes; Personal/C3/API/MySQL PASS, 42/42 offline correlations, cleanup complete",
+      "registry": {
+        "runId": "final-pf-r8-connected",
+        "terminalReceipt": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/operator-ledger.json",
+        "terminalReceiptSha256": "10896dd777ed3c0cb316e5c44227f6b3ee3af7edbccb31f042ea839f1468c1ca",
+        "sourceFingerprint": {
+          "digest": "d7f7b4242ddf185332ccfac92b3c5e77cc89f88af3b2fd561109c3259e81ead2",
+          "fileCount": 663
+        },
+        "sourceHashLedger": "/Users/mzm/Desktop/cairn_revision03_work/candidates/final-personal-friends-current-r8-offline-console-correlation-20260921T191208+0800/SOURCE_HASHES.sha256",
+        "covers": ["R03-C1","R03-C2","R03-C3","R03-C4","R03-GPS","E2E-REGRESSION"],
+        "controlsClosure": true,
+        "proofs": {
+          "R03-C1": [
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json","sha256":"4d79145505121c0e32ef5517fcde66b4213eeaa21616e072c6f0bd25047b02e9"},
+            {"kind":"jsonValue","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json","sha256":"4d79145505121c0e32ef5517fcde66b4213eeaa21616e072c6f0bd25047b02e9","pointer":"negativeJourneys.0.cachedLeasePresentAfter","expected":false}
+          ],
+          "R03-C2": [
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json","sha256":"4d79145505121c0e32ef5517fcde66b4213eeaa21616e072c6f0bd25047b02e9"},
+            {"kind":"jsonValue","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json","sha256":"4d79145505121c0e32ef5517fcde66b4213eeaa21616e072c6f0bd25047b02e9","pointer":"negativeJourneys.1.durableEnvelopeReady","expected":true}
+          ],
+          "R03-C3": [
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json","sha256":"4d79145505121c0e32ef5517fcde66b4213eeaa21616e072c6f0bd25047b02e9"},
+            {"kind":"jsonValue","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json","sha256":"4d79145505121c0e32ef5517fcde66b4213eeaa21616e072c6f0bd25047b02e9","pointer":"fixture.identityGate","expected":true},
+            {"kind":"jsonValue","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json","sha256":"4d79145505121c0e32ef5517fcde66b4213eeaa21616e072c6f0bd25047b02e9","pointer":"controls.noInjectedAccount","expected":true}
+          ],
+          "R03-C4": [
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json","sha256":"4d79145505121c0e32ef5517fcde66b4213eeaa21616e072c6f0bd25047b02e9"},
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/current-focused-regression-aef22db2-20260921T064152Z/REGRESSION_RESULT.json","sha256":"17da47dd6667ff69edabac3ffe70fb61b37f9c1a043145007367f5373baf8c2c"},
+            {"kind":"allAssertionsPass","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/local-api-mysql-rev03g.json","sha256":"db9ee8e8654ef75a847eeee2a804a9ac3551f0377fa19ff4130df6027c4d3292"}
+          ],
+          "R03-GPS": [
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-personal-receipt.json","sha256":"20c3cbe22d829e78537ad6aaec9c3cda1d026bfb52f1363f21396e46a9f88e81"},
+            {"kind":"jsonValue","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-personal-receipt.json","sha256":"20c3cbe22d829e78537ad6aaec9c3cda1d026bfb52f1363f21396e46a9f88e81","pointer":"activity.liveMemoryBeforeFinish.route","expected":"Memory"},
+            {"kind":"jsonValue","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-personal-receipt.json","sha256":"20c3cbe22d829e78537ad6aaec9c3cda1d026bfb52f1363f21396e46a9f88e81","pointer":"controls.nativeEvidenceClaimed","expected":false}
+          ],
+          "E2E-REGRESSION": [
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-evidence.json","sha256":"4d79145505121c0e32ef5517fcde66b4213eeaa21616e072c6f0bd25047b02e9"},
+            {"kind":"status","path":"/Users/mzm/Desktop/cairn_revision03_work/evidence/final-personal-friends-r8-run-20260921T114039Z-finalpfr8/run-output/final-personal-receipt.json","sha256":"20c3cbe22d829e78537ad6aaec9c3cda1d026bfb52f1363f21396e46a9f88e81"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "E-O61-FOCUSED-FAILS",
+      "kind": "preserved focused-test contract failures",
+      "path": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-convergence-o61-20260921T203950+0800/marker-jest-final-result.json",
+      "sha256": "cd6f2803da0e10d8fa35e16b4d106532f5e228f26a264d392bda25a3912e4fb0",
+      "status": "FAIL retained; CommonJS mock could not control the dynamic expo-updates import. The corrected truthful O61 marker test subsequently passed; these failures were not relabeled."
+    },
+    {
+      "id": "E-O61-CAPTURE-FAILS",
+      "kind": "preserved loaded-Web capture-contract failures",
+      "path": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-convergence-o61-20260921T203950+0800/corrected-auth-capture-20260921T211210+0800/auth-o61-corrected-receipt.json",
+      "sha256": "6b55a34974fef1a560650c55349e1c83719c754a929d8d4b82f966215f48f916",
+      "status": "FAIL retained; loaded O61 was visible but the capture contract incorrectly required OPTIONS and selected a lazy bundle. Not promoted."
+    },
+    {
+      "id": "E-O61-FINAL-LOADED-WEB",
+      "kind": "final isolated loaded Auth Web marker capture",
+      "path": "/Users/mzm/Desktop/cairn_revision03_work/evidence/final-convergence-o61-20260921T203950+0800/final-auth-capture-20260921T212515+0800/auth-o61-final-receipt.json",
+      "sha256": "9ea6747b6a5ff615eaf2f873e42770eaeb529321e6a0efefc5c736447441672c",
+      "status": "PASS at exact 46aa7e1a/664; one visible O61, zero O60, exact main Web bundle, isolated loopback diagnostics, zero unmatched errors, one attempt and cleanup complete"
+    }
+  ],
+  "rule": "Generated results are appended from runner output; narrative cannot create PASS."
+}

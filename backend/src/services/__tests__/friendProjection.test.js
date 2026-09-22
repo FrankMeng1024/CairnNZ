@@ -127,6 +127,7 @@ test('server projection excludes whole endpoint/private cells and emits no sourc
     },
   };
   const projection = await deriveFriendProjection(db, 7, 8, {
+    id: 17,
     grant_epoch: 'grant-a',
     authorization_version: 3,
     policy_epoch: 2,
@@ -148,6 +149,10 @@ test('server projection excludes whole endpoint/private cells and emits no sourc
   assert.match(calls[0].sql, /evidence_source = 'activity_real'/);
   assert.match(calls[0].sql, /finalized_at IS NOT NULL/);
   assert.match(calls[0].sql, /horizontal_accuracy_m <= 50/);
+  assert.match(calls[0].sql, /FROM memory_presence_witnesses witness/);
+  assert.match(calls[0].sql, /witness\.first_observed_at_ms AS ts/);
+  assert.match(calls[0].sql, /witness\.observed_at_ms AS ts/);
+  assert.deepEqual(calls[0].params.slice(0, 4), [7, 7, 7, 7]);
 });
 
 test('friendship active uniqueness does not derive a generated column from cascading FK inputs', () => {

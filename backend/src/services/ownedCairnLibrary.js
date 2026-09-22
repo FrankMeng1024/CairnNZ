@@ -28,6 +28,14 @@ function escapeLike(value) {
 }
 
 function buildOwnedCairnLibraryQuery({ userId, limit, query, cursor }) {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new Error('invalid_limit');
+  }
+  // mysql2's prepared-statement encoder sends every JavaScript Number as a
+  // DOUBLE. MySQL 8 rejects a DOUBLE parameter in LIMIT even when the value is
+  // integral, so interpolate only this independently validated integer. All
+  // user/content/cursor data remains bound below.
+  const fetchLimit = limit + 1;
   const where = ['user_id = ?'];
   const values = [userId];
   if (query) {
@@ -38,15 +46,15 @@ function buildOwnedCairnLibraryQuery({ userId, limit, query, cursor }) {
     where.push('(created_at < ? OR (created_at = ? AND id < ?))');
     values.push(cursor.createdAt, cursor.createdAt, cursor.id);
   }
-  values.push(limit + 1);
   return {
     sql: `SELECT id, user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
                  type, text, lat, lng, alt, permission, approximate, public_snapshot,
+                 public_intent, public_state, publication_epoch, content_revision,
                  created_at, updated_at
           FROM markers
           WHERE ${where.join(' AND ')}
           ORDER BY created_at DESC, id DESC
-          LIMIT ?`,
+          LIMIT ${fetchLimit}`,
     values,
   };
 }

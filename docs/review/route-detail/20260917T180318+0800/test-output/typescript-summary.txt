@@ -1,0 +1,8 @@
+Command (cwd app): npx tsc --noEmit --pretty false
+
+Full project: NONZERO, 253 pre-existing/unrelated diagnostic lines.
+Representative baseline diagnostics include missing `src/config/i18n`, missing `@playwright/test` types, and missing `@turf/helpers` declarations.
+
+Filtered CARD-ROUTE-01 touched app files: 0 diagnostics.
+Result: NO_TYPESCRIPT_ERRORS_IN_CARD_ROUTE_01_TOUCHED_APP_FILES
+

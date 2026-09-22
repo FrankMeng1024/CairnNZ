@@ -1,0 +1,16 @@
+{
+  "schema": "cairnnz.v1-closure.supervision.fixtures.v1",
+  "disposable": true,
+  "cases": [
+    {"id":"T02","kind":"returned_unintegrated","expected":"BLOCK_THEN_ALLOW_AFTER_DISPOSITION"},
+    {"id":"T03","kind":"dispatched_without_ack","expected":"BLOCK_AND_DISTINGUISH_FROM_RUNNING"},
+    {"id":"T05","kind":"approval_wait_with_independent_ready","expected":"BLOCK_WITHOUT_DUPLICATE_OR_BYPASS"},
+    {"id":"T06","kind":"late_superseded_result","expected":"BLOCK_UNTIL_QUARANTINED"},
+    {"id":"T07","kind":"local_complete_native_unverified","expected":"ALLOW_WITH_SEPARATE_NATIVE_STATE"},
+    {"id":"T08","kind":"owner_pause_unit_only","expected":"ALLOW_BUT_KEEP_OWNER_LIVE_NOT_RUN"},
+    {"id":"T09","kind":"classified_provider_pauses","expected":"ALLOW_RECORDED_CHECKPOINT_WITHOUT_RETRY_LOOP"},
+    {"id":"T10","kind":"stale_observer_metadata","expected":"REPORT_UNCERTAIN_WITHOUT_RECOVERY_ACTION"},
+    {"id":"T11","kind":"source_fingerprint_changed","expected":"BLOCK_STALE_EVIDENCE"},
+    {"id":"T12","kind":"corrupt_state_and_repeated_stop","expected":"ONE_CONTINUATION_THEN_VISIBLE_FAULT"}
+  ]
+}

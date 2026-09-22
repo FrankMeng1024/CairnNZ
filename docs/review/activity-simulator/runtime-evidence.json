@@ -5,13 +5,31 @@
   "states": [
     "HIKE READY · COLLAPSED",
     "HIKE READY · EXPANDED",
-    "RUN ACTIVE · COLLAPSED"
+    "SETTINGS · INDEPENDENT TOGGLE",
+    "RUN ACTIVE · COLLAPSED",
+    "HIKE · SET START"
   ],
   "assertions": {
-    "hikeCollapsedVisible": true,
-    "hikeExpandedVisible": true,
-    "runActiveCollapsedVisible": true,
-    "acceleratedTimeScaleVisible": "10x"
+    "debugOffHidesSimulator": true,
+    "independentToggleKeepsDebugOn": true,
+    "simulatorToggleOffHidesOverlay": true,
+    "hikeTriggerLowerLeft": true,
+    "expandedPanelIsScreenBounded": true,
+    "expandedControlsReachable": true,
+    "diagnosticsReachable": true,
+    "runTriggerLowerLeft": true,
+    "joystickOnRight": true,
+    "joystickClearOfMapCenter": true,
+    "canonicalDuration": true,
+    "simulatorFreshnessUsesProviderTimeline": true,
+    "noStartSetupVisible": true,
+    "mapCenterTapReachedHandler": true,
+    "startHereTapReachedHandler": true
+  },
+  "runStateSnapshot": {
+    "locationProviderSource": "simulator",
+    "simulatorVirtualTimestamp": 1788835658571,
+    "lastTrackTimestamp": 1788835658571
   },
   "runtimeErrors": [],
   "limitation": "Controlled render evidence only; native GPS/background/process behavior requires physical-device OTA QA."

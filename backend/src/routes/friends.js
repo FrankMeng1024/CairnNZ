@@ -539,6 +539,8 @@ router.delete('/:id', async (req, res) => {
     let removed = false;
     try {
       await conn.beginTransaction();
+      const lockIds = [Number(req.user.userId), Number(friendId)].sort((a, b) => a - b);
+      await conn.query('SELECT id FROM users WHERE id IN (?) ORDER BY id FOR UPDATE', [lockIds]);
       await closeFriendshipEpisode(conn, req.user.userId, friendId, 'unfriended');
       const [result] = await conn.execute(
         'DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)',
@@ -632,6 +634,8 @@ router.post('/:id/block', async (req, res) => {
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
+      const lockIds = [Number(req.user.userId), targetId].sort((a, b) => a - b);
+      await conn.query('SELECT id FROM users WHERE id IN (?) ORDER BY id FOR UPDATE', [lockIds]);
       // Insert block (idempotent).
       await conn.execute(
         `INSERT INTO blocked_users (blocker_id, blocked_id, reason)

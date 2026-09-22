@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T141933+0800",
+  "isolation": {
+    "production_api_used": false,
+    "production_data_read": false,
+    "production_data_mutated": false,
+    "backend_deployed": false,
+    "ota_published": false
+  },
+  "gates": [
+    {
+      "name": "app_scoped_regression",
+      "command": "cd app && npx jest --runInBand --forceExit src/features/activity/__tests__/activityDetailPresentation.test.ts src/features/activity/__tests__/completedActivityIntent.test.ts src/features/activity/__tests__/activityRouteState.test.ts src/features/trails/__tests__/trailsLibrary.test.ts src/features/trails/__tests__/trailsScreenContracts.test.ts src/services/__tests__/markerTombstones.test.ts src/services/__tests__/pendingSyncStore.test.ts src/services/__tests__/accountLocalDataContract.test.ts src/services/__tests__/syncDaemonOwnershipCleanup.test.ts src/features/memory/__tests__/memoryAuthorityInitialization.test.ts src/components/__tests__/semanticFoundation.test.ts src/components/__tests__/transientContracts.test.tsx src/features/cairns/__tests__/cairnIdentity.test.ts src/features/cairns/__tests__/cairnPersonalContracts.test.ts src/store/__tests__/useMarkerStore.fastAck.test.ts src/services/__tests__/offlineCommittedEntity.test.ts src/features/plant/services/__tests__/noteEncoding.test.ts __tests__/plantTitleBody.test.ts __tests__/v409-offlineQueue.test.ts",
+      "exit_code": 0,
+      "result": "PASS",
+      "suites": {"passed": 19, "total": 19},
+      "tests": {"passed": 106, "total": 106},
+      "raw_output": "test-output/scoped-regression.txt",
+      "warnings": [
+        "Existing Jest configuration warning: unknown setupFilesAfterFramework option.",
+        "Jest force-exit/open-handle warning; no retry-to-green was used."
+      ]
+    },
+    {
+      "name": "backend_scoped_regression",
+      "command": "node --test backend/src/routes/__tests__/freeActivityContracts.test.js backend/src/services/__tests__/ownedCairnLibrary.test.js",
+      "exit_code": 0,
+      "result": "PASS",
+      "tests": {"passed": 20, "total": 20},
+      "raw_output": "test-output/backend-regression.txt"
+    },
+    {
+      "name": "activity_changed_file_gate",
+      "command": "cd app && npm run verify:changed",
+      "exit_code": 0,
+      "result": "PASS",
+      "checks": {"passed": 542, "total": 542},
+      "raw_output": "test-output/verify-changed.txt"
+    },
+    {
+      "name": "full_typescript_baseline",
+      "command": "cd app && npx tsc --noEmit --pretty false",
+      "exit_code": 2,
+      "result": "BASELINE_FAILURE_OUTSIDE_TOUCHED_FILES",
+      "diagnostic_lines": 257,
+      "touched_file_diagnostic_lines": 0,
+      "raw_output": "test-output/typescript-full.txt",
+      "summary": "test-output/typescript-summary.txt",
+      "touched_filter": "test-output/typescript-touched.txt"
+    },
+    {
+      "name": "scoped_diff_check",
+      "command": "git diff --check -- <CARD-CAIRN-01 source and test paths>",
+      "exit_code": 0,
+      "result": "PASS",
+      "note": "The repository-wide check still reports pre-existing unrelated whitespace in backend Session/sessions work."
+    }
+  ],
+  "visual_qa": {
+    "result": "PASS_WITH_DECLARED_EVIDENCE_BOUNDARIES",
+    "capture_manifest": "visual/capture-results.json",
+    "capture_count": 20,
+    "board_count": 3,
+    "actual_handler_flow_step_count": 13,
+    "native_device": "UNVERIFIED",
+    "native_mapbox": "UNVERIFIED",
+    "actual_web_mapbox": "UNVERIFIED",
+    "owner_acceptance": "PENDING"
+  }
+}
+

@@ -1,0 +1,254 @@
+/**
+ * Memory routes — Memory mode points cloud sync.
+ *
+ *   POST /api/memory/points    (auth) — upload a batch of visited points
+ *   GET  /api/memory/points    (auth) — download all visited points
+ *   DELETE /api/memory/points  (auth) — wipe user's memory
+ *
+ * v0.2.6.3 (K2 fix):
+ *   - UNIQUE key is now (user_id, client_id) not (user_id, ts) — multiple
+ *     points sharing the same ms (e.g. recordPoint + recordCircleUnlock
+ *     in the same tick) no longer collide.
+ *   - Server-side fallback for legacy v0.2.6.2 clients that POST
+ *     without cid: deterministic hash of (user_id, ts, lat, lng) so
+ *     retries from the same client compute the same cid → INSERT IGNORE
+ *     dedups correctly.
+ *   - GET supports keyset pagination via after_ts + after_cid params
+ *     so ts-collisions don't break the cursor.
+ */
+const express = require('express');
+const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
+const pool = require('../config/db');
+const authenticate = require('../middleware/authenticate');
+const { deterministicCid } = require('../lib/deterministicCid');
+const { scheduleMemoryAttribution, scheduleMemoryProjectionReset } = require('../lib/attributeMemoryPoints');
+const { validateBody } = require('../middleware/validate');
+const schemas = require('../middleware/schemas');
+
+const router = express.Router();
+
+// v412: deterministicCid 抽到 lib/deterministicCid.js, sessions.js /save 端点复用同一实现
+
+// Sprint 6 round-30 R30Q3: per-user rate limit on POST /points. Pre-fix,
+// only the batch cap of 1000 points enforced any bound. A malicious
+// (or badly-behaved retry-loop) client could POST 1000-point batches
+// back-to-back → unbounded MySQL write amplification + attributeMemoryPoints
+// runs an ST_Contains sweep per batch. Legitimate memory sync fires ~
+// every 30-60s during active hiking, so 120/5min/user leaves ~1 req/
+// 2.5s of headroom for retry storms without opening a DoS vector. Key
+// by userId (authenticate runs first); IP fallback defends the
+// unauthenticated-attempt edge that shouldn't happen post-authenticate.
+const pointsLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, max: 120,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => req.user?.userId ? `mempts:${req.user.userId}` : ipKeyGenerator(req, res),
+  message: { error: 'Too many memory point uploads. Slow down.' },
+});
+
+/**
+ * POST /api/memory/points
+ * Body: { points: [{ lat, lng, ts, cid? }, ...] }
+ * Returns: { points: [{ ts, cid } | null, ...] }
+ *
+ * Response includes the cid for each accepted row so clients on
+ * v0.2.6.2 (no cid) can backfill locally on next pull. Null placeholders
+ * in the echo array preserve request/response index alignment.
+ */
+router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.points), async (req, res) => {
+  const userId = req.user.userId;
+  const { points } = req.body;
+
+  if (!Array.isArray(points)) {
+    return res.status(400).json({ error: 'points must be an array' });
+  }
+  if (points.length === 0) {
+    return res.json({ points: [] });
+  }
+  if (points.length > 1000) {
+    return res.status(400).json({ error: 'batch too large (max 1000 points)' });
+  }
+
+  const tsUpperBound = Date.now() + 24 * 60 * 60 * 1000;
+  const rows = [];
+  const echo = [];
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    if (
+      typeof p?.lat !== 'number' || typeof p?.lng !== 'number' || typeof p?.ts !== 'number' ||
+      !isFinite(p.lat) || !isFinite(p.lng) || !isFinite(p.ts) ||
+      // M6: ts must be integer; fractional ts breaks deterministic-cid hashing.
+      !Number.isInteger(p.ts) ||
+      p.lat < -90 || p.lat > 90 || p.lng < -180 || p.lng > 180 ||
+      p.ts <= 0 || p.ts > tsUpperBound || p.ts > Number.MAX_SAFE_INTEGER
+    ) {
+      // M5: emit a null placeholder so request/response array indices stay aligned.
+      echo.push(null);
+      continue;
+    }
+    // Sprint 6 round-18 R18 note: `client_id` column collation is
+    // utf8mb4_0900_ai_ci (case + accent insensitive). Two clients sending
+    // `cid='ABC123'` and `cid='abc123'` would collide on the UNIQUE key
+    // uk_user_cid and one point would be silently dropped via
+    // ON DUPLICATE KEY. Odds are zero in practice: Expo UUIDs are
+    // lowercase and `deterministicCid` returns hex — both already stable
+    // casing. Left as-is to preserve client-side sync-id parity; a
+    // future ALTER to utf8mb4_bin (or lowercase-normalization here)
+    // would need coordinated client rollout so the echo doesn't diverge
+    // from the client's locally cached cid. Filed as backlog risk item.
+    const cid = (typeof p.cid === 'string' && p.cid.length > 0 && p.cid.length <= 36)
+      ? p.cid
+      : deterministicCid(userId, p.ts, p.lat, p.lng);
+    rows.push([userId, p.lat, p.lng, p.ts, cid]);
+    echo.push({ batch_index: i, ts: p.ts, cid });
+  }
+
+  if (rows.length === 0) {
+    return res.json({ points: [] });
+  }
+
+  try {
+    // M2 fix (v0.2.6.3): use INSERT ... ON DUPLICATE KEY UPDATE so non-
+    // dedup errors surface as exceptions (vs INSERT IGNORE which
+    // silently drops them — leading the client to mark non-stored
+    // points as synced and lose them).
+    //
+    // The ON DUPLICATE clause is a no-op (`client_id=client_id`) — we
+    // just need any expression so MySQL doesn't error on the conflict.
+    // Then we SELECT the affected cids to confirm what really landed.
+    await pool.query(
+      'INSERT INTO memory_points (user_id, lat, lng, ts, client_id) VALUES ? ON DUPLICATE KEY UPDATE client_id = VALUES(client_id)',
+      [rows]
+    );
+    // memory_points is already committed. Region attribution is a derived,
+    // idempotent projection and must not block the source upload response.
+    const tsList = rows.map((r) => r[3]); // rows[i] = [user_id, lat, lng, ts, client_id]
+    scheduleMemoryAttribution(pool, userId, Math.min(...tsList), Math.max(...tsList));
+    // Confirm storage by selecting back the cids we just inserted.
+    const validEcho = echo.filter((e) => e !== null);
+    const cidList = validEcho.map((e) => e.cid);
+    const [confirmedRows] = cidList.length > 0
+      ? await pool.query(
+          `SELECT client_id FROM memory_points WHERE user_id = ? AND client_id IN (?)`,
+          [userId, cidList]
+        )
+      : [[]];
+    const confirmedSet = new Set(confirmedRows.map((r) => r.client_id));
+    // Emit echo preserving null placeholders so client can align by index.
+    const finalEcho = echo.map((e) => {
+      if (e === null) return null;
+      return confirmedSet.has(e.cid) ? e : null;
+    });
+    // O1: dropped accepted/duplicates/rejected — client 只用 points echo,
+    // 三个数字纯 debug 遗留(memorySync 从不 read)。
+    return res.json({ points: finalEcho });
+  } catch (err) {
+    console.error('[memory/points:insert]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * GET /api/memory/points
+ * Query: ?after_ts=<n>&after_cid=<s>&limit=<n>&until=<n>
+ *   - Keyset pagination: returns points where (ts > after_ts) OR
+ *     (ts == after_ts AND cid > after_cid), ordered (ts ASC, cid ASC).
+ *     Tolerates ts-collisions which are now possible since UNIQUE
+ *     moved to cid.
+ *   - `until` (optional): only return points with ts <= until — used
+ *     by clients to bound a paginated pull to the snapshot at start
+ *     time so concurrent writes don't extend the loop forever.
+ *   - limit defaults to 5000, max 10000.
+ *
+ * Returns: { points: [{ lat, lng, ts, cid }, ...] }
+ *
+ * Backwards compat: if no query params, returns all points (subject to
+ * default limit) — old v0.2.6.2 clients work unchanged.
+ */
+router.get('/points', authenticate, async (req, res) => {
+  const userId = req.user.userId;
+  // Sprint 6 R85 BUG-3: clamp to finite non-negative. Pre-fix, `Number("Infinity")`
+  // returns Infinity (truthy, || 0 doesn't trigger), which mysql2 would
+  // serialize into a BIGINT parameter → SQL type error → 500. Same for
+  // NaN via crafted input. Now: force finite integer, default to 0 for
+  // afterTs and MAX_SAFE_INTEGER for until.
+  const rawAfterTs = Number(req.query.after_ts);
+  const afterTs = Number.isFinite(rawAfterTs) && rawAfterTs >= 0 ? rawAfterTs : 0;
+  const afterCid = typeof req.query.after_cid === 'string' ? req.query.after_cid.slice(0, 36) : '';
+  const rawUntil = Number(req.query.until);
+  const until = Number.isFinite(rawUntil) && rawUntil >= 0 ? rawUntil : Number.MAX_SAFE_INTEGER;
+  const requested = Number(req.query.limit);
+  const limit = Math.max(1, Math.min(10000, Number.isFinite(requested) ? requested : 5000));
+  try {
+    const [rows] = await pool.query(
+      `SELECT lat, lng, ts, client_id FROM memory_points
+       WHERE user_id = ?
+         AND ts <= ?
+         AND ((ts > ?) OR (ts = ? AND client_id > ?))
+       ORDER BY ts ASC, client_id ASC
+       LIMIT ?`,
+      [userId, until, afterTs, afterTs, afterCid, limit]
+    );
+    return res.json({
+      points: rows.map((r) => ({
+        lat: Number(r.lat),
+        lng: Number(r.lng),
+        ts: Number(r.ts),
+        cid: r.client_id,
+      })),
+    });
+  } catch (err) {
+    console.error('[memory/points:query]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Sprint 6 R59: rate-limit the wipe endpoint. Pre-fix, DELETE
+// /memory/points had no throttle — a bug or malicious action could
+// trigger a full data wipe with a single call. Legitimate use is
+// "user taps Clear my memory in Settings" once (with client-side
+// confirmation dialog). Cap at 3 wipes / day / user — allows a
+// user to retry after failure but blunts accidental-loop / abuse
+// scenarios. If a user really needs to wipe multiple times in a
+// day, they can wait or contact support.
+const wipeLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, max: 3,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req, res) => req.user?.userId ? `memwipe:${req.user.userId}` : ipKeyGenerator(req, res),
+  message: { error: 'Too many memory wipe requests. Please try again tomorrow.' },
+});
+
+/**
+ * DELETE /api/memory/points
+ * Wipes all of the authenticated user's memory points. Used by the
+ * Settings → "Clear my memory" action.
+ */
+router.delete('/points', authenticate, wipeLimiter, async (req, res) => {
+  const userId = req.user.userId;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [regionsResult] = await conn.query(
+      'DELETE FROM unlocked_regions WHERE user_id = ?',
+      [userId]
+    );
+    const [result] = await conn.query(
+      'DELETE FROM memory_points WHERE user_id = ?',
+      [userId]
+    );
+    await conn.commit();
+    scheduleMemoryProjectionReset(pool, userId);
+    return res.json({
+      deleted: result.affectedRows ?? 0,
+      unlocked_regions_deleted: regionsResult.affectedRows ?? 0,
+    });
+  } catch (err) {
+    try { await conn.rollback(); } catch { /* ignore */ }
+    console.error('[memory/points:delete]', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
+  }
+});
+
+module.exports = router;

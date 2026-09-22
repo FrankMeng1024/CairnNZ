@@ -154,6 +154,10 @@ import { deriveActivityLocationHealth } from '../features/activity/activityLocat
 import type { ActivityTransitionState } from '../features/activity/activityOperationalState';
 import { appendCausalLivePoint } from '../features/activity/causalLiveRoute';
 import type { ActivityRouteReference } from '../features/route/routeContracts';
+import {
+  runOwnedTrackingTokenRefresh,
+  type TrackingTokenRefreshSnapshot,
+} from '../services/trackingTokenRefreshAuthority';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
@@ -161,6 +165,7 @@ let locationSubscription: { remove: () => void } | null = null;
 let incrementalFlushInterval: ReturnType<typeof setInterval> | null = null;
 // Sprint 72 STORY-00555 — hiking token refresh interval
 let tokenRefreshInterval: ReturnType<typeof setInterval> | null = null;
+let tokenRefreshEpoch = 0;
 let realTelemetryHealthInterval: ReturnType<typeof setInterval> | null = null;
 let activityLifecycleInterval: ReturnType<typeof setInterval> | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
@@ -1054,6 +1059,47 @@ const initialState = {
   },
 };
 
+function stopOwnedTokenRefreshTimer(): void {
+  tokenRefreshEpoch += 1;
+  if (tokenRefreshInterval) clearInterval(tokenRefreshInterval);
+  tokenRefreshInterval = null;
+}
+
+function trackingRefreshSnapshot(
+  state: Pick<TrackingState, 'status' | 'ownerUserId' | 'sessionId' | 'liveOwnerGeneration'>,
+  refreshEpoch: number,
+): TrackingTokenRefreshSnapshot | null {
+  if ((state.status !== 'tracking' && state.status !== 'paused')
+    || !state.ownerUserId
+    || !state.sessionId
+    || !state.liveOwnerGeneration) return null;
+  return {
+    status: state.status,
+    ownerUserId: state.ownerUserId,
+    sessionId: state.sessionId,
+    ownerGeneration: state.liveOwnerGeneration,
+    refreshEpoch,
+  };
+}
+
+async function refreshOwnedTrackingToken(
+  getState: () => TrackingState,
+  captured: TrackingTokenRefreshSnapshot,
+) {
+  return runOwnedTrackingTokenRefresh({
+    captured,
+    current: () => trackingRefreshSnapshot(getState(), tokenRefreshEpoch),
+    loadRefresh: async () => {
+      const { refreshToken } = await import('../services/authService');
+      return refreshToken;
+    },
+    loadNotify: async () => {
+      const { notifyMemoryAuthRefreshed } = await import('../services/memorySync');
+      return notifyMemoryAuthRefreshed;
+    },
+  });
+}
+
 export const useTrackingStore = create<TrackingState>((set, get) => ({
   ...initialState,
 
@@ -1677,15 +1723,15 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // clears the token (iron rule); we just breadcrumb and keep hiking.
       try {
         const HIKING_REFRESH_MS = 30 * 60_000;
+        stopOwnedTokenRefreshTimer();
+        const refreshEpoch = tokenRefreshEpoch;
         tokenRefreshInterval = setInterval(async () => {
-          if (get().status !== 'tracking' && get().status !== 'paused') return;
+          const captured = trackingRefreshSnapshot(get(), refreshEpoch);
+          if (!captured) return;
           crashLogger.breadcrumb('hiking_refresh:start');
           try {
-            const { refreshToken } = await import('../services/authService');
-            const result = await refreshToken();
-            if (result.token) {
-              const { notifyMemoryAuthRefreshed } = await import('../services/memorySync');
-              notifyMemoryAuthRefreshed(String(get().ownerUserId ?? ''));
+            const result = await refreshOwnedTrackingToken(get, captured);
+            if (result.notified) {
               crashLogger.breadcrumb('hiking_refresh:success');
             } else {
               crashLogger.breadcrumb(`hiking_refresh:fail reason=${result.error ?? 'unknown'} authInvalid=${!!result.authInvalid}`);
@@ -1720,7 +1766,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       markRealProviderStopped('background');
       backgroundTaskActive = false;
       if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
-      if (tokenRefreshInterval) { clearInterval(tokenRefreshInterval); tokenRefreshInterval = null; }
+      stopOwnedTokenRefreshTimer();
       stopRealTelemetryHealthTimer();
       networkMonitor.stop();
       sessionRecorder.stop();
@@ -1924,10 +1970,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     } catch { /* swallow */ }
 
     // Sprint 72 STORY-00555: stop hiking token refresh
-    if (tokenRefreshInterval) {
-      clearInterval(tokenRefreshInterval);
-      tokenRefreshInterval = null;
-    }
+    stopOwnedTokenRefreshTimer();
     stopRealTelemetryHealthTimer();
 
     // Stop monitors. We do this asynchronously but the order matters:
@@ -3469,15 +3512,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         });
       } catch { /* non-fatal */ }
 
+      stopOwnedTokenRefreshTimer();
+      const refreshEpoch = tokenRefreshEpoch;
       tokenRefreshInterval = setInterval(async () => {
-        if (get().status !== 'tracking' && get().status !== 'paused') return;
+        const captured = trackingRefreshSnapshot(get(), refreshEpoch);
+        if (!captured) return;
         try {
-          const { refreshToken } = await import('../services/authService');
-          const result = await refreshToken();
-          if (result.token) {
-            const { notifyMemoryAuthRefreshed } = await import('../services/memorySync');
-            notifyMemoryAuthRefreshed(String(get().ownerUserId ?? ''));
-          }
+          await refreshOwnedTrackingToken(get, captured);
         } catch { /* never interrupt a recording */ }
       }, 30 * 60_000);
     }
@@ -4767,7 +4808,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     simulatorSourceActive = false;
     drainBackgroundLocations();
     if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
-    if (tokenRefreshInterval) { clearInterval(tokenRefreshInterval); tokenRefreshInterval = null; }
+    stopOwnedTokenRefreshTimer();
     stopRealTelemetryHealthTimer();
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -4804,6 +4845,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   },
 
   suspendForUserSwitch: async () => {
+    // Invalidate already-running callbacks before the first suspension await;
+    // clearInterval alone cannot stop a callback that has already fired.
+    stopOwnedTokenRefreshTimer();
     const activity = get();
     if (activity.status === 'idle' || !activity.sessionId) {
       stopActivityLifecycleTimer();
@@ -4847,7 +4891,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       backgroundTaskActive = false;
     }
     if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
-    if (tokenRefreshInterval) { clearInterval(tokenRefreshInterval); tokenRefreshInterval = null; }
     stopRealTelemetryHealthTimer();
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -4915,7 +4958,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       backgroundTaskActive = false;
     }
     if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
-    if (tokenRefreshInterval) { clearInterval(tokenRefreshInterval); tokenRefreshInterval = null; }
+    stopOwnedTokenRefreshTimer();
     stopRealTelemetryHealthTimer();
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports

@@ -40,15 +40,17 @@ describe('Settings product and correctness convergence', () => {
   test('server-owned actions cannot claim optimistic success', () => {
     expect(settings).toContain("feedbackState === 'sending'");
     expect(settings).toContain('if (result.acknowledged)');
-    expect(settings).toContain('if (feedbackFlight.current) return');
+    expect(settings).toContain('const ownerId = renderedOwnerId');
+    expect(settings).toContain('|| feedbackFlight.current) return');
+    expect(settings).toContain('generation !== feedbackGeneration.current');
     expect(settings).toContain('if (exportFlight.current) return');
-    expect(settings).toContain('if (!user?.id || deleteFlight.current) return');
+    expect(settings).toContain('if (!ownerId || currentOwnerId() !== ownerId || deleteFlight.current) return');
     expect(settings).toContain('Delivered to Cairn');
     expect(settings).toContain('Retry delivery');
     expect(settings).toContain("latestExport.status === 'queued' || latestExport.status === 'building'");
     expect(settings).toContain('Ready to download');
     expect(settings).toContain('The export could not be prepared');
-    expect(settings).toContain('localCleanupDeferred && !purgeScheduled');
+    expect(settings).toContain("result.localCleanup !== 'complete' && result.durableCleanupScheduled === false");
     expect(settings).toContain('Do not sign another account into this installation; reinstall Cairn first.');
   });
 

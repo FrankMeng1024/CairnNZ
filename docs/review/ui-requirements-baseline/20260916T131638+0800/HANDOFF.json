@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "audit_id": "20260916T131638+0800",
+  "verdict": "AUDIT_COMPLETE_PRODUCT_NOT_COMPLETE",
+  "primary_register": "REQUIREMENTS_REGISTER.json",
+  "run_directory": "/Users/mzm/Desktop/cairn/CairnNZ/docs/review/ui-requirements-baseline/20260916T131638+0800",
+  "desktop_archive": "/Users/mzm/Desktop/Cairn_UI_Requirements_Audit_20260916T131638+0800.zip",
+  "source_identity": {
+    "head": "12fa1cd0ef599e53a81cd30537ce761c5e2150ce",
+    "branch": "master",
+    "origin_master": "12fa1cd0ef599e53a81cd30537ce761c5e2150ce",
+    "porcelain_entries": 321,
+    "staged": 0,
+    "unstaged_modified": 101,
+    "unstaged_deleted": 1,
+    "untracked": 219,
+    "sorted_status_sha256": "7168e85b85b374b5e399e0d718d30e60a3df1946ed7039f5b054c72917b109d6",
+    "binary_diff_sha256": "1f87436ac61fcdcec4cf4680196a03ad4cacfee9f7ca5f527955a7e2cdb3cb35"
+  },
+  "deployment_identity": {
+    "inherited_from_prior_audit": true,
+    "client": {
+      "app_version": "0.2.6",
+      "runtime_version": "0.2.6",
+      "native_build": "56",
+      "marker": "O56",
+      "update_group": "9b3a3dcc-03b6-4300-a97b-317ee0a7441b",
+      "update_id": "01a09c0e-993b-759b-95e8-084f1f45238f",
+      "ota_bundle_sha256": "b210b673…",
+      "device_loaded": "UNKNOWN",
+      "evidence_date": "2026-09-15/16 prior audit"
+    },
+    "backend": {
+      "commit": "6c8e623…",
+      "image": "sha256:b7b0…",
+      "deployed_schema_ledger": "034",
+      "local_unapplied_for_production": "035",
+      "live_reverified_this_run": false
+    },
+    "profiles": "development/preview/production share https://api.yiiling.cn except a dev-simulator localhost fallback; preview is not isolated",
+    "current_source_attributable_to_ota": "UNKNOWN_DIRTY_WORKTREE"
+  },
+  "materials": {
+    "prior_audit_artifacts": [
+      {
+        "path": "docs/review/product-system-v1-audit/00_DEPLOYED_BASELINE.md",
+        "sha256": "efc7b5d344fd81286091106fc2f710509350c12a0b5b61995a0f6b6b930d8e40",
+        "accounted_for": true
+      },
+      {
+        "path": "docs/review/product-system-v1-audit/01_MEMORY_FRIENDS_PERMISSIONS.md",
+        "sha256": "0a63f91f1d3b626e903f0fb9b702c43a3a706a3b9141e9cdd50a122d12e7b4f9",
+        "accounted_for": true
+      },
+      {
+        "path": "docs/review/product-system-v1-audit/02_CAIRN_ENCOUNTERS_ROUTE_TRUST.md",
+        "sha256": "2caf424d51445c8f56e802d81fbd2b9ab1cb10358212e40b04627cc20fb91f92",
+        "accounted_for": true
+      },
+      {
+        "path": "docs/review/product-system-v1-audit/03_APPLE_BILLING_AND_UNIT_ECONOMICS.md",
+        "sha256": "d06049de9ec6294a8921bcf8f15f1451fed78e581dbb68ae38dc0060d84bbb15",
+        "accounted_for": true
+      },
+      {
+        "path": "docs/review/product-system-v1-audit/04_NZ_BETA_RELEASE_READINESS.md",
+        "sha256": "2b05dc44f653a563742948d35d8cdeb2584910ab65842a50eb8f3a8bf5209caf",
+        "accounted_for": true
+      },
+      {
+        "path": "docs/review/product-system-v1-audit/05_CAPABILITY_MATRIX_AND_DEPENDENCIES.md",
+        "sha256": "266e841827ff4304b67d5ba4d2f0315b0834ac60159631716aab1d0e2503e4e5",
+        "accounted_for": true
+      },
+      {
+        "path": "docs/review/product-system-v1-audit/CAPABILITY_MATRIX.csv",
+        "sha256": "0b37a8f5c0d06886f016ed07ab0ebf142713d04406bfbfce44a6db296007f546",
+        "accounted_for": true
+      },
+      {
+        "path": "docs/review/product-system-v1-audit/SUMMARY.md",
+        "sha256": "ba8c702b53b2de605e10a6c0a65b1ad2a713f0555608ec34eaff0a70851e581a",
+        "accounted_for": true
+      },
+      {
+        "path": "docs/review/product-system-v1-audit/HANDOFF.json",
+        "sha256": "b5a323e98fa55fa2e501b801a451a35819906bd67d5c94f5700f4c1980547832",
+        "accounted_for": true
+      }
+    ],
+    "missing": [
+      {
+        "path": "CairnNZ_Project_Authority.md",
+        "status": "NOT_FOUND_IN_BOUNDED_SEARCH",
+        "effect": "No replacement authority was inferred."
+      },
+      {
+        "path": "/Users/mzm/Desktop/Cairn_v1_0_Handoff/",
+        "status": "MISSING",
+        "effect": "Optional context only; audit continued."
+      },
+      {
+        "path": "/Users/mzm/Desktop/CAIRN_PAGE_LED_EXECUTION_PLAN_v1.1.md",
+        "status": "MISSING",
+        "effect": "Optional context only; audit continued."
+      },
+      {
+        "path": "/Users/mzm/Desktop/CAIRN_PRODUCT_SYSTEM_BLUEPRINT_v0.9.md",
+        "status": "MISSING_AT_NAMED_ROOT",
+        "effect": "A copy inside Cairn_Blueprint_Review was inspected as candidate design."
+      }
+    ]
+  },
+  "key_findings": [
+    "F-001",
+    "F-002",
+    "F-003",
+    "F-004",
+    "F-005",
+    "F-006",
+    "F-007",
+    "F-008",
+    "F-009",
+    "F-010",
+    "F-011",
+    "F-012",
+    "F-013",
+    "F-014",
+    "F-015",
+    "F-016",
+    "F-017",
+    "F-018",
+    "F-019"
+  ],
+  "unallocated_requirements": [],
+  "proposed_next_card": {
+    "card_id": "CARD-01",
+    "title": "First iPhone Hike/Run evidence review — no code changes",
+    "status": "AWAITING_USER_APPROVAL",
+    "report": "03_PAGE_LED_SLICE_PLAN.md"
+  },
+  "blocker_categories": {
+    "personal_ui_review": [
+      "Current installed build identity",
+      "Physical iPhone/native Mapbox evidence"
+    ],
+    "sharing_pilot": [
+      "F-001 friend-fog authorization",
+      "F-004 non-owner wiring/privacy"
+    ],
+    "external_release": [
+      "F-001",
+      "F-002",
+      "F-006",
+      "F-010",
+      "F-012",
+      "F-014",
+      "F-015",
+      "F-017",
+      "F-018"
+    ],
+    "local_audit_completion": []
+  },
+  "artifacts": [
+    "00_REVIEW_SUMMARY.md",
+    "REQUIREMENTS_REGISTER.json",
+    "REQUIREMENTS_REGISTER.csv",
+    "01_PAGE_AND_FLOW_BASELINE.md",
+    "02_UI_DNA_AND_SHARED_DEPENDENCIES.md",
+    "03_PAGE_LED_SLICE_PLAN.md",
+    "04_FIRST_IPHONE_REVIEW.md",
+    "HANDOFF.json",
+    "visual/index.html",
+    "visual/manifest.json",
+    "visual/capture-results.json",
+    "visual/images/board-activity-day-sunset-night.jpg",
+    "visual/images/board-library-detail-editor.jpg",
+    "visual/images/board-cairn-memory-settings.jpg",
+    "VALIDATION.json",
+    "scripts/capture-baseline.mjs",
+    "scripts/build-deliverables.mjs",
+    "scripts/validate-deliverables.mjs"
+  ],
+  "visual": {
+    "screenshots": 41,
+    "boards": 3,
+    "historical_phone_images_packaged": 0,
+    "privacy_reason": "Historical private-looking map context excluded."
+  },
+  "audit_only_proof": {
+    "product_source_modified_by_audit": false,
+    "existing_tests_or_snapshots_modified": false,
+    "dependencies_or_configuration_modified": false,
+    "marker_or_version_modified": false,
+    "backend_or_deployment_modified": false,
+    "destructive_or_commercial_actions_executed": false,
+    "product_api_writes_reached_production": false,
+    "note": "Final unrelated-worktree comparison is recorded in VALIDATION.json."
+  },
+  "stop_condition": "Await product review and explicit page-scope approval. No implementation/release authorized."
+}

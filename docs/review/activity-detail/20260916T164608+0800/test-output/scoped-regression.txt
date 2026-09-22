@@ -1,0 +1,32 @@
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+PASS src/features/activity/__tests__/confirmedRoutePresentation.test.ts
+PASS src/features/activity/__tests__/completedActivityIntent.test.ts
+PASS src/store/__tests__/useMarkerStore.fastAck.test.ts
+PASS src/store/__tests__/useRouteStore.offline.test.ts
+PASS src/services/__tests__/markerTombstones.test.ts
+PASS src/services/__tests__/offlineCommittedEntity.test.ts
+PASS src/screens/__tests__/activityP0Contract.test.ts
+PASS src/features/activity/__tests__/activityDetailPresentation.test.ts
+PASS src/features/activity/__tests__/activityRouteState.test.ts
+PASS src/features/trails/__tests__/trailsScreenContracts.test.ts
+
+Test Suites: 10 passed, 10 total
+Tests:       55 passed, 55 total
+Snapshots:   0 total
+Time:        7.221 s
+Ran all test suites matching /src\/features\/activity\/__tests__\/activityDetailPresentation.test.ts|src\/features\/activity\/__tests__\/activityRouteState.test.ts|src\/features\/activity\/__tests__\/completedActivityIntent.test.ts|src\/features\/activity\/__tests__\/confirmedRoutePresentation.test.ts|src\/features\/trails\/__tests__\/trailsScreenContracts.test.ts|src\/store\/__tests__\/useRouteStore.offline.test.ts|src\/store\/__tests__\/useMarkerStore.fastAck.test.ts|src\/services\/__tests__\/markerTombstones.test.ts|src\/services\/__tests__\/offlineCommittedEntity.test.ts|src\/screens\/__tests__\/activityP0Contract.test.ts/i.

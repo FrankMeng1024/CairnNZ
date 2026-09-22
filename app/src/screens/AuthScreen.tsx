@@ -37,11 +37,23 @@ import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../componen
 import { Icon } from '../components/Icon';
 import { login, register, loginWithGoogle, verifyCode, resendCode,
   passwordResetRequest, passwordResetVerify, patchDob, restoreAccount,
+  type AuthResult,
 } from '../services/authService';
 import { CairnLogo } from '../components/ActivityIcons/CairnLogo';
 import { GlassPanel } from '../components/GlassPanel';
 // O1 batch 39: Google + makeRedirectUri + Prompt imports removed — 0 actual code references (Google OAuth deferred).
 import { crashLogger } from '../services/crashLogger';
+import {
+  type TokenAuthority,
+} from '../services/tokenStore';
+import {
+  finishAccountTransition,
+  type AccountTransitionAuthority,
+} from '../services/accountTransitionAuthority';
+import {
+  installAuthenticatedSession,
+  releaseAuthScreenAuthorityOnUnmount,
+} from '../services/authSessionInstallation';
 import { prewarmMapTiles } from '../services/mapboxPrewarm';
 import { OtaBadge } from '../components/OtaBadge';
 import { OTP_LENGTH, applyOtpCellInput, eligibleClipboardOtp, normalizeOtpInput } from '../utils/authOtp';
@@ -766,7 +778,7 @@ export function AuthScreen() {
     require('../services/bootDiagnostics').markBootPhase('auth_screen_render_start');
   } catch {/* ignore */}
   const nav = useNavigation<Nav>();
-  const { setLoggedIn, setUser, hydrate } = useAppStore();
+  const { hydrate } = useAppStore();
   // R21 v2 (2026-08-17): AuthScreen only mounts when hydrate() finished
   // with isLoggedIn=false (no token OR invalid token). Initial view is
   // 'splash' — the Landing screen. Old logic that started at
@@ -818,8 +830,10 @@ export function AuthScreen() {
   const [forgotNewPassword, setForgotNewPassword] = useState('');
   const [forgotError, setForgotError] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotResultUnknown, setForgotResultUnknown] = useState(false);
   // O18 AUTH-01: post-login restore-modal state.
   const [restoreDeadline, setRestoreDeadline] = useState('');
+  const [restoreAuthority, setRestoreAuthority] = useState<TokenAuthority | null>(null);
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
   const [privacyExpanded, setPrivacyExpanded] = useState(false);
@@ -835,6 +849,79 @@ export function AuthScreen() {
   const [privacyError, setPrivacyError] = useState('');
   const googleFlowActive = useRef(false);
   const submitAttempted = useRef(false);  // STORY-00133: only validate on blur after first submit
+  const authAttemptGeneration = useRef(0);
+  const authActionFlight = useRef(false);
+  const activeAuthTransition = useRef<AccountTransitionAuthority | null>(null);
+  const activeAuthToken = useRef<TokenAuthority | null>(null);
+  const authInstallInFlight = useRef(false);
+  const authMounted = useRef(true);
+  const restoreChoiceFlight = useRef(false);
+
+  useEffect(() => () => {
+    authMounted.current = false;
+    authAttemptGeneration.current += 1;
+    const transition = activeAuthTransition.current;
+    const token = activeAuthToken.current;
+    const released = releaseAuthScreenAuthorityOnUnmount({
+      installationInFlight: authInstallInFlight.current,
+      transition,
+      token,
+    });
+    if (released) {
+      activeAuthTransition.current = null;
+      activeAuthToken.current = null;
+    }
+  }, []);
+
+  const installAuthenticatedResult = async (
+    result: AuthResult,
+    beforeHydrate?: () => Promise<void>,
+  ): Promise<boolean> => {
+    const transition = result.transitionAuthority;
+    const tokenAuthority = result.tokenAuthority;
+    const attempt = ++authAttemptGeneration.current;
+    if (transition) activeAuthTransition.current = transition;
+    if (tokenAuthority) activeAuthToken.current = tokenAuthority;
+    authInstallInFlight.current = true;
+    try {
+      return await installAuthenticatedSession({
+        result,
+        hydrate,
+        shouldContinue: () => authMounted.current && attempt === authAttemptGeneration.current,
+        beforeHydrate,
+        beforePublish: async () => {
+          try {
+            await storage.removeItem('cairn_logout_marker');
+            crashLogger.breadcrumb('login:marker_cleared');
+          } catch { /* account installation remains safe without the UX marker */ }
+        },
+        publish: (user) => {
+          useAppStore.setState({ user, isLoggedIn: true, sessionExpired: false });
+        },
+      });
+    } finally {
+      authInstallInFlight.current = false;
+      if (activeAuthTransition.current?.id === transition?.id) activeAuthTransition.current = null;
+      if (activeAuthToken.current?.generation === tokenAuthority?.generation
+        && activeAuthToken.current?.token === tokenAuthority?.token) {
+        activeAuthToken.current = null;
+      }
+    }
+  };
+
+  const releasePendingAuthAuthorityIfUnmounted = (): boolean => {
+    if (authMounted.current) return false;
+    const released = releaseAuthScreenAuthorityOnUnmount({
+      installationInFlight: authInstallInFlight.current,
+      transition: activeAuthTransition.current,
+      token: activeAuthToken.current,
+    });
+    if (released) {
+      activeAuthTransition.current = null;
+      activeAuthToken.current = null;
+    }
+    return true;
+  };
 
   // ── 2026-08-16 concept views (rows 01–06 of auth-scan) ────────────────
   // Concept 1.5 Complete Profile — separate Display Name + DOB collector.
@@ -1030,6 +1117,7 @@ export function AuthScreen() {
     // stale render. /login handler sets restoreDeadline on hint='pending_deletion',
     // otherwise it stays empty — but we defensively clear on every view change.
     setRestoreDeadline('');
+    setRestoreAuthority(null);
     submitAttempted.current = false;
   };
 
@@ -1110,6 +1198,8 @@ export function AuthScreen() {
     }
     if (isRegister && !privacyChecked) { setPrivacyError('Please agree to continue'); valid = false; }
     if (!valid) return;
+    if (authActionFlight.current) return;
+    authActionFlight.current = true;
 
     // R21 (2026-08-17): request GPS permission IN the button click's user-
     // gesture context. Web browsers only show the permission prompt when
@@ -1135,6 +1225,7 @@ export function AuthScreen() {
         : await login(email.trim().toLowerCase(), password);
 
       if (result.error) {
+        if (!authMounted.current) return;
         // 409 = email already registered — guide user to sign in instead
         if (result.error.includes('already exists') || result.error.includes('already registered')) {
           setApiError('An account with this email already exists. Please sign in instead, or use "Continue with Google" if you signed up with Google.');
@@ -1146,6 +1237,7 @@ export function AuthScreen() {
 
       // 2-step registration: backend sent a code to the user's email
       if (result.step === 'verify') {
+        if (!authMounted.current) return;
         setVerifyEmail(result.email || email.trim().toLowerCase());
         setVerifyCode_('');
         setVerifyError('');
@@ -1154,13 +1246,19 @@ export function AuthScreen() {
         return;
       }
 
+      if (result.transitionAuthority) activeAuthTransition.current = result.transitionAuthority;
+      if (result.tokenAuthority) activeAuthToken.current = result.tokenAuthority;
+      if (releasePendingAuthAuthorityIfUnmounted()) return;
+
       // O18 AUTH-01: soft-deleted account — show restore modal instead of
       // continuing to Home. Token is already saved by login() so restore
       // endpoint can authenticate; user must explicitly choose Restore or
       // Cancel (Cancel = sign out without restoring, account will hard-
       // delete when cron sweeps past the deadline).
       if (result.hint === 'pending_deletion' && result.restoreDeadline) {
+        restoreChoiceFlight.current = false;
         setRestoreDeadline(result.restoreDeadline);
+        setRestoreAuthority(result.tokenAuthority ?? null);
         setView('restore_confirm');
         return;
       }
@@ -1171,26 +1269,6 @@ export function AuthScreen() {
       // Backend migration writes a sentinel DOB (2000-01-01) for any legacy
       // user whose dateOfBirth is NULL. Client no longer prompts.
 
-      // Persist or clear remember-me credentials based on the checkbox.
-      // O1 batch 28.5: 用 credentialsStore (SecureStore 加密)。rememberMe=true
-      // 存 {email, password},toggle off = 清 SecureStore (下次不预填密码)。
-      // 用户拍板: 测试向 sim-walker + 生产 UX 都要 remember-me 完整功能。
-      if (!isRegister) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { saveCredentials, clearCredentials } = require('../services/credentialsStore');
-          if (rememberMe) {
-            await saveCredentials({
-              email: email.trim().toLowerCase(),
-              password,
-            });
-          } else {
-            await clearCredentials();
-          }
-        } catch {
-          // Storage failure is non-fatal — the user is signed in either way.
-        }
-      }
       // Re-hydrate stores with new user's data (sessions, markers) BEFORE
       // flipping isLoggedIn / navigating. If we navigated first, Home
       // would render with sessions=[] then re-render once the fetch
@@ -1206,24 +1284,32 @@ export function AuthScreen() {
       // triggered RootNavigator to flash Auth→Home before AuthScreen finished
       // its own setUser+setLoggedIn sequence. Now user+isLoggedIn are set
       // atomically AFTER hydrate() returns (lines below), single React render.
-      await hydrate();
+      const installed = await installAuthenticatedResult(result, async () => {
+        if (isRegister) return;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { saveCredentials, clearCredentials } = require('../services/credentialsStore');
+          if (rememberMe) {
+            await saveCredentials({
+              email: email.trim().toLowerCase(),
+              password,
+            });
+          } else {
+            await clearCredentials();
+          }
+        } catch { /* remember-me failure does not install a stale account */ }
+      });
+      if (!authMounted.current) return;
+      if (!installed) {
+        setApiError('This sign-in was superseded before Cairn could install the account. Please sign in again.');
+        return;
+      }
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../services/bootDiagnostics').markBootPhase('login_after_hydrate');
       } catch {/* ignore */}
-      // Sprint 72 STORY-00549: clear logout marker on successful login so
-      // next cold start can auto-login.
-      try {
-        await storage.removeItem('cairn_logout_marker');
-        crashLogger.breadcrumb('login:marker_cleared');
-      } catch {/* ignore */}
-      // Bug-1 fix: atomic setState so RootNavigator gate `isLoggedIn && user`
-      // evaluates true in one React render, preventing the Auth→Home→Auth flash.
-      if (result.user) {
-        useAppStore.setState({ user: result.user, isLoggedIn: true });
-      } else {
-        setLoggedIn(true);
-      }
+      // installAuthenticatedResult atomically published user + logged-in state
+      // only after the same account/token/transition survived hydration.
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../services/bootDiagnostics').markBootPhase('login_after_setLoggedIn');
@@ -1253,6 +1339,10 @@ export function AuthScreen() {
         // operational difference is the deferral. (Subagent C analysis,
         // 2026-06-24, _review/v319_login_crash_investigation/subagent_C.md.)
         setTimeout(() => {
+          if (!useAppStore.getState().isLoggedIn
+            || String(useAppStore.getState().user?.id ?? '') !== String(result.user?.id ?? '')) {
+            return;
+          }
           try {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             require('../services/bootDiagnostics').markBootPhase('login_settimeout_fired');
@@ -1279,6 +1369,7 @@ export function AuthScreen() {
         }, 0);
       }
     } catch (e: any) {
+      if (!authMounted.current) return;
       const msg: string = e?.message || '';
       const status: number | undefined = e?.status;
       // Sleep-run 2026-08-16: 401 = session/token invalid → dedicated
@@ -1315,7 +1406,8 @@ export function AuthScreen() {
         setApiError('We couldn\'t reach Cairn. Check your connection and try again.');
       }
     } finally {
-      setLoading(false);
+      authActionFlight.current = false;
+      if (authMounted.current) setLoading(false);
     }
   };
 
@@ -1337,10 +1429,13 @@ export function AuthScreen() {
     // error, so we need boot-ok upload of breadcrumbs to reconstruct which
     // step crashed. Every branch and every await is instrumented.
     crashLogger.breadcrumb('apple:handler_start');
+    if (authActionFlight.current) return;
+    authActionFlight.current = true;
     resetErrors();
     if (Platform.OS !== 'ios') {
       crashLogger.breadcrumb(`apple:platform_skip os=${Platform.OS}`);
       Alert.alert('Apple Sign In', 'Apple Sign In is available on iOS only. Please use email or Google on this device.', [{ text: 'OK' }]);
+      authActionFlight.current = false;
       return;
     }
     setAppleLoading(true);
@@ -1352,6 +1447,7 @@ export function AuthScreen() {
       const Crypto = require('expo-crypto');
       crashLogger.breadcrumb('apple:isAvailable_call');
       const available = await AppleAuthentication.isAvailableAsync();
+      if (!authMounted.current) return;
       crashLogger.breadcrumb(`apple:isAvailable_result=${available}`);
       if (!available) {
         Alert.alert('Apple Sign In', 'Apple Sign In is not available on this device (older iOS or unsupported region).', [{ text: 'OK' }]);
@@ -1368,6 +1464,7 @@ export function AuthScreen() {
         Crypto.CryptoDigestAlgorithm.SHA256,
         rawNonce,
       );
+      if (!authMounted.current) return;
       crashLogger.breadcrumb(`apple:nonce_gen_ok raw_len=${rawNonce.length} hash_len=${hashedNonce.length}`);
       crashLogger.breadcrumb('apple:signInAsync_start');
       const credential = await AppleAuthentication.signInAsync({
@@ -1377,6 +1474,7 @@ export function AuthScreen() {
         ],
         nonce: hashedNonce,
       });
+      if (!authMounted.current) return;
       crashLogger.breadcrumb(`apple:signInAsync_ok has_id_token=${!!credential.identityToken} has_fullName=${!!credential.fullName} has_user=${!!credential.user}`);
       const idToken = credential.identityToken;
       if (!idToken) {
@@ -1400,30 +1498,37 @@ export function AuthScreen() {
           crashLogger.breadcrumb(`apple:fullName_from_cache has_cached=${!!cached}`);
         } catch { /* silent */ }
       }
+      if (!authMounted.current) return;
       crashLogger.breadcrumb('apple:loginWithApple_start');
       const { loginWithApple } = require('../services/authService');
       const result = await loginWithApple(idToken, providedName, rawNonce);
       crashLogger.breadcrumb(`apple:loginWithApple_result has_err=${!!result.error} has_user=${!!result.user} hint=${result.hint || 'none'}`);
       if (result.error) {
+        if (!authMounted.current) return;
         Alert.alert('Apple Sign In failed', result.error, [{ text: 'OK' }]);
         return;
       }
+      if (result.transitionAuthority) activeAuthTransition.current = result.transitionAuthority;
+      if (result.tokenAuthority) activeAuthToken.current = result.tokenAuthority;
+      if (releasePendingAuthAuthorityIfUnmounted()) return;
       if (result.hint === 'pending_deletion' && result.restoreDeadline) {
+        restoreChoiceFlight.current = false;
         crashLogger.breadcrumb('apple:pending_deletion_redirect');
         setRestoreDeadline(result.restoreDeadline);
+        setRestoreAuthority(result.tokenAuthority ?? null);
         setView('restore_confirm');
         return;
       }
-      if (result.user) {
-        crashLogger.breadcrumb(`apple:setUser user_id=${result.user.id}`);
-        setUser(result.user);
-      }
       crashLogger.breadcrumb('apple:hydrate_start');
-      await hydrate();
-      crashLogger.breadcrumb('apple:setLoggedIn');
-      setLoggedIn(true);
+      const installed = await installAuthenticatedResult(result);
+      if (!authMounted.current) return;
+      if (!installed) {
+        Alert.alert('Apple Sign In failed', 'The account changed before sign-in could finish. Please try again.', [{ text: 'OK' }]);
+        return;
+      }
       crashLogger.breadcrumb('apple:complete');
     } catch (err: any) {
+      if (!authMounted.current) return;
       // Apple returns an error whose `code` includes ERR_REQUEST_CANCELED
       // when the user swipes away — suppress the alert in that case.
       const code = err?.code || '';
@@ -1432,7 +1537,8 @@ export function AuthScreen() {
       if (code === 'ERR_REQUEST_CANCELED' || code === 'ERR_CANCELED') return;
       Alert.alert('Apple Sign In failed', err?.message || 'Please try again.', [{ text: 'OK' }]);
     } finally {
-      setAppleLoading(false);
+      authActionFlight.current = false;
+      if (authMounted.current) setAppleLoading(false);
       crashLogger.breadcrumb('apple:finally');
     }
   };
@@ -1540,35 +1646,34 @@ export function AuthScreen() {
     const raw = codeOverride ?? verifyCode_;
     const trimmed = raw.replace(/\s/g, '');
     if (trimmed.length !== 6) { setVerifyError('Please enter the 6-digit code.'); return; }
+    if (authActionFlight.current) return;
+    authActionFlight.current = true;
     setVerifyLoading(true);
     setVerifyError('');
-    const result = await verifyCode(verifyEmail, trimmed);
-    setVerifyLoading(false);
-    if (result.error) {
-      // R21 (2026-08-17 user "invalid code 页面不对 应该停留在 6 位验证码页面
-      // 让我可以改 继续输"): stay on verify_email view, show error inline
-      // below the OTP boxes. Previously routed to a dedicated 'invalid_code'
-      // splash which was a dead-end — user had to Back to Sign In and
-      // restart the entire flow.
-      setVerifyError(result.error);
-      return;
-    }
-    // Sprint 72 STORY-00549: verify (registration) also counts as fresh login
     try {
-      await storage.removeItem('cairn_logout_marker');
-      crashLogger.breadcrumb('login:marker_cleared');
-    } catch {/* ignore */}
-    // R21 (2026-08-17): setUser FIRST, then setLoggedIn — reversed order.
-    // RootNavigator gate is `isLoggedIn && user`; if we flipped isLoggedIn
-    // first, gate could evaluate true-and-null for one render, breaking
-    // screens that assert user!.  Order matters.
-    if (result.user) setUser(result.user);
-    setLoggedIn(true);
-    await hydrate();
-    // R21 (2026-08-17): register verify success → straight to Home.
-    // OnboardingModal (4-page tour, gated by hasCompletedOnboarding)
-    // covers any settling / welcome moment. No welcome view / no timeout.
-    nav.replace('Home');
+      const result = await verifyCode(verifyEmail, trimmed);
+      if (result.error) {
+        if (!authMounted.current) return;
+        // Stay on the verification form so a known-invalid code is editable.
+        setVerifyError(result.error);
+        return;
+      }
+      if (result.transitionAuthority) activeAuthTransition.current = result.transitionAuthority;
+      if (result.tokenAuthority) activeAuthToken.current = result.tokenAuthority;
+      if (releasePendingAuthAuthorityIfUnmounted()) return;
+      const installed = await installAuthenticatedResult(result);
+      if (!authMounted.current) return;
+      if (!installed) {
+        setVerifyError('The account changed before verification could finish. Please sign in.');
+        return;
+      }
+      if (String(useAppStore.getState().user?.id ?? '') === String(result.user?.id ?? '')) {
+        nav.replace('Home');
+      }
+    } finally {
+      authActionFlight.current = false;
+      if (authMounted.current) setVerifyLoading(false);
+    }
   };
 
   const handleResend = async () => {
@@ -2368,10 +2473,20 @@ export function AuthScreen() {
             style={[styles.primaryBtn, { width: '100%', marginTop: Spacing.xs }]}
             disabled={restoreLoading}
             onPress={async () => {
+              if (restoreChoiceFlight.current) return;
+              restoreChoiceFlight.current = true;
               setRestoreLoading(true);
               try {
-                const r = await restoreAccount();
+                const r = await restoreAccount(
+                  restoreAuthority ?? undefined,
+                  activeAuthTransition.current ?? undefined,
+                );
                 if (r.error) {
+                  if (!authMounted.current) return;
+                  if (r.hint === 'commit_unknown' || r.hint === 'account_gone' || r.hint === 'save_token_failed' || r.hint === 'session_missing') {
+                    activeAuthTransition.current = null;
+                    activeAuthToken.current = null;
+                  }
                   // AUTH-3: explicit English OK button — no Chinese "好" from
                   // system locale default. If session missing, guide user
                   // back to sign-in rather than leaving them stuck in the modal.
@@ -2388,16 +2503,26 @@ export function AuthScreen() {
                     Alert.alert('Account permanently deleted', r.error, [
                       { text: 'Sign in', onPress: () => handleViewChange('login') },
                     ]);
+                  } else if (r.hint === 'commit_unknown' || r.hint === 'save_token_failed') {
+                    Alert.alert('Restore result', r.error, [
+                      { text: 'Sign in', onPress: () => handleViewChange('login') },
+                    ]);
                   } else {
                     Alert.alert('Restore failed', r.error, [{ text: 'OK' }]);
                   }
                   return;
                 }
-                if (r.user) setUser(r.user);
-                await hydrate();
-                setLoggedIn(true);
+                if (r.transitionAuthority) activeAuthTransition.current = r.transitionAuthority;
+                if (r.tokenAuthority) activeAuthToken.current = r.tokenAuthority;
+                if (releasePendingAuthAuthorityIfUnmounted()) return;
+                const installed = await installAuthenticatedResult(r);
+                if (!authMounted.current) return;
+                if (!installed) {
+                  Alert.alert('Restore failed', 'The account changed before restore could finish. Please sign in again.', [{ text: 'OK' }]);
+                }
               } finally {
-                setRestoreLoading(false);
+                restoreChoiceFlight.current = false;
+                if (authMounted.current) setRestoreLoading(false);
               }
             }}>
             {restoreLoading
@@ -2407,12 +2532,30 @@ export function AuthScreen() {
           <TouchableOpacity
             testID="btn-cancel-restore"
             style={{ paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm, marginTop: Spacing.sm }}
+            disabled={restoreLoading}
             onPress={async () => {
+              if (restoreChoiceFlight.current) return;
+              restoreChoiceFlight.current = true;
+              setRestoreLoading(true);
               // Just sign out — do not restore. Account will hard-delete on cron.
+              const restoreTransition = activeAuthTransition.current;
               try {
                 const { logout: logoutSvc } = require('../services/authService');
-                await logoutSvc();
+                await logoutSvc({
+                  expectedAuthority: restoreAuthority ?? undefined,
+                  expectedUserId: restoreAuthority?.ownerUserId ?? undefined,
+                  transitionAuthority: restoreTransition ?? undefined,
+                });
               } catch { /* silent */ }
+              if (!authMounted.current) {
+                restoreChoiceFlight.current = false;
+                return;
+              }
+              if (restoreTransition) finishAccountTransition(restoreTransition);
+              activeAuthTransition.current = null;
+              activeAuthToken.current = null;
+              restoreChoiceFlight.current = false;
+              setRestoreLoading(false);
               // AUTH-3 (2026-08-11): use handleViewChange so form inputs +
               // errors reset (previously setView('login') left stale
               // email/password prefilled from the account that was just
@@ -2479,11 +2622,14 @@ export function AuthScreen() {
             }}
             disabled={forgotLoading || resendCooldown > 0}
             onPress={async () => {
+              if (authActionFlight.current) return;
               const eErr = validateEmail(forgotEmail);
               if (eErr) { setForgotError(eErr); return; }
+              authActionFlight.current = true;
               setForgotLoading(true);
               try {
                 const r = await passwordResetRequest(forgotEmail.trim().toLowerCase());
+                if (!authMounted.current) return;
                 if (r.rateLimited) {
                   // R21 (2026-08-17 user "限流了应该告诉我 多久后再试"):
                   // Show explicit rate-limit message + start countdown so
@@ -2494,13 +2640,15 @@ export function AuthScreen() {
                   return;
                 }
                 if (r.error) { setForgotError(r.error); return; }
+                setForgotResultUnknown(false);
                 if (r.devCode) setForgotCode(r.devCode);
                 setForgotError('');
                 setCodeSentEmail(forgotEmail.trim().toLowerCase());
                 startResendCooldown(60);
                 setView('forgot_verify');
               } finally {
-                setForgotLoading(false);
+                authActionFlight.current = false;
+                if (authMounted.current) setForgotLoading(false);
               }
             }}
             scale={0.98}
@@ -2572,10 +2720,12 @@ export function AuthScreen() {
               marginTop: 32,
               opacity: forgotLoading ? 0.6 : 1,
             }}
-            disabled={forgotLoading}
+            disabled={forgotLoading || forgotResultUnknown}
             onPress={async () => {
+              if (authActionFlight.current) return;
               if (forgotCode.length !== 6) { setForgotError('Enter the 6-digit code'); return; }
               if (forgotNewPassword.length < 8) { setForgotError('Password must be 8+ characters'); return; }
+              authActionFlight.current = true;
               setForgotLoading(true);
               try {
                 const r = await passwordResetVerify(
@@ -2583,12 +2733,23 @@ export function AuthScreen() {
                   forgotCode,
                   forgotNewPassword,
                 );
-                if (r.error) { setForgotError(r.error); return; }
-                if (r.user) setUser(r.user);
-                await hydrate();
-                setLoggedIn(true);
+                if (r.error) {
+                  if (!authMounted.current) return;
+                  if (r.hint === 'commit_unknown') setForgotResultUnknown(true);
+                  setForgotError(r.error);
+                  return;
+                }
+                if (r.transitionAuthority) activeAuthTransition.current = r.transitionAuthority;
+                if (r.tokenAuthority) activeAuthToken.current = r.tokenAuthority;
+                if (releasePendingAuthAuthorityIfUnmounted()) return;
+                const installed = await installAuthenticatedResult(r);
+                if (!authMounted.current) return;
+                if (!installed) {
+                  setForgotError('The account changed before reset sign-in could finish. Sign in with the new password.');
+                }
               } finally {
-                setForgotLoading(false);
+                authActionFlight.current = false;
+                if (authMounted.current) setForgotLoading(false);
               }
             }}
             scale={0.98}

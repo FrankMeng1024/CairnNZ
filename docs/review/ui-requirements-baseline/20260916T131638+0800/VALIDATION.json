@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "audit_id": "20260916T131638+0800",
+  "validated_at": "2026-09-16T06:36:05.630Z",
+  "result": "PASS",
+  "checks": {
+    "required_files": {
+      "expected": 14,
+      "present": 14
+    },
+    "requirements": {
+      "count": 57,
+      "complete": true
+    },
+    "capability_crosswalk": {
+      "original": 33,
+      "crosswalk": 33,
+      "all_covered": true
+    },
+    "evidence_references": {
+      "evidence_count": 110,
+      "valid": true
+    },
+    "visuals": {
+      "captures": 41,
+      "boards": 3,
+      "files_present": true
+    },
+    "html": {
+      "local_links": 88,
+      "all_resolve": true
+    },
+    "csv": {
+      "physical_lines": 58,
+      "expected": 58
+    },
+    "proposed_card": {
+      "count": 1,
+      "card_id": "CARD-01",
+      "status": "AWAITING_USER_APPROVAL"
+    },
+    "privacy_exclusions": {
+      "files_scanned": 59,
+      "forbidden_candidates": 0
+    },
+    "unrelated_worktree": {
+      "expected_sha256": "7168e85b85b374b5e399e0d718d30e60a3df1946ed7039f5b054c72917b109d6",
+      "actual_sha256": "7168e85b85b374b5e399e0d718d30e60a3df1946ed7039f5b054c72917b109d6",
+      "preserved": true,
+      "unrelated_entries": 321
+    },
+    "zip": {
+      "path": "/Users/mzm/Desktop/Cairn_UI_Requirements_Audit_20260916T131638+0800.zip",
+      "entries": 63,
+      "includes_all_captures": true
+    }
+  },
+  "failures": []
+}

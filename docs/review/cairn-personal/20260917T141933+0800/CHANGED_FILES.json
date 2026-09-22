@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T141933+0800",
+  "source_files": [
+    {"path": "app/src/components/OtaBadge.tsx", "baseline": "PRE_EXISTING_DIRTY"},
+    {"path": "app/src/features/cairns/cairnIdentity.ts", "baseline": "NEW"},
+    {"path": "app/src/features/memory/screens/MemoryScreen.tsx", "baseline": "PRE_EXISTING_DIRTY"},
+    {"path": "app/src/features/memory/services/mapboxAdapter.web.tsx", "baseline": "PRE_EXISTING_DIRTY"},
+    {"path": "app/src/features/plant/services/noteEncoding.ts", "baseline": "PRE_EXISTING_DIRTY"},
+    {"path": "app/src/navigation/RootNavigator.tsx", "baseline": "PRE_EXISTING_DIRTY"},
+    {"path": "app/src/screens/AllCairnsScreen.tsx", "baseline": "NEW"},
+    {"path": "app/src/screens/MarkerDetailScreen.tsx", "baseline": "PRE_EXISTING_DIRTY"},
+    {"path": "app/src/services/offlineEntity.ts", "baseline": "PRE_EXISTING_DIRTY"},
+    {"path": "app/src/store/useMarkerStore.ts", "baseline": "PRE_EXISTING_DIRTY"},
+    {"path": "backend/src/routes/markers.js", "baseline": "PRE_EXISTING_DIRTY"},
+    {"path": "backend/src/services/ownedCairnLibrary.js", "baseline": "NEW"}
+  ],
+  "test_files": [
+    {"path": "app/__tests__/plantTitleBody.test.ts", "baseline": "PRE_EXISTING_DIRTY"},
+    {"path": "app/src/features/cairns/__tests__/cairnIdentity.test.ts", "baseline": "NEW"},
+    {"path": "app/src/features/cairns/__tests__/cairnPersonalContracts.test.ts", "baseline": "NEW"},
+    {"path": "app/src/features/plant/services/__tests__/noteEncoding.test.ts", "baseline": "NEW"},
+    {"path": "app/src/services/__tests__/offlineCommittedEntity.test.ts", "baseline": "PRE_EXISTING_DIRTY"},
+    {"path": "app/src/store/__tests__/useMarkerStore.fastAck.test.ts", "baseline": "NEW"},
+    {"path": "backend/src/services/__tests__/ownedCairnLibrary.test.js", "baseline": "NEW"}
+  ],
+  "audit_root": "docs/review/cairn-personal/20260917T141933+0800",
+  "audit_files_exact_inventory": "MANIFEST.sha256",
+  "unrelated_dirty_work": "PRESERVED"
+}
+

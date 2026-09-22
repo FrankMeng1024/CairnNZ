@@ -1,0 +1,153 @@
+{
+  "forensic": {
+    "date": "2026-09-10",
+    "timezone": "Asia/Shanghai",
+    "readOnly": true,
+    "primaryQaSessionId": "qa-mtvixnmb-iim3w848",
+    "confidence": "high"
+  },
+  "software": {
+    "otaMarker": "O43",
+    "appVersion": "0.2.6",
+    "buildNumber": "56",
+    "deviceOs": "ios",
+    "osVersion": "26.6.1",
+    "gitHead": "4fb85bc3173aff11fd4ff7b34ce7feefc561d9cc",
+    "originMaster": "4fb85bc3173aff11fd4ff7b34ce7feefc561d9cc",
+    "testedCommitEmbeddedInTelemetry": false
+  },
+  "candidateSessions": [
+    {
+      "qaSessionId": "qa-mtviplr2-g1xlb7sr",
+      "startShanghai": "2026-09-10T20:42:56.990+08:00",
+      "endShanghai": "2026-09-10T20:42:58.611+08:00",
+      "events": 4,
+      "classification": "idle setup envelope; not the walk"
+    },
+    {
+      "qaSessionId": "qa-mtviwils-4ms24c1n",
+      "startShanghai": "2026-09-10T20:48:19.504+08:00",
+      "endShanghai": "2026-09-10T20:57:42.347+08:00",
+      "events": 7,
+      "classification": "logger/upload shell associated with Activity suffix 2e7dbfd6; supporting session, no GPS evidence"
+    },
+    {
+      "qaSessionId": "qa-mtvixnmb-iim3w848",
+      "startShanghai": "2026-09-10T20:49:12.659+08:00",
+      "endShanghai": "2026-09-10T20:58:00.573+08:00",
+      "events": 576,
+      "rawSizeBytes": 470860,
+      "classification": "primary real-device Hike"
+    }
+  ],
+  "activity": {
+    "serverSessionId": 2067,
+    "userId": 72,
+    "clientActivityId": "70f69c8e-028b-4e8d-89bc-20592e7dbfd6",
+    "type": "hiking",
+    "startUtc": "2026-09-10T12:49:13.000Z",
+    "finalized": false,
+    "serverDisplayPointsAtInspection": 41,
+    "serverRawPointsAtInspection": null,
+    "note": "unfinished incremental server shell; the local telemetry reached 75 canonical points"
+  },
+  "counts": {
+    "events": 576,
+    "rawObservations": 85,
+    "accepted": 75,
+    "rejected": 10,
+    "quarantined": 0,
+    "acceptanceRatio": 0.8824,
+    "explicitGaps": 4,
+    "backgroundCallbacks": 0
+  },
+  "decisionReasons": {
+    "ACCEPT:first-trusted-fix": 4,
+    "ACCEPT:coherent-motion": 71,
+    "REJECT:poor-horizontal-accuracy": 10
+  },
+  "metrics": {
+    "rawInterArrivalMs": { "n": 84, "p50": 5000, "p90": 8700.7, "p95": 12976.65, "max": 57082 },
+    "acceptedInterArrivalMs": { "n": 74, "p50": 5000, "p90": 9999.7, "p95": 15699, "max": 60460 },
+    "horizontalAccuracyAllM": { "n": 85, "p50": 14.25, "p90": 26.24, "p95": 29.71, "max": 38.65 },
+    "horizontalAccuracyAcceptedM": { "n": 75, "p50": 14.25, "p90": 16.054, "p95": 18.593, "max": 24.84 },
+    "horizontalAccuracyRejectedM": { "n": 10, "p50": 29.14, "p90": 37.516, "p95": 38.083, "max": 38.65 },
+    "nativeTimestampToExpoCallbackMs": { "n": 85, "p50": 97, "p90": 104.6, "p95": 169.4, "max": 4371 },
+    "callbackToCanonicalDecisionMs": { "n": 85, "p50": 0, "p90": 1, "p95": 1, "max": 1 },
+    "nativeTimestampToShapeSourceRequestMs": { "n": 75, "p50": 139, "p90": 154.8, "p95": 163.9, "max": 339 },
+    "expoCallbackToShapeSourceRequestMs": { "n": 75, "p50": 41, "p90": 55.8, "p95": 62.5, "max": 105 },
+    "journalCommitRetainedCheckpointsMs": { "n": 12, "p50": 35.5, "p90": 45.7, "p95": 54.1, "max": 64 },
+    "commitToStoreRetainedCheckpointsMs": { "n": 12, "p50": 0, "p90": 0.9, "p95": 1, "max": 1 }
+  },
+  "coherentMotion": {
+    "count": 71,
+    "dtMs": { "p50": 5000, "p90": 8000, "p95": 11000, "max": 25000 },
+    "displacementM": { "p50": 5.67, "p90": 7.83, "p95": 9.825, "max": 14.71 },
+    "reportedSpeedMps": { "n": 70, "p50": 0.925, "p90": 1.331, "p95": 1.4, "max": 1.86 },
+    "displacementBuckets": { "under4m": 0, "4mToUnder5m": 0, "5mToUnder8m": 64, "8mOrMore": 7 },
+    "dtVsDisplacementPearson": 0.109,
+    "reportedSpeedVsDisplacementPearson": -0.097,
+    "causationWarning": "The sharp 5 m accepted-edge floor is consistent with distanceFilter=5 shaping delivery, but telemetry lacks raw-to-prior-raw displacement and cannot prove sole causation."
+  },
+  "longestRawCallbackGaps": [
+    { "fromRaw": 82, "toRaw": 83, "durationMs": 57082, "fromShanghai": "20:56:44.999", "toShanghai": "20:57:42.081", "context": "app background; foreground-only authorization" },
+    { "fromRaw": 74, "toRaw": 75, "durationMs": 25000, "fromShanghai": "20:55:35.001", "toShanghai": "20:56:00.001", "context": "foreground" },
+    { "fromRaw": 75, "toRaw": 76, "durationMs": 16999, "fromShanghai": "20:56:00.001", "toShanghai": "20:56:17.000", "context": "foreground" },
+    { "fromRaw": 33, "toRaw": 34, "durationMs": 14999, "fromShanghai": "20:51:36.002", "toShanghai": "20:51:51.001", "context": "foreground" },
+    { "fromRaw": 71, "toRaw": 72, "durationMs": 13149, "fromShanghai": "20:55:16.000", "toShanghai": "20:55:29.149", "context": "background handoff / foreground reacquisition" }
+  ],
+  "foregroundIosConfiguration": {
+    "expoLocationVersion": "19.0.8",
+    "service": "CLLocationManager standard location service via startUpdatingLocation",
+    "managerInstance": "Expo BaseLocationProvider-owned CLLocationManager",
+    "desiredAccuracy": "kCLLocationAccuracyBestForNavigation",
+    "distanceFilterM": 5,
+    "allowsBackgroundLocationUpdates": false,
+    "timeIntervalRequestedByJavascriptMs": "dynamic 2000 or 3000",
+    "timeIntervalIosRuntimeEffect": "none; omitted from Expo iOS LocationOptions",
+    "activityType": "CLLocationManager default (not set by Expo foreground provider)",
+    "pausesLocationUpdatesAutomatically": "CLLocationManager default (not set by Expo foreground provider)",
+    "batchHandling": "Expo receives [CLLocation] and exports only locations.last to JavaScript"
+  },
+  "currentPosition": {
+    "rnmapboxVersion": "10.3.1",
+    "nativeMapboxConstraint": "~> 11.20.1",
+    "exactCompiledNativePatch": "not proven; no Podfile.lock/native build manifest in repository or telemetry",
+    "component": "Mapbox.UserLocation",
+    "locationPuckComponentUsed": false,
+    "renderMode": "normal",
+    "animated": true,
+    "animationDurationMs": 1000,
+    "animationEasing": "linear",
+    "minDisplacementM": 0,
+    "provider": "separate RNMapbox AppleLocationProvider / CLLocationManager subscription",
+    "desiredAccuracy": "kCLLocationAccuracyBest (Mapbox AppleLocationProvider default)",
+    "activityType": "other (Mapbox AppleLocationProvider default)",
+    "rendering": "JavaScript UserLocation state -> animated Annotation -> Animated.ShapeSource",
+    "sourceCallbackInstrumented": true,
+    "renderedInterpolatedPositionInstrumented": false,
+    "warning": "RNMapbox emits the same JS update event for location and heading updates; cumulative callback counts are not coordinate cadence."
+  },
+  "directStreamComparison": [
+    {
+      "shanghai": "20:55:27.000",
+      "finding": "RNMapbox observed a 27.71 m-accuracy source location while the Cairn foreground watcher was inactive until takeover at 20:55:29.264."
+    },
+    {
+      "shanghai": "20:57:42.081",
+      "finding": "RNMapbox and Cairn observed the same or near-identical 27.93 m estimate; Cairn rejected it at the 25 m gate after foreground restart."
+    },
+    {
+      "shanghai": "20:58:00.000",
+      "finding": "RNMapbox observed a 14.02 m-accuracy source estimate about 8.3 seconds newer than Cairn's last raw Activity observation before the app became inactive."
+    }
+  ],
+  "limitations": [
+    "No rendered/interpolated current-position coordinate or paint timestamp is logged.",
+    "No source-vs-heading discriminator exists on retained RNMapbox UserLocation callbacks.",
+    "No raw-to-previous-raw displacement is logged, so distanceFilter causation cannot be isolated.",
+    "No Mapbox ShapeSource/GPU paint-completion event is correlated to a canonical version.",
+    "Physical movement onset has no independent ground-truth timestamp.",
+    "The Activity was not finished in the retained evidence, so matching/Save are outside this incident."
+  ]
+}

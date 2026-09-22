@@ -1,0 +1,40 @@
+{
+  "schema": "cairnnz.v1-closure.command-receipt.v1",
+  "queueItem": "A4",
+  "sourceFingerprint": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+  "sourceFingerprintFileCount": 633,
+  "command": "cd app && npm run verify:changed",
+  "startedAt": "2026-09-19T22:51:50+08:00",
+  "completedAt": "2026-09-19T22:56:20+08:00",
+  "exitCode": 1,
+  "result": "FAIL",
+  "routerGate": "full",
+  "summary": {
+    "testSuitesPassed": 109,
+    "testSuitesFailed": 11,
+    "testSuitesTotal": 120,
+    "testsPassed": 1124,
+    "testsFailed": 27,
+    "testsSkipped": 3,
+    "testsTotal": 1154,
+    "elapsedSecondsReportedByJest": 239.717
+  },
+  "failedSuites": [
+    "__tests__/useAppStore.test.ts",
+    "src/services/__tests__/editDiagSender.test.ts",
+    "src/utils/__tests__/geo-kalman.test.ts",
+    "src/utils/__tests__/geo-dynamic-sampling.test.ts",
+    "src/utils/__tests__/geo-route.test.ts",
+    "src/services/routing/corridor/__tests__/CorridorQuery.test.ts",
+    "src/features/memory/__tests__/revision03MemoryScale.test.ts",
+    "__tests__/i18n.test.ts",
+    "tests/route-following/route-following.spec.ts",
+    "tests/sprint74/v409-offline-reliability.spec.ts",
+    "tests/post-cleanup/regression.spec.ts"
+  ],
+  "completeOutput": "verify-changed-resumed.log",
+  "completeOutputSha256": "08185c7534cde085cf69371448dc5fd2bb93cf3e435a21c06d7a74c916a821a4",
+  "completeOutputBytes": 47770,
+  "processStateAfterCommand": "STOPPED",
+  "classification": "Failure retained for assertion-by-assertion diagnosis; no unchanged retry was performed."
+}

@@ -490,4 +490,119 @@ describe('Cairn create acknowledgement ordering', () => {
       expect.objectContaining({ id: 'local-cairn', syncState: 'pending' }),
     ]);
   });
+
+  describe('marker hydration authority', () => {
+    test('guest hydration keeps local Cairns and makes zero authenticated backend calls', async () => {
+      mockMarkerCache.set('cairn_markers_v026_guest', JSON.stringify([{
+        id: 'guest-local-cairn',
+        clientCairnId: 'guest-local-cairn',
+        type: 'cairn',
+        regionCode: 'nz',
+        lat: -43.5,
+        lng: 170.1,
+        note: 'Local guest fallback',
+        authorId: 'guest',
+        createdAt: 1,
+        permission: 'personal',
+        synced: false,
+        syncState: 'pending',
+      }]));
+
+      await useMarkerStore.getState().hydrate('guest');
+      await settle();
+
+      expect(mockAuthenticatedFetch).not.toHaveBeenCalled();
+      expect(useMarkerStore.getState()).toMatchObject({
+        userId: 'guest',
+        markers: [expect.objectContaining({ id: 'guest-local-cairn', note: 'Local guest fallback' })],
+      });
+    });
+
+    test('authenticated hydration still fetches and publishes the matching owner response', async () => {
+      mockAuthenticatedFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [{
+          id: 91,
+          client_cairn_id: 'owner-a-client-cairn',
+          user_id: 'owner-a',
+          type: 'cairn',
+          text: 'Authenticated server Cairn',
+          lat: -43.51,
+          lng: 170.11,
+          permission: 'personal',
+          created_at: '2026-09-10T01:00:00.000Z',
+        }],
+      });
+
+      await useMarkerStore.getState().hydrate('owner-a');
+      await settle();
+
+      expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+      expect(mockAuthenticatedFetch).toHaveBeenCalledWith('/api/markers');
+      expect(useMarkerStore.getState()).toMatchObject({
+        userId: 'owner-a',
+        markers: [expect.objectContaining({
+          id: 'owner-a-client-cairn',
+          serverCairnId: '91',
+          note: 'Authenticated server Cairn',
+        })],
+      });
+    });
+
+    test('an account transition cannot publish an older hydration response', async () => {
+      let resolveOwnerA!: (value: unknown) => void;
+      mockAuthenticatedFetch
+        .mockImplementationOnce(() => new Promise(resolve => { resolveOwnerA = resolve; }))
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => [{
+            id: 202,
+            client_cairn_id: 'owner-b-client-cairn',
+            user_id: 'owner-b',
+            type: 'cairn',
+            text: 'Owner B server truth',
+            lat: -42,
+            lng: 171,
+            permission: 'personal',
+            created_at: '2026-09-11T01:00:00.000Z',
+          }],
+        });
+
+      await useMarkerStore.getState().hydrate('owner-a');
+      await useMarkerStore.getState().hydrate('owner-b');
+      await settle();
+      expect(useMarkerStore.getState()).toMatchObject({
+        userId: 'owner-b',
+        markers: [expect.objectContaining({ id: 'owner-b-client-cairn', note: 'Owner B server truth' })],
+      });
+
+      resolveOwnerA({
+        ok: true,
+        status: 200,
+        json: async () => [{
+          id: 101,
+          client_cairn_id: 'owner-a-client-cairn',
+          user_id: 'owner-a',
+          type: 'cairn',
+          text: 'Late owner A response',
+          lat: -43,
+          lng: 170,
+          permission: 'personal',
+          created_at: '2026-09-09T01:00:00.000Z',
+        }],
+      });
+      await settle();
+
+      expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(2);
+      expect(useMarkerStore.getState().userId).toBe('owner-b');
+      expect(useMarkerStore.getState().markers).toEqual([
+        expect.objectContaining({ id: 'owner-b-client-cairn', note: 'Owner B server truth' }),
+      ]);
+      expect(useMarkerStore.getState().markers).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ note: 'Late owner A response' }),
+      ]));
+    });
+  });
 });

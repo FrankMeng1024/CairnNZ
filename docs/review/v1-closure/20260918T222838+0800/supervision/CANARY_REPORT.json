@@ -1,0 +1,76 @@
+{
+  "schema": "cairnnz.v1-closure.supervision.canary-report.v1",
+  "runId": "20260918T222838+0800",
+  "status": "INTERRUPTED_NOT_PASS",
+  "recommendation": "NO_AUTOMATIC_RERUN_FUNCTIONAL_WORK_MAY_RESUME",
+  "startedAt": "2026-09-19T23:46:03+08:00",
+  "reportNotBefore": "2026-09-20T00:16:03+08:00",
+  "ownerRecoverOnlyObservedAt": "2026-09-20T00:13:40+08:00",
+  "observer": {
+    "execSessionId": 97758,
+    "pid": 6075,
+    "output": "/Users/mzm/Desktop/cairn_revision03_work/supervision/canary-20260919T234603p0800-observer.jsonl",
+    "firstSampleAt": "2026-09-19T23:48:02.465+08:00",
+    "lastSampleAt": "2026-09-20T00:16:02.622+08:00",
+    "samples": 29,
+    "observedSamples": 11,
+    "uncertainSamples": 18,
+    "terminalExitCode": 130,
+    "terminalDisposition": "DELIBERATELY_STOPPED_AFTER_TIME_BOUNDARY_FOR_RECOVER_ONLY",
+    "liveAfterCheckpoint": false
+  },
+  "identity": {
+    "rootSessionId": "01a0b4c1-b498-76e0-95bd-1976d11586f2",
+    "rootModel": "gpt-5.6-sol",
+    "rootReasoningEffort": "ultra",
+    "childModel": "gpt-5.6-sol",
+    "childReasoningEffort": "xhigh",
+    "fast": "OFF",
+    "sourceFingerprintAtStart": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+    "sourceFileCountAtStart": 633,
+    "sourceFingerprintAtCheckpoint": "cab465fa6ff734ac5ad6b1c5f13e2076c13cf350b26207dae9b05e009768a604",
+    "sourceFileCountAtCheckpoint": 636
+  },
+  "workers": [
+    {
+      "agentId": "/root/rev03_a4_resume",
+      "threadId": "01a0ba25-8dab-73e2-a33b-4f5fec5dfe4b",
+      "generationAtCheckpoint": 3
+    },
+    {
+      "agentId": "/root/homepage_material_lane",
+      "threadId": "01a0ba25-bc6b-7471-b132-dc5df466a815",
+      "generationAtCheckpoint": 2
+    },
+    {
+      "agentId": "/root/functional_verification_lane",
+      "threadId": "01a0ba25-efc8-72b3-95a4-ef06c5feb810",
+      "generationAtCheckpoint": 4
+    }
+  ],
+  "usefulProgress": [
+    "A4 constrained-heap/profile sensitivity diagnosis completed without erasing the 180 ms >150 ms FAIL/OPEN result.",
+    "FR-CIRCLE-ACCOUNT-01 reached focused RED-to-GREEN PASS.",
+    "An external Public-disabled API/MySQL harness candidate was prepared but remains unapplied and unrun.",
+    "FR-MEM-HIDE-01 reached focused RED-to-GREEN PASS.",
+    "Homepage Candidate A and reproducible material metrics were prepared externally; loaded-App validation remains NOT_RUN.",
+    "Settings account refresh, profile save, and delete single-flight defects were reproduced through real SettingsScreen handlers; all three remain RED.",
+    "FR-DISCOVERY-500 starvation condition was confirmed and an external byte-identical harness copy prepared; patch/manifest/runtime remain NOT_RUN."
+  ],
+  "supervisionFindings": [
+    "No duplicate primary-tree writer was observed; only /root/rev03_a4_resume held the writer lease.",
+    "No worker-owned migration, deployment, MySQL write, browser, or server had an unknown outcome at recovery.",
+    "The read-only observer correctly reported prolonged UNCERTAIN state after rootProgressObservedAt stopped advancing at 23:55:25, even though later artifacts existed. This is an update-cadence gap, not evidence of semantic failure or success.",
+    "The owner issued RECOVER_ONLY before the no-owner-prompt window closed, so the no-owner-prompt criterion was not met and the window cannot be PASS.",
+    "Every active child checkpointed; the observer was deliberately stopped and its exit 130 is not a test failure or PASS."
+  ],
+  "noOwnerPromptCriterionMet": false,
+  "ownershipViolation": false,
+  "concurrencyViolation": false,
+  "staleOutputMerged": false,
+  "unknownSharedMutation": false,
+  "pending": false,
+  "automaticRerun": false,
+  "runtimeIntentClearedAt": "2026-09-20T10:16:31+08:00",
+  "next": "No automatic canary is pending. Preserve this interrupted NOT PASS evidence and resume controlled functional work."
+}

@@ -1,0 +1,201 @@
+{
+  "schema_version": "1.0",
+  "audit": {
+    "name": "Cairn Blueprint Reality Audit",
+    "mode": "read-only",
+    "window": "2026-09-15/2026-09-16 Asia/Shanghai",
+    "repository": "/Users/mzm/Desktop/cairn/CairnNZ",
+    "review_bundle": "/Users/mzm/Desktop/Cairn_Blueprint_Review",
+    "local_head": "12fa1cd0ef599e53a81cd30537ce761c5e2150ce",
+    "branch": "master",
+    "authority_file_present": false,
+    "verdict": "HOLD_FOR_PRODUCT_REVIEW",
+    "implementation_applied": false,
+    "deployment_applied": false,
+    "ota_applied": false,
+    "production_data_modified": false,
+    "o_marker_modified": false
+  },
+  "evidence_scale": [
+    "current_source",
+    "user_reachability",
+    "automated_proof",
+    "deployed_match",
+    "device_loaded",
+    "real_field_validation"
+  ],
+  "evidence_values": [
+    "YES",
+    "NO",
+    "PARTIAL",
+    "UNKNOWN"
+  ],
+  "release_baseline": {
+    "client": {
+      "app_version": "0.2.6",
+      "runtime_version": "0.2.6",
+      "native_build": "56",
+      "ota_marker": "O56",
+      "eas_update_group": "9b3a3dcc-03b6-4300-a97b-317ee0a7441b",
+      "eas_update_id": "01a09c0e-993b-759b-95e8-084f1f45238f",
+      "ota_bundle_sha256": "b210b673d33f4f88229adc0b9fd9792fd27261425c76b128cb177c8f4bf0ae86",
+      "device_loaded": "UNKNOWN",
+      "real_nz_field_validated": "NO"
+    },
+    "backend": {
+      "public_health": "OK",
+      "production_commit": "6c8e623f1b3b814be7fc67ca08f381d0f3895045",
+      "container_image": "sha256:b7b0f029af695f3e30f7323e42866e568bbb4d65252c6cdb4775b0f7e0a4e181",
+      "artifact_matches_checkout": true,
+      "migration_ledger": "034",
+      "local_migration_035_deployed": false
+    },
+    "coherent_release_contract": false
+  },
+  "critical_findings": [
+    {
+      "id": "P0-FRIEND-FOG-AUTH",
+      "severity": "P0",
+      "state": "DEPLOYED",
+      "finding": "Production lacks the memory subscription authorization/cap trigger and circle fog does not recheck friendship or block state, enabling direct authenticated subscription to arbitrary existing users and exact location-history reads.",
+      "minimum_owner_action": "Do not run a friend-location pilot; approve a new corrective migration plus request/query-time authorization and regression proof in isolated accounts."
+    },
+    {
+      "id": "P0-RELEASE-CONTRACT",
+      "severity": "P0",
+      "state": "DEPLOYED_MISMATCH",
+      "finding": "O56 promises seven-day deletion recovery and calls the feedback endpoint; production uses a five-minute deletion window and has no feedback endpoint/table.",
+      "minimum_owner_action": "Hold external beta and approve a bounded M0 compatibility/release plan before any deployment."
+    },
+    {
+      "id": "P1-IAP-NONOPERATIONAL",
+      "severity": "P1",
+      "state": "PUBLISHED_CLIENT",
+      "finding": "The native SDK exists, but O56 has no RevenueCat public key and no server-authoritative entitlement path; the advertised paid benefit cannot be delivered.",
+      "minimum_owner_action": "Keep purchase launch disabled and verify ASC/RevenueCat/backend lifecycle before making a paid capability available."
+    },
+    {
+      "id": "P1-NO-DEVICE-FIELD-CHAIN",
+      "severity": "P1",
+      "state": "UNVERIFIED",
+      "finding": "No physical-device evidence identifies O56 as loaded and no current NZ field run validates the native build, OTA and production backend together.",
+      "minimum_owner_action": "Capture exact build/runtime/update/backend identity and one consented real-provenance NZ walk after M0 is coherent."
+    }
+  ],
+  "old_finding_classifications": [
+    {
+      "lead": "O56 not published",
+      "classification": "SUPERSEDED"
+    },
+    {
+      "lead": "five-minute account deletion",
+      "classification": "FIXED LOCALLY"
+    },
+    {
+      "lead": "feedback/migration 035 absent",
+      "classification": "FIXED LOCALLY"
+    },
+    {
+      "lead": "memory friendship/cap trigger missing",
+      "classification": "STILL PRESENT"
+    },
+    {
+      "lead": "unfriend/block leaves friend fog access",
+      "classification": "STILL PRESENT"
+    },
+    {
+      "lead": "Plant writes Memory",
+      "classification": "FIXED LOCALLY"
+    },
+    {
+      "lead": "Trails contains Cairn/friend tabs",
+      "classification": "SUPERSEDED"
+    },
+    {
+      "lead": "Route creation is backend-first only",
+      "classification": "SUPERSEDED"
+    },
+    {
+      "lead": "Route provenance is durable",
+      "classification": "STILL PRESENT"
+    },
+    {
+      "lead": "Route correction corridor is 100m",
+      "classification": "SUPERSEDED"
+    }
+  ],
+  "automated_checks": [
+    {
+      "scope": "app focused Jest",
+      "suites_passed": 20,
+      "tests_passed": 179,
+      "tests_failed": 0,
+      "boundary": "local source/unit/contract only"
+    },
+    {
+      "scope": "backend focused Node tests",
+      "files_passed": 3,
+      "tests_passed": 23,
+      "tests_failed": 0,
+      "boundary": "local source/string contract only"
+    }
+  ],
+  "modules": [
+    {
+      "id": "M0",
+      "name": "Trustworthy release baseline",
+      "size": "MEDIUM",
+      "status": "RECOMMENDED_FIRST_AFTER_APPROVAL",
+      "blocks": ["M1", "M2", "M3", "M4", "M5"]
+    },
+    {
+      "id": "M1",
+      "name": "Personal Cairn journal",
+      "size": "MEDIUM",
+      "status": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "M2",
+      "name": "Authorized friend layers",
+      "size": "LARGE",
+      "status": "NOT_AUTHORIZED_SECURITY_CRITICAL"
+    },
+    {
+      "id": "M3",
+      "name": "Encounter and Public Cairns",
+      "size": "LARGE",
+      "status": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "M4",
+      "name": "Trustworthy Routes",
+      "size": "LARGE",
+      "status": "NOT_AUTHORIZED"
+    },
+    {
+      "id": "M5",
+      "name": "Paid entitlement",
+      "size": "LARGE",
+      "status": "NOT_AUTHORIZED"
+    }
+  ],
+  "unverified_owner_checks": [
+    "App Store Connect membership, agreements, tax, banking, build, TestFlight and subscription product state",
+    "RevenueCat app/key/product/offering/entitlement, environment, transfer policy and webhook history",
+    "Mapbox account contract, usage, invoices, alerts, token restrictions and offline storage",
+    "Infrastructure compute, database, backup, egress and email invoices/retention",
+    "Physical-device exact O56 identity and current real NZ field validation"
+  ],
+  "artifacts": [
+    "00_DEPLOYED_BASELINE.md",
+    "01_MEMORY_FRIENDS_PERMISSIONS.md",
+    "02_CAIRN_ENCOUNTERS_ROUTE_TRUST.md",
+    "03_APPLE_BILLING_AND_UNIT_ECONOMICS.md",
+    "04_NZ_BETA_RELEASE_READINESS.md",
+    "05_CAPABILITY_MATRIX_AND_DEPENDENCIES.md",
+    "CAPABILITY_MATRIX.csv",
+    "SUMMARY.md",
+    "HANDOFF.json"
+  ],
+  "next_action": "STOP_FOR_PRODUCT_REVIEW"
+}

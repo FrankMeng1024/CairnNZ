@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "run_id": "20260916T164608+0800",
+  "results": [
+    {
+      "id": "AD-TEST-CORE",
+      "command": "cd app && npm run verify:changed",
+      "status": "PASS",
+      "suites": 33,
+      "tests_passed": 534,
+      "tests_failed": 0,
+      "output": "test-output/verify-changed.txt"
+    },
+    {
+      "id": "AD-TEST-SCOPED",
+      "command": "Focused Activity Detail, Route, Cairn, offline, and page-contract Jest suites",
+      "status": "PASS",
+      "suites": 10,
+      "tests_passed": 55,
+      "tests_failed": 0,
+      "output": "test-output/scoped-regression.txt"
+    },
+    {
+      "id": "AD-TEST-FOCUSED",
+      "command": "Focused identity, metrics, linked-Cairn, rename/delete, Gap, status-copy, independent-Route, duplicate-protection, and destination selection",
+      "status": "PASS",
+      "suites": 6,
+      "tests_passed": 21,
+      "tests_failed": 0,
+      "note": "Superseded in breadth by AD-TEST-CORE and AD-TEST-SCOPED; retained as the first post-implementation focused result."
+    },
+    {
+      "id": "AD-TEST-SESSION-FILE",
+      "command": "npx jest --watchAll=false --runInBand __tests__/useSessionStore.test.ts",
+      "status": "BASELINE_FAILURE_OUTSIDE_TASK",
+      "suites": 1,
+      "tests_passed": 8,
+      "tests_failed": 1,
+      "task_specific_tests_passed": [
+        "renames a synced Activity only after the server accepts it",
+        "renames pending Activity outbox before changing its local projection",
+        "reports a durable queued server deletion without resurrecting the local Activity"
+      ],
+      "unrelated_failure": {
+        "test": "never evicts pending local-authoritative Activities at the 100-item history cap",
+        "expected": 101,
+        "received": 106,
+        "cause": "The test still assumes the old 100 synced-item cap; current source intentionally defines MAX_SESSIONS = 500."
+      },
+      "output": "test-output/session-store-regression.txt"
+    },
+    {
+      "id": "AD-TEST-TSC",
+      "command": "npx tsc --noEmit --pretty false",
+      "status": "BASELINE_FAILURE_NO_SCOPED_DIAGNOSTICS",
+      "repository_diagnostic_count": 170,
+      "task_touched_file_diagnostic_count": 0,
+      "note": "Existing diagnostics are in unrelated preview/generated/test/config files; no dependency or configuration repair was authorized."
+    },
+    {
+      "id": "AD-QA-VISUAL",
+      "command": "capture-activity-detail.mjs then build-product-family-board.mjs",
+      "status": "PASS_WITH_EVIDENCE_BOUNDARY",
+      "captures": 10,
+      "boards": 3,
+      "runtime_errors": 0,
+      "prevented_api_write_attempts": 89,
+      "allowed_product_writes": 0,
+      "renderer": "EXPO_WEB_FALLBACK",
+      "native_mapbox": "UNVERIFIED",
+      "normal_navigation": "NOT_PROVEN_BY_CAPTURE",
+      "output": "visual/capture-results.json"
+    }
+  ],
+  "known_test_warning": "Jest reports the pre-existing unknown setupFilesAfterFramework option in app/package.json.",
+  "acceptance": {
+    "local_implementation_gates": "PASS",
+    "physical_device": "PENDING",
+    "owner": "PENDING"
+  }
+}

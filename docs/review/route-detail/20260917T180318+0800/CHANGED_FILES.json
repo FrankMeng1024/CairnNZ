@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T180318+0800",
+  "source_files": [
+    "app/src/components/Icon.tsx",
+    "app/src/components/OtaBadge.tsx",
+    "app/src/components/map/EditOverlayV274.tsx",
+    "app/src/features/route/routeContracts.ts",
+    "app/src/features/route/__tests__/routeContracts.test.ts",
+    "app/src/features/trails/__tests__/trailsScreenContracts.test.ts",
+    "app/src/screens/HikingScreen.tsx",
+    "app/src/screens/MapHistoryScreen.tsx",
+    "app/src/screens/RouteEditorScreen.tsx",
+    "app/src/screens/RunningScreen.tsx",
+    "app/src/services/offlineEntity.ts",
+    "app/src/services/routeOfflineEntities.ts",
+    "app/src/services/routeService.ts",
+    "app/src/services/routeTombstones.ts",
+    "app/src/services/__tests__/routeService.contract.test.ts",
+    "app/src/services/routing/corridor/PolylineSampler.ts",
+    "app/src/store/useRouteStore.ts",
+    "app/src/store/__tests__/runPreviewFinally.test.ts",
+    "app/src/store/__tests__/useRouteStore.offline.test.ts",
+    "backend/src/middleware/schemas.js",
+    "backend/src/migrations/036_route_origin_identity.sql",
+    "backend/src/models/Route.js",
+    "backend/src/routes/routes.js",
+    "backend/src/routes/__tests__/freeActivityContracts.test.js",
+    "backend/src/routes/__tests__/routeOriginRoundTrip.test.js"
+  ],
+  "task_scoped_patch_file_count": 24,
+  "baseline_limitation": {"file":"app/src/features/trails/__tests__/trailsScreenContracts.test.ts","reason":"PRE_EXISTING_UNTRACKED_DIRECTORY_NOT_IN_ANTICIPATED_BYTE_COPY","final_source_included":true},
+  "unrelated_dirty_work":"PRESERVED"
+}
+

@@ -1,0 +1,50 @@
+
+> app@0.2.6 test
+> jest --watchAll=false --runInBand src/features/memory/__tests__/memoryEvidenceAuthority.test.ts
+
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["@testing-library/jest-native/extend-expect"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+FAIL src/features/memory/__tests__/memoryEvidenceAuthority.test.ts
+  central Memory semantic authority
+    ✓ overlapping Activity, passive and Cairn evidence creates one explored place (4 ms)
+    ✓ distinct explored cells remain independent (2 ms)
+    ✓ server acknowledgement does not replace the client Memory identity or geometry (3 ms)
+    ✕ a later real return preserves presence without inflating coverage (2 ms)
+
+  ● central Memory semantic authority › a later real return preserves presence without inflating coverage
+
+    expect(received).toMatchObject(expected)
+
+    Matcher error: received value must be a non-null object
+
+    Received has value: undefined
+
+      44 |     });
+      45 |
+    > 46 |     expect(first).toMatchObject({ coverageChanged: true, presenceChanged: true });
+         |                   ^
+      47 |     expect(returned).toMatchObject({ coverageChanged: false, presenceChanged: true });
+      48 |     expect(useMemoryStore.getState().points).toHaveLength(1);
+      49 |     expect(useMemoryStore.getState().presenceWitnesses).toHaveLength(2);
+
+      at Object.toMatchObject (src/features/memory/__tests__/memoryEvidenceAuthority.test.ts:46:19)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 3 passed, 4 total
+Snapshots:   0 total
+Time:        1.276 s
+Ran all test suites matching /src\/features\/memory\/__tests__\/memoryEvidenceAuthority.test.ts/i.

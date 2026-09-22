@@ -1,0 +1,9 @@
+{
+  "work_package":"W3",
+  "status":"completed",
+  "verdict":"READY",
+  "completed_at":"2026-09-18T12:40:00+08:00",
+  "delivered":["prospective friend-only Encounter","opaque read-only Cairn/Profile/Route","resource-specific authority","Route start lease","immutable active-outing geometry","borrowed geometry process recovery and terminal cleanup","hidden/unavailable states"],
+  "evidence":["FRIENDS_VERDICT.md","evidence/abcdn-api-mysql-review-final.json","evidence/owner-review-seed-verification.json","evidence/activity-verify-o60-final.log"],
+  "physical_exclusion":"FR-10 physical portion NOT_RUN"
+}

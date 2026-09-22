@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
@@ -11,6 +11,7 @@ import { BackButton } from '../components/BackButton';
 import { Icon } from '../components/Icon';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ModalCard, ModalCardHeader } from '../components/ModalCard';
+import { StateSurface } from '../components/StateSurface';
 import { Colors, FontSize, Radius, Spacing } from '../components/tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
@@ -19,7 +20,10 @@ import { CairnPin } from '../features/memory/components/CairnPinsLayer';
 import { MARKER_TYPES } from '../config/markerTypes';
 import { cairnDisplayTitle, splitTitleBody } from '../features/plant/services/noteEncoding';
 import {
+  capturePublicCairnAccountAuthority,
+  publicCairnAccountAuthorityIsCurrent,
   usePublicCairnStore,
+  type PublicCairnAccountAuthority,
   type PublicCairnDetail,
 } from '../features/public/services/publicCairns';
 
@@ -43,6 +47,48 @@ try {
 type DetailRoute = RouteProp<RootStackParamList, 'PublicCairnDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ReportCategory = 'spam' | 'unsafe' | 'harassment' | 'other';
+interface ScreenActionTicket {
+  attempt: number;
+  resourceId: string;
+  authorId: string;
+  authority: PublicCairnAccountAuthority;
+}
+
+interface ScreenDetailBinding {
+  resourceId: string;
+  authority: PublicCairnAccountAuthority;
+  detail: PublicCairnDetail;
+}
+
+interface ScreenLoadState {
+  attempt: number;
+  resourceId: string;
+  authority: PublicCairnAccountAuthority;
+  loading: boolean;
+  error: string | null;
+}
+
+function detailLoadCode(caught: unknown): string {
+  return String((caught as { code?: unknown } | null)?.code || '');
+}
+
+function detailLoadError(caught: unknown): string {
+  const code = detailLoadCode(caught);
+  return code.includes('expired')
+    ? 'This downloaded copy has expired. Connect to check whether it is still available.'
+    : code.includes('offline')
+      ? 'Connect to download this Cairn.'
+      : 'This Public Cairn is no longer available.';
+}
+
+export function showPublicActionFeedback(title: string, body: string): void {
+  if (Platform.OS === 'web') {
+    const browserGlobal = globalThis as typeof globalThis & { alert: (message?: string) => void };
+    browserGlobal.alert(`${title}\n\n${body}`);
+    return;
+  }
+  Alert.alert(title, body);
+}
 
 export function PublicCairnDetailScreen() {
   const route = useRoute<DetailRoute>();
@@ -51,14 +97,22 @@ export function PublicCairnDetailScreen() {
   const mapTheme = useMapTheme();
   const id = route.params.cairnId;
   const cached = usePublicCairnStore(state => state.details[id]);
+  const publicEnabled = usePublicCairnStore(state => state.enabled);
   const loadDetail = usePublicCairnStore(state => state.loadDetail);
   const thank = usePublicCairnStore(state => state.thanks);
   const hide = usePublicCairnStore(state => state.hide);
   const blockAuthor = usePublicCairnStore(state => state.blockAuthor);
   const report = usePublicCairnStore(state => state.report);
-  const [detail, setDetail] = useState<PublicCairnDetail | null>(cached ?? null);
-  const [loading, setLoading] = useState(!cached);
-  const [error, setError] = useState<string | null>(null);
+  const publicViewerId = usePublicCairnStore(state => state.viewerId);
+  const liveAuthority = publicEnabled
+    ? capturePublicCairnAccountAuthority(publicViewerId)
+    : null;
+  const liveAuthorityGeneration = liveAuthority?.generation ?? null;
+  const [boundDetail, setBoundDetail] = useState<ScreenDetailBinding | null>(() => {
+    if (!liveAuthority || !cached || cached.id !== id) return null;
+    return { resourceId: id, authority: liveAuthority, detail: cached };
+  });
+  const [loadState, setLoadState] = useState<ScreenLoadState | null>(null);
   const [thanked, setThanked] = useState(false);
   const [actionPending, setActionPending] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -67,96 +121,303 @@ export function PublicCairnDetailScreen() {
   const [reportFeedback, setReportFeedback] = useState<string | null>(null);
   const [reportCompleted, setReportCompleted] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'hide' | 'block' | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const hadAuthorizedDetail = useRef(Boolean(cached));
+  const mounted = useRef(false);
+  const routeId = useRef(id);
+  const viewerId = useRef(publicViewerId);
+  const enabled = useRef(publicEnabled);
+  const loadAttempt = useRef(0);
+  const actionAttempt = useRef(0);
+  routeId.current = id;
+  viewerId.current = publicViewerId;
+  enabled.current = publicEnabled;
   const style = getMapStyleForTheme('outdoors', mapTheme);
   const lightPreset = themeToStandardPreset(mapTheme);
 
   useEffect(() => {
-    let active = true;
-    hadAuthorizedDetail.current = Boolean(cached);
-    setDetail(cached ?? null);
-    setLoading(!cached);
-    void loadDetail(id).then(next => {
-      if (!active) return;
-      setDetail(next);
-      setError(null);
-    }).catch((caught: any) => {
-      if (!active) return;
-      const code = String(caught?.code || '');
-      setError(code.includes('expired')
-        ? 'This downloaded copy has expired. Connect to check whether it is still available.'
-        : code.includes('offline')
-          ? 'Connect to download this Cairn.'
-          : 'This Public Cairn is no longer available.');
-      if (!cached) setDetail(null);
-    }).finally(() => active && setLoading(false));
-    return () => { active = false; };
-  }, [id, loadDetail]);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      loadAttempt.current += 1;
+      actionAttempt.current += 1;
+    };
+  }, []);
+
+  const bindingIsLive = (binding: Pick<ScreenDetailBinding, 'resourceId' | 'authority'>): boolean => (
+    enabled.current
+    && routeId.current === binding.resourceId
+    && viewerId.current === binding.authority.viewerId
+    && publicCairnAccountAuthorityIsCurrent(binding.authority)
+  );
+
+  const beginScreenAction = (binding: ScreenDetailBinding): ScreenActionTicket | null => {
+    if (!bindingIsLive(binding)) return null;
+    return {
+      attempt: ++actionAttempt.current,
+      resourceId: binding.resourceId,
+      authorId: binding.detail.author.id,
+      authority: binding.authority,
+    };
+  };
+
+  const screenActionIsCurrent = (ticket: ScreenActionTicket): boolean => (
+    mounted.current
+    && enabled.current
+    && actionAttempt.current === ticket.attempt
+    && routeId.current === ticket.resourceId
+    && viewerId.current === ticket.authority.viewerId
+    && publicCairnAccountAuthorityIsCurrent(ticket.authority)
+  );
+
+  const loadAuthorizedDetail = useCallback((
+    resourceId: string,
+    authority: PublicCairnAccountAuthority,
+    retained: ScreenDetailBinding | null,
+  ) => {
+    const attempt = ++loadAttempt.current;
+    const ticket = { attempt, resourceId, authority };
+    const attemptIsCurrent = () => mounted.current
+      && enabled.current
+      && loadAttempt.current === ticket.attempt
+      && routeId.current === ticket.resourceId
+      && viewerId.current === ticket.authority.viewerId
+      && publicCairnAccountAuthorityIsCurrent(ticket.authority);
+    setLoadState({ ...ticket, loading: true, error: null });
+    void loadDetail(resourceId).then(next => {
+      if (!attemptIsCurrent()) return;
+      if (next.id !== ticket.resourceId) {
+        throw Object.assign(new Error('Detail identity changed.'), { code: 'superseded' });
+      }
+      const nextBinding = { resourceId: ticket.resourceId, authority: ticket.authority, detail: next };
+      hadAuthorizedDetail.current = true;
+      setBoundDetail(nextBinding);
+      setLoadState({ ...ticket, loading: true, error: null });
+    }).catch((caught: unknown) => {
+      if (!attemptIsCurrent()) return;
+      const invalidated = detailLoadCode(caught) === 'superseded';
+      if (invalidated || !retained) {
+        setBoundDetail(current => (
+          current
+          && current.resourceId === ticket.resourceId
+          && current.authority.viewerId === ticket.authority.viewerId
+          && current.authority.generation === ticket.authority.generation
+            ? null
+            : current
+        ));
+      }
+      setLoadState({
+        ...ticket,
+        loading: true,
+        error: invalidated ? 'This Public Cairn is no longer available.' : detailLoadError(caught),
+      });
+    }).finally(() => {
+      if (!attemptIsCurrent()) return;
+      setLoadState(current => (
+        current
+        && current.attempt === ticket.attempt
+        && current.resourceId === ticket.resourceId
+        && current.authority.viewerId === ticket.authority.viewerId
+        && current.authority.generation === ticket.authority.generation
+          ? { ...current, loading: false }
+          : current
+      ));
+    });
+  }, [loadDetail]);
 
   useEffect(() => {
-    if (cached) {
+    loadAttempt.current += 1;
+    actionAttempt.current += 1;
+    setThanked(false);
+    setActionPending(false);
+    setReportOpen(false);
+    setReportCategory('other');
+    setReportDetail('');
+    setReportFeedback(null);
+    setReportCompleted(false);
+    setConfirmAction(null);
+    setActionFeedback(null);
+    if (!publicEnabled || !publicViewerId) {
+      hadAuthorizedDetail.current = false;
+      setBoundDetail(null);
+      setLoadState(null);
+      return undefined;
+    }
+    const authority = capturePublicCairnAccountAuthority(publicViewerId);
+    if (!authority) {
+      hadAuthorizedDetail.current = false;
+      setBoundDetail(null);
+      setLoadState(null);
+      return undefined;
+    }
+    const retained = cached?.id === id ? { resourceId: id, authority, detail: cached } : null;
+    hadAuthorizedDetail.current = Boolean(retained);
+    setBoundDetail(retained);
+    loadAuthorizedDetail(id, authority, retained);
+    return () => { loadAttempt.current += 1; };
+  }, [id, liveAuthorityGeneration, loadAuthorizedDetail, publicEnabled, publicViewerId]);
+
+  useEffect(() => {
+    if (!publicEnabled || !publicViewerId) {
+      setBoundDetail(null);
+      return;
+    }
+    const authority = capturePublicCairnAccountAuthority(publicViewerId);
+    if (!authority) {
+      setBoundDetail(null);
+      return;
+    }
+    if (cached?.id === id) {
       hadAuthorizedDetail.current = true;
-      setDetail(cached);
+      setBoundDetail({ resourceId: id, authority, detail: cached });
       return;
     }
     if (hadAuthorizedDetail.current) {
-      setDetail(null);
-      setError('This Public Cairn is no longer available.');
+      setBoundDetail(null);
+      setLoadState(current => (
+        current
+        && current.resourceId === id
+        && current.authority.viewerId === authority.viewerId
+        && current.authority.generation === authority.generation
+          ? { ...current, loading: false, error: 'This Public Cairn is no longer available.' }
+          : current
+      ));
     }
-  }, [cached]);
+  }, [cached, id, liveAuthorityGeneration, publicEnabled, publicViewerId]);
+
+  const visibleBinding = boundDetail
+    && publicEnabled
+    && boundDetail.resourceId === id
+    && boundDetail.detail.id === id
+    && boundDetail.authority.viewerId === publicViewerId
+    && publicCairnAccountAuthorityIsCurrent(boundDetail.authority)
+    ? boundDetail
+    : null;
+  const currentLoadState = loadState
+    && publicEnabled
+    && loadState.resourceId === id
+    && loadState.authority.viewerId === publicViewerId
+    && publicCairnAccountAuthorityIsCurrent(loadState.authority)
+    ? loadState
+    : null;
+  const detail = visibleBinding?.detail ?? null;
+  const loading = publicEnabled && Boolean(publicViewerId) && !detail
+    && (currentLoadState?.loading ?? true);
+  const unavailableError = publicEnabled
+    ? currentLoadState?.error ?? 'This Public Cairn is no longer available.'
+    : 'Public Cairns are not available in this release.';
+  const detailStatus = actionFeedback ?? currentLoadState?.error ?? null;
 
   const words = useMemo(() => detail ? splitTitleBody(detail.text) : { title: '', body: '' }, [detail]);
   const title = detail ? cairnDisplayTitle(words.title, words.body, detail.createdAt) : 'Public Cairn';
   const markerType = detail ? (MARKER_TYPES as any)[detail.type] ?? MARKER_TYPES.cairn : MARKER_TYPES.cairn;
 
+  const retryDetail = () => {
+    const authority = capturePublicCairnAccountAuthority(publicViewerId);
+    if (!publicEnabled || !authority || routeId.current !== id || viewerId.current !== authority.viewerId) return;
+    loadAuthorizedDetail(id, authority, null);
+  };
+
   const commitConfirmedAction = async () => {
-    if (!confirmAction || !detail) return;
+    if (!confirmAction || !visibleBinding) return;
+    const ticket = beginScreenAction(visibleBinding);
+    if (!ticket) return;
     const selected = confirmAction;
     setConfirmAction(null);
     setActionPending(true);
     try {
-      const confirmed = await (selected === 'hide' ? hide(id) : blockAuthor(detail.author.id));
-      if (!confirmed) {
-        Alert.alert(
+      const result = await (selected === 'hide' ? hide(ticket.resourceId) : blockAuthor(ticket.authorId));
+      if (!screenActionIsCurrent(ticket) || result.status === 'superseded') return;
+      if (result.status === 'queued_offline') {
+        showPublicActionFeedback(
           selected === 'hide' ? 'Hidden here' : 'Blocked here',
           'This change is saved on this device and will retry when you are connected.',
         );
+      } else if (result.status === 'unavailable') {
+        Alert.alert('No longer available', 'This Public Cairn is no longer available.');
       }
       nav.goBack();
     } catch {
-      setError('Could not save that change on this device. Nothing was sent; please try again.');
+      if (!screenActionIsCurrent(ticket)) return;
+      setActionFeedback('Could not save that change on this device. Nothing was sent; please try again.');
     } finally {
-      setActionPending(false);
+      if (screenActionIsCurrent(ticket)) setActionPending(false);
+    }
+  };
+
+  const sendThanks = async () => {
+    if (thanked || actionPending || !visibleBinding) return;
+    const ticket = beginScreenAction(visibleBinding);
+    if (!ticket) return;
+    setActionPending(true);
+    try {
+      const result = await thank(ticket.resourceId);
+      if (!screenActionIsCurrent(ticket) || result.status === 'superseded') return;
+      if (result.status === 'confirmed') setThanked(true);
+      else if (result.status === 'queued_offline') {
+        showPublicActionFeedback('Thanks saved', 'Your Thanks will retry when you are connected.');
+      } else {
+        setActionFeedback('This Public Cairn is no longer available.');
+      }
+    } catch {
+      if (screenActionIsCurrent(ticket)) setActionFeedback('Could not save your Thanks; please try again.');
+    } finally {
+      if (screenActionIsCurrent(ticket)) setActionPending(false);
     }
   };
 
   const submitReport = async () => {
+    if (!visibleBinding) return;
+    const ticket = beginScreenAction(visibleBinding);
+    if (!ticket) return;
     setActionPending(true);
     setReportFeedback(null);
     try {
-      const confirmed = await report(id, reportCategory, reportDetail);
-      setReportCompleted(true);
-      setReportFeedback(confirmed ? 'Report received.' : 'Saved to retry when you are connected.');
+      const result = await report(ticket.resourceId, reportCategory, reportDetail);
+      if (!screenActionIsCurrent(ticket) || result.status === 'superseded') return;
+      if (result.status === 'confirmed') {
+        setReportCompleted(true);
+        setReportFeedback('Report received.');
+      } else if (result.status === 'queued_offline') {
+        setReportCompleted(true);
+        setReportFeedback('Saved to retry when you are connected.');
+      } else {
+        setReportCompleted(false);
+        setReportFeedback('This Public Cairn is no longer available.');
+      }
     } catch {
+      if (!screenActionIsCurrent(ticket)) return;
       setReportCompleted(false);
       setReportFeedback('Could not save this report on your device. Your draft is still here; please try again.');
     } finally {
-      setActionPending(false);
+      if (screenActionIsCurrent(ticket)) setActionPending(false);
     }
   };
 
-  if (!detail && !loading) {
+  if (!detail && loading) {
+    return (
+      <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]}>
+        <View style={styles.plainHeader}><BackButton variant="inline" /></View>
+        <StateSurface
+          variant="loading"
+          title="Loading Public Cairn…"
+          material="embedded"
+          alignment="center"
+          style={styles.empty}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (!detail) {
     return (
       <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]}>
         <View style={styles.plainHeader}><BackButton variant="inline" /></View>
         <View style={styles.empty}>
           <Icon name="CloudOff" size={26} color={theme.iconInactive} />
           <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Public Cairn unavailable</Text>
-          <Text style={[styles.emptyBody, { color: theme.foregroundSecondary }]}>{error}</Text>
-          <PrimaryButton label="Try again" onPress={() => {
-            setLoading(true);
-            void loadDetail(id).then(setDetail).catch(() => {}).finally(() => setLoading(false));
-          }} />
+          <Text style={[styles.emptyBody, { color: theme.foregroundSecondary }]}>{unavailableError}</Text>
+          {publicEnabled ? <PrimaryButton label="Try again" onPress={retryDetail} /> : null}
         </View>
       </SafeAreaView>
     );
@@ -199,16 +460,12 @@ export function PublicCairnDetailScreen() {
           </View>
           <Text style={[styles.author, { color: theme.foregroundSecondary }]}>Left by {detail?.author.name}</Text>
         </View>
-        {error ? <Text style={[styles.status, { color: theme.foregroundSecondary }]}>{error}</Text> : null}
+        {detailStatus ? <Text style={[styles.status, { color: theme.foregroundSecondary }]}>{detailStatus}</Text> : null}
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
         <View style={styles.actions}>
           <PrimaryButton
             label={thanked ? 'Thanks sent' : 'Thanks'}
-            onPress={() => {
-              if (thanked) return;
-              setActionPending(true);
-              void thank(id).then(ok => setThanked(ok)).finally(() => setActionPending(false));
-            }}
+            onPress={() => void sendThanks()}
             disabled={thanked || actionPending}
             style={styles.action}
             testID="public-thanks"

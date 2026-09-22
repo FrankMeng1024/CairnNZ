@@ -1,0 +1,107 @@
+{
+  "sourceActivityServerId": 2073,
+  "responses": [
+    {
+      "requestIndex": 1,
+      "canonicalStart": 0,
+      "canonicalEnd": 79,
+      "httpStatus": 200,
+      "code": "Ok",
+      "message": null,
+      "matchingsCount": 1,
+      "confidence": 0.971186,
+      "tracepointCount": 80,
+      "nullTracepointCount": 68,
+      "alternativesCountHistogram": {
+        "0": 10,
+        "2": 1,
+        "7": 1
+      },
+      "matchingDistanceM": 174,
+      "geometryPointCount": 14,
+      "classification": "M3",
+      "cairnResult": "partial_tracepoint_coverage"
+    },
+    {
+      "requestIndex": 2,
+      "canonicalStart": 79,
+      "canonicalEnd": 158,
+      "httpStatus": 200,
+      "code": "Ok",
+      "message": null,
+      "matchingsCount": 1,
+      "confidence": 0.953768,
+      "tracepointCount": 80,
+      "nullTracepointCount": 77,
+      "alternativesCountHistogram": {
+        "0": 2,
+        "1": 1
+      },
+      "matchingDistanceM": 22.8,
+      "geometryPointCount": 4,
+      "classification": "M3",
+      "cairnResult": "partial_tracepoint_coverage"
+    },
+    {
+      "requestIndex": 3,
+      "canonicalStart": 158,
+      "canonicalEnd": 237,
+      "httpStatus": 200,
+      "code": "NoSegment",
+      "message": "Could not find a matching segment for input coordinates",
+      "matchingsCount": 0,
+      "confidence": null,
+      "tracepointCount": 0,
+      "nullTracepointCount": 0,
+      "alternativesCountHistogram": {},
+      "matchingDistanceM": null,
+      "geometryPointCount": 0,
+      "classification": "M2",
+      "cairnResult": "NoSegment"
+    },
+    {
+      "requestIndex": 4,
+      "canonicalStart": 237,
+      "canonicalEnd": 316,
+      "httpStatus": 200,
+      "code": "NoSegment",
+      "message": "Could not find a matching segment for input coordinates",
+      "matchingsCount": 0,
+      "confidence": null,
+      "tracepointCount": 0,
+      "nullTracepointCount": 0,
+      "alternativesCountHistogram": {},
+      "matchingDistanceM": null,
+      "geometryPointCount": 0,
+      "classification": "M2",
+      "cairnResult": "NoSegment"
+    },
+    {
+      "requestIndex": 5,
+      "canonicalStart": 316,
+      "canonicalEnd": 391,
+      "httpStatus": 200,
+      "code": "Ok",
+      "message": null,
+      "matchingsCount": 1,
+      "confidence": 0.041909,
+      "tracepointCount": 76,
+      "nullTracepointCount": 71,
+      "alternativesCountHistogram": {
+        "0": 4,
+        "1": 1
+      },
+      "matchingDistanceM": 69.2,
+      "geometryPointCount": 5,
+      "classification": "M3",
+      "cairnResult": "partial_tracepoint_coverage"
+    }
+  ],
+  "aggregate": {
+    "usefulHighConfidencePartialResponses": 2,
+    "acceptedByCairn": 0,
+    "noSegmentResponses": 2,
+    "lowConfidencePartialResponses": 1,
+    "finalResult": "whole segment canonical fallback"
+  }
+}

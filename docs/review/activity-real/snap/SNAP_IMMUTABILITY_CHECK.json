@@ -1,0 +1,47 @@
+{
+  "checkedAt": "2026-09-11T19:04:59+08:00",
+  "method": "SELECT-only before/after comparison using MySQL SHA2(CAST(JSON AS CHAR), 256)",
+  "snap": {
+    "serverId": 2073,
+    "routeHashBefore": "3e1b6d8cdccd27c2b89e05935f0119dd6b930424f7fa8cf599a692c9ec09ac51",
+    "routeHashAfter": "3e1b6d8cdccd27c2b89e05935f0119dd6b930424f7fa8cf599a692c9ec09ac51",
+    "rawHashBefore": "3d47e9144ae6d3e13e900e341787aefcb86586e7819a809cb6168f70a8fad13f",
+    "rawHashAfter": "3d47e9144ae6d3e13e900e341787aefcb86586e7819a809cb6168f70a8fad13f",
+    "routeCharactersBefore": 125387,
+    "routeCharactersAfter": 125387,
+    "rawCharactersBefore": 136493,
+    "rawCharactersAfter": 136493,
+    "distanceMBefore": 843.202,
+    "distanceMAfter": 843.202,
+    "durationSBefore": 805,
+    "durationSAfter": 805,
+    "unchanged": true
+  },
+  "historicalBackControl": {
+    "serverId": 46,
+    "routeHashBefore": "3dfa737be3af86a42b3fbd5f974de57a8d7adc14c2d728ed3aa0cc89d58d04e1",
+    "routeHashAfter": "3dfa737be3af86a42b3fbd5f974de57a8d7adc14c2d728ed3aa0cc89d58d04e1",
+    "rawHashBefore": "c6c4fbeff9fdd6ffea81bbc48592b839189cbc1ca099fed2bb81c03593b6a02b",
+    "rawHashAfter": "c6c4fbeff9fdd6ffea81bbc48592b839189cbc1ca099fed2bb81c03593b6a02b",
+    "unchanged": true
+  },
+  "snapOwnerAggregate": {
+    "finalizedSessionCountBefore": 10,
+    "finalizedSessionCountAfter": 10,
+    "distanceSumMBefore": 4802.370010375977,
+    "distanceSumMAfter": 4802.370010375977,
+    "durationSumSBefore": 4699,
+    "durationSumSAfter": 4699,
+    "memoryRowsBefore": 170,
+    "memoryRowsAfter": 170,
+    "unchanged": true
+  },
+  "sideEffects": {
+    "normalActivityRowCreated": false,
+    "backendActivityRowCreated": false,
+    "memoryChanged": false,
+    "statsChanged": false,
+    "pendingSyncCreated": false,
+    "originalActivityChanged": false
+  }
+}

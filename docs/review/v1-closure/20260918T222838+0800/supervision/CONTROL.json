@@ -1,0 +1,1027 @@
+{
+  "schema": "cairnnz.v1-closure.supervision.control.v1",
+  "runId": "20260918T222838+0800",
+  "rootSessionId": "01a0b4c1-b498-76e0-95bd-1976d11586f2",
+  "repoRoot": "/Users/mzm/Desktop/cairn/CairnNZ",
+  "preparedAt": "2026-09-19T18:06:13+08:00",
+  "mode": "FUNCTIONAL_RUN_READY",
+  "ownerPause": {
+    "state": "cleared",
+    "autoResume": false,
+    "checkpoint": "../OWNER_PAUSE_CHECKPOINT.md",
+    "clearedAt": "2026-09-20T10:16:31+08:00",
+    "supersededBy": "/Users/mzm/Desktop/CairnNZ_overnight_functional_closure_master_01.md",
+    "requestedAt": "2026-09-20T00:13:40+08:00",
+    "reason": "Owner cleared the stale pause/recovery intent after disabling the failed custom Stop guard.",
+    "recoverOnlyCompletedAt": "2026-09-19T23:33:16+08:00",
+    "releaseCondition": "Satisfied; normal controlled functional execution may resume.",
+    "resumeObservedAt": "2026-09-19T23:41:20+08:00",
+    "nativeGoalObservedStatus": "cleared",
+    "nativeGoalMismatch": null,
+    "nativeGoalBlockedAt": "2026-09-20T00:37:53+08:00",
+    "nativeGoalBlockReason": "Historical failed supervision state; the owner subsequently cleared the Goal.",
+    "pending": false
+  },
+  "pause": {
+    "checkpointRecorded": true,
+    "reason": "Explicit owner pause for a permission-explicit restart at the safe tool boundary after the exact-fingerprint loaded Raw GPS PASS.",
+    "pausedAt": "2026-09-19T21:58:04+08:00",
+    "clearedAt": "2026-09-19T22:45:00+08:00",
+    "t08RequestedAt": "2026-09-19T23:06:00+08:00",
+    "t08CheckpointReadyAt": "2026-09-19T23:14:00+08:00",
+    "t08RecoveryReceipt": "/Users/mzm/Desktop/cairn_revision03_work/baseline/t08-paused-20260919T231400p0800.tree"
+  },
+  "gate": {
+    "armed": false,
+    "enabled": false,
+    "event": "Stop",
+    "scope": "exact_root_session_and_repo",
+    "maxCorrectiveContinuations": 1,
+    "definition": ".codex/hooks.json",
+    "handler": ".codex/hooks/cairn-v1-stop-gate.mjs",
+    "trust": "HISTORICAL_TRUST_RECEIPT_PRESERVED_RUNTIME_DISABLED",
+    "trustedDefinitionHash": "sha256:0909bdbb20abac6637d8eb5ff1e39abc360bb52480e1fabb52ed75343faa42dc",
+    "loaded": "DISABLED_FOR_NOW_BY_OWNER",
+    "liveInvocation": "HISTORICAL_T01_PASS",
+    "verificationNonce": "T01R2-01a0b4c1-20260919T192951p0800",
+    "verifiedAt": "2026-09-19T19:34:00+08:00",
+    "hookRunId": "stop:0:/Users/mzm/Desktop/cairn/CairnNZ/.codex/hooks.json",
+    "definitionRetained": true,
+    "unattendedResult": "FAIL",
+    "unattendedStatus": "DISABLED_FOR_NOW",
+    "failureReason": "Stale owner-pause / RECOVER_ONLY state caused the custom Stop gate to block the Goal again after the owner had already resumed and left it unattended."
+  },
+  "coreGuards": {
+    "status": "T08_PASS_UNATTENDED_STOP_GUARD_FAIL_DISABLED",
+    "verifiedAt": "2026-09-19T19:34:41+08:00",
+    "T01": "PASS",
+    "T04": "PASS_PREVIOUSLY_NO_RERUN",
+    "T08": "PASS",
+    "unattendedStopGuard": "FAIL_DISABLED_FOR_NOW",
+    "fast": "OFF"
+  },
+  "unattendedStopGuard": {
+    "result": "FAIL",
+    "status": "DISABLED_FOR_NOW",
+    "classifiedAt": "2026-09-20T10:16:31+08:00",
+    "reason": "Stale owner-pause / RECOVER_ONLY state caused the custom Stop gate to block the Goal again after the owner had already resumed and left it unattended.",
+    "definitionRetained": ".codex/hooks.json",
+    "runtimeEnabled": false,
+    "rebuildAuthorized": false,
+    "automaticDrillPending": false,
+    "t08Unaffected": true
+  },
+  "runState": {
+    "status": "FUNCTIONAL_RUN_READY_NO_WORK_STARTED",
+    "confirmedAt": "2026-09-20T10:16:31+08:00",
+    "evidence": [
+      "Revision-03 read-only diagnosis completed and root integrated the bounded geodesic/tiled-cache and exact loaded-timing correction.",
+      "The exact-fingerprint full Memory scale gate passes: 2,001 distinct self locations plus live append, 2,000 friend cells, 10,000 distinct diagnostics, exact 30 m boundary, chunked cache recovery, quota failure, and account-deletion race.",
+      "Independent verifier completed repeated read-only passes; all reported ordering, paint-correlation, cache-slice, Combined/Friends, and deletion-race findings are closed in source and focused tests.",
+      "Homepage read-only diagnosis completed without edits; visual implementation remains deferred behind the Revision-03 software gate.",
+      "Exact fingerprint 044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929 passed all 24 loaded Raw GPS assertions with zero runtime errors.",
+      "The subsequent changed-Activity gate was explicitly interrupted by the owner (session 9895, exit 130) and is not classified as PASS or FAIL."
+    ],
+    "ownerPauseResumeDrill": "PASS",
+    "canary": "HISTORICAL_INTERRUPTED_NOT_PASS_NO_PENDING_DRILL",
+    "automaticGoalContinuationAudit": {
+      "countForCurrentPause": 2,
+      "totalConsecutiveGoalTurnsIncludingOriginalRecoverOnly": 3,
+      "observedAt": "2026-09-20T00:37:10+08:00",
+      "goalStatus": "active",
+      "classification": "NO_FEATURE_WORK_PAUSE_REVALIDATION_ONLY",
+      "workersQuiescent": true,
+      "ownedProcesses": 0,
+      "productFingerprintUnchanged": true,
+      "blockedThresholdSatisfied": true,
+      "nextAction": "Historical audit closed; custom Stop guard disabled and stale pause intent cleared."
+    }
+  },
+  "resumeAudit": {
+    "resumedAt": "2026-09-19T19:29:51+08:00",
+    "state": "FRESH_AFTER_BLOCKED",
+    "ownerReportedStopActive": 1,
+    "allowedT01Attempts": 1,
+    "t01AttemptsUsed": 1,
+    "t01Result": "PASS",
+    "t04RerunAllowed": false
+  },
+  "blockerAudit": {
+    "condition": "The trusted project Stop definition is not observed as loaded or invoked in the existing client; an owner-controlled client exit/resume is required.",
+    "consecutiveGoalTurns": 3,
+    "ownerExternalStateRequired": true,
+    "occurrences": [
+      {
+        "goalTurn": 1,
+        "at": "2026-09-19T10:32:39.126Z",
+        "evidence": "Premature T01 final reached task_complete ordinal 9346 while the required child remained active; continuation source was goal."
+      },
+      {
+        "goalTurn": 2,
+        "at": "2026-09-19T10:39:20.854Z",
+        "evidence": "Checkpoint final reached task_complete ordinal 9491; the next input at ordinal 9494 was source=goal, with no Stop-hook block or continuation observed."
+      },
+      {
+        "goalTurn": 3,
+        "at": "2026-09-19T10:40:36.806Z",
+        "evidence": "Second blocker report reached task_complete ordinal 9531; the next input at ordinal 9534 was source=goal. The Stop hook still did not block or create the continuation."
+      }
+    ]
+  },
+  "source": {
+    "head": "393338b5c159e7341d22b94086b5c29455386bdf",
+    "primaryRecoveryHead": "0520b102eae78a1dd77aa39418a919d85f5648c1",
+    "ownerPauseTree": "aef6a7f73bac71e9c327943cc7cd662c7634d7a5",
+    "ownerPausePreCheckpointTree": "4addb72cc99d0da8aa47d2110510abc59716af97",
+    "prepareStartIndex": "/Users/mzm/Desktop/cairn_revision03_work/baseline/supervision-prepare-start.index",
+    "ownerPauseRestartIndex": "/Users/mzm/Desktop/cairn_revision03_work/baseline/owner-pause-restart-20260919T215804p0800.index",
+    "productFingerprint": "cab465fa6ff734ac5ad6b1c5f13e2076c13cf350b26207dae9b05e009768a604",
+    "productFingerprintFileCount": 636,
+    "latestRecoveryIndex": "/Users/mzm/Desktop/cairn_revision03_work/baseline/recover-only-20260920T001700p0800.index",
+    "latestRecoveryIndexSha256AtPreFinalReceiptCapture": "e3a62dfd67d871af64324a777def4d91f96bc0d17bd8b8d0408fead6402ad505",
+    "latestRecoveryPreFinalReceiptTree": "e35b1c389671e411174d49e90aa0253204a5b6b5",
+    "candidate": "O60",
+    "appRuntime": "0.2.6",
+    "otaPublished": false
+  },
+  "runtime": {
+    "codexCli": "0.151.0",
+    "configuredModel": "gpt-5.6-sol",
+    "configuredReasoningEffort": "xhigh",
+    "observedRootModel": "gpt-5.6-sol",
+    "observedRootReasoningEffort": "ultra",
+    "observedAt": "2026-09-20T10:16:31+08:00",
+    "serviceTier": "default",
+    "approvalPolicy": "never",
+    "sandbox": "danger-full-access",
+    "permissionProfile": "disabled",
+    "fastRequired": "OFF",
+    "fastChangedByPreparation": false,
+    "fastRuntimeTelemetry": "OFF_OWNER_CONFIRMED_NO_TOGGLE_OBSERVED",
+    "goal": {
+      "threadId": null,
+      "previousThreadId": "01a0b4c1-b498-76e0-95bd-1976d11586f2",
+      "status": "cleared",
+      "explicitOwnerPauseOverride": false,
+      "observedAtCheckpoint": "2026-09-20T10:16:31+08:00",
+      "blockedAt": "2026-09-19T23:23:34+08:00",
+      "blockedAuditTurns": 3,
+      "schedulingAllowed": true,
+      "createdAtEpoch": 1789813426,
+      "tokenBudget": null
+    }
+  },
+  "overnightFunctionalContract": {
+    "path": "/Users/mzm/Desktop/CairnNZ_overnight_functional_closure_master_01.md",
+    "sha256": "dd435fac7fe71f5d556d3b4896f54d7a75e2b33af49c8688682bc8a13a0dcd09",
+    "activatedAt": "2026-09-19T22:45:00+08:00",
+    "scope": "functional closure only",
+    "parentPolicy": "gpt-5.6-sol ultra orchestration/integration only",
+    "workerPolicy": "all substantive implementation, diagnosis and verification use gpt-5.6-sol xhigh",
+    "maximumControlledChildren": 3,
+    "onePrimaryTreeWriter": true,
+    "oneHeavyLocalWorkload": true,
+    "fast": "OFF",
+    "excludedTonight": [
+      "release infrastructure",
+      "hosting migration",
+      "billing",
+      "provider-console work",
+      "recruitment",
+      "App Store preparation",
+      "OTA publication"
+    ]
+  },
+  "t08OwnerLive": {
+    "status": "PASS",
+    "preparedAt": "2026-09-19T22:53:01+08:00",
+    "threshold": "at least two real xhigh workers with IDs, acknowledged baseline/scope, and useful first progress",
+    "qualifyingWorkers": [
+      {
+        "id": "/root/rev03_a4_resume",
+        "result": "Recomputed exact 044045c3 product fingerprint across 633 files, confirmed no competing workload, and restarted the required changed-Activity command in exec session 46877."
+      },
+      {
+        "id": "/root/functional_verification_lane",
+        "result": "Confirmed exact-current evidence is not globally stale and identified the concrete absence of Settings assertion-level coverage in 03_ACCEPTANCE_PLAN."
+      }
+    ],
+    "recovery": {
+      "alternateIndex": "/Users/mzm/Desktop/cairn_revision03_work/baseline/t08-prepared-20260919T225301p0800.index",
+      "alternateIndexSha256": "c42ed69f6de478ca31480b0c309e499da4035bedd476bb78fff1117fb78f880b",
+      "tree": "9ec8b45b5736dabcd2e778ed0093a3ae23c3cd0e"
+    },
+    "explicitOwnerPauseObserved": true,
+    "explicitOwnerPauseObservedAt": "2026-09-19T23:06:00+08:00",
+    "allOwnedWorkersCheckpointedAt": "2026-09-19T23:14:00+08:00",
+    "allOwnedWorkersQuiescent": true,
+    "allOwnedProcessesTerminal": true,
+    "sharedMutationUnknown": false,
+    "pauseCheckpoint": {
+      "alternateIndex": "/Users/mzm/Desktop/cairn_revision03_work/baseline/t08-paused-20260919T231400p0800.index",
+      "alternateIndexSha256": "07e3a5aa5441ad6aeeeac7fa434df90715feafb44dc9604b88ff3166bce9824d",
+      "tree": "582113507b36d507ccf9c197077fc15d533b8993",
+      "treeReceipt": "/Users/mzm/Desktop/cairn_revision03_work/baseline/t08-paused-20260919T231400p0800.tree"
+    },
+    "recoverOnlyObserved": true,
+    "recoverOnlyAt": "2026-09-19T23:33:16+08:00",
+    "nativeGoalResumeObserved": true,
+    "nativeGoalResumeObservedAt": "2026-09-19T23:41:20+08:00",
+    "nativeGoalStatusAtCheckpoint": "active",
+    "usefulResumedWorkObservedAt": "2026-09-19T23:45:28+08:00",
+    "usefulResumedWork": {
+      "agentId": "/root/functional_verification_lane",
+      "attempt": 2,
+      "artifact": "/Users/mzm/Desktop/cairn_revision03_work/evidence/overnight-functional-01/lanec-acceptance-delta-red-test-spec-044045c3.md",
+      "artifactSha256": "4267a35f55f4e8d439cce69226c230c143a4193f6d52eac9c1b5b1516ec2212f",
+      "artifactBirthTime": "2026-09-19T23:45:28+08:00",
+      "artifactFinalModifiedTime": "2026-09-19T23:46:58+08:00",
+      "result": "Nine assertion-level red-test specifications with ownership, evidence levels and execution order; no false PASS claim."
+    },
+    "passedAt": "2026-09-19T23:46:03+08:00",
+    "pass": true,
+    "nextAction": "After this RECOVER_ONLY checkpoint, the owner pauses and later resumes the native Goal; verify recovery identity and start a fresh no-owner-prompt canary."
+  },
+  "canary30": {
+    "status": "HISTORICAL_INTERRUPTED_NOT_PASS_NO_PENDING_DRILL",
+    "startedAt": "2026-09-19T23:46:03+08:00",
+    "reportNotBefore": "2026-09-20T00:16:03+08:00",
+    "rootSessionId": "01a0b4c1-b498-76e0-95bd-1976d11586f2",
+    "sourceFingerprintAtStart": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+    "currentSourceFingerprint": "cab465fa6ff734ac5ad6b1c5f13e2076c13cf350b26207dae9b05e009768a604",
+    "sourceChangedDuringCanary": true,
+    "rootModel": "gpt-5.6-sol",
+    "rootReasoningEffort": "ultra",
+    "childModel": "gpt-5.6-sol",
+    "childReasoningEffort": "xhigh",
+    "fast": "OFF",
+    "ownerPromptRequired": true,
+    "observerOutput": "/Users/mzm/Desktop/cairn_revision03_work/supervision/canary-20260919T234603p0800-observer.jsonl",
+    "observerStartedAt": "2026-09-19T23:48:02+08:00",
+    "observerExecSessionId": 97758,
+    "observerPid": 6075,
+    "integrityNotes": [
+      "T08 PASS uses Lane C's filesystem-timestamped external artifact.",
+      "Lane A's first resume artifact contained an impossible 23:17 resumedAt value versus 23:44:29 filesystem birth time and was rejected pending an explicit correction record."
+    ],
+    "observations": [
+      {
+        "at": "2026-09-19T23:45:28+08:00",
+        "agentId": "/root/functional_verification_lane",
+        "result": "Generation-2 acceptance delta created on the exact baseline."
+      },
+      {
+        "at": "2026-09-19T23:46:45+08:00",
+        "agentId": "/root/homepage_material_lane",
+        "result": "Generation-2 visual-authority and protected-mask resume receipt created externally."
+      },
+      {
+        "at": "2026-09-19T23:49:26+08:00",
+        "agentId": "/root/rev03_a4_resume",
+        "result": "Targeted 10k GC/profile sensitivity diagnosis completed; 180 ms failure remains honestly open."
+      },
+      {
+        "at": "2026-09-19T23:52:23+08:00",
+        "agentId": "/root/functional_verification_lane",
+        "result": "First executable external Public-disabled API/MySQL harness candidate created without primary-tree writes."
+      },
+      {
+        "at": "2026-09-19T23:55:25+08:00",
+        "agentId": "/root/rev03_a4_resume",
+        "result": "FR-CIRCLE-ACCOUNT-01 completed RED-to-GREEN; account/generation fence changed the product fingerprint to 995a402c across 634 files."
+      },
+      {
+        "at": "2026-09-19T23:57:35+08:00",
+        "agentId": "/root/functional_verification_lane",
+        "result": "External Public-disabled API/MySQL harness candidate manifest completed; unapplied and not run."
+      },
+      {
+        "at": "2026-09-20T00:03:27+08:00",
+        "agentId": "/root/rev03_a4_resume",
+        "result": "FR-MEM-HIDE-01 completed focused RED-to-GREEN; no broader Friend Content removal or outbox claim."
+      },
+      {
+        "at": "2026-09-20T00:11:04+08:00",
+        "agentId": "/root/homepage_material_lane",
+        "result": "Homepage Candidate A report and reproducible external assets completed; loaded-App validation remains NOT_RUN."
+      },
+      {
+        "at": "2026-09-20T00:12:45+08:00",
+        "agentId": "/root/rev03_a4_resume",
+        "result": "Settings normal-handler focused RED completed: three expected behavioral failures, no product fix applied."
+      },
+      {
+        "at": "2026-09-20T00:13:26+08:00",
+        "agentId": "/root/functional_verification_lane",
+        "result": "FR-DISCOVERY-500 starvation condition confirmed and external byte-identical harness copy preserved; patch/runtime remain NOT_RUN."
+      }
+    ],
+    "ownerRecoverOnlyObservedAt": "2026-09-20T00:13:40+08:00",
+    "observerSamples": 29,
+    "observerObservedSamples": 11,
+    "observerUncertainSamples": 18,
+    "observerTerminalExitCode": 130,
+    "observerTerminalDisposition": "DELIBERATELY_STOPPED_AFTER_TIME_BOUNDARY_FOR_RECOVER_ONLY",
+    "noOwnerPromptCriterionMet": false,
+    "report": "supervision/CANARY_REPORT.json",
+    "recommendation": "NO_AUTOMATIC_RERUN_FUNCTIONAL_WORK_MAY_RESUME",
+    "pending": false,
+    "automaticRerun": false,
+    "runtimeIntentClearedAt": "2026-09-20T10:16:31+08:00"
+  },
+  "previousRecoverOnly": {
+    "status": "COMPLETE_NATIVE_GOAL_RESUMED",
+    "startedAt": "2026-09-19T23:26:54+08:00",
+    "completedAt": "2026-09-19T23:33:16+08:00",
+    "masterPrompt": {
+      "path": "/Users/mzm/Desktop/CairnNZ_Unattended_04/MASTER_PROMPT.md",
+      "sha256": "f7069353a24f7a35bf41f98d5824ead239eec83ef1e594c300552521eb2dd8cd"
+    },
+    "featureWritesAllowed": false,
+    "workerDispatchAllowed": false,
+    "goalMustRemainPaused": false,
+    "sameRootSession": true,
+    "fast": "OFF_UNCHANGED",
+    "reconciliation": {
+      "goal": "PAUSED",
+      "productFingerprint": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+      "productFingerprintFileCount": 633,
+      "productDriftSincePause": false,
+      "metadataOnlyDriftSincePause": [
+        "docs/review/v1-closure/20260918T222838+0800/HANDOFF.json",
+        "docs/review/v1-closure/20260918T222838+0800/supervision/CONTROL.json",
+        "docs/review/v1-closure/20260918T222838+0800/supervision/LIVE_DRILL_RESULTS.json"
+      ],
+      "pauseTree": "582113507b36d507ccf9c197077fc15d533b8993",
+      "comparisonTreeBeforeRecoveryReceipt": "c44eb05f9ad7416cf6e83572858d8b322e99bee6",
+      "ordinaryGitIndexUnchanged": true,
+      "sharedMutationUnknown": false,
+      "migrationOrDeploymentInFlight": false,
+      "ownedProcesses": [],
+      "retainedService": "cairn-v1-closure-mysql on 127.0.0.1:3310; running idle",
+      "unrelatedService": "cc-builder-mysql on 0.0.0.0:3306; untouched"
+    },
+    "survivingAgents": [
+      {
+        "id": "/root/rev03_a4_resume",
+        "attempt": 1,
+        "collaborationState": "completed",
+        "writer": true,
+        "resumePolicy": "reuse_by_followup_if_supported_no_duplicate"
+      },
+      {
+        "id": "/root/homepage_material_lane",
+        "attempt": 1,
+        "collaborationState": "interrupted_after_checkpoint",
+        "writer": false,
+        "resumePolicy": "reuse_by_followup_if_supported_no_duplicate"
+      },
+      {
+        "id": "/root/functional_verification_lane",
+        "attempt": 1,
+        "collaborationState": "completed",
+        "writer": false,
+        "resumePolicy": "reuse_by_followup_if_supported_no_duplicate"
+      }
+    ],
+    "terminalExecSessions": [46877, 90650, 84048],
+    "hookVerification": {
+      "definitionSha256": "0909bdbb20abac6637d8eb5ff1e39abc360bb52480e1fabb52ed75343faa42dc",
+      "handlerSha256": "61af54fc631e6f5189534749cd76a0daa14d0b33e8b48169b5d3139c84aa789a",
+      "queueAdapterSha256": "1f1ebc133177b146b975e4898a6418d124aaeed29cc7636791512610935a6996",
+      "ownerTrust": "RECORDED",
+      "runtimeLoading": "ACTIVE_RUNTIME_VERIFIED_BY_EXISTING_T01_LIVE_INVOCATION",
+      "rerun": "NOT_PERFORMED"
+    },
+    "checkpoint": {
+      "alternateIndex": "/Users/mzm/Desktop/cairn_revision03_work/baseline/t08-recover-only-20260919T233316p0800.index",
+      "alternateIndexSha256AtPreReceiptCapture": "1e9fd4cdfe71051c863a1943bb92824de1505d9ae3aa6ef12a4770e0a169d893",
+      "preReceiptTree": "5bc8d22af2234b22e4306024719cbc9a0df8ca0f",
+      "treeReceipt": "/Users/mzm/Desktop/cairn_revision03_work/baseline/t08-recover-only-20260919T233316p0800.tree"
+    }
+  },
+  "recoverOnly": {
+    "status": "INACTIVE_CLEARED",
+    "startedAt": "2026-09-20T00:13:40+08:00",
+    "completedAt": "2026-09-20T00:20:11+08:00",
+    "checkpoint": "supervision/RECOVER_ONLY_CHECKPOINT.json",
+    "featureWritesAllowed": true,
+    "workerDispatchAllowed": true,
+    "sameRootSession": true,
+    "fast": "OFF_UNCHANGED",
+    "nativeGoalRequestedPosture": "none",
+    "nativeGoalObservedStatus": "cleared",
+    "nativeGoalOwnerAction": "None; controlled functional execution may resume.",
+    "nativeGoalBlockedAt": "2026-09-20T00:37:53+08:00",
+    "productFingerprint": "cab465fa6ff734ac5ad6b1c5f13e2076c13cf350b26207dae9b05e009768a604",
+    "productFingerprintFileCount": 636,
+    "ordinaryIndexUnchanged": true,
+    "sharedMutationUnknown": false,
+    "migrationOrDeploymentInFlight": false,
+    "ownedProcesses": [],
+    "workersQuiescent": true,
+    "hookRuntime": "ACTIVE_RUNTIME_VERIFIED_EXISTING_T01_REUSED",
+    "T08": "PASS_USEFUL_RESUMED_WORK_OBSERVED",
+    "canary": "HISTORICAL_INTERRUPTED_NOT_PASS_NO_PENDING_DRILL",
+    "active": false,
+    "clearedAt": "2026-09-20T10:16:31+08:00"
+  },
+  "workloadScheduler": {
+    "maximumHeavyLocalWorkloads": 1,
+    "currentOwner": null,
+    "currentTask": null,
+    "previous": [
+      {
+        "owner": "/root/rev03_a4_resume",
+        "execSessionId": 46877,
+        "task": "cd app && npm run verify:changed",
+        "state": "COMPLETED_FAIL",
+        "exitCode": 1
+      },
+      {
+        "owner": "/root/functional_verification_lane",
+        "execSessionId": 84048,
+        "task": "four-suite Friends and Settings focused Jest run",
+        "state": "COMPLETED_PASS",
+        "exitCode": 0
+      },
+      {
+        "owner": "/root/rev03_a4_resume",
+        "execSessionId": 90650,
+        "task": "profiled 10,000-location Memory slice diagnostic",
+        "state": "COMPLETED_PASS_DIAGNOSTIC_NOT_CLOSURE",
+        "exitCode": 0
+      },
+      {
+        "owner": "/root/rev03_a4_resume",
+        "execSessionId": 60199,
+        "pid": 5987,
+        "task": "phase-labeled targeted 10,000-location Memory sensitivity diagnostic",
+        "state": "COMPLETED_PASS_DIAGNOSTIC_NOT_CLOSURE",
+        "exitCode": 0,
+        "result": "1 suite passed; preserved 180 ms >150 ms FAIL/OPEN remains unresolved"
+      }
+    ]
+  },
+  "permissionPreflight": {
+    "mode": "RECOVER_AND_PREFLIGHT_ONLY",
+    "result": "READY_FOR_PARALLEL_RESUME",
+    "completedAt": "2026-09-19T22:40:08+08:00",
+    "instruction": {
+      "path": "/Users/mzm/Desktop/CairnNZ_resume_permissions_parallel.md",
+      "sha256": "89fcc6e21d9e2b4dd491ebdc330271ff0fd28fa5c9a7ada0b2f1bfcbc06ba0f6"
+    },
+    "goalKeptPaused": true,
+    "featureWorkResumed": false,
+    "longLoadedScreenTestStarted": false,
+    "parent": {
+      "agentId": "/root",
+      "threadId": "01a0b4c1-b498-76e0-95bd-1976d11586f2",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "ultra",
+      "approvalPolicy": "never",
+      "sandbox": "danger-full-access",
+      "permissionProfile": "disabled",
+      "metadataSource": "/Users/mzm/.codex/sessions/2026/09/18/rollout-2026-09-18T21-43-09-01a0b4c1-b498-76e0-95bd-1976d11586f2.jsonl",
+      "smokeReceipt": "/private/tmp/cairn-permission-preflight-parent.jFWJgT/receipt.json",
+      "smokeReceiptSha256": "211934a89873baa658171975762650c661f6765a1697c5ec255e2d356aa45648",
+      "screenshot": "/private/tmp/cairn-permission-preflight-parent.jFWJgT/browser-smoke.png",
+      "screenshotSha256": "e3325dea67e280b7bf4cf167de4813b806dab6adda31fb4bc75b7908cbfe8bc2",
+      "filesystemWriteRead": "PASS",
+      "loopbackHttp": "PASS_200_LISTENER_CLOSED",
+      "headlessBrowser": "PASS_PROCESS_CLOSED"
+    },
+    "child": {
+      "agentId": "/root/permission_preflight_child",
+      "nickname": "Franklin",
+      "threadId": "01a0ba15-909f-71f2-a36f-8c3e472d2c9f",
+      "attempt": null,
+      "attemptNote": "Attempt ordinal is not exposed in the child session metadata; this was the sole fresh child dispatched for the preflight.",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "approvalPolicy": "never",
+      "sandbox": "danger-full-access",
+      "permissionProfile": "disabled",
+      "metadataSource": "/Users/mzm/.codex/sessions/2026/09/19/rollout-2026-09-19T22-32-50-01a0ba15-909f-71f2-a36f-8c3e472d2c9f.jsonl",
+      "smokeReceipt": "/private/tmp/cairnnz-preflight-child.ilyq6Z/preflight-receipt.json",
+      "smokeReceiptSha256": "b64322e72dd9cd47b815bbe930765ea78f1b04288abd58ab1acae3eac4a38b54",
+      "screenshot": "/private/tmp/cairnnz-preflight-child.ilyq6Z/chrome-smoke.png",
+      "screenshotSha256": "b00c5a2e416317b7a5046aec0318835a9d1f2cb7fef4cc3062e74ab8d5b1569a",
+      "filesystemWriteRead": "PASS",
+      "loopbackHttp": "PASS_200_LISTENER_CLOSED",
+      "headlessBrowser": "PASS_PROCESS_CLOSED",
+      "repositoryWrites": false
+    },
+    "source": {
+      "head": "393338b5c159e7341d22b94086b5c29455386bdf",
+      "productFingerprint": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+      "productFingerprintFileCount": 633,
+      "ordinaryIndexUnchanged": true
+    },
+    "supervisionEvidenceReused": {
+      "receipt": "LIVE_DRILL_RESULTS.json",
+      "T01": "PASS_NO_RERUN",
+      "T04": "PASS_NO_RERUN",
+      "T08": "PASS",
+      "hook": "HISTORICAL_T01_PASS_CURRENTLY_DISABLED",
+      "coreGuards": "T08_PASS_UNATTENDED_STOP_GUARD_FAIL_DISABLED"
+    },
+    "readyAssignmentsAfterExplicitGoalResume": [
+      {
+        "lane": "A",
+        "model": "gpt-5.6-sol",
+        "reasoningEffort": "xhigh",
+        "task": "Restart the owner-interrupted changed-Activity gate from the beginning and complete the exact-fingerprint Revision-03 verifier audit; do not rerun the already-passing long loaded-screen case unless new evidence requires it."
+      },
+      {
+        "lane": "B",
+        "model": "gpt-5.6-sol",
+        "reasoningEffort": "xhigh",
+        "task": "Perform the already-authorized bounded Homepage material repair from the recorded read-only diagnosis and validate it under the visual guardrails."
+      },
+      {
+        "lane": "C_OPTIONAL",
+        "model": "gpt-5.6-sol",
+        "reasoningEffort": "xhigh",
+        "task": "Prepare exact-fingerprint Public closure evidence only where independent and dependency-ready; Public integration remains gated by the Revision-03 software gate."
+      }
+    ],
+    "rootAssignment": "gpt-5.6-sol ultra supervisor/integrator; one product-code writer remains authoritative",
+    "maximumConcurrentChildren": 3,
+    "fast": "OFF_UNCHANGED"
+  },
+  "primaryWriter": {
+    "id": null,
+    "previousId": "/root/rev03_a4_resume",
+    "scope": "Revision-03 A4 Activity/Memory product and test changes for the current batch",
+    "exclusive": true,
+    "status": "NONE_ACTIVE_READY_FOR_CONTROLLED_ATTEMPT",
+    "runningObservedAt": "2026-09-19T23:44:13+08:00",
+    "releasedAt": "2026-09-20T00:13:40+08:00"
+  },
+  "integrationOwner": {
+    "id": "/root",
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "ultra",
+    "scope": "orchestration, integration, scheduling, shared contracts, baselines and evidence disposition only"
+  },
+  "workers": [
+    {
+      "id": "/root/auth_final_review",
+      "task": "authorization_identity_revision_persistence_privacy_review",
+      "attempt": 1,
+      "required": false,
+      "state": "COMPLETED",
+      "disposition": "recorded_in_review_findings",
+      "writer": false
+    },
+    {
+      "id": "/root/flow_gps_final_review",
+      "task": "user_flow_realistic_gps_ui_evidence_review",
+      "attempt": 1,
+      "required": false,
+      "state": "COMPLETED",
+      "disposition": "recorded_in_review_findings",
+      "writer": false
+    },
+    {
+      "id": "/root/supervision_drill_worker",
+      "task": "T01/T04 disposable stall worker",
+      "attempt": 1,
+      "required": false,
+      "state": "QUARANTINED",
+      "disposition": "quarantined_after_finite_deadline_and_collected",
+      "writer": false,
+      "acknowledgedAt": "2026-09-19T10:31:43.695Z",
+      "finishedAt": "2026-09-19T10:33:13.704Z",
+      "exitCode": 4,
+      "quarantined": true,
+      "execSessionId": 49834,
+      "pid": 82550,
+      "nonce": "T01-01a0b4c1-20260919T182828p0800"
+    },
+    {
+      "id": "/root/supervision_t01_active",
+      "task": "T01 resumed-session Stop-hook live proof",
+      "attempt": 2,
+      "required": true,
+      "state": "COMPLETED",
+      "disposition": "integrated",
+      "writer": false,
+      "nonce": "T01R2-01a0b4c1-20260919T192951p0800",
+      "acknowledgedAt": "2026-09-19T11:33:32.702Z",
+      "execSessionId": 25110,
+      "pid": 83463,
+      "finishedAt": "2026-09-19T11:34:41.525Z",
+      "exitCode": 0,
+      "terminalState": "RELEASED"
+    },
+    {
+      "id": "/root/rev03_primary_writer",
+      "task": "A4 Revision-03 Memory responsiveness diagnosis and bounded correction",
+      "attempt": 1,
+      "required": true,
+      "state": "COMPLETED",
+      "disposition": "read_only_diagnosis_integrated_by_root",
+      "writer": false,
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "dispatchFingerprint": "9cee885d048b37ba1257f2651e0add6aa0a37b583e59e5404cb8df2636722632",
+      "observedRunningAt": "2026-09-19T19:36:00+08:00",
+      "acknowledgedAt": "2026-09-19T19:38:00+08:00",
+      "ownedFiles": [
+        "app/src/features/memory/components/FogLayer.tsx",
+        "app/src/features/memory/__tests__/revision03MemoryScale.test.ts"
+      ],
+      "ownedFileStartSha256": {
+        "app/src/features/memory/components/FogLayer.tsx": "bbbfdd39fb0519cdcd49c5c24cdb684588d8ff48d009b33363a6ff460a96e089",
+        "app/src/features/memory/__tests__/revision03MemoryScale.test.ts": "9fbe4fbba5ba579a83f9336138a26dfe7a8a3364d35a6fc0f1a9147e09dd66bd"
+      },
+      "acknowledgement": "No edits occurred. Worker identified the loaded timing correlation defect, exact 30 m over-reveal, and synchronous Turf tile hotspot; root integrated the bounded correction and focused sensitivity tests.",
+      "expectedOutput": "read-only A4 diagnosis, exact proposed patch plan, sensitivity test and command receipts"
+    },
+    {
+      "id": "/root/rev03_verifier",
+      "task": "Read-only Revision-03 A4 evidence and contract verification",
+      "attempt": 1,
+      "required": true,
+      "state": "COMPLETED",
+      "disposition": "owner_paused_during_final_exact_fingerprint_audit_no_concrete_blocker_found_so_far",
+      "writer": false,
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "dispatchFingerprint": "9cee885d048b37ba1257f2651e0add6aa0a37b583e59e5404cb8df2636722632",
+      "observedRunningAt": "2026-09-19T19:36:00+08:00",
+      "acknowledgedAt": "2026-09-19T19:36:00+08:00",
+      "acknowledgement": "Repeated bounded read-only passes found and verified fixes for paint nullability, persistent-cache work/error handling, aggregate slice accounting, Combined/Friends bounded geometry, and deletion write-after-purge. Final follow-up confirmed the exact fingerprint and loaded evidence match and the resumed-map fence does not weaken the assertion; the assertion-by-assertion audit remains incomplete after the explicit owner pause.",
+      "pausedAt": "2026-09-19T21:58:04+08:00",
+      "startedProcesses": []
+    },
+    {
+      "id": "/root/homepage_readonly",
+      "task": "Read-only authorized Homepage authority and repair audit",
+      "attempt": 1,
+      "required": true,
+      "state": "COMPLETED",
+      "disposition": "read_only_diagnosis_recorded_no_edits",
+      "writer": false,
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "dispatchFingerprint": "9cee885d048b37ba1257f2651e0add6aa0a37b583e59e5404cb8df2636722632",
+      "observedRunningAt": "2026-09-19T19:36:00+08:00",
+      "acknowledgedAt": "2026-09-19T19:37:00+08:00",
+      "acknowledgement": "Visual guardrails, current sources, and canonical QA authority inspected without edits. Source-level high-frequency texture is the substantiated defect; implementation remains deferred behind the Revision-03 software gate."
+    },
+    {
+      "id": "/root/permission_preflight_child",
+      "task": "Fresh bounded inherited-permission and harmless browser/server smoke",
+      "attempt": null,
+      "attemptNote": "Attempt ordinal was not exposed; this was the sole fresh preflight child.",
+      "required": false,
+      "state": "COMPLETED",
+      "disposition": "receipt_collected_no_repo_writes_no_processes_left",
+      "writer": false,
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "threadId": "01a0ba15-909f-71f2-a36f-8c3e472d2c9f",
+      "receipt": "/private/tmp/cairnnz-preflight-child.ilyq6Z/preflight-receipt.json"
+    },
+    {
+      "id": "/root/rev03_a4_resume",
+      "task": "Revision-03 A4 exact-current changed gate and assertion-level verifier closure",
+      "attempt": 3,
+      "previousAttempt": 1,
+      "generation": 3,
+      "threadId": "01a0ba25-8dab-73e2-a33b-4f5fec5dfe4b",
+      "required": true,
+      "state": "COMPLETED",
+      "disposition": "recover_only_checkpointed_settings_red_writer_lease_released",
+      "runningObservedAt": "2026-09-19T23:44:13+08:00",
+      "lastMeaningfulProgressAt": "2026-09-20T00:12:45+08:00",
+      "resumeArtifact": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/RESUME_GENERATION_2.json",
+      "resumeArtifactTimestampCorrection": "initial 23:17 value rejected; corrected from direct date observation to 23:46:03",
+      "latestIntegratedResult": {
+        "id": "FR-MEM-HIDE-01",
+        "status": "PASS_RED_GREEN_FOCUSED",
+        "completedAt": "2026-09-20T00:03:27+08:00",
+        "receipt": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-diagnostics/fr-mem-hide-01/receipt.json",
+        "receiptSha256": "2ddd06da71b872a9bfa282d88817ad6fb0dc622056982f09ea4d809ae7e6da95",
+        "finalFingerprintBeforeSettingsRedTest": "5f2be7d535a763ce33736b32cdf241cee129daa8957ecab2128346747ae90423"
+      },
+      "preservedPriorIntegratedResult": {
+        "id": "FR-CIRCLE-ACCOUNT-01",
+        "status": "PASS_RED_GREEN_FOCUSED",
+        "receipt": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-diagnostics/fr-circle-account-01/receipt.json"
+      },
+      "openRedResult": {
+        "id": "SETTINGS_OWNER_BOUNDARIES",
+        "status": "RED_EXIT_1_3_OF_3_EXPECTED_FAILURES",
+        "productSourceChanged": false,
+        "test": "app/src/screens/__tests__/settingsAccountBoundary.test.tsx",
+        "log": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-diagnostics/settings-owner/red.log",
+        "logSha256": "a54c198c79f31d8a2713e072de33996b813b88b2119c583fcb73a5495de12486"
+      },
+      "writer": true,
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "dispatchFingerprint": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+      "acknowledgedAt": "2026-09-19T22:50:00+08:00",
+      "heavyWorkload": "cd app && npm run verify:changed",
+      "execSessionId": 46877,
+      "log": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-resumed.log",
+      "firstExecutableResult": {
+        "state": "FAIL",
+        "exitCode": 1,
+        "suitesPassed": 109,
+        "suitesFailed": 11,
+        "testsPassed": 1124,
+        "testsFailed": 27,
+        "testsSkipped": 3,
+        "a4Relevant": [
+          "10,000-location Memory synchronous slice 180 ms versus frozen <150 ms",
+          "stale cold-hydrate test still expects pre-O41 Memory initialization ownership"
+        ],
+        "classifiedCollectionDebtCount": 9
+      },
+      "checkpoint": {
+        "recordedAt": "2026-09-19T23:07:00+08:00",
+        "productFingerprint": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+        "changedFile": "app/__tests__/useAppStore.test.ts",
+        "changedFileSha256": "48276ff3f5c2f8c914151a2ce89d89dbc53883ab9a8ce8e0ee07604ba562a142",
+        "changedLines": "+7/-9",
+        "performanceStatus": "FAIL_OPEN_180_MS_GT_150_MS",
+        "audit": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/VERIFIER_AUDIT.md",
+        "ownedProcesses": []
+      }
+    },
+    {
+      "id": "/root/homepage_material_lane",
+      "task": "F5 isolated Homepage material diagnosis and bounded candidate preparation",
+      "attempt": 2,
+      "previousAttempt": 1,
+      "required": true,
+      "state": "COMPLETED",
+      "collaborationState": "interrupted_after_checkpoint",
+      "disposition": "recover_only_checkpointed_candidate_a_prepared_not_loaded_not_pass",
+      "threadId": "01a0ba25-bc6b-7471-b132-dc5df466a815",
+      "runningObservedAt": "2026-09-19T23:44:13+08:00",
+      "lastMeaningfulProgressAt": "2026-09-20T00:11:04+08:00",
+      "resumeArtifact": "/Users/mzm/Desktop/cairn_revision03_work/homepage_candidates/lane-b-material-20260919-01/RESUME_RECEIPT.md",
+      "resumeArtifactSha256": "8522a89aaf1d39725f435dbb1bc0e44366a09de0e702b1ddba019cd93c5e8cb1",
+      "candidateReport": "/Users/mzm/Desktop/cairn_revision03_work/homepage_candidates/lane-b-material-20260919-01/CANDIDATE_A_REPORT.md",
+      "candidateReportSha256": "d027058012cda7f2036722682938c2e43db137dc89c597d28f11a71e3b18d79e",
+      "writer": false,
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "dispatchFingerprint": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+      "heavyWorkloadAllowed": false,
+      "primaryTreeWritesAllowed": false,
+      "checkpoint": {
+        "recordedAt": "2026-09-19T23:10:00+08:00",
+        "scratch": "/Users/mzm/Desktop/cairn_revision03_work/homepage_candidates/lane-b-material-20260919-01",
+        "generatedCandidates": 0,
+        "primaryTreeWrites": 0,
+        "ownedProcesses": [],
+        "status": "NOT_RUN_OWNER_ACCEPTANCE_UNVERIFIED"
+      }
+    },
+    {
+      "id": "/root/functional_verification_lane",
+      "task": "F3/F6 and dependency-independent F4 read-only functional verification",
+      "attempt": 4,
+      "previousAttempts": [1, 2],
+      "generation": 4,
+      "threadId": "01a0ba25-efc8-72b3-95a4-ef06c5feb810",
+      "required": true,
+      "state": "COMPLETED",
+      "disposition": "recover_only_checkpointed_fr_discovery_candidate_partial_unapplied_not_run",
+      "runningObservedAt": "2026-09-19T23:44:13+08:00",
+      "generation3RunningObservedAt": "2026-09-19T23:48:30+08:00",
+      "lastMeaningfulProgressAt": "2026-09-20T00:13:26+08:00",
+      "resumeArtifact": "/Users/mzm/Desktop/cairn_revision03_work/evidence/overnight-functional-01/lanec-acceptance-delta-red-test-spec-044045c3.md",
+      "resumeArtifactSha256": "4267a35f55f4e8d439cce69226c230c143a4193f6d52eac9c1b5b1516ec2212f",
+      "generation2Result": "completed useful acceptance delta with no primary-tree edits or heavy process",
+      "generation3Output": "/Users/mzm/Desktop/cairn_v1_closure_work/canary-public-off-044045c3",
+      "generation4Output": "/Users/mzm/Desktop/cairn_revision03_work/canary-friend-discovery-500",
+      "generation4Artifact": "/Users/mzm/Desktop/cairn_revision03_work/canary-friend-discovery-500/candidate/backend/scripts/personal-friends-harness/abcdn-api-mysql.js",
+      "generation4ArtifactSha256": "d1233dd60bc19b2bb6db91bcccd606ff09b774369f163cf99ee6ae5be59bf375",
+      "writer": false,
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "dispatchFingerprint": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+      "acknowledgedAt": "2026-09-19T22:51:00+08:00",
+      "firstFinding": "Settings has no assertion-level representation in 03_ACCEPTANCE_PLAN; current normal-caller mapping is required.",
+      "additionalFindings": [
+        "useMarkerStore loadCircleMarkers lacks an account/generation fence and can publish a delayed account-A response after account switch",
+        "non-owner Memory-discovered Cairn Hide closes the sheet but performs no durable hide or cache purge",
+        "Settings profile refresh/name-save async responses lack initiating-viewer fencing and privacy deletion lacks action single-flight",
+        "friend Cairn discovery truncates to the newest 500 candidates before proximity/evidence filtering, permitting nearby eligible starvation"
+      ],
+      "focusedTest": {
+        "execSessionId": 84048,
+        "state": "COMPLETED_PASS",
+        "exitCode": 0,
+        "suites": "4/4",
+        "tests": "41/41",
+        "durationSeconds": 9.367,
+        "evidence": "/Users/mzm/Desktop/cairn_revision03_work/evidence/overnight-functional-01/lanec-friends-settings-focused-044045c3.log",
+        "sha256": "ff4ebf5e39746cd978354c98435cce7b75df478c397efd3bb686675d96920948",
+        "limitation": "The existing green tests do not exercise the newly mapped normal-path races and actions."
+      },
+      "heavyWorkloadAllowed": false,
+      "primaryTreeWritesAllowed": false,
+      "checkpoint": {
+        "recordedAt": "2026-09-19T23:08:00+08:00",
+        "ownedProcesses": [],
+        "primaryTreeWrites": 0,
+        "findingsFixed": false,
+        "remaining": "finish compact acceptance/dependency order, then hand bounded red tests and ownership to the next authorized primary writer"
+      }
+    }
+  ],
+  "jobs": [
+    {
+      "id": "T01-01a0b4c1-20260919T182828p0800-attempt-1",
+      "owned": true,
+      "state": "DEADLINE_NONZERO_FENCED",
+      "pid": 82550,
+      "execSessionId": 49834,
+      "partialArtifact": "/Users/mzm/Desktop/cairn_revision03_work/supervision/drills/T01-01a0b4c1-20260919T182828p0800/attempt-1-partial.json",
+      "statusArtifact": "/Users/mzm/Desktop/cairn_revision03_work/supervision/drills/T01-01a0b4c1-20260919T182828p0800/attempt-1-status.json",
+      "deadlineMs": 90000,
+      "finishedAt": "2026-09-19T10:33:13.704Z",
+      "exitCode": 4,
+      "releaseCreated": false
+    },
+    {
+      "id": "T01-01a0b4c1-20260919T182828p0800-takeover-1",
+      "owned": true,
+      "state": "COMPLETED",
+      "executor": "root",
+      "sourceAttempt": "attempt-1",
+      "resultArtifact": "/Users/mzm/Desktop/cairn_revision03_work/supervision/drills/T01-01a0b4c1-20260919T182828p0800/takeover-1-final.json",
+      "resultSha256": "ec1b8d527a136dae850c931e9a631e8888019290b6d609986934c23dfc59b989",
+      "completedAt": "2026-09-19T10:35:44.270Z"
+    },
+    {
+      "id": "T01R2-01a0b4c1-20260919T192951p0800-attempt-2",
+      "owned": true,
+      "state": "COMPLETED",
+      "nonce": "T01R2-01a0b4c1-20260919T192951p0800",
+      "deadlineMs": 180000,
+      "startedAt": "2026-09-19T11:33:32.702Z",
+      "execSessionId": 25110,
+      "pid": 83463,
+      "statusArtifact": "docs/review/v1-closure/20260918T222838+0800/supervision/t01-runtime/T01R2-01a0b4c1-20260919T192951p0800-status.json",
+      "releaseArtifact": "docs/review/v1-closure/20260918T222838+0800/supervision/t01-runtime/T01R2-01a0b4c1-20260919T192951p0800-release",
+      "finishedAt": "2026-09-19T11:34:41.525Z",
+      "exitCode": 0,
+      "terminalState": "RELEASED",
+      "restarted": false
+    },
+    {
+      "id": "R03-A4-LOADED-044045c3",
+      "owned": true,
+      "state": "COMPLETED_PASS",
+      "execSessionId": 65633,
+      "resultArtifact": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/loaded-web/manifest.json",
+      "exitCode": 0,
+      "assertions": "24/24",
+      "runtimeErrors": 0
+    },
+    {
+      "id": "R03-A4-VERIFY-CHANGED-044045c3",
+      "owned": true,
+      "state": "INTERRUPTED_BY_EXPLICIT_OWNER_PAUSE",
+      "execSessionId": 9895,
+      "resultArtifact": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-interrupted.json",
+      "exitCode": 130,
+      "result": "NOT_RUN_TO_COMPLETION"
+    },
+    {
+      "id": "R03-A4-VERIFY-CHANGED-RESUME-044045c3",
+      "owned": true,
+      "state": "COMPLETED_FAIL",
+      "execSessionId": 46877,
+      "resultArtifact": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-resumed.log",
+      "exitCode": 1,
+      "result": "109_OF_120_SUITES_PASS_11_FAIL_2_A4_RELEVANT"
+    },
+    {
+      "id": "OVERNIGHT-LANEC-FRIENDS-SETTINGS-FOCUSED-044045c3",
+      "owned": true,
+      "state": "COMPLETED_PASS",
+      "execSessionId": 84048,
+      "resultArtifact": "/Users/mzm/Desktop/cairn_revision03_work/evidence/overnight-functional-01/lanec-friends-settings-focused-044045c3.log",
+      "resultSha256": "ff4ebf5e39746cd978354c98435cce7b75df478c397efd3bb686675d96920948",
+      "exitCode": 0,
+      "result": "4_OF_4_SUITES_41_OF_41_TESTS_PASS_WITH_KNOWN_COVERAGE_LIMITATION"
+    },
+    {
+      "id": "R03-A4-MEMORY-10K-PROFILE-044045c3",
+      "owned": true,
+      "state": "COMPLETED_DIAGNOSTIC_NOT_CLOSURE",
+      "execSessionId": 90650,
+      "resultArtifact": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-diagnostics/memory-scale-10000-profiled.log",
+      "profileArtifact": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-diagnostics/memory-scale-10000.cpuprofile",
+      "exitCode": 0,
+      "result": "NO_GAP_GTE_150_MS_BUT_PRIOR_180_MS_REMAINS_FAIL_OPEN"
+    },
+    {
+      "id": "R03-A4-O41-AUTHORITY-FOCUSED-044045c3",
+      "owned": true,
+      "state": "COMPLETED_PASS",
+      "resultArtifact": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-diagnostics/o41-authority-focused.log",
+      "result": "11_OF_11_PASS_TEST_CONTRACT_ONLY"
+    },
+    {
+      "id": "R03-A4-MEMORY-10K-SENSITIVITY-044045c3",
+      "owned": true,
+      "state": "COMPLETED_DIAGNOSTIC_NOT_CLOSURE",
+      "execSessionId": 60199,
+      "pid": 5987,
+      "exitCode": 0,
+      "result": "1_OF_1_SUITE_PASS_1_TEST_PASS_5_SKIPPED_180_MS_FAIL_OPEN_PRESERVED"
+    },
+    {
+      "id": "CANARY30-OBSERVER-20260919T234603P0800",
+      "owned": true,
+      "state": "TERMINAL_INTERRUPTED_FOR_RECOVER_ONLY",
+      "execSessionId": 97758,
+      "pid": 6075,
+      "startedAt": "2026-09-19T23:48:02+08:00",
+      "expectedStopNotBefore": "2026-09-20T00:16:03+08:00",
+      "output": "/Users/mzm/Desktop/cairn_revision03_work/supervision/canary-20260919T234603p0800-observer.jsonl",
+      "role": "read_only_metadata_observer",
+      "exitCode": 130,
+      "result": "29_SAMPLES_11_OBSERVED_18_UNCERTAIN_NO_CANARY_PASS",
+      "report": "docs/review/v1-closure/20260918T222838+0800/supervision/CANARY_REPORT.json"
+    }
+  ],
+  "ownedProcesses": [],
+  "containers": [
+    {
+      "id": "691e61549515",
+      "name": "cairn-v1-closure-mysql",
+      "port": "127.0.0.1:3310->3306",
+      "ownership": "closure_review_database",
+      "expectedState": "running"
+    },
+    {
+      "id": "f3b4d31e78f1",
+      "name": "cc-builder-mysql",
+      "port": "0.0.0.0:3306->3306",
+      "ownership": "unrelated_existing_service",
+      "expectedState": "running"
+    }
+  ],
+  "observer": {
+    "rootProgressObservedAt": "2026-09-20T00:20:11+08:00",
+    "rootStaleAfterSeconds": 300,
+    "statusFiles": [
+      {
+        "path": "docs/review/v1-closure/20260918T222838+0800/04_WORK_QUEUE.json",
+        "staleAfterSeconds": 86400
+      },
+      {
+        "path": "docs/review/v1-closure/20260918T222838+0800/OWNER_PAUSE_CHECKPOINT.md",
+        "staleAfterSeconds": 86400
+      }
+    ],
+    "defaultIntervalMs": 60000,
+    "defaultOutput": "/Users/mzm/Desktop/cairn_revision03_work/supervision/observer.jsonl",
+    "maxSamples": 720
+  },
+  "evidence": {
+    "testedFingerprint": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+    "loadedRawGpsReceipt": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/loaded-web/manifest.json",
+    "interruptedChangedGateReceipt": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-interrupted.json",
+    "scaleTestedFingerprint": "51920f0fb96ecd981bfb4e9f7e97657644dfac2da90e10b1279e3ace90ba3f62",
+    "scaleReceipt": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/51920f0fb96ecd981bfb4e9f7e97657644dfac2da90e10b1279e3ace90ba3f62/memory-scale-final.json",
+    "scaleJestReceipt": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/51920f0fb96ecd981bfb4e9f7e97657644dfac2da90e10b1279e3ace90ba3f62/memory-scale-final-jest.json",
+    "closeoutReceipt": null
+  },
+  "closure": {
+    "localSoftware": "HOLD",
+    "closeoutValidator": "NOT_RUN",
+    "nativeDevice": "UNVERIFIED",
+    "ownerAcceptance": "UNVERIFIED"
+  },
+  "firstReadyWorkAfterOwnerActivation": {
+    "queueId": "F6",
+    "task": "From the preserved three-failure SettingsScreen RED, implement only initiating-viewer/generation fences, stale-name draft preservation, and delete single-flight/busy state; then run the same focused test."
+  },
+  "nextSupervisorAction": {
+    "state": "FUNCTIONAL_RUN_READY_NO_WORK_STARTED_THIS_TURN",
+    "reason": "The stale pause/RECOVER_ONLY intent is cleared, the old Goal is absent, the failed custom Stop guard is disabled, and all prior workers/processes are quiescent.",
+    "steps": [
+      "Keep the 180 ms >150 ms result FAIL/OPEN; the profiled pass is diagnostic only and does not erase it.",
+      "Start the preserved SettingsScreen RED correction with exactly one primary-tree writer when functional implementation is next authorized.",
+      "Reuse an old worker only if the collaboration runtime still supports it and it is quiescent; otherwise create one controlled new attempt without duplicate ownership.",
+      "Continue independent Homepage loaded validation and external Friends/Public fixtures only under the existing one-heavy-workload rule.",
+      "Keep Fast OFF; do not rerun completed evidence merely because the supervision Goal was cleared.",
+      "Do not rebuild or reactivate the custom Stop hook in this recovery."
+    ]
+  },
+  "previousGoalTurnClassification": "failed_unattended_supervision_recovered_metadata_only"
+}

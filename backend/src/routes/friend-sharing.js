@@ -154,33 +154,51 @@ router.post('/projections', async (req, res) => {
   const requested = Array.isArray(req.body?.friend_ids) ? req.body.friend_ids : [];
   const ids = [...new Set(requested.map(Number).filter(id => Number.isInteger(id) && id > 0))];
   if (ids.length > 5) return res.status(400).json({ error: 'At most five selected sources are allowed' });
-  const authorizedAt = new Date();
-  const expiresAt = new Date(authorizedAt.getTime() + 24 * 60 * 60 * 1000);
+  const conn = await pool.getConnection();
   try {
+    await conn.beginTransaction();
+    const lockIds = [...new Set([Number(req.user.userId), ...ids])].sort((a, b) => a - b);
+    if (lockIds.length > 0) {
+      await conn.query('SELECT id FROM users WHERE id IN (?) ORDER BY id FOR UPDATE', [lockIds]);
+    }
     const projections = [];
     const revoked_friend_ids = [];
     for (const ownerId of ids) {
-      const grant = await currentMemoryGrant(pool, ownerId, req.user.userId, { requireSelected: true });
+      const grant = await currentMemoryGrant(conn, ownerId, req.user.userId, { requireSelected: true });
       if (!grant) {
         revoked_friend_ids.push(String(ownerId));
         continue;
       }
-      const projection = await deriveFriendProjection(pool, ownerId, req.user.userId, grant);
-      projections.push({
-        ...projection,
-        server_authorized_at: authorizedAt.toISOString(),
-        authorization_expires_at: expiresAt.toISOString(),
-      });
+      const projection = await deriveFriendProjection(conn, ownerId, req.user.userId, grant);
+      const revalidated = await currentMemoryGrant(conn, ownerId, req.user.userId, { requireSelected: true });
+      if (!revalidated
+        || revalidated.grant_epoch !== grant.grant_epoch
+        || Number(revalidated.authorization_version) !== Number(grant.authorization_version)
+        || Number(revalidated.policy_epoch) !== Number(grant.policy_epoch)) {
+        revoked_friend_ids.push(String(ownerId));
+        continue;
+      }
+      projections.push(projection);
     }
+    await conn.commit();
+    const authorizedAt = new Date();
+    const expiresAt = new Date(authorizedAt.getTime() + 24 * 60 * 60 * 1000);
     return res.json({
       server_authorized_at: authorizedAt.toISOString(),
       authorization_expires_at: expiresAt.toISOString(),
-      projections,
+      projections: projections.map(projection => ({
+        ...projection,
+        server_authorized_at: authorizedAt.toISOString(),
+        authorization_expires_at: expiresAt.toISOString(),
+      })),
       revoked_friend_ids,
     });
   } catch (error) {
+    try { await conn.rollback(); } catch { /* noop */ }
     console.error('[friend-sharing/projections]', error.message);
     return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
   }
 });
 

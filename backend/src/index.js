@@ -113,6 +113,7 @@ app.use('/api/memory', require('./routes/memory'));
 app.use('/api/memory-subscriptions', require('./routes/memory-subscriptions'));
 app.use('/api/friend-sharing', require('./routes/friend-sharing'));
 app.use('/api/friend-content', require('./routes/friend-content'));
+app.use('/api/public-cairns', require('./routes/public-cairns'));
 app.use('/api/circle', require('./routes/circle'));
 app.use('/api/hide', require('./routes/hide'));
 app.use('/api/telemetry', require('./routes/telemetry'));
@@ -168,6 +169,8 @@ async function start() {
       ['users', 'deleted_at'],
       ['users', 'date_of_birth'],
       ['pending_registrations', 'date_of_birth'],
+      ['markers', 'content_revision'],
+      ['routes', 'content_revision'],
     ];
     const requiredTables = [
       'token_blacklist',      // migration 020

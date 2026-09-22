@@ -24,10 +24,12 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import Svg, { Path } from 'react-native-svg';
 import {
   useFriendStore, sendFriendRequest, fetchFriendRequests,
-  acceptFriendRequestAPI, rejectFriendRequestAPI, blockUser, fetchFriendProfile,
+  acceptFriendRequestAPI, rejectFriendRequestAPI, blockUser,
+  fetchFriendProfileForNavigation, friendProfileNavigationAuthorityIsCurrent,
   fetchOutboundRequests, cancelOutboundRequest, removeFriendAPI,
-  type OutboundRequest, type FriendProfile,
+  type OutboundRequest, type FriendProfile, type FriendProfileNavigationAuthority,
 } from '../store/useFriendStore';
+import { useAppStore } from '../store/useAppStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { Icon, type IconName } from '../components/Icon';
@@ -43,6 +45,13 @@ import { Colors, FontSize, IconSize, Radius, Shadow, Spacing } from '../componen
 import { deriveFriendsRequestContentState } from '../utils/friendsRequestState';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+type ProfileFriend = {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  addedAt: number;
+};
 
 // ── Design system: golden-ratio driven tokens for consistency ──────────────
 // Type scale (1.25 modular): 12 / 14 / 16 / 20 / 26 / 32
@@ -510,6 +519,7 @@ export function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const headerColor = theme.scenicText;
   const nav = useNavigation<Nav>();
+  const viewerId = useAppStore((state) => String(state.user?.id ?? ''));
   const [tab, setTab] = useState<'friends' | 'pending'>('friends');
   const [showAdd, setShowAdd] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -527,19 +537,25 @@ export function FriendsScreen() {
   const [incoming, setIncoming] = useState<IncomingRequest[]>([]);
   const [outbound, setOutbound] = useState<OutboundRequest[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [profileFriend, setProfileFriend] = useState<{ id: string; name: string; email: string } | null>(null);
+  const profileRequestGeneration = useRef(0);
+  const profileViewerId = useRef(viewerId);
+  const [profileFriend, setProfileFriend] = useState<ProfileFriend | null>(null);
   const [profileData, setProfileData] = useState<FriendProfile | null>(null);
+  const [profileNavigationAuthority, setProfileNavigationAuthority] = useState<FriendProfileNavigationAuthority | null>(null);
+  const [profileOfflineFallback, setProfileOfflineFallback] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [removeConfirming, setRemoveConfirming] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState('');
+  const [removeServerCommitted, setRemoveServerCommitted] = useState(false);
   const [cancelRequestTarget, setCancelRequestTarget] = useState<OutboundRequest | null>(null);
   const [cancelRequestBusy, setCancelRequestBusy] = useState(false);
   const [cancelRequestError, setCancelRequestError] = useState('');
-  const [friendActionTarget, setFriendActionTarget] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [friendActionTarget, setFriendActionTarget] = useState<ProfileFriend | null>(null);
   const [blockConfirming, setBlockConfirming] = useState(false);
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockError, setBlockError] = useState('');
+  const [blockServerCommitted, setBlockServerCommitted] = useState(false);
 
   const loadRequests = async () => {
     try {
@@ -566,7 +582,7 @@ export function FriendsScreen() {
 
   const friends = useMemo(
     () => storeFriends.map((f) => ({
-      id: f.id, name: f.name, email: f.email,
+      id: f.id, userId: f.userId, name: f.name, email: f.email, addedAt: f.addedAt,
     })),
     [storeFriends],
   );
@@ -608,22 +624,42 @@ export function FriendsScreen() {
   };
 
   // Bug-4: tap → open profile detail sheet
-  const handleFriendTap = async (friend: { id: string; name: string; email: string }) => {
+  const handleFriendTap = async (friend: ProfileFriend) => {
+    const requestGeneration = ++profileRequestGeneration.current;
     setRemoveConfirming(false);
     setRemoveBusy(false);
     setRemoveError('');
+    setRemoveServerCommitted(false);
     setProfileFriend(friend);
     setProfileData(null);
+    setProfileNavigationAuthority(null);
+    setProfileOfflineFallback(false);
     setProfileLoading(true);
-    const p = await fetchFriendProfile(friend.id);
-    setProfileData(p);
+    const result = await fetchFriendProfileForNavigation(friend.id);
+    if (requestGeneration !== profileRequestGeneration.current) return;
+    if (result.status === 'superseded') {
+      setProfileFriend(null);
+      setProfileData(null);
+      setProfileNavigationAuthority(null);
+      setProfileOfflineFallback(false);
+      setProfileLoading(false);
+      return;
+    }
+    if (result.status === 'online') {
+      setProfileData(result.profile);
+      setProfileNavigationAuthority(result.authority);
+    } else if (result.status === 'offline-fallback') {
+      setProfileNavigationAuthority(result.authority);
+      setProfileOfflineFallback(true);
+    }
     setProfileLoading(false);
   };
 
-  const handleFriendLongPress = (friend: { id: string; name: string; email: string }) => {
+  const handleFriendLongPress = (friend: ProfileFriend) => {
     setBlockConfirming(false);
     setBlockBusy(false);
     setBlockError('');
+    setBlockServerCommitted(false);
     setFriendActionTarget(friend);
   };
 
@@ -632,7 +668,13 @@ export function FriendsScreen() {
     setBlockBusy(true);
     setBlockError('');
     const result = await blockUser(friendActionTarget.id);
+    if (result.superseded) return;
     setBlockBusy(false);
+    if (result.serverCommitted) {
+      setBlockServerCommitted(true);
+      setBlockError(result.error || 'Block completed, but local cleanup could not be confirmed.');
+      return;
+    }
     if (result.error) {
       setBlockError(result.error);
       return;
@@ -653,10 +695,54 @@ export function FriendsScreen() {
 
   const closeProfile = () => {
     if (removeBusy) return;
+    profileRequestGeneration.current += 1;
     setProfileFriend(null);
     setProfileData(null);
+    setProfileNavigationAuthority(null);
+    setProfileOfflineFallback(false);
+    setProfileLoading(false);
     setRemoveConfirming(false);
     setRemoveError('');
+    setRemoveServerCommitted(false);
+  };
+
+  useEffect(() => {
+    if (profileViewerId.current === viewerId) return;
+    profileViewerId.current = viewerId;
+    profileRequestGeneration.current += 1;
+    setProfileFriend(null);
+    setProfileData(null);
+    setProfileNavigationAuthority(null);
+    setProfileOfflineFallback(false);
+    setProfileLoading(false);
+  }, [viewerId]);
+
+  useEffect(() => () => {
+    profileRequestGeneration.current += 1;
+  }, []);
+
+  const openSharedContent = () => {
+    const target = profileFriend;
+    const authority = profileNavigationAuthority;
+    if (!target || !authority || !friendProfileNavigationAuthorityIsCurrent(authority)) {
+      profileRequestGeneration.current += 1;
+      setProfileFriend(null);
+      setProfileData(null);
+      setProfileNavigationAuthority(null);
+      setProfileOfflineFallback(false);
+      setProfileLoading(false);
+      return;
+    }
+    profileRequestGeneration.current += 1;
+    setProfileFriend(null);
+    setProfileData(null);
+    setProfileNavigationAuthority(null);
+    setProfileOfflineFallback(false);
+    setProfileLoading(false);
+    setRemoveConfirming(false);
+    setRemoveError('');
+    setRemoveServerCommitted(false);
+    nav.navigate('FriendContent', { friendId: target.id, friendName: target.name });
   };
 
   const confirmRemoveFriend = async () => {
@@ -664,13 +750,21 @@ export function FriendsScreen() {
     setRemoveBusy(true);
     setRemoveError('');
     const result = await removeFriendAPI(profileFriend.id);
+    if (result.superseded) return;
     setRemoveBusy(false);
+    if (result.serverCommitted) {
+      setRemoveServerCommitted(true);
+      setRemoveError(result.error || 'Unfriend completed, but local cleanup could not be confirmed.');
+      return;
+    }
     if (!result.success) {
       setRemoveError(result.error || 'Could not remove friend. Try again.');
       return;
     }
     setProfileFriend(null);
     setProfileData(null);
+    setProfileNavigationAuthority(null);
+    setProfileOfflineFallback(false);
     setRemoveConfirming(false);
     setRemoveError('');
   };
@@ -752,8 +846,8 @@ export function FriendsScreen() {
                 id={f.id}
                 name={f.name}
                 email={f.email}
-                onPress={() => handleFriendTap({ id: f.id, name: f.name, email: f.email })}
-                onLongPress={() => handleFriendLongPress({ id: f.id, name: f.name, email: f.email })}
+                onPress={() => handleFriendTap(f)}
+                onLongPress={() => handleFriendLongPress(f)}
               />
             ))}
           </>
@@ -872,11 +966,23 @@ export function FriendsScreen() {
                 </Text>
                 <PrimaryButton
                   label="Open shared content"
-                  onPress={() => {
-                    const target = profileFriend;
-                    closeProfile();
-                    nav.navigate('FriendContent', { friendId: target.id, friendName: target.name });
-                  }}
+                  onPress={openSharedContent}
+                  style={{ marginTop: Spacing.md }}
+                />
+              </View>
+            ) : profileOfflineFallback && profileNavigationAuthority ? (
+              <View testID="friend-profile-offline-fallback">
+                <StateSurface
+                  variant="unavailable"
+                  title="Profile details unavailable offline"
+                  body="Shared content opens only when a separate cached authorization is still valid."
+                  material="embedded"
+                  alignment="center"
+                  style={s.profileState}
+                />
+                <PrimaryButton
+                  label="Open shared content"
+                  onPress={openSharedContent}
                   style={{ marginTop: Spacing.md }}
                 />
               </View>
@@ -902,6 +1008,7 @@ export function FriendsScreen() {
                     variant="destructive"
                     onPress={confirmRemoveFriend}
                     loading={removeBusy}
+                    disabled={removeServerCommitted}
                     style={s.profileRemoveAction}
                     testID="friend-profile-remove-final"
                   />
@@ -957,7 +1064,7 @@ export function FriendsScreen() {
             {blockConfirming ? (
               <>
                 <PrimaryButton label="Back" variant="secondary" onPress={() => setBlockConfirming(false)} style={s.dialogAction} />
-                <PrimaryButton label={`Block ${firstNameOf(friendActionTarget.name)}`} variant="destructive" onPress={confirmBlockFriend} loading={blockBusy} style={s.dialogAction} />
+                <PrimaryButton label={`Block ${firstNameOf(friendActionTarget.name)}`} variant="destructive" onPress={confirmBlockFriend} loading={blockBusy} disabled={blockServerCommitted} style={s.dialogAction} />
               </>
             ) : (
               <>

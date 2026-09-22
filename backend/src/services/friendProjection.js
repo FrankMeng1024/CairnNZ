@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { eligibleSourceProvenanceSql } = require('./activitySourceProvenance');
 
 const CELL_SIZE_M = 200;
 const MASK_RADIUS_M = 250;
@@ -81,26 +82,70 @@ function cellIntersectsMask(cell, mask) {
   return minimumGroundDistanceToCellMeters(cell, mask) <= radiusM + MASK_DISTANCE_TOLERANCE_M;
 }
 
-async function deriveFriendProjection(db, ownerId, viewerId, grant) {
+async function loadFriendProjectionEvidence(db, ownerId, grant) {
   const [rows] = await db.execute(
-    `SELECT mp.id, mp.lat, mp.lng, mp.ts, mp.source_activity_client_id,
+    `SELECT DISTINCT evidence.id, evidence.lat, evidence.lng, evidence.ts,
+            evidence.source_activity_client_id,evidence.source_segment_id,evidence.evidence_kind,
             s.id AS session_id
-       FROM memory_points mp
+       FROM (
+         SELECT mp.id, mp.lat, mp.lng, mp.ts, mp.source_activity_client_id,mp.source_segment_id,
+                'coverage' AS evidence_kind
+           FROM memory_points mp
+          WHERE mp.user_id = ?
+            AND mp.evidence_source = 'activity_real'
+            AND mp.continuity_state = 'accepted'
+            AND mp.horizontal_accuracy_m IS NOT NULL
+            AND mp.horizontal_accuracy_m <= 50
+         UNION ALL
+         SELECT witness.id, witness.first_lat AS lat, witness.first_lng AS lng,
+                witness.first_observed_at_ms AS ts,witness.source_activity_client_id,witness.source_segment_id,
+                'presence_first' AS evidence_kind
+           FROM memory_presence_witnesses witness
+          WHERE witness.user_id = ?
+            AND witness.evidence_source = 'activity_real'
+            AND witness.continuity_state = 'accepted'
+            AND witness.horizontal_accuracy_m <= 50
+         UNION ALL
+         SELECT witness.id, witness.lat, witness.lng, witness.observed_at_ms AS ts,
+                witness.source_activity_client_id,witness.source_segment_id,'presence_latest' AS evidence_kind
+           FROM memory_presence_witnesses witness
+          WHERE witness.user_id = ?
+            AND witness.evidence_source = 'activity_real'
+            AND witness.continuity_state = 'accepted'
+            AND witness.horizontal_accuracy_m <= 50
+            AND witness.observed_at_ms > witness.first_observed_at_ms
+       ) evidence
        JOIN sessions s
-         ON s.user_id = mp.user_id
-        AND s.client_activity_id = mp.source_activity_client_id
+         ON s.user_id = ?
+        AND s.client_activity_id = evidence.source_activity_client_id
         AND s.finalized_at IS NOT NULL
         AND s.abandoned_at IS NULL
-      WHERE mp.user_id = ?
-        AND mp.evidence_source = 'activity_real'
-        AND mp.continuity_state = 'accepted'
-        AND mp.horizontal_accuracy_m IS NOT NULL
-        AND mp.horizontal_accuracy_m <= 50
-        AND FROM_UNIXTIME(mp.ts / 1000) >= GREATEST(?, ?)
-      ORDER BY mp.source_activity_client_id ASC, mp.ts ASC, mp.id ASC
+        AND ${eligibleSourceProvenanceSql('s.source_provenance')}
+       JOIN memory_share_grants active_grant
+         ON active_grant.id = ? AND active_grant.owner_id = ?
+        AND active_grant.status = 'active' AND active_grant.revoked_at IS NULL
+       JOIN friendship_episodes active_episode
+         ON active_episode.id = active_grant.friendship_episode_id
+        AND active_episode.ended_at IS NULL
+       JOIN JSON_TABLE(s.route_points_canonical, '$[*]' COLUMNS(
+         lat DOUBLE PATH '$.lat', lng DOUBLE PATH '$.lng',
+         observed_ms BIGINT PATH '$.t', segment_id VARCHAR(80) PATH '$.segment_id'
+       )) canonical
+         ON ABS(CAST(canonical.observed_ms AS SIGNED)-CAST(evidence.ts AS SIGNED)) <= 1000
+        AND ST_Distance_Sphere(POINT(canonical.lng,canonical.lat),POINT(evidence.lng,evidence.lat)) <= 5
+        AND COALESCE(canonical.segment_id,'legacy-0')=COALESCE(evidence.source_segment_id,'legacy-0')
+      WHERE FROM_UNIXTIME(evidence.ts / 1000) >=
+            GREATEST(active_grant.effective_at, active_episode.started_at)
+      ORDER BY evidence.source_activity_client_id ASC, evidence.ts ASC,
+               evidence.evidence_kind ASC, evidence.id ASC
       LIMIT 20000`,
-    [ownerId, grant.effective_at, grant.friendship_started_at],
+    [ownerId, ownerId, ownerId, ownerId, grant.id, ownerId],
   );
+  return rows;
+}
+
+async function deriveFriendProjection(db, ownerId, viewerId, grant) {
+  const rows = await loadFriendProjectionEvidence(db, ownerId, grant);
   const [privatePlaces] = await db.execute(
     `SELECT lat, lng, GREATEST(radius_m, 250) AS radius_m, version
        FROM memory_private_places
@@ -112,7 +157,7 @@ async function deriveFriendProjection(db, ownerId, viewerId, grant) {
   const endpoints = [];
   const byActivity = new Map();
   for (const row of rows) {
-    const key = row.source_activity_client_id;
+    const key = `${row.source_activity_client_id}:${row.source_segment_id || 'legacy-0'}`;
     const entry = byActivity.get(key);
     if (!entry) byActivity.set(key, { first: row, last: row });
     else entry.last = row;
@@ -169,5 +214,6 @@ module.exports = {
   cellPolygon,
   minimumGroundDistanceToCellMeters,
   cellIntersectsMask,
+  loadFriendProjectionEvidence,
   deriveFriendProjection,
 };

@@ -45,3 +45,20 @@ Do not:
 - run `git clean`;
 - restart MySQL unless explicitly required;
 - restart nginx unless explicitly required.
+
+## Deferred operational debt: deploy fetch amplification
+
+The 2026-09-08 O36 telemetry deployment spent about 38 minutes fetching a
+72.9 MB pack even though its backend-only commit was small. Production was
+also behind asset-heavy client/review commits on deploy-bearing `master`:
+the missing range contained 771 changed files and about 79.7 MiB of
+uncompressed blobs. Transport over GitHub SSH port 443 averaged only about
+32 KB/s. Disk pressure, stale locks, and local I/O wait were ruled out.
+
+Do not change production Git/deployment architecture as an incidental part of
+an application rollout. Track a deliberate future operations task to prevent
+generated QA screenshots, runtime captures, and review boards from being
+committed heavily to deploy-bearing `master` (prefer bounded external build/QA
+artifacts). Separately evaluate a backend-focused checkout or artifact deploy
+and fetch progress/watchdog logging. Do not rewrite repository history merely
+to address this debt.

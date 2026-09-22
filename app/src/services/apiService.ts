@@ -22,7 +22,10 @@
  * queue retries).
  */
 import { API_BASE_URL } from '../config/api';
-import { getToken, clearToken } from './tokenStore';
+import {
+  getTokenAuthority,
+  isTokenAuthorityCurrent,
+} from './tokenStore';
 import { useAppStore } from '../store/useAppStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { crashLogger } from './crashLogger';
@@ -41,9 +44,13 @@ export async function authenticatedFetch(
   options: AuthFetchOptions = {}
 ): Promise<Response> {
   const { skipLogoutOn401, expectedUserId, ...fetchOptions } = options;
-  const token = await getToken();
-  if (expectedUserId !== undefined
-    && String(useAppStore.getState().user?.id ?? '') !== String(expectedUserId)) {
+  const authority = await getTokenAuthority();
+  const token = authority?.token ?? null;
+  const requestOwnerId = String(useAppStore.getState().user?.id ?? '');
+  if ((expectedUserId !== undefined
+      && (requestOwnerId !== String(expectedUserId)
+        || authority?.ownerUserId !== String(expectedUserId)))
+    || (requestOwnerId && authority?.ownerUserId !== requestOwnerId)) {
     const error = new Error('authenticated_fetch_account_changed');
     (error as any).code = 'ACCOUNT_CHANGED';
     throw error;
@@ -163,7 +170,11 @@ export async function authenticatedFetch(
     // recording.
     const tracking = useTrackingStore.getState().status;
     if (tracking === 'tracking' || tracking === 'paused') {
-      useAppStore.getState().setSessionExpired(true);
+      if (authority
+        && await isTokenAuthorityCurrent(authority)
+        && String(useAppStore.getState().user?.id ?? '') === requestOwnerId) {
+        useAppStore.getState().setSessionExpired(true);
+      }
       crashLogger.breadcrumb(`revoke:401_during_tracking_deferred path=${path}`);
       return res;
     }
@@ -171,8 +182,17 @@ export async function authenticatedFetch(
     // Rule 3: hard signal + not tracking → true logout.
     crashLogger.breadcrumb(`apiService:401_hard_logout path=${path}`);
     crashLogger.breadcrumb(`signout_reason=401_invalid path=${path}`);
-    await clearToken();
-    await useAppStore.getState().logout();
+    if (authority
+      && authority.ownerUserId === requestOwnerId
+      && String(useAppStore.getState().user?.id ?? '') === requestOwnerId) {
+      // Unified logout owns token CAS and every device-global cleanup under
+      // one serialized account transition.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logout } = require('./authService');
+      await logout({ expectedAuthority: authority, expectedUserId: requestOwnerId, revoke: false });
+    } else {
+      crashLogger.breadcrumb(`apiService:401_stale_authority_ignored path=${path}`);
+    }
   }
 
   return res;

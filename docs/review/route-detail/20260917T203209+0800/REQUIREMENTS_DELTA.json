@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T203209+0800",
+  "card": "CARD-ROUTE-01",
+  "delivery_revision": "02",
+  "requirements": [
+    {"id":"RQ-ROUTE-001","capabilities":["ROUTE-01"],"implementation":"CORRECTED_CANDIDATE","automated_proof":"PASS","visual_proof":"PASS_EXPO_WEB_BOUNDARY","deployment":"PENDING","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-ROUTE-002","capabilities":["ROUTE-02"],"implementation":"PRESERVED_IMPLEMENTED_CANDIDATE","automated_proof":"PASS","visual_proof":"PRIOR_EVIDENCE_RETAINED","deployment":"PENDING","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-ROUTE-003","capabilities":["ROUTE-03"],"implementation":"IMPLEMENTED_LOCAL_MINIMUM","automated_proof":"PASS_REAL_MYSQL_8_0_45","visual_proof":"PRIOR_EVIDENCE_RETAINED","deployment":"MIGRATION_AND_BACKEND_REQUIRED","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-ROUTE-004","capabilities":["ROUTE-04"],"implementation":"CORRECTED_CANDIDATE","automated_proof":"PASS","visual_proof":"PASS_EXPO_WEB_DAY_SUNSET_NIGHT","deployment":"PENDING","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-ROUTE-005","capabilities":["ROUTE-01","ROUTE-02"],"implementation":"CORRECTED_CANDIDATE","automated_proof":"PASS","visual_proof":"PASS_EXPO_WEB_NATIVE_GESTURE_NOT_RUN","deployment":"PENDING","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-ROUTE-006","capabilities":["ROUTE-02","ROUTE-03"],"implementation":"PRESERVED_IMPLEMENTED_CANDIDATE","automated_proof":"PASS","visual_proof":"PRIOR_EVIDENCE_RETAINED","deployment":"ORIGIN_BACKEND_REQUIRED","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-TRAIL-003","capabilities":["ACT-03","ROUTE-01"],"implementation":"PRESERVED_IMPLEMENTED_CANDIDATE","automated_proof":"PASS","visual_proof":"PRIOR_EVIDENCE_RETAINED","deployment":"PENDING","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-OFFLINE-001","capabilities":["CAIRN-01","ROUTE-02","ACT-03"],"implementation":"CORRECTED_ROUTE_SCOPE","automated_proof":"PASS","visual_proof":"PASS_EXPO_WEB_FIXTURE","deployment":"MODERN_SERVER_FEATURES_PENDING","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"},
+    {"id":"RQ-ROUTE-007","capabilities":["ROUTE-05"],"implementation":"NOT_IMPLEMENTED_OUT_OF_SCOPE","automated_proof":"NOT_CLAIMED","visual_proof":"NONE","deployment":"NO","device_loading":"UNVERIFIED","owner_acceptance":"PENDING"}
+  ]
+}
+

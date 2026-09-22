@@ -1,0 +1,1364 @@
+{
+  "schema": "cairnnz.revision03.loaded-raw-gps.v1",
+  "generatedAt": "2026-09-19T13:53:21.524Z",
+  "environment": {
+    "renderer": "Expo Web production screens + mapbox-gl adapter",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "locale": "en-NZ",
+    "timezone": "Pacific/Auckland",
+    "evidenceBoundary": "Loaded Web UI and deterministic synthetic Raw GPS; not native, physical-device, battery, or NZ field evidence"
+  },
+  "candidateFingerprint": {
+    "algorithm": "sha256",
+    "digest": "044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929",
+    "fileCount": 633,
+    "scope": [
+      "app/src",
+      "app/scripts",
+      "app/package.json",
+      "app/package-lock.json",
+      "backend/src",
+      "backend/scripts",
+      "backend/package.json",
+      "backend/package-lock.json"
+    ]
+  },
+  "source": {
+    "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+    "seed": 550101,
+    "origin": {
+      "lat": -41.2865,
+      "lng": 174.7762
+    },
+    "bulkReplayTimeScale": 10,
+    "interactionReplayTimeScale": 1,
+    "intendedMotion": "walk northeast, stop 90 simulated seconds, resume northeast with a second leg"
+  },
+  "timings": {
+    "domain": "browser performance.now monotonic wall time",
+    "budgetsFrozenBeforeRun": {
+      "rawInputToAcceptedMs": 120,
+      "acceptedToMemoryMs": 40,
+      "memoryToSourceUpdateMs": 350,
+      "paintOpportunityMs": 50,
+      "userActionAcknowledgementMs": 50,
+      "controlTransitionConvergenceMs": 500
+    },
+    "pauseControlAcknowledgementMs": 0.7999999523162842,
+    "resumeControlAcknowledgementMs": 1.7000000476837158,
+    "pauseTransitionConvergenceMs": 18.5,
+    "resumeTransitionConvergenceMs": 38.700000047683716,
+    "livePipeline": {
+      "domain": "browser performance.now monotonic wall time",
+      "cadence": "O55 runtime at 1x wall-clock",
+      "correlation": {
+        "key": "1789782812203|293",
+        "timestamp": 1789782812203,
+        "sequence": 293,
+        "rawCoordinates": {
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555
+        },
+        "acceptedCoordinates": {
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555
+        },
+        "memoryCoordinates": {
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555
+        },
+        "acceptedMatchesMemoryCoordinates": true,
+        "memoryCommitted": true,
+        "memoryDeduplicated": false,
+        "commitOutcomeObservedMs": 22.200000047683716,
+        "fogContentSignature": "raw-web-qa|qa-raw-gps-isolated|memory-fog-geodesic-v2|21|0|24c029dd",
+        "fogEvidencePointCount": 21,
+        "fogGeometryRevision": "memory-fog-geodesic-v2"
+      },
+      "deduplicatedCommitsBeforeMatchedCoverage": [],
+      "rawInputObserved": true,
+      "acceptedMovementObserved": true,
+      "memoryUpdateObserved": true,
+      "fogSourceUpdateObserved": true,
+      "paintOpportunityObserved": true,
+      "rawInputToAcceptedMs": 2,
+      "acceptedToMemoryMs": 1,
+      "memoryToSourceUpdateMs": 211.5,
+      "sourceUpdateToPaintOpportunityMs": 14.5,
+      "paintOpportunityMs": 14.5,
+      "paintBoundary": "next Web requestAnimationFrame scheduled by the correlated setData call; not native GPU proof"
+    },
+    "livePipelineTrace": {
+      "startedAt": 75789.29999995232,
+      "coverageBefore": 20,
+      "raw": [
+        {
+          "observedAt": 81792.19999992847,
+          "timestamp": 1789782812203,
+          "sequence": 293,
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555
+        }
+      ],
+      "accepted": [
+        {
+          "observedAt": 81794.19999992847,
+          "timestamp": 1789782812203,
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555
+        }
+      ],
+      "memory": [
+        {
+          "observedAt": 81795.19999992847,
+          "timestamp": 1789782812203,
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555,
+          "cid": "a7bb6029-9fc3-4088-9e36-da62f1108dba",
+          "coverageCount": 21
+        }
+      ],
+      "decisions": [
+        {
+          "observedAt": 81817.39999997616,
+          "timestamp": 1789782812203,
+          "sequence": 293,
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555,
+          "accepted": true,
+          "memoryCommitted": true,
+          "memoryDeduplicated": false,
+          "coverageCount": 21
+        }
+      ],
+      "sources": [
+        {
+          "observedAt": 82006.69999992847,
+          "evidencePointCount": 21,
+          "contentSignature": "raw-web-qa|qa-raw-gps-isolated|memory-fog-geodesic-v2|21|0|24c029dd",
+          "geometryRevision": "memory-fog-geodesic-v2",
+          "paintOpportunityAt": 82021.19999992847
+        }
+      ],
+      "completedAt": 82088.10000002384
+    },
+    "note": "Acknowledgement begins at the captured DOM click dispatch and ends at the synchronous store transition; full convergence is reported separately. The simulator used 1x wall-clock cadence; accelerated 10x replay was used only for bulk setup."
+  },
+  "stages": [
+    {
+      "stage": "before-activity",
+      "runtimeId": "0b57cce5-6450-4cea-81bc-cba58569b77a",
+      "observedAtWallMs": 1789825775292,
+      "route": "Hiking",
+      "tracking": {
+        "status": "idle",
+        "sessionId": null,
+        "provider": "real",
+        "rawCount": 0,
+        "acceptedCount": 0,
+        "distanceM": 0,
+        "trackArrayObjectId": 2
+      },
+      "journal": {
+        "ownerUserId": "raw-web-qa",
+        "sessionCount": 0,
+        "sessionIds": []
+      },
+      "memory": {
+        "personalCoverageCount": 0,
+        "presenceWitnessCount": 0,
+        "syntheticCoverageCount": 0,
+        "geometryVersion": 2,
+        "personalArrayObjectId": 3,
+        "syntheticArrayObjectId": 1,
+        "syntheticObjectIdentity": "0b57cce5-6450-4cea-81bc-cba58569b77a:1",
+        "syntheticContentFingerprint": "0|811c9dc5",
+        "syntheticCids": [],
+        "firstSynthetic": null,
+        "lastSynthetic": null
+      },
+      "simulator": {
+        "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+        "seed": 550101,
+        "observationMode": "raw-gps",
+        "signal": "normal",
+        "timeScale": 10,
+        "rawTrailCount": 0,
+        "truthTrailCount": 0,
+        "latestRaw": null,
+        "latestDecision": null
+      },
+      "renderer": {
+        "loaded": false,
+        "fogLayerPresent": false,
+        "fogSourcePresent": false
+      }
+    },
+    {
+      "stage": "initial-accepted-motion",
+      "runtimeId": "0b57cce5-6450-4cea-81bc-cba58569b77a",
+      "observedAtWallMs": 1789825781421,
+      "route": "Hiking",
+      "tracking": {
+        "status": "tracking",
+        "sessionId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+        "provider": "simulator",
+        "rawCount": 91,
+        "acceptedCount": 32,
+        "distanceM": 156.3532349736672,
+        "trackArrayObjectId": 5
+      },
+      "journal": {
+        "ownerUserId": "raw-web-qa",
+        "sessionCount": 0,
+        "sessionIds": []
+      },
+      "memory": {
+        "personalCoverageCount": 0,
+        "presenceWitnessCount": 0,
+        "syntheticCoverageCount": 9,
+        "geometryVersion": 2,
+        "personalArrayObjectId": 3,
+        "syntheticArrayObjectId": 4,
+        "syntheticObjectIdentity": "0b57cce5-6450-4cea-81bc-cba58569b77a:4",
+        "syntheticContentFingerprint": "9|8540dc2b",
+        "syntheticCids": [
+          "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "17812368-6f3a-44a2-86db-f485b7d8c22f",
+          "51757e01-2428-4898-8412-458cf44b6488",
+          "cd37a028-8d9e-4dda-b87e-fc664ee26723",
+          "de811041-738d-499a-946d-39daaebf26cf",
+          "7b037bb0-1854-4710-b487-c3c22edce4a5",
+          "bbb0bed3-707c-4ac4-93fe-4f280358f632",
+          "a52d06f1-7cd4-4c6c-96d8-6371fb304664",
+          "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1"
+        ],
+        "firstSynthetic": {
+          "lat": -41.28649216742116,
+          "lng": 174.77622619768158,
+          "ts": 1789782516200,
+          "cid": "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 13.294484804649553,
+          "continuityState": "accepted"
+        },
+        "lastSynthetic": {
+          "lat": -41.28557331599488,
+          "lng": 174.77714022917576,
+          "ts": 1789782603200,
+          "cid": "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 15.174549608174667,
+          "continuityState": "accepted"
+        }
+      },
+      "simulator": {
+        "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+        "seed": 550101,
+        "observationMode": "raw-gps",
+        "signal": "normal",
+        "timeScale": 10,
+        "rawTrailCount": 92,
+        "truthTrailCount": 92,
+        "latestRaw": {
+          "sequence": 92,
+          "atMs": 1789782606200,
+          "lat": -41.285541699623415,
+          "lng": 174.77692366820065,
+          "bearingDegrees": 278.6416111036117,
+          "joystickMagnitude": 1,
+          "effectiveVirtualElapsedMs": 90800,
+          "observationMode": "raw-gps",
+          "groundTruthLat": -41.28552077103428,
+          "groundTruthLng": 174.77717923321404,
+          "accuracyM": 24.524142640280225,
+          "errorEastM": -21.35380544430296,
+          "errorNorthM": -2.327184356241809,
+          "outlier": true
+        },
+        "latestDecision": {
+          "accepted": false,
+          "reason": "physical-continuity-quarantine",
+          "sequence": 92,
+          "atMs": 1789782606200,
+          "lat": -41.285541699623415,
+          "lng": 174.77692366820065,
+          "segmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c"
+        }
+      },
+      "renderer": {
+        "loaded": false,
+        "fogLayerPresent": false,
+        "fogSourcePresent": false
+      }
+    },
+    {
+      "stage": "live-memory-initial-motion",
+      "runtimeId": "0b57cce5-6450-4cea-81bc-cba58569b77a",
+      "observedAtWallMs": 1789825811797,
+      "route": "Memory",
+      "tracking": {
+        "status": "tracking",
+        "sessionId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+        "provider": "simulator",
+        "rawCount": 91,
+        "acceptedCount": 32,
+        "distanceM": 156.3532349736672,
+        "trackArrayObjectId": 5
+      },
+      "journal": {
+        "ownerUserId": "raw-web-qa",
+        "sessionCount": 0,
+        "sessionIds": []
+      },
+      "memory": {
+        "personalCoverageCount": 0,
+        "presenceWitnessCount": 0,
+        "syntheticCoverageCount": 9,
+        "geometryVersion": 2,
+        "personalArrayObjectId": 3,
+        "syntheticArrayObjectId": 4,
+        "syntheticObjectIdentity": "0b57cce5-6450-4cea-81bc-cba58569b77a:4",
+        "syntheticContentFingerprint": "9|8540dc2b",
+        "syntheticCids": [
+          "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "17812368-6f3a-44a2-86db-f485b7d8c22f",
+          "51757e01-2428-4898-8412-458cf44b6488",
+          "cd37a028-8d9e-4dda-b87e-fc664ee26723",
+          "de811041-738d-499a-946d-39daaebf26cf",
+          "7b037bb0-1854-4710-b487-c3c22edce4a5",
+          "bbb0bed3-707c-4ac4-93fe-4f280358f632",
+          "a52d06f1-7cd4-4c6c-96d8-6371fb304664",
+          "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1"
+        ],
+        "firstSynthetic": {
+          "lat": -41.28649216742116,
+          "lng": 174.77622619768158,
+          "ts": 1789782516200,
+          "cid": "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 13.294484804649553,
+          "continuityState": "accepted"
+        },
+        "lastSynthetic": {
+          "lat": -41.28557331599488,
+          "lng": 174.77714022917576,
+          "ts": 1789782603200,
+          "cid": "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 15.174549608174667,
+          "continuityState": "accepted"
+        }
+      },
+      "simulator": {
+        "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+        "seed": 550101,
+        "observationMode": "raw-gps",
+        "signal": "normal",
+        "timeScale": 10,
+        "rawTrailCount": 92,
+        "truthTrailCount": 92,
+        "latestRaw": {
+          "sequence": 92,
+          "atMs": 1789782606200,
+          "lat": -41.285541699623415,
+          "lng": 174.77692366820065,
+          "bearingDegrees": 278.6416111036117,
+          "joystickMagnitude": 1,
+          "effectiveVirtualElapsedMs": 90800,
+          "observationMode": "raw-gps",
+          "groundTruthLat": -41.28552077103428,
+          "groundTruthLng": 174.77717923321404,
+          "accuracyM": 24.524142640280225,
+          "errorEastM": -21.35380544430296,
+          "errorNorthM": -2.327184356241809,
+          "outlier": true
+        },
+        "latestDecision": {
+          "accepted": false,
+          "reason": "physical-continuity-quarantine",
+          "sequence": 92,
+          "atMs": 1789782606200,
+          "lat": -41.285541699623415,
+          "lng": 174.77692366820065,
+          "segmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c"
+        }
+      },
+      "renderer": {
+        "loaded": true,
+        "fogLayerPresent": true,
+        "fogSourcePresent": true
+      }
+    },
+    {
+      "stage": "stationary-90-seconds",
+      "runtimeId": "0b57cce5-6450-4cea-81bc-cba58569b77a",
+      "observedAtWallMs": 1789825812789,
+      "route": "Memory",
+      "tracking": {
+        "status": "tracking",
+        "sessionId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+        "provider": "simulator",
+        "rawCount": 181,
+        "acceptedCount": 32,
+        "distanceM": 156.3532349736672,
+        "trackArrayObjectId": 5
+      },
+      "journal": {
+        "ownerUserId": "raw-web-qa",
+        "sessionCount": 0,
+        "sessionIds": []
+      },
+      "memory": {
+        "personalCoverageCount": 0,
+        "presenceWitnessCount": 0,
+        "syntheticCoverageCount": 9,
+        "geometryVersion": 2,
+        "personalArrayObjectId": 3,
+        "syntheticArrayObjectId": 4,
+        "syntheticObjectIdentity": "0b57cce5-6450-4cea-81bc-cba58569b77a:4",
+        "syntheticContentFingerprint": "9|8540dc2b",
+        "syntheticCids": [
+          "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "17812368-6f3a-44a2-86db-f485b7d8c22f",
+          "51757e01-2428-4898-8412-458cf44b6488",
+          "cd37a028-8d9e-4dda-b87e-fc664ee26723",
+          "de811041-738d-499a-946d-39daaebf26cf",
+          "7b037bb0-1854-4710-b487-c3c22edce4a5",
+          "bbb0bed3-707c-4ac4-93fe-4f280358f632",
+          "a52d06f1-7cd4-4c6c-96d8-6371fb304664",
+          "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1"
+        ],
+        "firstSynthetic": {
+          "lat": -41.28649216742116,
+          "lng": 174.77622619768158,
+          "ts": 1789782516200,
+          "cid": "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 13.294484804649553,
+          "continuityState": "accepted"
+        },
+        "lastSynthetic": {
+          "lat": -41.28557331599488,
+          "lng": 174.77714022917576,
+          "ts": 1789782603200,
+          "cid": "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 15.174549608174667,
+          "continuityState": "accepted"
+        }
+      },
+      "simulator": {
+        "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+        "seed": 550101,
+        "observationMode": "raw-gps",
+        "signal": "normal",
+        "timeScale": 10,
+        "rawTrailCount": 182,
+        "truthTrailCount": 182,
+        "latestRaw": {
+          "sequence": 182,
+          "atMs": 1789782696200,
+          "lat": -41.28553476080711,
+          "lng": 174.777112073161,
+          "bearingDegrees": 356.2008606301501,
+          "joystickMagnitude": 0,
+          "effectiveVirtualElapsedMs": 180800,
+          "observationMode": "raw-gps",
+          "groundTruthLat": -41.28552077103428,
+          "groundTruthLng": 174.77717923321404,
+          "accuracyM": 13.244505344608797,
+          "errorEastM": -5.611577420807233,
+          "errorNorthM": -1.5555939344277159,
+          "outlier": false
+        },
+        "latestDecision": {
+          "accepted": false,
+          "reason": "physical-continuity-quarantine",
+          "sequence": 182,
+          "atMs": 1789782696200,
+          "lat": -41.28553476080711,
+          "lng": 174.777112073161,
+          "segmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c"
+        }
+      },
+      "renderer": {
+        "loaded": true,
+        "fogLayerPresent": true,
+        "fogSourcePresent": true
+      }
+    },
+    {
+      "stage": "resumed-motion",
+      "runtimeId": "0b57cce5-6450-4cea-81bc-cba58569b77a",
+      "observedAtWallMs": 1789825839297,
+      "route": "Memory",
+      "tracking": {
+        "status": "tracking",
+        "sessionId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+        "provider": "simulator",
+        "rawCount": 291,
+        "acceptedCount": 84,
+        "distanceM": 389.0698359987102,
+        "trackArrayObjectId": 7
+      },
+      "journal": {
+        "ownerUserId": "raw-web-qa",
+        "sessionCount": 0,
+        "sessionIds": []
+      },
+      "memory": {
+        "personalCoverageCount": 0,
+        "presenceWitnessCount": 0,
+        "syntheticCoverageCount": 20,
+        "geometryVersion": 2,
+        "personalArrayObjectId": 3,
+        "syntheticArrayObjectId": 6,
+        "syntheticObjectIdentity": "0b57cce5-6450-4cea-81bc-cba58569b77a:6",
+        "syntheticContentFingerprint": "20|24fc092d",
+        "syntheticCids": [
+          "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "17812368-6f3a-44a2-86db-f485b7d8c22f",
+          "51757e01-2428-4898-8412-458cf44b6488",
+          "cd37a028-8d9e-4dda-b87e-fc664ee26723",
+          "de811041-738d-499a-946d-39daaebf26cf",
+          "7b037bb0-1854-4710-b487-c3c22edce4a5",
+          "bbb0bed3-707c-4ac4-93fe-4f280358f632",
+          "a52d06f1-7cd4-4c6c-96d8-6371fb304664",
+          "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1",
+          "cae8cc0d-0ab1-409c-8518-dbc5f3997d16",
+          "4d10266e-0a01-4643-b2ba-93dbaf6f7859",
+          "2b01b991-3444-4a85-99c8-262e19dcb2b9",
+          "46e64977-189e-4175-928c-39a8f19db832",
+          "835e2c72-ae86-423b-9c10-bc14c4ecdc8b",
+          "0c215441-4e5d-4ef3-9b10-8da964bc6fb7",
+          "6423a2bb-0e01-4bd8-bac9-58e6ea74c8ca",
+          "825a1e87-ffdd-4c9e-975c-8616f5a243df",
+          "897589c5-5cd8-47c9-8699-ab8ef6485fe7",
+          "079045ff-8242-4c11-b7e5-383785b5bdc3",
+          "69ca0dba-b58a-4275-b33a-daab65d0fe38"
+        ],
+        "firstSynthetic": {
+          "lat": -41.28649216742116,
+          "lng": 174.77622619768158,
+          "ts": 1789782516200,
+          "cid": "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 13.294484804649553,
+          "continuityState": "accepted"
+        },
+        "lastSynthetic": {
+          "lat": -41.28443960573153,
+          "lng": 174.77849582118233,
+          "ts": 1789782801200,
+          "cid": "69ca0dba-b58a-4275-b33a-daab65d0fe38",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 16.865209975473444,
+          "continuityState": "accepted"
+        }
+      },
+      "simulator": {
+        "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+        "seed": 550101,
+        "observationMode": "raw-gps",
+        "signal": "normal",
+        "timeScale": 10,
+        "rawTrailCount": 292,
+        "truthTrailCount": 292,
+        "latestRaw": {
+          "sequence": 292,
+          "atMs": 1789782806200,
+          "lat": -41.28441924668345,
+          "lng": 174.77854699288207,
+          "bearingDegrees": 60.78697294133525,
+          "joystickMagnitude": 1,
+          "effectiveVirtualElapsedMs": 290800,
+          "observationMode": "raw-gps",
+          "groundTruthLat": -41.2843868884003,
+          "groundTruthLng": 174.77845304468292,
+          "accuracyM": 15.750475824210179,
+          "errorEastM": 7.8500028175152154,
+          "errorNorthM": -3.5980811684002383,
+          "outlier": false
+        },
+        "latestDecision": {
+          "accepted": true,
+          "reason": "accepted-credible-motion",
+          "sequence": 292,
+          "atMs": 1789782806200,
+          "lat": -41.28441924668345,
+          "lng": 174.77854699288207,
+          "segmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "memoryCommitted": true,
+          "memoryDeduplicated": true
+        }
+      },
+      "renderer": {
+        "loaded": true,
+        "fogLayerPresent": true,
+        "fogSourcePresent": true
+      }
+    },
+    {
+      "stage": "paused-via-normal-control",
+      "runtimeId": "0b57cce5-6450-4cea-81bc-cba58569b77a",
+      "observedAtWallMs": 1789825849028,
+      "route": "Hiking",
+      "tracking": {
+        "status": "paused",
+        "sessionId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+        "provider": "simulator",
+        "rawCount": 293,
+        "acceptedCount": 85,
+        "distanceM": 402.74811226358753,
+        "trackArrayObjectId": 9
+      },
+      "journal": {
+        "ownerUserId": "raw-web-qa",
+        "sessionCount": 0,
+        "sessionIds": []
+      },
+      "memory": {
+        "personalCoverageCount": 0,
+        "presenceWitnessCount": 0,
+        "syntheticCoverageCount": 21,
+        "geometryVersion": 2,
+        "personalArrayObjectId": 3,
+        "syntheticArrayObjectId": 8,
+        "syntheticObjectIdentity": "0b57cce5-6450-4cea-81bc-cba58569b77a:8",
+        "syntheticContentFingerprint": "21|50fcee86",
+        "syntheticCids": [
+          "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "17812368-6f3a-44a2-86db-f485b7d8c22f",
+          "51757e01-2428-4898-8412-458cf44b6488",
+          "cd37a028-8d9e-4dda-b87e-fc664ee26723",
+          "de811041-738d-499a-946d-39daaebf26cf",
+          "7b037bb0-1854-4710-b487-c3c22edce4a5",
+          "bbb0bed3-707c-4ac4-93fe-4f280358f632",
+          "a52d06f1-7cd4-4c6c-96d8-6371fb304664",
+          "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1",
+          "cae8cc0d-0ab1-409c-8518-dbc5f3997d16",
+          "4d10266e-0a01-4643-b2ba-93dbaf6f7859",
+          "2b01b991-3444-4a85-99c8-262e19dcb2b9",
+          "46e64977-189e-4175-928c-39a8f19db832",
+          "835e2c72-ae86-423b-9c10-bc14c4ecdc8b",
+          "0c215441-4e5d-4ef3-9b10-8da964bc6fb7",
+          "6423a2bb-0e01-4bd8-bac9-58e6ea74c8ca",
+          "825a1e87-ffdd-4c9e-975c-8616f5a243df",
+          "897589c5-5cd8-47c9-8699-ab8ef6485fe7",
+          "079045ff-8242-4c11-b7e5-383785b5bdc3",
+          "69ca0dba-b58a-4275-b33a-daab65d0fe38",
+          "a7bb6029-9fc3-4088-9e36-da62f1108dba"
+        ],
+        "firstSynthetic": {
+          "lat": -41.28649216742116,
+          "lng": 174.77622619768158,
+          "ts": 1789782516200,
+          "cid": "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 13.294484804649553,
+          "continuityState": "accepted"
+        },
+        "lastSynthetic": {
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555,
+          "ts": 1789782812203,
+          "cid": "a7bb6029-9fc3-4088-9e36-da62f1108dba",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 14.707743774531263,
+          "continuityState": "accepted"
+        }
+      },
+      "simulator": {
+        "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+        "seed": 550101,
+        "observationMode": "raw-gps",
+        "signal": "normal",
+        "timeScale": 1,
+        "rawTrailCount": 294,
+        "truthTrailCount": 294,
+        "latestRaw": {
+          "sequence": 294,
+          "atMs": 1789782813203,
+          "lat": -41.28431616357627,
+          "lng": 174.77861938964395,
+          "bearingDegrees": 192.0462164552122,
+          "joystickMagnitude": 1,
+          "effectiveVirtualElapsedMs": 297803,
+          "observationMode": "raw-gps",
+          "groundTruthLat": -41.28431493357363,
+          "groundTruthLng": 174.7785344959051,
+          "accuracyM": 19.193631019320517,
+          "errorEastM": 7.093453072449632,
+          "errorNorthM": -0.13677352144998345,
+          "outlier": false
+        },
+        "latestDecision": {
+          "accepted": false,
+          "reason": "indoor-drift-suppressed",
+          "sequence": 294,
+          "atMs": 1789782813203,
+          "lat": -41.28431616357627,
+          "lng": 174.77861938964395,
+          "segmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c"
+        }
+      },
+      "renderer": {
+        "loaded": false,
+        "fogLayerPresent": false,
+        "fogSourcePresent": false
+      }
+    },
+    {
+      "stage": "immediately-before-finish",
+      "runtimeId": "0b57cce5-6450-4cea-81bc-cba58569b77a",
+      "observedAtWallMs": 1789825850499,
+      "route": "Hiking",
+      "tracking": {
+        "status": "tracking",
+        "sessionId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+        "provider": "simulator",
+        "rawCount": 295,
+        "acceptedCount": 86,
+        "distanceM": 402.74811226358753,
+        "trackArrayObjectId": 10
+      },
+      "journal": {
+        "ownerUserId": "raw-web-qa",
+        "sessionCount": 0,
+        "sessionIds": []
+      },
+      "memory": {
+        "personalCoverageCount": 0,
+        "presenceWitnessCount": 0,
+        "syntheticCoverageCount": 21,
+        "geometryVersion": 2,
+        "personalArrayObjectId": 3,
+        "syntheticArrayObjectId": 8,
+        "syntheticObjectIdentity": "0b57cce5-6450-4cea-81bc-cba58569b77a:8",
+        "syntheticContentFingerprint": "21|50fcee86",
+        "syntheticCids": [
+          "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "17812368-6f3a-44a2-86db-f485b7d8c22f",
+          "51757e01-2428-4898-8412-458cf44b6488",
+          "cd37a028-8d9e-4dda-b87e-fc664ee26723",
+          "de811041-738d-499a-946d-39daaebf26cf",
+          "7b037bb0-1854-4710-b487-c3c22edce4a5",
+          "bbb0bed3-707c-4ac4-93fe-4f280358f632",
+          "a52d06f1-7cd4-4c6c-96d8-6371fb304664",
+          "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1",
+          "cae8cc0d-0ab1-409c-8518-dbc5f3997d16",
+          "4d10266e-0a01-4643-b2ba-93dbaf6f7859",
+          "2b01b991-3444-4a85-99c8-262e19dcb2b9",
+          "46e64977-189e-4175-928c-39a8f19db832",
+          "835e2c72-ae86-423b-9c10-bc14c4ecdc8b",
+          "0c215441-4e5d-4ef3-9b10-8da964bc6fb7",
+          "6423a2bb-0e01-4bd8-bac9-58e6ea74c8ca",
+          "825a1e87-ffdd-4c9e-975c-8616f5a243df",
+          "897589c5-5cd8-47c9-8699-ab8ef6485fe7",
+          "079045ff-8242-4c11-b7e5-383785b5bdc3",
+          "69ca0dba-b58a-4275-b33a-daab65d0fe38",
+          "a7bb6029-9fc3-4088-9e36-da62f1108dba"
+        ],
+        "firstSynthetic": {
+          "lat": -41.28649216742116,
+          "lng": 174.77622619768158,
+          "ts": 1789782516200,
+          "cid": "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 13.294484804649553,
+          "continuityState": "accepted"
+        },
+        "lastSynthetic": {
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555,
+          "ts": 1789782812203,
+          "cid": "a7bb6029-9fc3-4088-9e36-da62f1108dba",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 14.707743774531263,
+          "continuityState": "accepted"
+        }
+      },
+      "simulator": {
+        "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+        "seed": 550101,
+        "observationMode": "raw-gps",
+        "signal": "normal",
+        "timeScale": 1,
+        "rawTrailCount": 296,
+        "truthTrailCount": 296,
+        "latestRaw": {
+          "sequence": 296,
+          "atMs": 1789782814481,
+          "lat": -41.28428999822465,
+          "lng": 174.77862686311505,
+          "bearingDegrees": 217.32444490913952,
+          "joystickMagnitude": 1,
+          "effectiveVirtualElapsedMs": 299081,
+          "observationMode": "raw-gps",
+          "groundTruthLat": -41.28430205726828,
+          "groundTruthLng": 174.7785497515522,
+          "accuracyM": 14.842619481552237,
+          "errorEastM": 6.443201582490832,
+          "errorNorthM": 1.3409016100327253,
+          "outlier": false
+        },
+        "latestDecision": {
+          "accepted": true,
+          "reason": "accepted-new-segment",
+          "sequence": 296,
+          "atMs": 1789782814481,
+          "lat": -41.28428999822465,
+          "lng": 174.77862686311505,
+          "segmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789825849126:b5c7f48f",
+          "memoryCommitted": true,
+          "memoryDeduplicated": true
+        }
+      },
+      "renderer": {
+        "loaded": false,
+        "fogLayerPresent": false,
+        "fogSourcePresent": false
+      }
+    },
+    {
+      "stage": "detail-navigation-before-terminal-cleanup",
+      "runtimeId": "0b57cce5-6450-4cea-81bc-cba58569b77a",
+      "observedAtWallMs": 1789825852460,
+      "route": "MapHistory",
+      "tracking": {
+        "status": "tracking",
+        "sessionId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+        "provider": "simulator",
+        "rawCount": 295,
+        "acceptedCount": 86,
+        "distanceM": 402.74811226358753,
+        "trackArrayObjectId": 10
+      },
+      "journal": {
+        "ownerUserId": "raw-web-qa",
+        "sessionCount": 1,
+        "sessionIds": [
+          "ec11c863-8c67-48c3-a308-9746d026b27b"
+        ]
+      },
+      "memory": {
+        "personalCoverageCount": 0,
+        "presenceWitnessCount": 0,
+        "syntheticCoverageCount": 21,
+        "geometryVersion": 2,
+        "personalArrayObjectId": 3,
+        "syntheticArrayObjectId": 8,
+        "syntheticObjectIdentity": "0b57cce5-6450-4cea-81bc-cba58569b77a:8",
+        "syntheticContentFingerprint": "21|50fcee86",
+        "syntheticCids": [
+          "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "17812368-6f3a-44a2-86db-f485b7d8c22f",
+          "51757e01-2428-4898-8412-458cf44b6488",
+          "cd37a028-8d9e-4dda-b87e-fc664ee26723",
+          "de811041-738d-499a-946d-39daaebf26cf",
+          "7b037bb0-1854-4710-b487-c3c22edce4a5",
+          "bbb0bed3-707c-4ac4-93fe-4f280358f632",
+          "a52d06f1-7cd4-4c6c-96d8-6371fb304664",
+          "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1",
+          "cae8cc0d-0ab1-409c-8518-dbc5f3997d16",
+          "4d10266e-0a01-4643-b2ba-93dbaf6f7859",
+          "2b01b991-3444-4a85-99c8-262e19dcb2b9",
+          "46e64977-189e-4175-928c-39a8f19db832",
+          "835e2c72-ae86-423b-9c10-bc14c4ecdc8b",
+          "0c215441-4e5d-4ef3-9b10-8da964bc6fb7",
+          "6423a2bb-0e01-4bd8-bac9-58e6ea74c8ca",
+          "825a1e87-ffdd-4c9e-975c-8616f5a243df",
+          "897589c5-5cd8-47c9-8699-ab8ef6485fe7",
+          "079045ff-8242-4c11-b7e5-383785b5bdc3",
+          "69ca0dba-b58a-4275-b33a-daab65d0fe38",
+          "a7bb6029-9fc3-4088-9e36-da62f1108dba"
+        ],
+        "firstSynthetic": {
+          "lat": -41.28649216742116,
+          "lng": 174.77622619768158,
+          "ts": 1789782516200,
+          "cid": "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 13.294484804649553,
+          "continuityState": "accepted"
+        },
+        "lastSynthetic": {
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555,
+          "ts": 1789782812203,
+          "cid": "a7bb6029-9fc3-4088-9e36-da62f1108dba",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 14.707743774531263,
+          "continuityState": "accepted"
+        }
+      },
+      "simulator": {
+        "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+        "seed": 550101,
+        "observationMode": "raw-gps",
+        "signal": "normal",
+        "timeScale": 1,
+        "rawTrailCount": 296,
+        "truthTrailCount": 296,
+        "latestRaw": {
+          "sequence": 296,
+          "atMs": 1789782814481,
+          "lat": -41.28428999822465,
+          "lng": 174.77862686311505,
+          "bearingDegrees": 217.32444490913952,
+          "joystickMagnitude": 1,
+          "effectiveVirtualElapsedMs": 299081,
+          "observationMode": "raw-gps",
+          "groundTruthLat": -41.28430205726828,
+          "groundTruthLng": 174.7785497515522,
+          "accuracyM": 14.842619481552237,
+          "errorEastM": 6.443201582490832,
+          "errorNorthM": 1.3409016100327253,
+          "outlier": false
+        },
+        "latestDecision": {
+          "accepted": true,
+          "reason": "accepted-new-segment",
+          "sequence": 296,
+          "atMs": 1789782814481,
+          "lat": -41.28428999822465,
+          "lng": 174.77862686311505,
+          "segmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789825849126:b5c7f48f",
+          "memoryCommitted": true,
+          "memoryDeduplicated": true
+        }
+      },
+      "renderer": {
+        "loaded": false,
+        "fogLayerPresent": false,
+        "fogSourcePresent": false
+      }
+    },
+    {
+      "stage": "after-actual-finish-handler",
+      "runtimeId": "0b57cce5-6450-4cea-81bc-cba58569b77a",
+      "observedAtWallMs": 1789825852759,
+      "route": "MapHistory",
+      "tracking": {
+        "status": "idle",
+        "sessionId": null,
+        "provider": "real",
+        "rawCount": 0,
+        "acceptedCount": 0,
+        "distanceM": 0,
+        "trackArrayObjectId": 2
+      },
+      "journal": {
+        "ownerUserId": "raw-web-qa",
+        "sessionCount": 1,
+        "sessionIds": [
+          "ec11c863-8c67-48c3-a308-9746d026b27b"
+        ]
+      },
+      "memory": {
+        "personalCoverageCount": 0,
+        "presenceWitnessCount": 0,
+        "syntheticCoverageCount": 21,
+        "geometryVersion": 2,
+        "personalArrayObjectId": 3,
+        "syntheticArrayObjectId": 8,
+        "syntheticObjectIdentity": "0b57cce5-6450-4cea-81bc-cba58569b77a:8",
+        "syntheticContentFingerprint": "21|50fcee86",
+        "syntheticCids": [
+          "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "17812368-6f3a-44a2-86db-f485b7d8c22f",
+          "51757e01-2428-4898-8412-458cf44b6488",
+          "cd37a028-8d9e-4dda-b87e-fc664ee26723",
+          "de811041-738d-499a-946d-39daaebf26cf",
+          "7b037bb0-1854-4710-b487-c3c22edce4a5",
+          "bbb0bed3-707c-4ac4-93fe-4f280358f632",
+          "a52d06f1-7cd4-4c6c-96d8-6371fb304664",
+          "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1",
+          "cae8cc0d-0ab1-409c-8518-dbc5f3997d16",
+          "4d10266e-0a01-4643-b2ba-93dbaf6f7859",
+          "2b01b991-3444-4a85-99c8-262e19dcb2b9",
+          "46e64977-189e-4175-928c-39a8f19db832",
+          "835e2c72-ae86-423b-9c10-bc14c4ecdc8b",
+          "0c215441-4e5d-4ef3-9b10-8da964bc6fb7",
+          "6423a2bb-0e01-4bd8-bac9-58e6ea74c8ca",
+          "825a1e87-ffdd-4c9e-975c-8616f5a243df",
+          "897589c5-5cd8-47c9-8699-ab8ef6485fe7",
+          "079045ff-8242-4c11-b7e5-383785b5bdc3",
+          "69ca0dba-b58a-4275-b33a-daab65d0fe38",
+          "a7bb6029-9fc3-4088-9e36-da62f1108dba"
+        ],
+        "firstSynthetic": {
+          "lat": -41.28649216742116,
+          "lng": 174.77622619768158,
+          "ts": 1789782516200,
+          "cid": "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 13.294484804649553,
+          "continuityState": "accepted"
+        },
+        "lastSynthetic": {
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555,
+          "ts": 1789782812203,
+          "cid": "a7bb6029-9fc3-4088-9e36-da62f1108dba",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 14.707743774531263,
+          "continuityState": "accepted"
+        }
+      },
+      "simulator": {
+        "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+        "seed": 550101,
+        "observationMode": "raw-gps",
+        "signal": "normal",
+        "timeScale": 1,
+        "rawTrailCount": 0,
+        "truthTrailCount": 0,
+        "latestRaw": null,
+        "latestDecision": null
+      },
+      "renderer": {
+        "loaded": false,
+        "fogLayerPresent": false,
+        "fogSourcePresent": false
+      }
+    },
+    {
+      "stage": "after-finish-memory",
+      "runtimeId": "0b57cce5-6450-4cea-81bc-cba58569b77a",
+      "observedAtWallMs": 1789825901291,
+      "route": "Memory",
+      "tracking": {
+        "status": "idle",
+        "sessionId": null,
+        "provider": "real",
+        "rawCount": 0,
+        "acceptedCount": 0,
+        "distanceM": 0,
+        "trackArrayObjectId": 2
+      },
+      "journal": {
+        "ownerUserId": "raw-web-qa",
+        "sessionCount": 1,
+        "sessionIds": [
+          "ec11c863-8c67-48c3-a308-9746d026b27b"
+        ]
+      },
+      "memory": {
+        "personalCoverageCount": 0,
+        "presenceWitnessCount": 0,
+        "syntheticCoverageCount": 21,
+        "geometryVersion": 2,
+        "personalArrayObjectId": 3,
+        "syntheticArrayObjectId": 8,
+        "syntheticObjectIdentity": "0b57cce5-6450-4cea-81bc-cba58569b77a:8",
+        "syntheticContentFingerprint": "21|50fcee86",
+        "syntheticCids": [
+          "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "17812368-6f3a-44a2-86db-f485b7d8c22f",
+          "51757e01-2428-4898-8412-458cf44b6488",
+          "cd37a028-8d9e-4dda-b87e-fc664ee26723",
+          "de811041-738d-499a-946d-39daaebf26cf",
+          "7b037bb0-1854-4710-b487-c3c22edce4a5",
+          "bbb0bed3-707c-4ac4-93fe-4f280358f632",
+          "a52d06f1-7cd4-4c6c-96d8-6371fb304664",
+          "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1",
+          "cae8cc0d-0ab1-409c-8518-dbc5f3997d16",
+          "4d10266e-0a01-4643-b2ba-93dbaf6f7859",
+          "2b01b991-3444-4a85-99c8-262e19dcb2b9",
+          "46e64977-189e-4175-928c-39a8f19db832",
+          "835e2c72-ae86-423b-9c10-bc14c4ecdc8b",
+          "0c215441-4e5d-4ef3-9b10-8da964bc6fb7",
+          "6423a2bb-0e01-4bd8-bac9-58e6ea74c8ca",
+          "825a1e87-ffdd-4c9e-975c-8616f5a243df",
+          "897589c5-5cd8-47c9-8699-ab8ef6485fe7",
+          "079045ff-8242-4c11-b7e5-383785b5bdc3",
+          "69ca0dba-b58a-4275-b33a-daab65d0fe38",
+          "a7bb6029-9fc3-4088-9e36-da62f1108dba"
+        ],
+        "firstSynthetic": {
+          "lat": -41.28649216742116,
+          "lng": 174.77622619768158,
+          "ts": 1789782516200,
+          "cid": "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 13.294484804649553,
+          "continuityState": "accepted"
+        },
+        "lastSynthetic": {
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555,
+          "ts": 1789782812203,
+          "cid": "a7bb6029-9fc3-4088-9e36-da62f1108dba",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 14.707743774531263,
+          "continuityState": "accepted"
+        }
+      },
+      "simulator": {
+        "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+        "seed": 550101,
+        "observationMode": "raw-gps",
+        "signal": "normal",
+        "timeScale": 1,
+        "rawTrailCount": 0,
+        "truthTrailCount": 0,
+        "latestRaw": null,
+        "latestDecision": null
+      },
+      "renderer": {
+        "loaded": true,
+        "fogLayerPresent": true,
+        "fogSourcePresent": true
+      }
+    },
+    {
+      "stage": "after-durable-reload",
+      "runtimeId": "a4e1ed96-a47e-436e-a8ca-db20acc27db5",
+      "observedAtWallMs": 1789825948108,
+      "route": "Memory",
+      "tracking": {
+        "status": "idle",
+        "sessionId": null,
+        "provider": "real",
+        "rawCount": 0,
+        "acceptedCount": 0,
+        "distanceM": 0,
+        "trackArrayObjectId": 2
+      },
+      "journal": {
+        "ownerUserId": "raw-web-qa",
+        "sessionCount": 1,
+        "sessionIds": [
+          "ec11c863-8c67-48c3-a308-9746d026b27b"
+        ]
+      },
+      "memory": {
+        "personalCoverageCount": 0,
+        "presenceWitnessCount": 0,
+        "syntheticCoverageCount": 21,
+        "geometryVersion": 4,
+        "personalArrayObjectId": 3,
+        "syntheticArrayObjectId": 1,
+        "syntheticObjectIdentity": "a4e1ed96-a47e-436e-a8ca-db20acc27db5:1",
+        "syntheticContentFingerprint": "21|50fcee86",
+        "syntheticCids": [
+          "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "17812368-6f3a-44a2-86db-f485b7d8c22f",
+          "51757e01-2428-4898-8412-458cf44b6488",
+          "cd37a028-8d9e-4dda-b87e-fc664ee26723",
+          "de811041-738d-499a-946d-39daaebf26cf",
+          "7b037bb0-1854-4710-b487-c3c22edce4a5",
+          "bbb0bed3-707c-4ac4-93fe-4f280358f632",
+          "a52d06f1-7cd4-4c6c-96d8-6371fb304664",
+          "8f4bcc6d-0ac0-46d5-bc03-d58e9830d0e1",
+          "cae8cc0d-0ab1-409c-8518-dbc5f3997d16",
+          "4d10266e-0a01-4643-b2ba-93dbaf6f7859",
+          "2b01b991-3444-4a85-99c8-262e19dcb2b9",
+          "46e64977-189e-4175-928c-39a8f19db832",
+          "835e2c72-ae86-423b-9c10-bc14c4ecdc8b",
+          "0c215441-4e5d-4ef3-9b10-8da964bc6fb7",
+          "6423a2bb-0e01-4bd8-bac9-58e6ea74c8ca",
+          "825a1e87-ffdd-4c9e-975c-8616f5a243df",
+          "897589c5-5cd8-47c9-8699-ab8ef6485fe7",
+          "079045ff-8242-4c11-b7e5-383785b5bdc3",
+          "69ca0dba-b58a-4275-b33a-daab65d0fe38",
+          "a7bb6029-9fc3-4088-9e36-da62f1108dba"
+        ],
+        "firstSynthetic": {
+          "lat": -41.28649216742116,
+          "lng": 174.77622619768158,
+          "ts": 1789782516200,
+          "cid": "659d2052-7241-4411-8fbb-7247d65ce5de",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 13.294484804649553,
+          "continuityState": "accepted"
+        },
+        "lastSynthetic": {
+          "lat": -41.28430961838839,
+          "lng": 174.77862124838555,
+          "ts": 1789782812203,
+          "cid": "a7bb6029-9fc3-4088-9e36-da62f1108dba",
+          "synced": false,
+          "evidenceSource": "simulator_test",
+          "sourceActivityClientId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+          "sourceSegmentId": "ec11c863-8c67-48c3-a308-9746d026b27b:1789782515400:2c36348c",
+          "horizontalAccuracyM": 14.707743774531263,
+          "continuityState": "accepted"
+        }
+      },
+      "simulator": {
+        "model": "O55 rawGpsObservationModel / REALISTIC_GPS_PROFILE",
+        "seed": 550101,
+        "observationMode": "raw-gps",
+        "signal": "normal",
+        "timeScale": 1,
+        "rawTrailCount": 0,
+        "truthTrailCount": 0,
+        "latestRaw": null,
+        "latestDecision": null
+      },
+      "renderer": {
+        "loaded": true,
+        "fogLayerPresent": true,
+        "fogSourcePresent": true
+      }
+    }
+  ],
+  "assertions": {
+    "ordinaryStartReachedTracking": true,
+    "liveMemoryBeforeFinish": true,
+    "stationaryDidNotWidenCoverage": true,
+    "resumedMotionAddedCoverage": true,
+    "finishDidNotCreateMissingCoverage": true,
+    "reloadRestoredCoverage": true,
+    "finishRetainedExactCoverage": true,
+    "reloadRestoredExactCoverage": true,
+    "reloadRestoredActivityJournal": true,
+    "independentLifecycleObservations": true,
+    "independentReloadObject": true,
+    "syntheticNeverEnteredPersonal": true,
+    "rawInputExisted": true,
+    "actualFogLoadedAtMemoryStages": true,
+    "normalFinishCommitted": true,
+    "sameObservationPipelineCorrelated": true,
+    "wallClockRawInputReachedAccepted": true,
+    "acceptedEvidenceReachedLiveMemory": true,
+    "liveMemoryReachedFogSource": true,
+    "webPaintOpportunityWithinBudget": true,
+    "pauseControlAcknowledgedWithinBudget": true,
+    "resumeControlAcknowledgedWithinBudget": true,
+    "pauseTransitionConvergedWithinBudget": true,
+    "resumeTransitionConvergedWithinBudget": true
+  },
+  "captures": [
+    {
+      "name": "diagnostic-pre-start",
+      "file": "01-diagnostic-pre-start.png",
+      "route": "Hiking"
+    },
+    {
+      "name": "product-live-initial-motion-day",
+      "file": "02-product-live-initial-motion-day.png",
+      "route": "Memory"
+    },
+    {
+      "name": "product-live-stationary-day",
+      "file": "03-product-live-stationary-day.png",
+      "route": "Memory"
+    },
+    {
+      "name": "product-live-resumed-day",
+      "file": "04-product-live-resumed-day.png",
+      "route": "Memory"
+    },
+    {
+      "name": "diagnostic-raw-truth-accepted-prefinish",
+      "file": "05-diagnostic-raw-truth-accepted-prefinish.png",
+      "route": "Hiking"
+    },
+    {
+      "name": "normal-pause-control",
+      "file": "06-normal-pause-control.png",
+      "route": "Hiking"
+    },
+    {
+      "name": "finish-confirmation",
+      "file": "07-finish-confirmation.png",
+      "route": "Hiking"
+    },
+    {
+      "name": "activity-detail-after-finish",
+      "file": "08-activity-detail-after-finish.png",
+      "route": "MapHistory"
+    },
+    {
+      "name": "product-after-finish-day",
+      "file": "09-product-after-finish-day.png",
+      "route": "Memory"
+    },
+    {
+      "name": "product-reloaded-day",
+      "file": "10-product-reloaded-day.png",
+      "route": "Memory"
+    },
+    {
+      "name": "product-reloaded-sunset",
+      "file": "11-product-reloaded-sunset.png",
+      "route": "Memory"
+    },
+    {
+      "name": "product-reloaded-night",
+      "file": "12-product-reloaded-night.png",
+      "route": "Memory"
+    }
+  ],
+  "api": {
+    "requestCount": 360,
+    "startClientActivityId": "ec11c863-8c67-48c3-a308-9746d026b27b",
+    "finishCommitted": true
+  },
+  "runtimeErrors": [],
+  "consoleNotes": []
+}

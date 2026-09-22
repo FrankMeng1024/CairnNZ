@@ -1,0 +1,87 @@
+{
+  "current": {
+    "boundary": "accuracy GOOD/LOST run then fixed 80-point chunks; response matching indices must be a contiguous input range",
+    "defect": "tidy=true nulls occur inside otherwise useful ordered matches; current logic calls them non-contiguous and rejects the whole matching. No pre-request route-class split exists, so internal/off-network spans also cause whole chunks to fail."
+  },
+  "recommended": {
+    "preprocessing": "sequence-aware 3-5s temporal resampling with mandatory endpoints, turns, reversals, stop/start and gap boundaries; submit tidy=false",
+    "splitting": "classify stable matcher-supported islands from tracepoint runs and overlapping short probes; expand only while confidence/deviation/topology remain valid",
+    "assembly": "MATCHED -> CANONICAL -> MATCHED with canonical boundary points and no invented connector",
+    "internalSafety": "NoSegment/NoMatch, unstable alternatives, implausible displacement, or bearing/topology disagreement immediately preserves canonical subsection",
+    "headPolicy": "Do not globally loosen p95. A new evidence-conditioned mapped-corridor gate may allow the 15.058m head only after multi-window support and explicit crossing exit."
+  },
+  "routeClasses": [
+    {
+      "order": 1,
+      "canonicalStart": 0,
+      "canonicalEnd": 61,
+      "classification": "MAPBOX_MAPPED_AMBIGUOUS",
+      "networkClass": "R1",
+      "reason": "high-confidence/full-tracepoint isolated matches, but 14-16m shift narrowly fails current 15m p95 gate",
+      "rawOrdinalStart": 1,
+      "rawOrdinalEnd": 65,
+      "distanceM": 121.556,
+      "durationS": 105.001
+    },
+    {
+      "order": 2,
+      "canonicalStart": 62,
+      "canonicalEnd": 104,
+      "classification": "UNKNOWN",
+      "networkClass": "R4",
+      "reason": "transition/crossing with inconsistent candidates; must remain canonical",
+      "rawOrdinalStart": 66,
+      "rawOrdinalEnd": 111,
+      "distanceM": 97.062,
+      "durationS": 93.998
+    },
+    {
+      "order": 3,
+      "canonicalStart": 105,
+      "canonicalEnd": 158,
+      "classification": "OFF_NETWORK_CONFIDENT",
+      "networkClass": "R3",
+      "reason": "internal outbound windows return NoMatch/NoSegment; nearby-road capture is unsafe",
+      "rawOrdinalStart": 112,
+      "rawOrdinalEnd": 168,
+      "distanceM": 130.051,
+      "durationS": 91.001
+    },
+    {
+      "order": 4,
+      "canonicalStart": 159,
+      "canonicalEnd": 283,
+      "classification": "UNKNOWN",
+      "networkClass": "R2",
+      "reason": "visible/public-looking corridor has NoSegment at 14m and conservative 21m radii; includes stop interval",
+      "rawOrdinalStart": 169,
+      "rawOrdinalEnd": 323,
+      "distanceM": 232.138,
+      "durationS": 308
+    },
+    {
+      "order": 5,
+      "canonicalStart": 284,
+      "canonicalEnd": 327,
+      "classification": "OFF_NETWORK_CONFIDENT",
+      "networkClass": "R3",
+      "reason": "internal return mostly NoSegment/zero-confidence and must remain canonical",
+      "rawOrdinalStart": 324,
+      "rawOrdinalEnd": 367,
+      "distanceM": 159.269,
+      "durationS": 122
+    },
+    {
+      "order": 6,
+      "canonicalStart": 328,
+      "canonicalEnd": 391,
+      "classification": "MAPBOX_MAPPED_CONFIDENT",
+      "networkClass": "R1",
+      "reason": "0.976 confidence, bounded 8.754m p95/max, accepted by current quality gates when isolated/resampled",
+      "rawOrdinalStart": 368,
+      "rawOrdinalEnd": 431,
+      "distanceM": 87.973,
+      "durationS": 70
+    }
+  ]
+}

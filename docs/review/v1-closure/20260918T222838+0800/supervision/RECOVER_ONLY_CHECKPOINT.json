@@ -1,0 +1,224 @@
+{
+  "schema": "cairnnz.v1-closure.supervision.recover-only-checkpoint.v1",
+  "runId": "20260918T222838+0800",
+  "result": "RECOVERY_READY",
+  "observedAt": "2026-09-20T00:13:40+08:00",
+  "checkpointedAt": "2026-09-20T00:20:11+08:00",
+  "root": {
+    "sessionId": "01a0b4c1-b498-76e0-95bd-1976d11586f2",
+    "agentId": "/root",
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "ultra",
+    "fast": "OFF",
+    "codexCli": "0.151.0",
+    "approvalPolicy": "never",
+    "sandbox": "danger-full-access",
+    "permissionProfile": "disabled"
+  },
+  "nativeGoal": {
+    "threadId": "01a0b4c1-b498-76e0-95bd-1976d11586f2",
+    "requestedPosture": "paused",
+    "observedStatus": "blocked",
+    "objectivePreserved": true,
+    "tokenBudget": null,
+    "schedulingAllowedByRecoveryMode": false,
+    "limitation": "The Goal remained active through two automatic continuations after RECOVER_ONLY. After the third consecutive blocked-audit turn, it was marked blocked to honor the explicit owner pause. Resume only through the owner's native /goal resume.",
+    "blockedAt": "2026-09-20T00:37:53+08:00",
+    "automaticContinuationAudit": {
+      "countForCurrentPause": 2,
+      "totalConsecutiveGoalTurnsIncludingOriginalRecoverOnly": 3,
+      "observedAt": "2026-09-20T00:37:10+08:00",
+      "classification": "PAUSE_REVALIDATION_ONLY",
+      "featureWorkStarted": false,
+      "workerDispatched": false,
+      "workersQuiescent": true,
+      "ownedProcesses": 0,
+      "productFingerprintUnchanged": true,
+      "blockedThresholdSatisfied": true
+    }
+  },
+  "hook": {
+    "definition": ".codex/hooks.json",
+    "definitionSha256": "0909bdbb20abac6637d8eb5ff1e39abc360bb52480e1fabb52ed75343faa42dc",
+    "handler": ".codex/hooks/cairn-v1-stop-gate.mjs",
+    "handlerSha256": "61af54fc631e6f5189534749cd76a0daa14d0b33e8b48169b5d3139c84aa789a",
+    "queueAdapterSha256": "1f1ebc133177b146b975e4898a6418d124aaeed29cc7636791512610935a6996",
+    "ownerTrust": "RECORDED",
+    "runtimeLoading": "ACTIVE_RUNTIME_VERIFIED_BY_EXISTING_T01_LIVE_INVOCATION",
+    "T01": "PASS_REUSED_NO_RERUN",
+    "T04": "PASS_REUSED_NO_RERUN",
+    "intentionalReturn": "ALLOWED_BY_RECOVER_ONLY_MODE"
+  },
+  "source": {
+    "head": "393338b5c159e7341d22b94086b5c29455386bdf",
+    "ordinaryIndexTree": "25457beb21e53bad8594ddd72e1d0a730034d6fb",
+    "productFingerprint": "cab465fa6ff734ac5ad6b1c5f13e2076c13cf350b26207dae9b05e009768a604",
+    "productFingerprintFileCount": 636,
+    "candidate": "O60",
+    "appRuntime": "0.2.6",
+    "otaPublished": false,
+    "publicGeneralProductionEnabled": false,
+    "recoveryIndex": "/Users/mzm/Desktop/cairn_revision03_work/baseline/recover-only-20260920T001700p0800.index",
+    "recoveryIndexSha256AtPreFinalReceiptCapture": "e3a62dfd67d871af64324a777def4d91f96bc0d17bd8b8d0408fead6402ad505",
+    "recoveryPreFinalReceiptTree": "e35b1c389671e411174d49e90aa0253204a5b6b5",
+    "ordinaryIndexUnchanged": true,
+    "productDriftFromT08Pause": [
+      {
+        "status": "A",
+        "path": "app/src/features/memory/__tests__/cairnPinsLayerActions.test.tsx",
+        "sha256": "828ec89d0834dd3f64e3d0197db6a4ce412fe480738cae23bd36a98010afa550"
+      },
+      {
+        "status": "M",
+        "path": "app/src/features/memory/components/CairnPinsLayer.tsx",
+        "sha256": "93d27e48e09141b2daa7978391754add7fa6f4b66bb000adbe1f683262b85ed8"
+      },
+      {
+        "status": "A",
+        "path": "app/src/screens/__tests__/settingsAccountBoundary.test.tsx",
+        "sha256": "3f9704adf9aa0f0a60f63be9d84129dd1b044084a6a51f3394ab08815d6a9583"
+      },
+      {
+        "status": "A",
+        "path": "app/src/store/__tests__/useMarkerStore.circleAccountBoundary.test.ts",
+        "sha256": "6dbad8751c36d35be3787d5ef557447e8b0afc264ce0c23a2b0e659cd08f958b"
+      },
+      {
+        "status": "M",
+        "path": "app/src/store/useMarkerStore.ts",
+        "sha256": "b040576ef3d20bb067ecd478d1abf7c83142ed06f76c2d5065996c0514b6ba02"
+      }
+    ]
+  },
+  "stage": {
+    "name": "REVISION_03_NORMAL_CALLER_CLOSURE_RECOVER_ONLY",
+    "revision03SoftwareGate": "HOLD",
+    "a4Performance": "FAIL_OPEN_180_MS_GT_150_MS",
+    "publicIntegrationGate": "WAITING_FOR_REVISION_03_SOFTWARE_GATE",
+    "homepage": "CANDIDATE_A_PREPARED_NOT_LOADED_NOT_PASS",
+    "closeoutValidator": "NOT_RUN"
+  },
+  "workers": [
+    {
+      "agentId": "/root/rev03_a4_resume",
+      "nickname": "Gauss",
+      "threadId": "01a0ba25-8dab-73e2-a33b-4f5fec5dfe4b",
+      "generation": 3,
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "writerLease": "RELEASED",
+      "state": "COMPLETED_QUIESCENT",
+      "ownedProcesses": [],
+      "result": "Settings normal-handler RED preserved; SettingsScreen product source remains unchanged.",
+      "evidence": "docs/review/v1-closure/20260918T222838+0800/evidence/a4/044045c3ad1ecde3c8eb9c55b76a72c14dfc46a39d8c14bf659b51e498e29929/verify-changed-diagnostics/settings-owner/red.log",
+      "evidenceSha256": "a54c198c79f31d8a2713e072de33996b813b88b2119c583fcb73a5495de12486",
+      "resultStatus": "RED_EXIT_1_3_OF_3_EXPECTED_BEHAVIORAL_FAILURES"
+    },
+    {
+      "agentId": "/root/homepage_material_lane",
+      "nickname": "Mill",
+      "threadId": "01a0ba25-bc6b-7471-b132-dc5df466a815",
+      "generation": 2,
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "writer": false,
+      "state": "INTERRUPTED_AFTER_CHECKPOINT_QUIESCENT",
+      "ownedProcesses": [],
+      "result": "Candidate A prepared externally; no primary-tree writes and no loaded-App PASS.",
+      "evidence": "/Users/mzm/Desktop/cairn_revision03_work/homepage_candidates/lane-b-material-20260919-01/CANDIDATE_A_REPORT.md",
+      "evidenceSha256": "d027058012cda7f2036722682938c2e43db137dc89c597d28f11a71e3b18d79e"
+    },
+    {
+      "agentId": "/root/functional_verification_lane",
+      "nickname": "Russell",
+      "threadId": "01a0ba25-efc8-72b3-95a4-ef06c5feb810",
+      "generation": 4,
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "writer": false,
+      "state": "COMPLETED_QUIESCENT",
+      "ownedProcesses": [],
+      "result": "FR-DISCOVERY-500 candidate is partial, external, unapplied, and not run; no manifest or patch yet.",
+      "artifact": "/Users/mzm/Desktop/cairn_revision03_work/canary-friend-discovery-500/candidate/backend/scripts/personal-friends-harness/abcdn-api-mysql.js",
+      "artifactSha256": "d1233dd60bc19b2bb6db91bcccd606ff09b774369f163cf99ee6ae5be59bf375"
+    }
+  ],
+  "ownedJobs": [
+    {
+      "id": "CANARY30-OBSERVER-20260919T234603P0800",
+      "execSessionId": 97758,
+      "pid": 6075,
+      "state": "TERMINAL_INTERRUPTED_FOR_RECOVER_ONLY",
+      "exitCode": 130,
+      "output": "/Users/mzm/Desktop/cairn_revision03_work/supervision/canary-20260919T234603p0800-observer.jsonl"
+    }
+  ],
+  "sharedMutation": {
+    "migrationInFlight": false,
+    "deploymentInFlight": false,
+    "databaseWriteInFlight": false,
+    "unknownOutcome": false
+  },
+  "validation": {
+    "jsonFilesParsed": 7,
+    "jsonResult": "PASS",
+    "queueProjectionDigest": "87e9ccb37529ae9ca2a5e4b56c47e9d0844d9df17d3ac2b44ab3f070c9c983b8",
+    "syntheticCurrentStateStopDecision": "ALLOW_OWNER_PAUSE",
+    "syntheticCurrentStateStopDecisionResult": "PASS",
+    "liveHookEvidence": "T01_PASS_REUSED_NO_RERUN",
+    "projectAuthorityFile": "NOT_FOUND_UNDER_/Users/mzm/Desktop",
+    "projectAuthorityImpact": "No new product decision was made; current AGENTS.md and the preserved approved contracts remain authoritative."
+  },
+  "retainedServices": [
+    {
+      "id": "691e61549515",
+      "name": "cairn-v1-closure-mysql",
+      "state": "RUNNING_IDLE",
+      "port": "127.0.0.1:3310->3306",
+      "ownership": "isolated closure review database"
+    },
+    {
+      "id": "f3b4d31e78f1",
+      "name": "cc-builder-mysql",
+      "state": "RUNNING_UNTOUCHED",
+      "port": "0.0.0.0:3306->3306",
+      "ownership": "unrelated existing service"
+    }
+  ],
+  "verifiedProgressToPreserve": [
+    "T01 active Stop-hook invocation PASS; not rerun.",
+    "T04 disposable failure/recovery PASS; not rerun.",
+    "T08 PASS: explicit pause, quiescent checkpoint, same-root recovery, native resume, and useful resumed Lane C artifact were observed.",
+    "FR-CIRCLE-ACCOUNT-01 focused RED-to-GREEN PASS.",
+    "FR-MEM-HIDE-01 focused RED-to-GREEN PASS; receipt sha256 2ddd06da71b872a9bfa282d88817ad6fb0dc622056982f09ea4d809ae7e6da95.",
+    "Settings account/profile-save/delete-single-flight defects reproduced by normal handlers; RED remains open.",
+    "No current migration or deployment outcome is uncertain."
+  ],
+  "nextResumeChecks": [
+    "Confirm this same root thread and native Goal status after the owner uses /goal resume.",
+    "Confirm hook hashes/loading, product fingerprint cab465fa6ff734ac5ad6b1c5f13e2076c13cf350b26207dae9b05e009768a604, Fast OFF, quiescent old generations, no duplicate writer, and no owned live process.",
+    "Enter RUN and begin a fresh 30-minute no-owner-prompt canary; the interrupted prior window is not PASS."
+  ],
+  "firstReadyWork": [
+    {
+      "order": 1,
+      "owner": "sole primary-tree writer",
+      "task": "Implement the smallest Settings initiating-viewer/generation fences, preserve the name draft/modal when stale A is discarded, add hard memory-delete single-flight plus busy/disabled Row state, then run only settingsAccountBoundary.test.tsx."
+    },
+    {
+      "order": 2,
+      "owner": "read-only/external verifier lane",
+      "task": "Complete the external FR-DISCOVERY-500 fixture patch and manifest without MySQL execution until the one-heavy-workload lease is available."
+    },
+    {
+      "order": 3,
+      "owner": "external Homepage lane",
+      "task": "Load Candidate A through the real Home screen at 390x844 and 430x932 and capture matched crops before any product-tree integration decision."
+    },
+    {
+      "order": 4,
+      "owner": "Revision-03 queue",
+      "task": "Keep A4 180 ms > 150 ms FAIL/OPEN and continue bounded diagnosis; do not replay the already-passing loaded Raw GPS run unchanged."
+    }
+  ]
+}

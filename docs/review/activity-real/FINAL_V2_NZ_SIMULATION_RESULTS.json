@@ -1,0 +1,197 @@
+{
+  "validationClass": "SIMULATION/OFFLINE VALIDATED",
+  "realNzFieldValidated": false,
+  "fixture": "Public Mapbox walking geometry for Tongariro Alpine Crossing; deterministic synthetic forest heavy-tail drift",
+  "o50BaselineCommit": "12fa1cd0ef599e53a81cd30537ce761c5e2150ce",
+  "generatedAt": "2026-09-13T11:53:41.605Z",
+  "networkPrototype": {
+    "attempted": true,
+    "result": "completed",
+    "mapMatchingRequests": 5,
+    "directionsRequests": 3,
+    "acceptedMatchedDistanceM": 2125.3,
+    "fallbackDistanceM": 1566.7,
+    "requestResults": [
+      {
+        "result": "accepted-candidate"
+      },
+      {
+        "result": "accepted-candidate"
+      },
+      {
+        "result": "no-safe-candidate"
+      },
+      {
+        "result": "accepted-candidate"
+      },
+      {
+        "result": "accepted-candidate"
+      },
+      {
+        "result": "accepted-candidate"
+      },
+      {
+        "result": "accepted-candidate"
+      },
+      {
+        "result": "accepted-candidate"
+      }
+    ],
+    "sectionDecisions": [
+      {
+        "state": "NETWORK_WEAK_SAME_CORRIDOR",
+        "geometryMode": "D_WEAK_SAME_CORRIDOR",
+        "networkSource": "walking-directions",
+        "decision": "refined",
+        "reason": "composite-corridor-evidence;corridor-strong-side-uncertain;evidence-centred-offset"
+      },
+      {
+        "state": "NETWORK_WEAK_SAME_CORRIDOR",
+        "geometryMode": "D_WEAK_SAME_CORRIDOR",
+        "networkSource": "map-matching",
+        "decision": "refined",
+        "reason": "composite-corridor-evidence;corridor-strong-side-uncertain;evidence-centred-offset"
+      },
+      {
+        "state": "FREE_TRAVERSAL",
+        "geometryMode": "FREE_TRAVERSAL",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "bounded-coherent-connector-inside-evidence-envelope"
+      },
+      {
+        "state": "OFF_NETWORK_PATH",
+        "geometryMode": "C_CANONICAL_DERIVED",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "no-safe-network-candidate;uncertainty-aware-base-final"
+      },
+      {
+        "state": "FREE_TRAVERSAL",
+        "geometryMode": "FREE_TRAVERSAL",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "bounded-coherent-connector-inside-evidence-envelope"
+      },
+      {
+        "state": "NETWORK_WEAK_SAME_CORRIDOR",
+        "geometryMode": "D_WEAK_SAME_CORRIDOR",
+        "networkSource": "walking-directions",
+        "decision": "refined",
+        "reason": "composite-corridor-evidence;corridor-strong-side-uncertain;evidence-centred-offset"
+      },
+      {
+        "state": "FREE_TRAVERSAL",
+        "geometryMode": "FREE_TRAVERSAL",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "bounded-coherent-connector-inside-evidence-envelope"
+      },
+      {
+        "state": "OFF_NETWORK_PATH",
+        "geometryMode": "C_CANONICAL_DERIVED",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "no-safe-network-candidate;uncertainty-aware-base-final"
+      },
+      {
+        "state": "FREE_TRAVERSAL",
+        "geometryMode": "FREE_TRAVERSAL",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "bounded-coherent-connector-inside-evidence-envelope"
+      },
+      {
+        "state": "NETWORK_WEAK_SAME_CORRIDOR",
+        "geometryMode": "D_WEAK_SAME_CORRIDOR",
+        "networkSource": "map-matching",
+        "decision": "refined",
+        "reason": "composite-corridor-evidence;corridor-strong-side-uncertain;evidence-centred-offset"
+      },
+      {
+        "state": "OFF_NETWORK_PATH",
+        "geometryMode": "C_CANONICAL_DERIVED",
+        "networkSource": "none",
+        "decision": "canonical-derived",
+        "reason": "no-safe-network-candidate;uncertainty-aware-base-final"
+      }
+    ]
+  },
+  "baseDiagnostics": {
+    "inputPointCount": 91,
+    "collapsedPointCount": 91,
+    "outputPointCount": 273,
+    "effectiveUncertaintyM": 10,
+    "simplificationToleranceM": 5.5,
+    "corridorClass": "simple",
+    "protectedTurnCount": 4,
+    "geometricTurnCount": 4,
+    "pauseBoundaryCount": 85,
+    "stationaryCloudCollapsed": false,
+    "removedMicroExcursionCount": 0,
+    "maximumRemovedExcursionDepthM": 0
+  },
+  "scorecard": {
+    "trailReference": {
+      "pointCount": 361,
+      "lengthM": 3696.4,
+      "lengthRatioToTrailReference": 1,
+      "referenceDisplacementP50M": 0,
+      "referenceDisplacementP95M": 0,
+      "meaningfulTurnCount": 1,
+      "microTurnCount": 196
+    },
+    "syntheticCanonical": {
+      "pointCount": 91,
+      "lengthM": 3692,
+      "lengthRatioToTrailReference": 0.9988,
+      "referenceDisplacementP50M": 1.9,
+      "referenceDisplacementP95M": 7.1,
+      "meaningfulTurnCount": 7,
+      "microTurnCount": 51
+    },
+    "o50Final": {
+      "pointCount": 273,
+      "lengthM": 3692,
+      "lengthRatioToTrailReference": 0.9988,
+      "referenceDisplacementP50M": 1.9,
+      "referenceDisplacementP95M": 7.1,
+      "meaningfulTurnCount": 7,
+      "microTurnCount": 51
+    },
+    "baseFinal": {
+      "pointCount": 273,
+      "lengthM": 3692,
+      "lengthRatioToTrailReference": 0.9988,
+      "referenceDisplacementP50M": 1.9,
+      "referenceDisplacementP95M": 7.1,
+      "meaningfulTurnCount": 7,
+      "microTurnCount": 51
+    },
+    "mapboxWalkingCandidate": {
+      "pointCount": 361,
+      "lengthM": 3696.4,
+      "lengthRatioToTrailReference": 1,
+      "referenceDisplacementP50M": 0,
+      "referenceDisplacementP95M": 0,
+      "meaningfulTurnCount": 1,
+      "microTurnCount": 196
+    },
+    "fusedV2": {
+      "pointCount": 408,
+      "lengthM": 3703.4,
+      "lengthRatioToTrailReference": 1.0019,
+      "referenceDisplacementP50M": 0.7,
+      "referenceDisplacementP95M": 5.3,
+      "meaningfulTurnCount": 6,
+      "microTurnCount": 131
+    }
+  },
+  "authorityNotes": [
+    "Canonical metrics and chronology are not changed by any displayed layer.",
+    "True gaps are evaluated separately and are never connected by this prototype.",
+    "Mapbox candidate acceptance is gated; snap percentage is not the objective.",
+    "DOC was evaluated as a candidate topology prior, not production snap authority.",
+    "LINZ Topo50 is context-scale evidence, not metre-level alignment authority."
+  ]
+}

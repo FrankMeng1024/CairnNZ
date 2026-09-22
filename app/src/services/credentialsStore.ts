@@ -79,3 +79,16 @@ export async function clearCredentials(): Promise<void> {
     console.warn('[credentialsStore] clear failed:', err);
   }
 }
+
+/**
+ * Account deletion must not retire its durable retry marker until the
+ * remembered password has actually been removed. Unlike the ordinary
+ * remember-me toggle, this strict variant propagates keychain failures.
+ */
+export async function clearCredentialsStrict(): Promise<void> {
+  if (Platform.OS !== 'web') {
+    await SecureStore.deleteItemAsync(CREDENTIALS_KEY);
+  } else if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(CREDENTIALS_KEY);
+  }
+}

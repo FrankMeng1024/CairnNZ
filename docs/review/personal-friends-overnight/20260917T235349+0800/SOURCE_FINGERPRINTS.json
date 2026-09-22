@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "run_id": "20260917T235349+0800",
+  "baseline_commit": "ac981e1c97199984082bc3dcc885fc2d946038a7",
+  "local_head": "9b92be3efef3a355d71491ec250cb6df62878a23",
+  "origin_master": "9b92be3efef3a355d71491ec250cb6df62878a23",
+  "deployed_backend_commit": "9b92be3efef3a355d71491ec250cb6df62878a23",
+  "client": {
+    "state": "uncommitted working-tree candidate over local_head; unrelated dirty work preserved",
+    "app_version": "0.2.6",
+    "runtime_policy": "appVersion",
+    "ota_marker": "O60",
+    "ota_badge_sha256": "de0320aba2f09fec6428950605c2c3c0bba98fd6474e35445619299e826e5ceb",
+    "tracked_patch": {
+      "path": "evidence/app-working-tree-vs-head.patch",
+      "sha256": "0d183a666809c8fb085baa6640918fec8f2173d6fb236b352dded2920c45fb79"
+    },
+    "new_task_files_patch": {
+      "path": "evidence/app-new-task-files.patch",
+      "sha256": "31424bcc69dd7ca4f456bdca650c37ec469e0a76887fb27a4dbc382d4fb3e815"
+    }
+  },
+  "backend": {
+    "patch": {
+      "path": "evidence/backend-ac981e1-to-9b92be3.patch",
+      "sha256": "64882ad6805af416d5cf7d740cc39be710d1d6370d28202ee853ebcd7b7003cf"
+    },
+    "production_image": "sha256:5a6620ff54cc5b1b5b3de0b49dab89f172fcd7590208f333b66a87384aed8f73",
+    "review_image": "sha256:23d0229f41136f7e3b89c863f7f712094efffc9d9db9c2b0f3f5a4f779b3c54d",
+    "migration_ledger": "037"
+  },
+  "evidence_sha256": {
+    "app_tests": "ae0188a8703f9d524f218b63fe125eba99c592843d444b0411b36c74897ad397",
+    "activity_verify": "f22db27c8cd2e4ce53387f04eafdb60890c5fd90b7fcbac9846ec911732ad76a",
+    "backend_tests": "4b075c2094742a932abb0ba8809b9af563f8e5c76fcc3680b269f7a1bf7cb948",
+    "mysql_api": "a96d2eef808748fe9c63a3e134385b443c30cc62f167f171754c8bc0ce8ab392",
+    "qa_manifest": "88f9be1d01cee1e6837db441f6c415d920dc9643f14c10dd2c4a0cf32f29e65b",
+    "full_surface_board": "77750a6ca3567beebce7b19771e6f3a42781a4470f7b1a1a08dba2b4d8e1b2c5",
+    "personal_friends_board": "9464bf4f293c294c0486655dc54504334252e6e1fdea6dd7a533d94b68d5daae",
+    "deployed_identity_receipt": "806b2593e26ab7a1e5f5dfc20694b01e0c0b438f52db664f80baca4abcfbefbc"
+  },
+  "task_file_manifest": "TASK_SCOPED_FILES.txt"
+}

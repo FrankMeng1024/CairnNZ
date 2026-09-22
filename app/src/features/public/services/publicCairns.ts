@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as Crypto from 'expo-crypto';
 import { authenticatedFetch } from '../../../services/apiService';
+import { useAppStore } from '../../../store/useAppStore';
 import { storage } from '../../../store/storage';
 
 const CACHE_PREFIX = 'cairn:public-cairns:v1:';
@@ -49,6 +50,14 @@ interface CacheSnapshot {
 
 type PublicError = 'offline' | 'unavailable' | 'expired' | null;
 
+export type PublicActionStatus = 'confirmed' | 'queued_offline' | 'superseded' | 'unavailable';
+export interface PublicActionResult { status: PublicActionStatus }
+
+const CONFIRMED: PublicActionResult = { status: 'confirmed' };
+const QUEUED_OFFLINE: PublicActionResult = { status: 'queued_offline' };
+const SUPERSEDED: PublicActionResult = { status: 'superseded' };
+const UNAVAILABLE: PublicActionResult = { status: 'unavailable' };
+
 interface PublicCairnState {
   viewerId: string | null;
   enabled: boolean;
@@ -62,11 +71,11 @@ interface PublicCairnState {
   refreshScene: () => Promise<void>;
   loadDetail: (resourceId: string) => Promise<PublicCairnDetail>;
   present: (resourceId: string) => Promise<void>;
-  thanks: (resourceId: string) => Promise<boolean>;
-  hide: (resourceId: string) => Promise<boolean>;
-  blockAuthor: (authorId: string) => Promise<boolean>;
+  thanks: (resourceId: string) => Promise<PublicActionResult>;
+  hide: (resourceId: string) => Promise<PublicActionResult>;
+  blockAuthor: (authorId: string) => Promise<PublicActionResult>;
   allowAuthorAfterUnblock: (authorId: string) => Promise<void>;
-  report: (resourceId: string, category: 'spam' | 'unsafe' | 'harassment' | 'other', detail?: string) => Promise<boolean>;
+  report: (resourceId: string, category: 'spam' | 'unsafe' | 'harassment' | 'other', detail?: string) => Promise<PublicActionResult>;
   verifyCompletedActivity: (sourceActivityClientId: string) => Promise<boolean>;
   purge: (resourceId: string) => Promise<void>;
   clearForAccountBoundary: () => void;
@@ -94,12 +103,49 @@ function emptySnapshot(viewerId: string): CacheSnapshot {
 function cacheKey(viewerId: string): string { return `${CACHE_PREFIX}${viewerId}`; }
 function resourceKey(viewerId: string, resourceId: string): string { return `${viewerId}:${resourceId}`; }
 
-function syncAccount(viewerId: string): number {
+function authoritativeViewerId(): string {
+  const state = useAppStore.getState();
+  return state.isLoggedIn ? String(state.user?.id ?? '') : '';
+}
+
+function viewerIsAuthoritative(viewerId: string): boolean {
+  return Boolean(viewerId) && authoritativeViewerId() === viewerId;
+}
+
+function bindAccount(viewerId: string): number | null {
+  if (!viewerIsAuthoritative(viewerId)) return null;
   if (viewerId !== observedViewerId) {
     observedViewerId = viewerId;
     accountGeneration += 1;
   }
   return accountGeneration;
+}
+
+function accountIsCurrent(viewerId: string, generation: number): boolean {
+  return viewerIsAuthoritative(viewerId)
+    && observedViewerId === viewerId
+    && accountGeneration === generation;
+}
+
+export interface PublicCairnAccountAuthority {
+  viewerId: string;
+  generation: number;
+}
+
+/** Capture the same authenticated account generation used by Public requests. */
+export function capturePublicCairnAccountAuthority(
+  viewerId: string | null,
+): PublicCairnAccountAuthority | null {
+  if (!viewerId) return null;
+  const generation = bindAccount(viewerId);
+  return generation === null ? null : { viewerId, generation };
+}
+
+/** Recheck UI-owned work after every async boundary. */
+export function publicCairnAccountAuthorityIsCurrent(
+  authority: PublicCairnAccountAuthority,
+): boolean {
+  return accountIsCurrent(authority.viewerId, authority.generation);
 }
 
 async function loadSnapshot(viewerId: string): Promise<CacheSnapshot> {
@@ -132,7 +178,7 @@ async function loadSnapshot(viewerId: string): Promise<CacheSnapshot> {
 async function persist(viewerId: string, expectedGeneration: number): Promise<void> {
   const previous = writeTails.get(viewerId) ?? Promise.resolve();
   const next = previous.catch(() => {}).then(async () => {
-    if (expectedGeneration !== accountGeneration || observedViewerId !== viewerId) return;
+    if (!accountIsCurrent(viewerId, expectedGeneration)) return;
     const snapshot = snapshots.get(viewerId);
     if (!snapshot) return;
     snapshot.wallClockHighWaterMs = Math.max(snapshot.wallClockHighWaterMs, Date.now());
@@ -170,7 +216,8 @@ function isAuthorizationCurrent(item: PublicCairnSummary, snapshot: CacheSnapsho
 }
 
 function publishState(viewerId: string, snapshot: CacheSnapshot, extra: Partial<PublicCairnState> = {}): void {
-  if (usePublicCairnStore.getState().viewerId !== viewerId) return;
+  if (!viewerIsAuthoritative(viewerId)
+    || usePublicCairnStore.getState().viewerId !== viewerId) return;
   const hidden = new Set(snapshot.hiddenIds);
   const blocked = new Set(snapshot.blockedAuthorIds);
   const entries = Object.values(snapshot.entries).filter(item => !hidden.has(item.id)
@@ -184,21 +231,25 @@ function publishState(viewerId: string, snapshot: CacheSnapshot, extra: Partial<
 }
 
 function beginRequest(viewerId: string, resourceId = '*') {
-  const generation = syncAccount(viewerId);
+  const generation = bindAccount(viewerId);
+  if (generation === null) throw new PublicCairnError('superseded');
   const requestId = ++requestSequence;
   return { viewerId, generation, resourceId, requestId, fence: resourceFences.get(resourceKey(viewerId, resourceId)) ?? 0 };
 }
 
 function requestCurrent(ticket: ReturnType<typeof beginRequest>): boolean {
-  return observedViewerId === ticket.viewerId && accountGeneration === ticket.generation
+  return accountIsCurrent(ticket.viewerId, ticket.generation)
     && (resourceFences.get(resourceKey(ticket.viewerId, ticket.resourceId)) ?? 0) === ticket.fence
     && (acceptedRequests.get(resourceKey(ticket.viewerId, ticket.resourceId)) ?? 0) <= ticket.requestId;
 }
 
-async function invalidate(viewerId: string, resourceId: string, generation = syncAccount(viewerId)): Promise<void> {
+async function invalidate(viewerId: string, resourceId: string, expectedGeneration?: number): Promise<void> {
+  const generation = expectedGeneration ?? bindAccount(viewerId);
+  if (generation === null || !accountIsCurrent(viewerId, generation)) return;
   resourceFences.set(resourceKey(viewerId, resourceId), ++requestSequence);
   acceptedRequests.delete(resourceKey(viewerId, resourceId));
   const snapshot = await loadSnapshot(viewerId);
+  if (!accountIsCurrent(viewerId, generation)) return;
   delete snapshot.entries[resourceId];
   delete snapshot.details[resourceId];
   await persist(viewerId, generation);
@@ -214,40 +265,52 @@ async function queueAction(snapshot: CacheSnapshot, action: PendingAction, gener
   await persist(snapshot.viewerId, generation);
 }
 
-async function sendPendingAction(snapshot: CacheSnapshot, action: PendingAction, generation: number): Promise<boolean> {
+async function sendPendingAction(
+  snapshot: CacheSnapshot,
+  action: PendingAction,
+  generation: number,
+): Promise<PublicActionResult> {
   const path = action.kind === 'block'
     ? `/api/friends/${encodeURIComponent(action.authorId)}/block`
     : action.kind === 'encounter'
       ? '/api/public-cairns/encounters/verify'
       : `/api/public-cairns/cairns/${encodeURIComponent(action.resourceId)}/${action.kind}`;
   try {
-    if (observedViewerId !== snapshot.viewerId || accountGeneration !== generation) return false;
+    if (!accountIsCurrent(snapshot.viewerId, generation)) return SUPERSEDED;
     const response = await authenticatedFetch(path, {
       method: 'POST', skipLogoutOn401: true,
       expectedUserId: snapshot.viewerId,
       body: JSON.stringify(action.body ?? {}),
     });
-    if (observedViewerId !== snapshot.viewerId || accountGeneration !== generation) return false;
+    if (!accountIsCurrent(snapshot.viewerId, generation)) return SUPERSEDED;
     if (!response.ok) {
       if (authoritativeUnavailable(response.status)) {
         delete snapshot.pendingActions[action.id];
         if (action.resourceId) await invalidate(snapshot.viewerId, action.resourceId, generation);
         else await persist(snapshot.viewerId, generation);
+        return accountIsCurrent(snapshot.viewerId, generation) ? UNAVAILABLE : SUPERSEDED;
       }
-      return false;
+      return QUEUED_OFFLINE;
     }
     delete snapshot.pendingActions[action.id];
     await persist(snapshot.viewerId, generation);
-    return true;
-  } catch { return false; }
+    // Persistence is an await boundary: another account may become
+    // authoritative while the acknowledged action is being removed from A's
+    // queue. Never report A's completion into B's UI after that boundary.
+    return accountIsCurrent(snapshot.viewerId, generation) ? CONFIRMED : SUPERSEDED;
+  } catch (error: any) {
+    if (!accountIsCurrent(snapshot.viewerId, generation) || error?.code === 'ACCOUNT_CHANGED') {
+      return SUPERSEDED;
+    }
+    return QUEUED_OFFLINE;
+  }
 }
 
 async function purgeBlockedAuthorNamespaces(
   authorId: string,
   account: { viewerId: string; generation: number },
 ): Promise<void> {
-  const accountStillCurrent = () => observedViewerId === account.viewerId
-    && accountGeneration === account.generation;
+  const accountStillCurrent = () => accountIsCurrent(account.viewerId, account.generation);
   if (!accountStillCurrent()) return;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -276,7 +339,7 @@ async function purgeBlockedAuthorNamespaces(
 
 async function drainPending(snapshot: CacheSnapshot, generation: number): Promise<void> {
   for (const action of Object.values(snapshot.pendingActions)) {
-    if (observedViewerId !== snapshot.viewerId || accountGeneration !== generation) return;
+    if (!accountIsCurrent(snapshot.viewerId, generation)) return;
     await sendPendingAction(snapshot, action, generation);
   }
 }
@@ -292,28 +355,37 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
   error: null,
 
   initialize: async viewerId => {
-    const generation = syncAccount(viewerId);
+    const generation = bindAccount(viewerId);
+    if (generation === null) return;
+    const stillCurrent = () => accountIsCurrent(viewerId, generation);
     set({ viewerId, capabilityChecked: false, loading: true, error: null, entries: [], details: {}, newlySurfacedId: null });
     const snapshot = await loadSnapshot(viewerId);
+    if (!stillCurrent()) return;
     publishState(viewerId, snapshot);
     try {
-      const response = await authenticatedFetch('/api/public-cairns/capabilities');
-      if (generation !== accountGeneration || observedViewerId !== viewerId) return;
+      const response = await authenticatedFetch('/api/public-cairns/capabilities', {
+        expectedUserId: viewerId,
+      });
+      if (!stillCurrent()) return;
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const capability = await response.json();
+      if (!stillCurrent()) return;
       if (!capability.enabled) {
         snapshots.set(viewerId, emptySnapshot(viewerId));
         await persist(viewerId, generation);
+        if (!stillCurrent()) return;
         set({ enabled: false, capabilityChecked: true, loading: false, entries: [], details: {}, newlySurfacedId: null });
         return;
       }
       snapshot.pilotEnabled = true;
       await persist(viewerId, generation);
+      if (!stillCurrent()) return;
       set({ enabled: true, capabilityChecked: true });
       await drainPending(snapshot, generation);
+      if (!stillCurrent()) return;
       await get().refreshScene();
     } catch {
-      if (generation === accountGeneration && observedViewerId === viewerId) {
+      if (stillCurrent()) {
         set({ enabled: snapshot.pilotEnabled, capabilityChecked: true, loading: false, error: 'offline' });
         publishState(viewerId, snapshot, { enabled: snapshot.pilotEnabled, capabilityChecked: true, loading: false, error: 'offline' });
       }
@@ -322,26 +394,33 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
 
   refreshScene: async () => {
     const viewerId = get().viewerId;
-    if (!viewerId || !get().enabled) return;
+    if (!viewerId || !get().enabled || !viewerIsAuthoritative(viewerId)) return;
     const ticket = beginRequest(viewerId);
     set({ loading: true, error: null });
     try {
       const snapshotBeforeRead = await loadSnapshot(viewerId);
+      if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
       await drainPending(snapshotBeforeRead, ticket.generation);
-      const response = await authenticatedFetch('/api/public-cairns/scene');
+      if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
+      const response = await authenticatedFetch('/api/public-cairns/scene', {
+        expectedUserId: viewerId,
+      });
       if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
       if (!response.ok) {
         if (authoritativeUnavailable(response.status)) {
           const snapshot = emptySnapshot(viewerId);
           snapshots.set(viewerId, snapshot);
           await persist(viewerId, ticket.generation);
+          if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
           publishState(viewerId, snapshot, { enabled: false, error: 'unavailable', loading: false });
           return;
         }
         throw new Error(`HTTP ${response.status}`);
       }
       const body = await response.json();
+      if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
       const snapshot = await loadSnapshot(viewerId);
+      if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
       const acceptedIds = new Set<string>();
       for (const raw of Array.isArray(body.entries) ? body.entries : []) {
         const summary = normalizeSummary(raw);
@@ -367,6 +446,7 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
       }
       acceptedRequests.set(resourceKey(viewerId, '*'), ticket.requestId);
       await persist(viewerId, ticket.generation);
+      if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
       const newId = Array.isArray(body.newly_surfaced) && body.newly_surfaced[0]
         ? String(body.newly_surfaced[0].id) : null;
       publishState(viewerId, snapshot, { loading: false, error: null, newlySurfacedId: newId });
@@ -379,13 +459,17 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
   loadDetail: async resourceId => {
     const viewerId = get().viewerId;
     if (!viewerId || !get().enabled) throw new PublicCairnError('unavailable');
+    if (!viewerIsAuthoritative(viewerId)) throw new PublicCairnError('superseded');
     const ticket = beginRequest(viewerId, resourceId);
     const snapshot = await loadSnapshot(viewerId);
+    if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
     if (snapshot.blockedAuthorIds.includes(snapshot.entries[resourceId]?.author.id ?? '')) {
       throw new PublicCairnError('unavailable');
     }
     try {
-      const response = await authenticatedFetch(`/api/public-cairns/cairns/${encodeURIComponent(resourceId)}`);
+      const response = await authenticatedFetch(`/api/public-cairns/cairns/${encodeURIComponent(resourceId)}`, {
+        expectedUserId: viewerId,
+      });
       if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
       if (!response.ok) {
         if (authoritativeUnavailable(response.status)) {
@@ -395,12 +479,14 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
         throw new Error(`HTTP ${response.status}`);
       }
       const body = await response.json();
+      if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
       const detail = normalizeDetail(body.cairn);
       if (detail.id !== resourceId || !requestCurrent(ticket)) throw new PublicCairnError('superseded');
       snapshot.entries[resourceId] = detail;
       snapshot.details[resourceId] = detail;
       acceptedRequests.set(resourceKey(viewerId, resourceId), ticket.requestId);
       await persist(viewerId, ticket.generation);
+      if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
       publishState(viewerId, snapshot);
       return detail;
     } catch (error) {
@@ -417,50 +503,64 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
   present: async resourceId => {
     const viewerId = get().viewerId;
     if (!viewerId) return;
+    const generation = bindAccount(viewerId);
+    if (generation === null) return;
     const snapshot = await loadSnapshot(viewerId);
+    if (!accountIsCurrent(viewerId, generation)) return;
     const entry = snapshot.entries[resourceId];
     if (!entry) return;
-    const generation = syncAccount(viewerId);
     const action: PendingAction = {
       id: `present:${resourceId}:${entry.authorizationRevision}`,
       kind: 'present', resourceId, authorId: entry.author.id, requestedAt: Date.now(),
     };
     await queueAction(snapshot, action, generation);
-    const sent = await sendPendingAction(snapshot, action, generation);
-    if (sent && get().newlySurfacedId === resourceId) set({ newlySurfacedId: null });
+    const result = await sendPendingAction(snapshot, action, generation);
+    if (result.status === 'confirmed' && accountIsCurrent(viewerId, generation)
+      && get().viewerId === viewerId && get().newlySurfacedId === resourceId) {
+      set({ newlySurfacedId: null });
+    }
   },
 
   thanks: async resourceId => {
     const viewerId = get().viewerId;
-    if (!viewerId) return false;
+    if (!viewerId) return SUPERSEDED;
+    const generation = bindAccount(viewerId);
+    if (generation === null) return SUPERSEDED;
     const snapshot = await loadSnapshot(viewerId);
+    if (!accountIsCurrent(viewerId, generation)) return SUPERSEDED;
     const entry = snapshot.entries[resourceId];
-    if (!entry) return false;
-    const generation = syncAccount(viewerId);
+    if (!entry) return UNAVAILABLE;
     const action: PendingAction = { id: `thanks:${resourceId}`, kind: 'thanks', resourceId, authorId: entry.author.id, requestedAt: Date.now() };
     await queueAction(snapshot, action, generation);
+    if (!accountIsCurrent(viewerId, generation) || get().viewerId !== viewerId) return SUPERSEDED;
     return sendPendingAction(snapshot, action, generation);
   },
 
   hide: async resourceId => {
     const viewerId = get().viewerId;
-    if (!viewerId) return false;
+    if (!viewerId) return SUPERSEDED;
+    const generation = bindAccount(viewerId);
+    if (generation === null) return SUPERSEDED;
     const snapshot = await loadSnapshot(viewerId);
+    if (!accountIsCurrent(viewerId, generation)) return SUPERSEDED;
     const entry = snapshot.entries[resourceId];
-    if (!entry) return false;
-    const generation = syncAccount(viewerId);
+    if (!entry) return UNAVAILABLE;
     if (!snapshot.hiddenIds.includes(resourceId)) snapshot.hiddenIds.push(resourceId);
     const action: PendingAction = { id: `hide:${resourceId}`, kind: 'hide', resourceId, authorId: entry.author.id, requestedAt: Date.now() };
     await queueAction(snapshot, action, generation);
+    if (!accountIsCurrent(viewerId, generation) || get().viewerId !== viewerId) return SUPERSEDED;
     await invalidate(viewerId, resourceId, generation);
+    if (!accountIsCurrent(viewerId, generation) || get().viewerId !== viewerId) return SUPERSEDED;
     return sendPendingAction(snapshot, action, generation);
   },
 
   blockAuthor: async authorId => {
     const viewerId = get().viewerId;
-    if (!viewerId) return false;
+    if (!viewerId) return SUPERSEDED;
+    const generation = bindAccount(viewerId);
+    if (generation === null) return SUPERSEDED;
     const snapshot = await loadSnapshot(viewerId);
-    const generation = syncAccount(viewerId);
+    if (!accountIsCurrent(viewerId, generation)) return SUPERSEDED;
     if (!snapshot.blockedAuthorIds.includes(authorId)) snapshot.blockedAuthorIds.push(authorId);
     const ids = Object.values(snapshot.entries).filter(item => item.author.id === authorId).map(item => item.id);
     for (const id of ids) {
@@ -471,17 +571,20 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
     }
     const action: PendingAction = { id: `block:${authorId}`, kind: 'block', resourceId: '', authorId, requestedAt: Date.now() };
     await queueAction(snapshot, action, generation);
+    if (!accountIsCurrent(viewerId, generation) || get().viewerId !== viewerId) return SUPERSEDED;
     publishState(viewerId, snapshot);
     await purgeBlockedAuthorNamespaces(authorId, { viewerId, generation });
+    if (!accountIsCurrent(viewerId, generation) || get().viewerId !== viewerId) return SUPERSEDED;
     return sendPendingAction(snapshot, action, generation);
   },
 
   allowAuthorAfterUnblock: async authorId => {
     const viewerId = get().viewerId;
     if (!viewerId) return;
-    const generation = syncAccount(viewerId);
+    const generation = bindAccount(viewerId);
+    if (generation === null) return;
     const snapshot = await loadSnapshot(viewerId);
-    if (observedViewerId !== viewerId || accountGeneration !== generation) return;
+    if (!accountIsCurrent(viewerId, generation)) return;
     snapshot.blockedAuthorIds = snapshot.blockedAuthorIds.filter(id => id !== authorId);
     delete snapshot.pendingActions[`block:${authorId}`];
     await persist(viewerId, generation);
@@ -490,34 +593,42 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
 
   report: async (resourceId, category, detail) => {
     const viewerId = get().viewerId;
-    if (!viewerId) return false;
+    if (!viewerId) return SUPERSEDED;
+    const generation = bindAccount(viewerId);
+    if (generation === null) return SUPERSEDED;
     const snapshot = await loadSnapshot(viewerId);
+    if (!accountIsCurrent(viewerId, generation)) return SUPERSEDED;
     const entry = snapshot.entries[resourceId];
-    if (!entry) return false;
-    const generation = syncAccount(viewerId);
+    if (!entry) return UNAVAILABLE;
     const action: PendingAction = {
       id: `report:${resourceId}:${entry.authorizationRevision}`,
       kind: 'report', resourceId, authorId: entry.author.id, requestedAt: Date.now(),
       body: { client_submission_id: Crypto.randomUUID(), category, detail: detail?.slice(0, 500) },
     };
     await queueAction(snapshot, action, generation);
+    if (!accountIsCurrent(viewerId, generation) || get().viewerId !== viewerId) return SUPERSEDED;
     return sendPendingAction(snapshot, action, generation);
   },
 
   verifyCompletedActivity: async sourceActivityClientId => {
     const viewerId = get().viewerId;
     if (!viewerId || !get().enabled || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(sourceActivityClientId)) return false;
+    const generation = bindAccount(viewerId);
+    if (generation === null) return false;
     const snapshot = await loadSnapshot(viewerId);
-    const generation = syncAccount(viewerId);
+    if (!accountIsCurrent(viewerId, generation)) return false;
     const action: PendingAction = {
       id: `encounter:${sourceActivityClientId}`,
       kind: 'encounter', resourceId: '', authorId: '', requestedAt: Date.now(),
       body: { source_activity_client_id: sourceActivityClientId },
     };
     await queueAction(snapshot, action, generation);
-    const confirmed = await sendPendingAction(snapshot, action, generation);
-    if (confirmed) await get().refreshScene();
-    return confirmed;
+    const result = await sendPendingAction(snapshot, action, generation);
+    const actionStillCurrent = result.status === 'confirmed' && accountIsCurrent(viewerId, generation)
+      && get().viewerId === viewerId;
+    if (actionStillCurrent) await get().refreshScene();
+    return actionStillCurrent && accountIsCurrent(viewerId, generation)
+      && get().viewerId === viewerId;
   },
 
   purge: async resourceId => {

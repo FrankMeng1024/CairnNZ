@@ -1,0 +1,21 @@
+
+> app@0.2.6 verify:changed
+> node scripts/verify-activity.mjs
+
+Activity CORE Verification — PASS
+continuity           35/35
+location-cadence      5/5
+background           25/25
+gap                  14/14
+elevation             5/5
+matching             42/42
+telemetry            38/38
+integration         103/103
+memory-gap            3/3
+journal-recovery     34/34
+memory               16/16
+offline-sync         35/35
+simulator-shared     56/56
+server               23/23
+static              100/100
+Total               534/534

@@ -1,0 +1,6 @@
+Command (cwd app):
+npx jest src/features/route/__tests__/routeContracts.test.ts src/features/trails/__tests__/trailsLibrary.test.ts src/features/trails/__tests__/trailsScreenContracts.test.ts src/services/__tests__/routeService.contract.test.ts src/store/__tests__/useRouteStore.offline.test.ts src/features/activity/__tests__/activityDetailPresentation.test.ts src/features/activity/__tests__/activityRouteState.test.ts src/features/activity/__tests__/completedActivityIntent.test.ts src/features/cairns/__tests__/cairnIdentity.test.ts src/features/cairns/__tests__/cairnPersonalContracts.test.ts src/services/__tests__/offlineCommittedEntity.test.ts src/store/__tests__/useMarkerStore.fastAck.test.ts src/store/__tests__/undoWalkedIndex.test.ts src/store/__tests__/validateStrokes.test.ts src/utils/__tests__/strokeGate.test.ts src/store/__tests__/runPreviewFinally.test.ts src/store/__tests__/altPreserve.test.ts --runInBand --watch=false
+
+PASS: 17/17 suites, 133/133 tests, 0 snapshots. Exit 0.
+Known non-failing runner warning: repository Jest config uses the unrecognized key `setupFilesAfterFramework`.
+
