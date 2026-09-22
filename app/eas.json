@@ -63,6 +63,21 @@
         "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false",
         "EXPO_PUBLIC_ACTIVITY_SIMULATOR_ENABLED": "false"
       }
+    },
+    "production-diagnostic": {
+      "autoIncrement": true,
+      "channel": "build57-diagnostic",
+      "ios": {
+        "resourceClass": "m-medium",
+        "image": "macos-sequoia-15.5-xcode-26.0"
+      },
+      "env": {
+        "CAIRN_BUILD57_DIAGNOSTIC": "true",
+        "EXPO_PUBLIC_BUILD57_DIAGNOSTIC": "true",
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.yiiling.cn",
+        "EXPO_PUBLIC_PLAYWRIGHT_BYPASS": "false",
+        "EXPO_PUBLIC_ACTIVITY_SIMULATOR_ENABLED": "false"
+      }
     }
   },
   "submit": {
