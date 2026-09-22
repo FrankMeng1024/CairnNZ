@@ -34,16 +34,11 @@ import { API_BASE_URL } from './src/config/api';
 // via checkpoint drain (still have per-phase aliyun log events).
 import { markBootPhase } from './src/services/bootDiagnostics';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
-import { PassiveMemoryRecorder } from './src/features/memory/components/PassiveMemoryRecorder';
-import { hydrateMemoryForUser } from './src/features/memory/services/memoryPersistence';
-import { attachMemorySync, pullMemoryFromServer } from './src/services/memorySync';
+const DeferredRuntimeServices = React.lazy(() => import('./src/components/DeferredRuntimeServices'));
 import { activitySimulatorBuildCapable } from './src/features/activitySimulator/capability';
 import { hydrateActivitySimulatorForUser, useActivitySimulatorStore } from './src/features/activitySimulator/useActivitySimulatorStore';
 import { activitySimulatorEngine } from './src/features/activitySimulator/activitySimulatorEngine';
-import {
-  appendSimulatorLog,
-  beginQaTelemetrySession,
-} from './src/features/activitySimulator/simulatorLog';
+import { appendSimulatorLog, beginQaTelemetrySession } from './src/features/activitySimulator/simulatorLog';
 
 // First side-effect: report that module loading completed. This runs
 // AFTER all the imports above (which is when iOS jetsam most likely
@@ -184,6 +179,7 @@ function AppRoot() {
   const hydrateSettings = useSettingsStore(s => s.hydrate);
   const settingsHydrated = useSettingsStore(s => s.hydrated);
   const lastAppState = useRef<string>(AppState.currentState);
+  const [runtimeServicesReady, setRuntimeServicesReady] = useState(false);
   const activeQaSessionRef = useRef<string | null>(null);
   const activeQaUserRef = useRef<string | null>(null);
   const lastQaDebugStateRef = useRef<boolean | null>(null);
@@ -200,6 +196,10 @@ function AppRoot() {
   // the eventual async resolution.
   const [flagsPrimed, setFlagsPrimed] = useState(false);
 
+  /* Startup-crash repair: Memory/Simulator services added after Build 56 are
+     loaded only after the first React commit. This preserves their runtime
+     behavior while removing their native/module graph from pre-render boot. */
+  useEffect(() => { setRuntimeServicesReady(true); }, []);
   // O41: one account-scoped Memory authority for Home and MemoryScreen.
   // Reacting to authenticated state (instead of running only inside the
   // cold-boot hydrator) also covers password/Apple/register/restore login.
@@ -211,6 +211,8 @@ function AppRoot() {
     let cancelled = false;
     void (async () => {
       try {
+        const { hydrateMemoryForUser } = await import('./src/features/memory/services/memoryPersistence');
+        const { attachMemorySync, pullMemoryFromServer } = await import('./src/services/memorySync');
         await hydrateMemoryForUser(userId);
         if (cancelled) return;
         const current = useAppStore.getState();
@@ -767,7 +769,7 @@ function AppRoot() {
         to: norm(next),
         tracking_active: trackingActive,
       });
-      appendSimulatorLog('APP', next === 'active' ? 'app_foregrounded' : 'app_backgrounded', {
+      require('./src/features/activitySimulator/simulatorLog').appendSimulatorLog('APP', next === 'active' ? 'app_foregrounded' : 'app_backgrounded', {
         from: norm(prev),
         to: norm(next),
         trackingActive,
@@ -862,7 +864,7 @@ function AppRoot() {
   return (
     <>
       <RootNavigator />
-      <PassiveMemoryRecorder />
+      {runtimeServicesReady && <React.Suspense fallback={null}><DeferredRuntimeServices /></React.Suspense>}
       {/* v322 ARCHITECTURE FIX: ForegroundUnlockManager moved into
           MemoryScreen. User question 2026-06-24: "Home page has no
           fog UI — why does H3 hydrate run on login?" Answer: because
