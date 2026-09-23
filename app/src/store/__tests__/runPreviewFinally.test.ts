@@ -31,7 +31,7 @@ jest.mock('../../services/routing/mapmatch/MapMatchingClient', () => ({
   matchSegment: jest.fn(),
 }));
 
-import { useRouteEditStore } from '../useRouteEditStore';
+import { preserveBeautifyEndpoints, useRouteEditStore } from '../useRouteEditStore';
 import { matchSegment } from '../../services/routing/mapmatch/MapMatchingClient';
 import { PointCloudIndex } from '../../services/routing/corridor/PointCloudIndex';
 import type { LngLat } from '../../services/routing/corridor/PolylineSampler';
@@ -170,6 +170,50 @@ describe('runPreview finally contract (v6.3 R1v3)', () => {
     const r = await useRouteEditStore.getState().runPreview();
     expect(r.ok).toBe(false);
     expect(useRouteEditStore.getState().isComputing).toBe(false);
+  });
+});
+
+describe('Beautify endpoint invariant', () => {
+  test('replaces shifted Mapbox endpoints with the exact accepted Route endpoints', () => {
+    const input: LngLat[] = [
+      { lng: 174.7, lat: -36.8, alt: 12 },
+      { lng: 174.701, lat: -36.801, alt: 15 },
+      { lng: 174.702, lat: -36.802, alt: 19 },
+    ];
+    const output = preserveBeautifyEndpoints(input, [
+      { lng: 174.7002, lat: -36.8002, alt: null },
+      { lng: 174.7011, lat: -36.8011, alt: null },
+      { lng: 174.7023, lat: -36.8023, alt: null },
+    ]);
+    expect(output[0]).toEqual(input[0]);
+    expect(output[output.length - 1]).toEqual(input[input.length - 1]);
+    expect(output[1]).toEqual({ lng: 174.7011, lat: -36.8011, alt: null });
+  });
+
+  test('no-stroke Beautify persists exact endpoints even when map matching shifts both', async () => {
+    const original = originalLine().slice(0, 8);
+    useRouteEditStore.setState({
+      originalPoints: original,
+      matchedPoints: original,
+      workingPoints: original,
+      brushStrokes: [],
+      isComputing: false,
+      isSaving: false,
+      trimStartFrac: 0,
+      trimEndFrac: 1,
+    });
+    matchSegmentMock.mockResolvedValue({
+      ok: true,
+      matchedPoints: original.map((point, index) => ({
+        ...point,
+        lng: point.lng + (index === 0 || index === original.length - 1 ? 0.001 : 0.00001),
+      })),
+    });
+
+    await expect(useRouteEditStore.getState().runPreview()).resolves.toEqual({ ok: true });
+    const matched = useRouteEditStore.getState().matchedPoints;
+    expect(matched[0]).toEqual(original[0]);
+    expect(matched[matched.length - 1]).toEqual(original[original.length - 1]);
   });
 });
 

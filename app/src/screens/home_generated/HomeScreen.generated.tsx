@@ -174,6 +174,37 @@ export function HomeScreen(props: {
   const unitText = showPercent
     ? `% of ${countryName || 'the map'}`
     : `km² of ${countryName || 'your world'}`;
+  const renderLastHikeCard = () => (
+    <TouchableOpacity
+      activeOpacity={props.onLastHikePress ? 0.85 : 1}
+      disabled={!props.onLastHikePress}
+      onPress={props.onLastHikePress}
+      style={[styles.H1__last_hike_card, cardContainerOverride]}
+      accessibilityRole={props.onLastHikePress ? 'button' : undefined}
+      accessibilityLabel={`${props.lastHikeEyebrow ?? 'Last hike'}: ${lastHikeTitle}`}
+      accessibilityHint={props.onLastHikePress ? (props.lastHikeEyebrow === 'Unfinished' ? 'Resume this Activity' : 'Open Activity details') : undefined}
+    >
+      <Text style={[styles.H1__last_hike_card__last_hike_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{props.lastHikeEyebrow ?? 'Last hike'}</Text>
+      <Text style={[styles.H1__last_hike_card__last_hike_title, cardText ? { color: cardText } : null]}>{lastHikeTitle}</Text>
+      {lastHikeDetails.length > 0 ? (
+        <View style={styles.H1__last_hike_card__detail_row}>
+          {lastHikeDetails.slice(0, 3).map((detail, index) => (
+            <React.Fragment key={`${detail}-${index}`}>
+              {index > 0 ? <View style={[styles.H1__last_hike_card__detail_divider, cardTextMuted ? { backgroundColor: cardTextMuted } : null]} /> : null}
+              <Text numberOfLines={1} style={[styles.H1__last_hike_card__detail_text, cardTextMuted ? { color: cardTextMuted } : null]}>{detail}</Text>
+            </React.Fragment>
+          ))}
+        </View>
+      ) : (
+        <Text style={[styles.H1__last_hike_card__last_hike_meta, cardTextMuted ? { color: cardTextMuted } : null]}>{lastHikeMeta}</Text>
+      )}
+      {props.onLastHikePress ? (
+        <View style={styles.H1__last_hike_card__disclosure} pointerEvents="none">
+          <Icon name="ChevronRight" size={18} color={cardTextMuted || textColor} strokeWidth={2.2} />
+        </View>
+      ) : null}
+    </TouchableOpacity>
+  );
   return (
     <View style={{ flex: 1, width: 375, height: 812, backgroundColor: props.sunnyMotionEnabled ? '#79A8BE' : undefined }}>
       {state === 'H0' && (
@@ -218,12 +249,14 @@ export function HomeScreen(props: {
           <Text style={[styles.H0__hero_invite_1, heroBigTextOverride]}>{countryName || 'Your world'}</Text>
           <Text style={[styles.H0__hero_invite_2, heroBigTextOverride]}>{'is waiting.'}</Text>
           <Text style={[styles.H0__hero_invite_sub, heroSubTextOverride]}>{'Every step becomes your map.'}</Text>
-          <View style={[styles.H0__first_journey_card, cardContainerOverride]}>
-            <Text style={[styles.H0__first_journey_card__first_journey_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{'Your first trail'}</Text>
-            <Text style={[styles.H0__first_journey_card__first_journey_title, cardText ? { color: cardText } : null]}>{'Head outside.'}</Text>
-            <Text style={[styles.H0__first_journey_card__first_journey_title2, cardText ? { color: cardText } : null]}>{'Unravel your world.'}</Text>
-            <Text style={[styles.H0__first_journey_card__first_journey_hint, cardTextMuted ? { color: cardTextMuted } : null]}>{'Tap an activity above to start.'}</Text>
-          </View>
+          {props.onLastHikePress ? renderLastHikeCard() : (
+            <View style={[styles.H0__first_journey_card, cardContainerOverride]}>
+              <Text style={[styles.H0__first_journey_card__first_journey_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{'Your first trail'}</Text>
+              <Text style={[styles.H0__first_journey_card__first_journey_title, cardText ? { color: cardText } : null]}>{'Head outside.'}</Text>
+              <Text style={[styles.H0__first_journey_card__first_journey_title2, cardText ? { color: cardText } : null]}>{'Unravel your world.'}</Text>
+              <Text style={[styles.H0__first_journey_card__first_journey_hint, cardTextMuted ? { color: cardTextMuted } : null]}>{'Tap an activity above to start.'}</Text>
+            </View>
+          )}
         </>
       )}
       {state === 'H1' && (
@@ -305,27 +338,7 @@ export function HomeScreen(props: {
           </Text>
           {/* R21 (2026-08-17): duplicate top-right toggle removed. The new
               inline toggle sits next to the km² label. */}
-          <TouchableOpacity
-            activeOpacity={props.onLastHikePress ? 0.85 : 1}
-            disabled={!props.onLastHikePress}
-            onPress={props.onLastHikePress}
-            style={[styles.H1__last_hike_card, cardContainerOverride]}
-          >
-            <Text style={[styles.H1__last_hike_card__last_hike_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{props.lastHikeEyebrow ?? 'Last hike'}</Text>
-            <Text style={[styles.H1__last_hike_card__last_hike_title, cardText ? { color: cardText } : null]}>{lastHikeTitle}</Text>
-            {lastHikeDetails.length > 0 ? (
-              <View style={styles.H1__last_hike_card__detail_row}>
-                {lastHikeDetails.slice(0, 3).map((detail, index) => (
-                  <React.Fragment key={`${detail}-${index}`}>
-                    {index > 0 ? <View style={[styles.H1__last_hike_card__detail_divider, cardTextMuted ? { backgroundColor: cardTextMuted } : null]} /> : null}
-                    <Text numberOfLines={1} style={[styles.H1__last_hike_card__detail_text, cardTextMuted ? { color: cardTextMuted } : null]}>{detail}</Text>
-                  </React.Fragment>
-                ))}
-              </View>
-            ) : (
-              <Text style={[styles.H1__last_hike_card__last_hike_meta, cardTextMuted ? { color: cardTextMuted } : null]}>{lastHikeMeta}</Text>
-            )}
-          </TouchableOpacity>
+          {renderLastHikeCard()}
         </>
       )}
     </View>

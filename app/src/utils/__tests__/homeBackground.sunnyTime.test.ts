@@ -21,7 +21,7 @@ describe('Sunny three-time background mapping', () => {
 
   it('maps explicit states to distinct approved asset identifiers', () => {
     expect(getHomeBackground('sunny', Date.now(), 'day', 'home').assetId)
-      .toBe('sunny-day-final-micro-3x.jpg');
+      .toBe('sunny-day-natural-material-3x.jpg');
     expect(getHomeBackground('sunny', Date.now(), 'sunset', 'home').assetId)
       .toBe('sunny-evening-final-micro-3x.jpg');
     expect(getHomeBackground('sunny', Date.now(), 'night', 'home').assetId)
@@ -162,15 +162,19 @@ describe('Sunny three-time background mapping', () => {
     timeOfDay => {
       const review = getWeatherReviewBackground('sunny', timeOfDay);
       const production = getHomeBackground('sunny', Date.now(), timeOfDay, 'home');
-      const expected = {
-        day: 'sunny-day-final-micro-3x.jpg',
+      const productionExpected = {
+        day: 'sunny-day-natural-material-3x.jpg',
         sunset: 'sunny-evening-final-micro-3x.jpg',
         night: 'sunny-night-star-micro-v2-3x.jpg',
       } as const;
+      const reviewExpected = {
+        ...productionExpected,
+        day: 'sunny-day-final-micro-3x.jpg',
+      } as const;
       expect(review.variant).toBe(`sunny-review-${timeOfDay}`);
-      expect(review.assetId).toBe(expected[timeOfDay]);
+      expect(review.assetId).toBe(reviewExpected[timeOfDay]);
       expect(production.variant).toBe(`sunny-${timeOfDay}`);
-      expect(production.assetId).toBe(expected[timeOfDay]);
+      expect(production.assetId).toBe(productionExpected[timeOfDay]);
       expect(production.variant).not.toContain('review');
     },
   );

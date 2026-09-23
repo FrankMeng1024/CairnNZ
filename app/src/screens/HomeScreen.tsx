@@ -339,7 +339,9 @@ export function HomeScreen() {
                     );
                   });
                 }
-              : undefined}
+              : lastHike
+                ? () => nav.navigate('MapHistory', { sessionId: lastHike.id })
+                : undefined}
             bgAsset={bgTokens.bgAsset}
             bgTokens={bgTokens}
             forcedIsDark={!bgTokens.useDarkText}

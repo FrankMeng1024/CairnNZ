@@ -29,8 +29,8 @@ export function MemorySharingSheet({ visible, onClose }: { visible: boolean; onC
       <ScrollView style={{ maxHeight: 560 }} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: theme.foreground }]}>Memory sharing</Text>
-            <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>You decide what begins sharing.</Text>
+            <Text style={[styles.title, { color: theme.foreground }]}>Let friends see new Memory</Text>
+            <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>Friendship never shares your Memory automatically.</Text>
           </View>
           <TouchableOpacity onPress={onClose} accessibilityLabel="Close Memory sharing">
             <Icon name="X" size={20} color={theme.iconInactive} />
@@ -40,8 +40,8 @@ export function MemorySharingSheet({ visible, onClose }: { visible: boolean; onC
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.row}>
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={[styles.rowTitle, { color: theme.foreground }]}>Share new exploration with friends</Text>
-              <Text style={[styles.body, { color: theme.foregroundSecondary }]}>New completed recorded Activities only—not live location, passive exploration, or old history.</Text>
+              <Text style={[styles.rowTitle, { color: theme.foreground }]}>Share future completed Activities</Text>
+              <Text style={[styles.body, { color: theme.foregroundSecondary }]}>This applies to all current and future friends. It never shares live location, passive exploration, or old history.</Text>
             </View>
             <Switch
               value={enabled}

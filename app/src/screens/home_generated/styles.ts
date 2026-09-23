@@ -367,7 +367,7 @@ export const styles = StyleSheet.create({
   H1__last_hike_card: {
     position: 'absolute',
     left: 24,
-    top: 582,
+    top: 568,
     width: 327,
     height: 111,
     backgroundColor: 'rgba(255,255,255,0.68)',
@@ -400,6 +400,16 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     color: '#65706A',
     fontWeight: '400',
+  },
+  H1__last_hike_card__disclosure: {
+    position: 'absolute',
+    right: 16,
+    top: 45,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   H1__last_hike_card__detail_row: {
     position: 'absolute',

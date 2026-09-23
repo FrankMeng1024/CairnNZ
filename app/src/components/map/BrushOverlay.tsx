@@ -110,6 +110,7 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
   const appendStrokePoint = useRouteEditStore(s => s.appendStrokePoint);
   const endStroke = useRouteEditStore(s => s.endStroke);
   const eraseAt = useRouteEditStore(s => s.eraseAt);
+  const setActiveTool = useRouteEditStore(s => s.setActiveTool);
 
   const currentStrokeIdRef = useRef<string | null>(null);
   // v247: prevent double endStroke when both onEnd and onFinalize fire.
@@ -405,10 +406,14 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
         samples: _rawSamples,
       });
     }
+    // Draw is intentionally one-shot. Commit the stroke after diagnostic
+    // capture, then release the gesture surface so the next touch pans the
+    // map naturally instead of requiring a separate Move mode.
     if (activeTool === 'brush') {
       const id = currentStrokeIdRef.current;
       if (id) endStroke(id);
       currentStrokeIdRef.current = null;
+      setActiveTool('pan');
     }
     // v269: clear after upload to free memory
     _rawSamples = [];

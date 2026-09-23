@@ -18,7 +18,7 @@
  *     [snapshot.type]" so the owner is reminded of the divergence.
  * Cairn visibility is an owner control independent from Memory sharing.
  */
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Dimensions, Platform, Alert,
   TouchableOpacity,
@@ -70,6 +70,7 @@ import {
 import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { usePublicCairnStore } from '../features/public/services/publicCairns';
+import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay';
 
 let MapView: any = null;
 let CameraComponent: any = null;
@@ -149,8 +150,18 @@ export function MarkerDetailScreen() {
   const [editPermission, setEditPermission] = useState<MarkerPermission>('personal');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [discardEditOpen, setDiscardEditOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
+  const [mapEpoch, setMapEpoch] = useState(0);
+
+  useEffect(() => {
+    if (mapReady || !MapView) return undefined;
+    const timeout = setTimeout(() => setMapLoadState('slow'), 8000);
+    return () => clearTimeout(timeout);
+  }, [mapEpoch, mapReady]);
 
   const { online } = useOnlineOnly();
 
@@ -182,14 +193,7 @@ export function MarkerDetailScreen() {
       closeEdit();
       return;
     }
-    Alert.alert(
-      'Discard changes?',
-      'Your draft has not been saved.',
-      [
-        { text: 'Stay', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: closeEdit },
-      ],
-    );
+    setDiscardEditOpen(true);
   }, [closeEdit, editDirty, saving]);
 
   const saveEdit = useCallback(async () => {
@@ -282,6 +286,7 @@ export function MarkerDetailScreen() {
       <View style={[styles.mapWrap, { height: MAP_H }]}>
         {MapView ? (
           <MapView
+            key={`cairn-detail-map-${mapEpoch}`}
             style={styles.map}
             {...(markerResolvedMapStyle.kind === 'url'
               ? { styleURL: markerResolvedMapStyle.url }
@@ -292,6 +297,9 @@ export function MarkerDetailScreen() {
             logoEnabled
             logoPosition={{ bottom: 8, left: 8 }}
             attributionPosition={{ bottom: 8, right: 8 }}
+            onDidFinishLoadingMap={() => { setMapReady(true); setMapLoadState('loading'); }}
+            onDidFinishRenderingMapFully={() => { setMapReady(true); setMapLoadState('loading'); }}
+            onMapLoadingError={() => setMapLoadState('error')}
           >
             {/* R21-v3 v2 (2026-08-30): Standard style lightPreset. */}
             {StyleImport ? (
@@ -351,6 +359,17 @@ export function MarkerDetailScreen() {
             <Text style={[styles.mapFallbackText, { color: visualTheme.foregroundSecondary }]}>Your Cairn is still available.</Text>
           </View>
         )}
+        {MapView && !mapReady ? (
+          <MapLoadOverlay
+            state={mapLoadState}
+            onRetry={() => {
+              setMapReady(false);
+              setMapLoadState('loading');
+              setMapEpoch((epoch) => epoch + 1);
+            }}
+            testID="cairn-detail-map-load-overlay"
+          />
+        ) : null}
         <View style={styles.backRowOverlay} pointerEvents="box-none">
           <BackButton variant="pill" />
         </View>
@@ -418,11 +437,9 @@ export function MarkerDetailScreen() {
         <View style={styles.metaList}>
           <MetaRow iconName="Calendar" label="Planted" text={dateStr} />
           {updatedDateStr ? <MetaRow iconName="Pencil" label="Updated" text={updatedDateStr} /> : null}
-          <MetaRow
-            iconName="MapPin"
-            label="Place"
-            text={marker.approximate ? 'Original approximate location saved' : 'Original location saved'}
-          />
+          {marker.approximate ? (
+            <MetaRow iconName="MapPin" label="Accuracy" text="Approximate GPS location" />
+          ) : null}
         </View>
 
         {sourceActivity ? (
@@ -482,7 +499,7 @@ export function MarkerDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Delete Cairn"
           >
-            <Icon name="Trash2" size={18} color={visualTheme.destructive} strokeWidth={2} />
+            <Icon name="Trash2" size={18} color={visualTheme.iconInactive} strokeWidth={2} />
           </TouchableOpacity>
           <TouchableOpacity
             testID="cairn-edit-open"
@@ -554,6 +571,24 @@ export function MarkerDetailScreen() {
       </BottomSheetFrame>
 
       <ModalCard
+        visible={discardEditOpen}
+        onDismiss={() => setDiscardEditOpen(false)}
+        testID="cairn-discard-edit-confirmation"
+      >
+        <ModalCardHeader title="Discard changes?" body="Your unsaved Cairn draft will be removed." />
+        <View style={styles.deleteActions}>
+          <PrimaryButton label="Keep editing" variant="secondary" onPress={() => setDiscardEditOpen(false)} style={styles.deleteAction} />
+          <PrimaryButton
+            label="Discard changes"
+            variant="destructive"
+            onPress={() => { setDiscardEditOpen(false); closeEdit(); }}
+            style={styles.deleteAction}
+            testID="cairn-discard-edit-confirm"
+          />
+        </View>
+      </ModalCard>
+
+      <ModalCard
         visible={deleteConfirmOpen}
         onDismiss={() => !deleting && setDeleteConfirmOpen(false)}
         dismissible={!deleting}
@@ -562,7 +597,6 @@ export function MarkerDetailScreen() {
         <ModalCardHeader
           title="Delete this Cairn?"
           body="This removes the Cairn. Its source Activity, independent Routes, and ordinary personal Memory remain."
-          onClose={deleting ? undefined : () => setDeleteConfirmOpen(false)}
         />
         <View style={styles.deleteActions}>
           <PrimaryButton

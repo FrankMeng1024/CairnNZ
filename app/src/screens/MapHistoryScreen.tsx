@@ -7,7 +7,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   ActivityIndicator, View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert,
-  Dimensions, Animated, Easing, Platform, TextInput,
+  Dimensions, Animated, Easing, Platform, TextInput, Keyboard,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,6 +41,7 @@ import { ContentSurface } from '../components/ContentSurface';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SyncBadge } from '../components/SyncBadge';
 import { ModalCard, ModalCardHeader } from '../components/ModalCard';
+import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay';
 import {
   deriveActivityRouteState,
 } from '../features/activity/activityRouteState';
@@ -129,7 +130,16 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
   // the initial fit. When true, render a small recenter button that
   // re-fits to the route bbox. Pattern matches HikingScreen's recenter.
   const [hasPanned, setHasPanned] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
+  const [mapEpoch, setMapEpoch] = useState(0);
   const cameraRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (mapReady || !MapView || pts.length < 2) return undefined;
+    const timeout = setTimeout(() => setMapLoadState('slow'), 8000);
+    return () => clearTimeout(timeout);
+  }, [mapEpoch, mapReady, pts.length]);
   if (!MapView || pts.length < 2) return null;
 
   // Bounding box of the track for camera fit.
@@ -177,6 +187,7 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
   return (
     <View style={StyleSheet.absoluteFillObject}>
     <MapView
+      key={`history-map-${session.id}-${mapEpoch}`}
       style={StyleSheet.absoluteFillObject}
       {...(resolvedMapStyle.kind === 'url'
         ? { styleURL: resolvedMapStyle.url }
@@ -187,6 +198,9 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
       attributionPosition={{ top: 112, right: 8 }}
       scaleBarEnabled={false}
       compassEnabled={false}
+      onDidFinishLoadingMap={() => { setMapReady(true); setMapLoadState('loading'); }}
+      onDidFinishRenderingMapFully={() => { setMapReady(true); setMapLoadState('loading'); }}
+      onMapLoadingError={() => setMapLoadState('error')}
       onRegionDidChange={(e: any) => {
         // v198 Bug 5: any user-initiated pan/zoom flips hasPanned=true
         // so the recenter button surfaces. isUserInteraction is true
@@ -284,6 +298,17 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
         </>
       )}
     </MapView>
+    {!mapReady ? (
+      <MapLoadOverlay
+        state={mapLoadState}
+        onRetry={() => {
+          setMapReady(false);
+          setMapLoadState('loading');
+          setMapEpoch((epoch) => epoch + 1);
+        }}
+        testID="history-map-load-overlay"
+      />
+    ) : null}
     {hasPanned && (
       <TouchableOpacity
         onPress={() => {
@@ -915,6 +940,7 @@ function MapHistoryObjectScreen() {
   const [renameEditing, setRenameEditing] = useState(false);
   const [renameText, setRenameText] = useState('');
   const [renameSaving, setRenameSaving] = useState(false);
+  const renameInputRef = useRef<TextInput>(null);
   const [invalidatedSessionId, setInvalidatedSessionId] = useState<string | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [routeDraftOpening, setRouteDraftOpening] = useState(false);
@@ -938,6 +964,8 @@ function MapHistoryObjectScreen() {
     setRouteActionError(null);
     try {
       await useRouteStore.getState().updateRoute(selectedRoute.id, { name: nextName });
+      renameInputRef.current?.blur();
+      Keyboard.dismiss();
       setRenameEditing(false);
     } catch {
       setRouteActionError('The Route name was not saved. Your draft is still here.');
@@ -1002,6 +1030,8 @@ function MapHistoryObjectScreen() {
     const result = await renameSession(id, trimmed);
     setRenameSaving(false);
     if (result.ok) {
+      renameInputRef.current?.blur();
+      Keyboard.dismiss();
       setRenameEditing(false);
       return;
     }
@@ -1317,7 +1347,7 @@ function MapHistoryObjectScreen() {
             decorative pin band on the SVG fallback path; on the real
             map it would float on top in random positions. So we skip
             it whenever a session is selected and the native map is up. */}
-        {!(sessionRender && MapView && sessionRender.trackPoints.length >= 2) && mapMarkers.map((m, i) => {
+        {!((sessionRender && MapView && sessionRender.trackPoints.length >= 2) || (routePreviewSession && MapView)) && mapMarkers.map((m, i) => {
           const meta = MARKER_META[m.type as keyof typeof MARKER_META] || MARKER_META.free;
           return (
             <View
@@ -1387,11 +1417,11 @@ function MapHistoryObjectScreen() {
       {targetRouteId && selectedRoute ? (
         <>
         <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
-          <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
           <View style={{ marginBottom: Spacing.md }}>
             {renameEditing ? (
               <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
                 <TextInput
+                  ref={renameInputRef}
                   style={[styles.renameInput, { color: visualTheme.foreground, borderBottomColor: visualTheme.primary }]}
                   value={renameText}
                   onChangeText={setRenameText}
@@ -1414,7 +1444,7 @@ function MapHistoryObjectScreen() {
                     : <Icon name="Check" size={20} color={visualTheme.iconActive} strokeWidth={2.5} />}
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => setRenameEditing(false)}
+                  onPress={() => { renameInputRef.current?.blur(); Keyboard.dismiss(); setRenameEditing(false); }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Cancel rename"
                 >
@@ -1507,16 +1537,16 @@ function MapHistoryObjectScreen() {
                 <Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.destructiveSurface, borderColor: visualTheme.destructive }]}
+                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
                 onPress={() => setRouteDeleteConfirm(true)}
                 disabled={deleteSaving}
                 accessibilityRole="button"
                 accessibilityLabel="Delete route"
               >
                 {deleteSaving
-                  ? <ActivityIndicator size="small" color={visualTheme.destructive} />
-                  : <Icon name="Trash2" size={IconSize.sm} color={visualTheme.destructive} strokeWidth={2} />}
-                <Text style={[styles.routeMaintenanceText, { color: visualTheme.destructive }]}>Delete</Text>
+                  ? <ActivityIndicator size="small" color={visualTheme.iconInactive} />
+                  : <Icon name="Trash2" size={IconSize.sm} color={visualTheme.iconInactive} strokeWidth={2} />}
+                <Text style={[styles.routeMaintenanceText, { color: visualTheme.foregroundSecondary }]}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1559,7 +1589,6 @@ function MapHistoryObjectScreen() {
           <ModalCardHeader
             title="Delete Route?"
             body="This removes the Route. Its source Activity, Cairns, and Memory stay unchanged."
-            onClose={deleteSaving ? undefined : () => setRouteDeleteConfirm(false)}
           />
           <View style={styles.deleteModalActions}>
             <PrimaryButton
@@ -1580,7 +1609,6 @@ function MapHistoryObjectScreen() {
         </>
       ) : targetRouteId ? (
         <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]} testID="route-detail-state">
-          <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
           <Text style={[styles.detailTitle, { color: visualTheme.foreground }]}>
             {routeDetailState === 'not-found' ? 'Route unavailable' : 'Loading Route'}
           </Text>
@@ -1600,7 +1628,6 @@ function MapHistoryObjectScreen() {
       ) : targetSessionId && selectedSession ? (
         <>
           <View style={[styles.singleSessionPanel, styles.activityDetailPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
-            <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
             <ScrollView
               style={styles.activityDetailScroll}
               contentContainerStyle={styles.activityDetailContent}
@@ -1611,6 +1638,7 @@ function MapHistoryObjectScreen() {
                 {renameEditing ? (
                   <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
                     <TextInput
+                      ref={renameInputRef}
                       style={[styles.renameInput, { color: visualTheme.foreground, borderBottomColor: visualTheme.primary }]}
                       value={renameText}
                       onChangeText={setRenameText}
@@ -1632,7 +1660,7 @@ function MapHistoryObjectScreen() {
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity
-                      onPress={() => setRenameEditing(false)}
+                      onPress={() => { renameInputRef.current?.blur(); Keyboard.dismiss(); setRenameEditing(false); }}
                       disabled={renameSaving}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       accessibilityLabel="Cancel rename"
@@ -1809,8 +1837,8 @@ function MapHistoryObjectScreen() {
                     accessibilityLabel="Delete Activity"
                     testID="activity-delete-action"
                   >
-                    <Icon name="Trash2" size={15} color={visualTheme.destructive} strokeWidth={2} />
-                    <Text style={[styles.activityDeleteText, { color: visualTheme.destructive }]}>Delete Activity</Text>
+                    <Icon name="Trash2" size={15} color={visualTheme.iconInactive} strokeWidth={2} />
+                    <Text style={[styles.activityDeleteText, { color: visualTheme.foregroundSecondary }]}>Delete Activity</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1826,7 +1854,6 @@ function MapHistoryObjectScreen() {
             <ModalCardHeader
               title="Delete Activity?"
               body="This removes the Activity record. Cairns, independent Routes, and Memory already earned stay in place."
-              onClose={deleteSaving ? undefined : () => setDeleteConfirm(false)}
             />
             <View style={styles.deleteModalActions}>
               <PrimaryButton

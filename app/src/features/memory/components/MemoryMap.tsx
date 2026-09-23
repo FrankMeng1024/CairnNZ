@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
-import { StyleSheet, View, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
@@ -32,6 +32,7 @@ import { haversineM } from '../../../utils/geo';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { useMapTheme } from '../../../hooks/useMapTheme';
 import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../../../config/mapbox';
+import { MapLoadOverlay, type MapLoadState } from '../../../components/MapLoadOverlay';
 
 interface Props {
   centerLat: number;
@@ -118,7 +119,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     if (memoryScope === 'friend') {
       return friendMarkers.filter(marker => String(marker.authorId) === String(selectedFriendId));
     }
-    return [...ownMarkers, ...friendMarkers];
+    return friendMarkers;
   }, [friendMarkers, memoryScope, ownMarkers, selectedFriendId]);
   const mapViewRef = useRef<any>(null);
 
@@ -280,6 +281,14 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   // Same pattern as HikingMap. Cleared on first onDidFinishRenderingMapFully
   // (or onDidFinishLoadingMap as backup — ref guard prevents duplicate).
   const [mapFirstRender, setMapFirstRender] = useState(false);
+  const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
+  const [mapEpoch, setMapEpoch] = useState(0);
+
+  useEffect(() => {
+    if (mapFirstRender) return undefined;
+    const timeout = setTimeout(() => setMapLoadState('slow'), 8000);
+    return () => clearTimeout(timeout);
+  }, [mapEpoch, mapFirstRender]);
 
   useEffect(() => {
     if (!Mapbox.available) onMapUnavailable?.();
@@ -295,11 +304,11 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     if (recenterToken > 0) {
       anchorRef.current = { lat: centerLat, lng: centerLng };
       setHasPannedAway(false);
-      suppressPanDetectUntilRef.current = Date.now() + 1000;
+      suppressPanDetectUntilRef.current = Date.now() + 600;
       cameraRef.current?.setCamera?.({
         centerCoordinate: [centerLng, centerLat],
         zoomLevel: INITIAL_ZOOM,
-        animationDuration: 600,
+        animationDuration: 280,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -315,7 +324,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     // 更新 anchor 到目标 center, 防止 flyTo 触发 pan-detected → 弹回 recenter pill
     anchorRef.current = { lat: flyToTarget.center[1], lng: flyToTarget.center[0] };
     setHasPannedAway(true);  // 已经不在自己 GPS 位置了, recenter pill 应该出现
-    suppressPanDetectUntilRef.current = Date.now() + 1000;
+    suppressPanDetectUntilRef.current = Date.now() + 600;
     cameraRef.current?.setCamera?.({
       centerCoordinate: flyToTarget.center,
       zoomLevel: flyToTarget.zoom,
@@ -331,7 +340,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     cameraRef.current?.setCamera?.({
       centerCoordinate: [centerLng, centerLat],
       zoomLevel: INITIAL_ZOOM,
-      animationDuration: 600,
+      animationDuration: 280,
     });
   }, [centerLat, centerLng]);
 
@@ -356,6 +365,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   return (
     <View style={styles.container}>
       <MapView
+        key={`memory-map-${mapEpoch}`}
         ref={mapViewRef}
         style={styles.map}
         {...(memoryResolvedMapStyle.kind === 'url'
@@ -422,6 +432,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           log('v357.mapbox_didFinishLoadingMap', {});
           // O1 batch 28.3: gate blue dot 一起出
           setMapReady(true);
+          setMapLoadState('loading');
           if (!mapFirstRender) setMapFirstRender(true);
           // v361 fix: onDidFinishRenderingMapFully is unreliable —
           // v357 telemetry showed it never fired in a normal session
@@ -440,11 +451,16 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           // Backup: also fire here in case didFinishLoadingMap was
           // somehow missed (defensive — ref guard prevents duplicate).
           setMapReady(true);
+          setMapLoadState('loading');
           if (!mapFirstRender) setMapFirstRender(true);
           if (!mapFullyReadyFiredRef.current && onMapFullyReady) {
             mapFullyReadyFiredRef.current = true;
             onMapFullyReady();
           }
+        }}
+        onMapLoadingError={(event: unknown) => {
+          log('memory.map_loading_error', { event: (() => { try { return JSON.stringify(event).slice(0, 500); } catch { return String(event); } })() });
+          setMapLoadState('error');
         }}
         onRegionIsChanging={(feature: any) => {
           // v340: suppress pan-detect for 1s after a programmatic
@@ -487,7 +503,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             pitch: 0,
           }}
           animationMode={'flyTo'}
-          animationDuration={600}
+          animationDuration={280}
         />
         {/* v349: re-enable custom UserLocation puck — CircleLayer is now
             exported by mapboxAdapter (v348 fix), so the v347 crash root
@@ -571,12 +587,16 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
       {/* Tile-loading overlay: same as HikingMap. Hides blank canvas on
           slow CDN / fresh install until Mapbox first-render fires. */}
       {!mapFirstRender && (
-        <View style={[styles.mapLoadingOverlay, { backgroundColor: theme.readabilityScrim }]} pointerEvents="none">
-          <View style={[styles.mapLoadingCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}>
-            <ActivityIndicator size="small" color={theme.primary} />
-            <Text style={[styles.mapLoadingText, { color: theme.foreground }]}>Loading map…</Text>
-          </View>
-        </View>
+        <MapLoadOverlay
+          state={mapLoadState}
+          onRetry={() => {
+            setMapReady(false);
+            setMapFirstRender(false);
+            setMapLoadState('loading');
+            setMapEpoch((epoch) => epoch + 1);
+          }}
+          testID="memory-map-load-overlay"
+        />
       )}
     </View>
   );

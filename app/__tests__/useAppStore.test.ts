@@ -36,6 +36,9 @@ const setupMocks = (getMeImpl: () => any) => {
   jest.doMock('../src/services/sessionService', () => ({
     fetchSessions: jest.fn(async () => []),
   }));
+  jest.doMock('../src/services/accountLocalData', () => ({
+    resumeScheduledDeletedAccountLocalPurge: jest.fn(async () => undefined),
+  }));
   jest.doMock('../src/store/useSessionStore', () => ({
     useSessionStore: {
       getState: () => ({ hydrate: jest.fn(async () => {}), clearSessions: jest.fn() }),
@@ -149,7 +152,12 @@ describe('useAppStore.hydrate', () => {
       const memPersist = require('../src/features/memory/services/memoryPersistence');
       const { useAppStore } = require('../src/store/useAppStore');
 
-      await useAppStore.getState().logout();
+      useAppStore.setState({
+        isLoggedIn: true,
+        user: { id: 'logout-owner', name: 'Frank', email: 'f@example.com' },
+      });
+
+      await useAppStore.getState().logout({ expectedUserId: 'logout-owner' });
 
       const trackingStore = require('../src/store/useTrackingStore');
       expect(trackingStore.useTrackingStore.__suspendForUserSwitch).toHaveBeenCalled();

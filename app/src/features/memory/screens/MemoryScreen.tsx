@@ -222,7 +222,7 @@ export function MemoryScreen() {
   const [fogReady, setFogReady] = useState(false);
   const [fogUnavailable, setFogUnavailable] = useState(false);
   // v413: friend memory 加载 — Memory 页 mount + subscribed friends 变化时拉 /api/circle/fog
-  const subscriptionsCount = useMemorySubscriptionsStore((s) => s.subscriptions.length);
+  const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
   const loadSubs = useMemorySubscriptionsStore((s) => s.load);
   const loadFriendProjections = useFriendMemoryStore((s) => s.loadSelectedProjections);
   const hydrateFriendProjections = useFriendMemoryStore((s) => s.hydrate);
@@ -258,11 +258,14 @@ export function MemoryScreen() {
       await Promise.all([loadFriendProjections(), loadCircleMarkers()]);
     })();
   }, [hydrateFriendProjections, loadCircleMarkers, loadFriendProjections, loadSubs, loadFriendsFromBackend, userId]);
-  // Track previous subscriptions count to detect changes when picker closes.
-  const prevSubsCountRef = useRef(0);
-  useEffect(() => {
-    prevSubsCountRef.current = subscriptionsCount;
-  }, [subscriptionsCount]);
+  // Snapshot exact source identities when the picker opens. Counts alone miss
+  // A→B swaps, while updating a "previous" ref on every mutation compares the
+  // final set to itself and suppresses the required projection refresh.
+  const pickerOpeningIdsRef = useRef<string[]>([]);
+  const openFriendPicker = useCallback(() => {
+    pickerOpeningIdsRef.current = subscriptions.map(item => String(item.friend_id)).sort();
+    setPickModalOpen(true);
+  }, [subscriptions]);
 
   // Refresh friend fog when pick modal closes and subscriptions changed,
   // rather than on every individual subscribe/unsubscribe tap. This
@@ -278,11 +281,14 @@ export function MemoryScreen() {
   // All of which competed with modal close animation + user's next tap on
   // the back / friends button, starving touch events for 3-5s.
   const handlePickModalClose = useCallback(() => {
+    const currentIds = subscriptions.map(item => String(item.friend_id)).sort();
+    const previousIds = pickerOpeningIdsRef.current;
+    const changed = currentIds.join('|') !== previousIds.join('|');
     const startTs = Date.now();
-    log('memory.picker_close.start', { subs_count: subscriptionsCount, prev: prevSubsCountRef.current });
+    log('memory.picker_close.start', { subscriptions: currentIds, previous: previousIds });
     setPickModalOpen(false);
-    if (subscriptionsCount !== prevSubsCountRef.current) {
-      const added = subscriptionsCount - prevSubsCountRef.current;
+    if (changed) {
+      const added = currentIds.length - previousIds.length;
       InteractionManager.runAfterInteractions(() => {
         const fetchStart = Date.now();
         log('memory.picker_close.fetch_start', { queued_ms: fetchStart - startTs });
@@ -297,11 +303,11 @@ export function MemoryScreen() {
         });
       });
       log('memory.friend_fog_reload_on_picker_close', {
-        prev: prevSubsCountRef.current,
-        now: subscriptionsCount,
+        previous: previousIds,
+        current: currentIds,
       });
     }
-  }, [subscriptionsCount, loadCircleMarkers, loadFriendProjections]);
+  }, [subscriptions, loadCircleMarkers, loadFriendProjections]);
 
   const handleCameraCenter = useCallback(
     (lat: number, lng: number) => {
@@ -388,7 +394,7 @@ export function MemoryScreen() {
           useNativeDriver: true,
         }).start();
       }
-    }, 3000); // 3s: if both map+fog gates haven't fired by then, show slow banner. Normal loads complete well before this.
+    }, 8000);
     return () => {
       if (overlayFadeTimerRef.current) {
         clearTimeout(overlayFadeTimerRef.current);
@@ -824,7 +830,7 @@ export function MemoryScreen() {
         {/* v376: Pick icon 移到 MemoryScopeToggle 内部作为第三个 segment,
             scope=friends 时 width+opacity 展开,scope=mine 时 collapse 到 0
             (用户 v375 反馈: 之前的 fixed-position 占位空白难看)。 */}
-        <MemoryScopeToggle onPickPress={() => setPickModalOpen(true)} />
+        <MemoryScopeToggle onPickPress={openFriendPicker} />
       </View>
       <TouchableOpacity
         testID="memory-all-cairns-entry"
@@ -860,29 +866,25 @@ export function MemoryScreen() {
         onPress={() => setSharingOpen(true)}
         activeOpacity={0.86}
         accessibilityRole="button"
-        accessibilityLabel="Open Memory sharing"
+        accessibilityLabel="Choose whether friends can see new Memory"
       >
         <Icon name="Users" size={15} color={theme.iconActive} strokeWidth={2} />
-        <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>Sharing</Text>
+        <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>Share mine</Text>
       </TouchableOpacity>
-      <View
-        testID="memory-evidence-context"
-        pointerEvents="none"
-        style={[styles.evidenceContext, { top: insets.top + 120, backgroundColor: theme.mapOverlay, borderColor: theme.borderStrong }]}
-      >
-        <Text style={[styles.evidenceContextTitle, { color: theme.foreground }]}>
-          {syntheticQaAuthority ? 'Raw GPS test Memory' : 'Personal Memory'}
-        </Text>
-        <Text style={[styles.evidenceContextText, { color: theme.foregroundSecondary }]}>
-          {syntheticQaAuthority
-            ? memoryEvidenceContext
+      {syntheticQaAuthority ? (
+        <View
+          testID="memory-evidence-context"
+          pointerEvents="none"
+          style={[styles.evidenceContext, { top: insets.top + 120, backgroundColor: theme.mapOverlay, borderColor: theme.borderStrong }]}
+        >
+          <Text style={[styles.evidenceContextTitle, { color: theme.foreground }]}>Raw GPS test Memory</Text>
+          <Text style={[styles.evidenceContextText, { color: theme.foregroundSecondary }]}>
+            {memoryEvidenceContext
               ? `Isolated synthetic evidence · first accepted ${memoryEvidenceContext.first} · latest ${memoryEvidenceContext.last}`
-              : 'Isolated synthetic evidence · no accepted movement yet.'
-            : memoryEvidenceContext
-            ? `Explored places saved · first recorded ${memoryEvidenceContext.first} · latest movement ${memoryEvidenceContext.last}`
-            : 'Your explored places will appear as you move.'}
-        </Text>
-      </View>
+              : 'Isolated synthetic evidence · no accepted movement yet.'}
+          </Text>
+        </View>
+      ) : null}
 
       {/* v352 zoom-flicker fix: render MemoryMap with persistentCoord
           (last-rendered coord, kept in ref across re-renders) instead of
@@ -1080,7 +1082,7 @@ export function MemoryScreen() {
                 ? 'Loading map…'
                 : loadingStage === 1
                   ? 'Restoring explored places…'
-                  : 'Network is slow, please wait…'}
+                  : 'Finishing your Memory view…'}
             </Text>
             <ActivityIndicator
               color={theme.primary}
@@ -1116,7 +1118,7 @@ export function MemoryScreen() {
             style={styles.slowBannerSpinner}
           />
           <Text style={styles.slowBannerText} numberOfLines={1}>
-            Weak signal — still loading map…
+            Map still loading…
           </Text>
           <TouchableOpacity
             style={styles.slowBannerClose}

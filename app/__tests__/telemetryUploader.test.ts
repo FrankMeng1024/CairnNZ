@@ -91,6 +91,19 @@ jest.mock('../src/services/networkMonitor', () => {
   };
 });
 
+// These tests exercise the Internal-QA upload path. Authorize that capability
+// explicitly instead of depending on whichever EAS profile env happens to be
+// present in the local Jest process.
+jest.mock('../src/features/activitySimulator/capability', () => ({
+  activitySimulatorBuildCapable: true,
+}));
+
+jest.mock('../src/store/useAppStore', () => ({
+  useAppStore: {
+    getState: () => ({ user: null }),
+  },
+}));
+
 import { telemetryUploader } from '../src/services/telemetryUploader';
 import { debugLogger } from '../src/services/debugLogger';
 // eslint-disable-next-line @typescript-eslint/no-var-requires

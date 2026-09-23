@@ -18,7 +18,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback,
+  KeyboardAvoidingView, Platform, Keyboard,
   ScrollView,
 } from 'react-native';
 import { MarkerPermission } from '../../../store/useMarkerStore';
@@ -73,10 +73,9 @@ export function ContentStep({
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
+      keyboardVerticalOffset={0}
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <View style={styles.container}>
+      <View style={styles.container}>
           {/* R114/O24 (2026-08-12): back button moved inline with title
               (was in a separate row above). User feedback: back on its
               own row felt disconnected from the page header. */}
@@ -84,12 +83,21 @@ export function ContentStep({
             {/* R21 v3 (2026-08-17): unified to Auth back style —
                 ContentStep is a full-screen form, not a map overlay, so
                 the frosted pill diverged from the Auth reference. */}
-            <BackButton variant="inline" onPress={() => { Keyboard.dismiss(); onBack(); }} />
-            <Text style={[styles.title, { color: theme.foreground }]}>Leave a Cairn</Text>
+            <View style={styles.headerBack}>
+              <BackButton variant="inline" onPress={() => { Keyboard.dismiss(); onBack(); }} />
+            </View>
+            <View style={styles.headerCopy}>
+              <Text style={[styles.title, { color: theme.foreground }]}>Leave a Cairn</Text>
+              <Text style={[styles.headerEyebrow, { color: theme.foregroundSecondary }]}>MARK THIS PLACE</Text>
+            </View>
+            <View style={styles.headerBalance} accessibilityElementsHidden />
           </View>
           <ScrollView
+            style={styles.scroll}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 16 }}
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+            contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
             <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>A trace for this place. Add a note now or come back later.</Text>
@@ -167,7 +175,6 @@ export function ContentStep({
             </TouchableOpacity>
           </View>
         </View>
-      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }
@@ -181,9 +188,13 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    paddingBottom: 8,
+    justifyContent: 'space-between',
+    minHeight: 58,
+    paddingBottom: Spacing.sm,
   },
+  headerBack: { width: 52, alignItems: 'flex-start' },
+  headerBalance: { width: 52 },
+  headerCopy: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // Concept alignment (2026-08-16): title bumped to 700 to read as the
   // page anchor next to the pill back button, matching Plant-2 concept.
   title: {
@@ -191,8 +202,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textPrimary,
     marginBottom: 0,
-    flexShrink: 1,
+    textAlign: 'center',
   },
+  headerEyebrow: { marginTop: 2, fontSize: 10, lineHeight: 13, fontWeight: '700', letterSpacing: 1.2 },
+  scroll: { flex: 1, minHeight: 0 },
+  scrollContent: { paddingBottom: Spacing.lg },
   sub: {
     fontSize: FontSize.caption,
     color: Colors.textSecondary,

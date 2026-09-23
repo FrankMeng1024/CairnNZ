@@ -61,8 +61,7 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
 
   const opts: { id: MemoryScope; label: string }[] = [
     { id: 'self', label: 'Mine' },
-    { id: 'combined', label: 'Together' },
-    { id: 'friend', label: 'Friend' },
+    { id: 'combined', label: 'Friends' },
   ];
 
   return (
@@ -74,13 +73,12 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
             key={o.id}
             style={[styles.segment, active && styles.segmentActive, active ? { backgroundColor: theme.surface } : null]}
             onPress={() => {
-              if (o.id !== 'friend') {
-                setScope(o.id);
+              if (o.id === 'self') {
+                setScope('self');
                 return;
               }
-              const selected = subscriptions[0];
-              if (selected) setScope('friend', String(selected.friend_id));
-              else onPickPress?.();
+              if (subscriptions.length === 0) onPickPress?.();
+              else setScope('combined');
             }}
             activeOpacity={0.7}
             testID={`memory-scope-${o.id}`}
@@ -102,6 +100,8 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
             accessibilityElementsHidden={scope === 'self'}
             importantForAccessibility={scope !== 'self' ? 'yes' : 'no-hide-descendants'}
             testID="memory-scope-pick"
+            accessibilityRole="button"
+            accessibilityLabel="Choose which friends to show"
           >
             <Icon name="Users" size={16} color={theme.iconActive} strokeWidth={2.2} />
           </TouchableOpacity>

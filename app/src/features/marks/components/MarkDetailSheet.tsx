@@ -55,6 +55,7 @@ interface Props {
   /** Handlers — Story-533/534 wire these. */
   onClose: () => void;
   onEdit?: (mark: Marker) => void;
+  onOpenDetail?: (mark: Marker) => void;
   onDelete?: (mark: Marker, semantic: 'own' | 'hide') => void;
   onLike?: (mark: Marker) => void;
   onReport?: (mark: Marker) => void;
@@ -97,7 +98,7 @@ export function MarkDetailSheet(props: Props) {
   const theme = useVisualTheme();
   const {
     marker, viewerId, subscribedFriendIds, friendIds, inMyFog,
-    onClose, onEdit, onDelete, onLike, onReport, isLiked,
+    onClose, onEdit, onOpenDetail, onDelete, onLike, onReport, isLiked,
   } = props;
 
   if (!marker) return null;
@@ -216,11 +217,11 @@ export function MarkDetailSheet(props: Props) {
             {canEdit ? (
               <TouchableOpacity
                 style={[styles.actionBtn, styles.actionBtnSecondary, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                onPress={() => onEdit?.(marker)}
-                testID="mark-detail-edit"
+                onPress={() => (onOpenDetail ?? onEdit)?.(marker)}
+                testID="mark-detail-open-owned"
               >
-                <Icon name="Pencil" size={14} color={theme.iconActive} strokeWidth={2.2} />
-                <Text style={[styles.actionTextSecondary, { color: theme.primary }]}>Edit</Text>
+                <Icon name="ChevronRight" size={14} color={theme.iconActive} strokeWidth={2.2} />
+                <Text style={[styles.actionTextSecondary, { color: theme.primary }]}>View Cairn</Text>
               </TouchableOpacity>
             ) : null}
 

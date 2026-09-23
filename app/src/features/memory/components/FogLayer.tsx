@@ -1058,7 +1058,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
     // It is never merged into self points or friend projections and therefore
     // cannot become shareable exploration.
     if (syntheticQaAuthority) return syntheticTestPoints;
-    return scope === 'friend' ? [] : selfPoints;
+    return scope === 'self' ? selfPoints : [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selfPoints, scope, syntheticQaAuthority, syntheticTestPoints]);
   const friendCells = useMemo(
@@ -1342,9 +1342,10 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
           // UI + map surfaces share one source of truth.
           fillColor: theme.mapFogFill,
           fillOpacity: 1,
-          // Disable AA to avoid 1px seams along hole edges (mapbox-gl-js#7023
-          // workaround per Simon Sat 2019).
-          fillAntialias: false,
+          // Antialiasing is presentation-only: it softens the exact boundary
+          // without changing, buffering, or bridging the evidence geometry.
+          // The quiet edge pass below masks historical tile seams.
+          fillAntialias: true,
         }}
       />
       {/* v350: Fragment-wrapped LineLayers were silently broken in v346-v349.
@@ -1361,9 +1362,9 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
           id="memory-fog-edge-outer"
           style={{
             lineColor: theme.mapFogEdgeOuter,
-            lineWidth: 5,
+            lineWidth: 6,
             lineBlur: 7,
-            lineOpacity: 0.72,
+            lineOpacity: 0.54,
           }}
         />
       ) : null}
@@ -1372,9 +1373,9 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
           id="memory-fog-edge-inner"
           style={{
             lineColor: theme.mapFogEdgeInner,
-            lineWidth: 1.1,
-            lineBlur: 0.8,
-            lineOpacity: 0.82,
+            lineWidth: 1,
+            lineBlur: 2.2,
+            lineOpacity: 0.44,
           }}
         />
       ) : null}

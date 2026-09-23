@@ -67,41 +67,10 @@ export function initMapbox() {
     // Empty configuration must never mutate the native singleton.
     if (isMapboxTokenConfigured()) Mapbox.setAccessToken(MAPBOX_TOKEN);
     Mapbox.setTelemetryEnabled(false);
-    // R114/O22 Bug 4: pre-warm the NZ tile cache at app boot. On first
-    // launch (or after a fresh install) the map otherwise renders as a
-    // blank cream/white canvas for many seconds while tiles download from
-    // the Mapbox CDN — especially bad on Chinese networks where the CDN
-    // is slow. Kicking off a small (2 city bbox) offline pack in the
-    // background means the tiles are already cached by the time the user
-    // opens Hike. Silent on failure — the on-map loading overlay covers
-    // the worst case.
-    try {
-      const offline = (Mapbox as any).offlineManager;
-      if (isMapboxTokenConfigured() && offline && typeof offline.createPack === 'function') {
-        const styleURL = process.env.EXPO_PUBLIC_CAIRN_TOPO_STYLE_URL
-          ?? 'mapbox://styles/mapbox/standard';
-        offline.getPack('cairn-nz-warmup').then((pack: unknown) => {
-          if (pack) return; // already cached from a previous launch
-          void offline.createPack(
-            {
-              name: 'cairn-nz-warmup',
-              styleURL,
-              // Rough NZ bbox — Auckland + Wellington + Christchurch corridor.
-              // Small enough to fit under Mapbox's 6000-tile free tier
-              // limit at zoom 8-12 (~200 km² @ z12).
-              bounds: [[166.5, -47.3], [178.6, -34.3]] as [
-                [number, number],
-                [number, number],
-              ],
-              minZoom: 5,
-              maxZoom: 10,
-            },
-            () => { /* progress — silent */ },
-            () => { /* error — silent, overlay covers UX */ },
-          );
-        }).catch(() => { /* silent */ });
-      }
-    } catch { /* silent — offline API may not be present in older builds */ }
+    // Do not start broad offline-pack downloads at app/auth launch. On a
+    // fresh install those requests competed with the first visible style and
+    // delayed the exact Hike/Memory tiles the user was waiting for. Each map
+    // now owns truthful style readiness and an app-native loading/error state.
   }
 }
 

@@ -20,7 +20,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { BackButton } from '../components/BackButton';
 import { ContentSurface } from '../components/ContentSurface';
@@ -198,6 +198,7 @@ function currentOwnerId(): string | null {
 
 export function SettingsScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const theme = useVisualTheme();
   const scenicTime = useScenicTimeState();
   const condition = useWeatherStore((state) => state.condition);
@@ -254,6 +255,7 @@ export function SettingsScreen() {
   const [deleteError, setDeleteError] = useState('');
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [deleteOwnerId, setDeleteOwnerId] = useState<string | null>(null);
+  const [signOutOpen, setSignOutOpen] = useState(false);
 
   const [exports, setExports] = useState<DataExportSummary[]>([]);
   const [exportLoading, setExportLoading] = useState(false);
@@ -261,6 +263,8 @@ export function SettingsScreen() {
   const [exportError, setExportError] = useState('');
   const [exportStateOwnerId, setExportStateOwnerId] = useState<string | null>(null);
   const [memoryDeleting, setMemoryDeleting] = useState(false);
+  const [memoryDeleteOpen, setMemoryDeleteOpen] = useState(false);
+  const [memoryDeleteResult, setMemoryDeleteResult] = useState('');
 
   const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>('feedback');
   const [feedbackText, setFeedbackText] = useState('');
@@ -330,6 +334,7 @@ export function SettingsScreen() {
     setDeletePhrase('');
     setDeleteError('');
     setDeleteOwnerId(null);
+    setSignOutOpen(false);
     exportGeneration.current += 1;
     exportFlight.current = false;
     setExports([]);
@@ -337,6 +342,8 @@ export function SettingsScreen() {
     setExportRequesting(false);
     setExportError('');
     setExportStateOwnerId(renderedOwnerId);
+    setMemoryDeleteOpen(false);
+    setMemoryDeleteResult('');
     feedbackGeneration.current += 1;
     feedbackFlight.current = false;
     setFeedbackKind('feedback');
@@ -453,30 +460,13 @@ export function SettingsScreen() {
     }
   };
 
-  const handleSignOut = () => {
-    Alert.alert(
-      'Sign out?',
-      'Your saved and recoverable Cairn data stays with this account. Explore while Cairn is open will return to Off on this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign out',
-          onPress: () => void (async () => {
-            try {
-              const ownerId = currentOwnerId();
-              if (!ownerId) return;
-              const tokenResult = await logout({ expectedUserId: ownerId });
-              if (tokenResult.ownerChanged || !tokenResult.cleared) {
-                Alert.alert('Account changed', 'Sign out did not act on the newer account. Try again from its Settings screen.');
-              }
-            } catch {
-              Alert.alert('Could not sign out', 'Cairn could not safely stop the current account session. Please try again.');
-            }
-          })(),
-        },
-      ],
-    );
-  };
+  const handleSignOut = () => setSignOutOpen(true);
+
+  const scrollContentStyle = useMemo(() => [
+    styles.scroll,
+    { paddingBottom: Spacing.xxl + Spacing.xl + Math.max(insets.bottom, Spacing.md) },
+  ], [insets.bottom]);
+  const scrollIndicatorInsets = useMemo(() => ({ bottom: insets.bottom }), [insets.bottom]);
 
   const latestExport = visibleExports[0] ?? null;
   const exportExpired = latestExport?.expires_at
@@ -499,14 +489,16 @@ export function SettingsScreen() {
   const renderRoot = () => (
     <>
       {renderHeader('Settings')}
-      <ScrollView testID="settings-root" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView style={styles.pageScroll} testID="settings-root" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Account</SectionTitle>
-        <ContentSurface style={[styles.surface, surfaceStyle]} onPress={() => openPage('account')} testID="settings-account-row">
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="User"
             title={user?.name || 'Your account'}
             detail={user?.email || 'Account identity and sign-in'}
-            value="Account"
+            value="Manage"
+            onPress={() => openPage('account')}
+            testID="settings-account-row"
           />
         </ContentSurface>
 
@@ -570,13 +562,13 @@ export function SettingsScreen() {
         </ContentSurface>
 
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Privacy & Data</SectionTitle>
-        <ContentSurface style={[styles.surface, surfaceStyle]} onPress={() => openPage('privacy')} testID="settings-privacy-row">
-          <Row icon="Shield" title="Privacy & Data" detail="Location, export and exploration history" value="Review" />
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <Row icon="Shield" title="Privacy & Data" detail="Location, export and exploration history" value="Review" onPress={() => openPage('privacy')} testID="settings-privacy-row" />
         </ContentSurface>
 
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Help & About</SectionTitle>
-        <ContentSurface style={[styles.surface, surfaceStyle]} onPress={() => openPage('help')} testID="settings-help-row">
-          <Row icon="MessageSquare" title="Help & About" detail="Feedback, support, terms and app information" value="Open" />
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <Row icon="MessageSquare" title="Help & About" detail="Feedback, support, terms and app information" value="Open" onPress={() => openPage('help')} testID="settings-help-row" />
         </ContentSurface>
         <Text style={[styles.footer, { color: background.textColor }]}>Ngā mihi nui — thanks for using Cairn.</Text>
       </ScrollView>
@@ -586,7 +578,7 @@ export function SettingsScreen() {
   const renderAccount = () => (
     <>
       {renderHeader('Account')}
-      <ScrollView testID="settings-account" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView style={styles.pageScroll} testID="settings-account" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
         <Text style={[styles.intro, { color: background.textColor, textShadowColor: background.textShadowColor }]}>Your identity and account actions.</Text>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row icon="User" title={user?.name || 'Cairn user'} detail="Name" />
@@ -708,7 +700,7 @@ export function SettingsScreen() {
   const renderPrivacy = () => (
     <>
       {renderHeader('Privacy & Data')}
-      <ScrollView testID="settings-privacy" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView style={styles.pageScroll} testID="settings-privacy" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
         <Text style={[styles.intro, { color: background.textColor, textShadowColor: background.textShadowColor }]}>Clear controls and accurate status for location and your data.</Text>
 
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Location</SectionTitle>
@@ -800,43 +792,13 @@ export function SettingsScreen() {
             icon="Trash2"
             title="Delete exploration history"
             detail="Deletes Memory points and derived explored regions; keeps Activities, Routes and Cairns"
-            destructive
-            onPress={() => Alert.alert(
-              'Delete exploration history?',
-              'This permanently removes your Memory points and explored-region progress from Cairn and this device. Activities, Routes and Cairns stay.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Delete history',
-                  style: 'destructive',
-                  onPress: () => void (async () => {
-                    if (memoryDeleteFlight.current) return;
-                    const ownerId = currentOwnerId();
-                    if (!ownerId) return;
-                    memoryDeleteFlight.current = true;
-                    const generation = ++memoryDeleteGeneration.current;
-                    setMemoryDeleting(true);
-                    try {
-                      const ok = await deleteAllMemoryFromServer(ownerId);
-                      if (generation !== memoryDeleteGeneration.current || currentOwnerId() !== ownerId) return;
-                      Alert.alert(ok ? 'Exploration history deleted' : 'Could not delete history', ok
-                        ? 'Your Activities, Routes and Cairns were not changed.'
-                        : 'Nothing was removed. Check your connection and try again.');
-                    } finally {
-                      if (generation === memoryDeleteGeneration.current) {
-                        memoryDeleteFlight.current = false;
-                        setMemoryDeleting(false);
-                      }
-                    }
-                  })(),
-                },
-              ],
-            )}
+            onPress={() => { setMemoryDeleteResult(''); setMemoryDeleteOpen(true); }}
             disabled={memoryDeleting}
             busy={memoryDeleting}
             testID="settings-delete-exploration"
           />
           {memoryDeleting ? <ActivityIndicator style={styles.inlineLoader} color={theme.destructive} /> : null}
+          {memoryDeleteResult ? <Text accessibilityLiveRegion="polite" style={[styles.deleteResult, { color: memoryDeleteResult.startsWith('Deleted') ? theme.textSecondary : theme.destructive }]}>{memoryDeleteResult}</Text> : null}
         </ContentSurface>
 
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Privacy</SectionTitle>
@@ -856,7 +818,7 @@ export function SettingsScreen() {
   const renderHelp = () => (
     <>
       {renderHeader('Help & About')}
-      <ScrollView testID="settings-help" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.pageScroll} testID="settings-help" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle} keyboardShouldPersistTaps="handled">
         <Text style={[styles.intro, { color: background.textColor, textShadowColor: background.textShadowColor }]}>Send a message, find support, or review Cairn’s legal information.</Text>
 
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Feedback</SectionTitle>
@@ -964,7 +926,7 @@ export function SettingsScreen() {
     <View style={[styles.root, { backgroundColor: background.settingsBackgroundColor }]}>
       <Image source={background.bgAsset} style={[styles.backgroundImage, backgroundLayout]} resizeMode="cover" />
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: background.settingsVeilColor }]} />
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         {page === 'root' ? renderRoot() : page === 'account' ? renderAccount() : page === 'privacy' ? renderPrivacy() : renderHelp()}
       </SafeAreaView>
 
@@ -1075,7 +1037,6 @@ export function SettingsScreen() {
         <ModalCardHeader
           title="Delete your account?"
           body="Your account will be disabled now. You can restore server-backed data by signing in during the next seven days. After that, Cairn permanently deletes your profile, Activities, Routes, Cairns, Memory, friendships, exports, feedback and account-linked diagnostics. Account data on this device is cleared now; unsynced device-only data cannot be restored."
-          onClose={deleteSaving ? undefined : () => setDeleteOpen(false)}
         />
         <TextField
           label="Type delete account to confirm"
@@ -1135,6 +1096,73 @@ export function SettingsScreen() {
           />
         </View>
       </ModalCard>
+
+      <ModalCard visible={signOutOpen} onDismiss={() => setSignOutOpen(false)} testID="settings-signout-modal">
+        <ModalCardHeader
+          title="Sign out?"
+          body="Your saved and recoverable Cairn data stays with this account. Explore while Cairn is open will return to Off on this device."
+        />
+        <View style={styles.modalActions}>
+          <PrimaryButton label="Stay signed in" variant="secondary" onPress={() => setSignOutOpen(false)} style={styles.flexButton} />
+          <PrimaryButton
+            label="Sign out"
+            variant="destructive"
+            style={styles.flexButton}
+            onPress={() => void (async () => {
+              const ownerId = currentOwnerId();
+              if (!ownerId) return;
+              setSignOutOpen(false);
+              try {
+                const tokenResult = await logout({ expectedUserId: ownerId });
+                if (tokenResult.ownerChanged || !tokenResult.cleared) {
+                  Alert.alert('Account changed', 'Sign out did not act on the newer account. Try again from its Settings screen.');
+                }
+              } catch {
+                Alert.alert('Could not sign out', 'Cairn could not safely stop the current account session. Please try again.');
+              }
+            })()}
+            testID="settings-signout-confirm"
+          />
+        </View>
+      </ModalCard>
+
+      <ModalCard visible={memoryDeleteOpen} onDismiss={() => !memoryDeleting && setMemoryDeleteOpen(false)} dismissible={!memoryDeleting} testID="settings-delete-exploration-modal">
+        <ModalCardHeader
+          title="Delete exploration history?"
+          body="This permanently removes your Memory points and explored-region progress from Cairn and this device. Activities, Routes and Cairns stay."
+        />
+        <View style={styles.modalActions}>
+          <PrimaryButton label="Keep history" variant="secondary" disabled={memoryDeleting} onPress={() => setMemoryDeleteOpen(false)} style={styles.flexButton} />
+          <PrimaryButton
+            label="Delete history"
+            variant="destructive"
+            loading={memoryDeleting}
+            style={styles.flexButton}
+            onPress={() => void (async () => {
+              if (memoryDeleteFlight.current) return;
+              const ownerId = currentOwnerId();
+              if (!ownerId) return;
+              memoryDeleteFlight.current = true;
+              const generation = ++memoryDeleteGeneration.current;
+              setMemoryDeleting(true);
+              try {
+                const ok = await deleteAllMemoryFromServer(ownerId);
+                if (generation !== memoryDeleteGeneration.current || currentOwnerId() !== ownerId) return;
+                setMemoryDeleteOpen(false);
+                setMemoryDeleteResult(ok
+                  ? 'Deleted. Activities, Routes and Cairns were not changed.'
+                  : 'Nothing was removed. Check your connection and try again.');
+              } finally {
+                if (generation === memoryDeleteGeneration.current) {
+                  memoryDeleteFlight.current = false;
+                  setMemoryDeleting(false);
+                }
+              }
+            })()}
+            testID="settings-delete-exploration-confirm"
+          />
+        </View>
+      </ModalCard>
     </View>
   );
 }
@@ -1142,6 +1170,7 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   safe: { flex: 1 },
+  pageScroll: { flex: 1 },
   backgroundImage: { position: 'absolute' },
   header: {
     minHeight: 58,
@@ -1222,6 +1251,7 @@ const styles = StyleSheet.create({
   stackSmall: { gap: Spacing.md, padding: Spacing.base },
   error: { fontSize: FontSize.caption, lineHeight: 18, fontWeight: '600', marginHorizontal: Spacing.base, marginBottom: Spacing.md },
   inlineLoader: { position: 'absolute', right: Spacing.base, top: Spacing.xl },
+  deleteResult: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.base, fontSize: FontSize.caption, lineHeight: 18, fontWeight: '600' },
   feedbackInput: { minHeight: 116, paddingTop: Spacing.md },
   counter: { textAlign: 'right', fontSize: FontSize.small, marginTop: -Spacing.sm },
   deliveryStatus: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1, borderRadius: Radius.button, padding: Spacing.md },

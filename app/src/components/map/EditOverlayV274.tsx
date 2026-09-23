@@ -19,7 +19,7 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert,
+  View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,6 +30,8 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../tokens';
 import { Icon } from '../Icon';
 import { useDistance } from '../../utils/distanceFormat';
 import { useVisualTheme } from '../../hooks/useVisualTheme';
+import { ModalCard, ModalCardHeader } from '../ModalCard';
+import { PrimaryButton } from '../PrimaryButton';
 
 interface EditOverlayV274Props {
   onCancel: () => void;
@@ -71,6 +73,7 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
 
   const [wheelOpen, setWheelOpen] = useState(false);
   const [trimOpen, setTrimOpen] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
 
   // v276: eraser tool removed from UI. If a session resumed in
   // 'eraser' mode (legacy state), coerce to 'brush' so the user
@@ -108,14 +111,7 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
   }
   function handleResetTap() {
     setWheelOpen(false);
-    Alert.alert(
-      'Reset edits?',
-      'All detour strokes and trim adjustments will be cleared.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Reset', style: 'destructive', onPress: () => resetEdits() },
-      ],
-    );
+    setResetConfirmOpen(true);
   }
   function handleUndoTap() {
     setWheelOpen(false);
@@ -160,8 +156,11 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
             { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle, shadowColor: theme.shadow },
             !canUndo && styles.btnDisabled,
           ]}
+          accessibilityRole="button"
+          accessibilityLabel="Undo last Route edit"
         >
           <Icon name="Undo2" size={16} color={theme.iconActive} strokeWidth={2.4} />
+          <Text style={[styles.utilityLabel, { color: theme.foreground }]}>Undo</Text>
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.85}
@@ -170,8 +169,11 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
             styles.utilityBadge,
             { backgroundColor: theme.destructiveSurface, borderColor: theme.borderSubtle, shadowColor: theme.shadow },
           ]}
+          accessibilityRole="button"
+          accessibilityLabel="Reset Route edits"
         >
           <Icon name="RotateCcw" size={16} color={theme.destructive} strokeWidth={2.4} />
+          <Text style={[styles.utilityLabel, { color: theme.destructive }]}>Reset</Text>
         </TouchableOpacity>
       </View>
 
@@ -352,12 +354,12 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   />
                 </View>
               )}
-              {/* 2026-08-16 CONCEPT_TRUTH Trails T6 Tools card — 4 tool tabs.
-                  Beautify (sparkles) / Trim (scissors) / Draw (pencil) / Move (crosshair).
+              {/* Trails tools. Draw is one-shot: after a stroke ends the map
+                  immediately returns to normal navigation, so a separate Move
+                  mode is no longer exposed.
                   Beautify = one-shot runPreview (no strokes)
                   Trim     = toggles trim slider panel
-                  Draw     = brush tool
-                  Move     = pan tool (map pan, no polyline translate) */}
+                  Draw     = one stroke, then normal map pan */}
               <View style={[styles.toolsCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle, shadowColor: theme.shadow }]} pointerEvents="auto">
                 <TouchableOpacity
                   activeOpacity={0.85}
@@ -386,6 +388,9 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   activeOpacity={0.85}
                   style={[styles.toolTab, safeTool === 'brush' && styles.toolTabActive]}
                   onPress={() => { setTrimOpen(false); setActiveTool('brush'); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Draw a Route adjustment"
+                  accessibilityState={{ selected: safeTool === 'brush' }}
                 >
                   <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, safeTool === 'brush' && { backgroundColor: theme.primary }]}>
                     <Icon name="Pencil" size={22} color={safeTool === 'brush' ? theme.onPrimary : theme.iconActive} strokeWidth={2.2} />
@@ -393,16 +398,6 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'brush' && { color: theme.primary, fontWeight: '800' }]}>Draw</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={[styles.toolTab, safeTool === 'pan' && styles.toolTabActive]}
-                  onPress={() => { setTrimOpen(false); setActiveTool('pan'); }}
-                >
-                  <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, safeTool === 'pan' && { backgroundColor: theme.primary }]}>
-                    <Icon name="Move" size={22} color={safeTool === 'pan' ? theme.onPrimary : theme.iconActive} strokeWidth={2.2} />
-                  </View>
-                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'pan' && { color: theme.primary, fontWeight: '800' }]}>Move</Text>
-                </TouchableOpacity>
               </View>
 
               {/* Primary CTA — Save (concept T6 shows "Preview" but only
@@ -425,6 +420,29 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
           )}
         </View>
       </KeyboardAvoidingView>
+      <ModalCard
+        visible={resetConfirmOpen}
+        onDismiss={() => setResetConfirmOpen(false)}
+        testID="route-reset-confirmation"
+      >
+        <ModalCardHeader
+          title="Reset Route edits?"
+          body="This clears Draw and Trim changes and restores the saved Route draft."
+        />
+        <View style={styles.resetActions}>
+          <PrimaryButton
+            label="Keep editing"
+            variant="secondary"
+            onPress={() => setResetConfirmOpen(false)}
+          />
+          <PrimaryButton
+            label="Reset edits"
+            variant="destructive"
+            onPress={() => { resetEdits(); setActiveTool('pan'); setResetConfirmOpen(false); }}
+            testID="route-reset-confirm"
+          />
+        </View>
+      </ModalCard>
     </View>
   );
 }
@@ -635,12 +653,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   utilityBadge: {
-    width: 36, height: 36, borderRadius: 18,
+    minWidth: 70, height: 38, borderRadius: 19,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    gap: 5,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.94)',
     borderWidth: 1, borderColor: 'rgba(20,42,30,0.08)',
     ...Shadow.elevated,
   },
+  utilityLabel: { fontSize: 11, fontWeight: '700' },
+  resetActions: { gap: Spacing.sm },
   toolsCard: {
     flexDirection: 'row',
     gap: 8,

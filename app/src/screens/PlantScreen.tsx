@@ -54,6 +54,10 @@ import {
   executeCairnCommit,
   type CairnCommitGate,
 } from '../features/cairns/cairnCommitBoundary';
+import { ModalCard, ModalCardHeader } from '../components/ModalCard';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { Icon } from '../components/Icon';
+import { Spacing } from '../components/tokens';
 
 type Step = 'gps' | 'pin' | 'content';
 
@@ -176,6 +180,7 @@ export function PlantScreen() {
   const [step, setStep] = useState<Step>(initialContext.step);
   const [draft, setDraft] = useState<PlantDraft>(initialContext.draft);
   const [submitting, setSubmitting] = useState(false);
+  const [plantedResult, setPlantedResult] = useState<{ markerId: string; offline: boolean } | null>(null);
   const commitGateRef = useRef<CairnCommitGate>({ current: null });
   const mountedRef = useRef(true);
   const publicEnabled = usePublicCairnStore((state) => state.enabled);
@@ -315,17 +320,10 @@ export function PlantScreen() {
         onCommittedCurrent: async result => {
           try { haptic.notification('success'); } catch { /* silent */ }
           const isOnline = networkMonitor.getState()?.state === 'online';
-          if (!isOnline) {
-            Alert.alert(
-              'Cairn saved offline',
-              "Saved locally. We'll upload it as soon as you're back online.",
-              [{ text: 'OK' }],
-            );
-          }
           await new Promise<void>((resolve) => setTimeout(resolve, 250));
           if (!contextIsCurrent()) return;
           if (initialContext.fromActivity && nav.canGoBack()) {
-            nav.goBack();
+            setPlantedResult({ markerId: result.marker.id, offline: !isOnline });
           } else {
             nav.replace('MarkerDetail', { markerId: result.marker.id });
           }
@@ -405,8 +403,34 @@ export function PlantScreen() {
           />
         )}
       </View>
-      {/* v299: success modal removed — commit() now navigates directly
-          to MarkerDetailScreen. */}
+      <ModalCard visible={Boolean(plantedResult)} dismissible={false} testID="plant-success-modal">
+        <ModalCardHeader
+          title="Cairn planted"
+          body={plantedResult?.offline
+            ? "It is saved on this iPhone and will sync when you're online. Your Activity is still recording."
+            : 'It is saved with this Activity. Your Activity is still recording.'}
+        />
+        <View style={styles.successActions}>
+          <PrimaryButton
+            label="View your Cairn"
+            renderIcon={(color) => <Icon name="MapPin" size={17} color={color} strokeWidth={2.2} />}
+            onPress={() => {
+              if (!plantedResult) return;
+              nav.replace('MarkerDetail', { markerId: plantedResult.markerId });
+            }}
+            testID="plant-success-view"
+          />
+          <PrimaryButton
+            label="Back to Activity"
+            variant="secondary"
+            onPress={() => {
+              setPlantedResult(null);
+              nav.goBack();
+            }}
+            testID="plant-success-back"
+          />
+        </View>
+      </ModalCard>
     </SafeAreaView>
   );
 }
@@ -414,4 +438,5 @@ export function PlantScreen() {
 const styles = StyleSheet.create({
   root:      { flex: 1 },
   container: { flex: 1, padding: 20 },
+  successActions: { gap: Spacing.sm },
 });

@@ -29,6 +29,7 @@ jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return {
     SafeAreaView: ({ children, ...props }: any) => ReactModule.createElement(View, props, children),
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 34, left: 0 }),
   };
 });
 
@@ -298,9 +299,8 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
     expect(mockAddMarker).toHaveBeenCalledTimes(1);
   });
 
-  test('a navigation failure after durable acceptance never becomes a retryable Plant failure', async () => {
-    mockGoBack.mockImplementationOnce(() => { throw new Error('navigation already unmounted'); });
-    render(<PlantScreen />);
+  test('post-Plant rediscovery choice keeps durable acceptance terminal', async () => {
+    const view = render(<PlantScreen />);
     const payload = {
       type: 'cairn',
       title: 'One durable object',
@@ -310,10 +310,12 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
       visibility: 'personal',
     };
     act(() => { mockContentSubmit!(payload); });
-    await waitFor(() => expect(mockGoBack).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(view.getByTestId('plant-success-modal')).toBeTruthy());
     act(() => { mockContentSubmit!(payload); });
+    fireEvent.press(view.getByTestId('plant-success-back'));
 
     expect(mockAddMarker).toHaveBeenCalledTimes(1);
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
     expect(mockDraftSet).not.toHaveBeenCalled();
     expect(Alert.alert).not.toHaveBeenCalledWith(
       "Couldn't plant this cairn",

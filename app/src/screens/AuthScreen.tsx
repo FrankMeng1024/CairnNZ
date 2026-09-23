@@ -54,7 +54,6 @@ import {
   installAuthenticatedSession,
   releaseAuthScreenAuthorityOnUnmount,
 } from '../services/authSessionInstallation';
-import { prewarmMapTiles } from '../services/mapboxPrewarm';
 import { OtaBadge } from '../components/OtaBadge';
 import { OTP_LENGTH, applyOtpCellInput, eligibleClipboardOtp, normalizeOtpInput } from '../utils/authOtp';
 
@@ -1018,13 +1017,6 @@ export function AuthScreen() {
       }, 80);
     });
   };
-
-  // Kick off Mapbox tile pre-warm on AuthScreen mount so tiles are
-  // downloading in the background while the user signs in. Web is skipped
-  // inside prewarmMapTiles. Silent on failure — never blocks auth flow.
-  useEffect(() => {
-    prewarmMapTiles();
-  }, []);
 
   // Load remember-me credentials on first mount. If the user previously
   // ticked the box on a successful Sign In we pre-fill email + password

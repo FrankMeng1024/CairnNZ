@@ -21,7 +21,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform,
+  View, Text, StyleSheet, TouchableOpacity, TextInput, Platform,
   KeyboardAvoidingView, ActivityIndicator, BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -56,12 +56,17 @@ import {
 } from '../features/route/routeEditorSaveCoordinator';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
+import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay';
+import { ModalCard, ModalCardHeader } from '../components/ModalCard';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { planWalkingRoute, WalkingPlanError } from '../services/routing/planWalkingRoute';
 
 // Conditional Mapbox import — same pattern as RoutesScreen.
 let MapView: any = null;
 let CameraComponent: any = null;
 let LineLayer: any = null;
 let ShapeSource: any = null;
+let CircleLayer: any = null;
 // v6.3 plan §2.3: optional Terrain DEM components. Older @rnmapbox/maps
 // builds may not export them — guarded `?? null` keeps the screen working.
 let RasterDemSource: any = null;
@@ -75,6 +80,7 @@ if (Platform.OS !== 'web') {
     CameraComponent = Mapbox.Camera;
     LineLayer = Mapbox.LineLayer;
     ShapeSource = Mapbox.ShapeSource;
+    CircleLayer = Mapbox.CircleLayer;
     RasterDemSource = Mapbox.RasterDemSource ?? null;
     TerrainComponent = Mapbox.Terrain ?? null;
     StyleImport = Mapbox.StyleImport ?? null;
@@ -123,6 +129,20 @@ export function RouteEditorScreen() {
   const [enterEditLoading, setEnterEditLoading] = useState(false);
   const [enterEditError, setEnterEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
+  const [mapEpoch, setMapEpoch] = useState(0);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [discardEditOpen, setDiscardEditOpen] = useState(false);
+  const [leavePrompt, setLeavePrompt] = useState<{
+    decision: 'confirm-saving' | 'confirm-discard';
+    action: any;
+  } | null>(null);
+  const [destinationPickActive, setDestinationPickActive] = useState(false);
+  const [destinationPlanning, setDestinationPlanning] = useState(false);
+  const [destinationPoint, setDestinationPoint] = useState<{ lat: number; lng: number } | null>(null);
+  const destinationAbortRef = useRef<AbortController | null>(null);
   const saveInFlightRef = useRef(false);
   const saveCoordinatorRef = useRef(createRouteEditorSaveCoordinator());
   const mountedRef = useRef(true);
@@ -177,6 +197,14 @@ export function RouteEditorScreen() {
 
   const cameraRef = useRef<any>(null);
   const mapViewRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (mapReady || !MapView) return undefined;
+    const timeout = setTimeout(() => setMapLoadState('slow'), 8000);
+    return () => clearTimeout(timeout);
+  }, [mapEpoch, mapReady]);
+
+  useEffect(() => () => destinationAbortRef.current?.abort(), []);
 
   // Distance helper for BrushStrokeLayer color classification.
   // v249: bound kdbush.within search to 600m (corridor was 500m, v253
@@ -321,41 +349,22 @@ export function RouteEditorScreen() {
     };
   }, [debugMode, qaToolsAvailable]);
 
-  // ── Hardware back during edit → discard alert
-  const discardAlertActiveRef = useRef(false);
+  // ── Hardware back during edit → the same in-product discard card.
   useEffect(() => {
     if (!dualEditActive) return;
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (discardAlertActiveRef.current) return true;
-      discardAlertActiveRef.current = true;
-      Alert.alert(
-        'Discard edits?',
-        'Your changes will be lost.',
-        [
-          { text: 'Keep editing', style: 'cancel', onPress: () => { discardAlertActiveRef.current = false; } },
-          { text: 'Discard', style: 'destructive', onPress: () => {
-            discardAlertActiveRef.current = false;
-            // v249: same semantics as the in-screen Cancel — keep any
-            // previously committed draft, only discard the in-progress.
-            useRouteEditStore.getState().cancelEdit({ keepDraft: true });
-            setEditMode(false);
-          } },
-        ],
-        { cancelable: false, onDismiss: () => { discardAlertActiveRef.current = false; } },
-      );
+      setDiscardEditOpen(true);
       return true;
     });
-    return () => {
-      sub.remove();
-      discardAlertActiveRef.current = false;
-    };
+    return () => sub.remove();
   }, [dualEditActive]);
 
   // ── Camera fit
   const cameraBounds = useMemo(() => {
-    const pts: Array<{ lat: number; lng: number }> = existingRoute?.points
-      ?? sessionTrackPoints;
+    const pts: Array<{ lat: number; lng: number }> = dualEditActive && editWorkingPoints.length >= 2
+      ? editWorkingPoints
+      : (draftForThisScreen?.workingPoints ?? existingRoute?.points ?? sessionTrackPoints);
     if (!pts || pts.length < 2) return null;
     let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
     for (const p of pts) {
@@ -368,7 +377,7 @@ export function RouteEditorScreen() {
       ne: [maxLng, maxLat] as [number, number],
       sw: [minLng, minLat] as [number, number],
     };
-  }, [existingRoute, sessionTrackPoints]);
+  }, [draftForThisScreen?.workingPoints, dualEditActive, editWorkingPoints, existingRoute?.points, sessionTrackPoints]);
 
   // v6.3 plan §2.3: backfill DEM altitudes onto matchedPoints whose `alt`
   // is null/undefined (Mapbox snap segments, partial-knowledge stitches).
@@ -537,20 +546,7 @@ export function RouteEditorScreen() {
   }, []);
 
   const handleCancelEdit = useCallback(() => {
-    Alert.alert(
-      'Discard edits?',
-      'Your changes will be lost.',
-      [
-        { text: 'Keep editing', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: () => {
-          // v249: edit-mode Cancel only discards the IN-PROGRESS edit;
-          // any previously committed draft survives so the user can
-          // re-enter Edit from view-mode and resume.
-          useRouteEditStore.getState().cancelEdit({ keepDraft: true });
-          setEditMode(false);
-        } },
-      ],
-    );
+    setDiscardEditOpen(true);
   }, []);
 
   // v249: Edit-mode "Save" — commits to in-memory draft, returns to
@@ -560,7 +556,8 @@ export function RouteEditorScreen() {
     if (saving) return;
     const result = useRouteEditStore.getState().commitEditDraft();
     if (!result.ok) {
-      Alert.alert('Couldn\'t save your route', 'Check your connection and try again.', [{ text: 'OK' }]);
+      // The edit overlay owns the route-store validation message. Do not
+      // layer a system alert over the product editor.
       return;
     }
     setEditMode(false);
@@ -575,7 +572,7 @@ export function RouteEditorScreen() {
     setEnterEditError(null);
     const trimmed = name.trim();
     if (trimmed.length === 0) {
-      Alert.alert('Name required', 'Please name this route before saving.', [{ text: 'OK' }]);
+      setEnterEditError('Name this Route before saving.');
       return;
     }
     const saveToken = saveCoordinatorRef.current.begin(saveObjectKey);
@@ -587,14 +584,7 @@ export function RouteEditorScreen() {
         ? useSessionStore.getState().sessions.find(item => item.id === fromSessionId)
         : null;
       if (fromSessionId && !liveSourceSession) {
-        Alert.alert('Activity unavailable', 'This Activity was deleted, so it cannot create a new Route.');
-        if (saveCoordinatorRef.current.claimNavigation(saveToken, saveObjectKeyRef.current)) {
-          allowLeaveRef.current = true;
-          nav.dispatch(CommonActions.reset({
-            index: 1,
-            routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'activities' } }],
-          }));
-        }
+        setEnterEditError('This Activity was deleted, so it cannot create a new Route.');
         return;
       }
       const draft = useRouteEditStore.getState().committedDraft;
@@ -608,7 +598,7 @@ export function RouteEditorScreen() {
           ? draft.workingPoints
           : (existingRoute?.points ?? sessionTrackPoints);
       if (finalPoints.length < 2) {
-        Alert.alert('No route', 'Route has no geometry to save.', [{ text: 'OK' }]);
+        setEnterEditError('This Route does not have a path to save yet.');
         return;
       }
       const { haversineM } = await import('../utils/geo');
@@ -667,7 +657,7 @@ export function RouteEditorScreen() {
           reconnectsActivityGap,
         });
         if (!createdId) {
-          Alert.alert('Save failed', 'Could not save the Route safely on this device.', [{ text: 'OK' }]);
+          setEnterEditError('Cairn could not safely save this Route on this device. Your draft is still here.');
           return;
         }
         savedRouteId = createdId;
@@ -718,7 +708,6 @@ export function RouteEditorScreen() {
       }
       if (mountedRef.current) {
         setEnterEditError(body);
-        Alert.alert('Save failed', body, [{ text: 'OK' }]);
       }
     } finally {
       saveCoordinatorRef.current.finish(saveToken);
@@ -729,27 +718,57 @@ export function RouteEditorScreen() {
 
   const handleDelete = useCallback(() => {
     if (!routeId) return;
-    Alert.alert(
-      'Delete Route?',
-      'This removes the Route. Its source Activity, Cairns, and Memory stay unchanged.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: async () => {
-          if (deleteInFlightRef.current) return;
-          deleteInFlightRef.current = true;
-          try {
-            await deleteRoute(routeId);
-            allowLeaveRef.current = true;
-            nav.goBack();
-          } catch {
-            Alert.alert('Delete failed', 'The Route is still here. Check your connection and try again.');
-          } finally {
-            deleteInFlightRef.current = false;
-          }
-        } },
-      ],
-    );
-  }, [routeId, deleteRoute, nav]);
+    setDeleteError(null);
+    setDeleteConfirmOpen(true);
+  }, [routeId]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!routeId || deleteInFlightRef.current) return;
+    deleteInFlightRef.current = true;
+    setDeleteError(null);
+    try {
+      await deleteRoute(routeId);
+      setDeleteConfirmOpen(false);
+      allowLeaveRef.current = true;
+      nav.goBack();
+    } catch {
+      setDeleteError('The Route is still here. Check your connection and try again.');
+    } finally {
+      deleteInFlightRef.current = false;
+    }
+  }, [deleteRoute, nav, routeId]);
+
+  const chooseDestination = useCallback(async (destination: { lat: number; lng: number }) => {
+    if (routeId || fromSessionId || !userCoord || destinationPlanning) return;
+    destinationAbortRef.current?.abort();
+    const controller = new AbortController();
+    destinationAbortRef.current = controller;
+    setDestinationPlanning(true);
+    setDestinationPoint(destination);
+    setDestinationPickActive(false);
+    setEnterEditError(null);
+    try {
+      const points = await planWalkingRoute(
+        { lat: userCoord.lat, lng: userCoord.lng },
+        destination,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      setSessionTrackPoints(points);
+      if (!name.trim()) setName('Walking Route');
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const code = error instanceof WalkingPlanError ? error.code : 'NETWORK';
+      setEnterEditError(code === 'NO_ROUTE'
+        ? 'No walkable Route was found for that destination. Choose another place.'
+        : code === 'NO_TOKEN'
+          ? 'Route planning is unavailable in this build.'
+          : 'Cairn could not plan that walk. Check your connection and try again.');
+    } finally {
+      if (destinationAbortRef.current === controller) destinationAbortRef.current = null;
+      if (!controller.signal.aborted) setDestinationPlanning(false);
+    }
+  }, [destinationPlanning, fromSessionId, name, routeId, userCoord]);
 
   // v245: detour-point system removed. All edit gestures go through the
   // BrushOverlay (gesture-handler PanGesture) when activeTool ∈ {brush,
@@ -798,54 +817,7 @@ export function RouteEditorScreen() {
       });
       if (decision === 'allow') return;
       event.preventDefault();
-      if (decision === 'confirm-saving') {
-        Alert.alert(
-          'Route is still saving',
-          'Keep waiting, or leave this editor. If the save outcome is uncertain, your draft stays available for retry.',
-          [
-            { text: 'Keep waiting', style: 'cancel' },
-            {
-              text: 'Leave editor',
-              style: 'destructive',
-              onPress: () => {
-                executeRouteEditorLeaveChoice(decision, 'leave-saving', {
-                  discardDraft: () => {},
-                  suppressLateNavigation: () => saveCoordinatorRef.current.suppressLateNavigation(),
-                  allowAndDispatch: () => {
-                    allowLeaveRef.current = true;
-                    (nav as any).dispatch(event.data.action);
-                  },
-                });
-              },
-            },
-          ],
-        );
-        return;
-      }
-      Alert.alert(
-        'Discard Route changes?',
-        'Your saved Route will stay unchanged.',
-        [
-          { text: 'Stay', style: 'cancel' },
-          {
-            text: 'Discard',
-            style: 'destructive',
-            onPress: () => {
-              executeRouteEditorLeaveChoice(decision, 'discard', {
-                discardDraft: () => {
-                  useRouteEditStore.getState().cancelEdit();
-                  useRouteEditStore.getState().clearCommittedDraft();
-                },
-                suppressLateNavigation: () => {},
-                allowAndDispatch: () => {
-                  allowLeaveRef.current = true;
-                  (nav as any).dispatch(event.data.action);
-                },
-              });
-            },
-          },
-        ],
-      );
+      setLeavePrompt({ decision, action: event.data.action });
     });
     return unsubscribe;
   }, [hasUnsavedChanges, nav, saving]);
@@ -897,6 +869,7 @@ export function RouteEditorScreen() {
       <View style={styles.mapArea}>
         {MapView ? (
           <MapView
+            key={`route-editor-map-${mapEpoch}`}
             ref={mapViewRef}
             style={StyleSheet.absoluteFillObject}
             {...(editorResolvedMapStyle.kind === 'url'
@@ -908,10 +881,19 @@ export function RouteEditorScreen() {
             attributionPosition={{ top: insets.top + 92, right: 8 }}
             scaleBarEnabled={false}
             compassEnabled={false}
+            onDidFinishLoadingMap={() => { setMapReady(true); setMapLoadState('loading'); }}
+            onDidFinishRenderingMapFully={() => { setMapReady(true); setMapLoadState('loading'); }}
+            onMapLoadingError={() => setMapLoadState('error')}
             scrollEnabled={!isEditing || editActiveTool === 'pan'}
             zoomEnabled={!isEditing || editActiveTool === 'pan'}
             pitchEnabled={!isEditing || editActiveTool === 'pan'}
             rotateEnabled={!isEditing || editActiveTool === 'pan'}
+            onPress={(event: any) => {
+              if (!destinationPickActive || destinationPlanning || isEditing) return;
+              const coordinate = event?.geometry?.coordinates ?? event?.features?.[0]?.geometry?.coordinates;
+              if (!Array.isArray(coordinate) || coordinate.length < 2) return;
+              void chooseDestination({ lng: Number(coordinate[0]), lat: Number(coordinate[1]) });
+            }}
             onCameraChanged={(state: any) => {
               // v272: forward camera state (center+zoom+bearing+pitch) to
               // BrushOverlay's self-mercator unprojector. Without bearing
@@ -973,8 +955,8 @@ export function RouteEditorScreen() {
                     bounds={{
                       ne: cameraBounds.ne,
                       sw: cameraBounds.sw,
-                      paddingTop: 80,
-                      paddingBottom: 220,
+                      paddingTop: insets.top + 96,
+                      paddingBottom: dualEditActive ? Math.max(390, insets.bottom + 350) : Math.max(310, insets.bottom + 270),
                       paddingLeft: 40,
                       paddingRight: 40,
                     }}
@@ -1024,6 +1006,22 @@ export function RouteEditorScreen() {
               </ShapeSource>
             )}
 
+            {destinationPoint && ShapeSource && CircleLayer ? (
+              <ShapeSource
+                id="route-destination"
+                shape={{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [destinationPoint.lng, destinationPoint.lat] } } as any}
+              >
+                <CircleLayer
+                  id="route-destination-ring"
+                  style={{ circleRadius: 10, circleColor: visualTheme.surface, circleStrokeColor: visualTheme.primary, circleStrokeWidth: 3 }}
+                />
+                <CircleLayer
+                  id="route-destination-core"
+                  style={{ circleRadius: 4, circleColor: visualTheme.primary }}
+                />
+              </ShapeSource>
+            ) : null}
+
             {/* Edit mode: dual line + brush strokes */}
             {isEditing && (
               <>
@@ -1048,6 +1046,18 @@ export function RouteEditorScreen() {
             <Text style={[styles.fallbackText, { color: visualTheme.foregroundSecondary }]}>Map unavailable</Text>
           </View>
         )}
+
+        {MapView && !mapReady ? (
+          <MapLoadOverlay
+            state={mapLoadState}
+            onRetry={() => {
+              setMapReady(false);
+              setMapLoadState('loading');
+              setMapEpoch((epoch) => epoch + 1);
+            }}
+            testID="route-editor-map-load-overlay"
+          />
+        ) : null}
 
         {snapWarning && !isEditing && (
           <View style={[styles.warningBanner, { top: insets.top + 8 }]}>
@@ -1107,6 +1117,37 @@ export function RouteEditorScreen() {
                 </TouchableOpacity>
               )}
 
+              {!routeId && !fromSessionId ? (
+                <TouchableOpacity
+                  style={[
+                    styles.destinationCard,
+                    { backgroundColor: visualTheme.surface, borderColor: destinationPickActive ? visualTheme.primary : visualTheme.border },
+                  ]}
+                  onPress={() => {
+                    if (!userCoord || destinationPlanning) return;
+                    setDestinationPickActive((active) => !active);
+                  }}
+                  disabled={!userCoord || destinationPlanning}
+                  accessibilityRole="button"
+                  accessibilityLabel="Choose a walking destination"
+                  accessibilityState={{ disabled: !userCoord || destinationPlanning, selected: destinationPickActive, busy: destinationPlanning }}
+                  testID="route-choose-destination"
+                >
+                  {destinationPlanning ? <ActivityIndicator size="small" color={visualTheme.primary} /> : <Icon name="MapPin" size={18} color={visualTheme.iconActive} strokeWidth={2.2} />}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.destinationTitle, { color: visualTheme.foreground }]}>
+                      {destinationPlanning ? 'Planning a walk…' : destinationPickActive ? 'Tap your destination on the map' : destinationPoint ? 'Choose another destination' : 'Plan to a destination'}
+                    </Text>
+                    <Text style={[styles.destinationBody, { color: visualTheme.foregroundSecondary }]}>
+                      {!userCoord
+                        ? 'A current location is needed to plan a walking Route.'
+                        : 'Cairn asks Mapbox for a walkable draft. It is a plan, not recorded exploration.'}
+                    </Text>
+                  </View>
+                  <Icon name="ChevronRight" size={16} color={visualTheme.iconInactive} strokeWidth={2} />
+                </TouchableOpacity>
+              ) : null}
+
               {/* Read-only summary card with name + stats — sage primaryBg tint */}
               <View style={[styles.viewSummary, { backgroundColor: visualTheme.surface, borderColor: visualTheme.border, borderWidth: 1 }]}>
                 <TextInput
@@ -1153,11 +1194,11 @@ export function RouteEditorScreen() {
                 {routeId && (
                   <TouchableOpacity
                     onPress={handleDelete}
-                    style={[styles.viewBtn, styles.viewDeleteBtn, { backgroundColor: visualTheme.surface, borderColor: visualTheme.destructive }]}
+                    style={[styles.viewBtn, styles.viewDeleteBtn, { backgroundColor: visualTheme.surface, borderColor: visualTheme.border }]}
                     activeOpacity={0.85}
                   >
-                    <Icon name="Trash2" size={16} color={visualTheme.destructive} strokeWidth={2.5} />
-                    <Text style={[styles.viewDeleteBtnText, { color: visualTheme.destructive }]}>Delete</Text>
+                    <Icon name="Trash2" size={16} color={visualTheme.iconInactive} strokeWidth={2.3} />
+                    <Text style={[styles.viewDeleteBtnText, { color: visualTheme.foregroundSecondary }]}>Delete</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -1195,6 +1236,86 @@ export function RouteEditorScreen() {
           </KeyboardAvoidingView>
         </>
       )}
+      <ModalCard
+        visible={discardEditOpen}
+        onDismiss={() => setDiscardEditOpen(false)}
+        testID="route-discard-edit-confirmation"
+      >
+        <ModalCardHeader title="Discard Route edits?" body="Your saved Route and any previously applied draft stay unchanged." />
+        <View style={styles.modalActions}>
+          <PrimaryButton label="Keep editing" variant="secondary" onPress={() => setDiscardEditOpen(false)} />
+          <PrimaryButton
+            label="Discard edits"
+            variant="destructive"
+            onPress={() => {
+              useRouteEditStore.getState().cancelEdit({ keepDraft: true });
+              setEditMode(false);
+              setDiscardEditOpen(false);
+            }}
+            testID="route-discard-edit-confirm"
+          />
+        </View>
+      </ModalCard>
+      <ModalCard
+        visible={leavePrompt !== null}
+        onDismiss={() => setLeavePrompt(null)}
+        testID="route-leave-confirmation"
+      >
+        <ModalCardHeader
+          title={leavePrompt?.decision === 'confirm-saving' ? 'Route is still saving' : 'Discard Route changes?'}
+          body={leavePrompt?.decision === 'confirm-saving'
+            ? 'Keep waiting, or leave this editor. If the save outcome is uncertain, your draft stays available for retry.'
+            : 'Your saved Route will stay unchanged.'}
+        />
+        <View style={styles.modalActions}>
+          <PrimaryButton
+            label={leavePrompt?.decision === 'confirm-saving' ? 'Keep waiting' : 'Keep editing'}
+            variant="secondary"
+            onPress={() => setLeavePrompt(null)}
+          />
+          <PrimaryButton
+            label={leavePrompt?.decision === 'confirm-saving' ? 'Leave editor' : 'Discard changes'}
+            variant="destructive"
+            onPress={() => {
+              const prompt = leavePrompt;
+              if (!prompt) return;
+              setLeavePrompt(null);
+              executeRouteEditorLeaveChoice(
+                prompt.decision,
+                prompt.decision === 'confirm-saving' ? 'leave-saving' : 'discard',
+                {
+                  discardDraft: () => {
+                    useRouteEditStore.getState().cancelEdit();
+                    useRouteEditStore.getState().clearCommittedDraft();
+                  },
+                  suppressLateNavigation: () => saveCoordinatorRef.current.suppressLateNavigation(),
+                  allowAndDispatch: () => {
+                    allowLeaveRef.current = true;
+                    (nav as any).dispatch(prompt.action);
+                  },
+                },
+              );
+            }}
+            testID="route-leave-confirm"
+          />
+        </View>
+      </ModalCard>
+      <ModalCard
+        visible={deleteConfirmOpen}
+        onDismiss={() => !deleteInFlightRef.current && setDeleteConfirmOpen(false)}
+        dismissible={!deleteInFlightRef.current}
+        testID="route-editor-delete-confirmation"
+      >
+        <ModalCardHeader
+          title="Delete this Route?"
+          body="Its source Activity, Cairns, and Memory stay unchanged."
+        />
+        {deleteError ? <Text style={[styles.modalError, { color: visualTheme.destructive }]}>{deleteError}</Text> : null}
+        <View style={styles.modalActions}>
+          <PrimaryButton label="Keep Route" variant="secondary" onPress={() => setDeleteConfirmOpen(false)} />
+          <PrimaryButton label="Delete Route" variant="destructive" onPress={() => { void confirmDelete(); }} testID="route-editor-delete-confirm" />
+        </View>
+      </ModalCard>
     </View>
   );
 }
@@ -1374,4 +1495,19 @@ const styles = StyleSheet.create({
     fontSize: FontSize.body,
     fontWeight: '700',
   },
+  destinationCard: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: Radius.button,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  destinationTitle: { fontSize: FontSize.caption, fontWeight: '700' },
+  destinationBody: { marginTop: 2, fontSize: FontSize.small, lineHeight: 16 },
+  modalActions: { gap: Spacing.sm },
+  modalError: { fontSize: FontSize.small, lineHeight: 18, marginBottom: Spacing.md, fontWeight: '600' },
 });

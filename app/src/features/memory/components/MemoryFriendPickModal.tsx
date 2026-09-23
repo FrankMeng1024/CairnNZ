@@ -18,7 +18,7 @@
  *     custom Animated.timing + Easing.out(Easing.cubic) 280ms + parallel
  *     backdrop fade. Same easing as Hiking route picker.
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
@@ -46,6 +46,8 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
   const isSubscribed = useMemorySubscriptionsStore((s) => s.isSubscribed);
   const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
   const setScope = useMemoryScopeStore((s) => s.setScope);
+  const [pendingId, setPendingId] = useState<number | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   // UX-E fix: Animated values for smooth slide + backdrop fade matching
   // Hiking choose-a-route. Mount Modal in 'fade' mode (instant) and own
@@ -97,20 +99,54 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
   const atCap = subs.length >= limit;
 
   const onTap = async (friendId: number) => {
+    if (pendingId !== null) return;
     if (isSubscribed(friendId)) {
-      await unsubscribe(friendId);
-      if (String(friendId) === selectedFriendId) setScope('combined');
+      setScope('friend', String(friendId));
+      dismiss();
       return;
     }
     if (atCap) {
       onCapHit(friendId);
       return;
     }
+    setPendingId(friendId);
+    setMutationError(null);
     const status = await subscribe(friendId);
-    if (status === 409) {
-      // Cap exceeded server-side (race) — surface paywall.
-      onCapHit(friendId);
+    setPendingId(null);
+    if (status >= 200 && status < 300) {
+      setScope('friend', String(friendId));
+      dismiss();
+      return;
     }
+    if (status === 409) {
+      // A 409 may be a duplicate after an unknown prior commit, not only a
+      // cap. Reconcile before choosing product feedback.
+      await load();
+      const reconciled = useMemorySubscriptionsStore.getState();
+      if (reconciled.isSubscribed(friendId)) {
+        setScope('friend', String(friendId));
+        dismiss();
+      } else if (reconciled.subscriptions.length >= reconciled.limit) {
+        onCapHit(friendId);
+      } else {
+        setMutationError('Could not add this friend to Memory. Try again.');
+      }
+      return;
+    }
+    setMutationError('Could not update Memory friends. Check your connection and try again.');
+  };
+
+  const removeFriend = async (friendId: number) => {
+    if (pendingId !== null) return;
+    setPendingId(friendId);
+    setMutationError(null);
+    const status = await unsubscribe(friendId);
+    setPendingId(null);
+    if (status < 200 || status >= 300) {
+      setMutationError('Could not remove this friend from Memory. Try again.');
+      return;
+    }
+    if (String(friendId) === selectedFriendId) setScope('combined');
   };
 
   return (
@@ -128,9 +164,9 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
           <View style={[styles.handle, { backgroundColor: theme.border }]} />
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: theme.foreground }]}>Show friends on your map</Text>
+              <Text style={[styles.title, { color: theme.foreground }]}>Friends in Memory</Text>
               <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>
-                {subs.length} of {limit} picked
+                Choose all friends or one person · {subs.length} of {limit} available
               </Text>
             </View>
             <TouchableOpacity onPress={dismiss} testID="memory-friend-pick-close" style={styles.close}>
@@ -143,6 +179,22 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
           ) : sources.length === 0 ? (
             <Text style={[styles.emptyHint, { color: theme.muted }]}>No shared Memory is available yet. Friends choose whether new completed Activities can appear here.</Text>
           ) : (
+            <>
+            {subs.length > 0 ? (
+              <TouchableOpacity
+                style={[styles.row, selectedFriendId == null && { backgroundColor: theme.surface }]}
+                onPress={() => { setScope('combined'); dismiss(); }}
+                accessibilityRole="button"
+                accessibilityLabel="Show all available friends in Memory"
+                testID="memory-friend-row-all"
+              >
+                <View style={styles.rowMain}>
+                  <Text style={[styles.rowName, { color: theme.foreground }]}>All available friends</Text>
+                  <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>Friend Memory only — your own Memory stays under Mine</Text>
+                </View>
+                {selectedFriendId == null ? <Icon name="Check" size={18} color={Colors.success} strokeWidth={2.5} /> : null}
+              </TouchableOpacity>
+            ) : null}
             <FlatList
               data={sources}
               keyExtractor={(f) => String(f.friend_id)}
@@ -154,17 +206,26 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
                   <TouchableOpacity
                     style={[styles.row, subscribed && { backgroundColor: theme.surface }]}
                     onPress={() => onTap(friendId)}
-                    onLongPress={() => subscribed && setScope('friend', String(friendId))}
+                    disabled={pendingId !== null}
                     testID={`memory-friend-row-${item.friend_id}`}
                   >
                     <View style={styles.rowMain}>
                       <Text style={[styles.rowName, { color: theme.foreground }]}>{item.friend_name}</Text>
                       <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>
-                        {subscribed ? 'Shown in Together · hold for this friend only' : 'New completed Activities only'}
+                        {subscribed ? 'Tap to see this friend only' : 'Available because this friend chose to share new Activities'}
                       </Text>
                     </View>
-                    {subscribed ? (
-                      <Icon name="Check" size={18} color={Colors.success} strokeWidth={2.5} />
+                    {pendingId === friendId ? (
+                      <ActivityIndicator size="small" color={theme.primary} />
+                    ) : subscribed ? (
+                      <TouchableOpacity
+                        onPress={() => { void removeFriend(friendId); }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${item.friend_name} from Memory`}
+                        style={styles.removeCircle}
+                      >
+                        <Icon name="X" size={14} color={theme.iconInactive} strokeWidth={2.3} />
+                      </TouchableOpacity>
                     ) : locked ? (
                       <Icon name="Lock" size={16} color={Colors.warning} strokeWidth={2.2} />
                     ) : (
@@ -177,6 +238,8 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
               }}
               ItemSeparatorComponent={() => <View style={[styles.sep, { backgroundColor: theme.border }]} />}
             />
+            {mutationError ? <Text style={[styles.mutationError, { color: theme.destructive }]}>{mutationError}</Text> : null}
+            </>
           )}
         </Animated.View>
       </Animated.View>
@@ -244,5 +307,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryBg,
     alignItems: 'center', justifyContent: 'center',
   },
+  removeCircle: {
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  mutationError: { fontSize: FontSize.small, lineHeight: 17, marginTop: Spacing.sm },
   sep: { height: 1, backgroundColor: Colors.border, marginVertical: 2 },
 });

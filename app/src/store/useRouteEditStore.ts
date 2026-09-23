@@ -86,6 +86,20 @@ const CORRIDOR_RADIUS_M = 250;
 const ENDPOINT_SNAP_M = 50;
 const TRIM_MIN_FRACTION = 0.05;
 
+/**
+ * Beautify is an interior-only operation. Map Matching may return shifted
+ * termini even when the request marks them as via points, so the product
+ * boundary re-applies the exact accepted input endpoints. Trim is the only
+ * Route tool allowed to move the start/end boundaries.
+ */
+export function preserveBeautifyEndpoints<T extends LngLat>(input: T[], beautified: T[]): T[] {
+  if (input.length < 2 || beautified.length < 2) return input.slice();
+  const output = beautified.map(point => ({ ...point })) as T[];
+  output[0] = { ...input[0] };
+  output[output.length - 1] = { ...input[input.length - 1] };
+  return output;
+}
+
 type EditTool = 'pan' | 'brush' | 'eraser';
 
 export interface BrushStroke {
@@ -1865,7 +1879,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           );
           let segOut: typeof baseInput;
           if (r.ok && r.matchedPoints && r.matchedPoints.length >= 2) {
-            segOut = r.matchedPoints;
+            segOut = preserveBeautifyEndpoints(seg.coords, r.matchedPoints as typeof baseInput);
             anyMatched = true;
           } else {
             // Fallback: keep raw baseline for this segment so we don't
@@ -1880,7 +1894,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
             out.push(...segOut.slice(1));
           }
         }
-        const finalMatched = out.length >= 2 ? out : baseInput;
+        const finalMatched = preserveBeautifyEndpoints(baseInput, out.length >= 2 ? out : baseInput);
         // Send telemetry so we can see beautify hit api + result quality.
         sendEditDiag('brush_preview_completed', {
           mode: 'beautify_route',

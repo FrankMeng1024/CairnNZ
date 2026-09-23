@@ -14,7 +14,7 @@ import {
   AccessibilityInfo, Easing,
 } from 'react-native';
 import { Colors, Spacing, FontSize, Radius, Shadow } from '../components/tokens';
-import { Icon, type IconName } from '../components/Icon';
+import { Icon } from '../components/Icon';
 import { getCurrentRegion } from '../config/regions';
 import { getMapStyleForTheme, themeToStandardPreset, buildActivityStandardConfig, isMapboxTokenConfigured } from '../config/mapbox';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -22,8 +22,6 @@ import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { haversineM } from '../utils/geo';
 import { useTrackingStore } from '../store/useTrackingStore';
-import { MARKER_META } from '../data/mockData';
-import { FLAG_TYPES } from '../data/flagTypes';
 import { MarkerPin } from './MarkerPin';
 import type { Marker } from '../store/useMarkerStore';
 import { registerSimulatorMapCenterGetter } from '../features/activitySimulator/simulatorMapBridge';
@@ -47,6 +45,8 @@ import {
 } from '../features/activity/activityMapPresentation';
 import { useIsFocused } from '@react-navigation/native';
 import { deriveActivityPresentationFreshness } from '../features/activity/activityLocationHealth';
+import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay';
+import { CairnPinV10 } from '../features/memory/components/CairnPinV10';
 
 // ── Mapbox conditional import ────────────────────────────────────────────
 // @rnmapbox/maps components are native-only — on web they may be undefined.
@@ -452,6 +452,7 @@ export function HikingMap({
   // is broken. This state drives a "Loading map…" overlay that hides
   // itself as soon as the native side reports the map is fully rendered.
   const [mapFirstRender, setMapFirstRender] = useState(false);
+  const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
   const [mapEpoch, setMapEpoch] = useState(0);
   const mapMountIdRef = useRef(`${telemetryScreenPrefix}-map-${Date.now().toString(36)}-0`);
   const hasFocusedRef = useRef(false);
@@ -459,12 +460,13 @@ export function HikingMap({
   // alone is unreliable — matches Memory v361 lesson (v357 telemetry showed
   // that event never fires in a normal session). Add onDidFinishLoadingMap
   // (fires when style + first tile batch ready = basemap visible) as the
-  // primary trigger, keep onDidFinishRenderingMapFully as backup, and add
-  // an 8s wall-clock fallback so the overlay never gets stuck permanently.
+  // primary trigger and keep onDidFinishRenderingMapFully as backup. The
+  // timeout changes the copy to a recoverable slow state; it must not expose
+  // the native white/empty canvas as a successfully loaded map.
   useEffect(() => {
     if (mapFirstRender) return;
     const t = setTimeout(() => {
-      setMapFirstRender(true);
+      setMapLoadState('slow');
       if (activitySimulatorBuildCapable) {
         useActivitySimulatorStore.getState().setMapDiagnostics({
           screen: telemetryScreenPrefix,
@@ -488,6 +490,7 @@ export function HikingMap({
     if (hasFocusedRef.current) setMapEpoch(nextEpoch);
     hasFocusedRef.current = true;
     setMapFirstRender(false);
+    setMapLoadState('loading');
     firstRealLocationSeenRef.current = false;
     initialCameraAppliedRef.current = false;
     mapboxCadenceRef.current = createMapboxCadenceState();
@@ -872,7 +875,6 @@ export function HikingMap({
   }, [instantCamera, mapEpoch]);
 
   const markStyleLoaded = () => {
-    setMapFirstRender(true);
     if (!activitySimulatorBuildCapable) return;
     useActivitySimulatorStore.getState().setMapDiagnostics({
       mountId: mapMountIdRef.current,
@@ -885,7 +887,8 @@ export function HikingMap({
     }, { coordinateSource: 'none' });
   };
   const markMapReady = (eventName: string) => {
-    if (!mapFirstRender) setMapFirstRender(true);
+    setMapFirstRender(true);
+    setMapLoadState('loading');
     if (!activitySimulatorBuildCapable) return;
     useActivitySimulatorStore.getState().setMapDiagnostics({
       mountId: mapMountIdRef.current,
@@ -899,6 +902,7 @@ export function HikingMap({
   };
   const markMapIdle = () => {
     setMapFirstRender(true);
+    setMapLoadState('loading');
     if (!activitySimulatorBuildCapable) return;
     useActivitySimulatorStore.getState().setMapDiagnostics({
       mountId: mapMountIdRef.current,
@@ -919,6 +923,7 @@ export function HikingMap({
     }
   };
   const markMapError = (event: unknown) => {
+    setMapLoadState('error');
     if (!activitySimulatorBuildCapable) return;
     useActivitySimulatorStore.getState().setMapDiagnostics({
       mountId: mapMountIdRef.current,
@@ -1078,9 +1083,9 @@ export function HikingMap({
           followPitch={0}
           animationDuration={instantCamera ? 0 : 600}
           animationMode={instantCamera ? 'none' : 'flyTo'}
-          defaultSettings={(instantCamera || simulatorEnabled) && userPos
+          defaultSettings={userPos
             ? { centerCoordinate: [userPos.lng, userPos.lat], zoomLevel: 15 }
-            : undefined}
+            : { centerCoordinate: [174.7762, -41.2865], zoomLevel: 4.8 }}
         />
         {plannedRoutePoints.length >= 2 && ShapeSource && LineLayer ? (
           <ShapeSource
@@ -1229,17 +1234,7 @@ export function HikingMap({
             coordinate={[m.lng, m.lat]}
             onSelected={() => onMarkerPress(m.id)}
           >
-            <View style={[mapStyles.markerPin, {
-              borderColor: MARKER_META[m.type]?.color ?? Colors.textSecondary,
-              backgroundColor: MARKER_META[m.type]?.bg ?? Colors.surface,
-            }]}>
-              <Icon
-                name={(FLAG_TYPES.find(f => f.id === m.type)?.icon || 'Flag') as IconName}
-                size={11}
-                color={MARKER_META[m.type]?.color ?? Colors.textSecondary}
-                strokeWidth={2.5}
-              />
-            </View>
+            <CairnPinV10 tier="self" type={m.type} size="detail" />
           </PointAnnotation>
         ))}
 
@@ -1273,19 +1268,23 @@ export function HikingMap({
           without this overlay the user sees a blank white/cream canvas
           and thinks the app is broken. When offline, the offline banner
           below takes priority so we don't double-message. */}
-      {!mapFirstRender && !isOffline && (
-        <View style={mapStyles.mapLoadingOverlay} pointerEvents="none">
-          <View style={[mapStyles.mapLoadingCard, { backgroundColor: theme.mapOverlay }] }>
-            <ActivityIndicator size="small" color={theme.primary} />
-            <Text style={[mapStyles.mapLoadingText, { color: theme.foreground }]}>Loading map…</Text>
-          </View>
-        </View>
+      {!mapFirstRender && (
+        <MapLoadOverlay
+          state={isOffline ? 'offline' : mapLoadState}
+          recordingContinues
+          onRetry={isOffline ? undefined : () => {
+            setMapLoadState('loading');
+            setMapFirstRender(false);
+            setMapEpoch((epoch) => epoch + 1);
+          }}
+          testID="activity-map-load-overlay"
+        />
       )}
       {/* R114/O22 STORY-73011 (K1): offline banner. Shown when NetInfo
           reports no internet — Mapbox tiles won't fetch so the map is
           effectively blank. GPS recording is unaffected; this banner
           tells the user "the map is offline but we're still tracking". */}
-      {isOffline && (
+      {isOffline && mapFirstRender && (
         <View style={mapStyles.offlineOverlay} pointerEvents="box-none">
           <View style={[mapStyles.offlineCard, { backgroundColor: theme.mapOverlay, borderColor: theme.border }] }>
             <Text style={[mapStyles.offlineTitle, { color: theme.foreground }]}>Map offline</Text>

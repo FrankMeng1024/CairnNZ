@@ -44,6 +44,7 @@ import { useMapTheme } from '../../../hooks/useMapTheme';
 import { log } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
 import { BackButton } from '../../../components/BackButton';
+import { CairnPinV10 } from '../../memory/components/CairnPinV10';
 
 interface Props {
   /** GPS-locked anchor — the immutable center of the 50m ring. Set
@@ -531,9 +532,7 @@ export function PinAdjustStep({
             while the stored coord was still inside. Now the circle
             IS the anchor, no ambiguity. */}
         <View pointerEvents="none" style={styles.centerOverlay}>
-          <View style={styles.pinDot}>
-            <View style={styles.pinDotInner} />
-          </View>
+          <CairnPinV10 tier="self" type="cairn" size="detail" />
         </View>
 
         {/* hint banner when user drags past the max-nudge ring */}

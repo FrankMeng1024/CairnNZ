@@ -49,7 +49,10 @@ jest.mock('expo-location', () => ({
 jest.mock('react-native-safe-area-context', () => {
   const ReactModule = require('react');
   const { View } = require('react-native');
-  return { SafeAreaView: ({ children, ...props }: any) => ReactModule.createElement(View, props, children) };
+  return {
+    SafeAreaView: ({ children, ...props }: any) => ReactModule.createElement(View, props, children),
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 34, left: 0 }),
+  };
 });
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ goBack: jest.fn() }),
@@ -283,14 +286,10 @@ describe('Settings normal-handler account and action boundaries', () => {
     const deleteRow = await screen.findByTestId('settings-delete-exploration');
     fireEvent.press(deleteRow);
 
-    const confirmation = (Alert.alert as jest.Mock).mock.calls.find(
-      ([title]) => title === 'Delete exploration history?',
-    );
-    const destructive = confirmation?.[2]?.find((button: any) => button.text === 'Delete history');
-    expect(destructive?.onPress).toEqual(expect.any(Function));
+    const destructive = screen.getByTestId('settings-delete-exploration-confirm');
     act(() => {
-      destructive.onPress();
-      destructive.onPress();
+      fireEvent.press(destructive);
+      fireEvent.press(destructive);
     });
 
     expect(mockDeleteAllMemoryFromServer).toHaveBeenCalledTimes(1);
@@ -298,9 +297,7 @@ describe('Settings normal-handler account and action boundaries', () => {
       .toMatchObject({ disabled: true, busy: true });
 
     deletion.resolve(true);
-    await waitFor(() => expect((Alert.alert as jest.Mock).mock.calls.filter(
-      ([title]) => title === 'Exploration history deleted',
-    )).toHaveLength(1));
+    await waitFor(() => expect(screen.getByText('Deleted. Activities, Routes and Cairns were not changed.')).toBeTruthy());
     expect(screen.getByTestId('settings-delete-exploration').props.accessibilityState)
       .toMatchObject({ disabled: false, busy: false });
   });
@@ -312,11 +309,7 @@ describe('Settings normal-handler account and action boundaries', () => {
     await waitFor(() => expect(mockGetMe).toHaveBeenCalled());
     fireEvent.press(screen.getByTestId('settings-privacy-row'));
     fireEvent.press(await screen.findByTestId('settings-delete-exploration'));
-    const confirmation = (Alert.alert as jest.Mock).mock.calls.find(
-      ([title]) => title === 'Delete exploration history?',
-    );
-    const destructive = confirmation?.[2]?.find((button: any) => button.text === 'Delete history');
-    act(() => destructive.onPress());
+    act(() => fireEvent.press(screen.getByTestId('settings-delete-exploration-confirm')));
     expect(mockDeleteAllMemoryFromServer).toHaveBeenCalledWith('owner-a');
 
     act(() => {
@@ -328,9 +321,7 @@ describe('Settings normal-handler account and action boundaries', () => {
 
     deletion.resolve(true);
     await act(async () => { await deletion.promise; await Promise.resolve(); });
-    expect((Alert.alert as jest.Mock).mock.calls.filter(
-      ([title]) => title === 'Exploration history deleted' || title === 'Could not delete history',
-    )).toHaveLength(0);
+    expect(screen.queryByText('Deleted. Activities, Routes and Cairns were not changed.')).toBeNull();
     expect(screen.getByTestId('settings-delete-exploration').props.accessibilityState)
       .toMatchObject({ disabled: false, busy: false });
   });

@@ -46,6 +46,7 @@ import { CairnPinV10, MysteryPinV10, StrangerBlurredPinV10 } from './CairnPinV10
 import { splitTitleBody } from '../../plant/services/noteEncoding';
 import { likeMarker, reportMarker, MarkerInteractionError } from '../../../services/markerInteractionService';
 import type { Tier } from './pinTier';
+import { useNavigation } from '@react-navigation/native';
 
 export type { Tier };
 
@@ -80,6 +81,7 @@ type Selection =
   | { kind: 'revealed'; marker: Marker; tier: Tier };
 
 export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }: Props) {
+  const navigation = useNavigation<any>();
   const isExplored = useMemoryStore((s) => s.isExplored);
   const geometryVersion = useMemoryStore((s) => s.geometryVersion);
   const ownIds = useMemoryStoreOwnIdsShim();
@@ -459,6 +461,10 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
             inMyFog={isExplored}
             isLiked={isMarkLikedForSheet}
             onClose={() => setSelection({ kind: 'none' })}
+            onOpenDetail={(mark) => {
+              setSelection({ kind: 'none' });
+              navigation.navigate('MarkerDetail', { markerId: mark.id });
+            }}
             onLike={handleLike}
             onReport={handleReport}
             onDelete={handleDeleteOrHide}

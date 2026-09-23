@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "primaryVisualAnchor": "app/assets/home/home-bg-sunny-day-semantic-v2-master.png",
   "qualityCalibrationAnchor": "app/assets/auth/landing-hero.jpg",
   "canonicalComponents": {
@@ -12,6 +12,7 @@
   "assets": [
     {"role":"Auth scenic background / quality calibration anchor","path":"app/assets/auth/landing-hero.jpg","width":853,"height":1844,"format":"JPEG","weather":null,"dayNight":null,"status":"canonical-kept","parent":null,"crop":"portrait cover; preserve central cairn, valley depth and calm UI zones","active":true},
     {"role":"Home canonical semantic master","path":"app/assets/home/home-bg-sunny-day-semantic-v2-master.png","width":1024,"height":1536,"format":"PNG RGB","weather":"sunny","dayNight":"day","status":"canonical-semantic-master","parent":"app/assets/home/home-bg-sunny-day-harmonized-3x.jpg + app/assets/auth/landing-hero.jpg","crop":"portrait cover; protect upper greeting zone, central action zone and lower navigation zone","active":false},
+    {"role":"Home current Sunny Day material refinement","path":"app/assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-day-natural-material-3x.jpg","width":1170,"height":2532,"format":"JPEG","weather":"sunny","dayNight":"day","status":"owner-round-material-refinement","parent":"app/assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-day-final-micro-native.png","crop":"preserved portrait camera and UI-safe sky; softened ridge/water/foliage materials","active":true},
     {"role":"Home scenic background","path":"app/assets/home/home-bg-sunny-day-semantic-v2-3x.jpg","width":1170,"height":2532,"format":"JPEG","weather":"sunny","dayNight":"day","status":"canonical-semantic-delivery","parent":"app/assets/home/home-bg-sunny-day-semantic-v2-master.png","crop":"mobile cover; center","active":true},
     {"role":"Home scenic background","path":"app/assets/home/home-bg-sunny-night-semantic-v2-3x.jpg","width":1170,"height":2532,"format":"JPEG","weather":"sunny","dayNight":"night","status":"semantic-derived","parent":"app/assets/home/home-bg-sunny-day-semantic-v2-master.png","crop":"same world/crop after sunset; visible terrain depth","active":true},
     {"role":"Home scenic background","path":"app/assets/home/home-bg-cloudy-day-semantic-v2-3x.jpg","width":1170,"height":2532,"format":"JPEG","weather":"cloudy","dayNight":"day","status":"semantic-derived","parent":"app/assets/home/home-bg-sunny-day-semantic-v2-master.png","crop":"same world/crop; luminous soft cloud and mist","active":true},
