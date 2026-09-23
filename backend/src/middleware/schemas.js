@@ -27,6 +27,11 @@ const alt = Joi.number().min(-1000).max(10000).allow(null);
 const isoDate = Joi.string().isoDate();
 const positiveInt = Joi.number().integer().min(0);
 const clientUuid = Joi.string().guid({ version: ['uuidv4'] });
+const authPassword = Joi.string().min(8).max(200).pattern(/[A-Z]/).pattern(/\d/).messages({
+  'string.min': 'Password must be at least 8 characters and include an uppercase letter and a number.',
+  'string.max': 'Password must be at least 8 characters and include an uppercase letter and a number.',
+  'string.pattern.base': 'Password must be at least 8 characters and include an uppercase letter and a number.',
+});
 
 // ── Markers ────────────────────────────────────────────────────────────
 const markerCreate = Joi.object({
@@ -266,7 +271,7 @@ const friendReject = Joi.object({
 const authRegister = Joi.object({
   name: Joi.string().min(1).max(60).required(),
   email: Joi.string().email().max(255).required(),
-  password: Joi.string().min(8).max(200).required(),
+  password: authPassword.required(),
   dateOfBirth: Joi.string().isoDate().required(),
 });
 
@@ -305,7 +310,7 @@ const authApple = Joi.object({
 // have no current password to verify.
 const authPasswordChange = Joi.object({
   currentPassword: Joi.string().min(1).max(200).allow('', null),
-  newPassword: Joi.string().min(8).max(200).required(),
+  newPassword: authPassword.required(),
 });
 
 // O18 AUTH-04: password reset flow.
@@ -316,7 +321,7 @@ const authPasswordResetRequest = Joi.object({
 const authPasswordResetVerify = Joi.object({
   email: Joi.string().email().max(255).required(),
   code: Joi.string().length(6).pattern(/^\d+$/).required(),
-  new_password: Joi.string().min(8).max(200).required(),
+  new_password: authPassword.required(),
 });
 
 // O18 AUTH-06: legacy DOB backfill for pre-migration users.

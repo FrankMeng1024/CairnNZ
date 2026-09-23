@@ -89,3 +89,29 @@ test('generic operational diagnostics are privacy-scrubbed at both boundaries', 
   assert.match(route, /sanitizeQaEvent\(\{ coordinateSource: 'real', fields: item\.ctx \}\)/);
   assert.match(sanitizer, /user\.\?id\|owner\.\?id\|author\.\?id/);
 });
+
+test('Batch 01 uses one password policy and credential changes revoke the caller session', () => {
+  const route = read('src/routes/auth.js');
+  const schemas = read('src/middleware/schemas.js');
+  const policy = require('../../utils/passwordPolicy');
+  assert.equal(policy.passwordMeetsPolicy('short1A'), false);
+  assert.equal(policy.passwordMeetsPolicy('lowercase1'), false);
+  assert.equal(policy.passwordMeetsPolicy('NoNumberHere'), false);
+  assert.equal(policy.passwordMeetsPolicy('StrongPass1'), true);
+  assert.match(schemas, /const authPassword = Joi\.string\(\)\.min\(8\)\.max\(200\)\.pattern\(\/\[A-Z\]\/\)\.pattern\(\/\\d\//);
+  assert.equal((schemas.match(/authPassword\.required\(\)/g) || []).length, 3);
+  const change = route.slice(route.indexOf("router.patch('/password'"), route.indexOf("router.post('/password-reset/request'"));
+  assert.match(change, /User\.bumpTokenVersion\(user\.id\)/);
+  assert.match(change, /TokenBlacklist\.revoke/);
+  assert.match(change, /session_revoked: true/);
+  assert.doesNotMatch(change, /signToken\(/);
+});
+
+test('Batch 01 verification emails expose a prominent standalone English code', () => {
+  const mail = read('src/services/emailService.js');
+  assert.match(mail, /\$\{code\} is your Cairn verification code/);
+  assert.match(mail, /Your Cairn verification code:\\n\\n\$\{code\}/);
+  assert.match(mail, /lang="en" dir="ltr"/);
+  assert.match(mail, /Verification code<\/div>/);
+  assert.match(mail, /\$\{code\} is your Cairn password reset code/);
+});

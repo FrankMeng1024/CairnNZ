@@ -106,9 +106,10 @@ function validateEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function validatePassword(password) {
-  return typeof password === 'string' && password.length >= 8;
-}
+const {
+  PASSWORD_POLICY_MESSAGE,
+  passwordMeetsPolicy,
+} = require('../utils/passwordPolicy');
 
 // O18 AUTH-06: returns whole-year age (birthday-aware) or null if the
 // input is not a parseable date.
@@ -133,8 +134,8 @@ router.post('/register', authLimiter, validateBody(schemas.auth.register), async
     return res.status(400).json({ error: 'Name must be 100 characters or fewer.' });
   if (!email || !validateEmail(email))
     return res.status(400).json({ error: 'Please enter a valid email address.' });
-  if (!validatePassword(password))
-    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  if (!passwordMeetsPolicy(password))
+    return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
 
   // O18 AUTH-06: enforce age >= 13 (COPPA + App Store).
   const age = ageInYears(dateOfBirth);
@@ -715,8 +716,8 @@ const passwordChangeLimiter = rateLimit({
 router.patch('/password', authenticate, passwordChangeLimiter, validateBody(schemas.auth.passwordChange), async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
-  if (!validatePassword(newPassword))
-    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+  if (!passwordMeetsPolicy(newPassword))
+    return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
 
   try {
     const user = await User.findById(req.user.userId);
@@ -739,9 +740,10 @@ router.patch('/password', authenticate, passwordChangeLimiter, validateBody(sche
     // (industry standard). Without this, an attacker who compromised a
     // device could keep using its old token even after the legitimate
     // owner changes the password. Pattern mirrors /account/restore.
-    // Re-fetch user for new token_version, then issue a fresh token so
-    // the CALLER stays signed in on this device (their old token would
-    // otherwise fail authenticate.js's serverVer > jwtVer check).
+    // The owner-test contract is deliberately simpler and safer: changing
+    // a credential signs every device out, including the caller. Do not mint
+    // a replacement session here; the client returns to Sign In after the
+    // committed response.
     await User.bumpTokenVersion(user.id);
     // Sprint 6 round-16 R16F7: also revoke caller's OLD jti explicitly.
     // token_version bump alone would work (LRU cache expiry = 5min), but
@@ -758,14 +760,7 @@ router.patch('/password', authenticate, passwordChangeLimiter, validateBody(sche
         console.warn('[password] blacklist revoke failed:', blErr.message);
       }
     }
-    const refreshed = await User.findById(user.id);
-    const newToken = signToken({
-      userId: refreshed.id,
-      email: refreshed.email,
-      token_version: Number(refreshed.token_version || 0),
-    });
-
-    return res.json({ message: 'Password updated.', token: newToken });
+    return res.json({ message: 'Password updated. Sign in again.', session_revoked: true });
   } catch (err) {
     console.error('[password]', err);
     return res.status(500).json({ error: 'Server error.' });
@@ -881,8 +876,8 @@ router.post('/password-reset/verify', authLimiter, validateBody(schemas.auth.pas
   const { email, code, new_password } = req.body;
   const normalEmail = email.toLowerCase().trim();
 
-  if (!validatePassword(new_password))
-    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+  if (!passwordMeetsPolicy(new_password))
+    return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
 
   try {
     const result = await PasswordReset.consumeCode(normalEmail, code);

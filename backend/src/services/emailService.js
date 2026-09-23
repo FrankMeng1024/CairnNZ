@@ -74,21 +74,21 @@ async function sendVerificationCode(toEmail, name, code) {
   await resendSend({
     from: `"Cairn" <${process.env.EMAIL_FROM}>`,
     to: toEmail,
-    // R114/O22 (2026-08-10) Bug C: subject no longer starts with digits.
-    // Gmail's spam filter penalises numeric-prefixed subjects and the code
-    // in subject is a phishing-style pattern. Cleaner subject + code
-    // stays prominent inside the body.
-    subject: 'Verify your Cairn account',
+    // A short, explicit subject plus the same standalone code in the text
+    // and HTML bodies gives iOS Mail and other clients their best supported
+    // chance to offer one-time-code extraction. The app never reads the
+    // clipboard itself.
+    subject: `${code} is your Cairn verification code`,
     text:
       `Hi ${firstName},\n\n` +
       `Welcome to Cairn — your trail memory app.\n\n` +
-      `Your verification code is: ${code}\n\n` +
+      `Your Cairn verification code:\n\n${code}\n\n` +
       `This code expires in 10 minutes.\n\n` +
       `If you didn't create a Cairn account, you can safely ignore this email.\n\n` +
       `— The Cairn Team\n` +
       `https://api.yiiling.cn`,
     html: `
-      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#faf7f2;">
+      <div lang="en" dir="ltr" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#faf7f2;">
         <div style="text-align:center;margin-bottom:32px;">
           <span style="font-size:28px;font-weight:900;color:#2d2d2d;letter-spacing:-1px;">Cairn</span>
           <div style="font-size:12px;color:#9b9b9b;margin-top:4px;letter-spacing:1px;text-transform:uppercase;">Trail memory app</div>
@@ -99,6 +99,7 @@ async function sendVerificationCode(toEmail, name, code) {
             Welcome to Cairn. Enter this code in the app to verify your account:
           </p>
           <div style="text-align:center;margin:0 0 24px;padding:20px 0;background:#f7f5f0;border-radius:12px;">
+            <div style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6b746f;margin-bottom:8px;">Verification code</div>
             <span style="font-size:40px;font-weight:800;letter-spacing:12px;color:#5d7c46;font-family:'SF Mono',Menlo,monospace;">${code}</span>
           </div>
           <p style="margin:0;font-size:13px;color:#9b9b9b;text-align:center;">
@@ -122,10 +123,10 @@ async function sendPasswordResetCode(toEmail, code) {
   await resendSend({
     from: `"Cairn" <${process.env.EMAIL_FROM}>`,
     to: toEmail,
-    subject: `${code} — reset your Cairn password`,
-    text: `You (or someone) asked to reset the password for your Cairn account.\n\nYour reset code is: ${code}\n\nThis code expires in 15 minutes. If you didn't request this, you can safely ignore this email — your password stays unchanged.\n\n— The Cairn Team`,
+    subject: `${code} is your Cairn password reset code`,
+    text: `You (or someone) asked to reset the password for your Cairn account.\n\nYour Cairn password reset code:\n\n${code}\n\nThis code expires in 15 minutes. If you didn't request this, you can safely ignore this email — your password stays unchanged.\n\n— The Cairn Team`,
     html: `
-      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#faf7f2;">
+      <div lang="en" dir="ltr" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#faf7f2;">
         <div style="text-align:center;margin-bottom:32px;">
           <span style="font-size:28px;font-weight:900;color:#2d2d2d;letter-spacing:-1px;">Cairn</span>
         </div>
@@ -134,7 +135,8 @@ async function sendPasswordResetCode(toEmail, code) {
           <p style="margin:0 0 24px;font-size:15px;color:#6b6b6b;line-height:1.5;">
             Enter this code in Cairn to set a new password:
           </p>
-          <div style="text-align:center;margin:0 0 24px;">
+          <div style="text-align:center;margin:0 0 24px;padding:20px 0;background:#f7f5f0;border-radius:12px;">
+            <div style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6b746f;margin-bottom:8px;">Password reset code</div>
             <span style="font-size:40px;font-weight:800;letter-spacing:12px;color:#5d7c46;font-family:monospace;">${code}</span>
           </div>
           <p style="margin:0;font-size:13px;color:#9b9b9b;text-align:center;">
