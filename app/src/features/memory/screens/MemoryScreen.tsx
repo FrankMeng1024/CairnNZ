@@ -220,6 +220,7 @@ export function MemoryScreen() {
   const [sharingOpen, setSharingOpen] = useState(false);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
   const [fogReady, setFogReady] = useState(false);
+  const [restoringMemoryVisible, setRestoringMemoryVisible] = useState(false);
   const [fogUnavailable, setFogUnavailable] = useState(false);
   // v413: friend memory 加载 — Memory 页 mount + subscribed friends 变化时拉 /api/circle/fog
   const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
@@ -340,7 +341,6 @@ export function MemoryScreen() {
   // minimum has elapsed.
   const slowShownAtRef = useRef<number>(0);
   const bannerMinShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const SLOW_BANNER_MIN_MS = 2000;
 
   // Reset overlay state on each remount (mountKey bump).
   useEffect(() => {
@@ -409,22 +409,11 @@ export function MemoryScreen() {
     };
   }, [mountKey, overlayOpacity]);
 
-  // Fade overlay out when BOTH gates are satisfied.
-  // v367: do NOT early-return on overlayHiddenRef.current — that guard
-  // was preventing the slow-banner from auto-closing when the map
-  // eventually finished loading. Now: if we have already faded the
-  // overlay (timed out into 'slow' state), we still need to detect
-  // map+fog ready and clear loadingState back to 'ready' so the banner
-  // disappears. Mapbox keeps retrying tiles in the background — when
-  // it finally succeeds, the banner should vanish automatically.
-  // v368: when the banner is currently visible (loadingState === 'slow'),
-  // enforce a minimum visible duration of SLOW_BANNER_MIN_MS. Otherwise
-  // a network that finishes a few ms after the timeout would flash the
-  // banner for a single frame, which is more confusing than helpful.
+  // Basemap readiness and Memory restoration are different truths. Reveal
+  // the usable map as soon as Mapbox paints; Fog restoration may continue
+  // behind a quiet, delayed status below the scope controls.
   useEffect(() => {
-    if (!mapReady || !fogReady) return;
-    // Always clear the timeout/stage timers — they're irrelevant once
-    // both gates are satisfied.
+    if (!mapReady) return;
     if (overlayFadeTimerRef.current) {
       clearTimeout(overlayFadeTimerRef.current);
       overlayFadeTimerRef.current = null;
@@ -432,38 +421,24 @@ export function MemoryScreen() {
     if (stageTimer1Ref.current) clearTimeout(stageTimer1Ref.current);
     if (stageTimer2Ref.current) clearTimeout(stageTimer2Ref.current);
 
-    // Path A: overlay still visible (haven't hit the slow timeout yet).
-    // Standard happy-path fade-out.
     if (!overlayHiddenRef.current) {
       overlayHiddenRef.current = true;
-      setLoadingState('ready');
-      log('v360.overlay_both_ready_fadeout', {});
+      log('memory.basemap_ready_fadeout', { fogReady });
       Animated.timing(overlayOpacity, {
         toValue: 0,
         duration: 300,
         useNativeDriver: true,
       }).start();
-      return;
     }
-
-    // Path B: overlay already faded (banner is showing in 'slow' state).
-    // Enforce minimum visible duration before flipping to 'ready'.
-    const shownFor = Date.now() - slowShownAtRef.current;
-    const remaining = SLOW_BANNER_MIN_MS - shownFor;
-    if (remaining <= 0) {
-      setLoadingState('ready');
-      log('v367.banner_auto_close_after_slow', { shown_ms: shownFor });
-      return;
-    }
-    // Wait the remaining time, then close. Cancel any prior scheduled
-    // close (e.g. if useEffect re-runs).
-    if (bannerMinShowTimerRef.current) clearTimeout(bannerMinShowTimerRef.current);
-    bannerMinShowTimerRef.current = setTimeout(() => {
-      setLoadingState('ready');
-      log('v368.banner_min_show_elapsed_close', { shown_ms: SLOW_BANNER_MIN_MS });
-      bannerMinShowTimerRef.current = null;
-    }, remaining);
+    setLoadingState(fogReady ? 'ready' : 'loading');
   }, [mapReady, fogReady, overlayOpacity]);
+
+  useEffect(() => {
+    setRestoringMemoryVisible(false);
+    if (!mapReady || fogReady) return undefined;
+    const timer = setTimeout(() => setRestoringMemoryVisible(true), 600);
+    return () => clearTimeout(timer);
+  }, [mapReady, fogReady, mountKey]);
 
   // Retry handler: reset state + bump refetchToken to re-trigger pull.
   const handleRetryLoad = () => {
@@ -1107,7 +1082,7 @@ export function MemoryScreen() {
               back button instead of a foreign sepia bar
           Mapbox auto-retries tile loading underneath; user can dismiss
           via the X button. English copy only. */}
-      {persistentCoord && loadingState === 'slow' && !slowBannerDismissed && (
+      {persistentCoord && loadingState === 'slow' && !mapReady && !slowBannerDismissed && (
         <View
           style={[styles.slowBanner, { top: insets.top + 8, left: 100, right: 12 }]}
           pointerEvents="box-none"
@@ -1118,7 +1093,7 @@ export function MemoryScreen() {
             style={styles.slowBannerSpinner}
           />
           <Text style={styles.slowBannerText} numberOfLines={1}>
-            Map still loading…
+            Map is taking longer…
           </Text>
           <TouchableOpacity
             style={styles.slowBannerClose}
@@ -1146,6 +1121,17 @@ export function MemoryScreen() {
           <Text style={styles.slowBannerText} numberOfLines={1}>{friendFogToast}</Text>
         </View>
       )}
+
+      {persistentCoord && restoringMemoryVisible && !fogReady ? (
+        <View
+          style={[styles.memoryRestoreBanner, { top: insets.top + 116, backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+          pointerEvents="none"
+          testID="memory-restoring-status"
+        >
+          <ActivityIndicator color={theme.primary} size="small" style={styles.slowBannerSpinner} />
+          <Text style={[styles.slowBannerText, { color: theme.foregroundSecondary }]} numberOfLines={1}>Restoring Memory…</Text>
+        </View>
+      ) : null}
 
       {friendProjectionError === 'offline' && memoryScope !== 'self' ? (
         <View style={[styles.slowBanner, { top: insets.top + 8, left: 80, right: 12 }]}>
@@ -1577,6 +1563,19 @@ const styles = StyleSheet.create({
     elevation: 4,
     zIndex: 8,
     height: 31,
+  },
+  memoryRestoreBanner: {
+    position: 'absolute',
+    alignSelf: 'center',
+    minHeight: 32,
+    maxWidth: 210,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 8,
   },
   slowBannerSpinner: {
     marginRight: 8,

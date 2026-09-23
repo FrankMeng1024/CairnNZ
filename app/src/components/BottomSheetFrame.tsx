@@ -25,6 +25,7 @@ interface Props {
   maxHeight?: `${number}%` | number;
   keyboardVerticalOffset?: number;
   testID?: string;
+  showHandle?: boolean;
 }
 
 /** Shared bottom-sheet material, safe-area, keyboard and dismissal contract. */
@@ -36,6 +37,7 @@ export function BottomSheetFrame({
   maxHeight = '88%',
   keyboardVerticalOffset = 0,
   testID,
+  showHandle = true,
 }: Props) {
   const theme = useVisualTheme();
   const insets = useSafeAreaInsets();
@@ -73,7 +75,9 @@ export function BottomSheetFrame({
             },
           ]}
         >
-          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.handle, { backgroundColor: theme.borderStrong }]} />
+          {showHandle ? (
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.handle, { backgroundColor: theme.borderStrong }]} />
+          ) : null}
           {children}
         </View>
       </KeyboardAvoidingView>

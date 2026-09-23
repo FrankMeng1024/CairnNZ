@@ -465,8 +465,8 @@ describe('Settings normal-handler account and action boundaries', () => {
     fireEvent.press(screen.getByTestId('settings-account-row'));
     fireEvent.press(await screen.findByTestId('settings-change-password'));
     fireEvent.changeText(screen.getByTestId('settings-current-password'), 'old-password');
-    fireEvent.changeText(screen.getByTestId('settings-new-password'), 'new-password');
-    fireEvent.changeText(screen.getByTestId('settings-confirm-password'), 'new-password');
+    fireEvent.changeText(screen.getByTestId('settings-new-password'), 'New-password1');
+    fireEvent.changeText(screen.getByTestId('settings-confirm-password'), 'New-password1');
     fireEvent.press(screen.getByTestId('settings-password-save'));
     expect(screen.queryByTestId('settings-modal-close')).toBeNull();
 
@@ -504,8 +504,8 @@ describe('Settings normal-handler account and action boundaries', () => {
     fireEvent.press(screen.getByTestId('settings-account-row'));
     fireEvent.press(await screen.findByTestId('settings-change-password'));
     fireEvent.changeText(screen.getByTestId('settings-current-password'), 'old-password');
-    fireEvent.changeText(screen.getByTestId('settings-new-password'), 'new-password');
-    fireEvent.changeText(screen.getByTestId('settings-confirm-password'), 'new-password');
+    fireEvent.changeText(screen.getByTestId('settings-new-password'), 'New-password1');
+    fireEvent.changeText(screen.getByTestId('settings-confirm-password'), 'New-password1');
     fireEvent.press(screen.getByTestId('settings-password-save'));
     screen.unmount();
 

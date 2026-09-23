@@ -48,6 +48,11 @@ import { deriveActivityPresentationFreshness } from '../features/activity/activi
 import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay';
 import { CairnPinV10 } from '../features/memory/components/CairnPinV10';
 
+// Session-local readiness memory: cold entry keeps the intentional Cairn
+// preparation boundary; subsequent ready-from-cache entries suppress only a
+// sub-280ms overlay flash. Actual map readiness is never delayed or faked.
+let activityMapHasRendered = false;
+
 // ── Mapbox conditional import ────────────────────────────────────────────
 // @rnmapbox/maps components are native-only — on web they may be undefined.
 // Force fallback on web to avoid "Element type is invalid" crash.
@@ -887,6 +892,7 @@ export function HikingMap({
     }, { coordinateSource: 'none' });
   };
   const markMapReady = (eventName: string) => {
+    activityMapHasRendered = true;
     setMapFirstRender(true);
     setMapLoadState('loading');
     if (!activitySimulatorBuildCapable) return;
@@ -901,6 +907,7 @@ export function HikingMap({
     }, { coordinateSource: 'none' });
   };
   const markMapIdle = () => {
+    activityMapHasRendered = true;
     setMapFirstRender(true);
     setMapLoadState('loading');
     if (!activitySimulatorBuildCapable) return;
@@ -1271,6 +1278,7 @@ export function HikingMap({
       {!mapFirstRender && (
         <MapLoadOverlay
           state={isOffline ? 'offline' : mapLoadState}
+          delayMs={activityMapHasRendered ? 280 : 0}
           recordingContinues
           onRetry={isOffline ? undefined : () => {
             setMapLoadState('loading');

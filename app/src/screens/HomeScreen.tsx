@@ -65,8 +65,13 @@ function formatDuration(secs: number): string {
 }
 function formatRelativeDay(startedAt: number | string): string {
   const t = typeof startedAt === 'number' ? startedAt : new Date(startedAt).getTime();
-  const days = Math.floor((Date.now() - t) / 86400000);
-  if (days === 0) return 'Today';
+  const elapsedMs = Math.max(0, Date.now() - t);
+  const minutes = Math.floor(elapsedMs / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
   if (days === 1) return 'Yesterday';
   if (days < 7) return `${days} days ago`;
   return new Date(t).toLocaleDateString();
@@ -233,7 +238,7 @@ export function HomeScreen() {
   const formatActivityDistance = (meters: number) => `${distance.format(meters, 1)} ${distance.unit}`;
 
   const lastHikeTitle = showUnfinished
-    ? (topUnfinished.activityMode === 'running' ? 'Unfinished Run' : 'Unfinished Hike')
+    ? (topUnfinished.activityMode === 'running' ? 'Paused run' : 'Paused hike')
     : (lastHike?.name || 'Recent hike');
   const lastHikeMeta = showUnfinished
     ? `${formatActivityDistance(topUnfinished.distanceM)} · ${formatDuration(topUnfinished.durationS)} · ${formatRelativeDay(topUnfinished.startedAt)}`
@@ -241,7 +246,7 @@ export function HomeScreen() {
     ? `${formatActivityDistance(lastHike.distanceM || 0)} · ${formatDuration(lastHike.durationS || 0)} · ${formatRelativeDay(lastHike.startedAt)}`
     : '');
   const lastHikeDetails = showUnfinished
-    ? ['Interrupted', 'Resume', formatRelativeDay(topUnfinished.startedAt)]
+    ? [formatActivityDistance(topUnfinished.distanceM), formatDuration(topUnfinished.durationS), formatRelativeDay(topUnfinished.startedAt)]
     : (lastHike
       ? [formatActivityDistance(lastHike.distanceM || 0), formatDuration(lastHike.durationS || 0), formatRelativeDay(lastHike.startedAt)]
       : []);
@@ -327,7 +332,9 @@ export function HomeScreen() {
             lastHikeTitle={lastHikeTitle}
             lastHikeMeta={lastHikeMeta}
             lastHikeDetails={lastHikeDetails}
-            lastHikeEyebrow={showUnfinished ? 'Unfinished' : 'Last hike'}
+            lastHikeEyebrow={showUnfinished ? (topUnfinished.activityMode === 'running' ? 'RUN PAUSED' : 'HIKE PAUSED') : 'LAST HIKE'}
+            lastHikeAction={showUnfinished ? 'Resume' : 'Open'}
+            lastHikeMode={showUnfinished ? topUnfinished.activityMode : (lastHike?.activityMode === 'running' ? 'running' : 'hiking')}
             onLastHikePress={showUnfinished
               ? () => {
                   const activity = topUnfinished!;
@@ -349,24 +356,6 @@ export function HomeScreen() {
             hikingIconCandidate={debugMode ? hikingIconCandidate : null}
             runningIconCandidate={debugMode ? runningIconCandidate : null}
           />
-          {qaToolsAvailable && !debugMode ? (
-            <TouchableOpacity
-              testID="internal-qa-entry"
-              onPress={() => nav.navigate('Debug')}
-              style={{
-                position: 'absolute', right: 20, top: 56,
-                minWidth: 42, height: 34, borderRadius: 17,
-                paddingHorizontal: 9,
-                backgroundColor: 'rgba(255,255,255,0.74)',
-                alignItems: 'center', justifyContent: 'center',
-                borderWidth: 1, borderColor: 'rgba(33,54,44,0.15)',
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Open internal QA tools"
-            >
-              <Text style={{ fontSize: 10, fontWeight: '900', color: '#21362C', letterSpacing: 0.5 }}>QA</Text>
-            </TouchableOpacity>
-          ) : null}
           {qaToolsAvailable && debugMode && (
             <View style={{ position: 'absolute', right: 20, top: 56 }}>
               <TouchableOpacity

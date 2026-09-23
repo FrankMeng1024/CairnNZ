@@ -48,6 +48,8 @@ export function HomeScreen(props: {
    *  eyebrow shows the passed label (e.g. "Unfinished") instead of the
    *  default "Last hike". */
   lastHikeEyebrow?: string;
+  lastHikeAction?: string;
+  lastHikeMode?: 'hiking' | 'running';
   onLastHikePress?: () => void;
 } = {}) {
   const nav = useNavigation<any>();
@@ -182,7 +184,7 @@ export function HomeScreen(props: {
       style={[styles.H1__last_hike_card, cardContainerOverride]}
       accessibilityRole={props.onLastHikePress ? 'button' : undefined}
       accessibilityLabel={`${props.lastHikeEyebrow ?? 'Last hike'}: ${lastHikeTitle}`}
-      accessibilityHint={props.onLastHikePress ? (props.lastHikeEyebrow === 'Unfinished' ? 'Resume this Activity' : 'Open Activity details') : undefined}
+      accessibilityHint={props.onLastHikePress ? (props.lastHikeAction === 'Resume' ? 'Resume this Activity' : 'Open Activity details') : undefined}
     >
       <Text style={[styles.H1__last_hike_card__last_hike_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{props.lastHikeEyebrow ?? 'Last hike'}</Text>
       <Text style={[styles.H1__last_hike_card__last_hike_title, cardText ? { color: cardText } : null]}>{lastHikeTitle}</Text>
@@ -199,8 +201,10 @@ export function HomeScreen(props: {
         <Text style={[styles.H1__last_hike_card__last_hike_meta, cardTextMuted ? { color: cardTextMuted } : null]}>{lastHikeMeta}</Text>
       )}
       {props.onLastHikePress ? (
-        <View style={styles.H1__last_hike_card__disclosure} pointerEvents="none">
-          <Icon name="ChevronRight" size={18} color={cardTextMuted || textColor} strokeWidth={2.2} />
+        <View style={[styles.H1__last_hike_card__action, { borderColor: cardBorder || 'rgba(33,54,44,0.12)' }]} pointerEvents="none">
+          <HomeProductIcon name={props.lastHikeMode === 'running' ? 'running' : 'hiking'} size={20} color={cardText || '#143D35'} />
+          <Text style={[styles.H1__last_hike_card__action_text, cardText ? { color: cardText } : null]}>{props.lastHikeAction ?? 'Open'}</Text>
+          <Icon name="ChevronRight" size={14} color={cardTextMuted || textColor} strokeWidth={2.2} />
         </View>
       ) : null}
     </TouchableOpacity>

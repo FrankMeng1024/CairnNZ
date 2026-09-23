@@ -34,6 +34,8 @@ import { useMapTheme } from '../../../hooks/useMapTheme';
 import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../../../config/mapbox';
 import { MapLoadOverlay, type MapLoadState } from '../../../components/MapLoadOverlay';
 
+let memoryMapHasRendered = false;
+
 interface Props {
   centerLat: number;
   centerLng: number;
@@ -432,6 +434,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           log('v357.mapbox_didFinishLoadingMap', {});
           // O1 batch 28.3: gate blue dot 一起出
           setMapReady(true);
+          memoryMapHasRendered = true;
           setMapLoadState('loading');
           if (!mapFirstRender) setMapFirstRender(true);
           // v361 fix: onDidFinishRenderingMapFully is unreliable —
@@ -451,6 +454,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           // Backup: also fire here in case didFinishLoadingMap was
           // somehow missed (defensive — ref guard prevents duplicate).
           setMapReady(true);
+          memoryMapHasRendered = true;
           setMapLoadState('loading');
           if (!mapFirstRender) setMapFirstRender(true);
           if (!mapFullyReadyFiredRef.current && onMapFullyReady) {
@@ -589,6 +593,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
       {!mapFirstRender && (
         <MapLoadOverlay
           state={mapLoadState}
+          delayMs={memoryMapHasRendered ? 280 : 0}
           onRetry={() => {
             setMapReady(false);
             setMapFirstRender(false);

@@ -11,11 +11,9 @@ describe('Auth verification integration contract', () => {
     expect(source).toContain("textContentType={i === 0 ? 'oneTimeCode' : 'none'}");
   });
 
-  it('keeps clipboard checks scoped to verification entry and app foreground', () => {
-    expect(source).toContain("if (view !== 'verify') return;");
-    expect(source).toContain("void tryAutoFill('view')");
-    expect(source).toContain("if (s === 'active') void tryAutoFill('foreground')");
-    expect(source).toContain('verificationActive: view === \'verify\'');
-    expect(source).toContain('auth:otp_clipboard trigger=${trigger} outcome=');
+  it('does not silently inspect the clipboard for verification codes', () => {
+    expect(source).not.toContain("require('expo-clipboard')");
+    expect(source).not.toContain('getStringAsync()');
+    expect(source).toContain('Native paste/autofill can provide the complete code to one cell.');
   });
 });

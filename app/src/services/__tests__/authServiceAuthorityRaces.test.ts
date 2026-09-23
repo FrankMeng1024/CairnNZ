@@ -173,10 +173,10 @@ describe('authService account/token authority races', () => {
     global.fetch = jest.fn(async () => response(false, 500, { error: 'server_error' }));
     const auth = require('../authService');
 
-    await expect(auth.changePassword('old-password', 'new-password', 'owner-a')).resolves.toMatchObject({
+    await expect(auth.changePassword('old-password', 'New-password1', 'owner-a')).resolves.toMatchObject({
       commitState: 'unknown',
     });
-    await expect(auth.changePassword('old-password', 'new-password', 'owner-a')).resolves.toMatchObject({
+    await expect(auth.changePassword('old-password', 'New-password1', 'owner-a')).resolves.toMatchObject({
       error: expect.stringContaining('unresolved'),
     });
     expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -243,11 +243,11 @@ describe('authService account/token authority races', () => {
     global.fetch = jest.fn(async () => response(false, 500, { error: 'server_error' }));
     const auth = require('../authService');
 
-    await expect(auth.passwordResetVerify('a@example.test', '123456', 'new-password')).resolves.toMatchObject({
+    await expect(auth.passwordResetVerify('a@example.test', '123456', 'New-password1')).resolves.toMatchObject({
       commitState: 'unknown',
       hint: 'commit_unknown',
     });
-    await expect(auth.passwordResetVerify('a@example.test', '123456', 'new-password')).resolves.toMatchObject({
+    await expect(auth.passwordResetVerify('a@example.test', '123456', 'New-password1')).resolves.toMatchObject({
       hint: 'commit_unknown',
     });
     expect(global.fetch).toHaveBeenCalledTimes(1);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { MapLoadOverlay } from '../MapLoadOverlay';
 
 jest.mock('../../hooks/useVisualTheme', () => ({
@@ -43,5 +43,16 @@ describe('MapLoadOverlay', () => {
     const view = render(<MapLoadOverlay state="offline" />);
     expect(view.getByText('Map offline')).toBeTruthy();
     expect(view.queryByRole('button', { name: 'Try loading the map again' })).toBeNull();
+  });
+
+  test('suppresses a warm-cache flash but never delays the ready map itself', () => {
+    jest.useFakeTimers();
+    const view = render(<MapLoadOverlay state="loading" delayMs={280} />);
+    expect(view.queryByTestId('map-load-overlay')).toBeNull();
+    act(() => jest.advanceTimersByTime(279));
+    expect(view.queryByTestId('map-load-overlay')).toBeNull();
+    act(() => jest.advanceTimersByTime(1));
+    expect(view.getByTestId('map-load-overlay')).toBeTruthy();
+    jest.useRealTimers();
   });
 });

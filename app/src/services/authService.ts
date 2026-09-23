@@ -169,7 +169,7 @@ export async function register(
     const res = await post('/api/auth/register', { name, email, password, dateOfBirth });
     const data = await res.json();
     if (!res.ok) {
-      return { error: data?.error || data?.message || 'Registration failed.', hint: data?.hint };
+      return { error: data?.details?.[0]?.message || data?.error || data?.message || 'Registration failed.', hint: data?.hint };
     }
     // Backend sends a verification code — frontend must show the verify screen
     // dev_code is only present in non-production builds
@@ -511,7 +511,7 @@ export async function passwordResetVerify(
         };
       }
       finishAccountTransition(transition);
-      return { error: data?.error || 'Reset failed.', hint: data?.hint };
+      return { error: data?.details?.[0]?.message || data?.error || 'Reset failed.', hint: data?.hint };
     }
     const tokenAuthority = await commitUnauthenticatedToken(transition, data);
     if (!tokenAuthority) {
@@ -727,43 +727,45 @@ export async function changePassword(
         };
       }
       finishAccountTransition(transition);
-      return { error: data?.error || 'Password could not be updated.' };
+      return { error: data?.details?.[0]?.message || data?.error || 'Password could not be updated.' };
     }
     serverCommitObserved = true;
-    if (!data?.token) {
-      // The server commit is authoritative. Keep A/B separation while the
-      // invalid local session is removed; do not present this as retryable.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { useAppStore } = require('../store/useAppStore');
-      await useAppStore.getState().logout({ expectedUserId, transitionAuthority: transition });
-      await clearTokenIfCurrent(authority);
-      finishAccountTransition(transition);
-      return {
-        commitState: 'committed',
-        sessionTransitioned: false,
-        error: 'Password updated on the server, but the new session could not be confirmed. Sign in again; do not retry the password change.',
-      };
+    // A credential change ends every session, including this device. During
+    // a rolling backend deploy an older server may still return a replacement
+    // token; install it only long enough to revoke it, then run the same
+    // account-fenced local purge as an ordinary sign out.
+    let revokeAuthority = authority;
+    if (data?.token) {
+      const replacement = await replaceTokenIfCurrent(
+        authority,
+        String(data.token),
+        data?.user?.id == null ? authority.ownerUserId : String(data.user.id),
+        transition,
+      );
+      if (replacement) revokeAuthority = replacement;
     }
-    const replacement = await replaceTokenIfCurrent(
-      authority,
-      String(data.token),
-      data?.user?.id == null ? authority.ownerUserId : String(data.user.id),
-      transition,
-    );
-    if (!replacement || currentUserId() !== String(expectedUserId)) {
+    try {
+      // Dynamic require keeps authService independent from native storage at
+      // module load (important for account-boundary tests and cold boot).
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { useAppStore } = require('../store/useAppStore');
-      await useAppStore.getState().logout({ expectedUserId, transitionAuthority: transition });
-      await clearTokenIfCurrent(replacement ?? authority);
-      finishAccountTransition(transition);
-      return {
-        commitState: 'committed',
-        sessionTransitioned: false,
-        error: 'Password updated on the server, but this device could not keep the new session. Sign in again; do not retry the password change.',
-      };
-    }
+      const { storage } = require('../store/storage');
+      await storage.setItem('cairn_auth_notice', 'Password updated. Sign in again with your new password.');
+    } catch { /* the security transition must not depend on UX notice storage */ }
+    const signedOut = await logout({
+      expectedAuthority: revokeAuthority,
+      expectedUserId,
+      transitionAuthority: transition,
+      revoke: Boolean(data?.token),
+      keepTransition: true,
+    });
     finishAccountTransition(transition);
-    return { commitState: 'committed', sessionTransitioned: true };
+    return {
+      commitState: 'committed',
+      sessionTransitioned: false,
+      error: signedOut.cleared && !signedOut.ownerChanged
+        ? undefined
+        : 'Password updated. Cairn could not fully clear this device session; close the app before another account signs in.',
+    };
   } catch {
     if (serverCommitObserved) {
       // A successful HTTP response is monotonic server truth. A later local

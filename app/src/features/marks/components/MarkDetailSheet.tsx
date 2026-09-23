@@ -161,6 +161,7 @@ export function MarkDetailSheet(props: Props) {
     <BottomSheetFrame
       visible={!!marker}
       onDismiss={onClose}
+      showHandle={false}
       testID={`mark-detail-sheet-form-${form}`}
     >
         <View style={styles.sheetContent}>

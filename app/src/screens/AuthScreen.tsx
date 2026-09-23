@@ -55,7 +55,8 @@ import {
   releaseAuthScreenAuthorityOnUnmount,
 } from '../services/authSessionInstallation';
 import { OtaBadge } from '../components/OtaBadge';
-import { OTP_LENGTH, applyOtpCellInput, eligibleClipboardOtp, normalizeOtpInput } from '../utils/authOtp';
+import { OTP_LENGTH, applyOtpCellInput, normalizeOtpInput } from '../utils/authOtp';
+import { PASSWORD_RULES, passwordPolicyError, passwordRuleState } from '../utils/passwordPolicy';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -643,10 +644,10 @@ function DobInputs({ value, onChange, onError, error }: {
 }
 
 // ── Inline text input with error ───────────────────────────────────────────
-function FieldInput({ icon, placeholder, value, onChangeText, error, onBlur, keyboardType, autoCapitalize, autoFocus, textContentType, autoComplete }: {
+function FieldInput({ icon, placeholder, value, onChangeText, error, onBlur, keyboardType, autoCapitalize, autoFocus, textContentType, autoComplete, inputRef }: {
   icon: string; placeholder: string; value: string; onChangeText: (v: string) => void;
   error?: string; onBlur?: () => void; keyboardType?: any; autoCapitalize?: any; autoFocus?: boolean;
-  textContentType?: any; autoComplete?: any;
+  textContentType?: any; autoComplete?: any; inputRef?: React.RefObject<TextInput | null>;
 }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -656,6 +657,7 @@ function FieldInput({ icon, placeholder, value, onChangeText, error, onBlur, key
           <Icon name={icon as any} size={IconSize.sm} color={focused ? Colors.primary : Colors.textMuted} strokeWidth={1.8} />
         </View>
         <TextInput
+          ref={inputRef}
           style={formStyles.inputInner}
           placeholder={placeholder}
           placeholderTextColor={Colors.textMuted}
@@ -836,11 +838,12 @@ export function AuthScreen() {
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
   const [privacyExpanded, setPrivacyExpanded] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [authEntryLoading, setAuthEntryLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);  // STORY-00132: separate state
   const [appleLoading, setAppleLoading] = useState(false);    // O18 batch 6.6
   const [apiError, setApiError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
   const [nameError, setNameError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -870,6 +873,19 @@ export function AuthScreen() {
       activeAuthTransition.current = null;
       activeAuthToken.current = null;
     }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const notice = await storage.getItem('cairn_auth_notice');
+        if (!notice || cancelled) return;
+        await storage.removeItem('cairn_auth_notice');
+        if (!cancelled) setAuthNotice(notice);
+      } catch { /* a missing notice never blocks authentication */ }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const installAuthenticatedResult = async (
@@ -1018,34 +1034,22 @@ export function AuthScreen() {
     });
   };
 
-  // Load remember-me credentials on first mount. If the user previously
-  // ticked the box on a successful Sign In we pre-fill email + password
-  // and re-tick the box. The user still has to tap Sign In — we never
-  // auto-route them past the auth screen.
+  // Cairn sessions already persist securely. Remove the obsolete secondary
+  // "remember password" mode and clear credentials stored by older builds;
+  // a signed-out screen must never prefill another account's password.
   useEffect(() => {
-    let cancelled = false;
     (async () => {
       try {
-        // O1 batch 28.5: 从 credentialsStore (SecureStore) hydrate。
-        // 首次运行同时清老 AsyncStorage key (若存在)。
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { loadCredentials } = require('../services/credentialsStore');
-        const creds = await loadCredentials();
-        if (cancelled) return;
-        if (creds) {
-          setEmail(creds.email);
-          setPassword(creds.password);
-          setRememberMe(true);
-        }
-        // 一次性清老 AsyncStorage key (若有历史明文数据),不阻塞主流程
-        try {
-          await storage.removeItem(OLD_REMEMBER_ME_KEY);
-        } catch {/* silent */}
+        const { clearCredentials } = require('../services/credentialsStore');
+        await Promise.allSettled([
+          clearCredentials(),
+          storage.removeItem(OLD_REMEMBER_ME_KEY),
+        ]);
       } catch {
-        // Corrupt/missing creds — ignore.
+        // Credential cleanup is best effort; session persistence is token-based.
       }
     })();
-    return () => { cancelled = true; };
   }, []);
 
   const isFirstSplashMount = useRef(true);
@@ -1121,7 +1125,19 @@ export function AuthScreen() {
     resetErrors();
     resetFormInputs();
     submitAttempted.current = false;
+    setAuthEntryLoading(false);
     setView(v);
+  };
+
+  const beginEmailAuth = () => {
+    if (authEntryLoading) return;
+    // Paint feedback before switching a recently-foregrounded native stack.
+    // The next animation frame keeps the tap visibly acknowledged without an
+    // arbitrary delay and avoids presenting an apparently dead control.
+    setAuthEntryLoading(true);
+    requestAnimationFrame(() => {
+      if (authMounted.current) handleViewChange('login');
+    });
   };
 
   const validateEmail = (val: string) => {
@@ -1139,9 +1155,7 @@ export function AuthScreen() {
       // checklist. Previously only length was enforced client-side and
       // backend also only checks length, so users could bypass the
       // stricter rules. Now client blocks submit unless all 3 pass.
-      if (val.length < 8) return 'Password must be at least 8 characters';
-      if (!/[A-Z]/.test(val)) return 'Password must contain an uppercase letter';
-      if (!/[0-9]/.test(val)) return 'Password must contain a number';
+      return passwordPolicyError(val);
     }
     return '';
   };
@@ -1193,22 +1207,6 @@ export function AuthScreen() {
     if (authActionFlight.current) return;
     authActionFlight.current = true;
 
-    // R21 (2026-08-17): request GPS permission IN the button click's user-
-    // gesture context. Web browsers only show the permission prompt when
-    // the request happens inside a user-initiated event; async setTimeout
-    // loses the gesture context and Chrome silently drops the prompt.
-    // Fire-and-forget: don't await, don't block login on grant/deny.
-    (async () => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const Location = require('expo-location');
-        const perm = await Location.getForegroundPermissionsAsync();
-        if (perm.status !== 'granted' && perm.canAskAgain !== false) {
-          await Location.requestForegroundPermissionsAsync();
-        }
-      } catch { /* silent */ }
-    })();
-
     setLoading(true);
     setApiError('');
     try {
@@ -1221,6 +1219,8 @@ export function AuthScreen() {
         // 409 = email already registered — guide user to sign in instead
         if (result.error.includes('already exists') || result.error.includes('already registered')) {
           setApiError('An account with this email already exists. Please sign in instead, or use "Continue with Google" if you signed up with Google.');
+        } else if (!isRegister && /incorrect email or password|invalid credentials/i.test(result.error)) {
+          setApiError('The email or password doesn’t match. Try again, reset your password, or create an account.');
         } else {
           setApiError(result.error);
         }
@@ -1276,21 +1276,7 @@ export function AuthScreen() {
       // triggered RootNavigator to flash Auth→Home before AuthScreen finished
       // its own setUser+setLoggedIn sequence. Now user+isLoggedIn are set
       // atomically AFTER hydrate() returns (lines below), single React render.
-      const installed = await installAuthenticatedResult(result, async () => {
-        if (isRegister) return;
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { saveCredentials, clearCredentials } = require('../services/credentialsStore');
-          if (rememberMe) {
-            await saveCredentials({
-              email: email.trim().toLowerCase(),
-              password,
-            });
-          } else {
-            await clearCredentials();
-          }
-        } catch { /* remember-me failure does not install a stale account */ }
-      });
+      const installed = await installAuthenticatedResult(result);
       if (!authMounted.current) return;
       if (!installed) {
         setApiError('This sign-in was superseded before Cairn could install the account. Please sign in again.');
@@ -1339,20 +1325,6 @@ export function AuthScreen() {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             require('../services/bootDiagnostics').markBootPhase('login_settimeout_fired');
           } catch {/* ignore */}
-          // R21 (2026-08-17 user "sign in 后应该索要各种权限"): request
-          // foreground location permission after successful sign in so
-          // Home can immediately show real weather + city name. Fire-and-
-          // forget: nav.replace happens regardless of grant/deny.
-          (async () => {
-            try {
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              const Location = require('expo-location');
-              const perm = await Location.getForegroundPermissionsAsync();
-              if (perm.status !== 'granted' && perm.canAskAgain !== false) {
-                await Location.requestForegroundPermissionsAsync();
-              }
-            } catch { /* silent */ }
-          })();
           nav.replace('Home');
           try {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1586,51 +1558,6 @@ export function AuthScreen() {
     return () => clearTimeout(t);
   }, [view]);
 
-  // R114/O22 (2026-08-10) Bug Y: auto-fill OTP from clipboard.
-  // Typical flow: user gets email → opens mail app → long-presses code
-  // → Copy → switches back to Cairn. When the app foregrounds on the
-  // verify view, we read the clipboard. If it contains exactly 6 digits
-  // we fill the OTP inputs and immediately auto-verify. Non-6-digit
-  // clipboard content is ignored (never trigger verify on random text).
-  //
-  // Triggered on: (a) entering verify view, (b) AppState → active while
-  // on verify view (user tabs back from mail). We also skip if the user
-  // has already typed something (to avoid overwriting mid-typing).
-  useEffect(() => {
-    if (view !== 'verify') return;
-    let cancelled = false;
-    const tryAutoFill = async (trigger: 'view' | 'foreground') => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const Clipboard = require('expo-clipboard');
-        const txt = await Clipboard.getStringAsync();
-        if (cancelled) return;
-        const candidate = eligibleClipboardOtp(txt, {
-          verificationActive: view === 'verify',
-          currentCode: verifyCode_,
-          verifying: verifyLoading,
-        });
-        crashLogger.breadcrumb(`auth:otp_clipboard trigger=${trigger} outcome=${candidate ? 'accepted' : 'ignored'}`);
-        if (candidate) {
-          setVerifyCode_(candidate);
-          void handleVerify(candidate);
-        }
-      } catch {
-        crashLogger.breadcrumb(`auth:otp_clipboard trigger=${trigger} outcome=unavailable`);
-      }
-    };
-    // Fire once on view entry.
-    void tryAutoFill('view');
-    // Fire again when user comes back from another app (mail app).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { AppState } = require('react-native');
-    const sub = AppState.addEventListener('change', (s: string) => {
-      if (s === 'active') void tryAutoFill('foreground');
-    });
-    return () => { cancelled = true; sub.remove(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
-
   const handleVerify = async (codeOverride?: string) => {
     // R114/O22 (2026-08-10) Bug D: 支持从 OtpInput 自动传入完整 code, 不再
     // 依赖 verifyCode_ state. 因为 setState 是异步的, 用户输完第 6 位后
@@ -1777,12 +1704,16 @@ export function AuthScreen() {
                   "Create an account" link inside the Sign In view. */}
               <PressBtn
                 style={styles.landingEmailBtn}
-                onPress={() => handleViewChange('login')}
+                onPress={beginEmailAuth}
                 scale={0.98}
+                disabled={authEntryLoading}
+                testID="continue-with-email"
               >
                 <View style={styles.btnContent}>
-                  <Icon name="Mail" size={IconSize.sm} color="#fff" strokeWidth={2} />
-                  <Text style={styles.landingEmailBtnText}>Continue with Email</Text>
+                  {authEntryLoading
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Icon name="Mail" size={IconSize.sm} color="#fff" strokeWidth={2} />}
+                  <Text style={styles.landingEmailBtnText}>{authEntryLoading ? 'Opening sign in…' : 'Continue with Email'}</Text>
                 </View>
               </PressBtn>
 
@@ -2696,9 +2627,20 @@ export function AuthScreen() {
           <PasswordInput
             value={forgotNewPassword}
             onChangeText={(v) => { setForgotNewPassword(v); if (forgotError) setForgotError(''); }}
-            placeholder="At least 8 characters"
+            placeholder="Create a new password"
             isNew
           />
+          <View style={{ marginTop: 12, gap: 6 }} testID="reset-password-rules">
+            {PASSWORD_RULES.map(rule => {
+              const met = passwordRuleState(forgotNewPassword)[rule.key];
+              return (
+                <View key={rule.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Icon name="Check" size={14} color={met ? '#21362C' : '#C8C0B4'} strokeWidth={met ? 3 : 2} />
+                  <Text style={{ fontSize: 13, color: met ? '#21362C' : '#8A8F95', fontWeight: met ? '500' : '400' }}>{rule.label}</Text>
+                </View>
+              );
+            })}
+          </View>
           {forgotError ? <Text style={formStyles.errorText}>{forgotError}</Text> : null}
           <PressBtn
             testID="btn-reset-password"
@@ -2716,7 +2658,8 @@ export function AuthScreen() {
             onPress={async () => {
               if (authActionFlight.current) return;
               if (forgotCode.length !== 6) { setForgotError('Enter the 6-digit code'); return; }
-              if (forgotNewPassword.length < 8) { setForgotError('Password must be 8+ characters'); return; }
+              const policyError = passwordPolicyError(forgotNewPassword);
+              if (policyError) { setForgotError(policyError); return; }
               authActionFlight.current = true;
               setForgotLoading(true);
               try {
@@ -2830,6 +2773,12 @@ export function AuthScreen() {
               <Text style={formStyles.apiError}>{apiError}</Text>
             </View>
           )}
+          {!!authNotice && (
+            <View style={[formStyles.apiBanner, { borderColor: 'rgba(33,54,44,0.24)', backgroundColor: 'rgba(229,238,231,0.92)' }]}>
+              <Icon name="CircleCheck" size={14} color={Colors.primary} strokeWidth={2} />
+              <Text style={[formStyles.apiError, { color: Colors.primary }]}>{authNotice}</Text>
+            </View>
+          )}
 
           {/* Name field — register only */}
           {isRegister && (
@@ -2841,11 +2790,7 @@ export function AuthScreen() {
                 value={name}
                 onChangeText={(v) => { setName(v); if (nameError) setNameError(''); }}
                 error={nameError}
-                // R114/O21 post-real-device fix: no auto-focus on Name in
-                // Create Account — user reported "进去就默认点开第一个 name
-                // 键盘会出来 不雅观 让用户自己来操作就好了". Explicit tap
-                // required to open keyboard, matching iOS Settings sign-up
-                // patterns (Apple ID, iCloud, etc).
+                autoFocus
               />
             </>
           )}
@@ -2888,14 +2833,8 @@ export function AuthScreen() {
                   they're satisfied. Deep green #21362C matches concept
                   checkmarks (RGB 33,54,44 sampled). */}
               {(() => {
-                const has8 = password.length >= 8;
-                const hasUpper = /[A-Z]/.test(password);
-                const hasDigit = /\d/.test(password);
-                const rules = [
-                  { met: has8, label: 'At least 8 characters' },
-                  { met: hasUpper, label: 'One uppercase letter' },
-                  { met: hasDigit, label: 'One number' },
-                ];
+                const state = passwordRuleState(password);
+                const rules = PASSWORD_RULES.map(rule => ({ met: state[rule.key], label: rule.label }));
                 return (
                   <View style={{ marginTop: 12, gap: 6 }}>
                     {rules.map((r, i) => (
@@ -2923,24 +2862,10 @@ export function AuthScreen() {
             </>
           )}
 
-          {/* Remember me + Forgot password — Sign In only.
-              2026-08-16 Round 10: per concept Auth-2-signin.png, these two
-              share the same row (Remember me left / Forgot right).
-              Previously Forgot was on its own row above Remember me. */}
+          {/* Login sessions already persist securely; the old password-saving
+              "Remember me" switch duplicated that contract. */}
           {!isRegister && (
-            <View style={[formStyles.rememberRow, { justifyContent: 'space-between', alignItems: 'center' }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <TouchableOpacity
-                  style={[formStyles.checkbox, rememberMe && formStyles.checkboxChecked]}
-                  onPress={() => setRememberMe(v => !v)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
-                >
-                  {rememberMe && <Icon name="Check" size={14} color="#fff" strokeWidth={3} />}
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setRememberMe(v => !v)} activeOpacity={0.7}>
-                  <Text style={[formStyles.rememberText, { marginLeft: 8 }]}>Remember me on this device</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={[formStyles.rememberRow, { justifyContent: 'flex-end', alignItems: 'center' }]}>
               <TouchableOpacity
                 testID="link-forgot-password"
                 onPress={() => {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from './Icon';
 import { FontSize, Radius, Shadow, Spacing } from './tokens';
@@ -11,6 +11,8 @@ type Props = {
   recordingContinues?: boolean;
   onRetry?: () => void;
   testID?: string;
+  /** Suppress a warm-cache one-frame flash without delaying real readiness. */
+  delayMs?: number;
 };
 
 const COPY: Record<MapLoadState, { title: string; body: string }> = {
@@ -37,10 +39,22 @@ const COPY: Record<MapLoadState, { title: string; body: string }> = {
  * over the native canvas until Mapbox reports a rendered map; a style-loaded
  * callback or a timeout must never expose a white/empty globe as ready.
  */
-export function MapLoadOverlay({ state, recordingContinues = false, onRetry, testID = 'map-load-overlay' }: Props) {
+export function MapLoadOverlay({ state, recordingContinues = false, onRetry, testID = 'map-load-overlay', delayMs = 0 }: Props) {
   const theme = useVisualTheme();
+  const [visible, setVisible] = useState(delayMs <= 0);
   const copy = COPY[state];
   const showRetry = Boolean(onRetry) && (state === 'slow' || state === 'error');
+
+  useEffect(() => {
+    if (delayMs <= 0) {
+      setVisible(true);
+      return;
+    }
+    const timer = setTimeout(() => setVisible(true), delayMs);
+    return () => clearTimeout(timer);
+  }, [delayMs]);
+
+  if (!visible) return null;
 
   return (
     <View

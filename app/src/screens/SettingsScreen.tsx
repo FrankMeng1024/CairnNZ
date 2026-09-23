@@ -22,6 +22,8 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/RootNavigator';
 import { BackButton } from '../components/BackButton';
 import { ContentSurface } from '../components/ContentSurface';
 import { Icon, type IconName } from '../components/Icon';
@@ -51,10 +53,13 @@ import { deleteAllMemoryFromServer } from '../services/memorySync';
 import { haptic } from '../services/hapticService';
 import { PRIVACY_URL } from '../config/api';
 import { getHomeBackground, getRegisteredBackgroundLayout, getWeatherReviewBackground } from '../utils/homeBackground';
+import { PASSWORD_RULES, passwordPolicyError, passwordRuleState } from '../utils/passwordPolicy';
+import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 
 type Page = 'root' | 'account' | 'privacy' | 'help';
 type FeedbackKind = 'feedback' | 'bug';
 type AsyncState = 'idle' | 'sending' | 'sent' | 'failed';
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const TERMS_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 const UNITS_SEGMENTS = [
@@ -197,7 +202,7 @@ function currentOwnerId(): string | null {
 }
 
 export function SettingsScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const theme = useVisualTheme();
   const scenicTime = useScenicTimeState();
@@ -256,6 +261,8 @@ export function SettingsScreen() {
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [deleteOwnerId, setDeleteOwnerId] = useState<string | null>(null);
   const [signOutOpen, setSignOutOpen] = useState(false);
+  const qaTapCount = useRef(0);
+  const qaTapReset = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [exports, setExports] = useState<DataExportSummary[]>([]);
   const [exportLoading, setExportLoading] = useState(false);
@@ -300,6 +307,7 @@ export function SettingsScreen() {
       exportFlight.current = false;
       feedbackGeneration.current += 1;
       feedbackFlight.current = false;
+      if (qaTapReset.current) clearTimeout(qaTapReset.current);
     };
   }, []);
 
@@ -462,6 +470,19 @@ export function SettingsScreen() {
 
   const handleSignOut = () => setSignOutOpen(true);
 
+  const handleOwnerQaUnlock = () => {
+    if (!activitySimulatorBuildCapable) return;
+    qaTapCount.current += 1;
+    if (qaTapReset.current) clearTimeout(qaTapReset.current);
+    qaTapReset.current = setTimeout(() => { qaTapCount.current = 0; }, 1800);
+    if (qaTapCount.current < 5) return;
+    qaTapCount.current = 0;
+    if (qaTapReset.current) clearTimeout(qaTapReset.current);
+    updateSetting('debugMode', true);
+    haptic.notification('success');
+    navigation.navigate('Debug');
+  };
+
   const scrollContentStyle = useMemo(() => [
     styles.scroll,
     { paddingBottom: Spacing.xxl + Spacing.xl + Math.max(insets.bottom, Spacing.md) },
@@ -570,7 +591,14 @@ export function SettingsScreen() {
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row icon="MessageSquare" title="Help & About" detail="Feedback, support, terms and app information" value="Open" onPress={() => openPage('help')} testID="settings-help-row" />
         </ContentSurface>
-        <Text style={[styles.footer, { color: background.textColor }]}>Ngā mihi nui — thanks for using Cairn.</Text>
+        <Pressable
+          onPress={handleOwnerQaUnlock}
+          accessibilityRole="text"
+          testID="settings-owner-qa-unlock"
+          style={styles.footerPressable}
+        >
+          <Text style={[styles.footer, { color: background.textColor }]}>Ngā mihi nui — thanks for using Cairn.</Text>
+        </Pressable>
       </ScrollView>
     </>
   );
@@ -701,7 +729,13 @@ export function SettingsScreen() {
     <>
       {renderHeader('Privacy & Data')}
       <ScrollView style={styles.pageScroll} testID="settings-privacy" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
-        <Text style={[styles.intro, { color: background.textColor, textShadowColor: background.textShadowColor }]}>Clear controls and accurate status for location and your data.</Text>
+        <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
+          <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="Shield" size={IconSize.md} color={theme.primary} /></View>
+          <View style={styles.rowCopy}>
+            <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Your location stays under your control</Text>
+            <Text style={[styles.body, { color: theme.textSecondary }]}>Review permissions, export your records, or remove exploration history without affecting Activities, Routes or Cairns.</Text>
+          </View>
+        </ContentSurface>
 
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Location</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
@@ -819,7 +853,13 @@ export function SettingsScreen() {
     <>
       {renderHeader('Help & About')}
       <ScrollView style={styles.pageScroll} testID="settings-help" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.intro, { color: background.textColor, textShadowColor: background.textShadowColor }]}>Send a message, find support, or review Cairn’s legal information.</Text>
+        <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
+          <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="MessageSquare" size={IconSize.md} color={theme.primary} /></View>
+          <View style={styles.rowCopy}>
+            <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>How can we help?</Text>
+            <Text style={[styles.body, { color: theme.textSecondary }]}>Send feedback, contact support, or review Cairn’s current app and legal information.</Text>
+          </View>
+        </ContentSurface>
 
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Feedback</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-feedback-card">
@@ -985,13 +1025,23 @@ export function SettingsScreen() {
           <TextField label="Current password" value={currentPassword} onChangeText={(value) => { setCurrentPassword(value); setPasswordError(''); }} secureTextEntry autoCapitalize="none" testID="settings-current-password" />
           <TextField label="New password" value={nextPassword} onChangeText={(value) => { setNextPassword(value); setPasswordError(''); }} secureTextEntry autoCapitalize="none" testID="settings-new-password" />
           <TextField label="Confirm new password" value={passwordConfirmation} onChangeText={(value) => { setPasswordConfirmation(value); setPasswordError(''); }} secureTextEntry autoCapitalize="none" error={passwordError || undefined} testID="settings-confirm-password" />
+          <View style={styles.passwordRules} testID="settings-password-rules">
+            {PASSWORD_RULES.map((rule) => {
+              const met = passwordRuleState(nextPassword)[rule.key];
+              return (
+                <View key={rule.key} style={styles.passwordRuleRow}>
+                  <Icon name="Check" size={14} color={met ? theme.primary : theme.textMuted} strokeWidth={met ? 3 : 2} />
+                  <Text style={[styles.passwordRuleText, { color: met ? theme.textPrimary : theme.textMuted }]}>{rule.label}</Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
-        <View style={styles.modalActions}>
-          <PrimaryButton label="Cancel" variant="secondary" disabled={passwordSaving} onPress={() => setPasswordOpen(false)} style={styles.flexButton} />
+        <View style={styles.stackSmall}>
           <PrimaryButton
             label="Update"
             loading={passwordSaving}
-            disabled={!currentPassword || nextPassword.length < 8 || passwordConfirmation.length < 8}
+            disabled={!currentPassword || Boolean(passwordPolicyError(nextPassword)) || passwordConfirmation.length < 8}
             onPress={() => void (async () => {
               if (passwordFlight.current) return;
               const ownerId = passwordOwnerId;
@@ -1003,6 +1053,11 @@ export function SettingsScreen() {
                 setPasswordError('New passwords do not match.');
                 return;
               }
+              const policyError = passwordPolicyError(nextPassword);
+              if (policyError) {
+                setPasswordError(policyError);
+                return;
+              }
               passwordFlight.current = true;
               const generation = ++passwordGeneration.current;
               setPasswordSaving(true);
@@ -1011,15 +1066,9 @@ export function SettingsScreen() {
                 && currentOwnerId() === ownerId
                 && generation === passwordGeneration.current;
               if (!ownerIsCurrent) return;
-              if (result.commitState === 'committed' && result.sessionTransitioned) {
-                setPasswordOpen(false);
-                void refreshProfile();
-                Alert.alert('Password updated', 'This device remains signed in. Other sessions have been revoked.');
-              } else if (result.commitState === 'committed') {
-                Alert.alert('Password updated', result.error || 'Sign in again to continue. Do not retry the password change.');
-              } else if (result.commitState === 'unknown') {
-                Alert.alert('Password result unknown', result.error || 'Check which password works before trying again.');
-              } else {
+              if (result.commitState === 'unknown') {
+                setPasswordError(result.error || 'The result is unknown. Check which password works before trying again.');
+              } else if (result.commitState !== 'committed') {
                 setPasswordError(result.error || 'Password could not be updated.');
               }
               if (generation === passwordGeneration.current) {
@@ -1027,7 +1076,6 @@ export function SettingsScreen() {
                 setPasswordSaving(false);
               }
             })()}
-            style={styles.flexButton}
             testID="settings-password-save"
           />
         </View>
@@ -1037,6 +1085,7 @@ export function SettingsScreen() {
         <ModalCardHeader
           title="Delete your account?"
           body="Your account will be disabled now. You can restore server-backed data by signing in during the next seven days. After that, Cairn permanently deletes your profile, Activities, Routes, Cairns, Memory, friendships, exports, feedback and account-linked diagnostics. Account data on this device is cleared now; unsynced device-only data cannot be restored."
+          onClose={deleteSaving ? undefined : () => setDeleteOpen(false)}
         />
         <TextField
           label="Type delete account to confirm"
@@ -1047,7 +1096,6 @@ export function SettingsScreen() {
           testID="settings-delete-phrase"
         />
         <View style={styles.stackSmall}>
-          <PrimaryButton label="Keep account" variant="secondary" disabled={deleteSaving} onPress={() => setDeleteOpen(false)} />
           <PrimaryButton
             label="Delete account"
             variant="destructive"
@@ -1101,13 +1149,12 @@ export function SettingsScreen() {
         <ModalCardHeader
           title="Sign out?"
           body="Your saved and recoverable Cairn data stays with this account. Explore while Cairn is open will return to Off on this device."
+          onClose={() => setSignOutOpen(false)}
         />
-        <View style={styles.modalActions}>
-          <PrimaryButton label="Stay signed in" variant="secondary" onPress={() => setSignOutOpen(false)} style={styles.flexButton} />
+        <View style={styles.stackSmall}>
           <PrimaryButton
             label="Sign out"
             variant="destructive"
-            style={styles.flexButton}
             onPress={() => void (async () => {
               const ownerId = currentOwnerId();
               if (!ownerId) return;
@@ -1242,7 +1289,13 @@ const styles = StyleSheet.create({
   preferenceBlock: { padding: Spacing.base, gap: Spacing.md },
   preferenceHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   footer: { textAlign: 'center', fontSize: FontSize.caption, fontWeight: '600', marginTop: Spacing.xxl, opacity: 0.82 },
+  footerPressable: { alignSelf: 'center', paddingHorizontal: Spacing.xl, paddingBottom: Spacing.xl },
+  passwordRules: { gap: Spacing.xs, paddingHorizontal: Spacing.xs },
+  passwordRuleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  passwordRuleText: { fontSize: FontSize.caption, fontWeight: '600' },
   cardHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, padding: Spacing.base, paddingBottom: Spacing.sm },
+  infoHero: { marginTop: Spacing.md, padding: Spacing.lg, flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
+  heroIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: FontSize.h3, fontWeight: '700', lineHeight: 23 },
   body: { fontSize: FontSize.caption, lineHeight: 19 },
   statusText: { flex: 1, fontSize: FontSize.caption, lineHeight: 19, fontWeight: '600' },

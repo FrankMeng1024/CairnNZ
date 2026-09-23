@@ -121,12 +121,14 @@ describe('truthful Settings server actions', () => {
     })] });
   });
 
-  test('password change requires a fresh confirmed session token', async () => {
+  test('password change ends the current session even if an older server returns a fresh token', async () => {
     global.fetch = jest.fn().mockResolvedValueOnce(response(true, 200, { token: 'fresh-token' }));
     await expect(changePassword('current password', 'new password', 'settings-owner')).resolves.toEqual({
-      commitState: 'committed', sessionTransitioned: true,
+      commitState: 'committed', sessionTransitioned: false, error: undefined,
     });
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('cairn_jwt', 'fresh-token');
+    expect(mockAppState.logout).toHaveBeenCalledWith(expect.objectContaining({ expectedUserId: 'settings-owner' }));
+    expect(mockToken.value).toBeNull();
   });
 
   test('password HTTP success remains committed when post-commit local logout throws', async () => {
