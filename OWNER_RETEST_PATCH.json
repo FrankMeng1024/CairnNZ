@@ -1,0 +1,223 @@
+{
+  "schema": "cairn-owner-retest-patch.v1",
+  "generatedAt": "2026-09-25T02:09:40+08:00",
+  "authority": {
+    "path": "/Users/mzm/Desktop/Cairn_Owner_Test_State.json",
+    "sha256": "2156cb5d45724f1565e5415a88c1d5d58cabb3d4ac2d48d08fb2a00d0032aa4b",
+    "updatedAt": 1790260498004,
+    "lastCase": "CAIRN06",
+    "preserved": true,
+    "note": "This file is a proposed retest delta only. It does not alter owner results or history."
+  },
+  "candidate": {
+    "marker": "O63",
+    "runtime": "0.2.6-o61",
+    "appVersion": "0.2.6",
+    "sourceCommit": "9a0b3f6d4b17d4f2b471195b865e8fa2453f755d",
+    "sourceTree": "de0cd6eb0c25cab8f4d91345a9e37d63b990c8f4",
+    "appTree": "7d8b5932f8597722141375e03410aa3f7aff3a10",
+    "backendCommit": "6854161c4f8cdf93379e81231d85d5e66deeec86",
+    "backendDeployed": true,
+    "otaPublished": false,
+    "nativeBuildCreated": false,
+    "publicEnabled": false
+  },
+  "definitionDeltas": [
+    {
+      "caseId": "END01",
+      "classification": "TEST_WORDING_REVIEW",
+      "change": "Completed Activities are view-only. Remove the historical-Activity resume expectation; this is not a product repair."
+    },
+    {
+      "caseId": "CAIRN10",
+      "classification": "PRODUCT_CONTRACT_CHANGE",
+      "change": "Simulator data is local QA provenance and cannot assert personal truth. A standalone REAL Cairn creates one Personal Memory witness only after durable save at a frozen GPS fix with accepted accuracy."
+    }
+  ],
+  "retestOrder": [
+    "END02",
+    "HOME03",
+    "AUTH03",
+    "AUTH04",
+    "CAIRN02",
+    "CAIRN03",
+    "CAIRN10",
+    "CAIRN08",
+    "CAIRN01",
+    "CAIRN09",
+    "CAIRN04",
+    "CAIRN06",
+    "HOME04",
+    "HOME01",
+    "HOME02",
+    "AUTH01",
+    "END01"
+  ],
+  "cases": {
+    "END02": {
+      "ownerObservation": "Starting Run from Home inherited an already-running Hike; this was a blocker.",
+      "rootCause": "Hike and Run could both interpret shared live-session state without enforcing screen ownership.",
+      "fix": "A shared guard owns the active mode and redirects any sibling entry to the real session owner; mode is written only while idle.",
+      "actionZh": "开始 Hike，返回 Home，再点 Run；分别在记录中和暂停时重复一次。",
+      "expectedZh": "始终回到正在进行的 Hike；Run 不继承 Hike 状态，也不会创建第二个活动。",
+      "siblingCoverage": ["Hike", "Run", "Home"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "HOME03": {
+      "ownerObservation": "After pause, resume, and leaving Hike, Home still called it paused and named it Paused Hike.",
+      "rootCause": "Home inferred pause from navigation history instead of the canonical session state.",
+      "fix": "Home now reads the canonical live status and uses Recording/Paused plus one Return action.",
+      "actionZh": "开始 Hike，先暂停再继续，然后回到 Home；再真正暂停后回 Home 对比。",
+      "expectedZh": "继续记录时显示 Recording；只有真正暂停时才显示 Paused；返回活动不改变记录状态。",
+      "siblingCoverage": ["Home", "Hike", "Run"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "AUTH03": {
+      "ownerObservation": "Continue stopped responding after foreground resume; OTP needed manual handling; Auth flashed before Home; a Chinese waiting location appeared.",
+      "rootCause": "Email entry depended on a delayed frame callback, navigation had competing owners, and location fallback was not guaranteed English.",
+      "fix": "Email entry is synchronous, the root owns the single transition, OTP full-paste/AutoFill is retained, and the Home fallback is English.",
+      "actionZh": "在登录页快速切后台再回来，点 Continue with Email；粘贴完整 6 位验证码并完成登录。",
+      "expectedZh": "按钮立即响应；已有输入不丢失；验证码可整段粘贴/系统自动填充；进入 Home 无白屏、重叠或闪烁；等待位置只显示英文。",
+      "siblingCoverage": ["Sign in", "Create account", "OTP", "Home transition"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "AUTH04": {
+      "ownerObservation": "In reset password, inserting a leading character erased the existing password; the keyboard covered the action.",
+      "rootCause": "The reset field was not controlled consistently and the flow lacked keyboard-safe layout ownership.",
+      "fix": "Password state is controlled; reset/forgot content uses keyboard avoidance, scrolling, and persistent taps.",
+      "actionZh": "在 Reset Password 输入 123123123，把光标移到最前面输入 g；保持键盘打开并滚动到提交按钮。",
+      "expectedZh": "文本变成 g123123123，不会清空；按钮可见、可滚动到并可点击。",
+      "siblingCoverage": ["Forgot password", "Reset password", "Create account", "Change password"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "CAIRN02": {
+      "ownerObservation": "The Plant button was completely obscured by the keyboard and keyboard behavior was inconsistent.",
+      "rootCause": "Plant content and its primary action did not share a keyboard-safe layout contract.",
+      "fix": "Plant uses the shared keyboard-aware container and maintains a reachable primary action.",
+      "actionZh": "从 Home、Hike、Run 分别进入 Plant，聚焦文本框并保持键盘打开。",
+      "expectedZh": "Plant 按钮始终可见或可滚动到；点击空白和提交行为在三个入口一致。",
+      "siblingCoverage": ["Standalone Plant", "Hike Plant", "Run Plant"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "CAIRN03": {
+      "ownerObservation": "Saved locally remained unsynced even after reconnect, app restart, and refresh.",
+      "rootCause": "Retry ownership was coupled to mounted screens and did not reliably drain on connectivity/foreground/hydration events.",
+      "fix": "App-owned connectivity plus bounded exponential scheduling now drains Cairn and Activity outboxes automatically.",
+      "actionZh": "离线种一个真实 Cairn，确认显示本地保存；联网后等待自动同步。若仍离线，杀掉并重开 App 后再联网。",
+      "expectedZh": "用户无需手动刷新；联网、前台恢复或冷启动后自动开始同步，成功后本地保存状态消失。",
+      "siblingCoverage": ["Cairn outbox", "Activity outbox", "cold launch", "foreground resume"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "deployed_gated", "ownerDevice": "pending"}
+    },
+    "CAIRN10": {
+      "ownerObservation": "Activity Plant Back went to standalone location selection; simulated Plant split the route; simulator Activity/Cairn did not behave like Memory; standalone Cairn should prove a visit.",
+      "rootCause": "Plant lacked explicit caller identity, simulator provenance leaked into real persistence assumptions, and standalone visit truth was undefined.",
+      "fix": "Plant carries exact activity context; Back returns to that activity without route discontinuity. Simulator data is live local QA only. A durable REAL standalone Cairn adds one accurate GPS-anchored Personal Memory witness.",
+      "actionZh": "用 Debug 模拟分别在 Hike/Run 中 Plant 后返回并继续走；打开 Memory 检查模拟轨迹。再关闭模拟，用真实 GPS 从 Home 单独 Plant。",
+      "expectedZh": "活动内 Back 直接回原活动且路线不断；模拟路线在 Finish 前已显示并以模拟坐标进入 QA Memory；模拟数据不上传、不混入真实个人历史；真实独立 Cairn 保存成功后仅在准确 GPS 点解锁一次个人 Memory。",
+      "siblingCoverage": ["Hike", "Run", "Plant", "Memory", "standalone Cairn"],
+      "status": {"implementation": "implemented_contract_change", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "CAIRN08": {
+      "ownerObservation": "The simulator start lost its blue focus ring and Cairn overlays used inconsistent masks/styles.",
+      "rootCause": "The debug origin affordance and overlay presentation were not using the locked shared system.",
+      "fix": "The simulator origin ring is restored and Cairn sheets/dialogs use the canonical scrim and presentation family.",
+      "actionZh": "开启 Debug 和模拟器，选择起点；在 Home、Hike、Run、Memory 打开 Cairn 和删除确认。",
+      "expectedZh": "模拟起点有清晰蓝色焦点圈；遮罩、圆角、间距、关闭和操作层级在所有入口一致。",
+      "siblingCoverage": ["Simulator", "Marker Detail", "Memory", "delete dialog"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "CAIRN01": {
+      "ownerObservation": "Detail map/content surfaces diverged in night mode; Plant Back and second-page title/spacing were inconsistent.",
+      "rootCause": "Standalone and activity callers had drifted layout and navigation contracts.",
+      "fix": "Plant caller context, navigation, title geometry, spacing, and Detail surfaces were unified against canonical components/tokens.",
+      "actionZh": "日间和夜间分别从 Home、Hike、Run 完成一次 Plant，并打开详情。",
+      "expectedZh": "Back 语义正确；标题、上下区域、留白和颜色统一；夜间地图上方与详情面板不割裂。",
+      "siblingCoverage": ["Standalone Plant", "Activity Plant", "Marker Detail"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "CAIRN09": {
+      "ownerObservation": "Short notes made the sheet too thin; standalone source context was absent; Memory View Cairn did nothing and no Edit was available.",
+      "rootCause": "Detail sizing and action branches varied by renderer and assumed activity linkage.",
+      "fix": "Detail has a stable minimum body; linked Activities, unavailable links, and standalone planted dates are explicit; all Memory branches open real detail and expose allowed edit actions.",
+      "actionZh": "打开短文字 Cairn、活动 Cairn、独立 Cairn，并从 Memory 地图点开后使用 View Cairn 和 Edit。",
+      "expectedZh": "短内容不显得单薄；每个 Cairn 都有真实来源说明；View Cairn 有效；自己的 Cairn 可编辑。",
+      "siblingCoverage": ["Marker Detail", "Memory pin renderers", "Map History"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "CAIRN04": {
+      "ownerObservation": "All Cairns was sparse, used update time instead of planted time, lacked route-like filtering/sort, and did not distinguish personal/friend/public.",
+      "rootCause": "The list used mutation timestamps and overloaded one visual signal for author and audience.",
+      "fix": "All Cairns uses planted `createdAt`, actual audience filters, deterministic sorting, and shared authorship/audience labels.",
+      "actionZh": "准备个人、朋友和 Public 样例，编辑一个旧 Cairn 后打开 All Cairns；切换筛选和排序。",
+      "expectedZh": "编辑不会把种植日期改成 Today；筛选和排序正确；作者身份与可见范围均由图标加文字清楚表达。",
+      "siblingCoverage": ["All Cairns", "Marker Detail", "Memory", "Map History"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "CAIRN06": {
+      "ownerObservation": "Delete dialogs lacked the canonical close/keep pattern; Memory still used old UI; identity was indistinguishable; sync was too slow.",
+      "rootCause": "Delete UI and identity were duplicated, while offline retry waited on screen-local triggers.",
+      "fix": "All live callers use the shared delete dialog and identity line; automatic app-owned retry starts promptly after recovery.",
+      "actionZh": "从详情和 Memory 各删除一个 Cairn；比较个人/朋友/Public 标识；让一个离线 Cairn 联网同步。",
+      "expectedZh": "删除弹窗都有 X、Keep 和明确删除动作；两个入口样式一致；身份与受众一目了然；联网后无需刷新即开始同步。",
+      "siblingCoverage": ["Marker Detail", "Memory", "All Cairns", "offline recovery"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "HOME04": {
+      "ownerObservation": "The Last Hike card improved but the extra Open box felt wrong because the whole card was already tappable.",
+      "rootCause": "A nested affordance competed with the full-card interaction.",
+      "fix": "The card is one coherent tap target with no nested Open button.",
+      "actionZh": "在 Home 点击 Last Hike 卡片的标题、数据和右侧区域。",
+      "expectedZh": "整个卡片都进入同一详情；没有额外 Open 框或重复点击语义。",
+      "siblingCoverage": ["Home Last Hike", "generated H0/H1 states"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "HOME01": {
+      "ownerObservation": "Debug retained obsolete controls; sunny artwork was too sharp; Privacy and Help felt outside the app's visual system.",
+      "rootCause": "Concluded experiments remained exposed and sunny/help surfaces had not fully converged on the locked Home family.",
+      "fix": "Obsolete distance/weather duplication was removed; a softened canonical sunny image was manifested; Cairn-native Privacy/Help layouts were preserved and validated.",
+      "actionZh": "连续点 Settings 的 Thanks for using Cairn 五次，检查 Debug；切换晴天；打开 Privacy 和 Help/About。",
+      "expectedZh": "Debug 只保留有效工具；晴天山、水面和草地不过度锐利；Privacy/Help 的间距、颜色、按钮与 App 一致。",
+      "siblingCoverage": ["Home weather variants", "Debug", "Privacy", "Help/About"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "HOME02": {
+      "ownerObservation": "Reinstall resumed without login; Hike/Memory transition and Fog timing remained unsatisfactory; populated Memory took about 15 seconds.",
+      "rootCause": "Map readiness and Fog restoration needed separate state, while iOS Keychain intentionally preserves secure sessions across reinstall. The reported native populated-data cost cannot be represented by Web alone.",
+      "fix": "Readiness and Fog restoration remain separated with local-first composition and centered status. Performance was benchmarked, including one disclosed mixed-data regression. Session persistence was not silently redefined.",
+      "actionZh": "在真机冷启动 Hike 和已填充的 Memory，录屏从地球层级进入以及 Fog 恢复耗时；另做一次删除重装并观察登录状态。",
+      "expectedZh": "没有一闪而过或与标签重叠的 loading；地球到本地过渡连续；Fog 状态与内容顺序合理。删除重装后仍登录是当前 Keychain 设计，是否改成强制登录请由 Owner 明确决定。",
+      "siblingCoverage": ["Hike map", "Run map", "Memory", "secure session restore"],
+      "status": {"implementation": "implemented_with_disclosed_limit", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending", "ownerDecision": "reinstall_session_policy"}
+    },
+    "AUTH01": {
+      "ownerObservation": "Sign-out/delete text wrapped awkwardly, leaned left, and field/button widths did not match.",
+      "rootCause": "Settings auth dialogs and destructive layouts had inconsistent width and alignment rules.",
+      "fix": "The Cairn-native dialog hierarchy uses close-to-cancel, one explicit action, aligned content, and shared widths.",
+      "actionZh": "在不同文字大小下打开 Sign out 和 Delete account 弹窗。",
+      "expectedZh": "文字换行自然且视觉居中；输入框与主按钮宽度一致；顶部 X 取消，下方只有当前主要动作。",
+      "siblingCoverage": ["Sign out", "Delete account", "Settings dialogs"],
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    },
+    "END01": {
+      "ownerObservation": "The test case incorrectly expected reopening/resuming historical Activities; the product has no such requirement.",
+      "rootCause": "The test definition contradicted the product contract.",
+      "fix": "No historical-resume feature was added. Completed Activities stay view-only.",
+      "actionZh": "完成一个活动，随后从历史记录打开。",
+      "expectedZh": "可以查看已完成活动，但没有 Resume/继续历史活动的动作；请将原 case 改为只读验证。",
+      "siblingCoverage": ["Completed Hike", "Completed Run", "Activity history"],
+      "status": {"implementation": "definition_only", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
+    }
+  },
+  "publicReadiness": {
+    "status": "blocked",
+    "gate": false,
+    "allowlistCount": 0,
+    "safeForNormalOtaWhileDisabled": true,
+    "blockers": [
+      "Owner numeric account ID is not present in the authority JSON.",
+      "A second isolated disposable actor and operator workflow have not been supplied/proven.",
+      "Native positive and negative walking-discovery cases are pending.",
+      "The local disposable MySQL integration harness could not run because Docker daemon availability failed."
+    ]
+  }
+}
