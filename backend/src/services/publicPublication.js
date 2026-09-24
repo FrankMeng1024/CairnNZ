@@ -10,6 +10,21 @@ function publicPilotEnabled() {
   return String(process.env.PUBLIC_CAIRN_PILOT_ENABLED || '').trim() === '1';
 }
 
+function publicPilotAuthorized(userId) {
+  if (!publicPilotEnabled() || userId == null) return false;
+  // The disposable MySQL harness creates actor ids after the process starts;
+  // this exception is valid only in its explicit test realm. Production can
+  // never turn a global flag into broad access.
+  if (process.env.NODE_ENV === 'test'
+    && process.env.CAIRN_REALM === 'isolated_review'
+    && process.env.ALLOW_ISOLATED_QA_SOURCE_CONTRACT === '1') return true;
+  const allowlist = new Set(String(process.env.PUBLIC_CAIRN_PILOT_USER_IDS || '')
+    .split(',')
+    .map(value => value.trim())
+    .filter(value => /^\d+$/.test(value)));
+  return allowlist.has(String(userId));
+}
+
 function usefulPublicText(text) {
   return typeof text === 'string' && text.replace(/\u001e/g, '').trim().length > 0;
 }
@@ -95,7 +110,7 @@ async function synchronizePublicSubmission(conn, markerId, ownerId) {
     return { state: 'withdrawn', code: 'PUBLIC_WITHDRAWN' };
   }
 
-  if (!publicPilotEnabled()) {
+  if (!publicPilotAuthorized(ownerId)) {
     await withdrawPublication(conn, marker.id, ownerId, 'pilot_disabled');
     await conn.execute(
       `UPDATE markers SET public_state='not_public', public_state_changed_at=UTC_TIMESTAMP(3)
@@ -180,6 +195,7 @@ async function synchronizePublicSubmission(conn, markerId, ownerId) {
 module.exports = {
   PUBLIC_ENCOUNTER_RADIUS_M,
   publicPilotEnabled,
+  publicPilotAuthorized,
   usefulPublicText,
   loadEligiblePublicationOriginEvidence,
   markerHasEligibleOrigin,

@@ -114,6 +114,72 @@ async function completeActivity(
   return { clientActivityId, sessionId: String(started.body.id), points };
 }
 
+async function startActiveActivity(
+  actor, lat, lng, startedAtMs = Date.now() - 20_000,
+  pointOffsets = [0, 10_000, 20_000],
+) {
+  const clientActivityId = crypto.randomUUID();
+  const sourceSegmentId = `${clientActivityId}:segment-1`;
+  const points = pointOffsets.map((offset, index) => ({
+    lat: lat + index * 0.00001,
+    lng: lng + index * 0.00001,
+    t: startedAtMs + offset,
+    acc: 8,
+    segment_id: sourceSegmentId,
+  }));
+  const started = await api(actor, '/api/sessions/start', {
+    method: 'POST', expected: 201,
+    body: {
+      client_activity_id: clientActivityId,
+      type: 'hiking',
+      start_time: new Date(startedAtMs).toISOString(),
+    },
+  });
+  await api(actor, `/api/sessions/${started.body.id}/append-points`, {
+    method: 'PATCH', expected: 200,
+    body: { client_op_id: crypto.randomUUID(), points },
+  });
+  const witnessResponse = await api(actor, '/api/memory/points', {
+    method: 'POST', expected: 200,
+    body: {
+      presence_witnesses: points.map(point => ({
+        cid: crypto.randomUUID(), first_lat: point.lat, first_lng: point.lng,
+        first_observed_at_ms: point.t, lat: point.lat, lng: point.lng,
+        observed_at_ms: point.t, evidence_source: 'activity_real',
+        source_activity_client_id: clientActivityId,
+        source_segment_id: sourceSegmentId,
+        horizontal_accuracy_m: 8, continuity_state: 'accepted',
+      })),
+    },
+  });
+  assert.equal(witnessResponse.body.presence_witnesses.length, points.length);
+  return { clientActivityId, sessionId: String(started.body.id), points };
+}
+
+async function finishActiveActivity(actor, activity) {
+  const lastPoint = activity.points[activity.points.length - 1];
+  await api(actor, `/api/sessions/${activity.sessionId}/save`, {
+    method: 'PATCH', expected: 200,
+    body: {
+      client_activity_id: activity.clientActivityId,
+      end_time: new Date(lastPoint.t).toISOString(),
+      distance_m: 35,
+      duration_s: Math.ceil((lastPoint.t - activity.points[0].t) / 1000),
+      name: `${actor.label} active Public harness Activity`,
+      route_points: activity.points,
+      route_points_raw: activity.points,
+      route_points_canonical: activity.points,
+      memory_points: activity.points.map(point => ({
+        lat: point.lat, lng: point.lng, ts: point.t,
+        cid: crypto.randomUUID(), evidence_source: 'activity_real',
+        source_activity_client_id: activity.clientActivityId,
+        source_segment_id: point.segment_id,
+        horizontal_accuracy_m: 8, continuity_state: 'accepted',
+      })),
+    },
+  });
+}
+
 async function createPublicCairn(owner, activity, lat, lng, text) {
   const response = await api(owner, '/api/markers', {
     method: 'POST', expected: 201,
@@ -381,8 +447,16 @@ async function main() {
     assert.equal(fakeSource.body.code, 'PUBLIC_ACTIVITY_NOT_ELIGIBLE');
     pass('PUB-03.prepublication-negative', 'pre-publication observations and an arbitrary/simulator-like source identity cannot create an encounter');
 
-    const viewerActivity = await completeActivity(actors.B, place.lat, place.lng, Date.now() + 1_000);
+    const viewerActivity = await startActiveActivity(actors.B, place.lat, place.lng, Date.now() - 20_000);
     evidence.objects.viewer_activity_id = viewerActivity.clientActivityId;
+    const [[activeBeforeVerify]] = await db.execute(
+      `SELECT finalized_at,abandoned_at,JSON_LENGTH(route_points) AS route_n
+         FROM sessions WHERE user_id=? AND client_activity_id=?`,
+      [actors.B.id, viewerActivity.clientActivityId],
+    );
+    assert.equal(activeBeforeVerify.finalized_at, null);
+    assert.equal(activeBeforeVerify.abandoned_at, null);
+    assert.equal(Number(activeBeforeVerify.route_n), viewerActivity.points.length);
     const verify = await api(actors.B, '/api/public-cairns/encounters/verify', {
       method: 'POST', expected: 200,
       body: { source_activity_client_id: viewerActivity.clientActivityId },
@@ -398,8 +472,10 @@ async function main() {
       [actors.B.id, marker.id],
     );
     assert.equal(Number(encounterCount.n), 1);
-    pass('PUB-04.encounter', 'post-publication finalized real Activity evidence created one idempotent encounter through the API/MySQL path', {
+    await finishActiveActivity(actors.B, viewerActivity);
+    pass('PUB-04.encounter', 'post-publication REAL evidence created one idempotent encounter through the API/MySQL path while the Activity was still active', {
       marker_id: marker.id, source_activity_client_id: viewerActivity.clientActivityId,
+      active_route_points: Number(activeBeforeVerify.route_n),
     });
     pass('PUB-04b.locality-before-limit', 'the older local publication remained eligible despite sixty newer distant publications because locality precedes the bounded candidate limit', {
       marker_id: marker.id, newer_distant_publications: distantFixtureIds.length,

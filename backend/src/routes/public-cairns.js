@@ -12,7 +12,7 @@ const {
 } = require('../services/encounterPolicy');
 const {
   PUBLIC_ENCOUNTER_RADIUS_M,
-  publicPilotEnabled,
+  publicPilotAuthorized,
 } = require('../services/publicPublication');
 const { eligibleSourceProvenanceSql } = require('../services/activitySourceProvenance');
 
@@ -154,18 +154,20 @@ const actionLimiter = rateLimit({
 router.use(authenticate);
 
 router.get('/capabilities', (req, res) => res.json({
-  enabled: publicPilotEnabled(),
+  enabled: publicPilotAuthorized(req.user.userId),
   scope: 'cairns_text_only',
   scene_limit: PUBLIC_SCENE_LIMIT,
   scene_author_limit: PUBLIC_SCENE_AUTHOR_LIMIT,
   new_card_limit: PUBLIC_NEW_CARD_LIMIT,
 }));
 
-router.use((req, res, next) => (publicPilotEnabled() ? next() : pilotDisabled(res)));
+router.use((req, res, next) => (publicPilotAuthorized(req.user.userId) ? next() : pilotDisabled(res)));
 
 // Qualify already-uploaded real Activity witnesses. The client supplies only
 // the Activity identity; source, timestamps, publication time and distance
-// are all re-established from server-owned rows.
+// are all re-established from server-owned rows. Active Activities use the
+// incrementally uploaded route_points authority so discovery can surface
+// before Finish; completed Activities use their immutable canonical route.
 router.post('/encounters/verify', actionLimiter, async (req, res) => {
   const sourceActivityClientId = typeof req.body?.source_activity_client_id === 'string'
     ? req.body.source_activity_client_id : '';
@@ -177,9 +179,9 @@ router.post('/encounters/verify', actionLimiter, async (req, res) => {
   try {
     await conn.beginTransaction();
     const [sessions] = await conn.execute(
-      `SELECT id,source_provenance FROM sessions
+      `SELECT id,source_provenance,finalized_at FROM sessions
         WHERE user_id=? AND client_activity_id=?
-          AND finalized_at IS NOT NULL AND abandoned_at IS NULL
+          AND abandoned_at IS NULL
           AND ${eligibleSourceProvenanceSql('source_provenance')}
         LIMIT 1 FOR SHARE`,
       [viewerId, sourceActivityClientId],
@@ -187,7 +189,7 @@ router.post('/encounters/verify', actionLimiter, async (req, res) => {
     if (!sessions[0]) {
       await conn.rollback();
       return res.status(409).json({
-        error: 'Only a completed real Activity can qualify a Public encounter.',
+        error: 'Only a current or completed real Activity can qualify a Public encounter.',
         code: 'PUBLIC_ACTIVITY_NOT_ELIGIBLE',
       });
     }
@@ -234,9 +236,14 @@ router.post('/encounters/verify', actionLimiter, async (req, res) => {
               ) nearby
               JOIN sessions source_session
                 ON source_session.user_id=? AND source_session.client_activity_id=?
-               AND source_session.finalized_at IS NOT NULL AND source_session.abandoned_at IS NULL
+               AND source_session.abandoned_at IS NULL
                AND ${eligibleSourceProvenanceSql('source_session.source_provenance')}
-              JOIN JSON_TABLE(source_session.route_points_canonical, '$[*]' COLUMNS(
+              JOIN JSON_TABLE(COALESCE(
+                CASE WHEN source_session.finalized_at IS NULL
+                  THEN source_session.route_points
+                  ELSE source_session.route_points_canonical END,
+                JSON_ARRAY()
+              ), '$[*]' COLUMNS(
                 lat DOUBLE PATH '$.lat',lng DOUBLE PATH '$.lng',
                 observed_ms BIGINT PATH '$.t',segment_id VARCHAR(80) PATH '$.segment_id'
               )) canonical
@@ -279,9 +286,14 @@ router.post('/encounters/verify', actionLimiter, async (req, res) => {
            JOIN sessions session
              ON session.user_id=?
             AND session.client_activity_id=evidence.source_activity_client_id
-            AND session.finalized_at IS NOT NULL AND session.abandoned_at IS NULL
+            AND session.abandoned_at IS NULL
             AND ${eligibleSourceProvenanceSql('session.source_provenance')}
-           JOIN JSON_TABLE(session.route_points_canonical, '$[*]' COLUMNS(
+           JOIN JSON_TABLE(COALESCE(
+             CASE WHEN session.finalized_at IS NULL
+               THEN session.route_points
+               ELSE session.route_points_canonical END,
+             JSON_ARRAY()
+           ), '$[*]' COLUMNS(
              lat DOUBLE PATH '$.lat', lng DOUBLE PATH '$.lng',
              observed_ms BIGINT PATH '$.t', segment_id VARCHAR(80) PATH '$.segment_id'
            )) canonical
