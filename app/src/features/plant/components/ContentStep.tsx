@@ -45,6 +45,7 @@ interface Props {
     voiceMs: number | null;
   }) => void;
   onBack: () => void;
+  onAdjustLocation?: () => void;
   activityLocation?: boolean;
   publicEnabled?: boolean;
 }
@@ -57,6 +58,7 @@ export function ContentStep({
   submitting = false,
   onSubmit,
   onBack,
+  onAdjustLocation,
   activityLocation = false,
   publicEnabled = false,
 }: Props) {
@@ -105,7 +107,7 @@ export function ContentStep({
             {activityLocation ? (
               <TouchableOpacity
                 style={[styles.locationTrust, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                onPress={onBack}
+                onPress={onAdjustLocation ?? onBack}
                 accessibilityRole="button"
                 accessibilityLabel="Using Activity location. Adjust location"
               >

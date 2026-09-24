@@ -34,6 +34,7 @@ await page.route('**/api/**', route => route.fulfill({
 
 await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
 await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.useAppStore), null, { timeout: 120_000 });
+await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.navigationRef && globalThis.__cairnStores?.getCurrentRoute), null, { timeout: 120_000 });
 await page.evaluate(() => {
   localStorage.setItem('cairn_onboarding_v1_done', 'true');
   localStorage.setItem('cairn_onboarding_v1_done_plant-qa', 'true');
@@ -66,7 +67,9 @@ async function navigatePlant(fromActivity) {
       status: 'tracking',
       sessionId: 'plant-qa-activity',
       ownerUserId: 'plant-qa',
+      liveOwnerGeneration: 'plant-qa-owner-generation',
       activityMode: 'hiking',
+      locationProviderSource: 'real',
       locationAvailable: true,
       lastCoordinate: { lat: -39.2, lng: 175.5, accuracy: 6, t: now },
       lastCoordinateTime: now,
@@ -74,7 +77,15 @@ async function navigatePlant(fromActivity) {
       status: 'idle', sessionId: null, locationAvailable: false,
       lastCoordinate: null, lastCoordinateTime: null,
     });
-    stores.navigationRef.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'Plant' }] });
+    const origin = active
+      ? {
+          kind: 'activity',
+          clientActivityId: 'plant-qa-activity',
+          ownerGeneration: 'plant-qa-owner-generation',
+          activityMode: 'hiking',
+        }
+      : { kind: 'standalone' };
+    stores.navigationRef.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'Plant', params: { origin } }] });
   }, fromActivity);
   await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Plant');
 }

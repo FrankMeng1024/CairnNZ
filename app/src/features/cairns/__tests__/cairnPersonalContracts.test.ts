@@ -11,6 +11,7 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   const activity = read('src/screens/MapHistoryScreen.tsx');
   const navigation = read('src/navigation/RootNavigator.tsx');
   const markerStore = read('src/store/useMarkerStore.ts');
+  const deleteDialog = read('src/features/cairns/CairnDeleteDialog.tsx');
   const webMapbox = read('src/features/memory/services/mapboxAdapter.web.tsx');
 
   test('Memory exposes a normal All Cairns route outside map/location branches', () => {
@@ -22,12 +23,23 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   });
 
   test('All Cairns is own-only, recent-first, searchable and opens the authoritative Detail', () => {
-    expect(library).toContain('useMarkerStore(state => state.markers)');
+    expect(library).toContain('markersForVisibleWorkspace(storedMarkers, debugMode)');
     expect(library).toContain('mergeOwnedCairns(markers, remoteMarkers)');
     expect(library).toContain('Search names and notes');
+    expect(library).toContain('testID={`all-cairns-filter-${filter.key}`}');
+    expect(library).toContain('all-cairns-sort');
+    expect(library).toContain('(b.createdAt ?? 0) - (a.createdAt ?? 0)');
+    expect(library).not.toMatch(/updatedAt.*sort|sort.*updatedAt/);
     expect(library).toContain("nav.navigate('MarkerDetail', { markerId: id })");
     expect(library).not.toMatch(/circleMarkers|publicMarkers|loadPublicMarkers|bbox/);
     expect(markerStore).toContain('/api/markers/library?');
+  });
+
+  test('standalone and unavailable Activity provenance remain truthful', () => {
+    expect(detail).toContain('testID="cairn-left-here-context"');
+    expect(detail).toContain('Left here {dateStr}');
+    expect(detail).toContain('testID="cairn-source-activity-unavailable"');
+    expect(detail).toContain('Activity link unavailable');
   });
 
   test('incomplete retrieval never claims a global search-empty result', () => {
@@ -57,8 +69,14 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   });
 
   test('delete confirmation states non-cascade semantics and truthful queued deletion', () => {
-    expect(detail).toContain('Its source Activity, independent Routes, and ordinary personal Memory remain.');
+    expect(deleteDialog).toContain('Its source Activity, independent Routes, and ordinary personal Memory remain.');
     expect(detail).toContain("result.remoteState === 'queued'");
+    [
+      detail,
+      activity,
+      read('src/screens/HikingScreen.tsx'),
+      read('src/features/memory/components/CairnPinsLayer.tsx'),
+    ].forEach(caller => expect(caller).toContain('<CairnDeleteDialog'));
     const deletion = markerStore.slice(
       markerStore.indexOf('deleteMarker: async (id)'),
       markerStore.indexOf('hideMark: async', markerStore.indexOf('deleteMarker: async (id)')),
@@ -91,5 +109,30 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   test('opening or editing a Cairn does not touch the recording lifecycle', () => {
     expect(detail).not.toMatch(/useTrackingStore|stopTracking|pauseTracking|resumeTracking/);
     expect(library).not.toMatch(/useTrackingStore|stopTracking|pauseTracking|resumeTracking/);
+  });
+
+  test('Simulator Cairns stay in the isolated QA workspace and all live owner callers use its selector', () => {
+    const plant = read('src/screens/PlantScreen.tsx');
+    const workspace = read('src/features/cairns/cairnWorkspace.ts');
+    const siblingCallers = [
+      library,
+      detail,
+      read('src/screens/HikingScreen.tsx'),
+      read('src/screens/MapHistoryScreen.tsx'),
+      read('src/features/memory/components/MemoryMap.tsx'),
+      read('src/features/memory/components/CairnPinsLayer.tsx'),
+    ];
+    expect(plant).toContain("qaProvenance: final.locationProvenance === 'simulator_test'");
+    expect(markerStore).toContain("if (data.qaProvenance === 'simulator_test')");
+    expect(markerStore).toContain("throw new Error('simulator_cairn_requires_qa_workspace')");
+    expect(markerStore).toContain("if (current.qaProvenance === 'simulator_test')");
+    expect(workspace).toContain("marker.qaProvenance !== 'simulator_test' || qaWorkspaceActive");
+    siblingCallers.slice(0, 5).forEach(caller => expect(caller).toContain('markersForVisibleWorkspace'));
+    expect(siblingCallers[5]).toContain('useMarkerStore((s) => s.markers)');
+    const qaBranch = markerStore.slice(
+      markerStore.indexOf("if (data.qaProvenance === 'simulator_test')"),
+      markerStore.indexOf('const payload: MarkerCreatePayload'),
+    );
+    expect(qaBranch).not.toMatch(/offlineMarkers\.saveLocal|authenticatedFetch/);
   });
 });

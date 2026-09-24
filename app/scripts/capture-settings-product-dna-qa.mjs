@@ -41,6 +41,7 @@ await page.route('**/api/**', async route => {
   const pathname = new URL(request.url()).pathname;
   const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
   if (pathname === '/api/auth/me') return json({ user: userForVariant() });
+  if (pathname === '/api/auth/login') return json({ token: 'settings-qa-token', user: userForVariant() });
   if (pathname === '/api/account/exports') {
     if (exportVariant === 'failed') return json([{
       id: 12, status: 'failed', size_bytes: null, requested_at: '2026-09-14T02:00:00.000Z',
@@ -100,6 +101,18 @@ const capture = async (name, viewport = null) => {
 await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
 await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.useAppStore), null, { timeout: 120_000 });
 await page.waitForFunction(() => globalThis.__cairnStores.useAppStore.getState().hydrated === true, null, { timeout: 120_000 });
+await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.navigationRef && globalThis.__cairnStores?.getCurrentRoute), null, { timeout: 120_000 });
+await page.evaluate(() => {
+  localStorage.setItem('cairn_onboarding_v1_done', 'true');
+  localStorage.setItem('cairn_onboarding_v1_done_settings-qa', 'true');
+});
+if (await page.evaluate(() => globalThis.__cairnStores.getCurrentRoute() === 'Auth')) {
+  await page.getByTestId('continue-with-email').click();
+  await page.getByPlaceholder('your@email.com').fill('aroha@example.invalid');
+  await page.getByPlaceholder('••••••••').fill('Password1');
+  await page.getByText('Sign In', { exact: true }).click();
+  await currentRoute('Home');
+}
 await seedUser();
 await currentRoute('Home');
 

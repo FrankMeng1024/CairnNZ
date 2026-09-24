@@ -22,10 +22,6 @@ import { Colors, Spacing, FontSize, Radius } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
 import { useSettingsStore } from '../store/useSettingsStore';
-import { useWeatherStore } from '../store/useWeatherStore';
-import { useScenicTimeState } from '../hooks/useScenicTimeState';
-import { formatSolarTime } from '../utils/scenicTime';
-import { getHomeBackground, getWeatherReviewBackground } from '../utils/homeBackground';
 import { debugLogger } from '../services/debugLogger';
 import { telemetryUploader } from '../services/telemetryUploader';
 import type { SessionMetadata } from '../types/debugLog';
@@ -43,7 +39,6 @@ export function DebugScreen() {
   const {
     debugMode, telemetryUploadEnabled, telemetryWifiOnly,
     telemetryBackendUrl, telemetryApiKey, debugAnnotationFabVisible,
-    activityGpsDistanceFilterM,
     updateSetting,
   } = settings;
 
@@ -52,20 +47,6 @@ export function DebugScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [stats, setStats] = useState({ totalEvents: 0, totalSize: 0 });
   const [bufferSize, setBufferSize] = useState(0);
-  const conditionOverride = useWeatherStore(s => s.conditionOverride);
-  const condition = useWeatherStore(s => s.conditionOverride ?? s.condition);
-  const setConditionOverride = useWeatherStore(s => s.setConditionOverride);
-  const timeOfDayOverride = useWeatherStore(s => s.timeOfDayOverride);
-  const setTimeOfDayOverride = useWeatherStore(s => s.setTimeOfDayOverride);
-  const scenicTime = useScenicTimeState();
-  const scenicTokens = conditionOverride === 'cloudy'
-    || conditionOverride === 'rain'
-    || conditionOverride === 'snow'
-    ? getWeatherReviewBackground(conditionOverride, scenicTime.timeOfDay)
-    : getHomeBackground(condition, Date.now(), scenicTime.timeOfDay, 'home', {
-      sunriseMs: scenicTime.sunriseMs,
-      sunsetMs: scenicTime.sunsetMs,
-    });
   const qaToolsAvailable = activitySimulatorBuildCapable || (typeof __DEV__ !== 'undefined' && __DEV__);
   const activitySimulatorEnabled = useActivitySimulatorStore(state => state.enabled);
   const setActivitySimulatorEnabled = useActivitySimulatorStore(state => state.setEnabled);
@@ -266,86 +247,6 @@ export function DebugScreen() {
                 </Text>
               </View>
             ) : null}
-
-            <View style={styles.section} testID="scenic-time-diagnostics">
-            <Text style={styles.sectionHeader}>SCENIC TIME</Text>
-            <View style={styles.statusBox}>
-              <Text style={styles.statusLine}>Appearance setting: {settings.appearance}</Text>
-              <Text style={styles.statusLine}>Dev override: {timeOfDayOverride ?? 'auto'}</Text>
-              <Text style={styles.statusLine}>Auto state: {scenicTime.autoTimeOfDay}</Text>
-              <Text style={styles.statusLine}>Effective state: {scenicTime.timeOfDay}</Text>
-              <Text style={styles.statusLine}>Source: {scenicTime.source}</Text>
-              <Text style={styles.statusLine}>Solar timezone: {scenicTime.solarTimezone ?? 'Device local'}</Text>
-              <Text style={styles.statusLine}>Sunrise: {formatSolarTime(scenicTime.sunriseMs, scenicTime.solarTimezone)}</Text>
-              <Text style={styles.statusLine}>Sunset: {formatSolarTime(scenicTime.sunsetMs, scenicTime.solarTimezone)}</Text>
-              <Text style={styles.statusLine}>Next transition: {formatSolarTime(scenicTime.nextTransitionMs, scenicTime.solarTimezone)}</Text>
-              <Text style={styles.statusLine}>Weather override: {conditionOverride ?? 'auto'}</Text>
-              <Text style={styles.statusLine}>Effective weather: {condition}</Text>
-              <Text style={styles.statusLine}>Scenic key: {scenicTokens.variant}</Text>
-              <Text style={styles.statusLine}>Asset: {scenicTokens.assetId}</Text>
-              <View style={styles.timeButtonRow}>
-                {([null, 'sunny', 'cloudy', 'rain', 'snow'] as const).map(value => {
-                  const active = conditionOverride === value;
-                  return (
-                    <TouchableOpacity
-                      key={value ?? 'auto-weather'}
-                      onPress={() => setConditionOverride(value)}
-                      style={[styles.timeButton, active && styles.timeButtonActive]}
-                    >
-                      <Text style={[styles.timeButtonText, active && styles.timeButtonTextActive]}>
-                        {value ?? 'auto'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <View style={styles.timeButtonRow}>
-                {([null, 'day', 'sunset', 'night'] as const).map(value => {
-                  const active = timeOfDayOverride === value;
-                  return (
-                    <TouchableOpacity
-                      key={value ?? 'auto'}
-                      onPress={() => setTimeOfDayOverride(value)}
-                      style={[styles.timeButton, active && styles.timeButtonActive]}
-                    >
-                      <Text style={[styles.timeButtonText, active && styles.timeButtonTextActive]}>
-                        {value ?? 'auto'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.section} testID="activity-location-cadence-experiment">
-            <Text style={styles.sectionHeader}>ACTIVITY GPS A/B</Text>
-            <View style={styles.statusBox}>
-              <Text style={styles.statusLine}>
-                Next real Hike/Run: {activityGpsDistanceFilterM === 1 ? '1 m experiment' : '5 m baseline'}
-              </Text>
-              <Text style={styles.fieldHint}>
-                Foreground Expo distance filter only. Canonical filtering and Mapbox remain unchanged.
-              </Text>
-              <View style={styles.timeButtonRow}>
-                {([5, 1] as const).map(distanceM => {
-                  const active = activityGpsDistanceFilterM === distanceM;
-                  return (
-                    <TouchableOpacity
-                      key={distanceM}
-                      testID={`activity-gps-distance-${distanceM}m`}
-                      onPress={() => updateSetting('activityGpsDistanceFilterM', distanceM)}
-                      style={[styles.timeButton, active && styles.timeButtonActive]}
-                    >
-                      <Text style={[styles.timeButtonText, active && styles.timeButtonTextActive]}>
-                        {distanceM} m {distanceM === 5 ? 'baseline' : 'experiment'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          </View>
 
           {activitySimulatorBuildCapable ? <View style={styles.section} testID="qa-snap-review">
             <Text style={styles.sectionHeader}>QA SNAP REVIEW</Text>
@@ -563,18 +464,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 4,
   },
-  timeButtonRow: { flexDirection: 'row', gap: 6, marginTop: 10 },
-  timeButton: {
-    flex: 1,
-    minHeight: 36,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.bg,
-  },
-  timeButtonActive: { backgroundColor: Colors.primary },
-  timeButtonText: { fontSize: 11, color: Colors.textSecondary, textTransform: 'capitalize' },
-  timeButtonTextActive: { color: '#FFFFFF', fontWeight: '700' },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',

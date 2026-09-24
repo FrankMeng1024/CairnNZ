@@ -586,7 +586,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { drainPending } = require('../services/syncDaemon');
-      void drainPending().catch(() => {});
+      void drainPending({ wakeReason: 'hydrate' }).catch(() => {});
     } catch { /* best effort */ }
 
     // Weather pre-fetch: fire-and-forget in parallel with hydrate completion.

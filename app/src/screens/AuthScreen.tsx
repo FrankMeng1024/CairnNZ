@@ -1131,13 +1131,11 @@ export function AuthScreen() {
 
   const beginEmailAuth = () => {
     if (authEntryLoading) return;
-    // Paint feedback before switching a recently-foregrounded native stack.
-    // The next animation frame keeps the tap visibly acknowledged without an
-    // arbitrary delay and avoids presenting an apparently dead control.
     setAuthEntryLoading(true);
-    requestAnimationFrame(() => {
-      if (authMounted.current) handleViewChange('login');
-    });
+    // A requestAnimationFrame scheduled while iOS backgrounds can be dropped,
+    // leaving this control permanently busy on resume. This is an in-screen
+    // state transition, so commit it synchronously and deterministically.
+    if (authMounted.current) handleViewChange('login');
   };
 
   const validateEmail = (val: string) => {
@@ -1292,46 +1290,15 @@ export function AuthScreen() {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../services/bootDiagnostics').markBootPhase('login_after_setLoggedIn');
       } catch {/* ignore */}
-      if (isRegister) {
-        // R21 (2026-08-17): register happy path — but authService.register
-        // actually always returns step='verify' + no token, so this branch
-        // is unreachable in production. Keeping the code path here as a
-        // safety net if backend contract ever changes to return token
-        // directly. Straight to Home; OnboardingModal handles welcome.
-        nav.replace('Home');
-      } else {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          require('../services/bootDiagnostics').markBootPhase('login_before_nav_home');
-        } catch {/* ignore */}
-        // v319 fix: DEFER nav.replace to next tick. v311-v318 crashed
-        // here because setLoggedIn(true) + nav.replace('Home') on the
-        // same JS tick made native-stack reconcile Stack.Navigator
-        // children from 1 (Auth) → 13 (Home + 12 others) AND dispatch
-        // a 'replace' command simultaneously — native-stack iOS edge
-        // case = synchronous JS throw / native crash.
-        //
-        // Smoking gun: register branch above uses setTimeout(...,1800)
-        // for nav.replace AND has never been reported as crashing.
-        // Login branch was synchronous AND consistently crashes. Single
-        // operational difference is the deferral. (Subagent C analysis,
-        // 2026-06-24, _review/v319_login_crash_investigation/subagent_C.md.)
-        setTimeout(() => {
-          if (!useAppStore.getState().isLoggedIn
-            || String(useAppStore.getState().user?.id ?? '') !== String(result.user?.id ?? '')) {
-            return;
-          }
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            require('../services/bootDiagnostics').markBootPhase('login_settimeout_fired');
-          } catch {/* ignore */}
-          nav.replace('Home');
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            require('../services/bootDiagnostics').markBootPhase('login_after_nav_home');
-          } catch {/* ignore */}
-        }, 0);
-      }
+      // RootNavigator owns the authenticated screen set. Publishing the
+      // installed account atomically is the one transition signal; dispatching
+      // an imperative replace at the same time races the conditional stack and
+      // produces an Auth/Home transient frame (or an unhandled native action).
+      // This applies equally to login and any future direct-token registration.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../services/bootDiagnostics').markBootPhase('login_auth_state_published', { isRegister });
+      } catch {/* ignore */}
     } catch (e: any) {
       if (!authMounted.current) return;
       const msg: string = e?.message || '';
@@ -1586,9 +1553,9 @@ export function AuthScreen() {
         setVerifyError('The account changed before verification could finish. Please sign in.');
         return;
       }
-      if (String(useAppStore.getState().user?.id ?? '') === String(result.user?.id ?? '')) {
-        nav.replace('Home');
-      }
+      // RootNavigator reacts to the single installed auth state. Do not also
+      // replace Home here; the competing transition caused the verification
+      // success screen/Home flash observed on iOS.
     } finally {
       authActionFlight.current = false;
       if (authMounted.current) setVerifyLoading(false);
@@ -2500,7 +2467,9 @@ export function AuthScreen() {
   // ── O18 AUTH-04: forgot password step 1 — request code by email ─────────
   if (view === 'forgot_request') {
     return (
-      <SafeAreaView style={[styles.container, { paddingHorizontal: 28, paddingTop: 24 }]} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={[formStyles.scroll, { paddingHorizontal: 28, paddingTop: 24 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* R21 (2026-08-17 user "Sign in/up 等界面 back 都太靠上了 位置不好"):
             rewritten to match Sign In / Register visual system —
             Back chevron top-left, title 26pt/700/#21362C ("Reset password"),
@@ -2584,6 +2553,8 @@ export function AuthScreen() {
             }
           </PressBtn>
         </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
@@ -2591,7 +2562,9 @@ export function AuthScreen() {
   // ── O18 AUTH-04: forgot password step 2 — enter code + new password ─────
   if (view === 'forgot_verify') {
     return (
-      <SafeAreaView style={[styles.container, { paddingHorizontal: 28, paddingTop: 24 }]} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={[formStyles.scroll, { paddingHorizontal: 28, paddingTop: 24 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* R21 v3 (2026-08-17): unified to shared formStyles.backBtn/backText. */}
         <TouchableOpacity style={formStyles.backBtn} onPress={() => handleViewChange('forgot_request')}>
           <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
@@ -2692,6 +2665,8 @@ export function AuthScreen() {
             {forgotLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.2 }}>Reset password & sign in</Text>}
           </PressBtn>
         </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }

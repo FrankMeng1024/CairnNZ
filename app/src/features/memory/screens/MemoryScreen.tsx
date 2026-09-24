@@ -140,10 +140,8 @@ export function MemoryScreen() {
   const presenceWitnesses = useMemoryStore((s) => s.presenceWitnesses);
   const debugMode = useSettingsStore((s) => s.debugMode);
   const simulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
-  const simulatorObservationMode = useActivitySimulatorStore((s) => s.observationMode);
-  const syntheticQaAuthority = debugMode
-    && simulatorEnabled
-    && simulatorObservationMode === 'raw-gps';
+  const simulatorCurrent = useActivitySimulatorStore((s) => s.current);
+  const syntheticQaAuthority = debugMode && simulatorEnabled;
   const memoryEvidenceContext = useMemo(() => {
     const times = (syntheticQaAuthority
       ? syntheticTestPoints.map(point => Number(point.ts))
@@ -619,6 +617,15 @@ export function MemoryScreen() {
     let cancelled = false;
     let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
 
+    // Simulator owns location inside the isolated QA workspace. Asking iOS
+    // for physical GPS here centers Memory on the tester instead of the
+    // simulated walk and makes accepted QA evidence appear to do nothing.
+    if (syntheticQaAuthority) {
+      setFailReason(null);
+      setOneShot({ lat: simulatorCurrent.lat, lng: simulatorCurrent.lng });
+      return () => {};
+    }
+
     if (watcherFix && Date.now() - watcherFix.ts < WATCHER_FIX_FRESH_MS) {
       log('memory.using_watcher_fix', { age_ms: Date.now() - watcherFix.ts });
       // Watcher fresh — we're not going to fetch, but we should clear
@@ -668,7 +675,7 @@ export function MemoryScreen() {
       if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = null; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refetchToken]);
+  }, [refetchToken, simulatorCurrent.lat, simulatorCurrent.lng, syntheticQaAuthority]);
 
   // S1 fix (v0.2.6.4): prefer fresh watcher → else oneShot → else stale
   // watcher. The previous `watcherFix ?? oneShot` made oneShot dead code
@@ -852,7 +859,7 @@ export function MemoryScreen() {
           pointerEvents="none"
           style={[styles.evidenceContext, { top: insets.top + 120, backgroundColor: theme.mapOverlay, borderColor: theme.borderStrong }]}
         >
-          <Text style={[styles.evidenceContextTitle, { color: theme.foreground }]}>Raw GPS test Memory</Text>
+          <Text style={[styles.evidenceContextTitle, { color: theme.foreground }]}>Simulator test Memory</Text>
           <Text style={[styles.evidenceContextText, { color: theme.foregroundSecondary }]}>
             {memoryEvidenceContext
               ? `Isolated synthetic evidence · first accepted ${memoryEvidenceContext.first} · latest ${memoryEvidenceContext.last}`
@@ -891,6 +898,7 @@ export function MemoryScreen() {
             setFogReady(true);
           }}
           onFogUnavailable={() => setFogUnavailable(true)}
+          qaWorkspaceActive={syntheticQaAuthority}
           key={`map-${mountKey}`}
         />
       ) : failReason === 'permission' ? (
@@ -1241,8 +1249,11 @@ export function MemoryScreen() {
             const bboxCenterLat = (minLat + maxLat) / 2;
             const inBbox = (lat: number, lng: number) =>
               lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
-            const points = useMemoryStore.getState().points;
-            const markers = useMarkerStore.getState().markers;
+            const memoryState = useMemoryStore.getState();
+            const points = syntheticQaAuthority ? memoryState.testPoints : memoryState.points;
+            const markers = useMarkerStore.getState().markers.filter(marker => (
+              marker.qaProvenance !== 'simulator_test' || syntheticQaAuthority
+            ));
             let flyLng = bboxCenterLng;
             let flyLat = bboxCenterLat;
             let foundExplored = false;

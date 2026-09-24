@@ -33,7 +33,7 @@ const BG_ASSETS = {
 // three-time family while all non-Sunny mappings remain unchanged.
 const HOME_BG_ASSETS = {
   ...BG_ASSETS,
-  'sunny-day': require('../../assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-day-natural-material-3x.jpg'),
+  'sunny-day': require('../../assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-day-systemic-unification-3x.jpg'),
   'sunny-sunset': require('../../assets/home/prototypes/final-nz-world-sunny/final-micro-polish/sunny-evening-final-micro-3x.jpg'),
   'sunny-night': require('../../assets/home/prototypes/weather-full-frame-correction/sunny-night/sunny-night-star-micro-v2-3x.jpg'),
   'cloudy-day': require('../../assets/home/prototypes/weather-full-frame-correction/cloudy/cloudy-day-full-frame-3x.jpg'),
@@ -458,7 +458,7 @@ const DARK_TEXT_VARIANTS: ReadonlySet<HomeBgVariant> = new Set([
 ]);
 
 const ASSET_IDS: Record<HomeBgVariant, string> = {
-  'sunny-day': 'sunny-day-natural-material-3x.jpg',
+  'sunny-day': 'sunny-day-systemic-unification-3x.jpg',
   'sunny-sunset': 'sunny-evening-final-micro-3x.jpg',
   'sunny-night': 'sunny-night-star-micro-v2-3x.jpg',
   'cloudy-day': 'cloudy-day-full-frame-3x.jpg',

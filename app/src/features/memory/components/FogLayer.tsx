@@ -1033,10 +1033,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
   const syntheticTestPoints = useMemoryStore((s) => s.testPoints);
   const debugMode = useSettingsStore((s) => s.debugMode);
   const simulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
-  const simulatorObservationMode = useActivitySimulatorStore((s) => s.observationMode);
-  const syntheticQaAuthority = debugMode
-    && simulatorEnabled
-    && simulatorObservationMode === 'raw-gps';
+  const syntheticQaAuthority = debugMode && simulatorEnabled;
   const accountId = useAppStore((s) => String(s.user?.id ?? 'signed-out'));
 
   // v413: friend memory union (纯前端 render 层, 不 merge 到 self).
@@ -1052,8 +1049,8 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
   // v413: union self ∪ enabled friend points. 每次 self 或 friend 变化都重算.
   // 用 useMemo 只依赖 version 号避免 array ref instability.
   const points = useMemo(() => {
-    // Raw GPS Simulator evidence is intentionally stored outside personal
-    // Memory. In the explicitly enabled Debug + Raw GPS realm, render that
+    // Simulator evidence is intentionally stored outside personal Memory. In
+    // the explicitly enabled Debug + Simulator realm, render that
     // isolated collection through this exact production Fog implementation.
     // It is never merged into self points or friend projections and therefore
     // cannot become shareable exploration.
@@ -1079,7 +1076,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
     cell.projectionVersion ?? '',
   ].join(':')))].sort().join(',');
   const authority = syntheticQaAuthority
-    ? `${accountId}|qa-raw-gps-isolated`
+    ? `${accountId}|qa-simulator-isolated`
     : `${accountId}|${scope}|${selectedFriendId ?? ''}|${friendAuthority}`;
   const preparedContent = useMemo(
     () => prepareMemoryFogContent(authority, points, friendCells),

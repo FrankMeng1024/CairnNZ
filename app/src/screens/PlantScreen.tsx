@@ -25,8 +25,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import {
   useMarkerStore,
@@ -38,6 +39,7 @@ import { useAppStore } from '../store/useAppStore';
 import networkMonitor from '../services/networkMonitor';
 import { MarkerType } from '../config/markerTypes';
 import { GpsLockStep } from '../features/plant/components/GpsLockStep';
+import type { PlantLocationProvenance } from '../features/plant/components/GpsLockStep';
 import { PinAdjustStep } from '../features/plant/components/PinAdjustStep';
 import { ContentStep } from '../features/plant/components/ContentStep';
 import { VisibilityConfig } from '../features/plant/config/plantConfig';
@@ -74,6 +76,7 @@ interface PlantDraft {
   lat: number | null;
   lng: number | null;
   accuracyM: number | null;
+  locationProvenance: PlantLocationProvenance | null;
   type: MarkerType;
   title: string;
   text: string;
@@ -106,6 +109,7 @@ const INITIAL_DRAFT: PlantDraft = {
   lat: null,
   lng: null,
   accuracyM: null,
+  locationProvenance: null,
   type: DEFAULT_TYPE,
   title: '',
   text: '',
@@ -124,11 +128,17 @@ type PlantActivityTrackingContext = Pick<
   | 'sessionId'
   | 'ownerUserId'
   | 'liveOwnerGeneration'
->;
+> & { activityMode?: 'hiking' | 'running' };
+
+type PlantOrigin = NonNullable<RootStackParamList['Plant']>['origin'];
 
 export function resolveInitialPlantContext(
   trackingOverride?: PlantActivityTrackingContext,
+  origin?: PlantOrigin,
 ): { step: Step; draft: PlantDraft; fromActivity: boolean; activityContext: CairnActivityContext | null } {
+  if (origin?.kind === 'standalone') {
+    return { step: 'gps', draft: INITIAL_DRAFT, fromActivity: false, activityContext: null };
+  }
   try {
     const tracking = trackingOverride ?? useTrackingStore.getState();
     const active = tracking.status === 'tracking' || tracking.status === 'paused';
@@ -141,6 +151,12 @@ export function resolveInitialPlantContext(
       && tracking.sessionId
       && tracking.ownerUserId
       && tracking.liveOwnerGeneration
+      && (!origin || (
+        origin.kind === 'activity'
+        && origin.clientActivityId === tracking.sessionId
+        && origin.ownerGeneration === tracking.liveOwnerGeneration
+        && origin.activityMode === tracking.activityMode
+      ))
       && ageMs >= 0
       && ageMs <= 30_000
     ) {
@@ -159,6 +175,7 @@ export function resolveInitialPlantContext(
           lat: coordinate.lat,
           lng: coordinate.lng,
           accuracyM: coordinate.accuracy ?? null,
+          locationProvenance: tracking.locationProviderSource === 'simulator' ? 'simulator_test' : 'real',
         },
       };
     }
@@ -168,6 +185,7 @@ export function resolveInitialPlantContext(
 
 export function PlantScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'Plant'>>();
   const addMarker = useMarkerStore((s) => s.addMarker);
   // R21 (2026-08-17): dark mode support. When isDark, the cream root swaps
   // to a deep slate so Plant matches Home/Settings/Friends at night. Child
@@ -176,11 +194,14 @@ export function PlantScreen() {
   // O1: recordCircleUnlock selector removed (v351 stopped calling it, dead ref
   // triggered re-render every time useMemoryStore changed)
   const userId = useAppStore((s) => s.user?.id ?? '');
-  const [initialContext] = useState(resolveInitialPlantContext);
+  const [initialContext] = useState(() => resolveInitialPlantContext(
+    undefined,
+    route.params?.origin ?? { kind: 'standalone' },
+  ));
   const [step, setStep] = useState<Step>(initialContext.step);
   const [draft, setDraft] = useState<PlantDraft>(initialContext.draft);
   const [submitting, setSubmitting] = useState(false);
-  const [plantedResult, setPlantedResult] = useState<{ markerId: string; offline: boolean } | null>(null);
+  const [plantedResult, setPlantedResult] = useState<{ markerId: string; offline: boolean; qa: boolean } | null>(null);
   const commitGateRef = useRef<CairnCommitGate>({ current: null });
   const mountedRef = useRef(true);
   const publicEnabled = usePublicCairnStore((state) => state.enabled);
@@ -283,6 +304,7 @@ export function PlantScreen() {
             approximate: false,
             voiceMemoUri: final.voiceUri ?? undefined,
             voiceMemoDurationMs: final.voiceMs ?? undefined,
+            qaProvenance: final.locationProvenance === 'simulator_test' ? 'simulator_test' : undefined,
             activityContext,
           });
         },
@@ -309,10 +331,40 @@ export function PlantScreen() {
           }
           Alert.alert("Couldn't plant this cairn", body, [{ text: 'OK' }]);
         },
-        // Plant owns the durable Cairn object only. Movement remains the sole
-        // Memory authority. Clear A's retry draft even if B is now visible.
+        // A successful standalone real-GPS Plant is also a verified visit to
+        // this place. Record the frozen GPS anchor—not the user-adjusted pin—
+        // and never let Simulator/web QA mutate Personal Memory.
         onCommitted: async result => {
           log('plant.commit_ok', { id: result.marker.id, projection: result.projection });
+          if (
+            !activityContext
+            && final.locationProvenance === 'real'
+            && final.gpsLat != null
+            && final.gpsLng != null
+            && final.accuracyM != null
+            && final.accuracyM > 0
+            && final.accuracyM <= 20
+          ) {
+            try {
+              // Keep the large H3/Memory graph off Plant's initial module path;
+              // a visit write needs it only after the Cairn is durably committed.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { recordMemoryEvidence } = require('../features/memory/services/recordMemoryEvidence');
+              await recordMemoryEvidence({
+                lat: final.gpsLat,
+                lng: final.gpsLng,
+                atMs: Date.now(),
+                source: 'passive_real',
+                ownerUserId: initiatingOwnerId,
+                horizontalAccuracyM: final.accuracyM,
+                continuityState: 'accepted',
+                durability: 'immediate',
+              });
+              log('plant.verified_visit_committed', { accuracyM: final.accuracyM });
+            } catch (error) {
+              log('plant.verified_visit_failed', { msg: String(error).slice(0, 120) });
+            }
+          }
           try {
             await storage.removeItem(draftKey(initiatingOwnerId));
           } catch { /* best-effort */ }
@@ -323,7 +375,7 @@ export function PlantScreen() {
           await new Promise<void>((resolve) => setTimeout(resolve, 250));
           if (!contextIsCurrent()) return;
           if (initialContext.fromActivity && nav.canGoBack()) {
-            setPlantedResult({ markerId: result.marker.id, offline: !isOnline });
+            setPlantedResult({ markerId: result.marker.id, offline: !isOnline, qa: result.marker.qaProvenance === 'simulator_test' });
           } else {
             nav.replace('MarkerDetail', { markerId: result.marker.id });
           }
@@ -357,13 +409,13 @@ export function PlantScreen() {
       <View style={styles.container}>
         {step === 'gps' && (
           <GpsLockStep
-            onLocked={(lat, lng, accuracyM) => {
+            onLocked={(lat, lng, accuracyM, locationProvenance) => {
               log('plant.step_gps_to_pin', { accuracyM });
               // v298 N5: GPS anchor + initial pin both = locked point,
               // but gpsLat/gpsLng is then frozen — step 2 confirm only
               // updates lat/lng, leaving the anchor intact for step
               // 3 → step 2 back navigation.
-              setDraft((d) => ({ ...d, gpsLat: lat, gpsLng: lng, lat, lng, accuracyM }));
+              setDraft((d) => ({ ...d, gpsLat: lat, gpsLng: lng, lat, lng, accuracyM, locationProvenance }));
               setStep('pin');
             }}
             onCancel={() => { log('plant.cancel'); nav.goBack(); }}
@@ -399,14 +451,17 @@ export function PlantScreen() {
             submitting={submitting}
             publicEnabled={publicEnabled}
             onSubmit={onContentSubmit}
-            onBack={() => setStep('pin')}
+            onBack={() => initialContext.fromActivity ? nav.goBack() : setStep('pin')}
+            onAdjustLocation={() => setStep('pin')}
           />
         )}
       </View>
       <ModalCard visible={Boolean(plantedResult)} dismissible={false} testID="plant-success-modal">
         <ModalCardHeader
           title="Cairn planted"
-          body={plantedResult?.offline
+          body={plantedResult?.qa
+            ? "It is saved in the Simulator test workspace and won't sync to your real Cairns. Your Activity is still recording."
+            : plantedResult?.offline
             ? "It is saved on this iPhone and will sync when you're online. Your Activity is still recording."
             : 'It is saved with this Activity. Your Activity is still recording.'}
         />

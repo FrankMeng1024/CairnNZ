@@ -28,7 +28,6 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import type { Marker } from '../../../store/useMarkerStore';
 import { Colors, Spacing, Radius, FontSize } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
-import type { IconName } from '../../../components/Icon';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { BottomSheetFrame } from '../../../components/BottomSheetFrame';
 import {
@@ -40,6 +39,7 @@ import {
 // wire format is honoured (previous inline splitNote used \n as separator,
 // which loses the title for any note that used the encodeTitleBody path).
 import { cairnDisplayTitle, splitTitleBody } from '../../plant/services/noteEncoding';
+import { CairnIdentityLine } from '../../cairns/CairnIdentityLine';
 
 interface Props {
   /** The mark to show. null = closed. */
@@ -62,12 +62,6 @@ interface Props {
   /** Session-local like state — Story-533 fake state. */
   isLiked?: (markId: string) => boolean;
 }
-
-const TIER_BADGE: Record<'personal' | 'friend' | 'public', { label: string; icon: IconName }> = {
-  personal: { label: 'Personal', icon: 'Lock' },
-  friend:   { label: 'Friend',   icon: 'Users' },
-  public:   { label: 'Public',   icon: 'Globe' },
-};
 
 /**
  * Normalize legacy 'group' (markers DB ENUM) → 'friend' for display.
@@ -123,8 +117,6 @@ export function MarkDetailSheet(props: Props) {
   if (form === 'D') return null;
 
   const permDisplay = normalizePerm(marker.permission);
-  const tierBadge = TIER_BADGE[permDisplay];
-
   // v4 row Q: Public marks anonymized regardless of creator's friend status.
   const showAuthorName =
     permDisplay !== 'public' && (form === 'B' || form === 'C') && !!marker.authorName;
@@ -172,26 +164,23 @@ export function MarkDetailSheet(props: Props) {
 
           {/* Title + body */}
           <Text style={[styles.title, { color: theme.foreground }]} testID="mark-detail-title">{displayTitle}</Text>
-          {body ? <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{body}</Text> : null}
+          {body ? (
+            <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{body}</Text>
+          ) : (
+            <Text style={[styles.emptyBody, { color: theme.muted }]}>No note added.</Text>
+          )}
 
-          {/* Tier badge row */}
+          {/* Authorship and audience are intentionally separate facts. */}
           <View style={styles.row} testID="mark-detail-tier-row">
-            <View style={[styles.tierChip, permDisplay === 'personal' && styles.tierPersonal,
-                                          permDisplay === 'friend'   && styles.tierFriend,
-                                          permDisplay === 'public'   && styles.tierPublic]}>
-              <Icon name={tierBadge.icon} size={12} color={theme.icon} strokeWidth={2.2} />
-              <Text style={[styles.tierText, { color: theme.foreground }]}>{tierBadge.label}</Text>
-            </View>
+            <CairnIdentityLine
+              isOwner={isMine}
+              permission={marker.permission}
+              authorName={showAuthorName ? marker.authorName : null}
+              compact
+              qa={marker.qaProvenance === 'simulator_test'}
+            />
             <Text style={[styles.metaText, { color: theme.muted }]}>{formatAge(marker.createdAt)}</Text>
           </View>
-
-          {/* Author (form B/C, Friend tier only) */}
-          {showAuthorName ? (
-            <View style={styles.authorRow}>
-              <Icon name="User" size={12} color={theme.iconInactive} strokeWidth={2} />
-              <Text style={[styles.authorText, { color: theme.foregroundSecondary }]}>{marker.authorName}</Text>
-            </View>
-          ) : null}
 
           {/* Visited badge (form B) */}
           {form === 'B' ? (
@@ -287,7 +276,7 @@ export function MarkDetailSheet(props: Props) {
 }
 
 const styles = StyleSheet.create({
-  sheetContent: { paddingBottom: Spacing.sm },
+  sheetContent: { minHeight: 250, paddingBottom: Spacing.sm },
   close: {
     alignSelf: 'flex-end',
     padding: Spacing.xs,
@@ -304,6 +293,12 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     lineHeight: 22,
     marginBottom: Spacing.md,
+  },
+  emptyBody: {
+    fontSize: FontSize.body,
+    lineHeight: 22,
+    marginBottom: Spacing.md,
+    fontStyle: 'italic',
   },
   row: {
     flexDirection: 'row',

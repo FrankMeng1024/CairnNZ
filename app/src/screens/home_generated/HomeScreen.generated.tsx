@@ -51,6 +51,9 @@ export function HomeScreen(props: {
   lastHikeAction?: string;
   lastHikeMode?: 'hiking' | 'running';
   onLastHikePress?: () => void;
+  onHikingPress?: () => void;
+  onRunningPress?: () => void;
+  onPlantPress?: () => void;
 } = {}) {
   const nav = useNavigation<any>();
   const state = props.state ?? 'H0';
@@ -201,8 +204,7 @@ export function HomeScreen(props: {
         <Text style={[styles.H1__last_hike_card__last_hike_meta, cardTextMuted ? { color: cardTextMuted } : null]}>{lastHikeMeta}</Text>
       )}
       {props.onLastHikePress ? (
-        <View style={[styles.H1__last_hike_card__action, { borderColor: cardBorder || 'rgba(33,54,44,0.12)' }]} pointerEvents="none">
-          <HomeProductIcon name={props.lastHikeMode === 'running' ? 'running' : 'hiking'} size={20} color={cardText || '#143D35'} />
+        <View style={[styles.H1__last_hike_card__action, { width: 72, height: 24, top: 19, borderWidth: 0, borderRadius: 0 }]} pointerEvents="none">
           <Text style={[styles.H1__last_hike_card__action_text, cardText ? { color: cardText } : null]}>{props.lastHikeAction ?? 'Open'}</Text>
           <Icon name="ChevronRight" size={14} color={cardTextMuted || textColor} strokeWidth={2.2} />
         </View>
@@ -219,15 +221,15 @@ export function HomeScreen(props: {
           <Text style={[styles.shared__greeting_eyebrow, heroSubTextOverride]}>{'Kia ora,'}</Text>
           <Text style={[styles.shared__greeting_name, heroBigTextOverride]}>{greetingName}</Text>
           <View style={styles.shared__action_row}>
-            <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={() => nav.navigate('Hiking' as never)} activeOpacity={0.85}>
+            <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={props.onHikingPress ?? (() => nav.navigate('Hiking' as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_hiking__icon}>{renderActionIcon('hiking')}</View>
               <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{'Hiking'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={() => nav.navigate('Running' as never)} activeOpacity={0.85}>
+            <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={props.onRunningPress ?? (() => nav.navigate('Running' as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_running__icon}>{renderActionIcon('running')}</View>
               <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{'Running'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={() => nav.navigate('Plant' as never)} activeOpacity={0.85}>
+            <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={props.onPlantPress ?? (() => nav.navigate('Plant' as never, { origin: { kind: 'standalone' } } as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_leave_cairn__icon}>{renderActionIcon('leaveCairn')}</View>
               <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{'Leave a Cairn'}</Text>
             </TouchableOpacity>
@@ -271,15 +273,15 @@ export function HomeScreen(props: {
           <Text style={[styles.shared__greeting_eyebrow, heroSubTextOverride]}>{'Kia ora,'}</Text>
           <Text style={[styles.shared__greeting_name, heroBigTextOverride]}>{greetingName}</Text>
           <View style={styles.shared__action_row}>
-            <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={() => nav.navigate('Hiking' as never)} activeOpacity={0.85}>
+            <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={props.onHikingPress ?? (() => nav.navigate('Hiking' as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_hiking__icon}>{renderActionIcon('hiking')}</View>
               <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{'Hiking'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={() => nav.navigate('Running' as never)} activeOpacity={0.85}>
+            <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={props.onRunningPress ?? (() => nav.navigate('Running' as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_running__icon}>{renderActionIcon('running')}</View>
               <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{'Running'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={() => nav.navigate('Plant' as never)} activeOpacity={0.85}>
+            <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={props.onPlantPress ?? (() => nav.navigate('Plant' as never, { origin: { kind: 'standalone' } } as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_leave_cairn__icon}>{renderActionIcon('leaveCairn')}</View>
               <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{'Leave a Cairn'}</Text>
             </TouchableOpacity>

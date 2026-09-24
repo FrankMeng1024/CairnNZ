@@ -71,6 +71,10 @@ import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { usePublicCairnStore } from '../features/public/services/publicCairns';
 import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay';
+import { CairnIdentityLine } from '../features/cairns/CairnIdentityLine';
+import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { CairnDeleteDialog } from '../features/cairns/CairnDeleteDialog';
 
 let MapView: any = null;
 let CameraComponent: any = null;
@@ -122,7 +126,9 @@ export function MarkerDetailScreen() {
   const nav = useNavigation<Nav>();
   const route = useRoute<DetailRoute>();
   const markerId = route.params?.markerId;
-  const markers = useMarkerStore((s) => s.markers);
+  const storedMarkers = useMarkerStore((s) => s.markers);
+  const debugMode = useSettingsStore((s) => s.debugMode);
+  const markers = useMemo(() => markersForVisibleWorkspace(storedMarkers, debugMode), [debugMode, storedMarkers]);
   const markerStoreOwnerId = useMarkerStore((s) => s.userId);
   const updateMarker = useMarkerStore((s) => s.updateMarker);
   const retryMarkerSync = useMarkerStore((s) => s.retryMarkerSync);
@@ -408,6 +414,13 @@ export function MarkerDetailScreen() {
         {/* 2. Body */}
         {privateBody ? <Text style={[styles.body, { color: visualTheme.foregroundSecondary }]}>{privateBody}</Text> : null}
 
+        <CairnIdentityLine
+          isOwner={isOwner}
+          permission={marker.permission}
+          authorName={marker.authorName}
+          qa={marker.qaProvenance === 'simulator_test'}
+        />
+
         {/* 3. Meta pills row: type, visibility, sync state */}
         <View style={styles.headerRow}>
           <View style={[styles.typeBadge, { backgroundColor: meta.bg, borderColor: meta.color }]}>
@@ -459,7 +472,27 @@ export function MarkerDetailScreen() {
               <Icon name="ChevronRight" size={16} color={visualTheme.iconInactive} strokeWidth={2} />
             </View>
           </ContentSurface>
-        ) : null}
+        ) : marker.originActivityClientId ? (
+          <ContentSurface level="record" style={styles.activityContext} testID="cairn-source-activity-unavailable">
+            <View style={styles.activityContextRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.activityContextLabel, { color: visualTheme.foregroundSecondary }]}>SOURCE</Text>
+                <Text style={[styles.activityContextTitle, { color: visualTheme.foreground }]}>Activity link unavailable</Text>
+              </View>
+              <Icon name="Route" size={16} color={visualTheme.iconInactive} strokeWidth={2} />
+            </View>
+          </ContentSurface>
+        ) : (
+          <ContentSurface level="record" style={styles.activityContext} testID="cairn-left-here-context">
+            <View style={styles.activityContextRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.activityContextLabel, { color: visualTheme.foregroundSecondary }]}>LOCATION RECORD</Text>
+                <Text style={[styles.activityContextTitle, { color: visualTheme.foreground }]}>Left here {dateStr}</Text>
+              </View>
+              <Icon name="MapPin" size={16} color={visualTheme.iconInactive} strokeWidth={2} />
+            </View>
+          </ContentSurface>
+        )}
 
         {marker.permission === 'public' && isOwner ? (
           <View style={[styles.snapshotBanner, { backgroundColor: visualTheme.surface, borderColor: visualTheme.border }]}>
@@ -588,34 +621,12 @@ export function MarkerDetailScreen() {
         </View>
       </ModalCard>
 
-      <ModalCard
+      <CairnDeleteDialog
         visible={deleteConfirmOpen}
-        onDismiss={() => !deleting && setDeleteConfirmOpen(false)}
-        dismissible={!deleting}
-        testID="cairn-delete-confirmation"
-      >
-        <ModalCardHeader
-          title="Delete this Cairn?"
-          body="This removes the Cairn. Its source Activity, independent Routes, and ordinary personal Memory remain."
-        />
-        <View style={styles.deleteActions}>
-          <PrimaryButton
-            label="Keep Cairn"
-            variant="secondary"
-            onPress={() => setDeleteConfirmOpen(false)}
-            disabled={deleting}
-            style={styles.deleteAction}
-          />
-          <PrimaryButton
-            label="Delete Cairn"
-            variant="destructive"
-            onPress={() => { void handleDelete(); }}
-            loading={deleting}
-            style={styles.deleteAction}
-            testID="cairn-delete-confirm"
-          />
-        </View>
-      </ModalCard>
+        busy={deleting}
+        onDismiss={() => setDeleteConfirmOpen(false)}
+        onConfirm={() => { void handleDelete(); }}
+      />
     </SafeAreaView>
   );
 }

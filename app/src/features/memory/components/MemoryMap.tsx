@@ -16,6 +16,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, u
 import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
+import { markersForVisibleWorkspace } from '../../cairns/cairnWorkspace';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { MemoryColors } from '../config/memoryConfig';
 import { FogLayer } from './FogLayer';
@@ -89,6 +90,7 @@ interface Props {
    * change (rare). When null, no flyTo runs.
    */
   flyToTarget?: { center: [number, number]; zoom: number; token: number } | null;
+  qaWorkspaceActive?: boolean;
 }
 
 const INITIAL_ZOOM = 16.5;
@@ -104,7 +106,7 @@ export type MemoryMapHandle = {
 };
 
 export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
-  { centerLat, centerLng, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogReady, onFogUnavailable, strangerMarks, flyToTarget },
+  { centerLat, centerLng, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogReady, onFogUnavailable, strangerMarks, flyToTarget, qaWorkspaceActive = false },
   ref,
 ) {
   const theme = useVisualTheme();
@@ -112,7 +114,11 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const memoryResolvedMapStyle = getMapStyleForTheme('outdoors', memoryMapTheme);
   const memoryLightPreset = themeToStandardPreset(memoryMapTheme);
   const Mapbox = getMapbox();
-  const ownMarkers = useMarkerStore((s) => s.markers);
+  const storedOwnMarkers = useMarkerStore((s) => s.markers);
+  const ownMarkers = useMemo(
+    () => markersForVisibleWorkspace(storedOwnMarkers, qaWorkspaceActive),
+    [qaWorkspaceActive, storedOwnMarkers],
+  );
   const friendMarkers = useMarkerStore((s) => s.circleMarkers);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
   const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);

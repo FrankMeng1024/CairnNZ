@@ -81,6 +81,9 @@ import {
   type ActivityNoticePresentation,
   type ActivityStatusTone,
 } from '../components/activity/ActivityRecordingChrome';
+import { ActivityOwnershipGuard } from '../components/activity/ActivityOwnershipGuard';
+import { resolveActivityScreenOwnership } from '../features/activity/activityScreenOwnership';
+import { PublicWalkingDiscoveryCard } from '../features/public/components/PublicWalkingDiscoveryCard';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -266,6 +269,7 @@ export function RunningScreen() {
   const sessionId = useTrackingStore(s => s.sessionId);
   const activityOwnerUserId = useTrackingStore(s => s.ownerUserId);
   const liveOwnerGeneration = useTrackingStore(s => s.liveOwnerGeneration);
+  const activityMode = useTrackingStore(s => s.activityMode);
   const linkMarker = useTrackingStore(s => s.linkMarker);
   const setActivityMode = useTrackingStore(s => s.setActivityMode);
   // O12: settings-aware distance/pace formatting.
@@ -827,6 +831,17 @@ export function RunningScreen() {
     </View>
   );
 
+  const screenOwnership = resolveActivityScreenOwnership(status, activityMode, 'running');
+  if (screenOwnership.kind === 'owned-elsewhere') {
+    return (
+      <ActivityOwnershipGuard
+        ownerMode={screenOwnership.ownerMode}
+        onReturnToActivity={() => nav.navigate('Hiking')}
+        onHome={() => nav.navigate('Home')}
+      />
+    );
+  }
+
   // ── Pre-start ─────────────────────────────────────────────────────────────
   if (!isActivitySessionVisible(operationalState)) {
     return (
@@ -1028,6 +1043,10 @@ export function RunningScreen() {
           { label: 'ACTIVE TIME', value: durationDisplay },
         ]}
         notices={runNotices}
+      />
+      <PublicWalkingDiscoveryCard
+        safeTop={insets.top}
+        onOpen={(cairnId) => nav.navigate('PublicCairnDetail', { cairnId })}
       />
 
       {!showSaveSheet ? (

@@ -30,9 +30,51 @@ import {
 } from '../features/activity/activityRegistry';
 import { deleteAcknowledgedHikeTrackArtifacts } from './hikeTrackWriter';
 import { removeLocalTrackPoints } from '../store/useSessionStore';
+import networkMonitor from './networkMonitor';
 
 let isDraining = false;
 let pendingSignal = false;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryDueAt = 0;
+
+function retryBackoffMs(attemptCount: number): number {
+  return Math.min(5_000 * Math.pow(2, Math.max(0, attemptCount - 1)), 30 * 60_000);
+}
+
+function clearRetryTimer(): void {
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
+  retryDueAt = 0;
+}
+
+function schedulePendingRetry(pending: PendingHike[]): void {
+  if (!networkMonitor.isOnline()) {
+    clearRetryTimer();
+    return;
+  }
+  const nextDueAt = pending
+    .filter(hike => isCurrentActivityOwner(hike.userId) && hike.lastAttemptAt)
+    .reduce((earliest, hike) => Math.min(
+      earliest,
+      Number(hike.lastAttemptAt) + retryBackoffMs(hike.attemptCount),
+    ), Number.POSITIVE_INFINITY);
+  if (!Number.isFinite(nextDueAt)) {
+    clearRetryTimer();
+    return;
+  }
+  if (retryTimer && retryDueAt <= nextDueAt) return;
+  clearRetryTimer();
+  retryDueAt = nextDueAt;
+  const delayMs = Math.max(50, nextDueAt - Date.now());
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    retryDueAt = 0;
+    crashLogger.breadcrumb('activity:sync_retry_wake');
+    void drainPending({ wakeReason: 'scheduled_retry' });
+  }, delayMs);
+  (retryTimer as any)?.unref?.();
+  crashLogger.breadcrumb(`activity:sync_retry_scheduled delay_ms=${Math.round(delayMs)}`);
+}
 
 function isCurrentActivityOwner(userId: string): boolean {
   if (!userId || userId === 'unknown' || userId === 'guest') return false;
@@ -62,6 +104,8 @@ export interface DrainResult {
 
 export async function drainPending(opts?: {
   onProgress?: (done: number, total: number) => void;
+  wakeReason?: 'hydrate' | 'network_online' | 'foreground' | 'scheduled_retry' | 'manual';
+  force?: boolean;
 }): Promise<DrainResult> {
   const result: DrainResult = { attempted: 0, succeeded: 0, failed: 0, skipped: 0 };
   if (isDraining) {
@@ -70,6 +114,7 @@ export async function drainPending(opts?: {
   }
   isDraining = true;
   try {
+    crashLogger.breadcrumb(`activity:sync_wake reason=${opts?.wakeReason ?? 'unspecified'}`);
     do {
       pendingSignal = false;
       await reconcileDurableTombstones();
@@ -114,12 +159,24 @@ export async function drainPending(opts?: {
       } catch (e) {
         crashLogger.breadcrumb(`v412:orphan_sweep_failed ${String(e).slice(0, 60)}`);
       }
-      if (list.length === 0) return result;
+      if (list.length === 0) {
+        clearRetryTimer();
+        return result;
+      }
       crashLogger.breadcrumb(`v412:sync_drain start count=${list.length}`);
       const total = list.length;
       let done = 0;
       try { opts?.onProgress?.(done, total); } catch { /* silent */ }
       for (const hike of list) {
+        const backoffRemainingMs = hike.lastAttemptAt
+          ? retryBackoffMs(hike.attemptCount) - (Date.now() - hike.lastAttemptAt)
+          : 0;
+        if (!opts?.force && backoffRemainingMs > 0) {
+          result.skipped += 1;
+          done += 1;
+          try { opts?.onProgress?.(done, total); } catch { /* silent */ }
+          continue;
+        }
         result.attempted += 1;
         const outcome = await uploadOne(hike);
         if (outcome === 'succeeded') result.succeeded += 1;
@@ -129,6 +186,7 @@ export async function drainPending(opts?: {
         try { opts?.onProgress?.(done, total); } catch { /* silent */ }
       }
     } while (pendingSignal);
+    schedulePendingRetry(await listPending());
   } finally {
     isDraining = false;
   }

@@ -161,6 +161,7 @@ import {
   runOwnedTrackingTokenRefresh,
   type TrackingTokenRefreshSnapshot,
 } from '../services/trackingTokenRefreshAuthority';
+import { maybeVerifyPublicWalkingDiscovery } from '../features/public/services/publicWalkingDiscovery';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
@@ -1115,7 +1116,11 @@ async function refreshOwnedTrackingToken(
 export const useTrackingStore = create<TrackingState>((set, get) => ({
   ...initialState,
 
-  setActivityMode: (mode) => set({ activityMode: mode }),
+  setActivityMode: (mode) => set(state => (
+    state.status === 'idle' && !state.isFinishing
+      ? { activityMode: mode }
+      : state
+  )),
 
   refreshBackgroundLocationPermission: async () => {
     if (Platform.OS === 'web') {
@@ -1782,7 +1787,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
       stopOwnedTokenRefreshTimer();
       stopRealTelemetryHealthTimer();
-      networkMonitor.stop();
+      // Connectivity monitoring is app-owned. Activity teardown must never
+      // disable recovery for Cairns or already-saved Activities.
       sessionRecorder.stop();
       void batteryMonitor.stop().catch(() => {});
       void debugLogger.endSession().catch(() => {});
@@ -1987,10 +1993,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     stopOwnedTokenRefreshTimer();
     stopRealTelemetryHealthTimer();
 
-    // Stop monitors. We do this asynchronously but the order matters:
+    // Stop Activity-owned monitors. Connectivity is app-owned so Cairn and
+    // completed-Activity outboxes keep recovering after this recording ends.
     // batteryMonitor's final session_end sample must be logged before
     // debugLogger.endSession flushes, otherwise it's lost.
-    networkMonitor.stop();
     sessionRecorder.stop();
     // Chain battery stop → debugLogger end → upload
     batteryMonitor.stop()
@@ -4348,6 +4354,31 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           };
         }
         const latest = get();
+        if (
+          !isSimulatorSample
+          && before.sessionId
+          && before.remoteSessionId
+          && before.liveOwnerGeneration
+        ) {
+          const discoveryIdentity = {
+            sessionId: before.sessionId,
+            ownerGeneration: before.liveOwnerGeneration,
+            remoteSessionId: before.remoteSessionId,
+          };
+          void maybeVerifyPublicWalkingDiscovery({
+            sourceActivityClientId: discoveryIdentity.sessionId,
+            serverActivityId: discoveryIdentity.remoteSessionId,
+            points: latest.trackPoints.map(toServerPoint),
+            isCurrent: () => {
+              const live = get();
+              return live.status === 'tracking'
+                && live.locationProviderSource === 'real'
+                && live.sessionId === discoveryIdentity.sessionId
+                && live.liveOwnerGeneration === discoveryIdentity.ownerGeneration
+                && live.remoteSessionId === discoveryIdentity.remoteSessionId;
+            },
+          }).catch(() => {});
+        }
         appendSimulatorLog('ACTIVITY_POINT', 'activity_point_committed', {
           sampleSource: owned.source ?? 'foreground',
           segmentId: accepted.segmentId,
@@ -4835,7 +4866,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require('../services/autoPauseMonitor').stopAutoPauseMonitor();
     } catch { /* monitor unavailable */ }
-    networkMonitor.stop();
+    // Connectivity monitoring is app-owned and survives Activity interruption.
     sessionRecorder.stop();
     await batteryMonitor.stop().catch(() => {});
     const fenced = await persistBackgroundContext(null, false).catch(() => false);
@@ -4940,7 +4971,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     clearActivityRouteReferenceForAccountBoundary();
     set({ ...initialState, activityMode: activity.activityMode });
 
-    networkMonitor.stop();
+    // Connectivity monitoring is app-owned and survives account parking.
     sessionRecorder.stop();
     await batteryMonitor.stop().catch(() => {});
     await debugLogger.endSession().catch(() => {});
@@ -4987,7 +5018,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       stopAutoPauseMonitor();
     } catch { /* monitor unavailable */ }
 
-    networkMonitor.stop();
+    // Connectivity monitoring is app-owned and survives Activity discard.
     sessionRecorder.stop();
     const s = get();
     const ownerUserId = String(s.ownerUserId ?? '');

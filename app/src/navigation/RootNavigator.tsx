@@ -81,7 +81,14 @@ export type RootStackParamList = {
     /** Explicit user choice; never written back to the Activity. */
     reconnectsActivityGap?: boolean;
   } | undefined;
-  Plant: undefined;
+  Plant: {
+    origin: {
+      kind: 'activity';
+      clientActivityId: string;
+      ownerGeneration: string;
+      activityMode: 'hiking' | 'running';
+    } | { kind: 'standalone' };
+  } | undefined;
   MarkerDetail: { markerId: string };
   AllCairns: undefined;
   Friends: undefined;

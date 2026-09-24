@@ -26,8 +26,10 @@ import { Icon } from '../../../components/Icon';
 import { useMemoryStore } from '../../memory/store/useMemoryStore';
 import { log } from '../../../services/appLog';
 
+export type PlantLocationProvenance = 'real' | 'simulator_test';
+
 interface Props {
-  onLocked: (lat: number, lng: number, accuracyM: number) => void;
+  onLocked: (lat: number, lng: number, accuracyM: number, provenance: PlantLocationProvenance) => void;
   onCancel: () => void;
 }
 
@@ -66,7 +68,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
     if (__DEV__ && Platform.OS === 'web') {
       log('plant.gps_lock_web_mock', { lat: WEB_MOCK_LAT, lng: WEB_MOCK_LNG });
       const t = setTimeout(() => {
-        onLockedRef.current(WEB_MOCK_LAT, WEB_MOCK_LNG, WEB_MOCK_ACCURACY_M);
+        onLockedRef.current(WEB_MOCK_LAT, WEB_MOCK_LNG, WEB_MOCK_ACCURACY_M, 'simulator_test');
       }, 100);
       return () => clearTimeout(t);
     }
@@ -181,7 +183,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
       if (fast) {
         setProgress(1);
         setBusy(false);
-        onLockedRef.current(fast.lat, fast.lng, fast.accuracyM);
+        onLockedRef.current(fast.lat, fast.lng, fast.accuracyM, 'real');
         return;
       }
       // No fast fix → fall through to the slow 15s sampler.
@@ -206,7 +208,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
         });
         setResult(res);
         setBusy(false);
-        if (res.ok) onLockedRef.current(res.lat, res.lng, res.accuracyMeters);
+        if (res.ok) onLockedRef.current(res.lat, res.lng, res.accuracyMeters, 'real');
       });
     });
     })();  // v324: close async IIFE wrapping the permission check + sampler

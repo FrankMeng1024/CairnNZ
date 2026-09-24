@@ -193,6 +193,50 @@ export function createOfflineEntity<T, Server = unknown>(
 
   const listeners: Array<(entries: OfflineEntry<T>[]) => void> = [];
   let draining = false;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let retryDueAt = 0;
+
+  function clearRetryTimer(): void {
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = null;
+    retryDueAt = 0;
+  }
+
+  function retryBackoffMs(attempts: number): number {
+    return Math.min(5_000 * Math.pow(2, Math.max(0, attempts)), 30 * 60_000);
+  }
+
+  function scheduleRetry(entries: OfflineEntry<T>[], ownerId: string): void {
+    const online = typeof (networkMonitor as any).isOnline === 'function'
+      ? networkMonitor.isOnline()
+      : true;
+    if (!online || !ownerId || !ownerStillCurrent(ownerId)) {
+      clearRetryTimer();
+      return;
+    }
+    const nextDueAt = entries
+      .filter(entry => entry.syncState === 'pending' && entry.lastTriedAt)
+      .reduce((earliest, entry) => Math.min(
+        earliest,
+        Number(entry.lastTriedAt) + retryBackoffMs(entry.attempts),
+      ), Number.POSITIVE_INFINITY);
+    if (!Number.isFinite(nextDueAt)) {
+      clearRetryTimer();
+      return;
+    }
+    if (retryTimer && retryDueAt <= nextDueAt) return;
+    clearRetryTimer();
+    retryDueAt = nextDueAt;
+    const delayMs = Math.max(50, nextDueAt - Date.now());
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      retryDueAt = 0;
+      crashLogger.breadcrumb(`offlineEntity:retry_wake kind=${kind}`);
+      void drainAllEntities();
+    }, delayMs);
+    (retryTimer as any)?.unref?.();
+    crashLogger.breadcrumb(`offlineEntity:retry_scheduled kind=${kind} delay_ms=${Math.round(delayMs)}`);
+  }
   // v423 C2 fix: read-modify-write mutex 序列化 saveLocal / drain 内部所有的
   // "读→改→写"块. 之前 drain 慢 (30s timeout) 期间用户 plant, saveLocal read
   // 到磁盘老快照 push 新 entry write; drain 结束 write(remaining) 用 drain
@@ -354,13 +398,17 @@ export function createOfflineEntity<T, Server = unknown>(
     let failed = 0;
     const ownerId = captureOwnerId();
     if (config.captureOwnerId && (!ownerId || !ownerStillCurrent(ownerId))) {
+      clearRetryTimer();
       draining = false;
       return { synced: 0, failed: 0, remaining: 0 };
     }
     try {
       // v423 C2 fix: read 也走 lock, 保证与 saveLocal/write 序列化 快照一致.
       const q = await withLock(async () => read(ownerId));
-      if (q.length === 0) return { synced: 0, failed: 0, remaining: 0 };
+      if (q.length === 0) {
+        clearRetryTimer();
+        return { synced: 0, failed: 0, remaining: 0 };
+      }
       crashLogger.breadcrumb(`offlineEntity:drain_start kind=${kind} size=${q.length}`);
 
       // v423 C3 fix: 用 Map 追踪 entry 处理结果, 避免 emit 中间态用 indexOf 拼错.
@@ -384,7 +432,7 @@ export function createOfflineEntity<T, Server = unknown>(
           continue;
         }
         // Exponential backoff
-        const backoffMs = Math.min(5_000 * Math.pow(2, entry.attempts), 30 * 60_000);
+        const backoffMs = retryBackoffMs(entry.attempts);
         if (entry.lastTriedAt && Date.now() - entry.lastTriedAt < backoffMs) {
           results.set(entry.localId, 'keep');
           continue;
@@ -464,6 +512,7 @@ export function createOfflineEntity<T, Server = unknown>(
         return merged;
       });
       crashLogger.breadcrumb(`offlineEntity:drain_end kind=${kind} synced=${synced} failed=${failed} remaining=${remaining.length}`);
+      scheduleRetry(remaining, ownerId);
       return { synced, failed, remaining: remaining.length };
     } finally {
       draining = false;

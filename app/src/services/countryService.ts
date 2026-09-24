@@ -24,7 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // of countryName from country-level ("China", "New Zealand") to city-level
 // ("Guiyang", "Auckland"). Old v1 cache holds country-only strings; using
 // a new key makes every existing device re-resolve fresh on first load.
-const CACHE_KEY = 'cairn.current_country.v2';
+const CACHE_KEY = 'cairn.current_country.v3';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 h
 const CACHE_DISTANCE_M = 50_000;           // 50 km → same country
 
@@ -63,6 +63,28 @@ async function writeCache(c: CountryCache): Promise<void> {
   try {
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(c));
   } catch { /* silent */ }
+}
+
+function englishRegionName(countryCode: string): string {
+  const code = String(countryCode || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return '';
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? '';
+  } catch {
+    const fallback: Record<string, string> = {
+      NZ: 'New Zealand', AU: 'Australia', US: 'United States', CA: 'Canada',
+      GB: 'United Kingdom', CN: 'China', JP: 'Japan', DE: 'Germany',
+      FR: 'France', IN: 'India', BR: 'Brazil', ZA: 'South Africa',
+    };
+    return fallback[code] ?? '';
+  }
+}
+
+function englishOnlyName(name: string, countryCode: string): string {
+  const normalized = String(name || '').trim();
+  return normalized && !/[^\u0000-\u007F]/.test(normalized)
+    ? normalized
+    : englishRegionName(countryCode);
 }
 
 /**
@@ -158,9 +180,11 @@ export async function resolveCurrentCountry(): Promise<CountryCache | null> {
       }
     } catch { /* silent — displayName stays empty, will fall through to cache */ }
 
+    displayName = englishOnlyName(displayName, countryCode);
     if (!displayName) {
       displayName = cached?.countryName ?? '';
     }
+    displayName = englishOnlyName(displayName, countryCode || cached?.countryCode || '');
     if (!displayName) return cached;
 
     const next: CountryCache = {

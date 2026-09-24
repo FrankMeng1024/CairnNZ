@@ -21,7 +21,7 @@ describe('Sunny three-time background mapping', () => {
 
   it('maps explicit states to distinct approved asset identifiers', () => {
     expect(getHomeBackground('sunny', Date.now(), 'day', 'home').assetId)
-      .toBe('sunny-day-natural-material-3x.jpg');
+      .toBe('sunny-day-systemic-unification-3x.jpg');
     expect(getHomeBackground('sunny', Date.now(), 'sunset', 'home').assetId)
       .toBe('sunny-evening-final-micro-3x.jpg');
     expect(getHomeBackground('sunny', Date.now(), 'night', 'home').assetId)
@@ -163,7 +163,7 @@ describe('Sunny three-time background mapping', () => {
       const review = getWeatherReviewBackground('sunny', timeOfDay);
       const production = getHomeBackground('sunny', Date.now(), timeOfDay, 'home');
       const productionExpected = {
-        day: 'sunny-day-natural-material-3x.jpg',
+        day: 'sunny-day-systemic-unification-3x.jpg',
         sunset: 'sunny-evening-final-micro-3x.jpg',
         night: 'sunny-night-star-micro-v2-3x.jpg',
       } as const;

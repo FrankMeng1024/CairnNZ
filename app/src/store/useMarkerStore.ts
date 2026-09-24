@@ -23,6 +23,7 @@ import {
   type MarkerCreateServerResponse,
 } from '../services/markerOfflineEntities';
 import type { SyncState } from '../services/offlineEntity';
+import { uuidv4 } from '../services/offlineQueue';
 import { tombstoneMarker, isMarkerTombstoned, listMarkerTombstones } from '../services/markerTombstones';
 import {
   cairnIdentityKeys,
@@ -111,6 +112,8 @@ export interface Marker {
   /** v422: offline placeholder 的 localId. 服务器 ack 后, id 会被替换成
    *   server id, 但 localId 保留以便 UI 追踪历史 + subscribe 匹配. */
   localId?: string;
+  /** Local-only Debug/Simulator truth. Never enters a production outbox. */
+  qaProvenance?: 'simulator_test';
 }
 
 /** Exact live Activity identity captured by the initiating UI before any
@@ -320,6 +323,39 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       if (!exactActivityIsCurrent) throw new Error('marker_activity_changed_before_commit');
       activeActivityClientId = activityContext.clientActivityId;
     }
+    if (data.qaProvenance === 'simulator_test') {
+      let qaWorkspaceAuthorized = false;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const settings = require('./useSettingsStore').useSettingsStore.getState();
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const simulator = require('../features/activitySimulator/useActivitySimulatorStore').useActivitySimulatorStore.getState();
+        qaWorkspaceAuthorized = settings.debugMode === true && simulator.enabled === true;
+      } catch { /* fail closed */ }
+      if (!qaWorkspaceAuthorized) throw new Error('simulator_cairn_requires_qa_workspace');
+      const localId = uuidv4();
+      const marker: Marker = {
+        ...markerData,
+        id: localId,
+        clientCairnId: localId,
+        localId,
+        originActivityClientId: activeActivityClientId,
+        permission: 'personal',
+        createdAt: Date.now(),
+        synced: false,
+        qaProvenance: 'simulator_test',
+        publicState: undefined,
+      };
+      const existing = get().markers;
+      const next = [...existing, marker];
+      // This is a durable local QA record, not a pending production write.
+      await storage.setItem(storageKey(ownerId), JSON.stringify(next));
+      if (String(get().userId ?? '') !== ownerId) {
+        return { state: 'durably-accepted', ownerId, projection: 'owner-changed', marker };
+      }
+      set({ markers: next });
+      return { state: 'durably-accepted', ownerId, projection: 'current', marker };
+    }
     const payload: MarkerCreatePayload = {
       userId: ownerId,
       type: data.type,
@@ -459,6 +495,17 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     if (!original || !ownerId) throw new Error('cairn_not_found');
     const patchMarker = (marker: Marker, updatedAt: number): Marker => ({ ...marker, ...updates, updatedAt });
 
+    if (original.qaProvenance === 'simulator_test') {
+      const acceptedAt = Date.now();
+      const next = get().markers.map(marker => cairnMatchesIdentity(marker, id)
+        ? { ...patchMarker(marker, acceptedAt), permission: 'personal' as MarkerPermission }
+        : marker);
+      await storage.setItem(storageKey(ownerId), JSON.stringify(next));
+      if (String(get().userId ?? '') !== ownerId) throw new Error('cairn_owner_changed_after_save');
+      set({ markers: next });
+      return;
+    }
+
     // Sync to backend (text, permission, type are updatable). Backend
     // mirrors the same publicSnapshot-on-first-public logic so a stale
     // local row sync wouldn't reset the server-side snapshot.
@@ -529,6 +576,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
   retryMarkerSync: async (id) => {
     const ownerId = String(get().userId ?? '');
     const marker = get().markers.find((item) => cairnMatchesIdentity(item, id));
+    if (marker?.qaProvenance === 'simulator_test') throw new Error('cairn_qa_does_not_sync');
     const localId = marker?.clientCairnId ?? marker?.localId;
     if (!ownerId || !localId) throw new Error('cairn_retry_unavailable');
     const accepted = await offlineMarkers.retry(localId, ownerId);
@@ -553,6 +601,14 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     const serverCairnId = current?.serverCairnId ?? (current?.synced ? current.id : undefined);
     const ownerId = String(get().userId ?? '');
     if (!ownerId) throw new Error('marker_owner_required');
+
+    if (current.qaProvenance === 'simulator_test') {
+      const next = get().markers.filter(marker => !cairnMatchesIdentity(marker, id));
+      await storage.setItem(storageKey(ownerId), JSON.stringify(next));
+      if (String(get().userId ?? '') !== ownerId) throw new Error('marker_owner_changed_after_delete');
+      set({ markers: next });
+      return { remoteState: 'not-needed' };
+    }
 
     // Modern Cairns have a durable client identity. Commit the tombstone and
     // cancel a pending create before hiding the object; the sync daemon then
@@ -1105,6 +1161,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       } catch (outboxError) {
         crashLogger.breadcrumb(`marker_hydrate:outbox_rebuild_failed ${String(outboxError).slice(0, 80)}`);
       }
+      // Cold boot may receive its initial online event before this owner-scoped
+      // outbox exists in memory. Wake it after reconstruction as well.
+      crashLogger.breadcrumb(`marker_hydrate:outbox_wake user_id=${userId}`);
+      void offlineMarkers.drain().catch(() => {});
       // 2. Then fetch from backend (async, updates state when done)
       get().loadFromBackend();
     })();

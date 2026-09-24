@@ -86,6 +86,11 @@ import {
   type ActivityNoticePresentation,
   type ActivityStatusTone,
 } from '../components/activity/ActivityRecordingChrome';
+import { ActivityOwnershipGuard } from '../components/activity/ActivityOwnershipGuard';
+import { resolveActivityScreenOwnership } from '../features/activity/activityScreenOwnership';
+import { CairnDeleteDialog } from '../features/cairns/CairnDeleteDialog';
+import { PublicWalkingDiscoveryCard } from '../features/public/components/PublicWalkingDiscoveryCard';
+import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
 
 
 // ── Main HikingScreen ──────────────────────────────────────────────────────
@@ -199,6 +204,7 @@ export function HikingScreen() {
     void refreshBackgroundLocationPermission();
   }, [isFocused, refreshBackgroundLocationPermission, simulatorLocationAuthoritative, status]);
   const sessionId = useTrackingStore(s => s.sessionId);
+  const liveOwnerGeneration = useTrackingStore(s => s.liveOwnerGeneration);
   const trackPoints = useTrackingStore(s => s.trackPoints);
   const trackPointsSmoothed = useTrackingStore(s => s.trackPointsSmoothed);
   const liveTrackPoints = locationProviderSource === 'real'
@@ -230,6 +236,7 @@ export function HikingScreen() {
   const saveLostPayload = useTrackingStore(s => s.saveLostPayload);
   const discardCurrentSession = useTrackingStore(s => s.discardCurrentSession);
   const activityMode = useTrackingStore(s => s.activityMode);
+  const setActivityMode = useTrackingStore(s => s.setActivityMode);
   // R114/O22 STORY-73012 (K2): overspeed flag from the tracking store.
   // True when the last few fixes exceeded 15 km/h during hiking mode.
   const overSpeedActive = useTrackingStore(s => s.overSpeedActive);
@@ -239,8 +246,8 @@ export function HikingScreen() {
 
   // Real marker store
   const deleteMarker = useMarkerStore(s => s.deleteMarker);
-  const getMarkersForRegion = useMarkerStore(s => s.getMarkersForRegion);
-  const allMarkers = useMarkerStore(s => s.markers);
+  const storedMarkers = useMarkerStore(s => s.markers);
+  const allMarkers = useMemo(() => markersForVisibleWorkspace(storedMarkers, debugMode), [debugMode, storedMarkers]);
   const region = getCurrentRegion();
   // R114 (2026-08-07): plumbing for unified MarkDetailSheet — mirrors
   // MapScreen so the sheet renders the correct 4-form variant when a
@@ -262,13 +269,13 @@ export function HikingScreen() {
   // 2026-07-20 perf: memoize markers filter so trackPoints updates (every 3s
   // during hike) don't force downstream <MarkerList> to see a new array ref.
   const markers = useMemo(
-    () => getMarkersForRegion(region.code),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => allMarkers.filter(marker => marker.regionCode === region.code),
     [allMarkers, region.code]
   );
 
   const [ui, setUi] = useState<UIState>('map');
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+  const [deleteCairnOpen, setDeleteCairnOpen] = useState(false);
   // v118: followUser controls whether the live map auto-recenters on
   // each GPS update. true (default during tracking) = Mapbox snaps the
   // camera to the user. false = user has manually panned/zoomed; we
@@ -623,6 +630,7 @@ export function HikingScreen() {
       setUnfinishedResolutionRequested(true);
       return;
     }
+    setActivityMode('hiking');
     const usingSharedRoute = Boolean(sharedRouteLease && selectedRoute === sharedRouteKey);
     let requestedActivityId: string | undefined;
     let borrowedUse: Awaited<ReturnType<typeof authorizeBorrowedRouteStart>>['identity'] | undefined;
@@ -1068,6 +1076,17 @@ export function HikingScreen() {
     });
   };
 
+  const screenOwnership = resolveActivityScreenOwnership(status, activityMode, 'hiking');
+  if (screenOwnership.kind === 'owned-elsewhere') {
+    return (
+      <ActivityOwnershipGuard
+        ownerMode={screenOwnership.ownerMode}
+        onReturnToActivity={() => nav.navigate('Running')}
+        onHome={() => nav.navigate('Home')}
+      />
+    );
+  }
+
   if (!activitySessionVisible) {
     return (
       <>
@@ -1230,6 +1249,10 @@ export function HikingScreen() {
         ]}
         notices={hikeNotices}
       />
+      <PublicWalkingDiscoveryCard
+        safeTop={insets.top}
+        onOpen={(cairnId) => nav.navigate('PublicCairnDetail', { cairnId })}
+      />
 
       {!stopSummary ? (
         <ActivityControlDock
@@ -1244,7 +1267,15 @@ export function HikingScreen() {
           onPauseResume={handlePauseResumeHike}
           onCairn={() => {
             haptic.selection();
-            nav.navigate('Plant');
+            if (!sessionId || !liveOwnerGeneration) return;
+            nav.navigate('Plant', {
+              origin: {
+                kind: 'activity',
+                clientActivityId: sessionId,
+                ownerGeneration: liveOwnerGeneration,
+                activityMode: 'hiking',
+              },
+            });
           }}
           onFinish={() => { void handleFinishHike(); }}
         />
@@ -1289,16 +1320,7 @@ export function HikingScreen() {
           }}
           onDelete={(m, semantic) => {
             if (semantic === 'own') {
-              // R114 review fix: destructive action needs confirmation.
-              // Matches CairnPinsLayer.handleDeleteOrHide + MarkerDetailScreen.
-              Alert.alert(
-                'Delete this cairn?',
-                'This cannot be undone.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: handleDeleteMarker },
-                ]
-              );
+              setDeleteCairnOpen(true);
             } else {
               // Non-owner hide — Hiking map generally only shows own
               // markers, so this branch is rare; wipe cache pending
@@ -1309,6 +1331,15 @@ export function HikingScreen() {
           }}
         />
       )}
+
+      <CairnDeleteDialog
+        visible={deleteCairnOpen}
+        onDismiss={() => setDeleteCairnOpen(false)}
+        onConfirm={() => {
+          setDeleteCairnOpen(false);
+          handleDeleteMarker();
+        }}
+      />
 
       {/* Stop summary sheet — shown after user taps Stop, before
           the session is actually written to the store. Lets the user

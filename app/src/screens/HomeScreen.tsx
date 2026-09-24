@@ -18,6 +18,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { HomeScreen as GeneratedHome } from './home_generated/HomeScreen.generated';
 import { useSessionStore } from '../store/useSessionStore';
+import { useTrackingStore } from '../store/useTrackingStore';
 import { useAppStore } from '../store/useAppStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import { useWeatherStore, NZ_TEST_CITIES } from '../store/useWeatherStore';
@@ -82,6 +83,14 @@ export function HomeScreen() {
   const distance = useDistance();
   const user = useAppStore(s => s.user);
   const sessions = useSessionStore(s => s.sessions);
+  const liveStatus = useTrackingStore(s => s.status);
+  const liveActivityMode = useTrackingStore(s => s.activityMode);
+  const liveActivityId = useTrackingStore(s => s.sessionId);
+  const liveOwnerUserId = useTrackingStore(s => s.ownerUserId);
+  const liveStartedAt = useTrackingStore(s => s.startedAt);
+  const liveDistanceM = useTrackingStore(s => s.distanceM);
+  const liveDurationS = useTrackingStore(s => s.durationS);
+  const resumeLiveActivity = useTrackingStore(s => s.resumeTracking);
   const memoryPointCount = useMemoryStore(s => s.points.length);
   const weatherCondition = useWeatherStore(s => s.condition);
   const conditionOverride = useWeatherStore(s => s.conditionOverride);
@@ -233,20 +242,33 @@ export function HomeScreen() {
   // R21 (2026-08-18): priority display — most recent unfinished action wins
   // over the last completed hike. Users see "resume or discard" instead of
   // "here's an old completed hike" when there's an in-progress session.
-  const topUnfinished = unfinishedActivity;
-  const showUnfinished = !!topUnfinished;
+  const showLiveActivity = liveStatus !== 'idle'
+    && Boolean(liveActivityId)
+    && String(liveOwnerUserId ?? '') === String(user?.id ?? '');
+  const topUnfinished = showLiveActivity ? null : unfinishedActivity;
+  const showUnfinished = showLiveActivity || !!topUnfinished;
+  const displayedMode = showLiveActivity ? liveActivityMode : topUnfinished?.activityMode;
+  const displayedDistanceM = showLiveActivity ? liveDistanceM : (topUnfinished?.distanceM ?? 0);
+  const displayedDurationS = showLiveActivity ? liveDurationS : (topUnfinished?.durationS ?? 0);
+  const displayedStartedAt = showLiveActivity ? (liveStartedAt ?? Date.now()) : (topUnfinished?.startedAt ?? Date.now());
   const formatActivityDistance = (meters: number) => `${distance.format(meters, 1)} ${distance.unit}`;
 
   const lastHikeTitle = showUnfinished
-    ? (topUnfinished.activityMode === 'running' ? 'Paused run' : 'Paused hike')
+    ? showLiveActivity
+      ? liveStatus === 'requesting'
+        ? (displayedMode === 'running' ? 'Starting run' : 'Starting hike')
+        : liveStatus === 'tracking'
+          ? (displayedMode === 'running' ? 'Current run' : 'Current hike')
+          : (displayedMode === 'running' ? 'Paused run' : 'Paused hike')
+      : (displayedMode === 'running' ? 'Paused run' : 'Paused hike')
     : (lastHike?.name || 'Recent hike');
   const lastHikeMeta = showUnfinished
-    ? `${formatActivityDistance(topUnfinished.distanceM)} · ${formatDuration(topUnfinished.durationS)} · ${formatRelativeDay(topUnfinished.startedAt)}`
+    ? `${formatActivityDistance(displayedDistanceM)} · ${formatDuration(displayedDurationS)} · ${formatRelativeDay(displayedStartedAt)}`
     : (lastHike
     ? `${formatActivityDistance(lastHike.distanceM || 0)} · ${formatDuration(lastHike.durationS || 0)} · ${formatRelativeDay(lastHike.startedAt)}`
     : '');
   const lastHikeDetails = showUnfinished
-    ? [formatActivityDistance(topUnfinished.distanceM), formatDuration(topUnfinished.durationS), formatRelativeDay(topUnfinished.startedAt)]
+    ? [formatActivityDistance(displayedDistanceM), formatDuration(displayedDurationS), formatRelativeDay(displayedStartedAt)]
     : (lastHike
       ? [formatActivityDistance(lastHike.distanceM || 0), formatDuration(lastHike.durationS || 0), formatRelativeDay(lastHike.startedAt)]
       : []);
@@ -332,11 +354,18 @@ export function HomeScreen() {
             lastHikeTitle={lastHikeTitle}
             lastHikeMeta={lastHikeMeta}
             lastHikeDetails={lastHikeDetails}
-            lastHikeEyebrow={showUnfinished ? (topUnfinished.activityMode === 'running' ? 'RUN PAUSED' : 'HIKE PAUSED') : 'LAST HIKE'}
-            lastHikeAction={showUnfinished ? 'Resume' : 'Open'}
-            lastHikeMode={showUnfinished ? topUnfinished.activityMode : (lastHike?.activityMode === 'running' ? 'running' : 'hiking')}
+            lastHikeEyebrow={showUnfinished
+              ? `${displayedMode === 'running' ? 'RUN' : 'HIKE'} ${showLiveActivity && liveStatus === 'tracking' ? 'RECORDING' : showLiveActivity && liveStatus === 'requesting' ? 'STARTING' : 'PAUSED'}`
+              : 'LAST HIKE'}
+            lastHikeAction={showUnfinished ? (showLiveActivity && liveStatus !== 'paused' ? 'Return' : 'Resume') : 'Open'}
+            lastHikeMode={showUnfinished ? displayedMode : (lastHike?.activityMode === 'running' ? 'running' : 'hiking')}
             onLastHikePress={showUnfinished
               ? () => {
+                  if (showLiveActivity) {
+                    nav.navigate(liveActivityMode === 'running' ? 'Running' : 'Hiking');
+                    if (liveStatus === 'paused') void resumeLiveActivity();
+                    return;
+                  }
                   const activity = topUnfinished!;
                   void restoreRecoverableActivity(activity).then(restored => {
                     if (!restored) return;
@@ -349,6 +378,9 @@ export function HomeScreen() {
               : lastHike
                 ? () => nav.navigate('MapHistory', { sessionId: lastHike.id })
                 : undefined}
+            onHikingPress={() => nav.navigate('Hiking')}
+            onRunningPress={() => nav.navigate('Running')}
+            onPlantPress={() => nav.navigate('Plant', { origin: { kind: 'standalone' } })}
             bgAsset={bgTokens.bgAsset}
             bgTokens={bgTokens}
             forcedIsDark={!bgTokens.useDarkText}

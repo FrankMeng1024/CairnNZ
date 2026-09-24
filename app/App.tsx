@@ -570,6 +570,7 @@ function AppRoot() {
     }
 
     // Configure debug logger device info + start network monitor
+    let unsubscribeNetworkRecovery: (() => void) | null = null;
     try {
       markBootPhase('ue_main_before_debuglogger_configure');
       debugLogger.configure({ deviceInfo: telemetryUploader.getDeviceInfo() });
@@ -587,9 +588,9 @@ function AppRoot() {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { drainPending } = require('./src/services/syncDaemon');
-        networkMonitor.onChange((state: { state: string }) => {
+        unsubscribeNetworkRecovery = networkMonitor.onChange((state: { state: string }) => {
           if (state.state === 'online') {
-            void drainPending().catch(() => {});
+            void drainPending({ wakeReason: 'network_online' }).catch(() => {});
           }
         });
       } catch { /* best effort */ }
@@ -796,12 +797,15 @@ function AppRoot() {
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { drainPending } = require('./src/services/syncDaemon');
-          void drainPending().catch(() => {});
+          void drainPending({ wakeReason: 'foreground' }).catch(() => {});
         } catch { /* best effort */ }
       }
     });
     markBootPhase('ue_main_exit');
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      unsubscribeNetworkRecovery?.();
+    };
   }, []);
 
   // v300 DIAG: mark boot complete once render reaches first non-loading state.

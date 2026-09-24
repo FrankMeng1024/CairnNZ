@@ -4,7 +4,7 @@
  * - STORY-00043: session track polyline on map when session selected
  * - STORY-00046: flag detail bottom sheet, richer flag list items, improved empty states
  */
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   ActivityIndicator, View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert,
   Dimensions, Animated, Easing, Platform, TextInput, Keyboard,
@@ -19,6 +19,7 @@ import { useTrackingStore } from '../store/useTrackingStore';
 import { fetchSessionDetail } from '../services/sessionService';
 import { useRouteStore } from '../store/useRouteStore';
 import { useMarkerStore } from '../store/useMarkerStore';
+import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
 import { crashLogger } from '../services/crashLogger';
 import { getCurrentRegion } from '../config/regions';
 import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
@@ -54,6 +55,7 @@ import {
 } from '../features/activity/activityDetailPresentation';
 import { routeMatchesIdentity, routeOriginLines } from '../features/route/routeContracts';
 import { cairnDisplayTitle, splitTitleBody } from '../features/plant/services/noteEncoding';
+import { CairnDeleteDialog } from '../features/cairns/CairnDeleteDialog';
 import {
   ALMOST_DONE_CLONE_V1_ID,
   loadOrBuildAlmostDoneCloneV1,
@@ -727,7 +729,6 @@ function FlagDetailSheet({ marker, onClose, onDelete }: {
   };
 
   const handleDelete = () => {
-    if (!deleteConfirm) { setDeleteConfirm(true); return; }
     Animated.parallel([
       Animated.timing(slideY, { toValue: H, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(scrimOpacity, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
@@ -755,13 +756,18 @@ function FlagDetailSheet({ marker, onClose, onDelete }: {
         <Text style={[sheetStyles.dateLine, { color: theme.muted }]}>Planted: {dateStr}</Text>
         {/* Delete */}
         <TouchableOpacity
-          style={[sheetStyles.deleteBtn, { backgroundColor: theme.surface, borderColor: theme.destructive }, deleteConfirm && { backgroundColor: theme.destructive }]}
-          onPress={handleDelete}
+          style={[sheetStyles.deleteBtn, { backgroundColor: theme.surface, borderColor: theme.destructive }]}
+          onPress={() => setDeleteConfirm(true)}
         >
-          <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? theme.onPrimary : theme.destructive} strokeWidth={2} />
-          <Text style={[sheetStyles.deleteBtnText, { color: deleteConfirm ? theme.onPrimary : theme.destructive }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Cairn'}</Text>
+          <Icon name="Trash2" size={IconSize.sm} color={theme.destructive} strokeWidth={2} />
+          <Text style={[sheetStyles.deleteBtnText, { color: theme.destructive }]}>Delete Cairn</Text>
         </TouchableOpacity>
       </Animated.View>
+      <CairnDeleteDialog
+        visible={deleteConfirm}
+        onDismiss={() => setDeleteConfirm(false)}
+        onConfirm={handleDelete}
+      />
     </>
   );
 }
@@ -944,7 +950,8 @@ function MapHistoryObjectScreen() {
   const [invalidatedSessionId, setInvalidatedSessionId] = useState<string | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [routeDraftOpening, setRouteDraftOpening] = useState(false);
-  const allMarkers = useMarkerStore(s => s.markers);
+  const storedMarkers = useMarkerStore(s => s.markers);
+  const allMarkers = useMemo(() => markersForVisibleWorkspace(storedMarkers, debugMode), [debugMode, storedMarkers]);
   const markers = allMarkers.filter(m => m.regionCode === region.code);
   const deleteMarker = useMarkerStore(s => s.deleteMarker);
   // v74a: live GPS for "distance from current position" in flag list rows.

@@ -350,7 +350,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // All Cairns retrieval, durable words/delete truth, and stable identity.
 // O59 (2026-09-17): authoritative Own Route Detail, truthful existing-draft
 // editing, durable Activity origin, and explicit Hike/Run pre-start handoff.
-export const OTA_VERSION = 'O62';
+export const OTA_VERSION = 'O63';
 
 
 type OtaState =

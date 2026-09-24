@@ -7,7 +7,9 @@ describe('Owner device Batch 01 source contracts', () => {
   test('auth entry is responsive, private and uses native OTP semantics', () => {
     const source = read('screens/AuthScreen.tsx');
     expect(source).toContain('Opening sign in…');
-    expect(source).toContain('requestAnimationFrame');
+    expect(source).toContain("handleViewChange('login')");
+    expect(source).toContain('login_auth_state_published');
+    expect(source).not.toContain('login_settimeout_fired');
     expect(source).not.toContain('Remember me on this device');
     expect(source).not.toContain('requestForegroundPermissionsAsync');
     expect(source).toContain('autoFocus');

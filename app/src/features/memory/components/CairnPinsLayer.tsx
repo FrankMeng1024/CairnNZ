@@ -43,6 +43,7 @@ import { MysteryCairnSheet } from './MysteryCairnSheet';
 import { MarkDetailSheet } from '../../marks/components/MarkDetailSheet';
 import { useMarkLikeStore } from '../../marks/store/useMarkLikeStore';
 import { CairnPinV10, MysteryPinV10, StrangerBlurredPinV10 } from './CairnPinV10';
+import { CairnDeleteDialog } from '../../cairns/CairnDeleteDialog';
 import { splitTitleBody } from '../../plant/services/noteEncoding';
 import { likeMarker, reportMarker, MarkerInteractionError } from '../../../services/markerInteractionService';
 import type { Tier } from './pinTier';
@@ -290,26 +291,24 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   //   dedicated Friend Content access.
   const deleteMarker = useMarkerStore((s) => s.deleteMarker);
   const hideMark = useMarkerStore((s) => s.hideMark);
+  const [deleteTarget, setDeleteTarget] = useState<{ marker: Marker; semantic: 'own' | 'hide' } | null>(null);
   const handleDeleteOrHide = useCallback((mark: Marker, semantic: 'own' | 'hide') => {
-    if (semantic === 'own') {
-      Alert.alert(
-        'Delete this cairn?',
-        'This cannot be undone.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: () => {
-            deleteMarker(mark.id);
-            setSelection({ kind: 'none' });
-          } },
-        ],
-      );
+    setDeleteTarget({ marker: mark, semantic });
+  }, []);
+  const confirmDeleteOrHide = useCallback(() => {
+    const target = deleteTarget;
+    if (!target) return;
+    setDeleteTarget(null);
+    if (target.semantic === 'own') {
+      void deleteMarker(target.marker.id);
+      setSelection({ kind: 'none' });
     } else {
       // hideMark commits the local circle-map wipe synchronously before its
       // remote await. Close only after that invocation was accepted, and
       // contain any unexpected rejection without claiming Friend Content was
       // removed.
       try {
-        const hiding = hideMark(mark.id);
+        const hiding = hideMark(target.marker.id);
         setSelection({ kind: 'none' });
         void hiding.catch(() => {
           Alert.alert('Could not hide this cairn', 'Please try again.');
@@ -318,7 +317,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
         Alert.alert('Could not hide this cairn', 'Please try again.');
       }
     }
-  }, [deleteMarker, hideMark]);
+  }, [deleteMarker, deleteTarget, hideMark]);
 
   if (!Mapbox.available) return null;
   const { SymbolLayer, ShapeSource, Images, Image: MbxImage, PointAnnotation, MarkerView } = Mapbox;
@@ -470,6 +469,12 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
             onDelete={handleDeleteOrHide}
           />
         )}
+        <CairnDeleteDialog
+          visible={Boolean(deleteTarget)}
+          semantic={deleteTarget?.semantic}
+          onDismiss={() => setDeleteTarget(null)}
+          onConfirm={confirmDeleteOrHide}
+        />
       </>
     );
   }
@@ -532,11 +537,21 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
             inMyFog={isExplored}
             isLiked={isMarkLikedForSheet}
             onClose={() => setSelection({ kind: 'none' })}
+            onOpenDetail={(mark) => {
+              setSelection({ kind: 'none' });
+              navigation.navigate('MarkerDetail', { markerId: mark.id });
+            }}
             onLike={handleLike}
             onReport={handleReport}
             onDelete={handleDeleteOrHide}
           />
         )}
+        <CairnDeleteDialog
+          visible={Boolean(deleteTarget)}
+          semantic={deleteTarget?.semantic}
+          onDismiss={() => setDeleteTarget(null)}
+          onConfirm={confirmDeleteOrHide}
+        />
       </>
     );
   }
@@ -590,11 +605,21 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
           inMyFog={isExplored}
           isLiked={isMarkLikedForSheet}
           onClose={() => setSelection({ kind: 'none' })}
+          onOpenDetail={(mark) => {
+            setSelection({ kind: 'none' });
+            navigation.navigate('MarkerDetail', { markerId: mark.id });
+          }}
           onLike={handleLike}
           onReport={handleReport}
           onDelete={handleDeleteOrHide}
         />
       )}
+      <CairnDeleteDialog
+        visible={Boolean(deleteTarget)}
+        semantic={deleteTarget?.semantic}
+        onDismiss={() => setDeleteTarget(null)}
+        onConfirm={confirmDeleteOrHide}
+      />
     </>
   );
 }

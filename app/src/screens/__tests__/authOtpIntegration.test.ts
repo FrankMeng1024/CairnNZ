@@ -16,4 +16,10 @@ describe('Auth verification integration contract', () => {
     expect(source).not.toContain('getStringAsync()');
     expect(source).toContain('Native paste/autofill can provide the complete code to one cell.');
   });
+
+  it('lets the conditional auth navigator own the Home transition', () => {
+    expect(source).toContain('login_auth_state_published');
+    expect(source).not.toContain('login_settimeout_fired');
+    expect(source).toContain('RootNavigator reacts to the single installed auth state.');
+  });
 });

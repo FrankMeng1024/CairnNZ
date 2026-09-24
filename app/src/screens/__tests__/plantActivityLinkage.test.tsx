@@ -15,6 +15,7 @@ const activityId = 'activity-client-id';
 let mockAppUserId = 'owner-a';
 let mockMarkerOwnerId = 'owner-a';
 let mockTrackingState: Record<string, any>;
+let mockRouteParams: Record<string, any>;
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -22,6 +23,7 @@ jest.mock('@react-navigation/native', () => ({
     goBack: mockGoBack,
     replace: mockReplace,
   }),
+  useRoute: () => ({ params: mockRouteParams }),
 }));
 
 jest.mock('react-native-safe-area-context', () => {
@@ -135,8 +137,17 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
     mockContentSubmit = null;
     mockAppUserId = 'owner-a';
     mockMarkerOwnerId = 'owner-a';
+    mockRouteParams = {
+      origin: {
+        kind: 'activity',
+        clientActivityId: activityId,
+        ownerGeneration: 'activity-generation-1',
+        activityMode: 'hiking',
+      },
+    };
     mockTrackingState = {
       status: 'tracking',
+      activityMode: 'hiking',
       locationProviderSource: 'real',
       locationAvailable: true,
       lastCoordinate: { lat: -41.2865, lng: 174.7762, accuracy: 8 },

@@ -1260,6 +1260,20 @@ export function HikingMap({
             id={simulatorEnabled ? 'activity-simulator-puck' : 'activity-paused-puck'}
             shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: [userPos.lng, userPos.lat] }, properties: {} } as any}
           >
+            {simulatorEnabled && simulatorCenterPickerVisible ? (
+              <CircleLayer
+                id="activity-simulator-origin-focus"
+                slot="top"
+                style={{
+                  circleRadius: 19,
+                  circleColor: '#2E6CC5',
+                  circleOpacity: 0.14,
+                  circleStrokeColor: '#2E6CC5',
+                  circleStrokeWidth: 3,
+                  circleEmissiveStrength: mapPresentation.emissiveStrength,
+                }}
+              />
+            ) : null}
             <CircleLayer id="activity-user-puck-halo" slot="top" style={{ circleRadius: 15, circleColor: mapPresentation.puckHaloColor, circleOpacity: 0.24, circleEmissiveStrength: mapPresentation.emissiveStrength }} />
             <CircleLayer id="activity-user-puck-ring" slot="top" style={{ circleRadius: 9, circleColor: mapPresentation.puckRingColor, circleEmissiveStrength: mapPresentation.emissiveStrength }} />
             <CircleLayer id="activity-user-puck-core" slot="top" style={{ circleRadius: 5.5, circleColor: mapPresentation.puckCoreColor, circleEmissiveStrength: mapPresentation.emissiveStrength }} />

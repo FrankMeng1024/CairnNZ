@@ -131,6 +131,9 @@ describe('FR-MEM-HIDE-01 Memory non-owner Cairn action', () => {
     expect(screen.getByTestId('mark-detail-sheet-form-B')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('mark-detail-delete-hide'));
+    expect(screen.getByTestId('cairn-delete-confirmation')).toBeTruthy();
+    expect(mockHideMark).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('cairn-delete-confirm'));
 
     expect(mockHideMark).toHaveBeenCalledTimes(1);
     expect(mockHideMark).toHaveBeenCalledWith('circle-501');
@@ -155,6 +158,7 @@ describe('FR-MEM-HIDE-01 Memory non-owner Cairn action', () => {
 
     fireEvent.press(screen.getByTestId('cairn-pin-friend'));
     fireEvent.press(screen.getByTestId('mark-detail-delete-hide'));
+    fireEvent.press(screen.getByTestId('cairn-delete-confirm'));
 
     expect(mockHideMark).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('mark-detail-sheet-form-B')).toBeNull();
