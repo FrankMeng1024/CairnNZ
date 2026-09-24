@@ -240,6 +240,8 @@ export function RunningScreen() {
   const locationAvailable = useTrackingStore(s => s.locationAvailable);
   const lastCoordinate = useTrackingStore(s => s.lastCoordinate);
   const latestSourceLocationTime = useTrackingStore(s => s.latestSourceLocationTime);
+  const latestSourceKind = useTrackingStore(s => s.latestSourceKind);
+  const foregroundRecoveryUntilMs = useTrackingStore(s => s.foregroundRecoveryUntilMs);
   const realMotionState = useTrackingStore(s => s.realMotionState);
   const realCandidatePending = useTrackingStore(s => s.realCandidatePending);
   const realCanonicalDecisionReason = useTrackingStore(s => s.realCanonicalDecisionReason);
@@ -712,6 +714,8 @@ export function RunningScreen() {
     latestCanonicalDecisionReason: realCanonicalDecisionReason,
     continuityGapOpen: pendingSegmentStartReason === 'gps-reacquired',
     motionState: realMotionState,
+    latestSourceKind,
+    foregroundRecoveryUntilMs,
   });
   const signalLost = status === 'tracking' && locationProviderSource === 'real'
     && realLocationHealth.userFacingIssue === 'source-unavailable';
@@ -725,7 +729,7 @@ export function RunningScreen() {
   const simulatorGpsActive = status === 'tracking' && locationProviderSource === 'simulator';
   const gpsStatusLabel = simulatorGpsActive
     ? `SIM · ${{ normal: 'Good', poor: 'Poor', lost: 'Lost', frozen: 'Frozen' }[simulatorSignal]}`
-    : transitionState === 'resuming'
+    : transitionState === 'resuming' || realLocationHealth.foregroundRecoveryActive
       ? 'Restoring GPS'
     : status === 'paused'
       ? 'GPS held'
@@ -743,7 +747,7 @@ export function RunningScreen() {
       : simulatorSignal === 'poor' ? 'warning'
         : simulatorSignal === 'lost' ? 'danger'
           : 'info'
-    : transitionState === 'resuming' ? 'warning'
+    : transitionState === 'resuming' || realLocationHealth.foregroundRecoveryActive ? 'warning'
       : status === 'paused' ? 'muted'
       : signalLost ? 'danger'
         : canonicalDegraded ? 'warning'

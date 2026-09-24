@@ -1,4 +1,11 @@
 export const ACTIVITY_SOURCE_HEALTH_FRESH_MS = 15_000;
+/** Core Location may legitimately batch outdoor background fixes under iOS
+ * power management. hike1 retained trustworthy samples with 19–21 s gaps, so
+ * background cadence has a separate bounded freshness budget. */
+export const ACTIVITY_BACKGROUND_SOURCE_HEALTH_FRESH_MS = 30_000;
+/** A foreground takeover stops/drains the background owner before the first
+ * foreground callback. That ownership handoff is recovery, not GPS loss. */
+export const ACTIVITY_FOREGROUND_RECOVERY_GRACE_MS = 12_000;
 export const ACTIVITY_CANONICAL_HEALTH_FRESH_MS = 5_000;
 export const ACTIVITY_CANONICAL_USER_WARNING_MS = 30_000;
 
@@ -15,6 +22,7 @@ export interface ActivityLocationHealth {
   canonicalHealth: ActivityCanonicalHealth;
   sourceAgeMs: number | null;
   canonicalAgeMs: number | null;
+  foregroundRecoveryActive: boolean;
   /** Calm product UI authority. Transient Candidate/filter states remain internal. */
   userFacingIssue: ActivityUserFacingLocationIssue;
   canonicalDegradationReason:
@@ -56,15 +64,23 @@ export function deriveActivityLocationHealth(args: {
   latestCanonicalDecisionReason: string | null;
   continuityGapOpen: boolean;
   motionState?: 'acquiring' | 'moving' | 'probably-stationary' | 'uncertain';
+  latestSourceKind?: 'foreground' | 'background' | null;
+  foregroundRecoveryUntilMs?: number | null;
   sourceFreshnessMs?: number;
   canonicalFreshnessMs?: number;
   canonicalUserWarningMs?: number;
 }): ActivityLocationHealth {
-  const sourceFreshnessMs = args.sourceFreshnessMs ?? ACTIVITY_SOURCE_HEALTH_FRESH_MS;
+  const sourceFreshnessMs = args.sourceFreshnessMs ?? (
+    args.latestSourceKind === 'background'
+      ? ACTIVITY_BACKGROUND_SOURCE_HEALTH_FRESH_MS
+      : ACTIVITY_SOURCE_HEALTH_FRESH_MS
+  );
   const canonicalFreshnessMs = args.canonicalFreshnessMs ?? ACTIVITY_CANONICAL_HEALTH_FRESH_MS;
   const canonicalUserWarningMs = args.canonicalUserWarningMs ?? ACTIVITY_CANONICAL_USER_WARNING_MS;
   const sourceAgeMs = age(args.nowMs, args.latestSourceTimestamp);
   const canonicalAgeMs = age(args.nowMs, args.latestCanonicalTimestamp);
+  const foregroundRecoveryActive = args.foregroundRecoveryUntilMs != null
+    && args.nowMs < args.foregroundRecoveryUntilMs;
   const sourceHealth: ActivitySourceHealth = !args.sourceActive
     ? 'inactive'
     : sourceAgeMs === null
@@ -101,14 +117,21 @@ export function deriveActivityLocationHealth(args: {
   const stationaryQuietProvider = args.sourceActive
     && args.motionState === 'probably-stationary';
   const userFacingIssue: ActivityUserFacingLocationIssue = (
-    (sourceHealth === 'stale' && !stationaryQuietProvider)
-    || (sourceHealth === 'inactive' && sourceAgeMs !== null)
+    !foregroundRecoveryActive
+    && (
+      (sourceHealth === 'stale' && !stationaryQuietProvider)
+      || (sourceHealth === 'inactive' && sourceAgeMs !== null)
+    )
   )
     ? 'source-unavailable'
     : sourceHealth === 'fresh'
       && canonicalHealth === 'degraded'
       && args.motionState !== 'probably-stationary'
       && (canonicalAgeMs ?? 0) >= canonicalUserWarningMs
+      // Candidate/continuity filtering is route-settling evidence, not proof
+      // of weak radio/GPS signal. Only sustained accuracy rejection earns the
+      // user-facing quality warning; all reasons remain in telemetry.
+      && canonicalDegradationReason === 'accuracy-reject'
       ? 'sustained-route-unreliable'
       : 'none';
   return {
@@ -116,6 +139,7 @@ export function deriveActivityLocationHealth(args: {
     canonicalHealth,
     sourceAgeMs,
     canonicalAgeMs,
+    foregroundRecoveryActive,
     userFacingIssue,
     canonicalDegradationReason,
   };

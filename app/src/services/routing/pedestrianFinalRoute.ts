@@ -173,6 +173,8 @@ export interface BaseFinalDiagnostics {
   stationaryCloudCollapsed: boolean;
   removedMicroExcursionCount: number;
   maximumRemovedExcursionDepthM: number;
+  removedTransientSpikeCount: number;
+  maximumRemovedTransientSpikeDepthM: number;
 }
 
 export interface PedestrianFinalOptions {
@@ -640,10 +642,90 @@ function collapseSameCorridorMicroExcursions(
 }
 
 /**
- * Offline-safe Base Final. It only removes a bounded same-corridor
- * micro-excursion and simplifies between multi-scale structural turns. It
- * never changes chronology, joins segments, consults a network, or feeds
- * Activity metrics/Memory.
+ * Removes only a short uncertainty-bounded lateral out-and-back. The gate
+ * requires opposing sharp turns, measurable detour, quick corridor return,
+ * and no true source gap. A persistent corner, crossing, U-turn, backtrack,
+ * Z, switchback, or parallel track fails at least one of those conditions.
+ */
+function collapseTransientLateralSpikes(
+  points: RawPoint[],
+  uncertaintyM: number,
+): {
+  points: RawPoint[];
+  removedCount: number;
+  maximumRemovedDepthM: number;
+} {
+  if (points.length < 5) {
+    return { points: points.slice(), removedCount: 0, maximumRemovedDepthM: 0 };
+  }
+  const maximumDepthM = clamp(uncertaintyM * 0.65, 4.5, 9);
+  const removed = new Set<number>();
+  let removedCount = 0;
+  let maximumRemovedDepthM = 0;
+
+  for (let start = 0; start < points.length - 4; start += 1) {
+    let best: { end: number; depthM: number; score: number } | null = null;
+    for (let end = start + 4; end < Math.min(points.length, start + 12); end += 1) {
+      const window = points.slice(start, end + 1);
+      const durationMs = window[0].t != null && window[window.length - 1].t != null
+        ? Number(window[window.length - 1].t) - Number(window[0].t)
+        : 0;
+      if (durationMs > 22_000) break;
+      const hasTrueGap = window.slice(1).some((point, index) => (
+        point.t != null
+        && window[index].t != null
+        && Number(point.t) - Number(window[index].t) > 12_500
+      ));
+      if (hasTrueGap) continue;
+
+      const directM = hav(window[0], window[window.length - 1]);
+      if (directM < 8) continue;
+      const travelledM = pathLength(window);
+      const detourExcessM = travelledM - directM;
+      if (detourExcessM < 3 || travelledM / directM < 1.24) continue;
+
+      const depths = window.slice(1, -1).map(point => (
+        projectPointToPath(point, [window[0], window[window.length - 1]]).distanceM
+      ));
+      const depthM = Math.max(...depths);
+      if (depthM < 3.25 || depthM > maximumDepthM) continue;
+      // A sustained second corridor/branch has broad support. A transient GPS
+      // spike peaks briefly and then converges back to the evidence chord.
+      const materialSupportCount = depths.filter(value => value >= Math.max(2.5, depthM * 0.58)).length;
+      if (materialSupportCount > 5) continue;
+
+      const turns = window.slice(1, -1).map((_point, offset) => {
+        const index = offset + 1;
+        return signedAngleDeltaDegrees(
+          bearingDegrees(window[index - 1], window[index]),
+          bearingDegrees(window[index], window[index + 1]),
+        );
+      });
+      const positiveTurn = Math.max(0, ...turns);
+      const negativeTurn = Math.min(0, ...turns);
+      if (positiveTurn < 55 || negativeTurn > -55) continue;
+
+      const score = detourExcessM + depthM;
+      if (!best || score > best.score) best = { end, depthM, score };
+    }
+    if (!best) continue;
+    for (let index = start + 1; index < best.end; index += 1) removed.add(index);
+    removedCount += 1;
+    maximumRemovedDepthM = Math.max(maximumRemovedDepthM, best.depthM);
+    start = best.end - 1;
+  }
+  return {
+    points: points.filter((_point, index) => !removed.has(index)),
+    removedCount,
+    maximumRemovedDepthM,
+  };
+}
+
+/**
+ * Offline-safe Base Final. It removes only bounded uncertainty-sized
+ * transient spikes/micro-excursions, then simplifies between multi-scale
+ * structural turns. It never changes canonical truth, joins segments,
+ * consults a network, or feeds Activity metrics/Memory.
  */
 export function buildBaseFinalGeometry(points: RawPoint[]): {
   points: SnappedPoint[];
@@ -666,6 +748,8 @@ export function buildBaseFinalGeometry(points: RawPoint[]): {
         stationaryCloudCollapsed: false,
         removedMicroExcursionCount: 0,
         maximumRemovedExcursionDepthM: 0,
+        removedTransientSpikeCount: 0,
+        maximumRemovedTransientSpikeDepthM: 0,
       },
     };
   }
@@ -687,10 +771,13 @@ export function buildBaseFinalGeometry(points: RawPoint[]): {
         stationaryCloudCollapsed: true,
         removedMicroExcursionCount: 0,
         maximumRemovedExcursionDepthM: 0,
+        removedTransientSpikeCount: 0,
+        maximumRemovedTransientSpikeDepthM: 0,
       },
     };
   }
-  const collapsed = collapseSameCorridorMicroExcursions(points, effectiveUncertaintyM);
+  const despiked = collapseTransientLateralSpikes(points, effectiveUncertaintyM);
+  const collapsed = collapseSameCorridorMicroExcursions(despiked.points, effectiveUncertaintyM);
   const allCritical = finalGeometryCriticalIndices(collapsed.points);
   const rawGeometricCritical = finalGeometryStructuralTurnIndices(collapsed.points);
   const directM = hav(collapsed.points[0], collapsed.points[collapsed.points.length - 1]);
@@ -706,8 +793,17 @@ export function buildBaseFinalGeometry(points: RawPoint[]): {
     .filter((sign, index) => sign !== rawTurnSigns[index]).length;
   const highFrequencyWobble = rawTurnSigns.length >= 4
     && rawAlternatingTurnCount >= Math.ceil((rawTurnSigns.length - 1) * 0.35);
+  const signedCorridorDistances = collapsed.points.slice(1, -1).map(point => (
+    projectPointToPath(
+      point,
+      [collapsed.points[0], collapsed.points[collapsed.points.length - 1]],
+    ).signedDistanceM
+  )).filter(distanceM => Math.abs(distanceM) >= 0.75);
+  const evidenceCrossesChord = signedCorridorDistances.filter(distanceM => distanceM > 0).length >= 2
+    && signedCorridorDistances.filter(distanceM => distanceM < 0).length >= 2;
   const uncertaintyBoundedStraight = directM >= 30
     && highFrequencyWobble
+    && evidenceCrossesChord
     && Math.max(...collapsed.points.map(point => projectPointToPath(
       point,
       [collapsed.points[0], collapsed.points[collapsed.points.length - 1]],
@@ -778,6 +874,8 @@ export function buildBaseFinalGeometry(points: RawPoint[]): {
       stationaryCloudCollapsed: false,
       removedMicroExcursionCount: collapsed.removedCount,
       maximumRemovedExcursionDepthM: collapsed.maximumRemovedDepthM,
+      removedTransientSpikeCount: despiked.removedCount,
+      maximumRemovedTransientSpikeDepthM: despiked.maximumRemovedDepthM,
     },
   };
 }

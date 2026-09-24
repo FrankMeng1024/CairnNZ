@@ -1,4 +1,9 @@
-import { appendCausalLivePoint, buildCausalLiveRoute } from '../causalLiveRoute';
+import {
+  appendCausalLivePoint,
+  buildCausalLiveRoute,
+  LIVE_MUTABLE_TAIL_MAX_AGE_MS,
+  LIVE_MUTABLE_TAIL_MAX_DISTANCE_M,
+} from '../causalLiveRoute';
 import { haversineM } from '../../../utils/geo';
 import type { TrackPoint } from '../../../store/useSessionStore';
 
@@ -17,7 +22,10 @@ describe('causal Live route presentation', () => {
   test('materially calms a straight urban corridor with 1–5 m wobble', () => {
     const canonical = Array.from({ length: 41 }, (_, index) => sample(index * 4, Math.sin(index * 1.7) * 4, index));
     const live = buildCausalLiveRoute(canonical);
-    expect(live.length).toBeLessThan(canonical.length / 2);
+    // Freezing the recent tail promptly intentionally retains a few more
+    // stable vertices than the former 24+12 point rewrite window. Geometry
+    // still sheds at least a third of raw wobble without moving old history.
+    expect(live.length).toBeLessThan(canonical.length * 2 / 3);
     expect(length(live) / haversineM(canonical[0], canonical[canonical.length - 1])).toBeLessThan(1.05);
     expect(live.at(-1)).toBe(canonical.at(-1));
   });
@@ -51,5 +59,30 @@ describe('causal Live route presentation', () => {
       published = appendCausalLivePoint(published, point, history);
       expect(published).toEqual(buildCausalLiveRoute(points.slice(0, index + 1)));
     });
+  });
+
+  test('never revises display geometry outside the bounded recent tail', () => {
+    const points = Array.from({ length: 36 }, (_, index) => ({
+      ...sample(index * 2, Math.sin(index * 1.9) * 3.5, index),
+      // Include a hike1-like background cadence gap. Point-count-only tails
+      // previously kept geometry mutable for roughly 100 seconds here.
+      t: index < 18 ? index * 1_000 : 100_000 + (index - 18) * 1_000,
+    }));
+    let published: TrackPoint[] = [];
+    const history: TrackPoint[] = [];
+    for (const point of points) {
+      const before = published;
+      history.push(point);
+      published = appendCausalLivePoint(published, point, history);
+      const retainedTimes = new Set(published.map(candidate => candidate.t));
+      const revised = before.filter(candidate => !retainedTimes.has(candidate.t));
+      for (const candidate of revised) {
+        expect(point.t - candidate.t).toBeLessThanOrEqual(LIVE_MUTABLE_TAIL_MAX_AGE_MS);
+        const from = history.findIndex(item => item.t === candidate.t);
+        const to = history.length - 1;
+        const travelled = from < 0 ? Infinity : length(history.slice(from, to + 1));
+        expect(travelled).toBeLessThanOrEqual(LIVE_MUTABLE_TAIL_MAX_DISTANCE_M + 0.01);
+      }
+    }
   });
 });

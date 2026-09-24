@@ -258,6 +258,10 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
     lastCoordinateTime: last?.t ?? null,
     lastFixTimestamp: last?.t ?? null,
     latestSourceLocationTime: last?.t ?? null,
+    latestSourceKind: last?.source === 'background' || last?.source === 'significant-change'
+      ? 'background'
+      : last ? 'foreground' : null,
+    foregroundRecoveryUntilMs: null,
     latestSourceCoordinate: last ? { ...last, t: last.t } : null,
     liveOwnerGeneration: newOwnerGeneration,
     liveOwnerAcceptAfterMs: activityTimestampForSource(

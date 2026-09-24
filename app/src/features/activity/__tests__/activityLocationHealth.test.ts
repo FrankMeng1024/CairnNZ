@@ -96,6 +96,81 @@ describe('Activity source and canonical health', () => {
     }).userFacingIssue).toBe('source-unavailable');
   });
 
+  test('hike1-like background batching stays available through a 21 second cadence gap', () => {
+    expect(deriveActivityLocationHealth({
+      nowMs: 121_000,
+      sourceActive: true,
+      latestSourceTimestamp: 100_000,
+      latestCanonicalTimestamp: 52_000,
+      latestSourceKind: 'background',
+      pendingCandidate: false,
+      latestCanonicalDecisionReason: 'stationary-cluster-suppressed',
+      continuityGapOpen: false,
+      motionState: 'uncertain',
+    })).toMatchObject({
+      sourceHealth: 'fresh',
+      canonicalHealth: 'degraded',
+      canonicalDegradationReason: 'continuity-reject',
+      userFacingIssue: 'none',
+    });
+  });
+
+  test('foreground ownership grace reports recovery instead of false source loss', () => {
+    expect(deriveActivityLocationHealth({
+      nowMs: 121_000,
+      sourceActive: false,
+      latestSourceTimestamp: 100_000,
+      latestCanonicalTimestamp: 52_000,
+      latestSourceKind: 'background',
+      foregroundRecoveryUntilMs: 130_000,
+      pendingCandidate: false,
+      latestCanonicalDecisionReason: 'stationary-cluster-suppressed',
+      continuityGapOpen: false,
+      motionState: 'uncertain',
+    })).toMatchObject({
+      sourceHealth: 'inactive',
+      foregroundRecoveryActive: true,
+      userFacingIssue: 'none',
+    });
+  });
+
+  test('expired recovery grace and true sparse loss still warn', () => {
+    expect(deriveActivityLocationHealth({
+      nowMs: 140_001,
+      sourceActive: true,
+      latestSourceTimestamp: 100_000,
+      latestCanonicalTimestamp: 52_000,
+      latestSourceKind: 'background',
+      foregroundRecoveryUntilMs: 140_000,
+      pendingCandidate: false,
+      latestCanonicalDecisionReason: 'stationary-cluster-suppressed',
+      continuityGapOpen: false,
+      motionState: 'moving',
+    })).toMatchObject({
+      sourceHealth: 'stale',
+      foregroundRecoveryActive: false,
+      userFacingIssue: 'source-unavailable',
+    });
+  });
+
+  test('fresh continuity filtering is not mislabeled as weak GPS signal', () => {
+    expect(deriveActivityLocationHealth({
+      nowMs: 140_000,
+      sourceActive: true,
+      latestSourceTimestamp: 139_000,
+      latestCanonicalTimestamp: 52_000,
+      pendingCandidate: false,
+      latestCanonicalDecisionReason: 'stationary-cluster-suppressed',
+      continuityGapOpen: false,
+      motionState: 'uncertain',
+    })).toMatchObject({
+      sourceHealth: 'fresh',
+      canonicalHealth: 'degraded',
+      canonicalDegradationReason: 'continuity-reject',
+      userFacingIssue: 'none',
+    });
+  });
+
   test('stationary position refinement never creates a route warning', () => {
     expect(deriveActivityLocationHealth({
       nowMs: 160_000,

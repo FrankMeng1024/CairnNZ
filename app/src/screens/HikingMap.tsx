@@ -44,7 +44,10 @@ import {
   activityMapPresentation,
 } from '../features/activity/activityMapPresentation';
 import { useIsFocused } from '@react-navigation/native';
-import { deriveActivityPresentationFreshness } from '../features/activity/activityLocationHealth';
+import {
+  ACTIVITY_BACKGROUND_SOURCE_HEALTH_FRESH_MS,
+  deriveActivityPresentationFreshness,
+} from '../features/activity/activityLocationHealth';
 import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay';
 import { CairnPinV10 } from '../features/memory/components/CairnPinV10';
 
@@ -579,6 +582,7 @@ export function HikingMap({
   const trackingStatus = useTrackingStore(s => s.status);
   const trackingIsFinishing = useTrackingStore(s => s.isFinishing);
   const latestSourceCoordinate = useTrackingStore(s => s.latestSourceCoordinate);
+  const latestSourceKind = useTrackingStore(s => s.latestSourceKind);
   const activityCustomProviderMounted = Boolean(
     !simulatorEnabled
     && CustomLocationProviderComponent
@@ -595,6 +599,9 @@ export function HikingMap({
     nowMs: Date.now(),
     sourceActive: realCustomProviderActive,
     latestSourceTimestamp: latestSourceCoordinate?.t ?? null,
+    freshForMs: latestSourceKind === 'background'
+      ? ACTIVITY_BACKGROUND_SOURCE_HEALTH_FRESH_MS
+      : undefined,
   });
   const currentActivityPositionVisible = realCustomProviderActive
     && presentationFreshness === 'CURRENT';

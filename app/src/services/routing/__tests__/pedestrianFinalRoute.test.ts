@@ -320,6 +320,54 @@ describe('O50 free/off-network cleanup product contracts', () => {
     )))).toBeGreaterThan(10);
   });
 
+  test('Base Final removes an isolated uncertainty-bounded lateral spike', () => {
+    const canonical = [
+      point(0, 0, 0, 14), point(10, 0, 1, 14), point(15, 9, 2, 14),
+      point(20, 0, 3, 14), point(30, 0, 4, 14),
+    ];
+    const base = buildBaseFinalGeometry(canonical);
+    expect(base.diagnostics.removedTransientSpikeCount).toBe(1);
+    expect(base.diagnostics.maximumRemovedTransientSpikeDepthM).toBeGreaterThan(8);
+    expect(Math.max(...base.points.map(sample => (
+      Math.abs((sample.lat - BASE_LAT) * METRES_PER_DEGREE)
+    )))).toBeLessThan(1);
+  });
+
+  test('Base Final removes a short multi-fix spike but preserves supported path intent', () => {
+    const burst = [
+      point(0, 0, 0, 14), point(8, 0, 1, 14), point(12, 7, 2, 14),
+      point(15, 9, 3, 14), point(18, 6, 4, 14), point(22, 0, 5, 14),
+      point(30, 0, 6, 14),
+    ];
+    expect(buildBaseFinalGeometry(burst).diagnostics.removedTransientSpikeCount).toBe(1);
+
+    const parallelRoad = [
+      point(0, 0, 0, 14), point(10, 0, 1, 14), point(20, 8, 2, 14),
+      point(30, 8, 3, 14), point(40, 8, 4, 14), point(50, 0, 5, 14),
+      point(60, 0, 6, 14),
+    ];
+    const parallel = buildBaseFinalGeometry(parallelRoad);
+    expect(parallel.diagnostics.removedTransientSpikeCount).toBe(0);
+    expect(Math.max(...parallel.points.map(sample => (
+      (sample.lat - BASE_LAT) * METRES_PER_DEGREE
+    )))).toBeGreaterThan(6);
+  });
+
+  test('transient-spike repair does not cross a true source gap', () => {
+    const canonical = [
+      point(0, 0, 0, 14), point(10, 0, 1, 14), point(15, 8, 2, 14),
+      point(20, 0, 3, 14), point(30, 0, 4, 14),
+    ];
+    canonical[2].t = canonical[1].t! + 30_000;
+    canonical[3].t = canonical[2].t! + 4_000;
+    canonical[4].t = canonical[3].t! + 4_000;
+    const base = buildBaseFinalGeometry(canonical);
+    expect(base.diagnostics.removedTransientSpikeCount).toBe(0);
+    expect(base.points.some(sample => (
+      (sample.lat - BASE_LAT) * METRES_PER_DEGREE > 6
+    ))).toBe(true);
+  });
+
   test('offline Base Final reports uncertainty and complexity without network calls', async () => {
     const canonical = [
       point(0, 0, 0, 18), point(20, 0, 1, 18), point(2, 8, 2, 18),

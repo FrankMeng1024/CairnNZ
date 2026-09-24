@@ -150,7 +150,10 @@ import {
 import {
   planRealLocationLifecycleTransition,
 } from '../features/activity/activityLocationLifecycle';
-import { deriveActivityLocationHealth } from '../features/activity/activityLocationHealth';
+import {
+  ACTIVITY_FOREGROUND_RECOVERY_GRACE_MS,
+  deriveActivityLocationHealth,
+} from '../features/activity/activityLocationHealth';
 import type { ActivityTransitionState } from '../features/activity/activityOperationalState';
 import { appendCausalLivePoint } from '../features/activity/causalLiveRoute';
 import type { ActivityRouteReference } from '../features/route/routeContracts';
@@ -672,6 +675,8 @@ async function emitRealTelemetryHealth(reason: string): Promise<void> {
     latestCanonicalDecisionReason: state.realCanonicalDecisionReason ?? latestRealCanonicalDecisionReason,
     continuityGapOpen: state.pendingSegmentStartReason === 'gps-reacquired',
     motionState: state.realMotionState,
+    latestSourceKind: state.latestSourceKind,
+    foregroundRecoveryUntilMs: state.foregroundRecoveryUntilMs,
   });
   let efficiency: Record<string, unknown> = {};
   try {
@@ -899,6 +904,11 @@ interface TrackingState {
   backgroundLocationPermission: BackgroundLocationPermissionState;
   /** Latest real provider evidence, accepted or not. Separate from route truth. */
   latestSourceLocationTime: number | null;
+  /** Provider cadence of the latest evidence. Background delivery may be
+   * batched by iOS without becoming unavailable. */
+  latestSourceKind: RealProviderKind | null;
+  /** Bounded UI-only handoff grace; never changes canonical acceptance. */
+  foregroundRecoveryUntilMs: number | null;
   /** Narrow presentation feed for RNMapbox. It is never canonical truth. */
   latestSourceCoordinate: (Coordinate & { t: number }) | null;
   /** Current bounded real-motion inference used by health/UI diagnostics. */
@@ -1034,6 +1044,8 @@ const initialState = {
   locationAvailable: false,
   backgroundLocationPermission: 'unknown' as BackgroundLocationPermissionState,
   latestSourceLocationTime: null as number | null,
+  latestSourceKind: null as RealProviderKind | null,
+  foregroundRecoveryUntilMs: null as number | null,
   latestSourceCoordinate: null as (Coordinate & { t: number }) | null,
   realMotionState: 'acquiring' as RealGpsContinuityState['motionState'],
   realCandidatePending: false,
@@ -1179,6 +1191,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       lastCoordinateTime: null,
       lastFixTimestamp: null,
       latestSourceLocationTime: null,
+      latestSourceKind: null,
+      foregroundRecoveryUntilMs: null,
       latestSourceCoordinate: null,
       realMotionState: 'acquiring',
       realCandidatePending: false,
@@ -3647,6 +3661,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           && state.liveOwnerGeneration === before.liveOwnerGeneration
           ? {
               latestSourceLocationTime: sampleTimestamp,
+              latestSourceKind: owned.source === 'background' || owned.source === 'significant-change'
+                ? 'background'
+                : 'foreground',
+              foregroundRecoveryUntilMs: owned.source === 'background'
+                || owned.source === 'significant-change'
+                ? state.foregroundRecoveryUntilMs
+                : null,
               latestSourceCoordinate: { ...coord, t: sampleTimestamp },
             }
           : state);
@@ -5153,6 +5174,17 @@ function enqueueActivation(task: () => Promise<void>): Promise<void> {
 }
 
 function enqueueRealLocationLifecycleTransition(nextState: AppStateStatus): Promise<void> {
+  if (nextState === 'active') {
+    const owner = useTrackingStore.getState();
+    if (owner.status === 'tracking' && owner.locationProviderSource === 'real') {
+      // Publish handoff intent synchronously, before the serialized native
+      // stop/drain/start work. A slow ownership transition must not flash a
+      // false lost-signal warning on foreground resume.
+      useTrackingStore.setState({
+        foregroundRecoveryUntilMs: Date.now() + ACTIVITY_FOREGROUND_RECOVERY_GRACE_MS,
+      });
+    }
+  }
   const intentEpoch = ++realLocationLifecycleIntentEpoch;
   return enqueueActivation(async () => {
     // Coalescing is event/ownership based: a queued obsolete transition does
@@ -5444,6 +5476,7 @@ async function drainCommittedBackgroundLocations(committedBeforeFence = false): 
   ) {
     useTrackingStore.setState({
       latestSourceLocationTime: retained.timestamp,
+      latestSourceKind: 'background',
       latestSourceCoordinate: {
         lat: retained.latitude,
         lng: retained.longitude,
