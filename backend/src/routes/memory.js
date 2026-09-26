@@ -23,6 +23,19 @@ const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { deterministicCid } = require('../lib/deterministicCid');
 const { scheduleMemoryAttribution, scheduleMemoryProjectionReset } = require('../lib/attributeMemoryPoints');
+const { reconcilePublicSubmissionsForActivity } = require('../services/publicPublication');
+
+function schedulePublicMemoryReconciliation(userId, clientActivityId) {
+  setImmediate(() => {
+    void reconcilePublicSubmissionsForActivity(pool, userId, clientActivityId).catch(error => {
+      console.error('[memory/points:public-reconcile]', {
+        userId,
+        clientActivityId,
+        error: error?.message || String(error),
+      });
+    });
+  });
+}
 const { validateBody } = require('../middleware/validate');
 const schemas = require('../middleware/schemas');
 
@@ -241,6 +254,17 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
       : [[]];
     const confirmedPresence = new Set(confirmedPresenceRows.map(row => row.client_id));
     const finalPresenceEcho = presenceEcho.filter(entry => confirmedPresence.has(entry.cid));
+    // A marker may have reached the server before its qualifying Memory
+    // evidence. Once these source rows are durable, re-evaluate only the
+    // exact Activities represented by this request. Public remains isolated:
+    // its failure cannot turn a successful Memory upload into a retry storm.
+    const sourceActivityClientIds = new Set([
+      ...rows.map(row => row[6]),
+      ...presenceRows.map(row => row[9]),
+    ].filter(Boolean));
+    for (const clientActivityId of sourceActivityClientIds) {
+      schedulePublicMemoryReconciliation(userId, clientActivityId);
+    }
     // O1: dropped accepted/duplicates/rejected — client 只用 points echo,
     // 三个数字纯 debug 遗留(memorySync 从不 read)。
     return res.json({ points: finalEcho, presence_witnesses: finalPresenceEcho });

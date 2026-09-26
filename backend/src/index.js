@@ -171,6 +171,13 @@ async function start() {
       ['pending_registrations', 'date_of_birth'],
       ['markers', 'content_revision'],
       ['routes', 'content_revision'],
+      ['public_cairn_publications', 'snapshot_location_policy_version'],
+      ['public_cairn_encounters', 'evidence_lat'],
+      ['public_cairn_encounters', 'evidence_lng'],
+      ['public_cairn_encounters', 'evidence_observed_at_ms'],
+      ['public_cairn_encounters', 'evidence_segment_id'],
+      ['public_cairn_encounters', 'evidence_source'],
+      ['public_cairn_encounters', 'evidence_horizontal_accuracy_m'],
     ];
     const requiredTables = [
       'token_blacklist',      // migration 020
@@ -181,6 +188,7 @@ async function start() {
       'user_push_prefs',      // migration 024
       'data_exports',         // migration 023
       'feedback_messages',    // migration 035
+      'public_cairn_moderation_audit', // migration 044
     ];
     const missingCols = [];
     for (const [table, col] of requiredCols) {
@@ -231,10 +239,22 @@ async function start() {
       if (missingTables.length > 0) console.error('   Missing tables:', missingTables.join(', '));
       if (missingFks.length > 0) console.error('   Missing FKs (migration 026):', missingFks.join(', '));
       console.error('       Apply pending migrations from backend/src/migrations/ then restart.\n');
+      const public044Missing = missingCols.some(column => (
+        column === 'public_cairn_publications.snapshot_location_policy_version'
+        || column.startsWith('public_cairn_encounters.evidence_')
+      ))
+        || missingTables.includes('public_cairn_moderation_audit');
+      if (String(process.env.PUBLIC_CAIRN_PILOT_ENABLED || '').trim() === '1' && public044Missing) {
+        throw new Error('public_cairn_migration_044_incomplete');
+      }
     } else {
       console.log('✓ Sprint 6 schema check: all tables + columns + FKs present');
     }
   } catch (schemaErr) {
+    if (String(process.env.PUBLIC_CAIRN_PILOT_ENABLED || '').trim() === '1') {
+      console.error('[boot] Public schema verification failed:', schemaErr.message);
+      throw schemaErr;
+    }
     console.warn('[boot] schema check skipped:', schemaErr.message);
   }
 
@@ -344,4 +364,8 @@ async function start() {
   }
 }
 
-start();
+start().catch(error => {
+  console.error('[boot] fatal startup failure:', error?.message || String(error));
+  process.exitCode = 1;
+  void pool.end().catch(() => {});
+});

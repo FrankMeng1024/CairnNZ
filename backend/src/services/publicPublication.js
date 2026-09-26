@@ -3,6 +3,12 @@
 const crypto = require('crypto');
 const { selectQualifyingEncounterEvidence } = require('./encounterPolicy');
 const { eligibleSourceProvenanceSql } = require('./activitySourceProvenance');
+const { appendPublicModerationAudit } = require('./publicModerationAudit');
+const {
+  evaluatePublicLocation,
+  locationPolicyVersion,
+  publicLocationPolicyConfigured,
+} = require('./publicLocationPolicy');
 
 const PUBLIC_ENCOUNTER_RADIUS_M = 50;
 
@@ -10,19 +16,26 @@ function publicPilotEnabled() {
   return String(process.env.PUBLIC_CAIRN_PILOT_ENABLED || '').trim() === '1';
 }
 
-function publicPilotAuthorized(userId) {
-  if (!publicPilotEnabled() || userId == null) return false;
+function publicPilotAuthorizedOwnerIds() {
+  if (!publicPilotEnabled() || !publicLocationPolicyConfigured()) return [];
   // The disposable MySQL harness creates actor ids after the process starts;
   // this exception is valid only in its explicit test realm. Production can
   // never turn a global flag into broad access.
   if (process.env.NODE_ENV === 'test'
     && process.env.CAIRN_REALM === 'isolated_review'
-    && process.env.ALLOW_ISOLATED_QA_SOURCE_CONTRACT === '1') return true;
-  const allowlist = new Set(String(process.env.PUBLIC_CAIRN_PILOT_USER_IDS || '')
-    .split(',')
-    .map(value => value.trim())
-    .filter(value => /^\d+$/.test(value)));
-  return allowlist.has(String(userId));
+    && process.env.ALLOW_ISOLATED_QA_SOURCE_CONTRACT === '1') return null;
+  const rawAllowlist = String(process.env.PUBLIC_CAIRN_PILOT_USER_IDS || '').trim();
+  if (!/^[1-9]\d*(,[1-9]\d*)*$/.test(rawAllowlist)) return [];
+  const values = rawAllowlist.split(',');
+  const allowlist = new Set(values);
+  if (allowlist.size !== values.length) return [];
+  return values;
+}
+
+function publicPilotAuthorized(userId) {
+  if (userId == null) return false;
+  const authorizedIds = publicPilotAuthorizedOwnerIds();
+  return authorizedIds === null || authorizedIds.includes(String(userId));
 }
 
 function usefulPublicText(text) {
@@ -80,7 +93,20 @@ async function markerHasEligibleOrigin(conn, marker) {
   return Array.isArray(rows) && Boolean(selectQualifyingEncounterEvidence(rows));
 }
 
-async function withdrawPublication(conn, markerId, ownerId, reason) {
+async function withdrawPublication(
+  conn,
+  markerId,
+  ownerId,
+  reason,
+  { actorUserId = ownerId } = {},
+) {
+  const [active] = await conn.execute(
+    `SELECT id,publication_epoch,content_revision,state
+       FROM public_cairn_publications
+      WHERE marker_id=? AND owner_id=? AND state IN ('pending','published','suspended')
+      FOR UPDATE`,
+    [markerId, ownerId],
+  );
   await conn.execute(
     `UPDATE public_cairn_publications
         SET state='withdrawn', withdrawn_at=UTC_TIMESTAMP(3),
@@ -88,9 +114,29 @@ async function withdrawPublication(conn, markerId, ownerId, reason) {
       WHERE marker_id=? AND owner_id=? AND state IN ('pending','published','suspended')`,
     [String(reason || 'withdrawn').slice(0, 240), markerId, ownerId],
   );
+  for (const publication of active) {
+    await appendPublicModerationAudit(conn, {
+      eventType: 'publication_withdrawn',
+      actorUserId,
+      ownerUserId: ownerId,
+      markerId,
+      publicationId: publication.id,
+      publicationEpoch: publication.publication_epoch,
+      contentRevision: publication.content_revision,
+      fromState: publication.state,
+      toState: 'withdrawn',
+      reason,
+    });
+  }
+  return active.length;
 }
 
-async function synchronizePublicSubmission(conn, markerId, ownerId) {
+async function synchronizePublicSubmission(
+  conn,
+  markerId,
+  ownerId,
+  { actorUserId = ownerId } = {},
+) {
   const [rows] = await conn.execute(
     `SELECT id,user_id,type,text,lat,lng,approximate,permission,content_revision,public_intent,
             public_state,publication_epoch,origin_activity_client_id
@@ -101,7 +147,7 @@ async function synchronizePublicSubmission(conn, markerId, ownerId) {
   if (!marker) return { state: 'not_public', code: 'CAIRN_NOT_FOUND' };
 
   if (marker.permission !== 'public' || !marker.public_intent) {
-    await withdrawPublication(conn, marker.id, ownerId, 'author_changed_audience');
+    await withdrawPublication(conn, marker.id, ownerId, 'author_changed_audience', { actorUserId });
     await conn.execute(
       `UPDATE markers SET public_state='withdrawn', public_state_changed_at=UTC_TIMESTAMP(3)
         WHERE id=? AND user_id=?`,
@@ -111,16 +157,20 @@ async function synchronizePublicSubmission(conn, markerId, ownerId) {
   }
 
   if (!publicPilotAuthorized(ownerId)) {
-    await withdrawPublication(conn, marker.id, ownerId, 'pilot_disabled');
-    await conn.execute(
-      `UPDATE markers SET public_state='not_public', public_state_changed_at=UTC_TIMESTAMP(3)
-        WHERE id=? AND user_id=?`,
-      [marker.id, ownerId],
-    );
-    return { state: 'not_public', code: 'PUBLIC_PILOT_DISABLED' };
+    // Exposure authorization is an operational gate, not an author edit or a
+    // moderation decision. Freeze this exact revision while reads are gated.
+    // A later content revision is superseded/re-reviewed after authorization
+    // returns; disabling the pilot cannot rewrite operator history.
+    return {
+      state: marker.public_state,
+      code: 'PUBLIC_PILOT_DISABLED',
+      frozen: true,
+      publicationEpoch: Number(marker.publication_epoch),
+      contentRevision: Number(marker.content_revision),
+    };
   }
   if (!usefulPublicText(marker.text)) {
-    await withdrawPublication(conn, marker.id, ownerId, 'text_required');
+    await withdrawPublication(conn, marker.id, ownerId, 'text_required', { actorUserId });
     await conn.execute(
       `UPDATE markers SET public_state='not_public', public_state_changed_at=UTC_TIMESTAMP(3)
         WHERE id=? AND user_id=?`,
@@ -129,7 +179,7 @@ async function synchronizePublicSubmission(conn, markerId, ownerId) {
     return { state: 'not_public', code: 'PUBLIC_TEXT_REQUIRED' };
   }
   if (!await markerHasEligibleOrigin(conn, marker)) {
-    await withdrawPublication(conn, marker.id, ownerId, 'eligible_origin_required');
+    await withdrawPublication(conn, marker.id, ownerId, 'eligible_origin_required', { actorUserId });
     await conn.execute(
       `UPDATE markers SET public_state='not_public', public_state_changed_at=UTC_TIMESTAMP(3)
         WHERE id=? AND user_id=?`,
@@ -138,45 +188,146 @@ async function synchronizePublicSubmission(conn, markerId, ownerId) {
     return { state: 'not_public', code: 'PUBLIC_ELIGIBLE_ACTIVITY_REQUIRED' };
   }
 
+  const publicLocation = evaluatePublicLocation(marker.lat, marker.lng);
+  if (!publicLocation.allowed) {
+    await withdrawPublication(conn, marker.id, ownerId, 'sensitive_place_excluded', { actorUserId });
+    await conn.execute(
+      `UPDATE markers SET public_state='not_public', public_state_changed_at=UTC_TIMESTAMP(3)
+        WHERE id=? AND user_id=?`,
+      [marker.id, ownerId],
+    );
+    return { state: 'not_public', code: publicLocation.code };
+  }
+
+  const snapshot = {
+    type: String(marker.type || 'cairn'),
+    text: String(marker.text || ''),
+    lat: publicLocation.lat,
+    lng: publicLocation.lng,
+    approximate: true,
+    locationPolicyVersion: publicLocation.policyVersion,
+  };
+  const snapshotSha256 = crypto.createHash('sha256')
+    .update(JSON.stringify(snapshot))
+    .digest('hex');
+
   const [current] = await conn.execute(
-    `SELECT id,state,publication_epoch,content_revision
+    `SELECT id,state,publication_epoch,content_revision,snapshot_location_policy_version,
+            snapshot_sha256
        FROM public_cairn_publications
       WHERE marker_id=? ORDER BY publication_epoch DESC LIMIT 1 FOR UPDATE`,
     [marker.id],
   );
   if (current[0]
-    && Number(current[0].content_revision) === Number(marker.content_revision)
-    && ['pending', 'published'].includes(current[0].state)) {
-    return {
-      state: current[0].state,
-      publicationId: String(current[0].id),
-      publicationEpoch: Number(current[0].publication_epoch),
-      contentRevision: Number(current[0].content_revision),
-      code: current[0].state === 'pending' ? 'PUBLIC_PENDING' : 'PUBLIC_PUBLISHED',
+    && Number(current[0].content_revision) === Number(marker.content_revision)) {
+    const currentPolicyVersion = locationPolicyVersion();
+    const policyMatches = current[0].snapshot_location_policy_version === currentPolicyVersion;
+    const stableStateCodes = {
+      pending: 'PUBLIC_PENDING',
+      published: 'PUBLIC_PUBLISHED',
+      rejected: 'PUBLIC_REJECTED',
+      suspended: 'PUBLIC_SUSPENDED',
+      withdrawn: 'PUBLIC_WITHDRAWN',
     };
+    // Moderation decisions are sticky for an identical author revision. A
+    // policy change must never turn rejected/suspended content back into a new
+    // pending submission. Withdrawn is likewise an explicit terminal episode.
+    if (!policyMatches && current[0].state === 'suspended') {
+      // A reported or reviewed snapshot is immutable. Close the old policy
+      // episode and create a fresh suspended episode whose new ID must be
+      // explicitly restored. Reports/audit rows therefore retain the exact
+      // bytes and hash an operator previously saw.
+      const nextEpoch = Number(marker.publication_epoch) + 1;
+      const [closed] = await conn.execute(
+        `UPDATE public_cairn_publications
+            SET state='withdrawn',withdrawn_at=UTC_TIMESTAMP(3),
+                decision_reason=COALESCE(decision_reason,'location_policy_superseded')
+          WHERE id=? AND marker_id=? AND owner_id=? AND state='suspended'
+            AND publication_epoch=? AND content_revision=?`,
+        [current[0].id, marker.id, ownerId,
+          current[0].publication_epoch, current[0].content_revision],
+      );
+      if (closed.affectedRows !== 1) throw new Error('public_suspended_policy_resnapshot_lost_lock');
+      await appendPublicModerationAudit(conn, {
+        eventType: 'publication_withdrawn',
+        actorUserId,
+        ownerUserId: ownerId,
+        markerId: marker.id,
+        publicationId: current[0].id,
+        publicationEpoch: current[0].publication_epoch,
+        contentRevision: current[0].content_revision,
+        fromState: 'suspended',
+        toState: 'withdrawn',
+        reason: 'location_policy_superseded',
+      });
+      const [inserted] = await conn.execute(
+        `INSERT INTO public_cairn_publications
+           (marker_id,owner_id,publication_epoch,content_revision,
+            snapshot_type,snapshot_text,snapshot_lat,snapshot_lng,snapshot_approximate,
+            snapshot_location_policy_version,snapshot_sha256,state,decision_reason)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,'suspended','location_policy_refresh_requires_restore')`,
+        [marker.id, ownerId, nextEpoch, marker.content_revision,
+          snapshot.type, snapshot.text, snapshot.lat, snapshot.lng,
+          snapshot.approximate ? 1 : 0, snapshot.locationPolicyVersion, snapshotSha256],
+      );
+      const [markerUpdated] = await conn.execute(
+        `UPDATE markers
+            SET publication_epoch=?,public_state='suspended',public_state_changed_at=UTC_TIMESTAMP(3)
+          WHERE id=? AND user_id=? AND publication_epoch=? AND content_revision=?`,
+        [nextEpoch, marker.id, ownerId, current[0].publication_epoch, marker.content_revision],
+      );
+      if (markerUpdated.affectedRows !== 1) throw new Error('public_policy_resnapshot_marker_lost_lock');
+      await appendPublicModerationAudit(conn, {
+        eventType: 'publication_policy_resnapshotted',
+        actorUserId,
+        ownerUserId: ownerId,
+        markerId: marker.id,
+        publicationId: inserted.insertId,
+        publicationEpoch: nextEpoch,
+        contentRevision: current[0].content_revision,
+        fromState: 'suspended',
+        toState: 'suspended',
+        reason: 'location_policy_changed',
+        metadata: {
+          previousPublicationId: String(current[0].id),
+          previousPolicyVersion: current[0].snapshot_location_policy_version,
+          locationPolicyVersion: snapshot.locationPolicyVersion,
+          previousSnapshotSha256: current[0].snapshot_sha256,
+          snapshotSha256,
+        },
+      });
+      return {
+        state: 'suspended',
+        publicationId: String(inserted.insertId),
+        previousPublicationId: String(current[0].id),
+        publicationEpoch: nextEpoch,
+        contentRevision: Number(current[0].content_revision),
+        code: 'PUBLIC_SUSPENDED',
+        policyResnapshotted: true,
+      };
+    }
+    if (policyMatches || ['rejected', 'withdrawn'].includes(current[0].state)) {
+      return {
+        state: current[0].state,
+        publicationId: String(current[0].id),
+        publicationEpoch: Number(current[0].publication_epoch),
+        contentRevision: Number(current[0].content_revision),
+        code: stableStateCodes[current[0].state] || 'PUBLIC_STATE_UNCHANGED',
+      };
+    }
   }
 
-  await withdrawPublication(conn, marker.id, ownerId, 'superseded_by_new_submission');
+  await withdrawPublication(conn, marker.id, ownerId, 'superseded_by_new_submission', { actorUserId });
   const nextEpoch = Number(marker.publication_epoch) + 1;
-  const snapshot = {
-    type: String(marker.type || 'cairn'),
-    text: String(marker.text || ''),
-    lat: Number(marker.lat),
-    lng: Number(marker.lng),
-    approximate: Boolean(marker.approximate),
-  };
-  const snapshotSha256 = crypto.createHash('sha256')
-    .update(JSON.stringify(snapshot))
-    .digest('hex');
   const [inserted] = await conn.execute(
     `INSERT INTO public_cairn_publications
        (marker_id,owner_id,publication_epoch,content_revision,
         snapshot_type,snapshot_text,snapshot_lat,snapshot_lng,snapshot_approximate,
-        snapshot_sha256,state)
-     VALUES (?,?,?,?,?,?,?,?,?,?,'pending')`,
+        snapshot_location_policy_version,snapshot_sha256,state)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending')`,
     [marker.id, ownerId, nextEpoch, marker.content_revision,
       snapshot.type, snapshot.text, snapshot.lat, snapshot.lng,
-      snapshot.approximate ? 1 : 0, snapshotSha256],
+      snapshot.approximate ? 1 : 0, snapshot.locationPolicyVersion, snapshotSha256],
   );
   await conn.execute(
     `UPDATE markers
@@ -184,6 +335,18 @@ async function synchronizePublicSubmission(conn, markerId, ownerId) {
       WHERE id=? AND user_id=?`,
     [nextEpoch, marker.id, ownerId],
   );
+  await appendPublicModerationAudit(conn, {
+    eventType: 'publication_submitted',
+    actorUserId: ownerId,
+    ownerUserId: ownerId,
+    markerId: marker.id,
+    publicationId: inserted.insertId,
+    publicationEpoch: nextEpoch,
+    contentRevision: marker.content_revision,
+    fromState: null,
+    toState: 'pending',
+    reason: 'owner_public_intent',
+  });
   return {
     state: 'pending', code: 'PUBLIC_PENDING',
     publicationId: String(inserted.insertId),
@@ -192,13 +355,90 @@ async function synchronizePublicSubmission(conn, markerId, ownerId) {
   };
 }
 
+async function reconcilePublicSubmissionsForActivityInTransaction(
+  conn,
+  ownerId,
+  clientActivityId,
+  { ownerLocked = false } = {},
+) {
+  if (!publicPilotAuthorized(ownerId) || !clientActivityId) return { reconciled: 0, skipped: true };
+  if (!ownerLocked) {
+    await conn.execute(
+      'SELECT id FROM users WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [ownerId],
+    );
+  }
+  const [markers] = await conn.execute(
+    `SELECT id FROM markers
+      WHERE user_id=? AND origin_activity_client_id=?
+        AND permission='public' AND public_intent=1
+      ORDER BY id FOR UPDATE`,
+    [ownerId, clientActivityId],
+  );
+  for (const marker of markers) {
+    await synchronizePublicSubmission(conn, marker.id, ownerId, { actorUserId: null });
+  }
+  return { reconciled: markers.length, skipped: false };
+}
+
+async function reconcilePublicSubmissionsForActivity(dbPool, ownerId, clientActivityId) {
+  if (!publicPilotAuthorized(ownerId) || !clientActivityId) return { reconciled: 0, skipped: true };
+  const conn = await dbPool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const result = await reconcilePublicSubmissionsForActivityInTransaction(
+      conn,
+      ownerId,
+      clientActivityId,
+    );
+    await conn.commit();
+    return result;
+  } catch (error) {
+    try { await conn.rollback(); } catch { /* preserve original failure */ }
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
+async function withdrawOwnerPublications(conn, ownerId, reason) {
+  const [markers] = await conn.execute(
+    `SELECT marker.id AS marker_id
+       FROM markers marker
+      WHERE marker.user_id=?
+        AND EXISTS (
+          SELECT 1 FROM public_cairn_publications publication
+           WHERE publication.marker_id=marker.id AND publication.owner_id=marker.user_id
+             AND publication.state IN ('pending','published','suspended')
+        )
+      ORDER BY marker.id FOR UPDATE`,
+    [ownerId],
+  );
+  let withdrawn = 0;
+  for (const row of markers) {
+    withdrawn += await withdrawPublication(conn, row.marker_id, ownerId, reason);
+  }
+  if (markers.length > 0) {
+    await conn.execute(
+      `UPDATE markers SET public_state='withdrawn',public_state_changed_at=UTC_TIMESTAMP(3)
+        WHERE user_id=? AND public_state IN ('pending','published','suspended')`,
+      [ownerId],
+    );
+  }
+  return withdrawn;
+}
+
 module.exports = {
   PUBLIC_ENCOUNTER_RADIUS_M,
   publicPilotEnabled,
   publicPilotAuthorized,
+  publicPilotAuthorizedOwnerIds,
   usefulPublicText,
   loadEligiblePublicationOriginEvidence,
   markerHasEligibleOrigin,
   withdrawPublication,
   synchronizePublicSubmission,
+  reconcilePublicSubmissionsForActivityInTransaction,
+  reconcilePublicSubmissionsForActivity,
+  withdrawOwnerPublications,
 };

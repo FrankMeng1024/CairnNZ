@@ -59,7 +59,8 @@ for migration in \
   040_resource_content_revision.sql \
   041_public_cairn_pilot.sql \
   042_v1_closure_authority.sql \
-  043_friend_discovery_marker_location.sql; do
+  043_friend_discovery_marker_location.sql \
+  044_public_cairn_moderation_audit.sql; do
   docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/$migration" >/dev/null
 done
 

@@ -188,24 +188,6 @@ async function main() {
         path: `/api/public-cairns/cairns/${publicMarkerId}/report`,
         body: { client_submission_id: crypto.randomUUID(), category: 'other', detail: 'disabled harness' },
       },
-      {
-        id: 'operator-submissions', actor: actors.C, method: 'GET',
-        path: '/api/public-cairns/operator/submissions?state=pending&limit=25',
-      },
-      {
-        id: 'operator-decision', actor: actors.C, method: 'POST',
-        path: '/api/public-cairns/operator/submissions/1/decision',
-        body: { action: 'approve', reason: 'disabled harness' },
-      },
-      {
-        id: 'operator-reports', actor: actors.C, method: 'GET',
-        path: '/api/public-cairns/operator/reports?state=pending&limit=25',
-      },
-      {
-        id: 'operator-disposition', actor: actors.C, method: 'POST',
-        path: '/api/public-cairns/operator/reports/1/disposition',
-        body: { state: 'reviewed', note: 'disabled harness' },
-      },
     ];
 
     for (const endpoint of disabledEndpoints) {
@@ -220,6 +202,39 @@ async function main() {
         `${endpoint.method} ${endpoint.path} is denied by the server feature gate`,
       );
     }
+
+    const operatorSubmissions = await api(
+      actors.C,
+      '/api/public-cairns/operator/submissions?state=pending&limit=25',
+      { expected: 200 },
+    );
+    assert.deepEqual(operatorSubmissions.body.submissions, []);
+    const operatorReports = await api(
+      actors.C,
+      '/api/public-cairns/operator/reports?state=pending&limit=25',
+      { expected: 200 },
+    );
+    assert.deepEqual(operatorReports.body.reports, []);
+    const operatorAudit = await api(
+      actors.C,
+      '/api/public-cairns/operator/audit?limit=25',
+      { expected: 200 },
+    );
+    assert.deepEqual(operatorAudit.body.events, []);
+    await api(actors.C, '/api/public-cairns/operator/submissions/1/decision', {
+      method: 'POST', expected: 404,
+      body: { action: 'approve', reason: 'disabled harness' },
+    });
+    await api(actors.C, '/api/public-cairns/operator/reports/1/disposition', {
+      method: 'POST', expected: 404,
+      body: { state: 'reviewed', note: 'disabled harness' },
+    });
+    const unauthorizedAudit = await api(actors.B, '/api/public-cairns/operator/audit', { expected: 403 });
+    assert.equal(unauthorizedAudit.body.code, 'OPERATOR_REQUIRED');
+    pass(
+      'PUB-OFF-01.operator-continuity',
+      'the exposure kill-switch leaves authenticated operator queues and metadata audit reachable while consumer endpoints remain closed',
+    );
 
     const legacyPublic = await api(
       actors.B,

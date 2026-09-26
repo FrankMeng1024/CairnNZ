@@ -21,9 +21,17 @@ test('Public live verification still binds witnesses to server Activity points a
   assert.match(source, /FROM_UNIXTIME\(evidence\.ts \/ 1000\) >= \?/);
   assert.match(source, /marker\.publication_epoch=publication\.publication_epoch/);
   assert.match(source, /marker\.content_revision=publication\.content_revision/);
+  assert.match(source, /evidence_observed_at_ms,evidence_segment_id,evidence_source/);
+  assert.match(source, /COALESCE\(encounter\.evidence_lng,/);
+  assert.match(source, /COALESCE\(encounter\.evidence_lat,/);
+  assert.match(source, /COALESCE\(encounter\.evidence_segment_id,witness\.source_segment_id,'legacy-0'\)/);
 });
 
-test('every Public API request is authorized against the authenticated owner canary', () => {
+test('consumer Public API requests use owner canary while operator incident access survives the kill switch', () => {
   assert.match(source, /enabled: publicPilotAuthorized\(req\.user\.userId\)/);
-  assert.match(source, /publicPilotAuthorized\(req\.user\.userId\) \? next\(\) : pilotDisabled\(res\)/);
+  assert.match(source, /req\.path\.startsWith\('\/operator\/'\) \|\| publicPilotAuthorized\(req\.user\.userId\)/);
+  assert.match(source, /router\.get\('\/operator\/audit', requireOperator/);
+  assert.match(source, /row && publicPilotAuthorized\(row\.author_id\) \? row : null/);
+  assert.match(source, /candidates\.filter\(row => publicPilotAuthorized\(row\.author_id\)\)/);
+  assert.match(source, /rows\.filter\(candidate => publicPilotAuthorized\(candidate\.author_id\)\)/);
 });

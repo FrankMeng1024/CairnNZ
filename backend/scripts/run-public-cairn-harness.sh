@@ -18,14 +18,27 @@ case "$HARNESS_MODE" in
   api)
     HARNESS_SCRIPT="api-mysql.js"
     PUBLIC_CAIRN_FLAG="1"
+    PUBLIC_ZONE_POLICY='[]'
     ;;
   endurance)
     HARNESS_SCRIPT="endurance.js"
     PUBLIC_CAIRN_FLAG="1"
+    PUBLIC_ZONE_POLICY='[]'
     ;;
   disabled)
     HARNESS_SCRIPT="disabled-api-mysql.js"
     PUBLIC_CAIRN_FLAG="0"
+    PUBLIC_ZONE_POLICY='[]'
+    ;;
+  missing-policy)
+    HARNESS_SCRIPT="disabled-api-mysql.js"
+    PUBLIC_CAIRN_FLAG="1"
+    PUBLIC_ZONE_POLICY=''
+    ;;
+  malformed-policy)
+    HARNESS_SCRIPT="disabled-api-mysql.js"
+    PUBLIC_CAIRN_FLAG="1"
+    PUBLIC_ZONE_POLICY='{bad'
     ;;
   *)
     echo "unsupported HARNESS_MODE: $HARNESS_MODE" >&2
@@ -106,9 +119,14 @@ for migration in \
   040_resource_content_revision.sql \
   041_public_cairn_pilot.sql \
   042_v1_closure_authority.sql \
-  043_friend_discovery_marker_location.sql; do
+  043_friend_discovery_marker_location.sql \
+  044_public_cairn_moderation_audit.sql; do
   apply_sql_file "$BACKEND_DIR/src/migrations/$migration"
 done
+
+MYSQL_DOCKER_CONTAINER="$CONTAINER" DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" \
+  DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \
+  "$SCRIPT_DIR/verify-migration-044.sh"
 
 API_PORT=$((33000 + ($$ % 1000)))
 while nc -z 127.0.0.1 "$API_PORT" >/dev/null 2>&1; do API_PORT=$((API_PORT + 1)); done
@@ -117,6 +135,7 @@ while nc -z 127.0.0.1 "$API_PORT" >/dev/null 2>&1; do API_PORT=$((API_PORT + 1))
   DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \
     JWT_SECRET="$JWT_SECRET" NONCE_SECRET="$JWT_SECRET" PORT="$API_PORT" \
     NODE_ENV=test TRUST_PROXY=false DISABLE_CRON=1 PUBLIC_CAIRN_PILOT_ENABLED="$PUBLIC_CAIRN_FLAG" \
+    PUBLIC_CAIRN_SENSITIVE_ZONES_JSON="$PUBLIC_ZONE_POLICY" \
     CAIRN_REALM=isolated_review ALLOW_ISOLATED_QA_SOURCE_CONTRACT=1 \
     node src/index.js
 ) >"$TEMP_DIR/backend.log" 2>&1 &

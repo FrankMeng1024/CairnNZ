@@ -1,10 +1,13 @@
 # Controlled Public Cairn pilot operations
 
 Public v1 is text-only and is disabled unless the backend process has
-`PUBLIC_CAIRN_PILOT_ENABLED=1`. Production must omit that exact opt-in. The
-capability endpoint remains readable so clients can hide Public authoring;
-all publication, discovery, Detail, interaction, and operator endpoints return
-`PUBLIC_PILOT_DISABLED` while disabled. Legacy bbox discovery remains gone.
+`PUBLIC_CAIRN_PILOT_ENABLED=1`, a non-empty numeric owner allowlist, and a
+valid reviewed sensitive-zone policy. The capability endpoint remains readable
+so clients can hide Public authoring. Consumer publication, discovery, Detail,
+and interaction remain closed while disabled; authenticated operator queues,
+audit, reject, suspend, and report disposition remain reachable for incident
+containment. Approve and restore still fail when exposure authorization or the
+current location policy is unavailable. Legacy bbox discovery remains gone.
 
 ## Operator entry
 
@@ -38,8 +41,9 @@ suspension cannot qualify after restoration.
 
 1. Remove `PUBLIC_CAIRN_PILOT_ENABLED=1` and restart only the targeted service.
 2. Verify `/api/public-cairns/capabilities` reports `enabled:false`.
-3. Verify publication/discovery/Detail/operator paths return 404 with
-   `PUBLIC_PILOT_DISABLED`, and `/api/markers/public` remains 410.
+3. Verify consumer publication/discovery/Detail paths return 404 with
+   `PUBLIC_PILOT_DISABLED`, operator containment remains authenticated and
+   reachable, and `/api/markers/public` remains 410.
 4. Do not drop migration 041 tables during incident containment. Retaining
    rows preserves auditability and allows forward recovery.
 5. Personal/Friends save, Finish, Memory, grants, and borrowed Routes remain

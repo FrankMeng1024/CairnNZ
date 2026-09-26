@@ -150,6 +150,10 @@ async function scheduleDeletion(userId) {
     if (!rows[0]?.deleted_at) {
       throw new Error('Account deletion timestamp was not persisted.');
     }
+    // Public exposure is revoked inside the same account transition. The
+    // metadata-only audit survives eventual hard deletion.
+    const { withdrawOwnerPublications } = require('../services/publicPublication');
+    await withdrawOwnerPublications(conn, userId, 'account_deletion_scheduled');
     await conn.commit();
     return new Date(rows[0].deleted_at);
   } catch (err) {
@@ -241,6 +245,9 @@ async function hardDelete(userId, graceMinutes = ACCOUNT_DELETION_GRACE_MINUTES)
       [userId],
     );
     exportPaths = exports.map((row) => row.file_path).filter(Boolean);
+
+    const { withdrawOwnerPublications } = require('../services/publicPublication');
+    await withdrawOwnerPublications(conn, userId, 'account_hard_delete');
 
     // These historical/diagnostic tables either predate FK ownership or are
     // intentionally nullable. Delete explicit account-owned references before

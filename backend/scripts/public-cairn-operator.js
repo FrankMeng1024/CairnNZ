@@ -16,9 +16,10 @@ function usage(message) {
     '',
     'Commands:',
     '  submissions [pending|published|rejected|suspended|withdrawn] [after_id]',
-    '  decide <publication_id> <approve|reject|suspend|restore> [reason]',
+    '  decide <publication_id> <approve|reject|suspend|restore> <reason>',
     '  reports [pending|reviewed|dismissed|actioned] [after_id]',
-    '  dispose <report_id> <reviewed|dismissed|actioned> [note]',
+    '  dispose <report_id> <reviewed|dismissed|actioned> <note>',
+    '  audit [after_id]',
   ].join('\n') + '\n');
   process.exitCode = 2;
 }
@@ -62,8 +63,10 @@ async function main() {
     const publicationId = positiveId(args[0], 'publication_id');
     const action = args[1];
     if (!['approve', 'reject', 'suspend', 'restore'].includes(action)) throw new Error('Invalid decision');
+    const reason = args.slice(2).join(' ').trim().slice(0, 240);
+    if (!reason) throw new Error('Decision reason is required');
     result = await request(`/api/public-cairns/operator/submissions/${publicationId}/decision`, {
-      method: 'POST', body: JSON.stringify({ action, reason: args.slice(2).join(' ').slice(0, 240) || null }),
+      method: 'POST', body: JSON.stringify({ action, reason }),
     });
   } else if (command === 'reports') {
     const state = args[0] || 'pending';
@@ -74,9 +77,14 @@ async function main() {
     const reportId = positiveId(args[0], 'report_id');
     const state = args[1];
     if (!['reviewed', 'dismissed', 'actioned'].includes(state)) throw new Error('Invalid disposition');
+    const note = args.slice(2).join(' ').trim().slice(0, 240);
+    if (!note) throw new Error('Disposition note is required');
     result = await request(`/api/public-cairns/operator/reports/${reportId}/disposition`, {
-      method: 'POST', body: JSON.stringify({ state, note: args.slice(2).join(' ').slice(0, 240) || null }),
+      method: 'POST', body: JSON.stringify({ state, note }),
     });
+  } else if (command === 'audit') {
+    const after = args[0] ? positiveId(args[0], 'after_id') : '0';
+    result = await request(`/api/public-cairns/operator/audit?after_id=${after}&limit=50`);
   } else {
     return usage(command ? `Unknown command: ${command}` : 'A command is required.');
   }

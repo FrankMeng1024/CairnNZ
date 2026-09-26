@@ -31,7 +31,7 @@ const {
   decodeCursor,
   encodeCursor,
 } = require('../services/ownedCairnLibrary');
-const { synchronizePublicSubmission } = require('../services/publicPublication');
+const { synchronizePublicSubmission, withdrawPublication } = require('../services/publicPublication');
 
 router.use(authenticate);
 
@@ -358,6 +358,12 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
       const permissionChanged = stored.permission !== perm;
       const contentChanged = resourceChanged || permissionChanged;
       if (contentChanged) {
+        if (stored.public_state === 'suspended' && resourceChanged
+          && stored.permission === PERMISSION.PUBLIC && perm === PERMISSION.PUBLIC) {
+          const suspended = new Error('A suspended Public Cairn must be restored or withdrawn before editing.');
+          suspended.code = 'PUBLIC_SUSPENDED_EDIT_BLOCKED';
+          throw suspended;
+        }
         if (permissionChanged) {
           await conn.execute(
             `UPDATE marker_audience_epochs SET ends_at = UTC_TIMESTAMP(3)
@@ -396,7 +402,9 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
          FROM markers WHERE id = ? AND user_id = ?`,
       [stored.id, req.user.userId],
     );
-    const publicSubmission = await synchronizePublicSubmission(conn, stored.id, req.user.userId);
+    const publicSubmission = await synchronizePublicSubmission(
+      conn, stored.id, req.user.userId, { actorUserId: req.user.userId },
+    );
     await conn.commit();
     res.status(201).json({
       id: stored.id,
@@ -421,7 +429,7 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
     });
   } catch (err) {
     if (conn) try { await conn.rollback(); } catch { /* ignore */ }
-    if (err.code === 'CAIRN_IDENTITY_MISMATCH') {
+    if (err.code === 'CAIRN_IDENTITY_MISMATCH' || err.code === 'PUBLIC_SUSPENDED_EDIT_BLOCKED') {
       return res.status(409).json({ error: err.message, code: err.code });
     }
     console.error('[markers/create]', err.message);
@@ -440,6 +448,7 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
 
     // Verify ownership AND fetch current state for snapshot logic.
     await conn.beginTransaction();
+    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [req.user.userId]);
     const [existing] = await conn.execute(
       `SELECT id, type, lat, lng, text, permission, audience_epoch, public_snapshot,
               content_revision, public_intent, public_state, publication_epoch
@@ -508,6 +517,17 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
       // honest about what client paths can do.
     }
 
+    const requestedPermission = permission === undefined
+      ? current.permission
+      : (permission === PERMISSION.FRIEND ? PERMISSION.GROUP_LEGACY : permission);
+    if (current.public_state === 'suspended' && resourceChanged
+      && current.permission === PERMISSION.PUBLIC && requestedPermission === PERMISSION.PUBLIC) {
+      await conn.rollback();
+      return res.status(409).json({
+        error: 'A suspended Public Cairn must be restored or withdrawn before editing.',
+        code: 'PUBLIC_SUSPENDED_EDIT_BLOCKED',
+      });
+    }
     if (resourceChanged) updates.push('content_revision = content_revision + 1');
     if (updates.length > 0) {
       updates.push('updated_at = NOW()');
@@ -526,7 +546,9 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
          FROM markers WHERE id = ? AND user_id = ?`,
       [markerId, req.user.userId],
     );
-    const publicSubmission = await synchronizePublicSubmission(conn, markerId, req.user.userId);
+    const publicSubmission = await synchronizePublicSubmission(
+      conn, markerId, req.user.userId, { actorUserId: req.user.userId },
+    );
     await conn.commit();
 
     // BUG-006 fix: echo user_id on update too. Updating a mark currently
@@ -569,6 +591,7 @@ router.delete('/client/:clientCairnId', async (req, res) => {
       [req.user.userId, clientCairnId],
     );
     if (ownedRows[0]) {
+      await withdrawPublication(conn, ownedRows[0].id, req.user.userId, 'author_deleted_cairn');
       await conn.execute('DELETE FROM friend_cairn_encounters WHERE marker_id = ?', [ownedRows[0].id]);
       await conn.execute('DELETE FROM marker_audience_epochs WHERE marker_id = ?', [ownedRows[0].id]);
     }
@@ -593,7 +616,7 @@ router.delete('/:id', async (req, res) => {
     await conn.beginTransaction();
     await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [req.user.userId]);
     const [rows] = await conn.execute(
-      `SELECT client_cairn_id FROM markers
+      `SELECT id,client_cairn_id FROM markers
        WHERE id = ? AND user_id = ? FOR UPDATE`,
       [req.params.id, req.user.userId],
     );
@@ -608,6 +631,7 @@ router.delete('/:id', async (req, res) => {
         [req.user.userId, rows[0].client_cairn_id],
       );
     }
+    await withdrawPublication(conn, rows[0].id, req.user.userId, 'author_deleted_cairn');
     await conn.execute('DELETE FROM friend_cairn_encounters WHERE marker_id = ?', [req.params.id]);
     await conn.execute('DELETE FROM marker_audience_epochs WHERE marker_id = ?', [req.params.id]);
     await conn.execute(

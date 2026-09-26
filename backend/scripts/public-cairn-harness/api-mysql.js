@@ -156,8 +156,9 @@ async function startActiveActivity(
   return { clientActivityId, sessionId: String(started.body.id), points };
 }
 
-async function finishActiveActivity(actor, activity) {
+async function finishActiveActivity(actor, activity, options = {}) {
   const lastPoint = activity.points[activity.points.length - 1];
+  const canonicalPoints = options.canonicalPoints ?? activity.points;
   await api(actor, `/api/sessions/${activity.sessionId}/save`, {
     method: 'PATCH', expected: 200,
     body: {
@@ -168,7 +169,7 @@ async function finishActiveActivity(actor, activity) {
       name: `${actor.label} active Public harness Activity`,
       route_points: activity.points,
       route_points_raw: activity.points,
-      route_points_canonical: activity.points,
+      route_points_canonical: canonicalPoints,
       memory_points: activity.points.map(point => ({
         lat: point.lat, lng: point.lng, ts: point.t,
         cid: crypto.randomUUID(), evidence_source: 'activity_real',
@@ -223,7 +224,7 @@ async function main() {
   const db = await mysql.createConnection(dbConfig);
   const heldConnection = await mysql.createConnection(dbConfig);
   try {
-    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
     const actors = {};
     for (const label of labels) {
       const [inserted] = await db.execute(
@@ -255,6 +256,67 @@ async function main() {
     pass('PUB-01.capability', 'review API exposes the centrally bounded text-Cairn pilot only');
 
     const place = { lat: -41.2867, lng: 174.7763 };
+    // Old failure: a Public Cairn planted from an active Activity was assessed
+    // before finalization and never reconsidered unless the owner edited it.
+    // Finish and duplicate Finish must now reconcile the same immutable UUID.
+    const deferredPlace = { lat: place.lat + 0.001, lng: place.lng + 0.001 };
+    const deferredActivity = await startActiveActivity(
+      actors.A,
+      deferredPlace.lat,
+      deferredPlace.lng,
+      Date.now() - 260_000,
+    );
+    const deferredMarker = await createPublicCairn(
+      actors.A,
+      deferredActivity,
+      deferredPlace.lat,
+      deferredPlace.lng,
+      'Pending only after durable Finish',
+    );
+    assert.equal(deferredMarker.submission.code, 'PUBLIC_ELIGIBLE_ACTIVITY_REQUIRED');
+    await finishActiveActivity(actors.A, deferredActivity);
+    const deferredSubmission = await pendingSubmission(actors.C, deferredMarker.id);
+    await finishActiveActivity(actors.A, deferredActivity);
+    const [[deferredCounts]] = await db.execute(
+      `SELECT
+         (SELECT COUNT(*) FROM public_cairn_publications WHERE marker_id=?) AS publication_n,
+         (SELECT COUNT(*) FROM public_cairn_moderation_audit
+           WHERE marker_id=? AND event_type='publication_submitted') AS audit_n`,
+      [deferredMarker.id, deferredMarker.id],
+    );
+    assert.deepEqual(
+      [Number(deferredCounts.publication_n), Number(deferredCounts.audit_n)],
+      [1, 1],
+    );
+    await decide(actors.C, deferredSubmission.id, 'reject');
+    const unchangedRejected = await api(actors.A, `/api/markers/${deferredMarker.id}`, {
+      method: 'PUT', expected: 200,
+      body: { text: 'Pending only after durable Finish' },
+    });
+    assert.equal(unchangedRejected.body.public_state, 'rejected');
+    const [[rejectedCounts]] = await db.execute(
+      `SELECT
+         (SELECT COUNT(*) FROM public_cairn_publications WHERE marker_id=?) AS publication_n,
+         (SELECT COUNT(*) FROM public_cairn_moderation_audit
+           WHERE marker_id=? AND event_type='publication_submitted') AS audit_n`,
+      [deferredMarker.id, deferredMarker.id],
+    );
+    assert.deepEqual(
+      [Number(rejectedCounts.publication_n), Number(rejectedCounts.audit_n)],
+      [1, 1],
+    );
+    const revisedRejected = await api(actors.A, `/api/markers/${deferredMarker.id}`, {
+      method: 'PUT', expected: 200,
+      body: { text: 'Materially revised after rejection' },
+    });
+    assert.equal(revisedRejected.body.public_state, 'pending');
+    const deferredV2 = await pendingSubmission(actors.C, deferredMarker.id);
+    await decide(actors.C, deferredV2.id, 'approve');
+    pass(
+      'PUB-01a.finish-reconcile',
+      'an active-Activity Cairn stayed private until Finish, then reconciled once; Finish replay and unchanged rejected retry created no duplicate, while a material revision re-entered review',
+    );
+
     const ownerActivity = await completeActivity(actors.A, place.lat, place.lng, Date.now() - 180_000);
     const [[ownerSourceBinding]] = await db.execute(
       `SELECT session.source_provenance,JSON_LENGTH(session.route_points_canonical) AS canonical_n,
@@ -344,8 +406,20 @@ async function main() {
     }
     assert.equal(marker.submission.state, 'pending', JSON.stringify(evidence.objects.origin_debug ?? marker.submission));
 
+    const [[coarsenedSnapshot]] = await db.execute(
+      `SELECT snapshot_lat,snapshot_lng,snapshot_approximate
+         FROM public_cairn_publications WHERE marker_id=?`,
+      [marker.id],
+    );
+    assert.equal(Boolean(coarsenedSnapshot.snapshot_approximate), true);
+    assert.ok(Number(coarsenedSnapshot.snapshot_lat) !== place.lat
+      || Number(coarsenedSnapshot.snapshot_lng) !== place.lng);
+    pass('PUB-01b.location-policy', 'the review snapshot stores a server-coarsened cell, never the exact owner pin');
+
     const unauthorizedQueue = await api(actors.D, '/api/public-cairns/operator/submissions', { expected: 403 });
     assert.equal(unauthorizedQueue.body.code, 'OPERATOR_REQUIRED');
+    const unauthorizedAudit = await api(actors.D, '/api/public-cairns/operator/audit', { expected: 403 });
+    assert.equal(unauthorizedAudit.body.code, 'OPERATOR_REQUIRED');
     const unauthorizedCli = spawnSync(process.execPath, [
       path.resolve(__dirname, '../public-cairn-operator.js'), 'submissions', 'pending',
     ], {
@@ -361,6 +435,35 @@ async function main() {
     assert.ok(cliQueue.submissions.some(item => String(item.id) === String(publication.id)));
     const approved = operatorCommand(actors.C, ['decide', String(publication.id), 'approve', 'exact revision reviewed']);
     assert.equal(approved.state, 'published');
+    const approvedRetry = operatorCommand(actors.C, ['decide', String(publication.id), 'approve', 'exact revision reviewed']);
+    assert.equal(approvedRetry.idempotent_replay, true);
+    const invalidDirectRestore = await decide(actors.C, publication.id, 'restore', 409);
+    assert.equal(invalidDirectRestore.body.code, 'PUBLIC_STATE_CONFLICT');
+    const suspended = await decide(actors.C, publication.id, 'suspend');
+    assert.equal(suspended.body.state, 'suspended');
+    const [[beforeSuspendedReplay]] = await db.execute(
+      'SELECT COUNT(*) AS n FROM public_cairn_publications WHERE marker_id=?',
+      [marker.id],
+    );
+    const suspendedOwnerReplay = await api(actors.A, `/api/markers/${marker.id}`, {
+      method: 'PUT', expected: 200, body: { text: primaryV1Text },
+    });
+    assert.equal(suspendedOwnerReplay.body.public_state, 'suspended');
+    const suspendedEdit = await api(actors.A, `/api/markers/${marker.id}`, {
+      method: 'PUT', expected: 409, body: { text: `${primaryV1Text} changed while suspended` },
+    });
+    assert.equal(suspendedEdit.body.code, 'PUBLIC_SUSPENDED_EDIT_BLOCKED');
+    const suspendRetry = await decide(actors.C, publication.id, 'suspend');
+    assert.equal(suspendRetry.body.idempotent_replay, true);
+    const restored = await decide(actors.C, publication.id, 'restore');
+    assert.equal(restored.body.state, 'published');
+    const restoreRetry = await decide(actors.C, publication.id, 'restore');
+    assert.equal(restoreRetry.body.idempotent_replay, true);
+    const [[afterSuspendedReplay]] = await db.execute(
+      'SELECT COUNT(*) AS n FROM public_cairn_publications WHERE marker_id=?',
+      [marker.id],
+    );
+    assert.equal(Number(afterSuspendedReplay.n), Number(beforeSuspendedReplay.n));
     pass('PUB-02.submit-approve', 'owner Public save created a pending exact revision; only the server-authorized operator approved it', {
       marker_id: marker.id, publication_id: String(publication.id), content_revision: Number(publication.content_revision),
     });
@@ -481,6 +584,35 @@ async function main() {
       marker_id: marker.id, newer_distant_publications: distantFixtureIds.length,
     });
 
+    const revokedActivity = await startActiveActivity(
+      actors.D,
+      place.lat,
+      place.lng,
+      Date.now() + 2_000,
+    );
+    const liveEncounter = await api(actors.D, '/api/public-cairns/encounters/verify', {
+      method: 'POST', expected: 200,
+      body: { source_activity_client_id: revokedActivity.clientActivityId },
+    });
+    assert.ok(liveEncounter.body.encountered_marker_ids.includes(marker.id));
+    const rejectedCanonical = revokedActivity.points.map(point => ({
+      ...point,
+      lat: point.lat + 0.01,
+      lng: point.lng + 0.01,
+    }));
+    await finishActiveActivity(actors.D, revokedActivity, { canonicalPoints: rejectedCanonical });
+    const finalRevalidation = await api(actors.D, '/api/public-cairns/encounters/verify', {
+      method: 'POST', expected: 200,
+      body: { source_activity_client_id: revokedActivity.clientActivityId },
+    });
+    assert.equal(finalRevalidation.body.encountered_marker_ids.includes(marker.id), false);
+    const revokedDetail = await api(actors.D, `/api/public-cairns/cairns/${marker.id}`, { expected: 404 });
+    assert.equal(revokedDetail.body.code, 'PUBLIC_CAIRN_UNAVAILABLE');
+    pass(
+      'PUB-04c.final-canonical-revalidation',
+      'live discovery was revoked when the qualifying mutable point was absent from final canonical truth',
+    );
+
     const scene = await api(actors.B, '/api/public-cairns/scene', { expected: 200 });
     assert.equal(scene.body.entries.length, 1);
     assert.equal(scene.body.newly_surfaced.length, 1);
@@ -544,6 +676,11 @@ async function main() {
       body: { client_submission_id: reportClientId, category: 'other', detail: 'Synthetic operator review fixture.' },
     });
     assert.equal(reportFirst.body.report_id, reportRetry.body.report_id);
+    const mismatchedReportRetry = await api(actors.B, `/api/public-cairns/cairns/${marker.id}/report`, {
+      method: 'POST', expected: 409,
+      body: { client_submission_id: reportClientId, category: 'spam', detail: 'Different immutable request.' },
+    });
+    assert.equal(mismatchedReportRetry.body.code, 'PUBLIC_REPORT_IDENTITY_MISMATCH');
     const [[interactionCounts]] = await db.execute(
       `SELECT
          (SELECT COUNT(*) FROM public_cairn_thanks WHERE viewer_id=? AND marker_id=?) AS thanks_n,
@@ -579,6 +716,28 @@ async function main() {
       'dispose', String(reportFirst.body.report_id), 'reviewed', 'Synthetic review complete.',
     ]);
     assert.equal(cliDisposition.state, 'reviewed');
+    const cliDispositionRetry = operatorCommand(actors.C, [
+      'dispose', String(reportFirst.body.report_id), 'reviewed', 'Synthetic review complete.',
+    ]);
+    assert.equal(cliDispositionRetry.idempotent_replay, true);
+    const mismatchedDisposition = await api(
+      actors.C,
+      `/api/public-cairns/operator/reports/${reportFirst.body.report_id}/disposition`,
+      {
+        method: 'POST', expected: 409,
+        body: { state: 'reviewed', note: 'Different retry note.' },
+      },
+    );
+    assert.equal(mismatchedDisposition.body.code, 'PUBLIC_REPORT_IDENTITY_MISMATCH');
+    const audit = await api(actors.C, '/api/public-cairns/operator/audit?limit=100', { expected: 200 });
+    const primaryAudit = audit.body.events.filter(event => String(event.marker_id) === String(marker.id));
+    assert.ok(primaryAudit.some(event => event.event_type === 'publication_submitted'));
+    assert.ok(primaryAudit.some(event => event.event_type === 'publication_decision'));
+    assert.ok(primaryAudit.some(event => event.event_type === 'report_submitted'));
+    assert.ok(primaryAudit.some(event => event.event_type === 'report_disposition'));
+    assert.ok(primaryAudit.every(event => !JSON.stringify(event.metadata_json ?? '').includes(primaryV1Text)));
+    const cliAudit = operatorCommand(actors.C, ['audit']);
+    assert.ok(cliAudit.events.some(event => event.event_type === 'report_disposition'));
     pass('PUB-06.interactions', 'Thanks and Report retries converged to one durable row; the v1 report/submission retained exact immutable text and hash after v2 edit, and report did not auto-penalize the author');
 
     // Exact-revision stale approval: v1 is pending, a material edit creates v2,
@@ -715,6 +874,81 @@ async function main() {
     const [[emptyState]] = await db.execute('SELECT public_state FROM markers WHERE id=?', [empty.id]);
     assert.equal(emptyState.public_state, 'not_public');
     pass('PUB-13.empty-save', 'an empty explicitly Public Cairn remained durably owner-saved but did not enter discovery');
+
+    // Audit history is metadata-only and deliberately outlives the content,
+    // reporter, owner, and deciding operator rows it describes.
+    const deletionPlace = { lat: place.lat + 0.002, lng: place.lng + 0.002 };
+    const deletionOwnerActivity = await completeActivity(
+      actors.F,
+      deletionPlace.lat,
+      deletionPlace.lng,
+      Date.now() - 80_000,
+    );
+    const deletionMarker = await createPublicCairn(
+      actors.F,
+      deletionOwnerActivity,
+      deletionPlace.lat,
+      deletionPlace.lng,
+      'Disposable audit-survival content',
+    );
+    const deletionPublication = await pendingSubmission(actors.C, deletionMarker.id);
+    await decide(actors.C, deletionPublication.id, 'approve');
+    const deletionViewerActivity = await completeActivity(
+      actors.G,
+      deletionPlace.lat,
+      deletionPlace.lng,
+      Date.now() + 1_000,
+    );
+    await api(actors.G, '/api/public-cairns/encounters/verify', {
+      method: 'POST', expected: 200,
+      body: { source_activity_client_id: deletionViewerActivity.clientActivityId },
+    });
+    await api(actors.G, `/api/public-cairns/cairns/${deletionMarker.id}/report`, {
+      method: 'POST', expected: 200,
+      body: {
+        client_submission_id: crypto.randomUUID(),
+        category: 'other',
+        detail: 'Disposable report detail must not enter audit metadata.',
+      },
+    });
+    await api(actors.F, `/api/markers/${deletionMarker.id}`, { method: 'DELETE', expected: 200 });
+    const [[deletedSubjects]] = await db.execute(
+      `SELECT
+         (SELECT COUNT(*) FROM markers WHERE id=?) AS markers_n,
+         (SELECT COUNT(*) FROM public_cairn_publications WHERE marker_id=?) AS publications_n,
+         (SELECT COUNT(*) FROM public_cairn_reports WHERE marker_id=?) AS reports_n,
+         (SELECT COUNT(*) FROM public_cairn_moderation_audit WHERE marker_id=?) AS audit_n`,
+      [deletionMarker.id, deletionMarker.id, deletionMarker.id, deletionMarker.id],
+    );
+    assert.deepEqual(
+      [Number(deletedSubjects.markers_n), Number(deletedSubjects.publications_n),
+        Number(deletedSubjects.reports_n)],
+      [0, 0, 0],
+    );
+    assert.ok(Number(deletedSubjects.audit_n) >= 4);
+    const deletedSubjectAudit = await api(actors.C, '/api/public-cairns/operator/audit?limit=100', { expected: 200 });
+    assert.ok(deletedSubjectAudit.body.events.some(event => (
+      String(event.marker_id) === String(deletionMarker.id)
+      && event.event_type === 'publication_withdrawn'
+    )));
+    await db.execute('DELETE FROM users WHERE id IN (?,?,?)', [actors.F.id, actors.G.id, actors.C.id]);
+    const [[survivingAudit]] = await db.execute(
+      `SELECT
+         COUNT(*) AS audit_n,
+         SUM(owner_user_id=? AND event_type='publication_submitted') AS owner_history_n,
+         SUM(actor_user_id IS NULL AND event_type='report_submitted') AS reporter_actor_null_n,
+         SUM(actor_user_id IS NULL AND event_type='publication_decision') AS operator_actor_null_n
+       FROM public_cairn_moderation_audit WHERE marker_id=?`,
+      [actors.F.id, deletionMarker.id],
+    );
+    assert.ok(Number(survivingAudit.audit_n) >= 4);
+    assert.ok(Number(survivingAudit.owner_history_n) >= 1);
+    assert.ok(Number(survivingAudit.reporter_actor_null_n) >= 1);
+    assert.ok(Number(survivingAudit.operator_actor_null_n) >= 1);
+    pass(
+      'PUB-14.audit-survival',
+      'marker/publication/report cascades and disposable owner/reporter/operator deletion retained metadata-only audit history with actor references nulled',
+    );
 
     const [[counts]] = await db.query(
       `SELECT

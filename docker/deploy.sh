@@ -52,6 +52,32 @@ git reset --hard origin/master
 echo "  ✓ Repo now at $(git log --oneline -1)"
 cd "$SCRIPT_DIR"
 
+# Run gates from the source that was just fetched. The re-entry guard also
+# prevents a deploy started from an older checkout from continuing with a
+# stale in-memory script after reset.
+CURRENT_DEPLOY_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+if [ "${CAIRN_DEPLOY_REENTRY_COMMIT:-}" != "$CURRENT_DEPLOY_COMMIT" ]; then
+  export CAIRN_DEPLOY_REENTRY_COMMIT="$CURRENT_DEPLOY_COMMIT"
+  exec /bin/bash "$SCRIPT_DIR/deploy.sh"
+fi
+
+# A global flag without a reviewed audience and sensitive-place policy must
+# never expose Public. Validate shape without printing IDs, tokens or places.
+if [ "${PUBLIC_CAIRN_PILOT_ENABLED:-0}" = "1" ]; then
+  if ! [[ "${PUBLIC_CAIRN_PILOT_USER_IDS:-}" =~ ^[1-9][0-9]*(,[1-9][0-9]*)*$ ]]; then
+    echo "❌ Public preflight failed: a strict non-empty pilot allowlist is required."
+    exit 1
+  fi
+  if ! NODE_ENV=production node -e "const p=require('../backend/src/services/publicPublication');if(!p.publicPilotAuthorized(process.env.PUBLIC_CAIRN_PILOT_USER_IDS.split(',')[0]))process.exit(1)"; then
+    echo "❌ Public preflight failed: allowlist or sensitive-zone policy is invalid."
+    exit 1
+  fi
+  if [ -z "${PUBLIC_CAIRN_SMOKE_USER_TOKEN:-}" ] || [ -z "${PUBLIC_CAIRN_SMOKE_OPERATOR_TOKEN:-}" ]; then
+    echo "❌ Public preflight failed: authenticated consumer and operator smoke tokens are required."
+    exit 1
+  fi
+fi
+
 # ── Step 2: run pending migrations ───────────────────────────────────────
 # Migrations live in backend/src/migrations/NNN_*.sql and are numbered
 # strictly increasing. We store the last-applied number in a file so a
@@ -71,6 +97,10 @@ LAST_APPLIED_FILE="$SCRIPT_DIR/.migrations_applied"
 REPO_ROOT="$REPO_ROOT" LAST_APPLIED_FILE="$LAST_APPLIED_FILE" \
   DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_NAME=cairn DB_PASSWORD="$DB_PASSWORD" \
   "$SCRIPT_DIR/run-pending-migrations.sh"
+if [ "${PUBLIC_CAIRN_PILOT_ENABLED:-0}" = "1" ]; then
+  DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_NAME=cairn DB_PASSWORD="$DB_PASSWORD" \
+    "$REPO_ROOT/backend/scripts/verify-migration-044.sh"
+fi
 
 # ── Step 3: build backend image ──────────────────────────────────────────
 echo "→ Step 3/6: docker compose build backend…"
@@ -106,6 +136,21 @@ if [ "$H2_CHECK" = "401" ]; then
   echo "  ✓ PATCH /api/auth/onboarding registered (401 without token = correct)"
 else
   echo "  ⚠️  PATCH /api/auth/onboarding returned $H2_CHECK (expected 401). Route may be missing."
+fi
+
+if [ "${PUBLIC_CAIRN_PILOT_ENABLED:-0}" = "1" ]; then
+  PUBLIC_CAPABILITY="$(curl -fsS http://localhost:3001/api/public-cairns/capabilities \
+    -H "Authorization: Bearer $PUBLIC_CAIRN_SMOKE_USER_TOKEN")"
+  PUBLIC_CAPABILITY="$PUBLIC_CAPABILITY" node -e "const b=JSON.parse(process.env.PUBLIC_CAPABILITY);if(b.enabled!==true||b.scope!=='cairns_text_only')process.exit(1)"
+  PUBLIC_SCENE_CHECK="$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:3001/api/public-cairns/scene \
+    -H "Authorization: Bearer $PUBLIC_CAIRN_SMOKE_USER_TOKEN")"
+  PUBLIC_OPERATOR_CHECK="$(curl -sS -o /dev/null -w '%{http_code}' 'http://localhost:3001/api/public-cairns/operator/submissions?limit=1' \
+    -H "Authorization: Bearer $PUBLIC_CAIRN_SMOKE_OPERATOR_TOKEN")"
+  if [ "$PUBLIC_SCENE_CHECK" != "200" ] || [ "$PUBLIC_OPERATOR_CHECK" != "200" ]; then
+    echo "❌ Public authenticated smoke failed (consumer=$PUBLIC_SCENE_CHECK operator=$PUBLIC_OPERATOR_CHECK)."
+    exit 1
+  fi
+  echo "  ✓ Public capability, consumer gate and operator access verified."
 fi
 
 echo

@@ -18,8 +18,32 @@ const schemas = require('../middleware/schemas');
 const pool = require('../config/db');
 const { deterministicCid } = require('../lib/deterministicCid');
 const { scheduleMemoryAttribution } = require('../lib/attributeMemoryPoints');
+const { reconcilePublicSubmissionsForActivity } = require('../services/publicPublication');
 
 const router = express.Router();
+
+// Public publication is a derived, separately moderated projection. Run its
+// reconciliation only after the Activity transaction is durable, and never
+// let a Public failure roll back or hide an otherwise successful Activity.
+async function reconcilePublicAfterActivityCommit(userId, clientActivityId) {
+  if (!clientActivityId) return;
+  try {
+    await reconcilePublicSubmissionsForActivity(pool, userId, clientActivityId);
+  } catch (error) {
+    console.error('[sessions/public-reconcile]', {
+      userId,
+      clientActivityId,
+      error: error?.message || String(error),
+    });
+  }
+}
+
+function schedulePublicAfterActivityCommit(userId, clientActivityId) {
+  if (!clientActivityId) return;
+  // Never make the source Activity response wait for a second pool checkout.
+  // The client-owned /encounters/verify action is the explicit durable retry.
+  setImmediate(() => { void reconcilePublicAfterActivityCommit(userId, clientActivityId); });
+}
 
 // ── POST /api/sessions (LEGACY - REMOVED 2026-07-20) ──────────────────────
 // v411 legacy 一次性保存 endpoint 已删除。v412+ 使用 start + append-points + save
@@ -107,6 +131,8 @@ router.post('/start', authenticate, validateBody(schemas.session.start), idempot
             client_activity_id: existingActivity.client_activity_id ?? null,
             type: existingActivity.type,
             start_time: existingActivity.start_time,
+            point_count: Number(existingActivity.point_count ?? 0),
+            raw_point_count: Number(existingActivity.raw_point_count ?? 0),
           })),
         } : {}),
       });
@@ -234,6 +260,7 @@ router.patch('/:id', authenticate, validateBody(schemas.session.update), idempot
 
     const ok = await Session.finalize(id, req.user.userId, fields);
     if (!ok) return res.status(404).json({ error: 'Session not found or no changes.' });
+    schedulePublicAfterActivityCommit(req.user.userId, existing.client_activity_id);
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error('[sessions/finalize]', err);
@@ -385,6 +412,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
       // 若 idempotency middleware 已 cache 命中, 这段不会跑到 (middleware 直接 replay)
       // 但若 middleware 因 cache 过期 miss, 这里作为兜底再次幂等
       await conn.rollback();
+      schedulePublicAfterActivityCommit(userId, rows[0].client_activity_id);
       return res.status(200).json({
         ok: true,
         session_id: id,
@@ -482,6 +510,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     if (attributionRange) {
       scheduleMemoryAttribution(pool, userId, attributionRange.minTs, attributionRange.maxTs);
     }
+    schedulePublicAfterActivityCommit(userId, rows[0].client_activity_id);
 
     return res.status(200).json({
       ok: true,

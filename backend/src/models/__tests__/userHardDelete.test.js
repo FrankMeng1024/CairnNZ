@@ -9,6 +9,8 @@ let eligible = true;
 let failPattern = null;
 let exportPaths = [];
 let failUnlink = false;
+let publicMarkerIds = [];
+let activePublications = [];
 const originalUnlink = fs.promises.unlink;
 const conn = {
   beginTransaction: async () => { calls.push('BEGIN'); },
@@ -27,6 +29,12 @@ const conn = {
     }
     if (normalized.startsWith('SELECT file_path FROM data_exports')) {
       return [exportPaths.map((filePath) => ({ file_path: filePath })), []];
+    }
+    if (normalized.startsWith('SELECT marker.id AS marker_id')) {
+      return [publicMarkerIds.map((markerId) => ({ marker_id: markerId })), []];
+    }
+    if (normalized.startsWith('SELECT id,publication_epoch,content_revision,state FROM public_cairn_publications')) {
+      return [activePublications, []];
     }
     if (normalized.startsWith('SELECT 1 AS present FROM information_schema.COLUMNS')) {
       return [[{ present: 1 }], []];
@@ -53,6 +61,8 @@ test.beforeEach(() => {
   failPattern = null;
   exportPaths = [];
   failUnlink = false;
+  publicMarkerIds = [];
+  activePublications = [];
 });
 
 test.after(() => {
@@ -63,11 +73,24 @@ test.after(() => {
 });
 
 test('scheduling deletion atomically preserves the timestamp and invalidates sessions', async () => {
+  publicMarkerIds = [7];
+  activePublications = [{
+    id: 70,
+    publication_epoch: 2,
+    content_revision: 3,
+    state: 'published',
+  }];
   const deletedAt = await User.scheduleDeletion(42);
   assert.equal(deletedAt.toISOString(), '2026-09-14T01:00:00.000Z');
   const sql = calls.filter((call) => typeof call === 'object').map((call) => call.sql).join('\n');
   assert.match(sql, /deleted_at = COALESCE\(deleted_at, CURRENT_TIMESTAMP\)/);
   assert.match(sql, /token_version = token_version \+ 1/);
+  assert.match(sql, /UPDATE public_cairn_publications SET state='withdrawn'/);
+  assert.match(sql, /INSERT INTO public_cairn_moderation_audit/);
+  assert.match(sql, /UPDATE markers SET public_state='withdrawn'/);
+  const withdrawIndex = calls.findIndex((call) => typeof call === 'object'
+    && call.sql.startsWith("UPDATE public_cairn_publications SET state='withdrawn'"));
+  assert.ok(withdrawIndex > 0 && withdrawIndex < calls.indexOf('COMMIT'));
   assert.deepEqual(calls.filter((call) => typeof call === 'string'), ['BEGIN', 'COMMIT', 'RELEASE']);
 });
 
