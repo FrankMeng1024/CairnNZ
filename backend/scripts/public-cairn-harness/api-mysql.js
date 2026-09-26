@@ -559,6 +559,21 @@ async function main() {
     assert.equal(fakeSource.body.code, 'PUBLIC_ACTIVITY_NOT_ELIGIBLE');
     pass('PUB-03.prepublication-negative', 'pre-publication observations and an arbitrary/simulator-like source identity cannot create an encounter');
 
+    // The primary publication was restored above, which intentionally resets
+    // its eligibility clock. Wait against the persisted server timestamp so
+    // the active walk below contributes two observations after that boundary;
+    // fast hosts must not turn this positive control into a timing lottery.
+    const [[primaryEligibility]] = await db.execute(
+      'SELECT UNIX_TIMESTAMP(published_at) * 1000 AS eligible_at_ms FROM public_cairn_publications WHERE id=?',
+      [publication.id],
+    );
+    const eligibilityWaitMs = Math.max(
+      0,
+      Number(primaryEligibility.eligible_at_ms) + 10_500 - Date.now(),
+    );
+    if (eligibilityWaitMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, eligibilityWaitMs));
+    }
     const viewerActivity = await startActiveActivity(actors.B, place.lat, place.lng, Date.now() - 20_000);
     evidence.objects.viewer_activity_id = viewerActivity.clientActivityId;
     const [[activeBeforeVerify]] = await db.execute(
