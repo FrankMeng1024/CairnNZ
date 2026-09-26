@@ -194,11 +194,20 @@ async function createPublicCairn(owner, activity, lat, lng, text) {
   return { id: String(response.body.id), submission: response.body.public_submission };
 }
 
-async function pendingSubmission(operator, markerId) {
-  const queue = await api(operator, '/api/public-cairns/operator/submissions?state=pending&limit=50', { expected: 200 });
-  const item = queue.body.submissions.find(row => String(row.marker_id) === String(markerId));
-  assert.ok(item, `pending publication for marker ${markerId}`);
-  return item;
+async function pendingSubmission(operator, markerId, timeoutMs = 3_000) {
+  // Finish commits the Activity first, then schedules the independently
+  // moderated Public projection. Poll that observable projection instead of
+  // racing Node's setImmediate callback on a fast loopback connection. The
+  // old missing-reconciliation defect still fails deterministically at the
+  // bounded deadline; no unrelated user action is used to wake it.
+  const deadline = Date.now() + timeoutMs;
+  do {
+    const queue = await api(operator, '/api/public-cairns/operator/submissions?state=pending&limit=50', { expected: 200 });
+    const item = queue.body.submissions.find(row => String(row.marker_id) === String(markerId));
+    if (item) return item;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  } while (Date.now() < deadline);
+  assert.fail(`pending publication for marker ${markerId} did not appear within ${timeoutMs}ms`);
 }
 
 async function decide(operator, publicationId, action, expected = 200) {
