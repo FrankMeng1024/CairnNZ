@@ -1,8 +1,8 @@
 {
-  "schema": "cairn-owner-retest-patch.v1",
-  "generatedAt": "2026-09-25T02:09:40+08:00",
+  "schema": "cairn-owner-retest-patch.v2",
+  "generatedAt": "2026-09-26T15:15:00+08:00",
   "authority": {
-    "path": "/Users/mzm/Desktop/Cairn_Owner_Test_State.json",
+    "path": "/Users/mzm/Downloads/Cairn_Recovery_20260926/evidence/Cairn_Owner_Test_State_snapshot.json",
     "sha256": "2156cb5d45724f1565e5415a88c1d5d58cabb3d4ac2d48d08fb2a00d0032aa4b",
     "updatedAt": 1790260498004,
     "lastCase": "CAIRN06",
@@ -10,17 +10,17 @@
     "note": "This file is a proposed retest delta only. It does not alter owner results or history."
   },
   "candidate": {
-    "marker": "O63",
+    "marker": "O64",
     "runtime": "0.2.6-o61",
     "appVersion": "0.2.6",
-    "sourceCommit": "9a0b3f6d4b17d4f2b471195b865e8fa2453f755d",
-    "sourceTree": "de0cd6eb0c25cab8f4d91345a9e37d63b990c8f4",
-    "appTree": "7d8b5932f8597722141375e03410aa3f7aff3a10",
-    "backendCommit": "6854161c4f8cdf93379e81231d85d5e66deeec86",
+    "sourceCommit": "389e95521d3eddee5959e62c2c3c08c15b564b29",
+    "sourceTree": "39523cea131748b9b5ba4d39ae7bf4644e006e0a",
+    "appTree": "91f736c71efefad2b0a77c68f1c5024c8cdc6a62",
+    "backendCommit": "43c473388ee0a14955bcc71744d1f4fc3a4f4f6c",
     "backendDeployed": true,
     "otaPublished": false,
     "nativeBuildCreated": false,
-    "publicEnabled": false
+    "publicEnabled": true
   },
   "definitionDeltas": [
     {
@@ -60,7 +60,10 @@
       "fix": "A shared guard owns the active mode and redirects any sibling entry to the real session owner; mode is written only while idle.",
       "actionZh": "开始 Hike，返回 Home，再点 Run；分别在记录中和暂停时重复一次。",
       "expectedZh": "始终回到正在进行的 Hike；Run 不继承 Hike 状态，也不会创建第二个活动。",
+      "sharedFamily": "Activity screen ownership and operational state",
       "siblingCoverage": ["Hike", "Run", "Home"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: Run could consume Hike's shared live state. New: activityScreenOwnership + activityOperationalState cover requesting/tracking/paused for both modes; final release gate passes.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "HOME03": {
@@ -69,7 +72,10 @@
       "fix": "Home now reads the canonical live status and uses Recording/Paused plus one Return action.",
       "actionZh": "开始 Hike，先暂停再继续，然后回到 Home；再真正暂停后回 Home 对比。",
       "expectedZh": "继续记录时显示 Recording；只有真正暂停时才显示 Paused；返回活动不改变记录状态。",
+      "sharedFamily": "Canonical Activity state presentation",
       "siblingCoverage": ["Home", "Hike", "Run"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: navigation history was rendered as pause authority. New: operational-state and Home source contracts assert tracking/paused/resuming independently; final gate passes.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "AUTH03": {
@@ -78,7 +84,10 @@
       "fix": "Email entry is synchronous, the root owns the single transition, OTP full-paste/AutoFill is retained, and the Home fallback is English.",
       "actionZh": "在登录页快速切后台再回来，点 Continue with Email；粘贴完整 6 位验证码并完成登录。",
       "expectedZh": "按钮立即响应；已有输入不丢失；验证码可整段粘贴/系统自动填充；进入 Home 无白屏、重叠或闪烁；等待位置只显示英文。",
+      "sharedFamily": "Auth transition, OTP and wrong-first-frame authority",
       "siblingCoverage": ["Sign in", "Create account", "OTP", "Home transition"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: resume used a delayed competing transition and OTP required manual digit handling. New: authOtpIntegration, authenticatedHydrateAuthority and ownerBatch01 contracts pass.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "AUTH04": {
@@ -87,7 +96,10 @@
       "fix": "Password state is controlled; reset/forgot content uses keyboard avoidance, scrolling, and persistent taps.",
       "actionZh": "在 Reset Password 输入 123123123，把光标移到最前面输入 g；保持键盘打开并滚动到提交按钮。",
       "expectedZh": "文本变成 g123123123，不会清空；按钮可见、可滚动到并可点击。",
+      "sharedFamily": "Shared controlled password field and keyboard-safe action layout",
       "siblingCoverage": ["Forgot password", "Reset password", "Create account", "Change password"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: leading insertion cleared the reset value and the keyboard covered submit. New: PasswordField cursor/visibility/caller migration suite passes; Auth and Settings use the shared field.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "CAIRN02": {
@@ -96,7 +108,10 @@
       "fix": "Plant uses the shared keyboard-aware container and maintains a reachable primary action.",
       "actionZh": "从 Home、Hike、Run 分别进入 Plant，聚焦文本框并保持键盘打开。",
       "expectedZh": "Plant 按钮始终可见或可滚动到；点击空白和提交行为在三个入口一致。",
+      "sharedFamily": "Plant keyboard avoidance and primary-action ownership",
       "siblingCoverage": ["Standalone Plant", "Hike Plant", "Run Plant"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: the Plant action sat behind the keyboard. New: Plant caller/linkage and shared action contracts pass for standalone, Hike and Run.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "CAIRN03": {
@@ -105,8 +120,11 @@
       "fix": "App-owned connectivity plus bounded exponential scheduling now drains Cairn and Activity outboxes automatically.",
       "actionZh": "离线种一个真实 Cairn，确认显示本地保存；联网后等待自动同步。若仍离线，杀掉并重开 App 后再联网。",
       "expectedZh": "用户无需手动刷新；联网、前台恢复或冷启动后自动开始同步，成功后本地保存状态消失。",
+      "sharedFamily": "App-owned durable entity scheduler and truthful failure state",
       "siblingCoverage": ["Cairn outbox", "Activity outbox", "cold launch", "foreground resume"],
-      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "deployed_gated", "ownerDevice": "pending"}
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: reconnect/restart left Saved locally indefinitely. New: online wake, reconnect, restart, auth/validation and unknown-outcome suites pass; real yiiling Activity 7/7 and Memory 8/8 pass.",
+      "status": {"implementation": "implemented", "localVerification": "pass", "backend": "deployed_verified", "ownerDevice": "pending"}
     },
     "CAIRN10": {
       "ownerObservation": "Activity Plant Back went to standalone location selection; simulated Plant split the route; simulator Activity/Cairn did not behave like Memory; standalone Cairn should prove a visit.",
@@ -114,7 +132,10 @@
       "fix": "Plant carries exact activity context; Back returns to that activity without route discontinuity. Simulator data is live local QA only. A durable REAL standalone Cairn adds one accurate GPS-anchored Personal Memory witness.",
       "actionZh": "用 Debug 模拟分别在 Hike/Run 中 Plant 后返回并继续走；打开 Memory 检查模拟轨迹。再关闭模拟，用真实 GPS 从 Home 单独 Plant。",
       "expectedZh": "活动内 Back 直接回原活动且路线不断；模拟路线在 Finish 前已显示并以模拟坐标进入 QA Memory；模拟数据不上传、不混入真实个人历史；真实独立 Cairn 保存成功后仅在准确 GPS 点解锁一次个人 Memory。",
+      "sharedFamily": "Plant caller identity, simulator product pipeline and provenance",
       "siblingCoverage": ["Hike", "Run", "Plant", "Memory", "standalone Cairn"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: Activity Plant returned through standalone location, split the route and leaked legacy review UI. New: simulatorContracts, Plant activity context/linkage and Memory provenance suites pass.",
       "status": {"implementation": "implemented_contract_change", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "CAIRN08": {
@@ -123,7 +144,10 @@
       "fix": "The simulator origin ring is restored and Cairn sheets/dialogs use the canonical scrim and presentation family.",
       "actionZh": "开启 Debug 和模拟器，选择起点；在 Home、Hike、Run、Memory 打开 Cairn 和删除确认。",
       "expectedZh": "模拟起点有清晰蓝色焦点圈；遮罩、圆角、间距、关闭和操作层级在所有入口一致。",
+      "sharedFamily": "QA origin affordance and shared modal/scrim system",
       "siblingCoverage": ["Simulator", "Marker Detail", "Memory", "delete dialog"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: simulator origin was visually unlocatable and overlay families diverged. New: simulator contracts plus Cairn/Activity/Route/Debug modal caller audit pass.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "CAIRN01": {
@@ -132,7 +156,10 @@
       "fix": "Plant caller context, navigation, title geometry, spacing, and Detail surfaces were unified against canonical components/tokens.",
       "actionZh": "日间和夜间分别从 Home、Hike、Run 完成一次 Plant，并打开详情。",
       "expectedZh": "Back 语义正确；标题、上下区域、留白和颜色统一；夜间地图上方与详情面板不割裂。",
+      "sharedFamily": "Plant navigation and Cairn surface hierarchy",
       "siblingCoverage": ["Standalone Plant", "Activity Plant", "Marker Detail"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: standalone and Activity entry paths drifted. New: Plant context/linkage, Cairn personal contracts and mobile visual captures pass.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "CAIRN09": {
@@ -141,7 +168,10 @@
       "fix": "Detail has a stable minimum body; linked Activities, unavailable links, and standalone planted dates are explicit; all Memory branches open real detail and expose allowed edit actions.",
       "actionZh": "打开短文字 Cairn、活动 Cairn、独立 Cairn，并从 Memory 地图点开后使用 View Cairn 和 Edit。",
       "expectedZh": "短内容不显得单薄；每个 Cairn 都有真实来源说明；View Cairn 有效；自己的 Cairn 可编辑。",
+      "sharedFamily": "Role-aware Cairn detail presentation",
       "siblingCoverage": ["Marker Detail", "Memory pin renderers", "Map History"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: short standalone/Memory detail had missing actions/context. New: Cairn personal, pin action and identity suites pass across owner/friend/Public roles.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "CAIRN04": {
@@ -150,7 +180,10 @@
       "fix": "All Cairns uses planted `createdAt`, actual audience filters, deterministic sorting, and shared authorship/audience labels.",
       "actionZh": "准备个人、朋友和 Public 样例，编辑一个旧 Cairn 后打开 All Cairns；切换筛选和排序。",
       "expectedZh": "编辑不会把种植日期改成 Today；筛选和排序正确；作者身份与可见范围均由图标加文字清楚表达。",
+      "sharedFamily": "Cairn library time, audience and authorship semantics",
       "siblingCoverage": ["All Cairns", "Marker Detail", "Memory", "Map History"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: update time replaced planted time and roles were visually identical. New: Cairn library/personal contracts and identity reconciliation suites pass.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "CAIRN06": {
@@ -159,7 +192,10 @@
       "fix": "All live callers use the shared delete dialog and identity line; automatic app-owned retry starts promptly after recovery.",
       "actionZh": "从详情和 Memory 各删除一个 Cairn；比较个人/朋友/Public 标识；让一个离线 Cairn 联网同步。",
       "expectedZh": "删除弹窗都有 X、Keep 和明确删除动作；两个入口样式一致；身份与受众一目了然；联网后无需刷新即开始同步。",
+      "sharedFamily": "Shared destructive confirmation, identity and retry",
       "siblingCoverage": ["Marker Detail", "Memory", "All Cairns", "offline recovery"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: Memory used legacy delete UI and retry waited on unrelated actions. New: CairnDeleteDialog callers, pending Activity/Route/Debug modal audit and scheduler suites pass.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "HOME04": {
@@ -168,7 +204,10 @@
       "fix": "The card is one coherent tap target with no nested Open button.",
       "actionZh": "在 Home 点击 Last Hike 卡片的标题、数据和右侧区域。",
       "expectedZh": "整个卡片都进入同一详情；没有额外 Open 框或重复点击语义。",
+      "sharedFamily": "Home recent-Activity card interaction",
       "siblingCoverage": ["Home Last Hike", "generated H0/H1 states"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: nested Open affordance duplicated the full-card tap. New: generated Home contract removes lastHikeAction and final Home tests/export pass.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "HOME01": {
@@ -177,7 +216,10 @@
       "fix": "Obsolete distance/weather duplication was removed; a softened canonical sunny image was manifested; Cairn-native Privacy/Help layouts were preserved and validated.",
       "actionZh": "连续点 Settings 的 Thanks for using Cairn 五次，检查 Debug；切换晴天；打开 Privacy 和 Help/About。",
       "expectedZh": "Debug 只保留有效工具；晴天山、水面和草地不过度锐利；Privacy/Help 的间距、颜色、按钮与 App 一致。",
+      "sharedFamily": "Locked Home artwork family and Cairn-native settings surfaces",
       "siblingCoverage": ["Home weather variants", "Debug", "Privacy", "Help/About"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: owner rejected harsh mountain/blue water/sharp grass and generic settings layouts. New: active asset SHA is manifested/exported and 390x844 plus sibling-size visual captures were reviewed; taste acceptance remains pending.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "HOME02": {
@@ -186,7 +228,10 @@
       "fix": "Readiness and Fog restoration remain separated with local-first composition and centered status. Performance was benchmarked, including one disclosed mixed-data regression. Session persistence was not silently redefined.",
       "actionZh": "在真机冷启动 Hike 和已填充的 Memory，录屏从地球层级进入以及 Fog 恢复耗时；另做一次删除重装并观察登录状态。",
       "expectedZh": "没有一闪而过或与标签重叠的 loading；地球到本地过渡连续；Fog 状态与内容顺序合理。删除重装后仍登录是当前 Keychain 设计，是否改成强制登录请由 Owner 明确决定。",
+      "sharedFamily": "Map/Fog readiness and secure-session restore authority",
       "siblingCoverage": ["Hike map", "Run map", "Memory", "secure session restore"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: decorative loading flashed and map readiness was confused with Fog restoration. New: transient/readiness, cross-runtime Memory and scale tests pass; native populated timing and reinstall policy remain owner checks.",
       "status": {"implementation": "implemented_with_disclosed_limit", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending", "ownerDecision": "reinstall_session_policy"}
     },
     "AUTH01": {
@@ -195,7 +240,10 @@
       "fix": "The Cairn-native dialog hierarchy uses close-to-cancel, one explicit action, aligned content, and shared widths.",
       "actionZh": "在不同文字大小下打开 Sign out 和 Delete account 弹窗。",
       "expectedZh": "文字换行自然且视觉居中；输入框与主按钮宽度一致；顶部 X 取消，下方只有当前主要动作。",
+      "sharedFamily": "Settings modal hierarchy and field/action sizing",
       "siblingCoverage": ["Sign out", "Delete account", "Settings dialogs"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "Old: duplicated cancel actions and mismatched widths produced left-heavy wrapping. New: Settings convergence/account-boundary suites and mobile captures pass.",
       "status": {"implementation": "implemented", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     },
     "END01": {
@@ -204,20 +252,37 @@
       "fix": "No historical-resume feature was added. Completed Activities stay view-only.",
       "actionZh": "完成一个活动，随后从历史记录打开。",
       "expectedZh": "可以查看已完成活动，但没有 Resume/继续历史活动的动作；请将原 case 改为只读验证。",
+      "sharedFamily": "Completed Activity product contract",
       "siblingCoverage": ["Completed Hike", "Completed Run", "Activity history"],
+      "allCallersMigrated": true,
+      "failureSensitiveEvidence": "The old failure was an invalid test expectation, not a product defect. completedActivityIntent and history contracts confirm completed Activities remain view-only.",
       "status": {"implementation": "definition_only", "localVerification": "pass", "backend": "not_applicable", "ownerDevice": "pending"}
     }
   },
   "publicReadiness": {
-    "status": "blocked",
-    "gate": false,
-    "allowlistCount": 0,
-    "safeForNormalOtaWhileDisabled": true,
-    "blockers": [
-      "Owner numeric account ID is not present in the authority JSON.",
-      "A second isolated disposable actor and operator workflow have not been supplied/proven.",
-      "Native positive and negative walking-discovery cases are pending.",
-      "The local disposable MySQL integration harness could not run because Docker daemon availability failed."
+    "status": "usable_controlled_canary",
+    "gate": true,
+    "allowlistAccountIds": [103, 106],
+    "allowlistCount": 2,
+    "operatorAccountIds": [107],
+    "broadExposure": false,
+    "realYiilingHarness": {"passed": 21, "failed": 0, "cleanedProductionCounts": [0, 0, 0, 0]},
+    "usableNow": "Text-only explicit publication, real-presence walking discovery and stranger actions are enabled for the two allowlisted consumers; account 107 can perform operator moderation only.",
+    "ownerDevicePending": [
+      "Physical two-actor positive walking discovery before Finish.",
+      "Physical near-miss/parallel-path negative control with current native GPS.",
+      "Owner visual and interaction acceptance on the production O64 bundle."
     ]
+  },
+  "criticalVerification": {
+    "releaseGate": {"clientPassed": 1458, "clientTotal": 1461, "intentionalSkips": 3, "backendPassed": 109, "backendTotal": 109, "staticPassed": 102, "staticTotal": 102},
+    "activityYiiling": {"passed": 7, "failed": 0},
+    "memoryYiiling": {"passed": 8, "failed": 0},
+    "publicYiiling": {"passed": 21, "failed": 0},
+    "memoryScaleOldFailureMs": 156,
+    "memoryScaleNewPassMs": 62,
+    "iosHermesBytes": 11667725,
+    "homeAssetSha256": "191a59c662e7d6fd7084b182bdf62db84e77c945b834d68e3aac6856c99b15d2",
+    "sameSessionSiblingReview": "pass"
   }
 }
