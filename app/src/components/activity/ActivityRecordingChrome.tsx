@@ -26,6 +26,24 @@ export interface ActivityNoticePresentation {
   icon?: IconName;
 }
 
+/** Shared copy for the two live Activity entry paths. */
+export function activityStartErrorMessage(error: string | null): string | null {
+  switch (error) {
+    case 'permission-denied':
+      return 'Location permission is needed to start.';
+    case 'previous-sync-pending':
+      return 'Your previous Activity is safely saved and still syncing. Try again when sync completes.';
+    case 'previous-cleanup-pending':
+      return 'Your previous discard is still clearing from the server. Try again in a moment.';
+    case 'unfinished-exists':
+      return 'Finish or discard the unfinished Activity before starting another.';
+    case null:
+      return null;
+    default:
+      return 'Couldn’t start GPS. Check location settings and try again.';
+  }
+}
+
 function modePresentation(mode: ActivityRecordingMode, themePrimary: string) {
   return mode === 'run'
     ? { label: 'Run', icon: 'running' as CairnIconName, color: Colors.running }

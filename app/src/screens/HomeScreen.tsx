@@ -30,9 +30,12 @@ import { SUNNY_AMBIENT_MOTION_ENABLED } from '../config/homeVisual';
 import {
   ensureUnfinishedActivityRegistry,
   findRecoverableActivity,
-  restoreRecoverableActivity,
   type RecoverableActivity,
 } from '../features/activity/activityRecovery';
+import {
+  deriveActivityOperationalState,
+  type ActivityOperationalState,
+} from '../features/activity/activityOperationalState';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { useDistance } from '../utils/distanceFormat';
 
@@ -78,19 +81,38 @@ function formatRelativeDay(startedAt: number | string): string {
   return new Date(t).toLocaleDateString();
 }
 
+function activityStateCopy(
+  state: ActivityOperationalState,
+  mode: 'hiking' | 'running' | undefined,
+): { eyebrow: string; title: string } {
+  const noun = mode === 'running' ? 'run' : 'hike';
+  const modeLabel = noun.toUpperCase();
+  switch (state) {
+    case 'starting': return { eyebrow: `${modeLabel} STARTING`, title: `Starting ${noun}` };
+    case 'tracking': return { eyebrow: `${modeLabel} RECORDING`, title: `Current ${noun}` };
+    case 'resuming': return { eyebrow: `${modeLabel} RESUMING`, title: `Resuming ${noun}` };
+    case 'pausing': return { eyebrow: `${modeLabel} PAUSING`, title: `Pausing ${noun}` };
+    case 'paused': return { eyebrow: `${modeLabel} PAUSED`, title: `Paused ${noun}` };
+    case 'finishing': return { eyebrow: `${modeLabel} FINISHING`, title: `Finishing ${noun}` };
+    case 'recovery': return { eyebrow: `${modeLabel} INTERRUPTED`, title: `Interrupted ${noun}` };
+    default: return { eyebrow: modeLabel, title: `Recent ${noun}` };
+  }
+}
+
 export function HomeScreen() {
   const nav = useNavigation<Nav>();
   const distance = useDistance();
   const user = useAppStore(s => s.user);
   const sessions = useSessionStore(s => s.sessions);
   const liveStatus = useTrackingStore(s => s.status);
+  const liveTransitionState = useTrackingStore(s => s.transitionState);
+  const liveIsFinishing = useTrackingStore(s => s.isFinishing);
   const liveActivityMode = useTrackingStore(s => s.activityMode);
   const liveActivityId = useTrackingStore(s => s.sessionId);
   const liveOwnerUserId = useTrackingStore(s => s.ownerUserId);
   const liveStartedAt = useTrackingStore(s => s.startedAt);
   const liveDistanceM = useTrackingStore(s => s.distanceM);
   const liveDurationS = useTrackingStore(s => s.durationS);
-  const resumeLiveActivity = useTrackingStore(s => s.resumeTracking);
   const memoryPointCount = useMemoryStore(s => s.points.length);
   const weatherCondition = useWeatherStore(s => s.condition);
   const conditionOverride = useWeatherStore(s => s.conditionOverride);
@@ -112,20 +134,40 @@ export function HomeScreen() {
   // signed-in user. Home may show it without blocking unrelated browsing;
   // tapping the card targets its exact immutable client identity.
   const [unfinishedActivity, setUnfinishedActivity] = useState<RecoverableActivity | null>(null);
+  const recoveryLookupGenerationRef = React.useRef(0);
+  const currentUserId = String(user?.id ?? '');
   const refreshUnfinished = React.useCallback(async () => {
+    const requestGeneration = ++recoveryLookupGenerationRef.current;
+    const userId = currentUserId;
+    const isCurrentRequest = () => requestGeneration === recoveryLookupGenerationRef.current
+      && String(useAppStore.getState().user?.id ?? '') === userId;
     try {
-      const userId = String(user?.id ?? '');
-      if (!userId) return setUnfinishedActivity(null);
+      if (!userId) {
+        if (isCurrentRequest()) setUnfinishedActivity(null);
+        return;
+      }
       await ensureUnfinishedActivityRegistry(userId);
+      if (!isCurrentRequest()) return;
       const registry = await import('../features/activity/activityRegistry');
       const unfinished = await registry.getUnfinishedActivity(userId);
-      if (!unfinished) return setUnfinishedActivity(null);
-      setUnfinishedActivity(await findRecoverableActivity({
+      if (!isCurrentRequest()) return;
+      if (!unfinished) {
+        setUnfinishedActivity(null);
+        return;
+      }
+      const recovered = await findRecoverableActivity({
         clientActivityId: unfinished.clientActivityId,
         userId,
-      }));
-    } catch { /* silent — no disk = empty */ }
-  }, [user?.id]);
+      });
+      if (isCurrentRequest()) setUnfinishedActivity(recovered);
+    } catch {
+      if (isCurrentRequest()) setUnfinishedActivity(null);
+    }
+  }, [currentUserId]);
+  useEffect(() => {
+    recoveryLookupGenerationRef.current += 1;
+    setUnfinishedActivity(null);
+  }, [currentUserId]);
   // R21 (2026-08-18 user "点击 discard 回到 homepage, 依旧展示 unfinish"):
   // re-list on every focus so Discard from Hiking clears the card
   // immediately. sessions.length dep kept so save-hike also refreshes.
@@ -142,27 +184,6 @@ export function HomeScreen() {
   );
   const hasHike = validSessions.length > 0;
   const state = hasHike ? 'H1' : 'H0';
-
-  // R21 (2026-08-17 user "你没索要地理 GPS 位置么"): actively request
-  // foreground location permission on Home mount so we can read GPS for
-  // country name + real weather. If user grants, resolveCurrentCountry
-  // + fetchWeather will succeed. If they deny, we silently fall back to
-  // "Your world" copy and default sunny bg.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const Location = require('expo-location');
-        const existing = await Location.getForegroundPermissionsAsync();
-        if (existing.status !== 'granted' && existing.canAskAgain !== false) {
-          await Location.requestForegroundPermissionsAsync();
-        }
-        // Whether or not it granted, resolve/fetch below will handle both paths.
-      } catch { /* silent */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   // R21 (2026-08-17): resolve current country from GPS. If location override
   // is active, use that instead. Cached 24h so first-render doesn't wait.
@@ -242,10 +263,12 @@ export function HomeScreen() {
   // R21 (2026-08-18): priority display — most recent unfinished action wins
   // over the last completed hike. Users see "resume or discard" instead of
   // "here's an old completed hike" when there's an in-progress session.
-  const showLiveActivity = liveStatus !== 'idle'
+  const showLiveActivity = (liveStatus !== 'idle' || liveIsFinishing)
     && Boolean(liveActivityId)
-    && String(liveOwnerUserId ?? '') === String(user?.id ?? '');
-  const topUnfinished = showLiveActivity ? null : unfinishedActivity;
+    && String(liveOwnerUserId ?? '') === currentUserId;
+  const topUnfinished = showLiveActivity || unfinishedActivity?.userId !== currentUserId
+    ? null
+    : unfinishedActivity;
   const showUnfinished = showLiveActivity || !!topUnfinished;
   const displayedMode = showLiveActivity ? liveActivityMode : topUnfinished?.activityMode;
   const displayedDistanceM = showLiveActivity ? liveDistanceM : (topUnfinished?.distanceM ?? 0);
@@ -253,15 +276,18 @@ export function HomeScreen() {
   const displayedStartedAt = showLiveActivity ? (liveStartedAt ?? Date.now()) : (topUnfinished?.startedAt ?? Date.now());
   const formatActivityDistance = (meters: number) => `${distance.format(meters, 1)} ${distance.unit}`;
 
+  const displayedOperationalState = showLiveActivity
+    ? deriveActivityOperationalState({
+      trackingStatus: liveStatus,
+      transitionState: liveTransitionState,
+      isFinishing: liveIsFinishing,
+    })
+    : showUnfinished ? 'recovery' : 'stopped';
+  const displayedStateCopy = activityStateCopy(displayedOperationalState, displayedMode);
+  const lastCompletedMode = lastHike?.activityMode === 'running' ? 'running' as const : 'hiking' as const;
   const lastHikeTitle = showUnfinished
-    ? showLiveActivity
-      ? liveStatus === 'requesting'
-        ? (displayedMode === 'running' ? 'Starting run' : 'Starting hike')
-        : liveStatus === 'tracking'
-          ? (displayedMode === 'running' ? 'Current run' : 'Current hike')
-          : (displayedMode === 'running' ? 'Paused run' : 'Paused hike')
-      : (displayedMode === 'running' ? 'Paused run' : 'Paused hike')
-    : (lastHike?.name || 'Recent hike');
+    ? displayedStateCopy.title
+    : (lastHike?.name || (lastCompletedMode === 'running' ? 'Recent run' : 'Recent hike'));
   const lastHikeMeta = showUnfinished
     ? `${formatActivityDistance(displayedDistanceM)} · ${formatDuration(displayedDurationS)} · ${formatRelativeDay(displayedStartedAt)}`
     : (lastHike
@@ -355,25 +381,20 @@ export function HomeScreen() {
             lastHikeMeta={lastHikeMeta}
             lastHikeDetails={lastHikeDetails}
             lastHikeEyebrow={showUnfinished
-              ? `${displayedMode === 'running' ? 'RUN' : 'HIKE'} ${showLiveActivity && liveStatus === 'tracking' ? 'RECORDING' : showLiveActivity && liveStatus === 'requesting' ? 'STARTING' : 'PAUSED'}`
-              : 'LAST HIKE'}
-            lastHikeAction={showUnfinished ? (showLiveActivity && liveStatus !== 'paused' ? 'Return' : 'Resume') : 'Open'}
-            lastHikeMode={showUnfinished ? displayedMode : (lastHike?.activityMode === 'running' ? 'running' : 'hiking')}
+              ? displayedStateCopy.eyebrow
+              : (lastCompletedMode === 'running' ? 'LAST RUN' : 'LAST HIKE')}
+            lastHikeMode={showUnfinished ? displayedMode : lastCompletedMode}
             onLastHikePress={showUnfinished
               ? () => {
                   if (showLiveActivity) {
                     nav.navigate(liveActivityMode === 'running' ? 'Running' : 'Hiking');
-                    if (liveStatus === 'paused') void resumeLiveActivity();
                     return;
                   }
                   const activity = topUnfinished!;
-                  void restoreRecoverableActivity(activity).then(restored => {
-                    if (!restored) return;
-                    nav.navigate(
-                      activity.activityMode === 'running' ? 'Running' : 'Hiking',
-                      { recoverClientActivityId: activity.clientActivityId },
-                    );
-                  });
+                  nav.navigate(
+                    activity.activityMode === 'running' ? 'Running' : 'Hiking',
+                    { recoverClientActivityId: activity.clientActivityId },
+                  );
                 }
               : lastHike
                 ? () => nav.navigate('MapHistory', { sessionId: lastHike.id })

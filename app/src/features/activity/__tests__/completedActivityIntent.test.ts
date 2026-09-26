@@ -35,6 +35,10 @@ const intent: PendingHike = {
       { lat: -41.001, lng: 174.001, t: 5_000, segment_id: 's1' },
     ],
     route_points_raw: [],
+    route_points_canonical: [
+      { lat: -41, lng: 174, t: 1_000, segment_id: 's1' },
+      { lat: -41.001, lng: 174.001, t: 5_000, segment_id: 's1' },
+    ],
     memory_points: [],
   },
   summary: {

@@ -13,47 +13,91 @@
  *   guard. Plus, even sub-500KB JSON parses can freeze on lower-end
  *   devices.
  *
- *   This gate breaks the loop: any hydrateMemoryForUser that starts
- *   but doesn't finish (sync death mid-parse) leaves a flag set on
- *   disk. Next boot reads the flag and skips hydrate entirely. The
- *   in-memory store stays empty (user sees no historical memory
- *   points) but the app boots and is usable.
- *
- * Trade-off: stability > historical data visibility. User can still
- * record new memory points; just the old cache won't auto-restore.
+ *   This gate breaks the loop per account. A hydrate that does not finish
+ *   leaves `in_progress`; the next boot selects a fresh recovery snapshot
+ *   namespace while preserving the old bytes for support/recovery. Server
+ *   reconciliation can then safely repopulate the writable projection.
  *
  * Lifecycle:
- *   - App boot: primeMemoryHydrateGate() reads disk into memory cache.
- *   - hydrateMemoryForUser entry: markMemoryHydrateInProgress().
- *   - hydrateMemoryForUser success: markMemoryHydrateSuccess().
- *   - Next boot: if flag still set, hasMemoryHydrateFailedBefore()
- *     returns true → hydrate skipped.
+ *   - hydrateMemoryForUser awaits hasMemoryHydrateFailedBefore(userId).
+ *   - entry writes an account-scoped in-progress marker.
+ *   - a stale marker is promoted to durable recovery mode.
+ *   - normal success clears the marker; recovery success keeps the recovery
+ *     namespace selected so the preserved snapshot is never overwritten.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const STORAGE_KEY = 'cairn_memory_hydrate_failed_v1';
-let cachedFlag: boolean | null = null;
+const STORAGE_KEY_PREFIX = 'cairn_memory_hydrate_state_v2:';
+type HydrateGateState = 'clear' | 'in_progress' | 'recovery_unreconciled' | 'recovery_reconciled';
+const cachedState = new Map<string, HydrateGateState>();
 
-export async function primeMemoryHydrateGate(): Promise<void> {
+function storageKey(userId: string): string {
+  return `${STORAGE_KEY_PREFIX}${encodeURIComponent(userId)}`;
+}
+
+async function readState(userId: string): Promise<HydrateGateState> {
+  const cached = cachedState.get(userId);
+  if (cached) return cached;
   try {
-    const v = await AsyncStorage.getItem(STORAGE_KEY);
-    cachedFlag = v === '1';
+    const value = await AsyncStorage.getItem(storageKey(userId));
+    const state: HydrateGateState = value === '1'
+      ? 'in_progress'
+      : value === 'recovery_reconciled'
+        ? 'recovery_reconciled'
+      : value === 'recovery' || value === 'recovery_unreconciled'
+        ? 'recovery_unreconciled'
+        : 'clear';
+    cachedState.set(userId, state);
+    return state;
   } catch {
-    cachedFlag = false;
+    cachedState.set(userId, 'clear');
+    return 'clear';
   }
 }
 
-export function hasMemoryHydrateFailedBefore(): boolean {
-  return cachedFlag === true;
+export async function primeMemoryHydrateGate(userId?: string): Promise<void> {
+  if (userId) await readState(userId);
 }
 
-export async function markMemoryHydrateInProgress(): Promise<void> {
-  cachedFlag = true;
-  await AsyncStorage.setItem(STORAGE_KEY, '1');
+export async function hasMemoryHydrateFailedBefore(userId: string): Promise<boolean> {
+  return (await readState(userId)) === 'in_progress';
 }
 
-export async function markMemoryHydrateSuccess(): Promise<void> {
-  cachedFlag = false;
-  await AsyncStorage.removeItem(STORAGE_KEY);
+export async function usesMemoryHydrateRecovery(userId: string): Promise<boolean> {
+  return (await readState(userId)).startsWith('recovery_');
+}
+
+export async function isMemoryHydrateRecoveryReconciled(userId: string): Promise<boolean> {
+  return (await readState(userId)) === 'recovery_reconciled';
+}
+
+export async function markMemoryHydrateRecovery(userId: string): Promise<void> {
+  cachedState.set(userId, 'recovery_unreconciled');
+  await AsyncStorage.setItem(storageKey(userId), 'recovery_unreconciled');
+}
+
+export async function markMemoryHydrateRecoveryReconciled(userId: string): Promise<void> {
+  cachedState.set(userId, 'recovery_reconciled');
+  await AsyncStorage.setItem(storageKey(userId), 'recovery_reconciled');
+}
+
+export async function markMemoryHydrateInProgress(userId: string): Promise<void> {
+  if (await usesMemoryHydrateRecovery(userId)) return;
+  cachedState.set(userId, 'in_progress');
+  await AsyncStorage.setItem(storageKey(userId), '1');
+}
+
+export async function markMemoryHydrateSuccess(userId: string): Promise<void> {
+  if (await usesMemoryHydrateRecovery(userId)) return;
+  cachedState.set(userId, 'clear');
+  await AsyncStorage.removeItem(storageKey(userId));
+}
+
+/** Clear both durable and process-local recovery authority after a verified
+ * privacy reset. Without clearing the cache, restoring the same account in
+ * this process could reopen an obsolete recovery namespace. */
+export async function clearMemoryHydrateState(userId: string): Promise<void> {
+  cachedState.delete(userId);
+  await AsyncStorage.removeItem(storageKey(userId));
 }

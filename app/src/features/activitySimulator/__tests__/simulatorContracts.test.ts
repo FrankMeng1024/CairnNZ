@@ -186,7 +186,8 @@ describe('Activity Simulator integration and safety contracts', () => {
     const tracking = read('src/store/useTrackingStore.ts');
     expect(tracking).toContain('const canonicalSegments = segmentTrace(s.trackPoints).segments');
     expect(tracking).toContain('const sourceSegments = canonicalSegments');
-    expect(tracking).toContain('const snappedSegments: TrackPoint[][] = sourceSegments.map(segment => segment)');
+    expect(tracking).toContain('const snappedSegments: TrackPoint[][] = segmentTrace(');
+    expect(tracking).toContain('finalArtifact?.points ?? baseFinalTrackPoints');
     expect(tracking).toContain('snappedTrackPoints = hikeSource');
     expect(tracking).toContain('preserveTrustedRouteEndpoints(canonicalInput, snapRes.points)');
     expect(tracking).toContain('evaluateMatchedGeometryQuality(canonicalInput, anchored)');

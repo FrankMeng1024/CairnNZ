@@ -35,6 +35,7 @@ import { useAppStore } from '../store/useAppStore';
 import { storage } from '../store/storage';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
+import { PasswordField } from '../components/PasswordField';
 import { login, register, loginWithGoogle, verifyCode, resendCode,
   passwordResetRequest, passwordResetVerify, patchDob, restoreAccount,
   type AuthResult,
@@ -328,87 +329,6 @@ function PressBtn({ onPress, style, children, scale = 0.97, disabled, testID }: 
         {children}
       </TouchableOpacity>
     </Animated.View>
-  );
-}
-
-// ── Password field with eye toggle ─────────────────────────────────────────
-function PasswordInput({ value, onChangeText, placeholder, error, onBlur, isNew }: {
-  value: string; onChangeText: (v: string) => void; placeholder: string;
-  error?: string; onBlur?: () => void; isNew?: boolean;
-}) {
-  const [show, setShow] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const inputRef = React.useRef<TextInput>(null);
-  return (
-    <>
-      <View style={[formStyles.inputWrap, !!error && formStyles.inputError, focused && !error && formStyles.inputFocused]}>
-        <View style={formStyles.inputIcon}>
-          <Icon name="KeyRound" size={IconSize.sm} color={focused ? Colors.primary : Colors.textMuted} strokeWidth={1.8} />
-        </View>
-        <TextInput
-          ref={inputRef}
-          style={formStyles.inputInner}
-          placeholder={placeholder}
-          placeholderTextColor={Colors.textMuted}
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={!show}
-          // R114/O22 (2026-08-10) Bug X: user reported password field
-          // auto-clears after submit error. Root cause: iOS Strong-Password
-          // Autofill (triggered by textContentType='newPassword' +
-          // autoComplete='password-new') decides the user "rejected" its
-          // suggestion when the form fails validation and wipes the field.
-          // We disable iOS's password-manager interference so the value
-          // the user typed stays put after an error — they just edit it.
-          textContentType="none"
-          autoComplete="off"
-          autoCorrect={false}
-          autoCapitalize="none"
-          spellCheck={false}
-          // R114/O24 (2026-08-12) defense-in-depth: explicitly opt out of
-          // iOS behaviors that could wipe the buffer on refocus. These
-          // are the platform defaults but stating them documents intent
-          // and prevents future regressions if RN changes defaults.
-          clearTextOnFocus={false}
-          selectTextOnFocus={false}
-          onFocus={() => setFocused(true)}
-          onBlur={() => { setFocused(false); onBlur?.(); }}
-        />
-        {/* AUTH-1 (2026-08-11): X clear button — industry-standard affordance
-            so the user can wipe the field in one tap when a password error
-            makes them want a fresh start (instead of long-press-select-all).
-            R114/O24 (2026-08-12) refinement: 4-eyes review flagged the
-            original hitSlop.left=8 caused iOS users to hit the X when
-            aiming at the right end of the input, then their next keystroke
-            replaced the (now-cleared) field with a single char. Fix:
-            (a) shrink hitSlop.left to 0 so X only accepts taps on itself;
-            (b) hide X while the field is focused (typing users don't need
-            it; they can backspace). Only visible when field has content
-            AND is blurred = user is clearly deciding to wipe. */}
-        {value.length > 0 && !focused && (
-          <TouchableOpacity
-            testID="btn-password-clear"
-            style={formStyles.clearBtn}
-            onPress={() => { onChangeText(''); inputRef.current?.focus(); }}
-            accessibilityRole="button"
-            accessibilityLabel="Clear password"
-            hitSlop={{ top: 8, bottom: 8, left: 0, right: 4 }}
-          >
-            <Icon name="X" size={IconSize.sm} color={Colors.textMuted} strokeWidth={2} />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={formStyles.eyeBtn}
-          onPress={() => setShow(v => !v)}
-          accessibilityRole="button"
-          accessibilityLabel={show ? 'Hide password' : 'Show password'}
-          hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
-        >
-          <Icon name={show ? 'EyeOff' : 'Eye'} size={IconSize.sm} color={Colors.textMuted} strokeWidth={1.8} />
-        </TouchableOpacity>
-      </View>
-      {!!error && <Text style={formStyles.fieldError}>{error}</Text>}
-    </>
   );
 }
 
@@ -2597,7 +2517,8 @@ export function AuthScreen() {
             autoFocus
           />
           <Text style={[formStyles.label, { marginTop: 20 }]}>New password</Text>
-          <PasswordInput
+          <PasswordField
+            variant="auth"
             value={forgotNewPassword}
             onChangeText={(v) => { setForgotNewPassword(v); if (forgotError) setForgotError(''); }}
             placeholder="Create a new password"
@@ -2789,7 +2710,8 @@ export function AuthScreen() {
           />
 
           <Text style={formStyles.label}>Password</Text>
-          <PasswordInput
+          <PasswordField
+            variant="auth"
             value={password}
             onChangeText={(v) => { setPassword(v); if (passwordError) setPasswordError(''); }}
             placeholder={'••••••••'}
@@ -2860,7 +2782,8 @@ export function AuthScreen() {
           {isRegister && (
             <>
               <Text style={formStyles.label}>Confirm Password</Text>
-              <PasswordInput
+              <PasswordField
+                variant="auth"
                 value={confirm}
                 onChangeText={(v) => { setConfirm(v); if (confirmError) setConfirmError(''); }}
                 placeholder="Re-enter password"

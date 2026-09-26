@@ -197,6 +197,7 @@ jest.mock('../../components/activity/ActivityRecordingChrome', () => {
   const ReactModule = require('react');
   const { Pressable, Text, View } = require('react-native');
   return {
+    activityStartErrorMessage: (error: string | null) => error,
     ActivityControlDock: (props: Record<string, any>) => {
       latestControlProps = props;
       return ReactModule.createElement(
@@ -255,6 +256,7 @@ describe('Running normal Quick Cairn handler', () => {
     mockCaptureActivityRouteReference.mockReturnValue(true);
     mockTrackingState = {
       status: 'tracking',
+      activityMode: 'running',
       transitionState: 'idle',
       isFinishing: false,
       startError: null,

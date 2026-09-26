@@ -376,19 +376,28 @@ export async function writeFogDisplayCache(entry: FogDisplayCacheEntry): Promise
  * The account remains blocked for this process so a deferred stale callback
  * cannot recreate chunks after the purge has completed.
  */
-export async function purgeFogDisplayCache(accountId: string): Promise<void> {
+export async function purgeFogDisplayCache(
+  accountId: string,
+  options: { permanent?: boolean } = {},
+): Promise<void> {
+  const permanent = options.permanent ?? true;
   blockedAccounts.add(accountId);
   accountGenerations.set(accountId, accountGeneration(accountId) + 1);
   latest.delete(accountId);
-  await (writeTails.get(accountId) ?? Promise.resolve()).catch(() => {});
-  const manifestRaw = await storage.getItem(manifestKeyFor(accountId));
-  const manifest = parseManifest(manifestRaw, accountId);
-  if (manifest) {
-    for (let index = 0; index < manifest.chunkCount; index += 1) {
-      await storage.removeItem(`${chunkPrefixFor(accountId)}${manifest.generation}:${index}`);
-    }
+  try {
+    await (writeTails.get(accountId) ?? Promise.resolve());
+    const prefix = chunkPrefixFor(accountId);
+    const ownedKeys = (await storage.getAllKeysStrict()).filter(key => (
+      key === manifestKeyFor(accountId) || key.startsWith(prefix)
+    ));
+    await storage.removeItemsStrict(ownedKeys);
+    const remaining = (await storage.getAllKeysStrict()).filter(key => (
+      key === manifestKeyFor(accountId) || key.startsWith(prefix)
+    ));
+    if (remaining.length > 0) throw new Error('fog_display_cache_purge_verify_failed');
+  } finally {
+    if (!permanent) blockedAccounts.delete(accountId);
   }
-  await storage.removeItem(manifestKeyFor(accountId));
 }
 
 export function resetFogDisplayCacheMemory(): void {

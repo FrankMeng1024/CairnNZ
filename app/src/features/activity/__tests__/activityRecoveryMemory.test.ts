@@ -53,6 +53,7 @@ jest.mock('../../../services/pendingSyncStore', () => ({
 import { discardRecoverableActivity, type RecoverableActivity } from '../activityRecovery';
 const { recordMemoryEvidence: mockRecordMemoryEvidence } = require('../../memory/services/recordMemoryEvidence');
 const { tombstoneActivity: mockTombstoneActivity } = require('../activityRegistry');
+const { getActivityRegistry: mockGetActivityRegistry } = require('../activityRegistry');
 const { discardActiveHike: mockDiscardActiveHike } = require('../../../services/hikeTrackWriter');
 
 const activity: RecoverableActivity = {
@@ -78,6 +79,15 @@ describe('Activity journal as crash-recoverable Memory intent', () => {
       mockOrder.push('memory');
       return { committed: true, deduplicated: false };
     });
+    mockGetActivityRegistry.mockResolvedValue({
+      version: 1,
+      unfinished: {
+        clientActivityId: activity.clientActivityId,
+        liveOwnerGeneration: activity.ownerGeneration,
+      },
+      completed: [],
+      tombstones: [],
+    });
   });
 
   test('accepted headless point survives process death then Activity discard', async () => {
@@ -96,6 +106,19 @@ describe('Activity journal as crash-recoverable Memory intent', () => {
   test('Memory persistence failure preserves the recoverable Activity journal', async () => {
     mockRecordMemoryEvidence.mockRejectedValueOnce(new Error('disk-full'));
     await expect(discardRecoverableActivity(activity)).rejects.toThrow('disk-full');
+    expect(mockTombstoneActivity).not.toHaveBeenCalled();
+    expect(mockDiscardActiveHike).not.toHaveBeenCalled();
+  });
+
+  test('stale recovery UI cannot discard an Activity that is already completed-local', async () => {
+    mockGetActivityRegistry.mockResolvedValueOnce({
+      version: 1,
+      unfinished: null,
+      completed: [{ clientActivityId: activity.clientActivityId, lifecycle: 'completed_local', syncState: 'pending' }],
+      tombstones: [],
+    });
+    await expect(discardRecoverableActivity(activity)).rejects.toThrow('activity_discard_not_unfinished');
+    expect(mockOrder).toEqual([]);
     expect(mockTombstoneActivity).not.toHaveBeenCalled();
     expect(mockDiscardActiveHike).not.toHaveBeenCalled();
   });

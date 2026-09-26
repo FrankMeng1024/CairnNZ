@@ -16,8 +16,12 @@ jest.mock('../../store/storage', () => ({
   storage: {
     getItem: jest.fn(async (key: string) => mockAsyncValues.get(key) ?? null),
     getItemStrict: jest.fn(async (key: string) => mockAsyncValues.get(key) ?? null),
+    getAllKeysStrict: jest.fn(async () => [...mockAsyncValues.keys()]),
     setItem: jest.fn(async (key: string, value: string) => { mockAsyncValues.set(key, value); }),
     removeItem: jest.fn(async (key: string) => { mockAsyncValues.delete(key); }),
+    removeItemsStrict: jest.fn(async (keys: string[]) => {
+      for (const key of keys) mockAsyncValues.delete(key);
+    }),
   },
 }));
 jest.mock('expo-secure-store', () => ({
@@ -40,6 +44,9 @@ jest.mock('../../features/activitySimulator/simulatorLog', () => ({ clearSimulat
 jest.mock('../../services/debugLogger', () => ({
   debugLogger: { clearAllSessions: jest.fn(async () => undefined) },
 }));
+jest.mock('../../features/memory/services/memoryEvidenceJournal', () => ({
+  purgeDurableMemoryEvidence: jest.fn(async () => undefined),
+}));
 
 const { purgeDeletedAccountLocalData } = require('../accountLocalData');
 
@@ -58,8 +65,10 @@ describe('deleted-account local ownership isolation', () => {
       'clearSimulatorLogs(owner)',
       'debugLogger.clearAllSessions()',
       'deleteAcknowledgedHikeTrackArtifacts(activityId, owner)',
+      'purgeDurableMemoryEvidence(owner)',
       'cairn_sessions_${owner}',
       'cairn_trackpoints_${owner}_',
+      '@cairn:activity_final:v1:${owner}:',
       '@cairn:activity_registry:v1:${owner}',
       '@cairn:offline_markers:v2:${owner}',
       '@cairn:offline_routes:v1:${owner}',

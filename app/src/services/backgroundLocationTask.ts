@@ -99,13 +99,17 @@ export async function persistBackgroundContext(
   sessionId: string | null,
   hikeActive: boolean,
   context?: DurableActivityContext | null,
+  options: { shouldContinue?: () => boolean } = {},
 ): Promise<boolean> {
   return withOwnershipBoundary(async () => {
     try {
+    if (options.shouldContinue && !options.shouldContinue()) return false;
     if (hikeActive) {
       if (!sessionId || !context) return false;
       await AsyncStorage.setItem(STORAGE_KEY_SESSION, sessionId);
+      if (options.shouldContinue && !options.shouldContinue()) return false;
       await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify(context));
+      if (options.shouldContinue && !options.shouldContinue()) return false;
       // Enable last: a headless callback must never observe `active` before
       // the complete owner context is durable.
       await AsyncStorage.setItem(STORAGE_KEY_HIKE_ACTIVE, '1');
@@ -113,7 +117,9 @@ export async function persistBackgroundContext(
       // Disable first: queued native callbacks are fenced before owner keys
       // are removed one by one.
       await AsyncStorage.setItem(STORAGE_KEY_HIKE_ACTIVE, '0');
+      if (options.shouldContinue && !options.shouldContinue()) return false;
       await AsyncStorage.removeItem(STORAGE_KEY_ACTIVITY_CONTEXT);
+      if (options.shouldContinue && !options.shouldContinue()) return false;
       await AsyncStorage.removeItem(STORAGE_KEY_SESSION);
     }
     // v409 fix #5 migration: 清老 key 避免 hydrate 时 stale 干扰
@@ -540,6 +546,55 @@ async function appendDirectlyToHikeTrack(
         coordinateSource: 'none',
         force: true,
       });
+      // A TaskManager wake may run with no React tree or Zustand store mounted.
+      // Commit personal Memory from the same accepted real evidence immediately
+      // after the Activity WAL. If this secondary repository is unavailable,
+      // the canonical journal remains a replayable repair source.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const memory = require('../features/memory/services/recordMemoryEvidence');
+        for (const point of accepted) {
+          await memory.recordMemoryEvidence({
+            lat: point.lat,
+            lng: point.lng,
+            atMs: point.t,
+            source: 'activity_real',
+            ownerUserId: context.userId,
+            ownerAuthority: 'durable_activity_lease',
+            durability: 'deferred',
+            sourceActivityClientId: context.clientActivityId,
+            sourceSegmentId: point.segmentId,
+            horizontalAccuracyM: point.acc ?? undefined,
+            continuityState: 'accepted',
+          });
+        }
+        appendSimulatorLog('MEMORY_EVIDENCE', 'activity_background_memory_commit', {
+          acceptedCount: accepted.length,
+          nativeBatchSequence,
+          committed: true,
+        }, {
+          userId: context.userId,
+          clientActivityId: context.clientActivityId,
+          qaSessionId: context.qaSessionId,
+          coordinateSource: 'real',
+          force: true,
+        });
+      } catch (memoryError) {
+        crashLogger.breadcrumb(`activity:bg_memory_deferred ${String(memoryError).slice(0, 80)}`);
+        appendSimulatorLog('ERROR', 'activity_background_memory_commit', {
+          acceptedCount: accepted.length,
+          nativeBatchSequence,
+          committed: false,
+          repairSource: 'activity-journal',
+          errorCategory: String(memoryError).slice(0, 120),
+        }, {
+          userId: context.userId,
+          clientActivityId: context.clientActivityId,
+          qaSessionId: context.qaSessionId,
+          coordinateSource: 'none',
+          force: true,
+        });
+      }
     }
     await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify({
       ...context,

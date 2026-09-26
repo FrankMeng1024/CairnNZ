@@ -213,6 +213,7 @@ jest.mock('../../components/activity/ActivityRecordingChrome', () => {
   const ReactModule = require('react');
   const { Pressable, Text } = require('react-native');
   return {
+    activityStartErrorMessage: (error: string | null) => error,
     ActivityControlDock: () => null,
     ActivityRecenterButton: () => null,
     ActivityStartDock: (props: Record<string, any>) => {

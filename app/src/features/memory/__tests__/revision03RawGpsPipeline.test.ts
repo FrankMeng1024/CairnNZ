@@ -36,6 +36,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 jest.mock('../../../store/storage', () => ({
   storage: {
     getItem: jest.fn(async (key: string) => mockStorageValues.get(key) ?? null),
+    getItemStrict: jest.fn(async (key: string) => mockStorageValues.get(key) ?? null),
     setItem: jest.fn(async (key: string, value: string) => { mockStorageValues.set(key, value); }),
     removeItem: jest.fn(async (key: string) => { mockStorageValues.delete(key); }),
   },
@@ -47,7 +48,9 @@ jest.mock('../store/useH3VisitedStore', () => ({
 }));
 jest.mock('../services/lastFixCache', () => ({ persistLastFix: jest.fn() }));
 jest.mock('../lib/memoryHydrateGate', () => ({
-  hasMemoryHydrateFailedBefore: jest.fn(() => false),
+  hasMemoryHydrateFailedBefore: jest.fn(async () => false),
+  usesMemoryHydrateRecovery: jest.fn(async () => false),
+  markMemoryHydrateRecovery: jest.fn(async () => undefined),
   markMemoryHydrateInProgress: jest.fn(async () => undefined),
   markMemoryHydrateSuccess: jest.fn(async () => undefined),
 }));
@@ -81,14 +84,21 @@ jest.mock('../../../services/backgroundLocationTask', () => ({
 }));
 jest.mock('../../../services/hikeTrackWriter', () => ({
   appendHikePoint: jest.fn(async () => undefined), startHikeTrack: jest.fn(async () => undefined),
-  updateHikeMeta: jest.fn(async () => undefined), flushNow: jest.fn(async () => undefined),
+  updateHikeMeta: jest.fn(async () => undefined), updateHikeMetaStrict: jest.fn(async () => undefined), flushNow: jest.fn(async () => undefined),
   renameToCompleted: jest.fn(async () => undefined), discardActiveHike: jest.fn(async () => undefined),
   readActiveHikeTail: jest.fn(async () => []), truncateActiveHikeTrack: jest.fn(async () => undefined),
+  sealHikeTrackForFinish: jest.fn(async () => true), releaseHikeTrackFinishSeal: jest.fn(async () => true),
 }));
 jest.mock('../../../services/pendingSyncStore', () => ({
-  savePending: jest.fn(async () => undefined), removePending: jest.fn(async () => undefined),
+  beginPendingPreparation: jest.fn(), finishPendingPreparation: jest.fn(),
+  savePending: jest.fn(async () => undefined),
+  markPendingPreparationPhase: jest.fn(async () => undefined),
+  markPendingUploadReady: jest.fn(async () => undefined),
+  readPendingReadonly: jest.fn(async () => null),
+  removePending: jest.fn(async () => undefined),
 }));
 jest.mock('../../activity/activityRegistry', () => ({
+  getActivityRegistry: jest.fn(async () => ({ unfinished: null, recoveryQueue: [], completed: [], tombstones: [] })),
   getUnfinishedActivity: jest.fn(async () => null), registerUnfinishedActivity: jest.fn(async () => undefined),
   updateUnfinishedActivity: jest.fn(async () => true), replaceUnfinishedActivity: jest.fn(async () => true),
   completeActivity: jest.fn(async () => undefined), acknowledgeActivity: jest.fn(async () => true),

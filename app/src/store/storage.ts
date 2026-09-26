@@ -73,4 +73,27 @@ export const storage = {
       if (opts?.strict) throw err;
     }
   },
+  /** Enumerate keys for owner-scoped privacy sweeps. Unlike getItem(), an
+   * unavailable backend is an error rather than an empty keyspace. */
+  getAllKeysStrict: async (): Promise<string[]> => {
+    if (isWeb) {
+      if (typeof window === 'undefined' || !window.localStorage) return [];
+      const keys: string[] = [];
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index);
+        if (key !== null) keys.push(key);
+      }
+      return keys;
+    }
+    return [...await AsyncStorage.getAllKeys()];
+  },
+  removeItemsStrict: async (keys: string[]): Promise<void> => {
+    if (keys.length === 0) return;
+    if (isWeb) {
+      if (typeof window === 'undefined' || !window.localStorage) return;
+      for (const key of keys) window.localStorage.removeItem(key);
+      return;
+    }
+    await AsyncStorage.multiRemove(keys);
+  },
 };

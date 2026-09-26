@@ -333,6 +333,18 @@ export function PublicCairnDetailScreen() {
           selected === 'hide' ? 'Hidden here' : 'Blocked here',
           'This change is saved on this device and will retry when you are connected.',
         );
+      } else if (result.status === 'queued_retry') {
+        showPublicActionFeedback(
+          selected === 'hide' ? 'Hidden here' : 'Blocked here',
+          'This change is saved on this device. The service did not accept it yet and will retry.',
+        );
+      } else if (result.status === 'auth_required') {
+        showPublicActionFeedback(
+          selected === 'hide' ? 'Hidden here' : 'Blocked here',
+          'This change is saved on this device. Sign in again to send it.',
+        );
+      } else if (result.status === 'rejected') {
+        setActionFeedback('The service rejected this change. It remains applied on this device.');
       } else if (result.status === 'unavailable') {
         Alert.alert('No longer available', 'This Public Cairn is no longer available.');
       }
@@ -356,6 +368,12 @@ export function PublicCairnDetailScreen() {
       if (result.status === 'confirmed') setThanked(true);
       else if (result.status === 'queued_offline') {
         showPublicActionFeedback('Thanks saved', 'Your Thanks will retry when you are connected.');
+      } else if (result.status === 'queued_retry') {
+        showPublicActionFeedback('Thanks saved', 'The service did not accept it yet and will retry.');
+      } else if (result.status === 'auth_required') {
+        showPublicActionFeedback('Thanks saved', 'Sign in again to send your Thanks.');
+      } else if (result.status === 'rejected') {
+        setActionFeedback('The service rejected this Thanks.');
       } else {
         setActionFeedback('This Public Cairn is no longer available.');
       }
@@ -381,6 +399,15 @@ export function PublicCairnDetailScreen() {
       } else if (result.status === 'queued_offline') {
         setReportCompleted(true);
         setReportFeedback('Saved to retry when you are connected.');
+      } else if (result.status === 'queued_retry') {
+        setReportCompleted(true);
+        setReportFeedback('Saved. The service did not accept it yet and will retry.');
+      } else if (result.status === 'auth_required') {
+        setReportCompleted(true);
+        setReportFeedback('Saved on this device. Sign in again to send it.');
+      } else if (result.status === 'rejected') {
+        setReportCompleted(false);
+        setReportFeedback('The service rejected this report. Check the details and try again.');
       } else {
         setReportCompleted(false);
         setReportFeedback('This Public Cairn is no longer available.');

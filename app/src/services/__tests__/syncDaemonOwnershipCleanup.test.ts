@@ -3,9 +3,18 @@ let mockPendingRows: any[] = [];
 let mockRegistry: any = { unfinished: null, completed: [], tombstones: [] };
 let mockRemoveFailureCount = 0;
 const mockOrder: string[] = [];
+const mockFailures: any[] = [];
+const mockSavedPending: any[] = [];
+const mockAddedSessions: any[] = [];
+let mockArtifact: any = null;
 
 jest.mock('../pendingSyncStore', () => ({
+  ensurePendingUploadReady: jest.fn(async () => true),
+  isPendingPreparationActive: jest.fn(() => false),
   listPending: jest.fn(async () => [...mockPendingRows]),
+  savePending: jest.fn(async (hike: any) => { mockSavedPending.push(hike); }),
+  markPendingPreparationPhase: jest.fn(async () => undefined),
+  markPendingUploadReady: jest.fn(async () => undefined),
   removePending: jest.fn(async (localId: string) => {
     mockOrder.push('pending-delete');
     if (mockRemoveFailureCount > 0) {
@@ -14,7 +23,17 @@ jest.mock('../pendingSyncStore', () => ({
     }
     mockPendingRows = mockPendingRows.filter(row => row.localId !== localId);
   }),
-  markAttempt: jest.fn(async () => undefined),
+  markAttempt: jest.fn(async (localId: string, failure: any = {}) => {
+    mockFailures.push(failure);
+    mockPendingRows = mockPendingRows.map(row => row.localId === localId ? {
+      ...row,
+      attemptCount: (row.attemptCount ?? 0) + 1,
+      lastAttemptAt: Date.now(),
+      failureKind: failure.kind ?? 'retryable',
+      failureStatus: failure.status ?? null,
+      failureCode: failure.code ?? null,
+    } : row);
+  }),
   updateRemoteId: jest.fn(async () => undefined),
   resetForResync: jest.fn(async () => true),
 }));
@@ -35,6 +54,9 @@ jest.mock('../../features/activity/activityRegistry', () => ({
   removeAcknowledgedActivity: jest.fn(async () => { mockOrder.push('registry-remove'); }),
   updateCompletedActivitySyncState: jest.fn(async () => undefined),
 }));
+jest.mock('../../features/activity/activityFinalArtifact', () => ({
+  loadActivityFinalArtifact: jest.fn(async () => mockArtifact),
+}));
 jest.mock('../../features/activitySimulator/simulatorLog', () => ({
   appendSimulatorLog: jest.fn(),
 }));
@@ -46,14 +68,14 @@ jest.mock('../../store/useSessionStore', () => ({
     getState: () => ({
       currentUserId: mockCurrentUserId,
       sessions: [],
+      addSession: jest.fn(async (session: any) => { mockAddedSessions.push(session); }),
       markSyncState: jest.fn(async () => undefined),
       markSynced: jest.fn(async () => { mockOrder.push('summary-ack'); return true; }),
     }),
   },
-  removeLocalTrackPoints: jest.fn(async () => { mockOrder.push('points-delete'); }),
 }));
 
-import { drainPending } from '../syncDaemon';
+import { classifyPendingSyncFailure, drainPending, recoverPreparingActivityCompletion } from '../syncDaemon';
 const { saveHikeAtomic: mockSaveHikeAtomic } = require('../sessionService');
 const { acknowledgeActivity: mockAcknowledgeActivity } = require('../../features/activity/activityRegistry');
 
@@ -86,7 +108,74 @@ describe('Activity ACK ownership and cleanup phases', () => {
     mockRegistry = { unfinished: null, completed: [], tombstones: [] };
     mockRemoveFailureCount = 0;
     mockOrder.length = 0;
+    mockFailures.length = 0;
+    mockSavedPending.length = 0;
+    mockAddedSessions.length = 0;
+    mockArtifact = null;
     jest.clearAllMocks();
+  });
+
+  test('a crash after refined artifact commit rolls the Base outbox forward before upload', async () => {
+    const preparing: any = {
+      ...pending,
+      uploadState: 'preparing',
+      preparationPhase: 'registry_committed',
+      summary: {
+        startedAt: 1_000,
+        endedAt: 5_000,
+        distanceM: 100,
+        durationS: 4,
+        elevationGainM: 2,
+        name: 'Pending',
+        markerIds: [],
+      },
+      finalArtifact: {
+        revision: 1,
+        displayFingerprint: 'base-display',
+        canonicalFingerprint: 'canonical-truth',
+        source: 'base',
+        algorithmVersion: 'pedestrian-final-v2-base',
+      },
+    };
+    mockArtifact = {
+      revision: 2,
+      displayFingerprint: 'refined-display',
+      canonicalFingerprint: 'canonical-truth',
+      source: 'matched',
+      algorithmVersion: 'pedestrian-final-v2-base',
+      points: [
+        {
+          lat: -41, lng: 174, t: 1_000.8, alt: 88, accuracy: 6,
+          verticalAccuracy: 9, speed: 1.2, course: 45, rawOrdinal: 3,
+          segmentId: 'segment-a', segmentStartReason: 'start',
+        },
+        { lat: -41.002, lng: 174.002, t: 5_000, alt: 92, segmentId: 'segment-a' },
+      ],
+    };
+
+    await expect(recoverPreparingActivityCompletion(preparing)).resolves.toBe(true);
+    expect(mockSavedPending).toHaveLength(1);
+    expect(mockSavedPending[0]).toMatchObject({
+      uploadState: 'preparing',
+      finalArtifact: { revision: 2, displayFingerprint: 'refined-display' },
+      payload: {
+        route_points: [
+          {
+            lat: -41, lng: 174, t: 1_000, alt: 88, acc: 6, v_acc: 9,
+            speed_mps: 1.2, course_deg: 45, raw_ordinal: 3,
+            segment_id: 'segment-a', segment_start_reason: 'start',
+          },
+          { lat: -41.002, lng: 174.002, t: 5_000, alt: 92, segment_id: 'segment-a' },
+        ],
+      },
+    });
+    expect(mockAddedSessions[0]).toMatchObject({
+      finalGeometryRevision: 2,
+      finalGeometryFingerprint: 'refined-display',
+      trackPoints: mockArtifact.points,
+    });
+    expect(preparing.uploadState).toBe('ready');
+    expect(preparing.finalArtifact.revision).toBe(2);
   });
 
   test('a cleanup delete failure after durable ACK never causes a second upload', async () => {
@@ -102,7 +191,6 @@ describe('Activity ACK ownership and cleanup phases', () => {
     expect(mockOrder).toEqual([
       'pending-delete',
       'pending-delete',
-      'points-delete',
       'heavy-trace-delete',
       'registry-remove',
     ]);
@@ -115,12 +203,12 @@ describe('Activity ACK ownership and cleanup phases', () => {
       pending.payload,
       pending.idempotencyKey,
       pending.localId,
+      pending.userId,
     );
     expect(mockOrder).toEqual([
       'summary-ack',
       'registry-ack',
       'pending-delete',
-      'points-delete',
       'heavy-trace-delete',
       'registry-remove',
     ]);
@@ -173,6 +261,7 @@ describe('Activity ACK ownership and cleanup phases', () => {
       accelerated.payload,
       accelerated.idempotencyKey,
       accelerated.localId,
+      accelerated.userId,
     );
     expect(accelerated.payload.route_points.map(point => point.t)).toEqual([startedAt, endedAt]);
     expect(Date.parse(accelerated.payload.end_time)).toBe(endedAt);
@@ -189,5 +278,49 @@ describe('Activity ACK ownership and cleanup phases', () => {
     expect(mockAcknowledgeActivity).not.toHaveBeenCalled();
     expect(mockPendingRows).toHaveLength(1);
     expect(mockOrder).toEqual([]);
+  });
+
+  test.each([
+    [{ status: 0 }, 'retryable'],
+    [{ status: 408 }, 'retryable'],
+    [{ status: 425 }, 'retryable'],
+    [{ status: 429 }, 'retryable'],
+    [{ status: 503 }, 'retryable'],
+    [{ status: 401 }, 'auth_required'],
+    [{ status: 409, body: { code: 'ACTIVITY_IDENTITY_MISMATCH' } }, 'action_required'],
+    [{ status: 400 }, 'action_required'],
+    [{ status: 403 }, 'action_required'],
+    [{ status: 422 }, 'action_required'],
+    [{ malformed: true }, 'action_required'],
+  ])('classifies durable replay failure %p as %s', (error, expected) => {
+    expect(classifyPendingSyncFailure(error).kind).toBe(expected);
+  });
+
+  test('a validation failure remains durable and is not timer/reconnect retried', async () => {
+    mockSaveHikeAtomic.mockRejectedValueOnce(Object.assign(new Error('bad point'), {
+      status: 422,
+      body: { code: 'INVALID_POINT' },
+    }));
+    await expect(drainPending()).resolves.toMatchObject({ attempted: 1, failed: 1 });
+    expect(mockFailures).toContainEqual(expect.objectContaining({
+      kind: 'action_required',
+      status: 422,
+      code: 'INVALID_POINT',
+    }));
+    expect(mockPendingRows).toHaveLength(1);
+    mockSaveHikeAtomic.mockClear();
+    await expect(drainPending({ wakeReason: 'network_online' })).resolves.toMatchObject({
+      attempted: 0,
+      skipped: 1,
+    });
+    expect(mockSaveHikeAtomic).not.toHaveBeenCalled();
+  });
+
+  test('an explicit owner retry may re-attempt an action-required row', async () => {
+    mockPendingRows = [{ ...pending, failureKind: 'action_required', lastAttemptAt: Date.now(), attemptCount: 1 }];
+    await expect(drainPending({ wakeReason: 'manual', force: true })).resolves.toMatchObject({
+      attempted: 1,
+      succeeded: 1,
+    });
   });
 });

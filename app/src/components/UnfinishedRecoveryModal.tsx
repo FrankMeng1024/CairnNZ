@@ -13,9 +13,9 @@
  *
  * 视觉与 TooShortSheet 一致 (Colors.surface card, primary CTA).
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Animated, Easing, BackHandler,
+  View, Text, StyleSheet, TouchableOpacity, Animated, Easing, BackHandler, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './Icon';
@@ -38,9 +38,9 @@ interface UnfinishedData {
 interface Props {
   visible: boolean;
   data: UnfinishedData | null;
-  onContinue: () => void;
-  onSave: () => void;
-  onDiscard: () => void;
+  onContinue: () => Promise<boolean>;
+  onSave: () => Promise<boolean>;
+  onDiscard: () => Promise<boolean>;
 }
 
 function formatRelative(pastMs: number): string {
@@ -62,6 +62,8 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
   const insets = useSafeAreaInsets();
   const slideY = useRef(new Animated.Value(500)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   // O12 Round-3 R3-C1: settings-aware distance format.
   const dist = useDistance();
   // R21 (2026-08-18 user "resume没有用夜间模式 风格也有点偏差"): swap the
@@ -77,6 +79,8 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
 
   useEffect(() => {
     if (visible) {
+      setActionPending(false);
+      setActionError(null);
       Animated.parallel([
         Animated.timing(slideY, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
         Animated.timing(opacity, { toValue: 1, duration: 220, easing: Easing.out(Easing.ease), useNativeDriver: true }),
@@ -114,11 +118,20 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
   const label = data.activityMode === 'running' ? 'Run' : 'Hike';
   const distText = dist.format(data.distanceM, 2);
 
-  const dismiss = (then?: () => void) => {
-    Animated.parallel([
-      Animated.timing(slideY, { toValue: 500, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: 200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-    ]).start(() => then?.());
+  const runAction = async (action: () => Promise<boolean>) => {
+    if (actionPending) return;
+    setActionPending(true);
+    setActionError(null);
+    try {
+      const completed = await action();
+      if (!completed) {
+        setActionError('That action could not be completed. Your Activity is still safe — try again.');
+      }
+    } catch {
+      setActionError('That action could not be completed. Your Activity is still safe — try again.');
+    } finally {
+      setActionPending(false);
+    }
   };
 
   return (
@@ -157,18 +170,21 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
           </View>
         </View>
         <TouchableOpacity
-          style={styles.btnPrimary}
+          style={[styles.btnPrimary, actionPending && styles.btnDisabled]}
           activeOpacity={0.85}
-          onPress={() => dismiss(onContinue)}
+          disabled={actionPending}
+          onPress={() => { void runAction(onContinue); }}
           testID="unfinished-continue"
         >
-          <Text style={styles.btnPrimaryText}>Resume {label}</Text>
+          {actionPending
+            ? <ActivityIndicator size="small" color="#FFFFFF" />
+            : <Text style={styles.btnPrimaryText}>Resume {label}</Text>}
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.btnSecondary, data.saveEligible === false && styles.btnDisabled]}
           activeOpacity={0.7}
-          disabled={data.saveEligible === false}
-          onPress={() => dismiss(onSave)}
+          disabled={data.saveEligible === false || actionPending}
+          onPress={() => { void runAction(onSave); }}
           testID="unfinished-save"
         >
           <Text style={[styles.btnSecondaryText, { color: primaryText }]}>Save {label}</Text>
@@ -176,11 +192,15 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
         <TouchableOpacity
           style={styles.btnSecondary}
           activeOpacity={0.7}
-          onPress={() => dismiss(onDiscard)}
+          disabled={actionPending}
+          onPress={() => { void runAction(onDiscard); }}
           testID="unfinished-discard"
         >
           <Text style={[styles.btnSecondaryText, { color: mutedText }]}>Discard {label}</Text>
         </TouchableOpacity>
+        {actionError ? (
+          <Text accessibilityRole="alert" testID="unfinished-action-error" style={[styles.actionError, { color: theme.destructive }]}>{actionError}</Text>
+        ) : null}
       </Animated.View>
     </Animated.View>
   );
@@ -194,6 +214,12 @@ const styles = StyleSheet.create({
     zIndex: 260,   // 高于 TooShortSheet (250), 确保 hike 恢复优先
   },
   btnDisabled: { opacity: 0.38 },
+  actionError: {
+    fontSize: FontSize.small,
+    lineHeight: 19,
+    textAlign: 'center',
+    paddingHorizontal: Spacing.md,
+  },
   sheet: {
     backgroundColor: Colors.surface,
     borderTopLeftRadius: Radius.sheet,

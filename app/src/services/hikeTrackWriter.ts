@@ -36,6 +36,10 @@ const ACTIVE_DIR = HIKE_DIR + 'active/';
 const COMPLETED_DIR = HIKE_DIR + 'completed/';
 const META_DIR = HIKE_DIR + 'meta/';
 
+const terminalPathFor = (fs: any, sessionId: string) => (
+  fs.documentDirectory + META_DIR + sessionId + '.terminal.json'
+);
+
 // Commit policy: flush every accepted point. The former timer/count buffer
 // routinely lost an accepted foreground tail on abrupt process death.
 
@@ -137,6 +141,136 @@ export interface HikeMeta {
   uploaded: boolean;
   /** Local-only provider identity used to restore Simulator Activities. */
   location_source?: 'real' | 'simulator';
+}
+
+const metaPathFor = (fs: any, sessionId: string) => (
+  fs.documentDirectory + META_DIR + sessionId + '.json'
+);
+
+const metaCandidates = (fs: any, sessionId: string): string[] => {
+  const base = metaPathFor(fs, sessionId);
+  return [base, `${base}.next`, `${base}.bak`];
+};
+
+function parseHikeMeta(raw: string, sessionId: string): HikeMeta | null {
+  try {
+    const parsed = JSON.parse(raw) as HikeMeta;
+    if (!parsed
+      || parsed.session_id !== sessionId
+      || !Number.isFinite(parsed.started_at)
+      || (parsed.activity_mode !== 'hiking' && parsed.activity_mode !== 'running')
+      || !Number.isFinite(parsed.total_points)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** Base is the committed authority; staged/backup candidates recover a torn swap. */
+async function readHikeMeta(fs: any, sessionId: string): Promise<HikeMeta> {
+  for (const path of metaCandidates(fs, sessionId)) {
+    try {
+      const parsed = parseHikeMeta(await fs.readAsStringAsync(path), sessionId);
+      if (parsed) return parsed;
+    } catch { /* try the next crash-recovery candidate */ }
+  }
+  throw new Error('activity_meta_unavailable');
+}
+
+interface HikeTerminalMarker {
+  v: 1;
+  session_id: string;
+  owner_generation?: string;
+  cutoff_at: number;
+}
+
+async function readTerminalMarker(fs: any, sessionId: string): Promise<HikeTerminalMarker | null> {
+  const base = terminalPathFor(fs, sessionId);
+  for (const path of [base, `${base}.next`]) {
+    try {
+      const parsed = JSON.parse(await fs.readAsStringAsync(path));
+      if (parsed?.v === 1 && parsed.session_id === sessionId && Number.isFinite(parsed.cutoff_at)) {
+        return parsed as HikeTerminalMarker;
+      }
+    } catch { /* absent or an interrupted staging write */ }
+  }
+  return null;
+}
+
+/**
+ * Cross-runtime Finish fence. TaskManager may run in another JS runtime, so a
+ * module Promise is not ownership. The verified marker is the linearization
+ * point consulted again at the background journal commit boundary.
+ */
+export async function sealHikeTrackForFinish(
+  sessionId: string,
+  ownerGeneration: string | undefined,
+  cutoffAt: number,
+): Promise<void> {
+  const fs = await getFs();
+  if (!fs) return;
+  await ensureDirs(fs);
+  const marker: HikeTerminalMarker = {
+    v: 1,
+    session_id: sessionId,
+    owner_generation: ownerGeneration,
+    cutoff_at: cutoffAt,
+  };
+  const base = terminalPathFor(fs, sessionId);
+  const next = `${base}.next`;
+  const encoded = JSON.stringify(marker);
+  await fs.writeAsStringAsync(next, encoded);
+  if (await fs.readAsStringAsync(next) !== encoded) throw new Error('activity_terminal_stage_verify_failed');
+  try { await fs.deleteAsync(base, { idempotent: true }); } catch {}
+  await fs.moveAsync({ from: next, to: base });
+  const committed = await readTerminalMarker(fs, sessionId);
+  if (!committed || committed.cutoff_at !== cutoffAt) throw new Error('activity_terminal_commit_verify_failed');
+}
+
+/**
+ * Abort a Finish fence that never acquired a durable completion authority.
+ * This is intentionally narrower than deleting Activity data: it only removes
+ * the matching terminal lease while the journal is still active, metadata is
+ * non-terminal, and no completed journal exists. A completed/mismatched owner
+ * can therefore never be reopened by an error-recovery path.
+ */
+export async function releaseHikeTrackFinishSeal(
+  sessionId: string,
+  expectedOwnerGeneration?: string,
+  options: { shouldContinue?: () => boolean } = {},
+): Promise<boolean> {
+  const fs = await getFs();
+  if (options.shouldContinue && !options.shouldContinue()) return false;
+  if (!fs) return true;
+  await ensureDirs(fs);
+  await flushChainTail.catch(() => {});
+  await durableWriteTail.catch(() => {});
+  if (options.shouldContinue && !options.shouldContinue()) return false;
+  const marker = await readTerminalMarker(fs, sessionId);
+  if (!marker) return true;
+  if (expectedOwnerGeneration && marker.owner_generation
+    && marker.owner_generation !== expectedOwnerGeneration) return false;
+  try {
+    const meta = await readHikeMeta(fs, sessionId);
+    if (options.shouldContinue && !options.shouldContinue()) return false;
+    if (meta.ended_at) return false;
+    if (expectedOwnerGeneration && meta.owner_generation
+      && meta.owner_generation !== expectedOwnerGeneration) return false;
+  } catch {
+    // Missing/corrupt ownership metadata is preserved for support rather than
+    // guessing that this terminal marker belongs to the mounted Activity.
+    return false;
+  }
+  try {
+    if ((await fs.getInfoAsync(fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl')).exists) {
+      return false;
+    }
+  } catch { return false; }
+  if (options.shouldContinue && !options.shouldContinue()) return false;
+  const terminalPath = terminalPathFor(fs, sessionId);
+  await deleteAndVerifyAbsent(fs, terminalPath);
+  await deleteAndVerifyAbsent(fs, `${terminalPath}.next`);
+  return (await readTerminalMarker(fs, sessionId)) === null;
 }
 
 interface WriterState {
@@ -562,13 +696,19 @@ async function replaceSnapshotWithPrefix(fs: any, basePath: string, replacement:
  * Overwrites any prior state — caller must call renameToCompleted() first
  * if a previous session should be preserved.
  */
-export async function startHikeTrack(sessionId: string, meta: Omit<HikeMeta, 'session_id' | 'total_points' | 'uploaded' | 'last_ts'>): Promise<void> {
+export async function startHikeTrack(
+  sessionId: string,
+  meta: Omit<HikeMeta, 'session_id' | 'total_points' | 'uploaded' | 'last_ts'>,
+  options: { shouldContinue?: () => boolean } = {},
+): Promise<void> {
   const fs = await getFs();
+  if (options.shouldContinue && !options.shouldContinue()) throw new Error('activity_owner_changed');
   if (!fs) {
     state = { sessionId, buffer: [], totalPoints: 0, lastFlushError: 'web-no-fs' };
     return;
   }
   await ensureDirs(fs);
+  if (options.shouldContinue && !options.shouldContinue()) throw new Error('activity_owner_changed');
   // Truncate every crash-recovery snapshot with the same immutable id.
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
   for (const path of activeCandidates(activePath)) {
@@ -578,6 +718,13 @@ export async function startHikeTrack(sessionId: string, meta: Omit<HikeMeta, 'se
     } catch { /* best effort */ }
   }
   try { await fs.deleteAsync(truncationPath(activePath), { idempotent: true }); } catch {}
+  const terminalPath = terminalPathFor(fs, sessionId);
+  for (const path of [terminalPath, `${terminalPath}.next`]) {
+    try { await fs.deleteAsync(path, { idempotent: true }); } catch {}
+  }
+  for (const path of metaCandidates(fs, sessionId)) {
+    try { await fs.deleteAsync(path, { idempotent: true }); } catch {}
+  }
   // Write initial meta
   const fullMeta: HikeMeta = {
     session_id: sessionId,
@@ -590,9 +737,10 @@ export async function startHikeTrack(sessionId: string, meta: Omit<HikeMeta, 'se
     uploaded: false,
   };
   await fs.writeAsStringAsync(
-    fs.documentDirectory + META_DIR + sessionId + '.json',
+    metaPathFor(fs, sessionId),
     JSON.stringify(fullMeta),
   );
+  if (options.shouldContinue && !options.shouldContinue()) throw new Error('activity_owner_changed');
   // The empty anchor makes a just-started Activity discoverable even if the
   // process dies before CoreLocation delivers its first acceptable sample.
   await fs.writeAsStringAsync(activePath, '');
@@ -609,19 +757,26 @@ export async function startHikeTrack(sessionId: string, meta: Omit<HikeMeta, 'se
  * app twice in a row, second-time recovery loses the mid-section walked between
  * kills. See docs/qa/v409-evidence/fresh-audit-v4.md Op 2 finding.
  */
-export async function resumeHikeTrack(sessionId: string): Promise<{ resumed: boolean; totalPoints: number }> {
+export async function resumeHikeTrack(
+  sessionId: string,
+  options: { shouldContinue?: () => boolean } = {},
+): Promise<{ resumed: boolean; totalPoints: number }> {
   const fs = await getFs();
+  if (options.shouldContinue && !options.shouldContinue()) throw new Error('activity_owner_changed');
   if (!fs) {
     state = { sessionId, buffer: [], totalPoints: 0, lastFlushError: 'web-no-fs' };
     return { resumed: true, totalPoints: 0 };
   }
-  // Read existing meta to preserve total_points count
+  if (await readTerminalMarker(fs, sessionId)) throw new Error('activity_journal_already_finalizing');
+  if (options.shouldContinue && !options.shouldContinue()) throw new Error('activity_owner_changed');
+  // The append-only journal, not advisory metadata, owns the count. Headless
+  // runtimes intentionally never rewrite meta after append because doing so
+  // could overwrite a concurrent Finish's `ended_at` with a stale object.
   let existingTotal = 0;
   try {
-    const metaRaw = await fs.readAsStringAsync(fs.documentDirectory + META_DIR + sessionId + '.json');
-    const meta: HikeMeta = JSON.parse(metaRaw);
-    existingTotal = meta.total_points ?? 0;
-  } catch { /* meta absent — start fresh count but don't fail */ }
+    existingTotal = (await readActiveHikeTail(sessionId)).length;
+  } catch { /* journal absent — start fresh count but don't fail */ }
+  if (options.shouldContinue && !options.shouldContinue()) throw new Error('activity_owner_changed');
   state = { sessionId, buffer: [], totalPoints: existingTotal, lastFlushError: null };
   return { resumed: true, totalPoints: existingTotal };
 }
@@ -699,6 +854,23 @@ export async function renameToCompleted(sessionId: string, endedAt: number, remo
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
   const completedPath = fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl';
   const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
+  // Legacy/direct callers may not have installed the early Finish fence. Do
+  // so before any move, using the current durable generation.
+  if (!await readTerminalMarker(fs, sessionId)) {
+    let ownerGeneration: string | undefined;
+    try {
+      ownerGeneration = (await readHikeMeta(fs, sessionId)).owner_generation;
+    } catch { /* verification below remains authoritative */ }
+    await sealHikeTrackForFinish(sessionId, ownerGeneration, endedAt);
+  }
+  // Mark metadata terminal before moving the journal. A stale headless writer
+  // re-reads this after its append and is forbidden from writing its old meta.
+  try {
+    const current = await readHikeMeta(fs, sessionId);
+    current.ended_at = endedAt;
+    if (remoteId !== undefined) current.remote_id = remoteId;
+    await fs.writeAsStringAsync(metaPath, JSON.stringify(current));
+  } catch { /* the independently verified terminal marker still fences writers */ }
   // Detect whether a JSONL exists before updating its paired metadata.
   // Initialization failures or legacy zero-point sessions can have only meta.
   let activeExisted = false;
@@ -717,11 +889,10 @@ export async function renameToCompleted(sessionId: string, endedAt: number, remo
   if (activeExisted) {
     // Update meta with ended_at and remote_id so recovery does not surface it.
     try {
-      const metaRaw = await fs.readAsStringAsync(metaPath);
-      const meta: HikeMeta = JSON.parse(metaRaw);
-      meta.ended_at = endedAt;
-      if (remoteId !== undefined) meta.remote_id = remoteId;
-      await fs.writeAsStringAsync(metaPath, JSON.stringify(meta));
+      const current = await readHikeMeta(fs, sessionId);
+      current.ended_at = endedAt;
+      if (remoteId !== undefined) current.remote_id = remoteId;
+      await fs.writeAsStringAsync(metaPath, JSON.stringify(current));
     } catch { /* best effort */ }
   } else {
     // No completed JSONL means meta has no counterpart; delete the orphan.
@@ -752,8 +923,10 @@ export async function listActiveHikes(): Promise<HikeMeta[]> {
     }
     for (const sid of sessionIds) {
       try {
-        const metaRaw = await fs.readAsStringAsync(fs.documentDirectory + META_DIR + sid + '.json');
-        metas.push(JSON.parse(metaRaw));
+        const meta = await readHikeMeta(fs, sid);
+        // A rejected late headless append may leave an active remnant, but a
+        // terminal metadata row is a completed Activity, never a resumable one.
+        if (!meta.ended_at) metas.push(meta);
       } catch { /* skip malformed */ }
     }
     return metas.sort((a, b) => b.started_at - a.started_at);
@@ -880,13 +1053,17 @@ export async function discardActiveHike(sessionId: string): Promise<void> {
   const fs = await getFs();
   if (!fs) return;
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
-  const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
   await durableWriteTail.catch(() => {});
   for (const candidate of activeCandidates(activePath)) {
     await deleteAndVerifyAbsent(fs, candidate);
   }
   await deleteAndVerifyAbsent(fs, truncationPath(activePath));
-  await deleteAndVerifyAbsent(fs, metaPath);
+  const terminalPath = terminalPathFor(fs, sessionId);
+  await deleteAndVerifyAbsent(fs, terminalPath);
+  await deleteAndVerifyAbsent(fs, `${terminalPath}.next`);
+  for (const candidate of metaCandidates(fs, sessionId)) {
+    await deleteAndVerifyAbsent(fs, candidate);
+  }
 }
 
 /**
@@ -920,7 +1097,7 @@ export async function truncateActiveHikeTrack(
   await replaceSnapshotWithPrefix(fs, activePath, replacement, points.length);
   state.totalPoints = points.length;
   state.buffer = [];
-  const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
+  const metaPath = metaPathFor(fs, sessionId);
   try {
     const metaRaw = await fs.readAsStringAsync(metaPath);
     const meta: HikeMeta = JSON.parse(metaRaw);
@@ -947,13 +1124,55 @@ export async function updateHikeMeta(
   } catch { /* recovery remains local even if mapping persistence fails */ }
 }
 
+/**
+ * Resume changes the callback ownership generation, so best-effort metadata
+ * is unsafe there: an old TaskManager runtime could otherwise keep appending
+ * under a generation the foreground process has already replaced. This
+ * variant proves the new generation is readable before a provider is started.
+ */
+export async function updateHikeMetaStrict(
+  sessionId: string,
+  patch: Partial<Pick<HikeMeta, 'remote_id' | 'owner_generation' | 'user_id'>>,
+): Promise<void> {
+  const fs = await getFs();
+  if (!fs) throw new Error('activity_meta_storage_unavailable');
+  if (await readTerminalMarker(fs, sessionId)) throw new Error('activity_meta_terminal');
+  const path = metaPathFor(fs, sessionId);
+  const nextPath = `${path}.next`;
+  const backupPath = `${path}.bak`;
+  const current = await readHikeMeta(fs, sessionId);
+  const next = { ...current, ...patch };
+  const encoded = JSON.stringify(next);
+  await fs.writeAsStringAsync(nextPath, encoded);
+  const staged = parseHikeMeta(await fs.readAsStringAsync(nextPath), sessionId);
+  if (!staged) throw new Error('activity_meta_stage_verify_failed');
+  if (await readTerminalMarker(fs, sessionId)) {
+    await fs.deleteAsync(nextPath, { idempotent: true }).catch(() => undefined);
+    throw new Error('activity_meta_terminal');
+  }
+  await fs.deleteAsync(backupPath, { idempotent: true }).catch(() => undefined);
+  const baseInfo = await fs.getInfoAsync(path);
+  if (baseInfo.exists) await fs.moveAsync({ from: path, to: backupPath });
+  await fs.moveAsync({ from: nextPath, to: path });
+  const verified = parseHikeMeta(await fs.readAsStringAsync(path), sessionId);
+  if (!verified) throw new Error('activity_meta_commit_verify_failed');
+  for (const [key, value] of Object.entries(patch)) {
+    if ((verified as any)[key] !== value) throw new Error('activity_meta_write_verify_failed');
+  }
+}
+
 /** Per-Activity heavy-data cleanup after durable server handoff. */
 export async function deleteCompletedHikeTrack(sessionId: string): Promise<void> {
   const fs = await getFs();
   if (!fs) return;
   await flushChainTail.catch(() => {});
   await deleteAndVerifyAbsent(fs, fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl');
-  await deleteAndVerifyAbsent(fs, fs.documentDirectory + META_DIR + sessionId + '.json');
+  const terminalPath = terminalPathFor(fs, sessionId);
+  await deleteAndVerifyAbsent(fs, terminalPath);
+  await deleteAndVerifyAbsent(fs, `${terminalPath}.next`);
+  for (const candidate of metaCandidates(fs, sessionId)) {
+    await deleteAndVerifyAbsent(fs, candidate);
+  }
 }
 
 async function deleteAndVerifyAbsent(fs: any, path: string): Promise<void> {
@@ -971,13 +1190,19 @@ export async function assertHikeTrackCleanupOwner(sessionId: string, expectedUse
   if (!fs) return;
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
   const completedPath = fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl';
-  const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
-  const artifactPaths = [...activeCandidates(activePath), truncationPath(activePath), completedPath, metaPath];
+  const terminalPath = terminalPathFor(fs, sessionId);
+  const artifactPaths = [
+    ...activeCandidates(activePath),
+    truncationPath(activePath),
+    completedPath,
+    terminalPath,
+    `${terminalPath}.next`,
+    ...metaCandidates(fs, sessionId),
+  ];
   const infos = await Promise.all(artifactPaths.map(path => fs.getInfoAsync(path)));
   if (!infos.some(info => info.exists)) return;
-  const metaInfo = infos[infos.length - 1];
-  if (!metaInfo.exists) throw new Error('activity_journal_owner_unavailable');
-  const meta = JSON.parse(await fs.readAsStringAsync(metaPath)) as HikeMeta;
+  if (!infos.slice(-3).some(info => info.exists)) throw new Error('activity_journal_owner_unavailable');
+  const meta = await readHikeMeta(fs, sessionId);
   if (String(meta.user_id ?? '') !== String(expectedUserId)) {
     throw new Error('activity_journal_owner_mismatch');
   }
@@ -1007,7 +1232,12 @@ export async function deleteAcknowledgedHikeTrackArtifacts(
   }
   await deleteAndVerifyAbsent(fs, truncationPath(activePath));
   await deleteAndVerifyAbsent(fs, fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl');
-  await deleteAndVerifyAbsent(fs, fs.documentDirectory + META_DIR + sessionId + '.json');
+  const terminalPath = terminalPathFor(fs, sessionId);
+  await deleteAndVerifyAbsent(fs, terminalPath);
+  await deleteAndVerifyAbsent(fs, `${terminalPath}.next`);
+  for (const candidate of metaCandidates(fs, sessionId)) {
+    await deleteAndVerifyAbsent(fs, candidate);
+  }
 }
 
 /** Canonical durable entry point used by the headless background task. */
@@ -1020,9 +1250,9 @@ export async function appendBackgroundHikePoints(points: HikePoint[], expectedUs
   const fs = await getFs();
   if (!fs) return;
   await ensureDirs(fs);
-  const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
-  const meta = JSON.parse(await fs.readAsStringAsync(metaPath)) as HikeMeta;
+  const meta = await readHikeMeta(fs, sessionId);
   if (meta.ended_at) throw new Error('background_activity_already_finalized');
+  if (await readTerminalMarker(fs, sessionId)) throw new Error('background_activity_finalizing');
   if (expectedUserId && meta.user_id && meta.user_id !== expectedUserId) {
     throw new Error('stale_background_user');
   }
@@ -1031,8 +1261,32 @@ export async function appendBackgroundHikePoints(points: HikePoint[], expectedUs
   }
   const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
   const lines = points.map(encodeJournalPoint).join('\n') + '\n';
+  // Capture the verified prefix before committing. If a separate runtime's
+  // terminal marker wins during the append, the crash-safe truncation marker
+  // below can linearize this callback as rejected without losing history.
+  const prefixBeforeAppend = await readBestSnapshot(fs, activePath);
+  const prefixLineCount = prefixBeforeAppend
+    ? prefixBeforeAppend.split('\n').filter(line => line.trim()).length
+    : 0;
   await appendSnapshot(fs, activePath, lines);
-  meta.total_points = (meta.total_points ?? 0) + points.length;
-  meta.last_ts = points[points.length - 1].t;
-  await fs.writeAsStringAsync(metaPath, JSON.stringify(meta));
+  // Re-check after the append. If the terminal marker won the race, this
+  // callback is rejected and must never rewrite its stale pre-Finish meta.
+  // When Finish already moved the historical file, remove only the newly
+  // resurrected active remnant. Otherwise leave it for Finish's full drain.
+  if (await readTerminalMarker(fs, sessionId)) {
+    await replaceSnapshotWithPrefix(fs, activePath, prefixBeforeAppend, prefixLineCount);
+    const completedPath = fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl';
+    if ((await fs.getInfoAsync(completedPath)).exists) {
+      // Finish may have moved the just-appended P+L snapshot before this
+      // runtime observed the terminal marker. Repair the completed copy to
+      // the same pre-append prefix before deleting the active remnant; merely
+      // truncating active would leave the rejected late tail in product data.
+      await replaceSnapshotWithPrefix(fs, completedPath, prefixBeforeAppend, prefixLineCount);
+      for (const candidate of activeCandidates(activePath)) {
+        await fs.deleteAsync(candidate, { idempotent: true });
+      }
+      await fs.deleteAsync(truncationPath(activePath), { idempotent: true });
+    }
+    throw new Error('background_activity_finalizing');
+  }
 }

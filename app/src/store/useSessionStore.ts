@@ -16,6 +16,7 @@ import type { Coordinate } from '../utils/geo';
 import { deleteRemoteSession, deleteRemoteSessionByClientId, renameRemoteSession } from '../services/sessionService';
 import { tombstoneActivity } from '../features/activity/activityRegistry';
 import { crashLogger } from '../services/crashLogger';
+import { mergeHydratedSessionLists, sameActivityIdentity } from '../features/activity/sessionListMerge';
 
 // O18 SAF-03: serialize concurrent hydrate() calls so a race between the
 // post-login hydrate and any background hydrate can't overwrite each other
@@ -26,6 +27,7 @@ let hydrateInFlightUserId: string | null = null;
 let sessionWriteTail: Promise<void> = Promise.resolve();
 
 export type ActivityMode = 'hiking' | 'running';
+export type ActivitySyncFailureKind = 'retryable' | 'auth_required' | 'action_required' | 'dependency';
 
 export interface TrackPoint extends Coordinate {
   t: number;  // Unix ms timestamp
@@ -59,10 +61,22 @@ export interface TrackingSession {
    *   - 'pending': 已 Save 但未同步 (pendingSyncStore 里有 payload), 灰卡不可点
    *   - 'syncing': SyncDaemon 正在上传该条 (短暂) */
   syncState?: 'synced' | 'pending' | 'syncing' | 'sync_error';
+  syncFailureKind?: ActivitySyncFailureKind;
+  syncFailureStatus?: number | null;
+  syncFailureCode?: string | null;
   /** Display-only Final lifecycle. Independent from server sync and from the
    *  immutable canonical evidence used for Activity metrics and Memory. */
   finalGeometryState?: 'base_ready' | 'refining' | 'enhanced' | 'limited_evidence';
   finalGeometryVersion?: 'pedestrian-final-v2-base';
+  finalGeometryRevision?: number;
+  finalGeometryFingerprint?: string;
+  /** Retained evidence of an impossible UUID↔numeric mapping collision. */
+  identityConflict?: {
+    kind: 'server_mapping';
+    localServerId: number;
+    remoteServerId: number;
+    role?: 'local' | 'remote-quarantine';
+  };
 }
 
 // The personal journey library is intentionally designed for multi-year use.
@@ -72,6 +86,7 @@ export interface TrackingSession {
 const MAX_SESSIONS = 500;
 
 const sessionsKey = (userId: string) => `cairn_sessions_${userId}`;
+const corruptSessionsKey = (userId: string) => `cairn_sessions_quarantine_${userId}_${Date.now()}`;
 const trackPointsKey = (userId: string, sessionId: string) =>
   `cairn_trackpoints_${userId}_${sessionId}`;
 
@@ -101,12 +116,14 @@ interface SessionState {
   /** Rename only after the server or pending outbox accepts the mutation. */
   renameSession: (id: string, name: string) => Promise<{
     ok: boolean;
-    reason?: 'not-found' | 'syncing' | 'pending-missing' | 'rejected' | 'unavailable' | 'invalid';
+    reason?: 'not-found' | 'syncing' | 'pending-missing' | 'identity-conflict' | 'rejected' | 'unavailable' | 'invalid';
   }>;
   clearSessions: () => void;       // called on logout to remove prior user's data
   getSessions: () => TrackingSession[];
   // O1 batch 40: getSessionsByRegion, markSyncing removed — 0 external callers
   hydrate: (userId?: string) => Promise<void>;
+  /** Additive authenticated refresh; absence in a list is never deletion. */
+  mergeRemoteSessions: (sessions: TrackingSession[], ownerUserId: string) => Promise<void>;
   // v412: 已 Save 未同步 hike 的 syncState 管理
   /**
    * SyncDaemon 上传成功后调用: syncState → 'synced', 更新 remoteId
@@ -123,7 +140,12 @@ interface SessionState {
     elevationGainM?: number;
     name?: string;
   }, ownerUserId?: string) => Promise<boolean>;
-  markSyncState: (localId: string, syncState: 'pending' | 'syncing' | 'sync_error', ownerUserId?: string) => Promise<void>;
+  markSyncState: (
+    localId: string,
+    syncState: 'pending' | 'syncing' | 'sync_error',
+    ownerUserId?: string,
+    failure?: { kind: ActivitySyncFailureKind; status?: number | null; code?: string | null },
+  ) => Promise<void>;
   /** 用户长按灰卡"放弃"调用: 从 sessions 数组删除, 不通知服务器 */
   removeLocal: (localId: string, ownerUserId?: string) => Promise<void>;
 }
@@ -159,12 +181,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       // and merges in-place. Prevents ghost duplicate card that would
       // appear after a race between drainPending completion and remote
       // list refresh.
-      let existingIdx = base.findIndex((x) => x.id === session.id);
-      if (existingIdx < 0 && session.remoteId) {
-        existingIdx = base.findIndex(
-          (x) => x.remoteId && x.remoteId === session.remoteId,
-        );
-      }
+      const existingIdx = base.findIndex((x) => sameActivityIdentity(x, session));
       let next;
       if (existingIdx >= 0) {
         next = base.slice();
@@ -197,7 +214,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const session = get().sessions.find(item => item.id === id);
     if (!session || !userId || userId === 'guest') return { ok: false, reason: 'not-found' };
 
-    const failRename = (reason: 'not-found' | 'syncing' | 'pending-missing' | 'rejected' | 'unavailable' | 'invalid') => {
+    const failRename = (reason: 'not-found' | 'syncing' | 'pending-missing' | 'identity-conflict' | 'rejected' | 'unavailable' | 'invalid') => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../features/activitySimulator/simulatorLog').appendSimulatorLog('ERROR', 'activity_rename_failed', {
@@ -207,6 +224,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       } catch { /* QA diagnostics cannot affect rename */ }
       return { ok: false as const, reason };
     };
+    // A UUID-to-server-id collision is retained for reconciliation. Sending
+    // a numeric PATCH here could rename a different real Activity, so the
+    // evidence must remain untouched until the mapping is resolved.
+    if (session.identityConflict) return failRename('identity-conflict');
     if (session.syncState === 'syncing') return failRename('syncing');
     if (session.syncState === 'pending' || session.syncState === 'sync_error') {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -251,6 +272,25 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ sessions: [], currentUserId: 'guest' });
   },
 
+  mergeRemoteSessions: async (remoteSessions, ownerUserId) => {
+    if (!ownerUserId || ownerUserId === 'guest') throw new Error('session_owner_required');
+    const run = sessionWriteTail.then(async () => {
+      const live = get();
+      const base = live.currentUserId === ownerUserId
+        ? live.sessions
+        : await persistedSessionsFor(ownerUserId);
+      const next = retainPendingAndCapHistory(mergeHydratedSessionLists(base, remoteSessions));
+      await storage.setItem(
+        sessionsKey(ownerUserId),
+        JSON.stringify(next.map(({ trackPoints: _, ...rest }) => rest)),
+        { strict: true },
+      );
+      if (get().currentUserId === ownerUserId) set({ sessions: next });
+    });
+    sessionWriteTail = run.catch(() => {});
+    await run;
+  },
+
   deleteSession: async (id) => {
     const userId = String(get().currentUserId ?? '');
     const session = get().sessions.find((s) => s.id === id);
@@ -275,6 +315,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const summaries = next.map(({ trackPoints: _, ...rest }) => rest);
     await storage.setItem(sessionsKey(userId), JSON.stringify(summaries), { strict: true });
     await storage.removeItem(trackPointsKey(userId, id));
+    try {
+      const { deleteActivityFinalArtifact } = require('../features/activity/activityFinalArtifact');
+      await deleteActivityFinalArtifact(userId, clientActivityId ?? id);
+    } catch { /* legacy sessions may not have a Final artifact */ }
     if (get().currentUserId === userId) set({ sessions: next });
     // Mirror deletion to backend.
     //
@@ -290,7 +334,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     let remoteState: 'deleted' | 'queued' = 'deleted';
     if (session && clientActivityId && get().currentUserId === userId) {
       const cancelled = await deleteRemoteSessionByClientId(clientActivityId);
-      const ok = cancelled || (remoteSessionId != null
+      // The immutable client UUID is safe deletion authority even when the
+      // local numeric mapping conflicts with the server list. Never fall back
+      // to that disputed number: it may belong to a different Activity.
+      const ok = cancelled || (!session.identityConflict && remoteSessionId != null
         ? await deleteRemoteSession(remoteSessionId)
         : false);
       remoteState = ok ? 'deleted' : 'queued';
@@ -346,7 +393,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         // Found: 原路径 in-place mutate
         updated = base.map((sess, i) =>
           i === idx
-            ? { ...sess, remoteId, syncState: 'synced' as const }
+            ? {
+                ...sess,
+                remoteId,
+                syncState: 'synced' as const,
+                syncFailureKind: undefined,
+                syncFailureStatus: undefined,
+                syncFailureCode: undefined,
+              }
             : sess
         );
       } else if (upsertData) {
@@ -382,7 +436,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return didUpdate;
   },
 
-  markSyncState: async (localId, syncState, requestedOwnerUserId) => {
+  markSyncState: async (localId, syncState, requestedOwnerUserId, failure) => {
     const ownerUserId = String(requestedOwnerUserId ?? get().currentUserId ?? '');
     if (!ownerUserId || ownerUserId === 'guest') return;
     const run = sessionWriteTail.then(async () => {
@@ -390,9 +444,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       const base = live.currentUserId === ownerUserId
         ? live.sessions
         : await persistedSessionsFor(ownerUserId);
-      const next = base.map(session =>
-        session.id === localId ? { ...session, syncState } : session,
-      );
+      const next = base.map(session => session.id === localId ? {
+        ...session,
+        syncState,
+        syncFailureKind: failure?.kind,
+        syncFailureStatus: failure?.status,
+        syncFailureCode: failure?.code,
+      } : session);
       await storage.setItem(
         sessionsKey(ownerUserId),
         JSON.stringify(next.map(({ trackPoints: _, ...rest }) => rest)),
@@ -420,6 +478,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         { strict: true },
       );
       await storage.removeItem(trackPointsKey(ownerUserId, localId));
+      try {
+        const { deleteActivityFinalArtifact } = require('../features/activity/activityFinalArtifact');
+        await deleteActivityFinalArtifact(ownerUserId, localId);
+      } catch { /* no artifact to remove */ }
       if (get().currentUserId === ownerUserId) set({ sessions: next });
     });
     sessionWriteTail = run.catch(() => {});
@@ -442,7 +504,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (raw) {
         try {
           // Sessions loaded without trackPoints (loaded on demand)
-          const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
           // Sprint 6 round-7 review R7B7: runtime shape validation.
           // If storage contains a non-array (future migration wrote
           // { version: 2, sessions: [...] } or corrupt {}), pre-fix
@@ -456,7 +518,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
                 userId, shape: typeof parsed, isNull: parsed === null,
               });
             } catch { /* silent */ }
-            storage.removeItem(sessionsKey(userId));
+            // Never destroy the only forensic/product copy during hydration.
+            // Preserve the exact bytes in place and add a separate quarantine
+            // copy; pending intents and the authenticated server merge can
+            // reconstruct visible rows without pretending corruption is empty.
+            await storage.setItem(corruptSessionsKey(userId), raw, { strict: true }).catch(() => {});
             if (useSessionStore.getState().currentUserId === userId) {
               set({ sessions: [] });
             }
@@ -468,6 +534,21 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           const summaries = (parsed as any[]).filter(
             s => s && typeof s.id === 'string' && typeof s.startedAt === 'number',
           );
+          if (summaries.length !== parsed.length) {
+            // Keep the original byte-for-byte payload as evidence. Valid
+            // entries remain visible, but malformed neighbours are never
+            // silently rewritten away by hydration.
+            await storage.setItem(corruptSessionsKey(userId), raw, { strict: true }).catch(() => {});
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { log } = require('../services/appLog');
+              log('session_store.hydrate.entries_quarantined', {
+                userId,
+                entryCount: parsed.length,
+                retainedCount: summaries.length,
+              });
+            } catch { /* diagnostics cannot affect recovery */ }
+          }
           const sessions: TrackingSession[] = summaries.map((s) => ({
             ...s,
             trackPoints: [],
@@ -487,8 +568,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           if (useSessionStore.getState().currentUserId === userId) {
             set({ sessions });
           }
-        } catch {
-          storage.removeItem(sessionsKey(userId));
+        } catch (error) {
+          await storage.setItem(corruptSessionsKey(userId), raw, { strict: true }).catch(() => {});
+          crashLogger.breadcrumb(`session_store:hydrate_corrupt owner=${userId} error=${String(error).slice(0, 80)}`);
           if (useSessionStore.getState().currentUserId === userId) {
             set({ sessions: [] });
           }

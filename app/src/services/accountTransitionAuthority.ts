@@ -75,6 +75,20 @@ export function isAccountTransitionCurrent(
   return !!authority && active?.id === authority.id;
 }
 
+/**
+ * Capture a process-local account-stability epoch for work that must not run
+ * across login/logout/delete/restore boundaries but does not itself own the
+ * account-transition lease. `null` means a transition is already active.
+ * A completed A→B→A cycle still changes the epoch, preventing ABA reuse.
+ */
+export function captureStableAccountEpoch(): number | null {
+  return active ? null : nextId;
+}
+
+export function isStableAccountEpoch(epoch: number | null | undefined): boolean {
+  return typeof epoch === 'number' && active === null && nextId === epoch;
+}
+
 export function finishAccountTransition(authority: AccountTransitionAuthority): boolean {
   if (!isAccountTransitionCurrent(authority)) return false;
   active = null;

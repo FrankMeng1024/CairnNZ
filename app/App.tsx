@@ -320,16 +320,9 @@ function AppRoot() {
         const { primeH3FailedFlag } = require('./src/features/memory/lib/h3LoadGate');
         void primeH3FailedFlag();
       } catch {/* ignore */}
-      // v317: prime the memory hydrate gate. If a previous session
-      // sync-died inside hydrateMemoryForUser (large JSON.parse), this
-      // flag is set on disk → next boot skips the parse and lets the
-      // app boot. User keeps app usable, just won't see old memory
-      // points until cache is cleared/regenerated.
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { primeMemoryHydrateGate } = require('./src/features/memory/lib/memoryHydrateGate');
-        void primeMemoryHydrateGate();
-      } catch {/* ignore */}
+      // Memory's hydrate loop guard is read synchronously with the resolved
+      // account inside hydrateMemoryForUser. A process-global fire-and-forget
+      // prime could race auth and incorrectly transfer Account A's failure to B.
       // v303 OTA 四修 P0-2: 手动强制 OTA check-on-load。
       // 默认 expo-updates ON_LOAD + fallbackToCacheTimeout=0,意味着 app
       // 启动用 cached bundle,新 bundle 后台下,**下次** cold start 才

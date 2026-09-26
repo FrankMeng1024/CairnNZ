@@ -21,6 +21,8 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, FontSize, Radius } from '../components/tokens';
 import { Icon } from '../components/Icon';
 import { BackButton } from '../components/BackButton';
+import { ModalCard, ModalCardHeader } from '../components/ModalCard';
+import { PrimaryButton } from '../components/PrimaryButton';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { debugLogger } from '../services/debugLogger';
 import { telemetryUploader } from '../services/telemetryUploader';
@@ -47,6 +49,9 @@ export function DebugScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [stats, setStats] = useState({ totalEvents: 0, totalSize: 0 });
   const [bufferSize, setBufferSize] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState<SessionMetadata | null>(null);
+  const [clearAllOpen, setClearAllOpen] = useState(false);
+  const [destructiveBusy, setDestructiveBusy] = useState(false);
   const qaToolsAvailable = activitySimulatorBuildCapable || (typeof __DEV__ !== 'undefined' && __DEV__);
   const activitySimulatorEnabled = useActivitySimulatorStore(state => state.enabled);
   const setActivitySimulatorEnabled = useActivitySimulatorStore(state => state.setEnabled);
@@ -122,40 +127,36 @@ export function DebugScreen() {
     }
   }
 
-  async function handleDelete(s: SessionMetadata) {
-    Alert.alert(
-      'Delete session?',
-      `Session ${s.session_id} (${s.events_count} events). This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await debugLogger.deleteSession(s.session_id);
-            refresh();
-          },
-        },
-      ],
-    );
+  function handleDelete(s: SessionMetadata) {
+    setDeleteTarget(s);
   }
 
-  async function handleClearAll() {
-    Alert.alert(
-      'Clear all sessions?',
-      'This deletes all stored debug logs. The current active session (if any) is kept.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear all',
-          style: 'destructive',
-          onPress: async () => {
-            await debugLogger.clearAllSessions();
-            refresh();
-          },
-        },
-      ],
-    );
+  function handleClearAll() {
+    setClearAllOpen(true);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || destructiveBusy) return;
+    setDestructiveBusy(true);
+    try {
+      await debugLogger.deleteSession(deleteTarget.session_id);
+      setDeleteTarget(null);
+      await refresh();
+    } finally {
+      setDestructiveBusy(false);
+    }
+  }
+
+  async function confirmClearAll() {
+    if (destructiveBusy) return;
+    setDestructiveBusy(true);
+    try {
+      await debugLogger.clearAllSessions();
+      setClearAllOpen(false);
+      await refresh();
+    } finally {
+      setDestructiveBusy(false);
+    }
   }
 
   async function handleRetryAll() {
@@ -377,6 +378,38 @@ export function DebugScreen() {
             )}
           </View>
         </ScrollView>
+        <ModalCard
+          visible={deleteTarget !== null}
+          onDismiss={() => !destructiveBusy && setDeleteTarget(null)}
+          dismissible={!destructiveBusy}
+          testID="debug-delete-session-confirmation"
+        >
+          <ModalCardHeader
+            title="Delete debug session?"
+            body={deleteTarget
+              ? `Session ${deleteTarget.session_id} contains ${deleteTarget.events_count} events. This cannot be undone.`
+              : undefined}
+          />
+          <View style={styles.modalActions}>
+            <PrimaryButton label="Delete session" variant="destructive" loading={destructiveBusy} onPress={() => { void confirmDelete(); }} />
+            <PrimaryButton label="Keep session" variant="secondary" disabled={destructiveBusy} onPress={() => setDeleteTarget(null)} />
+          </View>
+        </ModalCard>
+        <ModalCard
+          visible={clearAllOpen}
+          onDismiss={() => !destructiveBusy && setClearAllOpen(false)}
+          dismissible={!destructiveBusy}
+          testID="debug-clear-sessions-confirmation"
+        >
+          <ModalCardHeader
+            title="Clear debug sessions?"
+            body="This deletes all stored debug logs. The current active session, if any, is kept."
+          />
+          <View style={styles.modalActions}>
+            <PrimaryButton label="Clear sessions" variant="destructive" loading={destructiveBusy} onPress={() => { void confirmClearAll(); }} />
+            <PrimaryButton label="Keep sessions" variant="secondary" disabled={destructiveBusy} onPress={() => setClearAllOpen(false)} />
+          </View>
+        </ModalCard>
       </SafeAreaView>
     </View>
   );
@@ -429,6 +462,7 @@ function formatDuration(ms: number): string {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
+  modalActions: { gap: Spacing.sm },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -45,6 +45,10 @@ jest.mock('expo-file-system/legacy', () => {
 jest.mock('../crashLogger', () => ({ crashLogger: { breadcrumb: jest.fn() } }));
 
 import {
+  beginPendingPreparation,
+  ensurePendingUploadReady,
+  finishPendingPreparation,
+  isPendingPreparationActive,
   listPending,
   markAttempt,
   removePending,
@@ -69,6 +73,7 @@ function pending(localId = 'activity-one'): PendingHike {
       name: 'Offline hike',
       route_points: [{ lat: -41, lng: 174, t: 100 }],
       route_points_raw: [{ lat: -41, lng: 174, t: 100 }],
+      route_points_canonical: [{ lat: -41, lng: 174, t: 100 }],
       memory_points: [{ lat: -41, lng: 174, ts: 100 }],
     },
     createdAt: 1_000,
@@ -92,6 +97,27 @@ describe('verified pending Activity snapshots', () => {
     const raw = mockFiles.get('doc://cairn-pending-sync/activity-one.json') ?? '';
     expect(raw).toContain('cairn-pending-activity');
     expect(raw).toContain('checksum');
+  });
+
+  test('a live or incomplete Final preparation cannot upload before the registry checkpoint', async () => {
+    const item = pending('activity-preparing');
+    item.uploadState = 'preparing';
+    beginPendingPreparation(item.localId);
+    await savePending(item);
+    expect(isPendingPreparationActive(item.localId)).toBe(true);
+    await expect(ensurePendingUploadReady(item)).resolves.toBe(false);
+    expect((await listPending())[0].uploadState).toBe('preparing');
+
+    // Losing the process lease alone is not proof that list/registry state
+    // committed. Recovery must rebuild those projections first.
+    finishPendingPreparation(item.localId);
+    await expect(ensurePendingUploadReady(item)).resolves.toBe(false);
+    expect((await listPending())[0].uploadState).toBe('preparing');
+
+    item.preparationPhase = 'registry_committed';
+    await savePending(item);
+    await expect(ensurePendingUploadReady(item)).resolves.toBe(true);
+    expect((await listPending())[0].uploadState).toBe('ready');
   });
 
   test('process death during a metadata update recovers the newest verified generation', async () => {

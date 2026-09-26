@@ -5,6 +5,8 @@ describe('backgroundLocationTask durable ownership fencing', () => {
   let handler: BackgroundHandler;
   let appendBackgroundHikePoints: jest.Mock;
   let readActiveHikeTail: jest.Mock;
+  let recordMemoryEvidence: jest.Mock;
+  let flushRecordedMemoryEvidence: jest.Mock;
   let breadcrumb: jest.Mock;
 
   beforeEach(() => {
@@ -13,6 +15,8 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     handler = undefined as unknown as BackgroundHandler;
     appendBackgroundHikePoints = jest.fn(async () => undefined);
     readActiveHikeTail = jest.fn(async () => []);
+    recordMemoryEvidence = jest.fn(async () => ({ committed: true, deduplicated: false }));
+    flushRecordedMemoryEvidence = jest.fn(async () => undefined);
     breadcrumb = jest.fn();
 
     jest.doMock('react-native', () => ({ Platform: { OS: 'ios' } }));
@@ -42,6 +46,11 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     }));
     jest.doMock('../../features/activitySimulator/simulatorLog', () => ({
       appendSimulatorLog: jest.fn(),
+      flushSimulatorLogs: jest.fn(async () => undefined),
+    }));
+    jest.doMock('../../features/memory/services/recordMemoryEvidence', () => ({
+      recordMemoryEvidence,
+      flushRecordedMemoryEvidence,
     }));
   });
 
@@ -192,5 +201,33 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     expect(accepted[3]).toMatchObject({ canonicalDecision: 'ACCEPT' });
     expect(task.drainBackgroundLocations().map((item: any) => item.timestamp))
       .toEqual([1_000, 5_000, 9_000, 13_000, 17_000]);
+  });
+
+  it('commits headless accepted evidence to Memory without a mounted React screen', async () => {
+    const task = require('../backgroundLocationTask');
+    await task.persistBackgroundContext('activity-a', true, {
+      clientActivityId: 'activity-a',
+      userId: 'user-a',
+      ownerGeneration: 'generation-1',
+      segmentId: 'segment-1',
+      activityMode: 'running',
+      acceptAfterMs: 1_000,
+    });
+
+    await handler({ data: { locations: [point(1_000), point(5_000, -40.99995)] }, error: null });
+
+    expect(recordMemoryEvidence).toHaveBeenCalledTimes(2);
+    expect(recordMemoryEvidence).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      ownerUserId: 'user-a',
+      ownerAuthority: 'durable_activity_lease',
+      source: 'activity_real',
+      sourceActivityClientId: 'activity-a',
+      sourceSegmentId: 'segment-1',
+      continuityState: 'accepted',
+    }));
+    // A headless runtime owns only the durable evidence journal. The mounted
+    // foreground runtime replays that journal into its account-scoped
+    // snapshots, avoiding cross-runtime snapshot clobbering.
+    expect(flushRecordedMemoryEvidence).not.toHaveBeenCalled();
   });
 });

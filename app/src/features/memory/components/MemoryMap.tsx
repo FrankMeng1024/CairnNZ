@@ -34,12 +34,16 @@ import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { useMapTheme } from '../../../hooks/useMapTheme';
 import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../../../config/mapbox';
 import { MapLoadOverlay, type MapLoadState } from '../../../components/MapLoadOverlay';
+import { useAppStore } from '../../../store/useAppStore';
 
 let memoryMapHasRendered = false;
 
 interface Props {
   centerLat: number;
   centerLng: number;
+  /** A durable Memory center may exist without a live device fix. The map and
+   * fog still render, but the position puck must not imply current location. */
+  showUserLocation?: boolean;
   /**
    * Bumping this number triggers Camera flyTo (recenter). Parent
    * uses it for the recenter button.
@@ -82,6 +86,7 @@ interface Props {
    * second gate for hiding the loading overlay.
    */
   onFogReady?: () => void;
+  onFogPreparing?: (readinessKey: string) => void;
   onFogUnavailable?: () => void;
   /**
    * v424: fly camera to arbitrary center+zoom, driven by HierarchyPanel
@@ -106,7 +111,7 @@ export type MemoryMapHandle = {
 };
 
 export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
-  { centerLat, centerLng, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogReady, onFogUnavailable, strangerMarks, flyToTarget, qaWorkspaceActive = false },
+  { centerLat, centerLng, showUserLocation = true, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogPreparing, onFogReady, onFogUnavailable, strangerMarks, flyToTarget, qaWorkspaceActive = false },
   ref,
 ) {
   const theme = useVisualTheme();
@@ -166,32 +171,27 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   // rendered. Pre-fix the user saw pins "popping in" before fog, and some
   // pins missed first paint entirely.
   //
-  // v380 review (round 2): primary signal = FogLayer.onFogReady (fixed in
-  // round 1 to fire for zero-points users too). Belt-and-suspenders: a 2s
-  // timer still protects Mapbox/layer readiness failures.
+  // FogLayer is the sole readiness authority. A wall-clock fallback used to
+  // expose Cairns while the account-scoped fog geometry was still restoring.
   const [fogReady, setFogReady] = useState(false);
-  // v389: gate on (fogReady AND memory points have arrived OR 2s timeout)
-  // — first-entry "Mystery flash" was caused by rendering CairnPinsLayer
-  // before server memory_points hydrate finishes. We don't gate on
-  // initialRevealDone (only set for brand-new users); instead we gate
-  // on the actual points array.
-  const memoryPointsCount = useMemoryStore((s) => s.points.length);
-  const [pinsCanShow, setPinsCanShow] = useState(false);
-  useEffect(() => {
-    // Show pins as soon as memory points have arrived (Revealed will paint
-    // directly). Fallback timer ensures pins still show for users with 0
-    // memory points (nothing to hydrate).
-    if (memoryPointsCount > 0) {
-      setPinsCanShow(true);
-      return;
-    }
-    const t = setTimeout(() => setPinsCanShow(true), 2500);
-    return () => clearTimeout(t);
-  }, [memoryPointsCount]);
-  useEffect(() => {
-    const timer = setTimeout(() => setFogReady(() => true), 2000);
-    return () => clearTimeout(timer);
-  }, []);
+  const fogReadinessKeyRef = useRef('');
+  const fogGeometryReadyKeyRef = useRef('');
+  const fogPaintReadyKeyRef = useRef('');
+  const localHydration = useMemoryStore((s) => s.localHydration) ?? {
+    ownerUserId: null,
+    status: 'detached' as const,
+    requiresInitialReconcile: false,
+    initialReconcile: 'not_required' as const,
+    revision: 0,
+  };
+  const activeAccountId = useAppStore((s) => String(s.user?.id ?? 'signed-out'));
+  const pinsAuthorityReady = qaWorkspaceActive || (
+    localHydration.ownerUserId === activeAccountId
+    &&
+    localHydration.status === 'ready'
+    && (!localHydration.requiresInitialReconcile
+      || localHydration.initialReconcile === 'success')
+  );
   // We anchor on the first known center (the GPS fix at mount time)
   // — not the live coord prop, which would let `centerCoord` updates
   // from the watcher quietly drag the "did the user pan?" baseline.
@@ -468,6 +468,15 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             onMapFullyReady();
           }
         }}
+        onDidFinishRenderingFrameFully={() => {
+          const readinessKey = fogReadinessKeyRef.current;
+          if (!readinessKey
+            || fogGeometryReadyKeyRef.current !== readinessKey
+            || fogPaintReadyKeyRef.current === readinessKey) return;
+          fogPaintReadyKeyRef.current = readinessKey;
+          setFogReady(true);
+          onFogReady?.();
+        }}
         onMapLoadingError={(event: unknown) => {
           log('memory.map_loading_error', { event: (() => { try { return JSON.stringify(event).slice(0, 500); } catch { return String(event); } })() });
           setMapLoadState('error');
@@ -524,7 +533,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
 
             Result: small white-ringed blue dot. No 15px translucent halo
             that users were mistaking for a "default fog reveal circle". */}
-        <UserLocation visible={mapReady} animated={true}>
+        {showUserLocation ? <UserLocation visible={mapReady} animated={true}>
           {/* BUG-C fix (v371 post-OTA): User-location ring + dot now scale
               with zoom. Mapbox `circleRadius` default is screen pixels —
               constant size regardless of zoom — which at low zoom levels
@@ -565,11 +574,30 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
               circlePitchAlignment: 'map',
             }}
           />
-        </UserLocation>
-        <FogLayer userCenter={{ lat: centerLat, lng: centerLng }} onFogReady={() => {
-          setFogReady(true);
-          onFogReady?.();
-        }} onFogUnavailable={onFogUnavailable} />
+        </UserLocation> : null}
+        <FogLayer
+          userCenter={{ lat: centerLat, lng: centerLng }}
+          onFogPreparing={(readinessKey) => {
+            fogReadinessKeyRef.current = readinessKey;
+            fogGeometryReadyKeyRef.current = '';
+            fogPaintReadyKeyRef.current = '';
+            setFogReady(false);
+            onFogPreparing?.(readinessKey);
+          }}
+          onFogReady={(readinessKey) => {
+            if (fogReadinessKeyRef.current !== readinessKey) return;
+            // Geometry has committed in JS. Cairns remain gated until Mapbox
+            // reports a fully rendered frame for this same readiness key.
+            fogGeometryReadyKeyRef.current = readinessKey;
+          }}
+          onFogUnavailable={(readinessKey) => {
+            if (fogReadinessKeyRef.current !== readinessKey) return;
+            fogGeometryReadyKeyRef.current = '';
+            fogPaintReadyKeyRef.current = '';
+            setFogReady(false);
+            onFogUnavailable?.();
+          }}
+        />
         {/* Memory is territory and accumulated place history, not another
             activity-detail route viewer. The explored fog cut-outs carry the
             journey evidence; a literal polyline here duplicated Trails and
@@ -584,7 +612,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             (or 2.5s fallback for users with 0 points). This prevents the
             Mystery flash without breaking the case where the flag never
             sets (existing users). */}
-        {fogReady && pinsCanShow && (
+        {fogReady && pinsAuthorityReady && (
           <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
         )}
       </MapView>

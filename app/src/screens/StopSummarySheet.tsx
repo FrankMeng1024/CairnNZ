@@ -20,12 +20,12 @@ import { useDistance } from '../utils/distanceFormat';
 import { formatDate } from '../utils/dateFormat';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 
-type StopSummary = {
+export type StopSummary = {
   distanceM: number;
   durationS: number;
   elevationGainM: number;
   activityMode: 'hiking' | 'running';
-  trackPoints: Array<{ lat: number; lng: number }>;
+  trackPoints: Array<{ lat: number; lng: number; segmentId?: string }>;
   startedAt: number;
 };
 
@@ -47,6 +47,11 @@ type Props = {
    *  "Saving…" so users on long uploads get progress signal instead of
    *  a mystery spinner. */
   savingStep?: string | null;
+  /** Once true, summary.trackPoints is the verified Final artifact that is
+   * also used by Detail/reload/Save as Route. The intent sheet deliberately
+   * does not preview a provisional route. */
+  committed?: boolean;
+  onViewActivity?: () => void;
 };
 
 /** Concept palette — locked to docs/ui-redesign/sleep-run-2026-08-15. */
@@ -80,7 +85,7 @@ function formatDuration(totalSeconds: number): string {
  * SVG string stays small on Metro/Hermes.
  */
 function MiniMapPolyline({ points, stroke, width, height }: {
-  points: Array<{ lat: number; lng: number }>;
+  points: Array<{ lat: number; lng: number; segmentId?: string }>;
   stroke: string;
   width: number;
   height: number;
@@ -89,12 +94,21 @@ function MiniMapPolyline({ points, stroke, width, height }: {
 
   // Downsample so the resulting SVG polyline stays under ~200 points.
   const step = Math.max(1, Math.floor(points.length / 200));
-  const sampled: Array<{ lat: number; lng: number }> = [];
-  for (let i = 0; i < points.length; i += step) sampled.push(points[i]);
-  // Always include the last point so start→end reads correctly.
-  if (sampled[sampled.length - 1] !== points[points.length - 1]) {
-    sampled.push(points[points.length - 1]);
+  const segments: Array<Array<{ lat: number; lng: number; segmentId?: string }>> = [];
+  for (const point of points) {
+    const prior = segments[segments.length - 1];
+    if (!prior || (prior[0].segmentId ?? 'legacy-0') !== (point.segmentId ?? 'legacy-0')) {
+      segments.push([point]);
+    } else {
+      prior.push(point);
+    }
   }
+  const sampledSegments = segments.map(segment => {
+    const sampled = segment.filter((_, index) => index % step === 0);
+    if (sampled[sampled.length - 1] !== segment[segment.length - 1]) sampled.push(segment[segment.length - 1]);
+    return sampled;
+  }).filter(segment => segment.length >= 2);
+  const sampled = sampledSegments.flat();
 
   let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
   for (const p of sampled) {
@@ -113,30 +127,40 @@ function MiniMapPolyline({ points, stroke, width, height }: {
   const offsetX = pad + (w - lngSpan * scale) / 2;
   const offsetY = pad + (h - latSpan * scale) / 2;
 
-  const coords = sampled
-    .map(p => {
+  const project = (p: { lat: number; lng: number }) => {
       const x = offsetX + (p.lng - minLng) * scale;
       // Invert Y (SVG origin is top-left, lat grows upward).
       const y = offsetY + (maxLat - p.lat) * scale;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
+  };
 
   return (
     <Svg width={width} height={height}>
-      <SvgPolyline
-        points={coords}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={2.5}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
+      {sampledSegments.map((segment, index) => (
+        <SvgPolyline
+          key={`${segment[0]?.segmentId ?? 'legacy'}-${index}`}
+          points={segment.map(project).join(' ')}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={2.5}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ))}
     </Svg>
   );
 }
 
-export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onDiscard, saving = false, savingStep = null }: Props) {
+export function StopSummarySheet({
+  summary,
+  onCancel,
+  onConfirm,
+  onDiscard: _onDiscard,
+  saving = false,
+  savingStep = null,
+  committed = false,
+  onViewActivity,
+}: Props) {
   // _onDiscard is intentionally unused in the H4 redesign — see prop docs.
   const [name, setName] = useState('');
   // Sleep-run 2026-08-16: mini-map card width is measured at layout so the
@@ -171,7 +195,9 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
   };
 
   const isRun = summary.activityMode === 'running';
-  const heading = isRun ? 'Finish run' : 'Finish hike';
+  const heading = committed
+    ? (isRun ? 'Run complete' : 'Hike complete')
+    : (isRun ? 'Finish run' : 'Finish hike');
   const label = isRun ? 'Run' : 'Hike';
   // O18 HIST-09: default name uses user-preferred date format.
   const defaultName = `${label} — ${formatDate(summary.startedAt)}`;
@@ -196,7 +222,12 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
 
   return (
     <Animated.View style={[stopSheetStyles.scrim, { opacity }]} pointerEvents="auto">
-      <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => dismiss(onCancel)} />
+      <TouchableOpacity
+        style={StyleSheet.absoluteFillObject}
+        activeOpacity={1}
+        onPress={() => { if (!saving) dismiss(onCancel); }}
+        disabled={saving}
+      />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
         <Animated.View
           style={[
@@ -222,7 +253,7 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
                 activeOpacity={0.6}
                 disabled={saving}
                 accessibilityRole="button"
-                accessibilityLabel="Close and keep tracking"
+                accessibilityLabel={committed ? 'Close activity summary' : 'Close and keep tracking'}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={[stopSheetStyles.closeX, { color: titleInk }, saving && { opacity: 0.4 }]}>✕</Text>
@@ -253,7 +284,7 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
               不知道是啥"): only render when there are enough trackPoints to
               draw a polyline — an empty card just below the stats looked
               like a mystery blank div when the hike had 0 points. */}
-          {summary.trackPoints.length >= 2 && (
+          {committed && summary.trackPoints.length >= 2 && (
             <View
               style={[stopSheetStyles.miniMapCard, completeIsDark ? { backgroundColor: 'rgba(240,238,230,0.06)', borderColor: 'rgba(220,230,240,0.14)' } : null]}
               onLayout={(e) => setMiniMapWidth(e.nativeEvent.layout.width)}
@@ -273,16 +304,22 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
               写hike的名字的 要让用户知道"): explicit label above the field
               plus a friendlier placeholder so users know this names the
               activity in their history. */}
-          <Text style={[stopSheetStyles.nameLabel, { color: mutedInk }]}>{isRun ? 'Name this run (optional)' : 'Name this hike (optional)'}</Text>
-          <TextInput
-            style={[stopSheetStyles.nameInput, { color: titleInk, borderColor: completeIsDark ? 'rgba(220,230,240,0.14)' : 'rgba(20,42,30,0.10)', backgroundColor: completeIsDark ? 'rgba(240,238,230,0.06)' : 'rgba(255,253,247,0.5)' }]}
-            placeholder={defaultName}
-            placeholderTextColor={mutedInk}
-            value={name}
-            onChangeText={(t) => setName(t.slice(0, 60))}
-            autoFocus={false}
-            returnKeyType="done"
-          />
+          {!committed ? (
+            <>
+              <Text style={[stopSheetStyles.nameLabel, { color: mutedInk }]}>{isRun ? 'Name this run (optional)' : 'Name this hike (optional)'}</Text>
+              <TextInput
+                style={[stopSheetStyles.nameInput, { color: titleInk, borderColor: completeIsDark ? 'rgba(220,230,240,0.14)' : 'rgba(20,42,30,0.10)', backgroundColor: completeIsDark ? 'rgba(240,238,230,0.06)' : 'rgba(255,253,247,0.5)' }]}
+                placeholder={defaultName}
+                placeholderTextColor={mutedInk}
+                value={name}
+                onChangeText={(t) => setName(t.slice(0, 60))}
+                autoFocus={false}
+                returnKeyType="done"
+              />
+            </>
+          ) : (
+            <Text style={[stopSheetStyles.finalRouteNote, { color: mutedInk }]}>Final route saved on this device</Text>
+          )}
 
           {/* Primary CTA — "View Activity" saves the hike and jumps to
               the MapHistory detail. R21 (2026-08-18 user "去掉done"):
@@ -299,7 +336,8 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
               // O14 Bug 4: do NOT dismiss the sheet here. HikingScreen
               // keeps it mounted, flips `saving` true, waits for
               // stopTracking to finish, then unmounts.
-              onConfirm(name);
+              if (committed) onViewActivity?.();
+              else onConfirm(name);
             }}
             activeOpacity={0.85}
             disabled={saving}
@@ -314,7 +352,7 @@ export function StopSummarySheet({ summary, onCancel, onConfirm, onDiscard: _onD
                 </Text>
               </>
             ) : (
-              <Text style={stopSheetStyles.saveText}>Finish &amp; view activity</Text>
+              <Text style={stopSheetStyles.saveText}>{committed ? 'View activity' : `Finish ${label.toLowerCase()}`}</Text>
             )}
           </TouchableOpacity>
         </Animated.View>
@@ -429,6 +467,12 @@ const stopSheetStyles = StyleSheet.create({
     borderColor: HAIRLINE,
     fontSize: 15,
     color: TITLE_INK,
+  },
+  finalRouteNote: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   saveBtn: {
     height: 56,

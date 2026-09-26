@@ -15,7 +15,19 @@
  *   - Mutex: 同一时刻只允许一个 drain, 但记 pendingSignal 保证 drain 中新触发不丢
  */
 
-import { listPending, removePending, markAttempt, updateRemoteId, resetForResync, type PendingHike } from './pendingSyncStore';
+import {
+  ensurePendingUploadReady,
+  isPendingPreparationActive,
+  listPending,
+  markPendingPreparationPhase,
+  markPendingUploadReady,
+  savePending,
+  removePending,
+  markAttempt,
+  updateRemoteId,
+  resetForResync,
+  type PendingHike,
+} from './pendingSyncStore';
 import { deleteRemoteSession, deleteRemoteSessionByClientId, saveHikeAtomic, startSessionResolved } from './sessionService';
 import { authenticatedFetch } from './apiService';
 import { listMarkerTombstones } from './markerTombstones';
@@ -29,8 +41,8 @@ import {
   updateCompletedActivitySyncState,
 } from '../features/activity/activityRegistry';
 import { deleteAcknowledgedHikeTrackArtifacts } from './hikeTrackWriter';
-import { removeLocalTrackPoints } from '../store/useSessionStore';
 import networkMonitor from './networkMonitor';
+import { toServerPoint } from '../features/activity/activityContracts';
 
 let isDraining = false;
 let pendingSignal = false;
@@ -53,7 +65,9 @@ function schedulePendingRetry(pending: PendingHike[]): void {
     return;
   }
   const nextDueAt = pending
-    .filter(hike => isCurrentActivityOwner(hike.userId) && hike.lastAttemptAt)
+    .filter(hike => isCurrentActivityOwner(hike.userId)
+      && hike.lastAttemptAt
+      && (!hike.failureKind || hike.failureKind === 'retryable'))
     .reduce((earliest, hike) => Math.min(
       earliest,
       Number(hike.lastAttemptAt) + retryBackoffMs(hike.attemptCount),
@@ -88,6 +102,108 @@ function isCurrentActivityOwner(userId: string): boolean {
 }
 
 /**
+ * Finish recovery is a local transaction before it is a network retry. A
+ * process may die after the verified payload but before the Activity list or
+ * registry checkpoint. Rebuild those exact projections from the payload and
+ * versioned Final artifact before making the request uploadable.
+ */
+export async function recoverPreparingActivityCompletion(hike: PendingHike): Promise<boolean> {
+  if (hike.uploadState !== 'preparing') return true;
+  if (isPendingPreparationActive(hike.localId) || !isCurrentActivityOwner(hike.userId)) return false;
+  if (!hike.summary || !hike.finalArtifact) return false;
+  // Lazy import keeps headless/unit startup free of the full AsyncStorage
+  // adapter until an interrupted Finish actually needs reconstruction.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { loadActivityFinalArtifact } = require('../features/activity/activityFinalArtifact');
+  const artifact = await loadActivityFinalArtifact(hike.userId, hike.localId);
+  if (!artifact || artifact.canonicalFingerprint !== hike.finalArtifact.canonicalFingerprint) return false;
+  try {
+    const exactArtifact = artifact.revision === hike.finalArtifact.revision
+      && artifact.displayFingerprint === hike.finalArtifact.displayFingerprint;
+    if (!exactArtifact) {
+      // A process can die after the refined artifact is verified but before
+      // the outbox generation is replaced. The canonical fingerprint proves
+      // this is a presentation revision of the same recorded truth. Roll the
+      // outbox forward to that newest durable revision; never strand a
+      // completed Activity on an obsolete Base pointer.
+      if (artifact.revision < hike.finalArtifact.revision) return false;
+      const payload = {
+        ...hike.payload,
+        route_points: artifact.points.map(toServerPoint),
+      };
+      const finalArtifact = {
+        revision: artifact.revision,
+        displayFingerprint: artifact.displayFingerprint,
+        canonicalFingerprint: artifact.canonicalFingerprint,
+        source: artifact.source,
+        algorithmVersion: artifact.algorithmVersion,
+      };
+      await savePending({ ...hike, payload, finalArtifact, uploadState: 'preparing' });
+      hike.payload = payload;
+      hike.finalArtifact = finalArtifact;
+      crashLogger.breadcrumb(
+        `activity:finish_outbox_rolled_forward localId=${hike.localId.slice(0, 8)} rev=${artifact.revision}`,
+      );
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useSessionStore } = require('../store/useSessionStore');
+    const existing = useSessionStore.getState().sessions.find((item: any) => (
+      item.clientActivityId === hike.localId || item.id === hike.localId
+    ));
+    await useSessionStore.getState().addSession({
+      id: hike.localId,
+      clientActivityId: hike.localId,
+      remoteId: hike.remoteId ?? undefined,
+      serverActivityId: hike.remoteId ?? undefined,
+      activityMode: hike.activityMode,
+      regionCode: existing?.regionCode ?? 'nz',
+      startedAt: hike.summary.startedAt,
+      endedAt: hike.summary.endedAt,
+      durationS: hike.summary.durationS,
+      distanceM: hike.summary.distanceM,
+      elevationGainM: hike.summary.elevationGainM,
+      trackPoints: artifact.points,
+      markerIds: hike.summary.markerIds,
+      name: hike.summary.name,
+      syncState: 'pending',
+      finalGeometryState: artifact.source === 'matched'
+        ? 'enhanced'
+        : artifact.source === 'base' ? 'base_ready' : 'limited_evidence',
+      finalGeometryVersion: artifact.algorithmVersion,
+      finalGeometryRevision: artifact.revision,
+      finalGeometryFingerprint: artifact.displayFingerprint,
+    }, hike.userId);
+    await markPendingPreparationPhase(hike.localId, 'session_committed');
+    const registry = await getActivityRegistry(hike.userId);
+    const unfinished = registry.unfinished?.clientActivityId === hike.localId
+      ? registry.unfinished
+      : null;
+    if (!registry.completed.some(item => item.clientActivityId === hike.localId)) {
+      await completeActivity({
+        clientActivityId: hike.localId,
+        serverActivityId: hike.remoteId,
+        userId: hike.userId,
+        activityMode: hike.activityMode,
+        startedAt: hike.summary.startedAt,
+        endedAt: hike.summary.endedAt,
+        lifecycle: 'completed_local',
+        syncState: 'pending',
+        locationProviderSource: unfinished?.locationProviderSource ?? 'real',
+      });
+    }
+    await markPendingPreparationPhase(hike.localId, 'registry_committed');
+    await markPendingUploadReady(hike.localId);
+    hike.preparationPhase = 'registry_committed';
+    hike.uploadState = 'ready';
+    crashLogger.breadcrumb(`activity:finish_recovered localId=${hike.localId.slice(0, 8)}`);
+    return true;
+  } catch (error) {
+    crashLogger.breadcrumb(`activity:finish_recovery_failed ${String(error).slice(0, 80)}`);
+    return false;
+  }
+}
+
+/**
  * 触发一次 drain。多次并发调用只跑一次, 但记 pendingSignal 保证跑完立刻再跑。
  *
  * O21 HOME-SYNC-UX fix: 支持 onProgress 回调 + 返回统计结果, 让 UI 层
@@ -100,6 +216,36 @@ export interface DrainResult {
   succeeded: number;
   failed: number;
   skipped: number;
+}
+
+export interface PendingSyncFailure {
+  kind: 'retryable' | 'auth_required' | 'action_required' | 'dependency';
+  status: number | null;
+  code: string | null;
+  message: string;
+}
+
+/** One classification contract for direct HTTP failures and durable replay. */
+export function classifyPendingSyncFailure(error: any): PendingSyncFailure {
+  const status = Number.isFinite(Number(error?.status)) ? Number(error.status) : null;
+  const code = typeof error?.body?.code === 'string'
+    ? error.body.code
+    : typeof error?.code === 'string' ? error.code : null;
+  const message = String(error?.message ?? error ?? 'Unknown sync failure').slice(0, 240);
+  if (status === 401) return { kind: 'auth_required', status, code, message };
+  // Only the singleton Start conflict is a dependency on another unfinished
+  // Activity, and that path is classified explicitly above. Save-time identity,
+  // tombstone and idempotency conflicts require owner review and must not be
+  // presented as a retryable "resolve other Activity" condition.
+  if (status === 409) return { kind: 'action_required', status, code, message };
+  if (status === 0 || status === 408 || status === 425 || status === 429 || (status != null && status >= 500)) {
+    return { kind: 'retryable', status, code, message };
+  }
+  if (error?.malformed || (status != null && status >= 400 && status < 500)) {
+    return { kind: 'action_required', status, code, message };
+  }
+  // Fetch/network implementations do not consistently attach status=0.
+  return { kind: 'retryable', status, code, message };
 }
 
 export async function drainPending(opts?: {
@@ -123,8 +269,8 @@ export async function drainPending(opts?: {
       // Sprint 6 round-11 R11B4 fix: safety-sweep — sessions marked
       // syncState='pending' in-memory but with NO matching fs entry
       // are "orphan pending" from a markSynced-then-removePending
-      // failure. Coerce them to 'synced' so the banner drops. Pre-fix
-      // the banner stuck at N forever until app reload.
+      // failure or local outbox loss. Keep them fail-visible until an exact
+      // Final acknowledgement can be proven; Start-shell IDs are insufficient.
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { useSessionStore } = require('../store/useSessionStore');
@@ -133,27 +279,25 @@ export async function drainPending(opts?: {
         const pendingSet = new Set(list.map(h => h.localId));
         for (const sess of sessions) {
           if (sess.syncState === 'pending' && !pendingSet.has(sess.id)) {
-            // Sprint 6 round-20 R20B5: only mark synced if we have a REAL
-            // remoteId. Pre-fix, `sess.remoteId || 0` silently converted
-            // pending-without-remoteId cards to synced-with-remoteId=0.
-            // The UI then treated them as tappable synced cards, but
-            // fetchSessionDetail(0) would 404 → user sees "Route data
-            // unavailable" and the local trackPoints are the only truth
-            // (silent data-loss risk if trackPoints storage also lost).
-            // Truthy remoteId → orphan sweep is safe (real server row).
-            // Falsy remoteId → keep as pending; the pendingSyncStore
-            // fs entry may have been lost, but the correct recovery is
-            // to re-enqueue rather than silently succeed.
-            if (sess.remoteId && typeof useSessionStore.getState().markSynced === 'function') {
-              void useSessionStore.getState().markSynced(sess.id, sess.remoteId, undefined, currentUserId);
-            } else {
-              // Missing remoteId + missing fs entry = orphan. Leave in
-              // pending state so the banner + long-press-discard
-              // affordance remain visible to the user.
-              crashLogger.breadcrumb(
-                `v412:orphan_pending_no_remoteid localId=${String(sess.id).slice(0, 8)}`,
-              );
-            }
+            // A numeric remoteId proves only that Start allocated a server
+            // shell; it is not a Final Save acknowledgement. Missing outbox
+            // data is therefore fail-visible for both remote and local-only
+            // rows. Never relabel it synced without a verified Final ACK.
+            const clientActivityId = String(sess.clientActivityId ?? sess.id);
+            await useSessionStore.getState().markSyncState?.(
+              clientActivityId,
+              'sync_error',
+              currentUserId,
+              { kind: 'action_required', code: 'LOCAL_OUTBOX_MISSING' },
+            );
+            await updateCompletedActivitySyncState(
+              currentUserId,
+              clientActivityId,
+              'sync_error',
+            ).catch(() => undefined);
+            crashLogger.breadcrumb(
+              `activity:orphan_pending_action_required localId=${clientActivityId.slice(0, 8)} remote=${sess.remoteId ?? 'none'}`,
+            );
           }
         }
       } catch (e) {
@@ -168,6 +312,15 @@ export async function drainPending(opts?: {
       let done = 0;
       try { opts?.onProgress?.(done, total); } catch { /* silent */ }
       for (const hike of list) {
+        const explicitRetry = opts?.force || opts?.wakeReason === 'manual';
+        const authRefreshRetry = opts?.wakeReason === 'hydrate' && hike.failureKind === 'auth_required';
+        if (!explicitRetry && !authRefreshRetry
+          && hike.failureKind && hike.failureKind !== 'retryable') {
+          result.skipped += 1;
+          done += 1;
+          try { opts?.onProgress?.(done, total); } catch { /* silent */ }
+          continue;
+        }
         const backoffRemainingMs = hike.lastAttemptAt
           ? retryBackoffMs(hike.attemptCount) - (Date.now() - hike.lastAttemptAt)
           : 0;
@@ -254,7 +407,8 @@ export async function cleanupAcknowledgedActivityArtifacts(
   );
   try {
     await removePending(clientActivityId, userId);
-    await removeLocalTrackPoints(userId, clientActivityId);
+    // Retain compact Final display points after ACK. Explicit Activity/account
+    // deletion owns their removal; only raw recovery material is cleaned here.
     await deleteAcknowledgedHikeTrackArtifacts(clientActivityId, userId);
     await removeAcknowledgedActivity(userId, clientActivityId);
     if (simulatorActivity) {
@@ -327,6 +481,16 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     return 'succeeded';
   }
 
+  // A live Finish owns this payload until its refined Final snapshot and
+  // local registry projection are both durable. After process death rebuild
+  // missing local projections first; losing an in-memory lease alone cannot
+  // authorize upload.
+  if (!await recoverPreparingActivityCompletion(hike)
+    || !await ensurePendingUploadReady(hike)) {
+    crashLogger.breadcrumb(`activity:sync_skip_preparing localId=${hike.localId.slice(0, 8)}`);
+    return 'skipped';
+  }
+
   try {
     const preflightRegistry = await getActivityRegistry(hike.userId);
     simulatorActivity = preflightRegistry.completed.some(
@@ -360,18 +524,48 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
       // v412 blocker 1 修: 用 pendingHike 里的 activityMode, 不再硬编码 'hiking'
       // 之前硬编码会导致 running 离线 save 后, 网络恢复时被建成 hiking session (数据破坏)
       const activityMode = hike.activityMode || 'hiking';  // fallback 兼容老磁盘数据
-      const start = await startSessionResolved(activityMode, startTime, hike.localId);
+      const start = await startSessionResolved(activityMode, startTime, hike.localId, hike.userId);
       if (start.kind === 'conflict') {
         // Another legitimate unfinished Activity owns the server slot. Keep
         // this completed-local Activity intact until that Activity is resolved;
         // never weaken the singleton by manufacturing a second server shell.
-        await markAttempt(hike.localId);
+        await markAttempt(hike.localId, {
+          kind: 'dependency',
+          status: 409,
+          code: start.code,
+          message: 'Another unfinished Activity owns the server slot.',
+        });
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { useSessionStore } = require('../store/useSessionStore');
+          await useSessionStore.getState().markSyncState?.(hike.localId, 'sync_error', hike.userId, {
+            kind: 'dependency', status: 409, code: start.code,
+          });
+        } catch { /* pending metadata remains authoritative */ }
         await updateCompletedActivitySyncState(hike.userId, hike.localId, 'sync_error');
         crashLogger.breadcrumb(`activity:sync_start_conflict localId=${hike.localId.slice(0, 8)} existing=${start.existing?.clientActivityId?.slice(0, 8) ?? 'legacy'}`);
         return 'failed';
       }
       if (start.kind !== 'started') {
-        await markAttempt(hike.localId);
+        const startFailureKind = start.status === 401
+          ? 'auth_required' as const
+          : start.retryable ? 'retryable' as const : 'action_required' as const;
+        await markAttempt(hike.localId, {
+          kind: startFailureKind,
+          status: start.status,
+          code: start.code,
+          message: 'Unable to create the matching server Activity.',
+        });
+        if (!start.retryable) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { useSessionStore } = require('../store/useSessionStore');
+            await useSessionStore.getState().markSyncState?.(hike.localId, 'sync_error', hike.userId, {
+              kind: startFailureKind, status: start.status, code: start.code,
+            });
+          } catch { /* pending metadata remains authoritative */ }
+          await updateCompletedActivitySyncState(hike.userId, hike.localId, 'sync_error');
+        }
         crashLogger.breadcrumb(`v412:sync_start_failed localId=${hike.localId.slice(0, 8)}`);
         return 'failed';
       }
@@ -381,7 +575,13 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     }
 
     if (!isCurrentActivityOwner(hike.userId)) return 'skipped';
-    const result = await saveHikeAtomic(hike.remoteId, hike.payload, hike.idempotencyKey, hike.localId);
+    const result = await saveHikeAtomic(
+      hike.remoteId,
+      hike.payload,
+      hike.idempotencyKey,
+      hike.localId,
+      hike.userId,
+    );
     crashLogger.breadcrumb(
       `v412:sync_uploaded localId=${hike.localId.slice(0, 8)} sid=${result.session_id} replay=${!!result.idempotent_replay}`,
     );
@@ -450,6 +650,16 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     }
     const registryAcked = await acknowledgeActivity(hike.userId, hike.localId, result.session_id);
     if (!registryAcked) return 'failed';
+    try {
+      // Public qualification is downstream of the normal Activity ACK. Its
+      // own durable action queue may remain offline without weakening or
+      // rolling back the Activity handoff.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { reconcilePublicActivityAfterServerAck } = require('../features/public/services/publicCairns');
+      await reconcilePublicActivityAfterServerAck(hike.userId, hike.localId);
+    } catch (publicError) {
+      crashLogger.breadcrumb(`public:post_activity_ack_deferred ${String(publicError).slice(0, 80)}`);
+    }
     if (simulatorActivity) {
       const { appendSimulatorLog } = require('../features/activitySimulator/simulatorLog');
       appendSimulatorLog('SYNC_ACK', 'simulator_activity_server_acknowledged', {
@@ -497,12 +707,17 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
       }
       return 'skipped'; // 不 markAttempt: 这是路径调整,不是失败重试
     }
-    await markAttempt(hike.localId);
-    if ((hike.attemptCount || 0) + 1 >= 3) {
+    const failure = classifyPendingSyncFailure(err);
+    await markAttempt(hike.localId, failure);
+    if (failure.kind !== 'retryable' || (hike.attemptCount || 0) + 1 >= 3) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { useSessionStore } = require('../store/useSessionStore');
-        await useSessionStore.getState().markSyncState?.(hike.localId, 'sync_error', hike.userId);
+        await useSessionStore.getState().markSyncState?.(hike.localId, 'sync_error', hike.userId, {
+          kind: failure.kind,
+          status: failure.status,
+          code: failure.code,
+        });
         await updateCompletedActivitySyncState(hike.userId, hike.localId, 'sync_error');
       } catch { /* retry data remains intact */ }
     } else {
@@ -514,7 +729,7 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
       } catch { /* retry data remains intact */ }
     }
     crashLogger.breadcrumb(
-      `v412:sync_upload_failed localId=${hike.localId.slice(0, 8)} status=${err?.status || 'net'}`,
+      `v412:sync_upload_failed localId=${hike.localId.slice(0, 8)} status=${err?.status || 'net'} kind=${failure.kind}`,
     );
     return 'failed';
   }

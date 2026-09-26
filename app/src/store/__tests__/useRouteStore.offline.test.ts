@@ -14,7 +14,10 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 jest.mock('../../services/networkMonitor', () => ({
   __esModule: true,
-  default: { onChange: jest.fn(() => () => {}) },
+  // This suite deliberately keeps create requests offline. Expose that same
+  // authority to the retry scheduler so it does not leave a production-style
+  // wake timer alive after Jest tears this worker down.
+  default: { onChange: jest.fn(() => () => {}), isOnline: jest.fn(() => false) },
 }));
 jest.mock('../../services/crashLogger', () => ({ crashLogger: { breadcrumb: jest.fn() } }));
 jest.mock('../useAppStore', () => ({

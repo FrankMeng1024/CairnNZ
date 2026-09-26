@@ -2,7 +2,8 @@ import type { TrackPoint, TrackingSession } from '../../store/useSessionStore';
 import { segmentTrace } from './activityContracts';
 
 export type ActivityLocalReadiness = 'ready' | 'loading' | 'unavailable';
-export type ActivityServerSync = 'synced' | 'pending' | 'syncing' | 'error';
+export type ActivityServerSync = 'synced' | 'pending' | 'syncing'
+  | 'retryable_error' | 'auth_required' | 'action_required' | 'dependency';
 export type ActivityFinalEnhancement = 'base' | 'refining' | 'enhanced' | 'limited' | 'unknown';
 export type ActivityRouteReadiness = 'ready' | 'needs_review' | 'missing_section' | 'unavailable';
 export type ActivityManualAction = 'none' | 'keep_or_snap' | 'choose_or_reconnect';
@@ -18,7 +19,7 @@ export interface ActivityRouteState {
 }
 
 export function deriveActivityRouteState(args: {
-  session: Pick<TrackingSession, 'syncState' | 'finalGeometryState'>;
+  session: Pick<TrackingSession, 'syncState' | 'syncFailureKind' | 'finalGeometryState'>;
   trackPoints: ReadonlyArray<TrackPoint> | null;
 }): ActivityRouteState {
   const { session, trackPoints } = args;
@@ -31,7 +32,15 @@ export function deriveActivityRouteState(args: {
     ? 'pending'
     : session.syncState === 'syncing'
       ? 'syncing'
-      : session.syncState === 'sync_error' ? 'error' : 'synced';
+      : session.syncState === 'sync_error'
+        ? session.syncFailureKind === 'auth_required'
+          ? 'auth_required'
+          : session.syncFailureKind === 'action_required'
+            ? 'action_required'
+            : session.syncFailureKind === 'dependency'
+              ? 'dependency'
+              : 'retryable_error'
+        : 'synced';
   const finalEnhancement: ActivityFinalEnhancement = session.finalGeometryState === 'base_ready'
     ? 'base'
     : session.finalGeometryState === 'refining'
@@ -78,7 +87,11 @@ export function activityRouteStateCopy(state: ActivityRouteState): {
     ? 'Waiting to sync'
     : state.serverSync === 'syncing'
       ? 'Syncing activity…'
-      : state.serverSync === 'error' ? 'Sync issue · tap to retry' : null;
+      : state.serverSync === 'retryable_error' ? 'Sync interrupted · tap to retry'
+        : state.serverSync === 'auth_required' ? 'Sign in to sync this saved Activity'
+          : state.serverSync === 'action_required' ? 'Saved on this device · sync needs review'
+            : state.serverSync === 'dependency' ? 'Saved on this device · another Activity needs resolution'
+              : null;
   if (state.routeReadiness === 'missing_section') {
     return {
       savedLabel,

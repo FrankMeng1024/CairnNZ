@@ -8,8 +8,12 @@ import {
   getJournalEfficiencyMetrics,
   listActiveHikes,
   readActiveHikeTail,
+  releaseHikeTrackFinishSeal,
+  resumeHikeTrack,
+  sealHikeTrackForFinish,
   startHikeTrack,
   truncateActiveHikeTrack,
+  updateHikeMetaStrict,
   resetJournalEfficiencyMetrics,
 } from '../hikeTrackWriter';
 import { shouldStartNewSegment } from '../../features/activity/activityContracts';
@@ -19,11 +23,13 @@ const owner = 'owner-generation-a';
 const mockWebStorage = new Map<string, string>();
 let blockedRemoval: string | null = null;
 let blockedWrite: string | null = null;
+let afterSetItem: ((key: string, value: string) => void) | null = null;
 const localStorageMock = {
   getItem: (key: string) => mockWebStorage.get(key) ?? null,
   setItem: (key: string, value: string) => {
     if (key === blockedWrite) throw new Error('simulated-write-interruption');
     mockWebStorage.set(key, value);
+    afterSetItem?.(key, value);
   },
   removeItem: (key: string) => { if (key !== blockedRemoval) mockWebStorage.delete(key); },
   clear: () => mockWebStorage.clear(),
@@ -35,6 +41,7 @@ describe('crash-safe Activity journal', () => {
     localStorageMock.clear();
     blockedRemoval = null;
     blockedWrite = null;
+    afterSetItem = null;
     resetJournalEfficiencyMetrics();
     await discardActiveHike(activityId);
   });
@@ -48,6 +55,33 @@ describe('crash-safe Activity journal', () => {
     });
     expect(await listActiveHikes()).toEqual([
       expect.objectContaining({ session_id: activityId, total_points: 0, activity_mode: 'running', user_id: 'user-a' }),
+    ]);
+  });
+
+  test('a torn Resume generation stage preserves the prior discoverable Activity metadata', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'running',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    const base = `cairn-fs://cairn-hike-tracks/meta/${activityId}.json`;
+    blockedWrite = `${base}.next`;
+
+    await expect(updateHikeMetaStrict(activityId, {
+      owner_generation: 'new-owner-generation',
+    })).rejects.toThrow('simulated-write-interruption');
+
+    expect(JSON.parse(mockWebStorage.get(base) ?? '{}')).toMatchObject({
+      session_id: activityId,
+      owner_generation: owner,
+    });
+    await expect(listActiveHikes()).resolves.toEqual([
+      expect.objectContaining({
+        session_id: activityId,
+        owner_generation: owner,
+        activity_mode: 'running',
+      }),
     ]);
   });
 
@@ -195,6 +229,137 @@ describe('crash-safe Activity journal', () => {
       segmentId: 'segment-a',
     }], 'user-b')).rejects.toThrow('stale_background_user');
     expect(await readActiveHikeTail(activityId)).toEqual([]);
+  });
+
+  test('a separate-runtime headless append cannot resurrect an Activity after the durable Finish marker wins', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'hiking',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    await appendHikePoint({
+      t: 2_000,
+      lat: -41,
+      lng: 174,
+      src: 'fg',
+      clientActivityId: activityId,
+      ownerGeneration: owner,
+      segmentId: 'segment-a',
+    });
+    const active = `cairn-fs://cairn-hike-tracks/active/${activityId}.jsonl`;
+    const completed = `cairn-fs://cairn-hike-tracks/completed/${activityId}.jsonl`;
+    const meta = `cairn-fs://cairn-hike-tracks/meta/${activityId}.json`;
+    const terminal = `cairn-fs://cairn-hike-tracks/meta/${activityId}.terminal.json`;
+    const historicalPrefix = mockWebStorage.get(active) ?? '';
+    let injected = false;
+    afterSetItem = (key) => {
+      if (injected || key !== active) return;
+      injected = true;
+      // Model another JS runtime winning Finish after headless read stale meta
+      // but while its append is at the filesystem commit boundary.
+      // Finish moves the exact P+L file that the headless runtime just wrote.
+      // The post-marker rollback must repair completed, not only active.
+      mockWebStorage.set(completed, mockWebStorage.get(active) ?? '');
+      mockWebStorage.set(meta, JSON.stringify({
+        session_id: activityId,
+        started_at: 1_000,
+        ended_at: 2_500,
+        activity_mode: 'hiking',
+        user_id: 'user-a',
+        owner_generation: owner,
+        total_points: 1,
+        uploaded: false,
+      }));
+      mockWebStorage.set(terminal, JSON.stringify({
+        v: 1,
+        session_id: activityId,
+        owner_generation: owner,
+        cutoff_at: 2_500,
+      }));
+    };
+
+    await expect(appendBackgroundHikePoints([{
+      t: 3_000,
+      lat: -41.001,
+      lng: 174.001,
+      src: 'bg',
+      clientActivityId: activityId,
+      ownerGeneration: owner,
+      segmentId: 'segment-a',
+    }], 'user-a')).rejects.toThrow('background_activity_finalizing');
+
+    expect(mockWebStorage.has(active)).toBe(false);
+    expect(mockWebStorage.get(completed)).toBe(historicalPrefix);
+    expect(JSON.parse(mockWebStorage.get(meta) ?? '{}').ended_at).toBe(2_500);
+    await expect(listActiveHikes()).resolves.toEqual([]);
+  });
+
+  test('a terminal marker arriving before Finish drain rolls a racing headless batch back to the frozen prefix', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'running',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    await appendHikePoint({
+      t: 2_000,
+      lat: -41,
+      lng: 174,
+      src: 'fg',
+      clientActivityId: activityId,
+      ownerGeneration: owner,
+      segmentId: 'segment-a',
+    });
+    const active = `cairn-fs://cairn-hike-tracks/active/${activityId}.jsonl`;
+    const terminal = `cairn-fs://cairn-hike-tracks/meta/${activityId}.terminal.json`;
+    let injected = false;
+    afterSetItem = (key) => {
+      if (injected || key !== active) return;
+      injected = true;
+      mockWebStorage.set(terminal, JSON.stringify({
+        v: 1,
+        session_id: activityId,
+        owner_generation: owner,
+        cutoff_at: 2_500,
+      }));
+    };
+
+    await expect(appendBackgroundHikePoints([{
+      t: 3_000,
+      lat: -41.001,
+      lng: 174.001,
+      src: 'bg',
+      clientActivityId: activityId,
+      ownerGeneration: owner,
+      segmentId: 'segment-a',
+    }], 'user-a')).rejects.toThrow('background_activity_finalizing');
+    expect((await readActiveHikeTail(activityId)).map(point => point.t)).toEqual([2_000]);
+  });
+
+  test('an aborted Finish can release only its matching unfinished seal and resume appends', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'running',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    await sealHikeTrackForFinish(activityId, owner, 2_500);
+    await expect(resumeHikeTrack(activityId)).rejects.toThrow('activity_journal_already_finalizing');
+    await expect(releaseHikeTrackFinishSeal(activityId, 'wrong-owner')).resolves.toBe(false);
+    await expect(releaseHikeTrackFinishSeal(activityId, owner)).resolves.toBe(true);
+    await expect(resumeHikeTrack(activityId)).resolves.toEqual({ resumed: true, totalPoints: 0 });
+    await appendHikePoint({
+      t: 3_000,
+      lat: -41,
+      lng: 174,
+      src: 'fg',
+      clientActivityId: activityId,
+      ownerGeneration: owner,
+      segmentId: 'segment-resumed',
+      segmentStartReason: 'resume',
+    });
+    expect((await readActiveHikeTail(activityId)).map(point => point.t)).toEqual([3_000]);
   });
 
   test('rollback truncates the durable accepted tail and subsequent evidence appends there', async () => {

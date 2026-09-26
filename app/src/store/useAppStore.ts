@@ -383,11 +383,6 @@ export const useAppStore = create<AppState>((set, get) => ({
             // synced rows.
             await useSessionStore.getState().hydrate(user.id);
             const beforeMerge = useSessionStore.getState().sessions;
-            const preservedLocals = beforeMerge.filter((s) =>
-              s.syncState === 'pending' ||
-              s.syncState === 'syncing' ||
-              s.remoteId == null
-            );
             // R96 修补 C.2: fetchSessions 5xx/网络错时不清 UI。
             // 之前 fetchSessions 遇 500 静默返回 [],这里无条件用空数组
             // 覆盖 → 用户 activity 卡片全消失(即使本地 AsyncStorage 里还
@@ -407,15 +402,6 @@ export const useAppStore = create<AppState>((set, get) => ({
                 localByRemoteId.set(s.remoteId, s.name);
               }
             }
-            // Dedupe: any remote row whose id matches a preserved local's
-            // remoteId means the local uploaded before this hydrate ran —
-            // prefer the remote authoritative copy in that case.
-            const preservedRemoteIds = new Set(
-              preservedLocals.map((s) => s.remoteId).filter((v): v is number => v != null)
-            );
-            const preservedClientIds = new Set(
-              preservedLocals.map((s) => s.clientActivityId ?? s.id),
-            );
             // R96 修补 C.2: remote === null 表示 fetchSessions 失败(5xx/网络错)。
             // 此时 remoteSessions=[] + preservedLocals 拿到全部 beforeMerge
             // 意味 "保留本地不清 UI"。如果 remote 是真实数组(可能为空),
@@ -423,8 +409,6 @@ export const useAppStore = create<AppState>((set, get) => ({
             const remoteSessions = remote == null
               ? []
               : remote
-                  .filter((r) => !preservedRemoteIds.has(r.id))
-                  .filter((r) => !r.client_activity_id || !preservedClientIds.has(r.client_activity_id))
                   .map((r) => ({
                     id: r.client_activity_id || String(r.id),
                     clientActivityId: r.client_activity_id || undefined,
@@ -442,11 +426,12 @@ export const useAppStore = create<AppState>((set, get) => ({
                     name: r.name ?? localByRemoteId.get(r.id) ?? undefined,
                     syncState: 'synced' as const,
                   }));
-            // remote 失败时不能丢已 hydrate 的 synced sessions,补一份进来
-            const preservedAllLocals = remote == null
-              ? beforeMerge  // 保留全部本地(含 synced 已从本地 hydrate 的)
-              : preservedLocals;
-            const merged = [...preservedAllLocals, ...remoteSessions];
+            // Commit against the latest durable owner state under the Session
+            // store's write tail. A local Finish may complete while this GET
+            // is in flight; a stale pre-request snapshot must not erase it.
+            if (remote != null) {
+              await useSessionStore.getState().mergeRemoteSessions(remoteSessions, String(user.id));
+            }
             // The verified pending file is the completion intent. Roll every
             // owner-matching intent forward into both durable Detail storage
             // and completed-local lifecycle before recovery detection runs.
@@ -463,13 +448,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               ));
               for (const h of ownedIntents) {
                 const { reconcileCompletedActivityIntent } = require('../features/activity/completedActivityIntent');
-                const completedLocal = await reconcileCompletedActivityIntent(String(user.id), h);
-                const existingIndex = merged.findIndex((session) => (
-                  session.id === h.localId
-                  || (h.remoteId != null && session.remoteId === h.remoteId)
-                ));
-                if (existingIndex >= 0) merged[existingIndex] = completedLocal;
-                else merged.push(completedLocal);
+                await reconcileCompletedActivityIntent(String(user.id), h);
               }
               if (ownedIntents.length > 0) {
                 crashLogger.breadcrumb(`hydrate:reconciled_completed_intents count=${ownedIntents.length}`);
@@ -477,9 +456,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             } catch (orphanErr) {
               crashLogger.breadcrumb(`hydrate:orphan_rebuild_failed ${String(orphanErr).slice(0, 80)}`);
             }
-            useSessionStore.setState({ sessions: merged, currentUserId: user.id });
             crashLogger.breadcrumb(
-              `hydrate:merged preserved=${preservedLocals.length} remote=${remoteSessions.length}`
+              `hydrate:merged preserved=${beforeMerge.length} remote=${remoteSessions.length}`
             );
           } catch {
             try { await useSessionStore.getState().hydrate(user.id); } catch { /* swallow */ }
@@ -577,7 +555,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { drain } = require('../services/offlineQueue');
-        void drain().catch(() => {});
+        const queueOwnerUserId = String(get().user?.id ?? '');
+        if (queueOwnerUserId) void drain(queueOwnerUserId).catch(() => {});
       } catch { /* best effort */ }
     } catch { /* swallow — best effort */ }
 

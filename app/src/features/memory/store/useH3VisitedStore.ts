@@ -57,6 +57,8 @@ let h3LoadAttempted = false;
 // don't retry require('h3-js') every tick under hot-restart RSS pressure.
 let h3LastFailureMs = 0;
 const H3_RETRY_COOLDOWN_MS = 5000;
+/** Cancels chunked rebuilds when a newer projection or account owns H3. */
+let projectionGeneration = 0;
 
 function getH3(): H3Module | null {
   if (h3Ref) return h3Ref;
@@ -220,6 +222,7 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
 
   bulkImport: (points) => {
     if (points.length === 0) return;
+    const myProjectionGeneration = ++projectionGeneration;
     // v312: jetsam-resistant entry beacon — fires before getH3()
     // so we can tell whether bulkImport was called at all.
     try {
@@ -248,6 +251,7 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
     const cells = new Map(get().cells);
     let i = 0;
     const processChunk = () => {
+      if (myProjectionGeneration !== projectionGeneration) return;
       const end = Math.min(i + CHUNK_SIZE, points.length);
       for (; i < end; i++) {
         const p = points[i];
@@ -275,6 +279,18 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
         // before resuming.
         setTimeout(processChunk, 0);
       } else {
+        if (myProjectionGeneration !== projectionGeneration) return;
+        // Preserve cells added by a live recorder while the historical
+        // projection yielded between chunks. Account switches and resets
+        // increment the generation, so only same-projection additions merge.
+        for (const [cellId, current] of get().cells) {
+          const historical = cells.get(cellId);
+          cells.set(cellId, historical ? {
+            first: Math.min(historical.first, current.first),
+            last: Math.max(historical.last, current.last),
+            count: Math.max(historical.count, current.count),
+          } : current);
+        }
         // Done — commit cells + clear in-progress flag.
         set({ cells, cellVersion: get().cellVersion + 1 });
         markH3SuccessAndClear();
@@ -288,6 +304,7 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
   },
 
   replaceCells: (cells) => {
+    projectionGeneration += 1;
     set({ cells, cellVersion: get().cellVersion + 1, hydrated: true });
   },
 
@@ -300,6 +317,7 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
    */
   bulkImportSync: (points) => {
     if (points.length === 0) return;
+    projectionGeneration += 1;
     const h3 = getH3();
     if (!h3) return;
     const cells = new Map(get().cells);
@@ -326,6 +344,7 @@ export const useH3VisitedStore = create<H3VisitedState>((set, get) => ({
   },
 
   clear: () => {
+    projectionGeneration += 1;
     set({ cells: new Map(), cellVersion: get().cellVersion + 1, hydrated: false });
   },
 }));

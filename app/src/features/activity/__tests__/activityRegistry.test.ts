@@ -16,7 +16,9 @@ import {
   getUnfinishedActivity,
   isActivityTombstoned,
   mapActivityServerId,
+  reconcileStartConflict,
   registerUnfinishedActivity,
+  replaceUnfinishedActivityQueue,
   removeAcknowledgedActivity,
   tombstoneActivity,
   updateUnfinishedActivity,
@@ -128,6 +130,55 @@ describe('bounded durable Activity registry', () => {
     });
   });
 
+  test('Start conflict cannot resurrect a completed pending Activity as unfinished', async () => {
+    const speculative = '46464646-4646-4646-8646-464646464646';
+    const completed = '47474747-4747-4747-8747-474747474747';
+    await completeActivity({
+      clientActivityId: completed,
+      serverActivityId: null,
+      userId: 'user-start-conflict',
+      activityMode: 'hiking',
+      startedAt: 100,
+      endedAt: 200,
+      lifecycle: 'completed_local',
+      syncState: 'sync_error',
+    });
+    await registerUnfinishedActivity(unfinished('user-start-conflict', speculative, 'running'));
+
+    await expect(reconcileStartConflict(
+      'user-start-conflict',
+      speculative,
+      { ...unfinished('user-start-conflict', completed), serverActivityId: 2097 },
+    )).resolves.toBe('completed-local');
+
+    const registry = await getActivityRegistry('user-start-conflict');
+    expect(registry.unfinished).toBeNull();
+    expect(registry.completed).toEqual([
+      expect.objectContaining({
+        clientActivityId: completed,
+        serverActivityId: 2097,
+        lifecycle: 'completed_local',
+        syncState: 'sync_error',
+      }),
+    ]);
+  });
+
+  test('Start conflict only exposes a genuinely unfinished server Activity to recovery', async () => {
+    const speculative = '48484848-4848-4848-8848-484848484848';
+    const existing = '49494949-4949-4949-8949-494949494949';
+    await registerUnfinishedActivity(unfinished('user-real-unfinished', speculative, 'running'));
+    await expect(reconcileStartConflict(
+      'user-real-unfinished',
+      speculative,
+      { ...unfinished('user-real-unfinished', existing), serverActivityId: 83 },
+    )).resolves.toBe('recoverable-unfinished');
+    expect(await getUnfinishedActivity('user-real-unfinished')).toMatchObject({
+      clientActivityId: existing,
+      serverActivityId: 83,
+      lifecycle: 'unfinished',
+    });
+  });
+
   test('ack mapping persists before per-entity cleanup and does not affect another pending Activity', async () => {
     const a = '55555555-5555-4555-8555-555555555555';
     const b = '66666666-6666-4666-8666-666666666666';
@@ -167,5 +218,60 @@ describe('bounded durable Activity registry', () => {
     await registerUnfinishedActivity(unfinished('account-a', id));
     expect(await getUnfinishedActivity('account-b')).toBeNull();
     expect((await getUnfinishedActivity('account-a'))?.clientActivityId).toBe(id);
+  });
+
+  test('preserves multiple exact unfinished identities and promotes them one at a time', async () => {
+    const speculative = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const first = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const second = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    await registerUnfinishedActivity(unfinished('user-queue', speculative));
+    await expect(replaceUnfinishedActivityQueue('user-queue', speculative, [
+      { ...unfinished('user-queue', first, 'running'), serverActivityId: 2098 },
+      { ...unfinished('user-queue', second, 'hiking'), serverActivityId: 2097 },
+    ])).resolves.toBe(true);
+
+    let registry = await getActivityRegistry('user-queue');
+    expect(registry.unfinished?.clientActivityId).toBe(first);
+    expect(registry.recoveryQueue.map(item => item.clientActivityId)).toEqual([second]);
+
+    await tombstoneActivity({ userId: 'user-queue', clientActivityId: first, serverActivityId: 2098 });
+    registry = await getActivityRegistry('user-queue');
+    expect(registry.unfinished?.clientActivityId).toBe(second);
+    expect(registry.recoveryQueue).toEqual([]);
+    expect(registry.tombstones).toEqual([
+      expect.objectContaining({ clientActivityId: first, serverActivityId: 2098 }),
+    ]);
+  });
+
+  test('corrupt registry fails closed and a mutation cannot overwrite its raw identity evidence', async () => {
+    const key = '@cairn:activity_registry:v1:user-corrupt';
+    const raw = '{"version":1,"unfinished":';
+    mockMemory.set(key, raw);
+
+    await expect(getActivityRegistry('user-corrupt')).rejects.toThrow('activity_registry_corrupt');
+    await expect(registerUnfinishedActivity(unfinished(
+      'user-corrupt',
+      '99999999-9999-4999-8999-999999999999',
+    ))).rejects.toThrow('activity_registry_corrupt');
+    expect(mockMemory.get(key)).toBe(raw);
+  });
+
+  test('an owner-scoped key containing another owner fails closed without rewriting evidence', async () => {
+    const key = '@cairn:activity_registry:v1:account-a';
+    const raw = JSON.stringify({
+      version: 1,
+      unfinished: unfinished('account-b', 'abababab-abab-4bab-8bab-abababababab'),
+      recoveryQueue: [],
+      completed: [],
+      tombstones: [],
+    });
+    mockMemory.set(key, raw);
+
+    await expect(getActivityRegistry('account-a')).rejects.toThrow('activity_registry_corrupt');
+    await expect(registerUnfinishedActivity(unfinished(
+      'account-a',
+      'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd',
+    ))).rejects.toThrow('activity_registry_corrupt');
+    expect(mockMemory.get(key)).toBe(raw);
   });
 });

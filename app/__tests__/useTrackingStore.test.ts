@@ -5,6 +5,7 @@
 
 const mockLocation = {
   Accuracy: { BestForNavigation: 6, Balanced: 3 },
+  ActivityType: { Fitness: 3 },
   requestForegroundPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
   requestBackgroundPermissionsAsync: jest.fn(async () => ({ status: 'denied' })),
   getBackgroundPermissionsAsync: jest.fn(async () => ({ status: 'denied' })),
@@ -28,6 +29,11 @@ jest.mock('expo-secure-store', () => ({ __esModule: true, ...mockSecureStore, de
 
 jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
+  Alert: {
+    alert: jest.fn((_title: string, _message: string, buttons?: Array<{ onPress?: () => void }>) => {
+      buttons?.[0]?.onPress?.();
+    }),
+  },
   AppState: {
     addEventListener: jest.fn((_event: string, listener: (state: string) => void) => {
       mockAppStateChangeListener = listener;
@@ -88,6 +94,9 @@ jest.mock('../src/services/hikeTrackWriter', () => ({
   appendHikePoint: jest.fn(async () => {}),
   startHikeTrack: jest.fn(async () => {}),
   updateHikeMeta: jest.fn(async () => {}),
+  updateHikeMetaStrict: jest.fn(async () => {}),
+  sealHikeTrackForFinish: jest.fn(async () => {}),
+  releaseHikeTrackFinishSeal: jest.fn(async () => true),
   flushNow: jest.fn(async () => {}),
   renameToCompleted: jest.fn(async () => {}),
   discardActiveHike: jest.fn(async () => {}),
@@ -95,13 +104,18 @@ jest.mock('../src/services/hikeTrackWriter', () => ({
   truncateActiveHikeTrack: jest.fn(async () => {}),
 }));
 jest.mock('../src/services/pendingSyncStore', () => ({
+  beginPendingPreparation: jest.fn(),
+  finishPendingPreparation: jest.fn(),
+  readPendingReadonly: jest.fn(async () => null),
   savePending: jest.fn(async () => undefined),
   removePending: jest.fn(async () => undefined),
 }));
 jest.mock('../src/features/memory/services/recordMemoryEvidence', () => ({
   recordMemoryEvidence: jest.fn(async () => ({ committed: true, deduplicated: false })),
+  flushRecordedMemoryEvidence: jest.fn(async () => undefined),
 }));
 jest.mock('../src/features/activity/activityRegistry', () => ({
+  getActivityRegistry: jest.fn(async () => ({ version: 1, unfinished: null, completed: [], tombstones: [] })),
   getUnfinishedActivity: jest.fn(async () => null),
   registerUnfinishedActivity: jest.fn(async () => {}),
   updateUnfinishedActivity: jest.fn(async () => true),
@@ -918,6 +932,78 @@ describe('useTrackingStore — P0 operation guards', () => {
     expect(mockLocation.watchPositionAsync).toHaveBeenCalledTimes(callsAfterStart);
   });
 
+  it('FOREGROUND_TAKEOVER_LIVENESS: starts the watcher before a slow full-journal replay', async () => {
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.hasStartedLocationUpdatesAsync
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    const started = useTrackingStore.getState();
+    expect(started).toMatchObject({
+      status: 'tracking',
+      locationProviderSource: 'real',
+      backgroundLocationPermission: 'granted',
+    });
+    const clientActivityId = String(started.sessionId);
+    const ownerGeneration = String(started.liveOwnerGeneration);
+    const segmentId = String(started.currentSegmentId);
+    const prefix = {
+      lat: -41,
+      lng: 174,
+      t: 1_000,
+      source: 'foreground' as const,
+      clientActivityId,
+      ownerGeneration,
+      segmentId,
+      segmentStartReason: 'start' as const,
+    };
+    useTrackingStore.setState({
+      trackPoints: [prefix],
+      trackPointsSmoothed: [prefix],
+      trackPointsRaw: [prefix],
+    });
+
+    require('react-native').AppState.currentState = 'background';
+    mockAppStateChangeListener?.('background');
+    for (let tick = 0; tick < 30 && mockLocation.startLocationUpdatesAsync.mock.calls.length === 0; tick += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(mockLocation.getBackgroundPermissionsAsync.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(mockLocation.hasStartedLocationUpdatesAsync).toHaveBeenCalled();
+    expect(mockLocation.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+
+    const { readActiveHikeTail } = require('../src/services/hikeTrackWriter');
+    let releaseJournal: ((points: any[]) => void) | undefined;
+    readActiveHikeTail.mockImplementationOnce(() => new Promise<any[]>(resolve => {
+      releaseJournal = resolve;
+    }));
+    const watcherCallsBeforeForeground = mockLocation.watchPositionAsync.mock.calls.length;
+    require('react-native').AppState.currentState = 'active';
+    mockAppStateChangeListener?.('active');
+    for (let tick = 0; tick < 30
+      && mockLocation.watchPositionAsync.mock.calls.length === watcherCallsBeforeForeground; tick += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
+    expect(mockLocation.watchPositionAsync.mock.calls.length).toBe(watcherCallsBeforeForeground + 1);
+    expect(releaseJournal).toBeDefined();
+    expect(useTrackingStore.getState().trackPoints).toHaveLength(1);
+
+    releaseJournal?.([prefix, {
+      ...prefix,
+      lat: -40.9998,
+      t: 2_000,
+      source: 'background',
+      segmentStartReason: undefined,
+    }]);
+    for (let tick = 0; tick < 30 && useTrackingStore.getState().trackPoints.length < 2; tick += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(useTrackingStore.getState().trackPoints.map((point: any) => point.t)).toEqual([1_000, 2_000]);
+  });
+
   it('locks synchronously during a real start and rolls back a failed location dependency', async () => {
     let resolvePermission: ((value: { status: string }) => void) | undefined;
     mockLocation.requestForegroundPermissionsAsync.mockImplementationOnce(
@@ -976,31 +1062,46 @@ describe('useTrackingStore — P0 operation guards', () => {
       ownerUserId: 'tracking-test-user',
       remoteSessionId: 44,
       startedAt: 1,
-      distanceM: 0,
-      trackPoints: [],
+      distanceM: 35,
+      trackPoints: [
+        {
+          lat: -41, lng: 174, t: 1_000, source,
+          clientActivityId: 'finish-fence-activity',
+          ownerGeneration: 'finish-fence-generation',
+          segmentId: 'finish-fence-segment',
+        },
+        {
+          lat: -41.0003, lng: 174, t: 1_500, source,
+          clientActivityId: 'finish-fence-activity',
+          ownerGeneration: 'finish-fence-generation',
+          segmentId: 'finish-fence-segment',
+        },
+      ],
       liveOwnerGeneration: 'finish-fence-generation',
       liveOwnerAcceptAfterMs: 1,
       currentSegmentId: 'finish-fence-segment',
     });
 
     const finishing = useTrackingStore.getState().stopTracking();
-    expect(useTrackingStore.getState().isFinishing).toBe(true);
-    await useTrackingStore.getState().addTrackPoint({
-      lat: -41,
-      lng: 174,
-      source,
-      clientActivityId: 'finish-fence-activity',
-      ownerGeneration: 'finish-fence-generation',
-    }, 2_000);
-    expect(useTrackingStore.getState().trackPoints).toHaveLength(0);
-    // stopTracking establishes the in-memory fence synchronously, then awaits
-    // an earlier lifecycle write before reaching the durable native fence.
-    // Wait for that mocked promise to exist instead of racing microtask order.
-    for (let tick = 0; tick < 20 && !releaseFence; tick += 1) {
-      await new Promise(resolve => setTimeout(resolve, 0));
+    try {
+      expect(useTrackingStore.getState().isFinishing).toBe(true);
+      await useTrackingStore.getState().addTrackPoint({
+        lat: -41.0004,
+        lng: 174,
+        source,
+        clientActivityId: 'finish-fence-activity',
+        ownerGeneration: 'finish-fence-generation',
+      }, 2_000);
+      expect(useTrackingStore.getState().trackPoints).toHaveLength(2);
+      // stopTracking establishes the in-memory fence synchronously, then awaits
+      // an earlier lifecycle write before reaching the durable native fence.
+      for (let tick = 0; tick < 20 && !releaseFence; tick += 1) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+      expect(releaseFence).toBeDefined();
+    } finally {
+      releaseFence?.(true);
     }
-    expect(releaseFence).toBeDefined();
-    releaseFence?.(true);
     await expect(finishing).resolves.toBe(false);
   });
 
@@ -1024,6 +1125,38 @@ describe('useTrackingStore — P0 operation guards', () => {
       startError: 'initialization-failed',
     });
     expect(persistBackgroundContext).toHaveBeenLastCalledWith(null, false);
+  });
+
+  it('failed owner-generation persistence cannot activate a resumed provider', async () => {
+    const { persistBackgroundContext } = require('../src/services/backgroundLocationTask');
+    const { updateHikeMetaStrict } = require('../src/services/hikeTrackWriter');
+    updateHikeMetaStrict.mockRejectedValueOnce(new Error('meta-write-failed'));
+    useTrackingStore.setState({
+      status: 'paused',
+      transitionState: 'idle',
+      sessionId: 'resume-meta-failure',
+      ownerUserId: 'tracking-test-user',
+      startedAt: 1,
+      activityMode: 'running',
+      liveOwnerGeneration: 'old-generation',
+      liveOwnerAcceptAfterMs: 1,
+      currentSegmentId: 'old-segment',
+    });
+
+    await expect(useTrackingStore.getState().resumeTracking()).resolves.toBe(false);
+    expect(updateHikeMetaStrict).toHaveBeenCalledWith(
+      'resume-meta-failure',
+      { owner_generation: expect.any(String) },
+    );
+    expect(mockLocation.watchPositionAsync).not.toHaveBeenCalled();
+    expect(mockLocation.startLocationUpdatesAsync).not.toHaveBeenCalled();
+    expect(persistBackgroundContext).toHaveBeenLastCalledWith(null, false);
+    expect(useTrackingStore.getState()).toMatchObject({
+      status: 'paused',
+      transitionState: 'idle',
+      locationAvailable: false,
+      startError: 'initialization-failed',
+    });
   });
 
   it('coalesces five rapid Resume taps into one truthful source transition', async () => {

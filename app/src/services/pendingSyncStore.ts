@@ -35,6 +35,16 @@ function breadcrumb(msg: string): void {
 
 export interface PendingHike {
   contractVersion?: 2 | 3;
+  /**
+   * A Finish operation first commits a conservative Base artifact, then may
+   * replace it with a refined Final artifact. The sync daemon must never send
+   * that Base payload while the same idempotency key is still being prepared.
+   * Legacy rows have no preparation owner and are therefore treated as ready.
+   */
+  uploadState?: 'preparing' | 'ready';
+  /** Crash-recovery checkpoint for the local Finish transaction. Upload is
+   * permitted only after the Activity list and lifecycle registry exist. */
+  preparationPhase?: 'payload_committed' | 'session_committed' | 'registry_committed';
   localId: string;                 // uuid, hike 结束时生成
   userId: string;                  // 归属用户
   remoteId: number | null;         // 若 hike 开始时也离线, POST /sessions/start 未成 → null
@@ -85,6 +95,13 @@ export interface PendingHike {
   createdAt: number;
   lastAttemptAt: number | null;
   attemptCount: number;
+  /** Durable retry classification. Timer-driven retries are limited to
+   * retryable transport/server outcomes; auth, validation and identity
+   * failures remain visible without creating a background retry storm. */
+  failureKind?: 'retryable' | 'auth_required' | 'action_required' | 'dependency';
+  failureStatus?: number | null;
+  failureCode?: string | null;
+  failureMessage?: string | null;
   /** Complete local Detail projection committed with the sync payload. */
   summary?: {
     startedAt: number;
@@ -94,6 +111,14 @@ export interface PendingHike {
     elevationGainM: number;
     name: string;
     markerIds: string[];
+  };
+  /** Pointer/hash contract for the separately verified local Final artifact. */
+  finalArtifact?: {
+    revision: number;
+    displayFingerprint: string;
+    canonicalFingerprint: string;
+    source: 'base' | 'matched' | 'hybrid' | 'limited' | 'server-restored';
+    algorithmVersion: 'pedestrian-final-v2-base';
   };
 }
 
@@ -202,6 +227,21 @@ interface PendingEnvelope {
 }
 
 let mutationTail: Promise<void> = Promise.resolve();
+const activePreparations = new Set<string>();
+
+/** Process-local half of the Finish preparation fence. */
+export function beginPendingPreparation(localId: string): void {
+  if (localId) activePreparations.add(localId);
+}
+
+/** Release only after the refined payload and all local completion state exist. */
+export function finishPendingPreparation(localId: string): void {
+  activePreparations.delete(localId);
+}
+
+export function isPendingPreparationActive(localId: string): boolean {
+  return activePreparations.has(localId);
+}
 async function withMutation<T>(operation: () => Promise<T>): Promise<T> {
   const prior = mutationTail.catch(() => undefined);
   let release: () => void = () => undefined;
@@ -298,7 +338,11 @@ async function readBest(fs: any, basePath: string): Promise<{ hike: PendingHike;
 }
 
 async function writeVerified(fs: any, basePath: string, hike: PendingHike, generation: number): Promise<void> {
-  const payload = { ...hike, contractVersion: 3 as const };
+  const payload = {
+    ...hike,
+    contractVersion: 3 as const,
+    uploadState: hike.uploadState ?? 'ready' as const,
+  };
   const encodedPayload = JSON.stringify(payload);
   const encodedEnvelope = JSON.stringify({
     format: 'cairn-pending-activity',
@@ -333,12 +377,59 @@ export async function savePending(hike: PendingHike): Promise<void> {
     await ensureDir(fs);
     const basePath = basePathFor(fs, hike.localId);
     const prior = await readBest(fs, basePath);
-    const merged = !hike.summary && prior?.hike.summary
-      ? { ...hike, summary: prior.hike.summary }
-      : hike;
+    const merged = prior ? {
+      ...hike,
+      uploadState: hike.uploadState ?? prior.hike.uploadState ?? 'ready',
+      preparationPhase: hike.preparationPhase ?? prior.hike.preparationPhase,
+      createdAt: prior.hike.createdAt,
+      startedAt: hike.startedAt ?? prior.hike.startedAt,
+      summary: hike.summary ?? prior.hike.summary,
+      finalArtifact: hike.finalArtifact ?? prior.hike.finalArtifact,
+      lastAttemptAt: hike.lastAttemptAt ?? prior.hike.lastAttemptAt,
+      attemptCount: Math.max(hike.attemptCount ?? 0, prior.hike.attemptCount ?? 0),
+    } : hike;
     await writeVerified(fs, basePath, merged, (prior?.generation ?? 0) + 1);
   });
   breadcrumb(`pendingSync:save localId=${hike.localId} remoteId=${hike.remoteId ?? 'null'} pts=${hike.payload?.route_points?.length ?? 0}`);
+}
+
+/**
+ * Make a pending payload eligible for upload. Losing a process-local writer
+ * lease is not proof that the Activity list and lifecycle registry committed.
+ * Only the explicit registry checkpoint can promote without rebuilding those
+ * projections first.
+ */
+export async function ensurePendingUploadReady(hike: PendingHike): Promise<boolean> {
+  if (hike.uploadState !== 'preparing') return true;
+  if (isPendingPreparationActive(hike.localId)) return false;
+  if (hike.preparationPhase !== 'registry_committed') return false;
+  await mutatePending(hike.localId, (pending) => {
+    pending.uploadState = 'ready';
+  });
+  hike.uploadState = 'ready';
+  breadcrumb(`pendingSync:recover_preparing localId=${hike.localId}`);
+  return true;
+}
+
+export async function markPendingPreparationPhase(
+  localId: string,
+  preparationPhase: NonNullable<PendingHike['preparationPhase']>,
+): Promise<void> {
+  await mutatePending(localId, (hike) => {
+    const rank = { payload_committed: 1, session_committed: 2, registry_committed: 3 } as const;
+    if (!hike.preparationPhase || rank[preparationPhase] > rank[hike.preparationPhase]) {
+      hike.preparationPhase = preparationPhase;
+    }
+  });
+  breadcrumb(`pendingSync:phase localId=${localId} phase=${preparationPhase}`);
+}
+
+export async function markPendingUploadReady(localId: string): Promise<void> {
+  await mutatePending(localId, (hike) => {
+    hike.preparationPhase = 'registry_committed';
+    hike.uploadState = 'ready';
+  });
+  breadcrumb(`pendingSync:ready localId=${localId}`);
 }
 
 export async function listPending(): Promise<PendingHike[]> {
@@ -422,18 +513,33 @@ async function mutatePending(localId: string, mutation: (hike: PendingHike) => v
   });
 }
 
-export async function markAttempt(localId: string): Promise<void> {
+export async function markAttempt(localId: string, failure: {
+  kind?: PendingHike['failureKind'];
+  status?: number | null;
+  code?: string | null;
+  message?: string | null;
+} = {}): Promise<void> {
   let attempts = 0;
   await mutatePending(localId, (hike) => {
     hike.lastAttemptAt = Date.now();
     hike.attemptCount = (hike.attemptCount || 0) + 1;
+    hike.failureKind = failure.kind ?? 'retryable';
+    hike.failureStatus = failure.status ?? null;
+    hike.failureCode = failure.code ?? null;
+    hike.failureMessage = failure.message?.slice(0, 240) ?? null;
     attempts = hike.attemptCount;
   });
-  breadcrumb(`pendingSync:attempt localId=${localId} n=${attempts}`);
+  breadcrumb(`pendingSync:attempt localId=${localId} n=${attempts} kind=${failure.kind ?? 'retryable'}`);
 }
 
 export async function updateRemoteId(localId: string, remoteId: number | null): Promise<void> {
-  await mutatePending(localId, (hike) => { hike.remoteId = remoteId; });
+  await mutatePending(localId, (hike) => {
+    hike.remoteId = remoteId;
+    hike.failureKind = undefined;
+    hike.failureStatus = undefined;
+    hike.failureCode = undefined;
+    hike.failureMessage = undefined;
+  });
   breadcrumb(`pendingSync:updateRemoteId localId=${localId} remoteId=${remoteId ?? 'null'}`);
 }
 

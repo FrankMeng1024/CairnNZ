@@ -14,7 +14,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated, Easing, ScrollView,
-  Platform, TextInput, KeyboardAvoidingView, Keyboard, Linking, Alert,
+  Linking, Alert,
 } from 'react-native';
 import { haptic } from '../services/hapticService';
 import { uuidv4 } from '../services/offlineQueue';
@@ -23,6 +23,7 @@ import { useNavigation, useRoute, useFocusEffect, useIsFocused, CommonActions } 
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useTrackingStore } from '../store/useTrackingStore';
+import { useSessionStore } from '../store/useSessionStore';
 import { useAppStore } from '../store/useAppStore';
 import { useRouteStore } from '../store/useRouteStore';
 import { routeMatchesIdentity } from '../features/route/routeContracts';
@@ -78,12 +79,14 @@ import {
   ActivityRecenterButton,
   ActivityStartDock,
   ActivityTopChrome,
+  activityStartErrorMessage,
   type ActivityNoticePresentation,
   type ActivityStatusTone,
 } from '../components/activity/ActivityRecordingChrome';
 import { ActivityOwnershipGuard } from '../components/activity/ActivityOwnershipGuard';
 import { resolveActivityScreenOwnership } from '../features/activity/activityScreenOwnership';
 import { PublicWalkingDiscoveryCard } from '../features/public/components/PublicWalkingDiscoveryCard';
+import { StopSummarySheet, type StopSummary } from './StopSummarySheet';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -121,6 +124,7 @@ export function RunningScreen() {
   const nav = useNavigation<Nav>();
   const entryRoute = useRoute<any>();
   const requestedRouteId = entryRoute.params?.routeId as string | undefined;
+  const requestedRecoveryId = entryRoute.params?.recoverClientActivityId as string | undefined;
   const sharedRouteLease = entryRoute.params?.sharedRouteLease as any;
   const sharedRouteKey = sharedRouteLease ? `shared:${sharedRouteLease.leaseId}` : null;
   const isFocused = useIsFocused();
@@ -133,6 +137,12 @@ export function RunningScreen() {
   const clearActivityRouteReference = useRouteStore(s => s.clearActivityRouteReference);
   const [unfinishedRun, setUnfinishedRun] = useState<RecoverableActivity | null>(null);
   const [unfinishedResolutionRequested, setUnfinishedResolutionRequested] = useState(false);
+  const recoveryLookupGenerationRef = useRef(0);
+  useEffect(() => {
+    recoveryLookupGenerationRef.current += 1;
+    setUnfinishedRun(null);
+    setUnfinishedResolutionRequested(false);
+  }, [simulatorOwnerUserId]);
   // R21 (2026-08-18): dark theme parity with Hiking. Run tray + top pills
   // + Recenter FAB honour Settings Appearance so day/night reads the same.
   const runTheme = useVisualTheme();
@@ -212,12 +222,9 @@ export function RunningScreen() {
   // session name, then triggers handleStop(name) which calls stopTracking
   // and transitions to R4.
   const [showSaveSheet, setShowSaveSheet] = useState(false);
-  const [pendingName, setPendingName] = useState('');
-  /** Finish confirmation is transactional: opening it never changes the
-   * recording lifecycle; Cancel therefore preserves this exact state. */
-  const finishLifecycleBeforeSheet = useRef<'tracking' | 'paused' | null>(null);
-  const saveSheetSlide = useRef(new Animated.Value(300)).current;
-  const saveSheetOpacity = useRef(new Animated.Value(0)).current;
+  const [runStopSummary, setRunStopSummary] = useState<StopSummary | null>(null);
+  const [committedRunActivityId, setCommittedRunActivityId] = useState<string | null>(null);
+  const [savingRun, setSavingRun] = useState(false);
 
   // Real tracking store
   const status = useTrackingStore(s => s.status);
@@ -240,6 +247,9 @@ export function RunningScreen() {
   const startError = useTrackingStore(s => s.startError);
   const durationS = useTrackingStore(s => s.durationS);
   const distanceM = useTrackingStore(s => s.distanceM);
+  const elevationGainM = useTrackingStore(s => s.elevationGainM);
+  const startedAt = useTrackingStore(s => s.startedAt);
+  const savingHikeStep = useTrackingStore(s => s.savingHikeStep);
   const locationAvailable = useTrackingStore(s => s.locationAvailable);
   const lastCoordinate = useTrackingStore(s => s.lastCoordinate);
   const latestSourceLocationTime = useTrackingStore(s => s.latestSourceLocationTime);
@@ -283,6 +293,20 @@ export function RunningScreen() {
   // O18 RUN-02: signal-lost detection (parity with Hiking §566).
   const trackPoints = useTrackingStore(s => s.trackPoints);
   const trackPointsSmoothed = useTrackingStore(s => s.trackPointsSmoothed);
+  const runStopSummaryPresentation = runStopSummary
+    ? (committedRunActivityId ? runStopSummary : {
+        ...runStopSummary,
+        distanceM,
+        durationS,
+        elevationGainM,
+        startedAt: startedAt ?? runStopSummary.startedAt,
+        trackPoints: trackPoints.map(point => ({
+          lat: point.lat,
+          lng: point.lng,
+          segmentId: point.segmentId,
+        })),
+      })
+    : null;
   const liveTrackPoints = locationProviderSource === 'real'
     || (locationProviderSource === 'simulator' && simulatorObservationMode === 'raw-gps')
     ? trackPointsSmoothed
@@ -334,12 +358,22 @@ export function RunningScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (useTrackingStore.getState().status !== 'idle') return undefined;
+      const requestedOwner = String(simulatorOwnerUserId ?? '');
+      if (!requestedOwner) return undefined;
       let cancelled = false;
-      void findRecoverableActivity('running').then(activity => {
-        if (!cancelled) setUnfinishedRun(activity);
-      });
+      const lookupGeneration = ++recoveryLookupGenerationRef.current;
+      const requested = requestedRecoveryId
+        ? { clientActivityId: requestedRecoveryId, userId: requestedOwner }
+        : 'running' as const;
+      void findRecoverableActivity(requested).then(activity => {
+        if (cancelled
+          || lookupGeneration !== recoveryLookupGenerationRef.current
+          || String(useAppStore.getState().user?.id ?? '') !== requestedOwner) return;
+        setUnfinishedRun(activity);
+        if (requestedRecoveryId && activity) setUnfinishedResolutionRequested(true);
+      }).catch(() => undefined);
       return () => { cancelled = true; };
-    }, [status]),
+    }, [requestedRecoveryId, simulatorOwnerUserId, status]),
   );
   // Request foreground location permission on mount so the pre-start map's
   // UserLocation dot can render. If denied, dot is hidden but map still shows.
@@ -462,29 +496,31 @@ export function RunningScreen() {
   const openSaveSheet = () => {
     const current = useTrackingStore.getState();
     if (current.isFinishing) return;
-    finishLifecycleBeforeSheet.current = current.status === 'tracking' ? 'tracking' : 'paused';
     // Confirmation is not Pause. Recording, timing and location recovery keep
     // their existing truth until the user confirms Finish.
     if (!saveEligibility(current.trackPoints, current.distanceM).eligible) {
       setShowTooShortConfirmRun(true);
       return;
     }
-    setShowSaveSheet(true);
-    Animated.parallel([
-      Animated.timing(saveSheetSlide, { toValue: 0, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(saveSheetOpacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    ]).start();
-  };
-  const closeSaveSheet = (then?: () => void) => {
-    Keyboard.dismiss();
-    Animated.parallel([
-      Animated.timing(saveSheetSlide, { toValue: 300, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      Animated.timing(saveSheetOpacity, { toValue: 0, duration: 180, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-    ]).start(() => {
-      setShowSaveSheet(false);
-      finishLifecycleBeforeSheet.current = null;
-      then?.();
+    setCommittedRunActivityId(null);
+    setRunStopSummary({
+      distanceM: current.distanceM,
+      durationS: current.durationS,
+      elevationGainM: current.elevationGainM,
+      activityMode: 'running',
+      trackPoints: current.trackPoints.map(point => ({
+        lat: point.lat,
+        lng: point.lng,
+        segmentId: point.segmentId,
+      })),
+      startedAt: current.startedAt ?? Date.now(),
     });
+    setShowSaveSheet(true);
+  };
+  const closeSaveSheet = () => {
+    setShowSaveSheet(false);
+    setRunStopSummary(null);
+    setCommittedRunActivityId(null);
   };
 
   async function handleStart() {
@@ -529,7 +565,8 @@ export function RunningScreen() {
       clearActivityRouteReference();
       if (borrowedUse) await finalizeBorrowedRouteUse(borrowedUse, 'discarded').catch(() => {});
       const authoritative = await findRecoverableActivity('running');
-      if (authoritative) {
+      if (authoritative
+        && String(useAppStore.getState().user?.id ?? '') === authoritative.userId) {
         setUnfinishedRun(authoritative);
         setUnfinishedResolutionRequested(true);
       }
@@ -555,45 +592,38 @@ export function RunningScreen() {
     // 'View Activity' can navigate to MapHistory.
     const capturedId = useTrackingStore.getState().sessionId;
     const trimmed = name && name.trim().length > 0 ? name.trim() : undefined;
-    let detailOpenedFromBase = false;
-    const openCommittedDetail = (committedId: string) => {
-      if (!useAppStore.getState().isLoggedIn || detailOpenedFromBase) return;
-      detailOpenedFromBase = true;
-      setPendingName('');
-      nav.dispatch(
-        CommonActions.reset({
-          index: 2,
-          routes: [
-            { name: 'Home' },
-            { name: 'Routes', params: { initialTab: 'activities' } },
-            { name: 'MapHistory', params: { sessionId: committedId } },
-          ],
-        }),
-      );
-    };
-    const saved = await stopTracking(trimmed, openCommittedDetail);
-    if (detailOpenedFromBase) return;
+    setSavingRun(true);
+    let saved = false;
+    try {
+      saved = await stopTracking(trimmed);
+    } finally {
+      setSavingRun(false);
+    }
     const stillTracking = useTrackingStore.getState().status !== 'idle';
     const stopReason = useTrackingStore.getState().lastStopReason;
     if (saved && !stillTracking && capturedId) {
-      setPendingName('');
-      nav.dispatch(
-        CommonActions.reset({
-          index: 2,
-          routes: [
-            { name: 'Home' },
-            { name: 'Routes', params: { initialTab: 'activities' } },
-            { name: 'MapHistory', params: { sessionId: capturedId } },
-          ],
-        }),
-      );
+      const session = useSessionStore.getState().sessions.find(item => (
+        item.clientActivityId === capturedId || item.id === capturedId
+      ));
+      if (!session) return;
+      setCommittedRunActivityId(capturedId);
+      setRunStopSummary({
+        distanceM: session.distanceM,
+        durationS: session.durationS,
+        elevationGainM: session.elevationGainM,
+        activityMode: session.activityMode,
+        trackPoints: session.trackPoints.map(point => ({
+          lat: point.lat,
+          lng: point.lng,
+          segmentId: point.segmentId,
+        })),
+        startedAt: session.startedAt,
+      });
     } else if (stopReason !== 'too-short') {
-      // Stop refused for a reason other than too-short (rare — e.g. already
-      // idle). Also clear pendingName so the sheet doesn't retain stale data.
-      setPendingName('');
+      closeSaveSheet();
+    } else {
+      closeSaveSheet();
     }
-    // else: too-short — keep pendingName; TooShortSheet.onDiscard will
-    // discard the session and transition to R4 without needing the name.
   }
 
   // Plant a cairn at the user's current GPS position.
@@ -890,11 +920,7 @@ export function RunningScreen() {
             ? () => { void Linking.openSettings(); }
             : undefined}
           starting={operationalState === 'starting'}
-          startError={startError === 'permission-denied'
-            ? 'Location permission is needed to start.'
-            : startError
-              ? 'Couldn’t start GPS. Check location settings and try again.'
-              : null}
+          startError={activityStartErrorMessage(startError)}
         />
 
         {/* Route picker sheet */}
@@ -960,51 +986,56 @@ export function RunningScreen() {
           data={unfinishedRun}
           onContinue={async () => {
             const activity = unfinishedRun;
-            if (!activity) return;
+            if (!activity) return false;
             try {
               const restored = await restoreRecoverableActivity(activity);
-              if (!restored) crashLogger.breadcrumb('running:recovery_not_restored');
-            } catch (error) {
-              crashLogger.breadcrumb(`running:recovery_failed ${String(error).slice(0, 80)}`);
-            } finally {
+              if (!restored) {
+                crashLogger.breadcrumb('running:recovery_not_restored');
+                return false;
+              }
               setUnfinishedResolutionRequested(false);
               setUnfinishedRun(null);
+              return true;
+            } catch (error) {
+              crashLogger.breadcrumb(`running:recovery_failed ${String(error).slice(0, 80)}`);
+              return false;
             }
           }}
           onSave={async () => {
             const activity = unfinishedRun;
-            if (!activity) return;
+            if (!activity) return false;
             try {
               const saved = await saveRecoverableActivity(activity);
-              if (saved) {
-                nav.dispatch(
-                  CommonActions.reset({
-                    index: 2,
-                    routes: [
-                      { name: 'Home' },
-                      { name: 'Routes', params: { initialTab: 'activities' } },
-                      { name: 'MapHistory', params: { sessionId: activity.clientActivityId } },
-                    ],
-                  }),
-                );
-              }
-            } catch (error) {
-              crashLogger.breadcrumb(`running:recovery_save_failed ${String(error).slice(0, 80)}`);
-            } finally {
+              if (!saved) return false;
               setUnfinishedResolutionRequested(false);
               setUnfinishedRun(null);
+              nav.dispatch(
+                CommonActions.reset({
+                  index: 2,
+                  routes: [
+                    { name: 'Home' },
+                    { name: 'Routes', params: { initialTab: 'activities' } },
+                    { name: 'MapHistory', params: { sessionId: activity.clientActivityId } },
+                  ],
+                }),
+              );
+              return true;
+            } catch (error) {
+              crashLogger.breadcrumb(`running:recovery_save_failed ${String(error).slice(0, 80)}`);
+              return false;
             }
           }}
           onDiscard={async () => {
             const activity = unfinishedRun;
-            if (!activity) return;
+            if (!activity) return false;
             try {
               await discardRecoverableActivity(activity);
-            } catch (error) {
-              crashLogger.breadcrumb(`running:recovery_discard_failed ${String(error).slice(0, 80)}`);
-            } finally {
               setUnfinishedResolutionRequested(false);
               setUnfinishedRun(null);
+              return true;
+            } catch (error) {
+              crashLogger.breadcrumb(`running:recovery_discard_failed ${String(error).slice(0, 80)}`);
+              return false;
             }
           }}
         />
@@ -1086,70 +1117,40 @@ export function RunningScreen() {
         />
       ) : null}
 
-      {/* Save-name sheet — lightweight local sheet (name input + Save +
-          Cancel). Opens on Done tap; Save triggers handleStop(name) which
-          persists the session and transitions this screen to R4. */}
-      {showSaveSheet && (
-        <Animated.View
-          style={[runStyles.saveSheetBackdrop, { opacity: saveSheetOpacity }]}
-          pointerEvents="auto"
-        >
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={() => closeSaveSheet()}
-          />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ width: '100%' }}
-          >
-            <Animated.View
-              style={[runStyles.saveSheet, { backgroundColor: runTheme.surfaceElevated, borderTopColor: runTheme.border, transform: [{ translateY: saveSheetSlide }] }]}
-            >
-              <View style={[runStyles.saveSheetHandle, { backgroundColor: runTheme.border }]} />
-              <Text style={[runStyles.saveSheetTitle, { color: runTheme.foreground }]}>Finish run</Text>
-              <Text style={[runStyles.saveSheetLabel, { color: runTheme.foregroundSecondary }]}>Name this run (optional)</Text>
-              <TextInput
-                style={[runStyles.saveSheetInput, { backgroundColor: runTheme.surface, borderColor: runTheme.border, color: runTheme.foreground }]}
-                placeholder="Morning Run"
-                placeholderTextColor={runTheme.muted}
-                value={pendingName}
-                onChangeText={(t) => setPendingName(t.slice(0, 60))}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={() => {
-                  // Fix 1: do NOT clear pendingName here — handleStop clears
-                  // it after a successful (non-too-short) stop. Keeping it
-                  // preserves the user's chosen name across a too-short
-                  // TooShortSheet resolution.
-                  const name = pendingName;
-                  closeSaveSheet(() => { void handleStop(name); });
-                }}
-              />
-              <TouchableOpacity
-                style={[runStyles.saveSheetBtn, { backgroundColor: runTheme.primary }]}
-                onPress={() => {
-                  const name = pendingName;
-                  closeSaveSheet(() => { void handleStop(name); });
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Finish run and view activity"
-                activeOpacity={0.9}
-              >
-                <Text style={[runStyles.saveSheetBtnText, { color: runTheme.onPrimary }]}>Finish &amp; view activity</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={runStyles.saveSheetCancel}
-                onPress={() => closeSaveSheet()}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel and keep running"
-              >
-                <Text style={[runStyles.saveSheetCancelText, { color: runTheme.foregroundSecondary }]}>Cancel</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </KeyboardAvoidingView>
-        </Animated.View>
-      )}
+      {showSaveSheet && runStopSummaryPresentation ? (
+        <StopSummarySheet
+          summary={runStopSummaryPresentation}
+          saving={savingRun}
+          savingStep={savingHikeStep}
+          committed={Boolean(committedRunActivityId)}
+          onCancel={() => {
+            if (committedRunActivityId) {
+              closeSaveSheet();
+              nav.dispatch(CommonActions.reset({
+                index: 1,
+                routes: [
+                  { name: 'Home' },
+                  { name: 'Routes', params: { initialTab: 'activities' } },
+                ],
+              }));
+            } else {
+              closeSaveSheet();
+            }
+          }}
+          onConfirm={(name) => { void handleStop(name); }}
+          onViewActivity={() => {
+            if (!committedRunActivityId) return;
+            nav.dispatch(CommonActions.reset({
+              index: 2,
+              routes: [
+                { name: 'Home' },
+                { name: 'Routes', params: { initialTab: 'activities' } },
+                { name: 'MapHistory', params: { sessionId: committedRunActivityId } },
+              ],
+            }));
+          }}
+        />
+      ) : null}
 
       {/* v118: too-short modal — rendered at the running layer so it
           covers the lock + controls. Got it = continue tracking (state
@@ -1166,9 +1167,7 @@ export function RunningScreen() {
           setShowTooShortConfirmRun(false);
           clearLastStopReason();
           discardCurrentSession();
-          // Drop the SaveSheet name — this run is gone, and there is no
-          // false completion state for a discarded Activity.
-          setPendingName('');
+          closeSaveSheet();
         }}
       />
       {/* O18 ONB-04: permission-denied modal for Running. */}

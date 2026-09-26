@@ -44,7 +44,18 @@ export async function reconcileCompletedActivityIntent(
     trackPoints: trace,
     markerIds: [...(summary?.markerIds ?? [])],
     name: summary?.name ?? payload.name ?? undefined,
-    syncState: 'pending',
+    syncState: intent.failureKind && intent.failureKind !== 'retryable' ? 'sync_error' : 'pending',
+    syncFailureKind: intent.failureKind,
+    syncFailureStatus: intent.failureStatus,
+    syncFailureCode: intent.failureCode,
+    finalGeometryState: intent.finalArtifact?.source === 'matched'
+      ? 'enhanced'
+      : intent.finalArtifact?.source === 'hybrid' || intent.finalArtifact?.source === 'limited'
+        ? 'limited_evidence'
+        : 'base_ready',
+    finalGeometryVersion: intent.finalArtifact?.algorithmVersion,
+    finalGeometryRevision: intent.finalArtifact?.revision,
+    finalGeometryFingerprint: intent.finalArtifact?.displayFingerprint,
   };
 
   // Phase 2 is a complete durable Detail projection. If phase 3 fails, this

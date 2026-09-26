@@ -48,12 +48,11 @@ function distanceM(a: { lat: number; lng: number }, b: { lat: number; lng: numbe
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 
-async function readCache(): Promise<CountryCache | null> {
+async function readCache(): Promise<unknown | null> {
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as CountryCache;
-    return parsed;
+    return JSON.parse(raw) as unknown;
   } catch {
     return null;
   }
@@ -88,12 +87,37 @@ function englishOnlyName(name: string, countryCode: string): string {
 }
 
 /**
+ * Treat persisted reverse-geocoder output as untrusted input. Older builds
+ * wrote the device-localized locality directly, so every cache return path
+ * must pass through the same English-only boundary as a fresh lookup.
+ */
+export function normalizeCachedCountry(value: unknown): CountryCache | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<CountryCache>;
+  const countryCode = String(candidate.countryCode ?? '').trim().toUpperCase();
+  const countryName = englishOnlyName(String(candidate.countryName ?? ''), countryCode);
+  const lat = Number(candidate.lat);
+  const lng = Number(candidate.lng);
+  const resolvedAt = Number(candidate.resolvedAt);
+  if (!countryName
+    || !Number.isFinite(lat) || lat < -90 || lat > 90
+    || !Number.isFinite(lng) || lng < -180 || lng > 180
+    || !Number.isFinite(resolvedAt) || resolvedAt <= 0) return null;
+  return { countryName, countryCode, lat, lng, resolvedAt };
+}
+
+/**
  * Resolve current country. Returns null if we have neither a fresh cache
  * nor GPS permission. Never throws.
  */
 export async function resolveCurrentCountry(): Promise<CountryCache | null> {
   // Fastest path: fresh cache
-  const cached = await readCache();
+  const cachedRaw = await readCache();
+  const cached = normalizeCachedCountry(cachedRaw);
+  if (cached && JSON.stringify(cachedRaw) !== JSON.stringify(cached)) {
+    // Rewrite legacy locale-specific cache entries before any early return.
+    await writeCache(cached);
+  }
   const now = Date.now();
   if (cached && (now - cached.resolvedAt) < CACHE_TTL_MS) {
     // Attempt fresh coords to verify user hasn't crossed a border.

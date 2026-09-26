@@ -11,7 +11,7 @@
  * there is no raster transport, temporary URL, or screen-owned calculation.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
@@ -27,7 +27,7 @@ import differenceTurf from '@turf/difference';
 import intersectTurf from '@turf/intersect';
 import polygonSmoothTurf from '@turf/polygon-smooth';
 import unionTurf from '@turf/union';
-import { bboxPolygon, circle as circleTurf, polygon, multiPoint, multiPolygon, featureCollection } from '@turf/turf';
+import { bboxPolygon, polygon, multiPoint, multiPolygon, featureCollection } from '@turf/turf';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
 import {
   readFogDisplayCache,
@@ -42,8 +42,9 @@ interface Props {
    * from real GPS path data, not the empty world-rect placeholder). MemoryScreen
    * uses this as one of two gates for hiding the loading overlay.
    */
-  onFogReady?: () => void;
-  onFogUnavailable?: () => void;
+  onFogPreparing?: (readinessKey: string) => void;
+  onFogReady?: (readinessKey: string) => void;
+  onFogUnavailable?: (readinessKey: string) => void;
 }
 
 // Bug-6 fix: module-level cache so FogLayer unmount/remount (tab switch)
@@ -276,10 +277,19 @@ const DISPLAY_GROUP_TILE_SPAN = 1;
 // Twenty chords under-reveal a 30 m circle by at most ~0.37 m at an
 // edge midpoint while materially shortening foreground polygon work.
 const DISPLAY_CIRCLE_STEPS = 20;
-// A single footprint per Turf slice keeps GC-heavy low-power desktops below
-// the frozen foreground ceiling even when a dense tile's accumulated union is
-// under pressure. Total history still advances between event-loop yields.
-const DISPLAY_CIRCLE_CHUNK_SIZE = 1;
+const EARTH_RADIUS_M = 6_371_008.8;
+const DEGREES_TO_RADIANS = Math.PI / 180;
+const RADIANS_TO_DEGREES = 180 / Math.PI;
+const DISPLAY_CIRCLE_DISTANCE_RADIANS = CORRIDOR_WIDTH_M / EARTH_RADIUS_M;
+const DISPLAY_CIRCLE_BEARINGS = Array.from({ length: DISPLAY_CIRCLE_STEPS }, (_, index) => {
+  const bearing = index * -2 * Math.PI / DISPLAY_CIRCLE_STEPS;
+  return { sin: Math.sin(bearing), cos: Math.cos(bearing) };
+});
+// Merge four adjacent footprints before touching the accumulated tile. A
+// one-footprint chunk repeatedly re-polygonized the growing tile boundary and
+// produced 150+ ms late-tile slices at 10k points. Four keeps the input small
+// while reducing both union count and short-lived allocation pressure.
+const DISPLAY_CIRCLE_CHUNK_SIZE = 4;
 // A live append is already confined to a previously validated tile and only
 // contains new suffix points. Small four-point groups avoid timer overhead
 // while retaining the one-footprint cold-history safety bound.
@@ -331,16 +341,12 @@ function displayTilePolygon(x: number, y: number): Feature<Polygon> {
   return bboxPolygon([bounds.minLng, bounds.minLat, bounds.maxLng, bounds.maxLat]);
 }
 
-function clipCoverageCircleToDisplayTile(
-  circle: Feature<Polygon>,
-  tile: Feature<Polygon>,
+function clipCoverageRingToDisplayTile(
+  circleRing: Array<[number, number]>,
+  bounds: ReturnType<typeof displayTileBounds>,
 ): Feature<Polygon> | null {
-  const tileRing = tile.geometry.coordinates[0] as Array<[number, number]>;
-  const minLng = Math.min(...tileRing.map(([lng]) => lng));
-  const maxLng = Math.max(...tileRing.map(([lng]) => lng));
-  const minLat = Math.min(...tileRing.map(([, lat]) => lat));
-  const maxLat = Math.max(...tileRing.map(([, lat]) => lat));
-  let ring = (circle.geometry.coordinates[0] as Array<[number, number]>).slice(0, -1);
+  const { minLng, maxLng, minLat, maxLat } = bounds;
+  let ring = circleRing.slice(0, -1);
 
   const clip = (
     input: Array<[number, number]>,
@@ -445,19 +451,44 @@ function compareDisplayKeys(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function evidenceBoundedCoverageRing(point: { lat: number; lng: number }): Array<[number, number]> {
+  // This is Turf destination's spherical formula in one allocation-bounded
+  // loop. Calling the general-purpose Turf feature/invariant stack for every
+  // one of 20 vertices created enough short-lived objects for occasional
+  // >150 ms GC slices at 10k points. The radius and bearing order remain
+  // mathematically equivalent to Turf circle: every vertex is exactly
+  // 30 m from accepted evidence and the straight chords only under-reveal.
+  const latitude = point.lat * DEGREES_TO_RADIANS;
+  const longitude = point.lng * DEGREES_TO_RADIANS;
+  const sinLatitude = Math.sin(latitude);
+  const cosLatitude = Math.cos(latitude);
+  const sinDistance = Math.sin(DISPLAY_CIRCLE_DISTANCE_RADIANS);
+  const cosDistance = Math.cos(DISPLAY_CIRCLE_DISTANCE_RADIANS);
+  const coordinates: Array<[number, number]> = [];
+  for (const bearing of DISPLAY_CIRCLE_BEARINGS) {
+    const latitude2 = Math.asin(
+      sinLatitude * cosDistance + cosLatitude * sinDistance * bearing.cos,
+    );
+    const longitude2 = longitude + Math.atan2(
+      bearing.sin * sinDistance * cosLatitude,
+      cosDistance - sinLatitude * Math.sin(latitude2),
+    );
+    coordinates.push([
+      longitude2 * RADIANS_TO_DEGREES,
+      latitude2 * RADIANS_TO_DEGREES,
+    ]);
+  }
+  coordinates.push(coordinates[0]);
+  return coordinates;
+}
+
 export function evidenceBoundedCoverageCircle(point: { lat: number; lng: number }): Feature<Polygon> {
-  // Turf destination uses the same spherical ground-distance contract as the
-  // independent checks. Vertices are exactly 30 m from accepted evidence;
-  // straight chords between them can only under-reveal.
-  return circleTurf([point.lng, point.lat], CORRIDOR_WIDTH_M, {
-    units: 'meters',
-    steps: DISPLAY_CIRCLE_STEPS,
-  });
+  return polygon([evidenceBoundedCoverageRing(point)]);
 }
 
 async function buildClippedTileEvidence(
   points: Array<{ lat: number; lng: number }>,
-  tile: Feature<Polygon>,
+  tileBounds: ReturnType<typeof displayTileBounds>,
   shouldContinue: () => boolean,
   sliceDurationsMs: number[],
   sliceObserver: DisplayGeometrySliceObserver | undefined,
@@ -473,10 +504,15 @@ async function buildClippedTileEvidence(
   let sliceStartedAt = Date.now();
   for (let offset = 0; offset < points.length; offset += chunkSize) {
     if (!shouldContinue()) return { cancelled: true, evidence: null };
-    const circles = points.slice(offset, offset + chunkSize)
-      .map(evidenceBoundedCoverageCircle)
-      .map(circle => clipCoverageCircleToDisplayTile(circle, tile))
-      .filter((circle): circle is Feature<Polygon> => circle !== null);
+    const circles: Array<Feature<Polygon>> = [];
+    const chunkEnd = Math.min(points.length, offset + chunkSize);
+    for (let pointIndex = offset; pointIndex < chunkEnd; pointIndex += 1) {
+      const clipped = clipCoverageRingToDisplayTile(
+        evidenceBoundedCoverageRing(points[pointIndex]),
+        tileBounds,
+      );
+      if (clipped) circles.push(clipped);
+    }
     if (circles.length === 0) continue;
     const addition = circles.length === 1
       ? circles[0]
@@ -615,7 +651,7 @@ export async function buildTiledMemoryDisplayEvidence(
       continue;
     }
     const [x, y] = key.split('|').map(Number);
-    const tile = displayTilePolygon(x, y);
+    const tileBounds = displayTileBounds(x, y);
     recordDisplayGeometrySlice(sliceDurationsMs, sliceObserver, 'scan_tile_cache', tileScanSliceStartedAt, {
       tileKey: key,
     });
@@ -633,7 +669,7 @@ export async function buildTiledMemoryDisplayEvidence(
       const pointsToBuild = appendOnly ? tilePoints.slice(cached.pointCount) : tilePoints;
       const local = await buildClippedTileEvidence(
         pointsToBuild,
-        tile,
+        tileBounds,
         shouldContinue,
         sliceDurationsMs,
         sliceObserver,
@@ -1024,7 +1060,7 @@ export function buildFogShape(
   return null;
 }
 
-export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable }: Props) {
+export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, onFogUnavailable }: Props) {
   const theme = useVisualTheme();
   const Mapbox = getMapbox();
   // v346: drive geometry from useMemoryStore.points (real GPS path),
@@ -1035,6 +1071,17 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
   const simulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
   const syntheticQaAuthority = debugMode && simulatorEnabled;
   const accountId = useAppStore((s) => String(s.user?.id ?? 'signed-out'));
+  const localHydration = useMemoryStore((s) => s.localHydration) ?? {
+    ownerUserId: null,
+    status: 'detached' as const,
+    requiresInitialReconcile: false,
+    initialReconcile: 'not_required' as const,
+    revision: 0,
+  };
+  const localHydrationReady = localHydration.ownerUserId === accountId
+    && localHydration.status === 'ready'
+    && (!localHydration.requiresInitialReconcile
+      || localHydration.initialReconcile !== 'pending');
 
   // v413: friend memory union (纯前端 render 层, 不 merge 到 self).
   // 用户勾选 friend → enabledFriendIds 增 → union → fog 立即扩展
@@ -1083,6 +1130,9 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
     [authority, friendCells, points],
   );
   const { contentSignature } = preparedContent;
+  const readinessKey = `${authority}|local:${localHydration.ownerUserId ?? 'none'}:${localHydration.status}:${localHydration.requiresInitialReconcile ? 'needs-reconcile' : 'durable'}:${localHydration.initialReconcile}:${localHydration.revision}|${contentSignature}`;
+  const readinessKeyRef = useRef(readinessKey);
+  readinessKeyRef.current = readinessKey;
   const exactCachedAuthority = _moduleFogAuthority === authority;
   const lastAuthorityRef = useRef<string>(exactCachedAuthority ? authority : '');
   const lastSigRef = useRef<string>(exactCachedAuthority ? _moduleFogSig : '');
@@ -1101,21 +1151,32 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
   // i.e. it resets when FogLayer unmounts/remounts.
   const buildCountRef = useRef(0);
   // v359: fire onFogReady ONCE when first holes appear (data hydrated).
-  const fogReadyFiredRef = useRef(false);
+  const fogReadyFiredRef = useRef('');
   const buildGenerationRef = useRef(0);
   const cacheReadGenerationRef = useRef(0);
   const onFogUnavailableRef = useRef(onFogUnavailable);
   onFogUnavailableRef.current = onFogUnavailable;
+  const onFogPreparingRef = useRef(onFogPreparing);
+  onFogPreparingRef.current = onFogPreparing;
+  const onFogReadyRef = useRef(onFogReady);
+  onFogReadyRef.current = onFogReady;
   const [fogShape, setFogShape] = useState<Feature<Polygon | MultiPolygon>>(
     exactCachedAuthority && _moduleFogShape ? _moduleFogShape : solidFogShape(),
   );
   const [geometryReady, setGeometryReady] = useState(
-    (exactCachedAuthority && _moduleFogSig === contentSignature)
-      || (points.length === 0 && friendCells.length === 0),
+    localHydrationReady && ((exactCachedAuthority && _moduleFogSig === contentSignature)
+      || (points.length === 0 && friendCells.length === 0)),
   );
   const [displayCacheChecked, setDisplayCacheChecked] = useState(
     exactCachedAuthority && _moduleFogSig === contentSignature,
   );
+  // Reset the parent gate synchronously before a new account/scope/content
+  // authority can paint with the prior geometry.
+  useLayoutEffect(() => {
+    fogReadyFiredRef.current = '';
+    setGeometryReady(false);
+    onFogPreparingRef.current?.(readinessKey);
+  }, [readinessKey]);
   // v357 diagnostic: mount/unmount of this FogLayer instance.
   useEffect(() => {
     log('v357.fog_layer_mount', { points_n: points.length, friend_cells_n: friendCells.length });
@@ -1126,6 +1187,11 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
   }, []);
   useEffect(() => {
     const generation = ++cacheReadGenerationRef.current;
+    if (!localHydrationReady) {
+      setDisplayCacheChecked(true);
+      setGeometryReady(false);
+      return undefined;
+    }
     if (_moduleFogAuthority === authority && _moduleFogSig === contentSignature && _moduleFogShape) {
       lastAuthorityRef.current = authority;
       lastSigRef.current = contentSignature;
@@ -1139,7 +1205,8 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
     }
     setDisplayCacheChecked(false);
     void readFogDisplayCache(accountId).then(cached => {
-      if (generation !== cacheReadGenerationRef.current) return;
+      if (generation !== cacheReadGenerationRef.current
+        || readinessKeyRef.current !== readinessKey) return;
       if (cached?.authority === authority && cached.contentSignature === contentSignature) {
         lastAuthorityRef.current = authority;
         const restoredDisplayCache = restoreDisplayGeometryCache(cached.displayTiles);
@@ -1147,12 +1214,22 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
         _moduleDisplayGeometryCache = restoredDisplayCache;
       }
       setDisplayCacheChecked(true);
+    }).catch(error => {
+      if (generation !== cacheReadGenerationRef.current
+        || readinessKeyRef.current !== readinessKey) return;
+      log('fog.display_cache_read_failed', { error: String(error).slice(0, 180) });
+      setDisplayCacheChecked(true);
     });
     return () => { cacheReadGenerationRef.current += 1; };
-  }, [accountId, authority, contentSignature]);
+  }, [accountId, authority, contentSignature, localHydrationReady, readinessKey]);
   useEffect(() => {
     if (!displayCacheChecked) return undefined;
     const generation = ++buildGenerationRef.current;
+    if (!localHydrationReady) {
+      setFogShape(solidFogShape());
+      setGeometryReady(false);
+      return undefined;
+    }
     const authorityChanged = lastAuthorityRef.current !== authority;
     if (authorityChanged) {
       lastAuthorityRef.current = authority;
@@ -1161,7 +1238,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
       lastEvidenceRef.current = null;
       lastDisplayGeometryCacheRef.current = null;
       setFogShape(solidFogShape());
-      setGeometryReady(points.length === 0 && friendCells.length === 0);
+      setGeometryReady(false);
     }
     if (points.length === 0 && friendCells.length === 0) {
       const solid = solidFogShape();
@@ -1192,17 +1269,20 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
         pointSnapshot,
         () => !cancelled
           && generation === buildGenerationRef.current
-          && lastAuthorityRef.current === authority,
+          && lastAuthorityRef.current === authority
+          && readinessKeyRef.current === readinessKey,
         lastDisplayGeometryCacheRef.current,
       );
-      if (!built || cancelled || generation !== buildGenerationRef.current || lastAuthorityRef.current !== authority) return;
+      if (!built || cancelled || generation !== buildGenerationRef.current
+        || lastAuthorityRef.current !== authority || readinessKeyRef.current !== readinessKey) return;
       const combined = friendSnapshot.length > 0
         ? await buildTiledCombinedDisplayEvidence(
           built.cache,
           friendSnapshot,
           () => !cancelled
             && generation === buildGenerationRef.current
-            && lastAuthorityRef.current === authority,
+            && lastAuthorityRef.current === authority
+            && readinessKeyRef.current === readinessKey,
         )
         : null;
       if (friendSnapshot.length > 0 && !combined) return;
@@ -1215,8 +1295,8 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
       if (!shape) {
         log('fog.shape_unavailable', { n_points: pointSnapshot.length, build_ms: buildMs });
         if (!lastShapeRef.current) setFogShape(solidFogShape());
-        setGeometryReady(true);
-        onFogUnavailableRef.current?.();
+        setGeometryReady(false);
+        onFogUnavailableRef.current?.(readinessKey);
         return;
       }
       shape.properties = {
@@ -1263,6 +1343,7 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
         if (cancelled
           || generation !== buildGenerationRef.current
           || lastAuthorityRef.current !== authority
+          || readinessKeyRef.current !== readinessKey
           || String(useAppStore.getState().user?.id ?? 'signed-out') !== accountId) return;
         void writeFogDisplayCache({
           version: 3,
@@ -1274,6 +1355,8 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
           savedAt: Date.now(),
         }).then(metrics => {
           log('fog.display_cache_write', metrics);
+        }).catch(error => {
+          log('fog.display_cache_write_failed', { error: String(error).slice(0, 180) });
         });
       };
       // Persist only after the correlated source has had a paint opportunity.
@@ -1284,16 +1367,38 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
       } else {
         setTimeout(persistDisplayCache, 0);
       }
-      })();
+      })().catch(error => {
+        if (cancelled
+          || generation !== buildGenerationRef.current
+          || lastAuthorityRef.current !== authority
+          || readinessKeyRef.current !== readinessKey) return;
+        log('fog.shape_build_failed', {
+          n_points: pointSnapshot.length,
+          error: String(error).slice(0, 180),
+        });
+        if (!lastShapeRef.current) setFogShape(solidFogShape());
+        setGeometryReady(false);
+        onFogUnavailableRef.current?.(readinessKey);
+      });
     }, 120);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [accountId, authority, contentSignature, displayCacheChecked, friendCells, points]);
+  }, [accountId, authority, contentSignature, displayCacheChecked, friendCells, localHydrationReady, points, readinessKey]);
 
 
   const authoritativeEmpty = points.length === 0 && friendCells.length === 0;
-  const displayedFogShape = (lastAuthorityRef.current === authority && !authoritativeEmpty)
-    ? fogShape
-    : solidFogShape();
+  const exactShapeReady = lastAuthorityRef.current === authority
+    && lastSigRef.current === contentSignature
+    && Boolean(lastShapeRef.current);
+  const sameAuthorityShape = lastAuthorityRef.current === authority
+    ? (exactShapeReady ? fogShape : lastShapeRef.current)
+    : null;
+  // While an append-only/same-scope update builds, retain the last proven
+  // shape instead of briefly re-covering the user's entire history. Readiness
+  // remains exact-signature gated, so pins and completion signals still wait
+  // for the new geometry to paint. Authority changes always render solid.
+  const displayedFogShape = authoritativeEmpty
+    ? solidFogShape()
+    : sameAuthorityShape ?? solidFogShape();
 
   // v359: detect when fogShape first contains holes (corridor cutouts from
   // GPS data), then fire onFogReady ONCE. This is one of two gates the
@@ -1306,8 +1411,8 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
   // MemoryMap stayed false forever → pins never rendered for new users.
   // Now: any non-null fogShape counts as "fog has finished rendering".
   useEffect(() => {
-    if (fogReadyFiredRef.current) return;
-    if (!geometryReady || !displayedFogShape.geometry) return;
+    if (fogReadyFiredRef.current === readinessKey) return;
+    if (!localHydrationReady || !exactShapeReady || !geometryReady || !displayedFogShape.geometry) return;
     let hasHoles = false;
     if (displayedFogShape.geometry.type === 'Polygon') {
       hasHoles = (displayedFogShape.geometry.coordinates as any[]).length > 1;
@@ -1316,12 +1421,12 @@ export function FogLayer({ userCenter: _userCenter, onFogReady, onFogUnavailable
       hasHoles = polys.length > 1 || polys.some((p) => p.length > 1);
     }
     // v380: fire on ANY non-null shape (hasHoles OR zero-point world rect).
-    if (onFogReady) {
-      fogReadyFiredRef.current = true;
+    if (onFogReadyRef.current) {
+      fogReadyFiredRef.current = readinessKey;
       log('v359.fog_ready_fired', { n_points: points.length, has_holes: hasHoles });
-      onFogReady();
+      onFogReadyRef.current(readinessKey);
     }
-  }, [displayedFogShape, geometryReady, onFogReady, points.length]);
+  }, [displayedFogShape, exactShapeReady, geometryReady, localHydrationReady, points.length, readinessKey]);
 
   if (!Mapbox.available) return null;
 

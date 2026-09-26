@@ -91,11 +91,14 @@ describe('shared Hike and Run recording UI contracts', () => {
   });
 
   test('finish intent stays honest, calm, and above live controls', () => {
-    expect(hikeFinish).toContain("const heading = isRun ? 'Finish run' : 'Finish hike'");
-    expect(hikeFinish).toContain('Finish &amp; view activity');
+    expect(hikeFinish).toContain("? (isRun ? 'Run complete' : 'Hike complete')");
+    expect(hikeFinish).toContain(": (isRun ? 'Finish run' : 'Finish hike')");
+    expect(hikeFinish).toContain("{committed ? 'View activity' : `Finish ${label.toLowerCase()}`}");
+    expect(hikeFinish).toContain('if (committed) onViewActivity?.()');
     expect(hikeFinish).not.toContain('complete-hero.png');
-    expect(run).toContain('<Text style={[runStyles.saveSheetTitle, { color: runTheme.foreground }]}>Finish run</Text>');
-    expect(run).toContain('Name this run (optional)');
-    expect(run).toContain('Finish &amp; view activity');
+    expect(run).toContain('<StopSummarySheet');
+    expect(run).toContain('summary={runStopSummaryPresentation}');
+    expect(run).toContain('committed={Boolean(committedRunActivityId)}');
+    expect(run).toContain('onViewActivity={() =>');
   });
 });

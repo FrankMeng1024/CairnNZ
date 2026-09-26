@@ -133,6 +133,15 @@ interface MemoryState {
   _unsyncedPresenceCount: number;
   initialRevealDone: boolean;
   syncState: SyncState;
+  /** Local disk/journal authority. Empty points are meaningful only at ready. */
+  localHydration: {
+    ownerUserId: string | null;
+    status: 'detached' | 'hydrating' | 'ready' | 'blocked';
+    /** True only when no valid local coverage snapshot or journal exists. */
+    requiresInitialReconcile: boolean;
+    initialReconcile: 'not_required' | 'pending' | 'success' | 'offline';
+    revision: number;
+  };
 
   /** Record one GPS point as visited. Idempotent. */
   recordPoint: (lat: number, lng: number, atMs?: number, metadata?: MemoryEvidenceMetadata) => MemoryMutationResult;
@@ -321,6 +330,13 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   _unsyncedPresenceCount: 0,
   initialRevealDone: false,
   syncState: { inFlightCount: 0, lastSyncAt: 0 },
+  localHydration: {
+    ownerUserId: null,
+    status: 'detached',
+    requiresInitialReconcile: false,
+    initialReconcile: 'not_required',
+    revision: 0,
+  },
   lastWatcherFix: null,
 
   recordPoint: (lat, lng, atMs = Date.now(), metadata = { source: 'historical_unknown' }) => {
@@ -746,6 +762,13 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       _unsyncedPresenceCount: 0,
       initialRevealDone: false,
       syncState: { inFlightCount: 0, lastSyncAt: 0 },
+      localHydration: {
+        ownerUserId: null,
+        status: 'detached',
+        requiresInitialReconcile: false,
+        initialReconcile: 'not_required',
+        revision: get().localHydration.revision + 1,
+      },
       lastWatcherFix: null,
     });
     // O12 Round-3 R3-C2: clear H3 fog cells too — switching user must

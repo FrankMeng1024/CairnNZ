@@ -46,9 +46,8 @@ export function HomeScreen(props: {
   runningIconCandidate?: RunningIconCandidate | null;
   /** R21 (2026-08-18): when set, the last-hike card is tappable and its
    *  eyebrow shows the passed label (e.g. "Unfinished") instead of the
-   *  default "Last hike". */
+  *  default "Last hike". */
   lastHikeEyebrow?: string;
-  lastHikeAction?: string;
   lastHikeMode?: 'hiking' | 'running';
   onLastHikePress?: () => void;
   onHikingPress?: () => void;
@@ -59,7 +58,9 @@ export function HomeScreen(props: {
   const state = props.state ?? 'H0';
   const initial = props.initial ?? '?';
   const greetingName = props.greetingName ?? 'Explorer';
-  const lastHikeTitle = props.lastHikeTitle ?? 'Recent hike';
+  const defaultActivityNoun = props.lastHikeMode === 'running' ? 'run' : 'hike';
+  const lastHikeTitle = props.lastHikeTitle ?? `Recent ${defaultActivityNoun}`;
+  const lastHikeEyebrow = props.lastHikeEyebrow ?? `Last ${defaultActivityNoun}`;
   const lastHikeMeta = props.lastHikeMeta ?? '';
   const lastHikeDetails = props.lastHikeDetails ?? [];
   const countryName = props.countryName;
@@ -186,10 +187,10 @@ export function HomeScreen(props: {
       onPress={props.onLastHikePress}
       style={[styles.H1__last_hike_card, cardContainerOverride]}
       accessibilityRole={props.onLastHikePress ? 'button' : undefined}
-      accessibilityLabel={`${props.lastHikeEyebrow ?? 'Last hike'}: ${lastHikeTitle}`}
-      accessibilityHint={props.onLastHikePress ? (props.lastHikeAction === 'Resume' ? 'Resume this Activity' : 'Open Activity details') : undefined}
+      accessibilityLabel={`${lastHikeEyebrow}: ${lastHikeTitle}`}
+      accessibilityHint={props.onLastHikePress ? 'Open this Activity without changing its recording state' : undefined}
     >
-      <Text style={[styles.H1__last_hike_card__last_hike_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{props.lastHikeEyebrow ?? 'Last hike'}</Text>
+      <Text style={[styles.H1__last_hike_card__last_hike_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{lastHikeEyebrow}</Text>
       <Text style={[styles.H1__last_hike_card__last_hike_title, cardText ? { color: cardText } : null]}>{lastHikeTitle}</Text>
       {lastHikeDetails.length > 0 ? (
         <View style={styles.H1__last_hike_card__detail_row}>
@@ -204,8 +205,7 @@ export function HomeScreen(props: {
         <Text style={[styles.H1__last_hike_card__last_hike_meta, cardTextMuted ? { color: cardTextMuted } : null]}>{lastHikeMeta}</Text>
       )}
       {props.onLastHikePress ? (
-        <View style={[styles.H1__last_hike_card__action, { width: 72, height: 24, top: 19, borderWidth: 0, borderRadius: 0 }]} pointerEvents="none">
-          <Text style={[styles.H1__last_hike_card__action_text, cardText ? { color: cardText } : null]}>{props.lastHikeAction ?? 'Open'}</Text>
+        <View style={styles.H1__last_hike_card__action} pointerEvents="none">
           <Icon name="ChevronRight" size={14} color={cardTextMuted || textColor} strokeWidth={2.2} />
         </View>
       ) : null}

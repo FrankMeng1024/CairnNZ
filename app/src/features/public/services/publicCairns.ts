@@ -48,13 +48,23 @@ interface CacheSnapshot {
   pendingActions: Record<string, PendingAction>;
 }
 
-type PublicError = 'offline' | 'unavailable' | 'expired' | null;
+type PublicError = 'offline' | 'auth' | 'unavailable' | 'expired' | null;
 
-export type PublicActionStatus = 'confirmed' | 'queued_offline' | 'superseded' | 'unavailable';
+export type PublicActionStatus =
+  | 'confirmed'
+  | 'queued_offline'
+  | 'queued_retry'
+  | 'auth_required'
+  | 'rejected'
+  | 'superseded'
+  | 'unavailable';
 export interface PublicActionResult { status: PublicActionStatus }
 
 const CONFIRMED: PublicActionResult = { status: 'confirmed' };
 const QUEUED_OFFLINE: PublicActionResult = { status: 'queued_offline' };
+const QUEUED_RETRY: PublicActionResult = { status: 'queued_retry' };
+const AUTH_REQUIRED: PublicActionResult = { status: 'auth_required' };
+const REJECTED: PublicActionResult = { status: 'rejected' };
 const SUPERSEDED: PublicActionResult = { status: 'superseded' };
 const UNAVAILABLE: PublicActionResult = { status: 'unavailable' };
 
@@ -67,7 +77,7 @@ interface PublicCairnState {
   details: Record<string, PublicCairnDetail>;
   newlySurfacedId: string | null;
   error: PublicError;
-  initialize: (viewerId: string) => Promise<void>;
+  initialize: (viewerId: string, options?: { preservePresentation?: boolean }) => Promise<void>;
   refreshScene: () => Promise<void>;
   loadDetail: (resourceId: string) => Promise<PublicCairnDetail>;
   present: (resourceId: string) => Promise<void>;
@@ -284,13 +294,19 @@ async function sendPendingAction(
     });
     if (!accountIsCurrent(snapshot.viewerId, generation)) return SUPERSEDED;
     if (!response.ok) {
+      if (response.status === 401) return AUTH_REQUIRED;
       if (authoritativeUnavailable(response.status)) {
         delete snapshot.pendingActions[action.id];
         if (action.resourceId) await invalidate(snapshot.viewerId, action.resourceId, generation);
         else await persist(snapshot.viewerId, generation);
         return accountIsCurrent(snapshot.viewerId, generation) ? UNAVAILABLE : SUPERSEDED;
       }
-      return QUEUED_OFFLINE;
+      if ([400, 409, 422].includes(response.status)) {
+        delete snapshot.pendingActions[action.id];
+        await persist(snapshot.viewerId, generation);
+        return accountIsCurrent(snapshot.viewerId, generation) ? REJECTED : SUPERSEDED;
+      }
+      return QUEUED_RETRY;
     }
     delete snapshot.pendingActions[action.id];
     await persist(snapshot.viewerId, generation);
@@ -340,7 +356,8 @@ async function purgeBlockedAuthorNamespaces(
 async function drainPending(snapshot: CacheSnapshot, generation: number): Promise<void> {
   for (const action of Object.values(snapshot.pendingActions)) {
     if (!accountIsCurrent(snapshot.viewerId, generation)) return;
-    await sendPendingAction(snapshot, action, generation);
+    const result = await sendPendingAction(snapshot, action, generation);
+    if (['queued_offline', 'queued_retry', 'auth_required', 'superseded'].includes(result.status)) return;
   }
 }
 
@@ -354,11 +371,13 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
   newlySurfacedId: null,
   error: null,
 
-  initialize: async viewerId => {
+  initialize: async (viewerId, options) => {
     const generation = bindAccount(viewerId);
     if (generation === null) return;
     const stillCurrent = () => accountIsCurrent(viewerId, generation);
-    set({ viewerId, capabilityChecked: false, loading: true, error: null, entries: [], details: {}, newlySurfacedId: null });
+    set(options?.preservePresentation
+      ? { viewerId, capabilityChecked: false, loading: true, error: null }
+      : { viewerId, capabilityChecked: false, loading: true, error: null, entries: [], details: {}, newlySurfacedId: null });
     const snapshot = await loadSnapshot(viewerId);
     if (!stillCurrent()) return;
     publishState(viewerId, snapshot);
@@ -367,11 +386,26 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
         expectedUserId: viewerId,
       });
       if (!stillCurrent()) return;
+      if (response.status === 401) throw new PublicCairnError('auth');
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const capability = await response.json();
       if (!stillCurrent()) return;
       if (!capability.enabled) {
-        snapshots.set(viewerId, emptySnapshot(viewerId));
+        // Exposure revocation clears downloaded Public content immediately,
+        // but it must not erase a completed-Activity encounter retry that was
+        // durably queued before the capability request. A temporary kill
+        // switch can delay this derivation; it cannot make it disappear.
+        const disabledSnapshot = {
+          ...emptySnapshot(viewerId),
+          // A kill switch revokes downloaded exposure, not the user's durable
+          // safety choices or acknowledged local actions. Retaining the full
+          // queue and suppression sets prevents previously hidden/blocked
+          // content from resurrecting when the same canary is re-enabled.
+          hiddenIds: [...snapshot.hiddenIds],
+          blockedAuthorIds: [...snapshot.blockedAuthorIds],
+          pendingActions: { ...snapshot.pendingActions },
+        };
+        snapshots.set(viewerId, disabledSnapshot);
         await persist(viewerId, generation);
         if (!stillCurrent()) return;
         set({ enabled: false, capabilityChecked: true, loading: false, entries: [], details: {}, newlySurfacedId: null });
@@ -384,10 +418,11 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
       await drainPending(snapshot, generation);
       if (!stillCurrent()) return;
       await get().refreshScene();
-    } catch {
+    } catch (error) {
       if (stillCurrent()) {
-        set({ enabled: snapshot.pilotEnabled, capabilityChecked: true, loading: false, error: 'offline' });
-        publishState(viewerId, snapshot, { enabled: snapshot.pilotEnabled, capabilityChecked: true, loading: false, error: 'offline' });
+        const publicError = error instanceof PublicCairnError && error.code === 'auth' ? 'auth' : 'offline';
+        set({ enabled: snapshot.pilotEnabled, capabilityChecked: true, loading: false, error: publicError });
+        publishState(viewerId, snapshot, { enabled: snapshot.pilotEnabled, capabilityChecked: true, loading: false, error: publicError });
       }
     }
   },
@@ -406,6 +441,7 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
         expectedUserId: viewerId,
       });
       if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
+      if (response.status === 401) throw new PublicCairnError('auth');
       if (!response.ok) {
         if (authoritativeUnavailable(response.status)) {
           const snapshot = emptySnapshot(viewerId);
@@ -452,7 +488,9 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
       publishState(viewerId, snapshot, { loading: false, error: null, newlySurfacedId: newId });
     } catch (error) {
       if (error instanceof PublicCairnError && error.code === 'superseded') return;
-      if (requestCurrent(ticket)) set({ loading: false, error: 'offline' });
+      if (requestCurrent(ticket)) {
+        set({ loading: false, error: error instanceof PublicCairnError && error.code === 'auth' ? 'auth' : 'offline' });
+      }
     }
   },
 
@@ -471,6 +509,7 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
         expectedUserId: viewerId,
       });
       if (!requestCurrent(ticket)) throw new PublicCairnError('superseded');
+      if (response.status === 401) throw new PublicCairnError('auth');
       if (!response.ok) {
         if (authoritativeUnavailable(response.status)) {
           await invalidate(viewerId, resourceId, ticket.generation);
@@ -643,11 +682,75 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
   },
 }));
 
+/** Persist the exact Activity reconciliation identity before any network or
+ * capability request. A crash, timeout, or idempotent server replay can then
+ * only delay Public derivation; it cannot lose the retry. */
+export async function queuePublicActivityReconciliation(
+  viewerId: string,
+  sourceActivityClientId: string,
+): Promise<boolean> {
+  if (!viewerIsAuthoritative(viewerId)
+    || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(sourceActivityClientId)) return false;
+  const generation = bindAccount(viewerId);
+  if (generation === null) return false;
+  const snapshot = await loadSnapshot(viewerId);
+  if (!accountIsCurrent(viewerId, generation)) return false;
+  const id = `encounter:${sourceActivityClientId}`;
+  if (!snapshot.pendingActions[id]) {
+    await queueAction(snapshot, {
+      id,
+      kind: 'encounter',
+      resourceId: '',
+      authorId: '',
+      requestedAt: Date.now(),
+      body: { source_activity_client_id: sourceActivityClientId },
+    }, generation);
+  }
+  return accountIsCurrent(viewerId, generation);
+}
+
+/** Reconcile discovery only after the normal Activity upload has a server ACK. */
+export async function reconcilePublicActivityAfterServerAck(
+  viewerId: string,
+  sourceActivityClientId: string,
+): Promise<boolean> {
+  if (!await queuePublicActivityReconciliation(viewerId, sourceActivityClientId)) return false;
+  let state = usePublicCairnStore.getState();
+  if (state.viewerId !== viewerId || !state.capabilityChecked) {
+    await state.initialize(viewerId, { preservePresentation: true });
+    state = usePublicCairnStore.getState();
+  }
+  if (state.viewerId !== viewerId || !state.enabled) return false;
+  return state.verifyCompletedActivity(sourceActivityClientId);
+}
+
+// Tests deliberately replace action methods to hold async boundaries. Keep
+// the real method table so reset cannot leak a synthetic implementation into
+// a later test (or conceal a caller that never reached the real pipeline).
+const publicStoreMethods = {
+  initialize: usePublicCairnStore.getState().initialize,
+  refreshScene: usePublicCairnStore.getState().refreshScene,
+  loadDetail: usePublicCairnStore.getState().loadDetail,
+  present: usePublicCairnStore.getState().present,
+  thanks: usePublicCairnStore.getState().thanks,
+  hide: usePublicCairnStore.getState().hide,
+  blockAuthor: usePublicCairnStore.getState().blockAuthor,
+  allowAuthorAfterUnblock: usePublicCairnStore.getState().allowAuthorAfterUnblock,
+  report: usePublicCairnStore.getState().report,
+  verifyCompletedActivity: usePublicCairnStore.getState().verifyCompletedActivity,
+  purge: usePublicCairnStore.getState().purge,
+  clearForAccountBoundary: usePublicCairnStore.getState().clearForAccountBoundary,
+};
+
 export const __publicCairnTest = {
   cachePrefix: CACHE_PREFIX,
   reset() {
     snapshots.clear(); loadPromises.clear(); writeTails.clear(); resourceFences.clear(); acceptedRequests.clear();
     observedViewerId = ''; accountGeneration += 1; requestSequence = 0;
-    usePublicCairnStore.setState({ viewerId: null, enabled: false, capabilityChecked: false, loading: false, entries: [], details: {}, newlySurfacedId: null, error: null });
+    usePublicCairnStore.setState({
+      ...publicStoreMethods,
+      viewerId: null, enabled: false, capabilityChecked: false, loading: false,
+      entries: [], details: {}, newlySurfacedId: null, error: null,
+    });
   },
 };

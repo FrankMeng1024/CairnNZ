@@ -12,6 +12,7 @@ import { deleteExtras } from './LocalRouteExtras';
 import { clearSimulatorLogs } from '../features/activitySimulator/simulatorLog';
 import { debugLogger } from './debugLogger';
 import { purgeFogDisplayCache } from '../features/memory/services/fogDisplayCache';
+import { purgeDurableMemoryEvidence } from '../features/memory/services/memoryEvidenceJournal';
 import { clearCredentialsStrict } from './credentialsStore';
 import {
   isAccountTransitionCurrent,
@@ -314,6 +315,7 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
   )));
   await Promise.all(routeIds.map((routeId) => deleteExtras(routeId)));
   await clearSimulatorLogs(owner).catch(() => undefined);
+  await purgeDurableMemoryEvidence(owner);
   // Fence deferred/chunked precise-geometry writes before the broad key sweep;
   // otherwise an in-flight cache write could recreate data after deletion.
   await purgeFogDisplayCache(owner);
@@ -332,7 +334,10 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
     `@cairn:activity_registry:v1:${owner}`,
     `@cairn:activity_simulator:v1:${owner}`,
     `cairn:memory:tiles:v5:${owner}`,
+    `cairn:memory:tiles:recovery-v1:${owner}`,
     `cairn:memory:presence:v1:${owner}`,
+    `cairn:memory:presence:recovery-v1:${owner}`,
+    `cairn_memory_hydrate_state_v2:${encodeURIComponent(owner)}`,
     `cairn:memory:h3:v2:${owner}`,
     `cairn:memory:fog-display:v1:${owner}`,
     `cairn:memory:fog-display:v2:${owner}`,
@@ -348,6 +353,7 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
   ]);
   const prefixes = [
     `cairn_trackpoints_${owner}_`,
+    `@cairn:activity_final:v1:${owner}:`,
     `@cairn:activity_simulator_logs:v1:${owner}:`,
     `@cairn:activity_simulator_upload:v1:${owner}:`,
     `cairn:memory:fog-display:v3:${owner}:chunk:`,

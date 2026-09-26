@@ -32,7 +32,6 @@ import { useSessionStore, loadTrackPoints } from '../store/useSessionStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { snapToRoadAndTrim } from '../services/routeMatcher';
 import { useDistance } from '../utils/distanceFormat';
-import { smoothTrackPoints } from '../utils/smoothTrackPoints';
 import { getCurrentRegion } from '../config/regions';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
 import { Icon } from '../components/Icon';
@@ -257,11 +256,9 @@ export function RouteEditorScreen() {
   }, [routeId]);
 
   // ── Load session track points (save-as-route flow).
-  // v243: apply the SAME Kalman + filter smoothing the activity detail
-  // screen uses for its polyline. Without this, save-as-route shows raw
-  // GPS while the activity page showed smoothed — visual mismatch.
-  // v6.3 plan §2.2: preserve `alt` through every strip step. GPS produces
-  // altitude per fix; without it, save-as-route loses elevation profile.
+  // Snapshot the selected Final artifact revision exactly. Route editing may
+  // subsequently change the new Route, but import never re-smooths or mutates
+  // the source Activity representation.
   useEffect(() => {
     if (!fromSessionId) return;
     const sourcePromise: Promise<
@@ -288,17 +285,7 @@ export function RouteEditorScreen() {
           setSnapWarning(true);
           return;
         }
-        const smoothed = smoothTrackPoints(tp);
-        if (smoothed.length >= 2) {
-          setSessionTrackPoints(smoothed.map((p, i) => ({
-            lat: p.lat, lng: p.lng,
-            // smoothTrackPoints does not propagate alt — re-attach by index.
-            alt: tp[i]?.alt ?? null,
-          })));
-        } else {
-          setSessionTrackPoints(tp.map(p => ({ lat: p.lat, lng: p.lng, alt: p.alt ?? null })));
-          setSnapWarning(true);
-        }
+        setSessionTrackPoints(tp.map(p => ({ lat: p.lat, lng: p.lng, alt: p.alt ?? null })));
       })
       .catch(() => {
         setSessionTrackPoints([]);

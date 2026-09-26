@@ -7,6 +7,7 @@ const mockStorage = {
 const mockSessionState = {
   sessions: [] as any[],
   hydrate: jest.fn(async () => undefined),
+  mergeRemoteSessions: jest.fn(async () => undefined),
   clearSessions: jest.fn(),
 };
 const mockMarkerState = {
@@ -97,6 +98,7 @@ describe('real pre-publish authenticated hydrate authority', () => {
     secure.token = null;
     mockSessionState.sessions = [];
     mockSessionState.hydrate.mockClear();
+    mockSessionState.mergeRemoteSessions.mockClear();
     mockMarkerState.hydrate.mockClear();
     mockResumeDeletedAccountPurge.mockClear();
   });

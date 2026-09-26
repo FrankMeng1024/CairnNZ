@@ -137,8 +137,15 @@ export function RootNavigator() {
     void usePublicCairnStore.getState().initialize(String(user.id));
   }, [isLoggedIn, user?.id]);
   React.useEffect(() => networkMonitor.onChange(state => {
-    if (state.state === 'online' && usePublicCairnStore.getState().enabled) {
-      void usePublicCairnStore.getState().refreshScene();
+    if (state.state === 'online') {
+      const app = useAppStore.getState();
+      const viewerId = app.isLoggedIn ? String(app.user?.id ?? '') : '';
+      if (viewerId) {
+        // Re-read capability even when the cached gate was false. This is the
+        // activation path for an already-installed client after server-side
+        // canary enablement; requiring `enabled` here made it unreachable.
+        void usePublicCairnStore.getState().initialize(viewerId, { preservePresentation: true });
+      }
     }
   }), []);
   markBootPhase('navigator_body_running', { isLoggedIn: !!isLoggedIn });

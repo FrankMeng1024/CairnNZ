@@ -4,6 +4,7 @@ import {
   discardActiveHike,
   listActiveHikes,
   readActiveHikeTail,
+  releaseHikeTrackFinishSeal,
   resumeHikeTrack,
   startHikeTrack,
 } from '../../services/hikeTrackWriter';
@@ -27,12 +28,16 @@ import {
   flushRecordedMemoryEvidence,
   recordMemoryEvidence,
 } from '../memory/services/recordMemoryEvidence';
-import { removePending } from '../../services/pendingSyncStore';
+import { readPendingReadonly, removePending } from '../../services/pendingSyncStore';
 import type { ActivityLocationSource } from '../activitySimulator/types';
 import { activityFreshnessNow, activityTimestampForSource } from '../activitySimulator/simulatorTime';
 import { endSimulatorProvider } from '../activitySimulator/activityLocationProvider';
 import { appendSimulatorLog } from '../activitySimulator/simulatorLog';
 import type { ActivityRouteReference } from '../route/routeContracts';
+import {
+  captureStableAccountEpoch,
+  isStableAccountEpoch,
+} from '../../services/accountTransitionAuthority';
 
 export interface RecoverableActivity {
   sessionId: string;
@@ -49,6 +54,38 @@ export interface RecoverableActivity {
   lastPointAt: number;
   locationProviderSource?: ActivityLocationSource;
   borrowedRouteReference?: ActivityRouteReference;
+}
+
+interface ActivityRecoveryAuthority {
+  userId: string;
+  accountEpoch: number;
+}
+
+function currentAccountOwns(userId: string): boolean {
+  const state = useAppStore.getState();
+  return state.isLoggedIn !== false && String(state.user?.id ?? '') === userId;
+}
+
+function captureRecoveryAuthority(userId: string): ActivityRecoveryAuthority | null {
+  const accountEpoch = captureStableAccountEpoch();
+  if (accountEpoch === null || !currentAccountOwns(userId)) return null;
+  return { userId, accountEpoch };
+}
+
+function recoveryAuthorityCurrent(authority: ActivityRecoveryAuthority): boolean {
+  return isStableAccountEpoch(authority.accountEpoch) && currentAccountOwns(authority.userId);
+}
+
+async function registeredActivityStillCurrent(
+  activity: Pick<RecoverableActivity, 'userId' | 'clientActivityId' | 'ownerGeneration'>,
+  authority: ActivityRecoveryAuthority,
+): Promise<boolean> {
+  if (!recoveryAuthorityCurrent(authority)) return false;
+  const registered = await getUnfinishedActivity(activity.userId);
+  return recoveryAuthorityCurrent(authority)
+    && registered?.clientActivityId === activity.clientActivityId
+    && registered.userId === activity.userId
+    && registered.liveOwnerGeneration === activity.ownerGeneration;
 }
 
 function publishRecoveredBorrowedRoute(reference?: ActivityRouteReference): void {
@@ -69,7 +106,10 @@ function publishRecoveredBorrowedRoute(reference?: ActivityRouteReference): void
 /** One-time bounded migration from the former file-only discovery model. */
 export async function ensureUnfinishedActivityRegistry(userId: string): Promise<void> {
   if (!userId || userId === 'guest' || userId === 'unknown') return;
+  const authority = captureRecoveryAuthority(userId);
+  if (!authority) return;
   const registry = await getActivityRegistry(userId);
+  if (!recoveryAuthorityCurrent(authority)) return;
   if (registry.unfinished) return;
   const terminalIds = new Set([
     ...registry.completed.map(item => item.clientActivityId),
@@ -86,9 +126,11 @@ export async function ensureUnfinishedActivityRegistry(userId: string): Promise<
     // artifact as an unfinished Activity.
     .filter(meta => !terminalIds.has(meta.session_id))
     .sort((a, b) => (b.last_ts ?? b.started_at) - (a.last_ts ?? a.started_at));
+  if (!recoveryAuthorityCurrent(authority)) return;
   const chosen = candidates[0];
   if (!chosen) return;
   const points = await readActiveHikeTail(chosen.session_id);
+  if (!recoveryAuthorityCurrent(authority)) return;
   if (points.length === 0) return;
   const ownerGeneration = chosen.owner_generation ?? newSegmentId(`${chosen.session_id}-owner`);
   const currentSegmentId = points[points.length - 1]?.segmentId ?? 'legacy-0';
@@ -104,7 +146,7 @@ export async function ensureUnfinishedActivityRegistry(userId: string): Promise<
     nextSegmentStartReason: 'process-recovery',
     locationProviderSource: chosen.location_source ?? 'real',
     lifecycle: 'unfinished',
-  });
+  }, { shouldCommit: () => recoveryAuthorityCurrent(authority) });
 }
 
 function toTrackPoint(point: Awaited<ReturnType<typeof readActiveHikeTail>>[number]): SegmentedTrackPoint {
@@ -133,18 +175,46 @@ export async function findRecoverableActivity(
   const currentUserId = typeof query === 'string'
     ? String(useAppStore.getState().user?.id ?? '')
     : query.userId;
-  if (!currentUserId) return null;
+  const authority = captureRecoveryAuthority(currentUserId);
+  if (!authority) return null;
   const registered = await getUnfinishedActivity(currentUserId);
-  const exactId = typeof query === 'string' ? registered?.clientActivityId : query.clientActivityId;
-  const mode = typeof query === 'string' ? query : registered?.activityMode;
-  if (!exactId) return null;
+  if (!recoveryAuthorityCurrent(authority) || !registered || registered.userId !== currentUserId) return null;
+  const exactId = registered.clientActivityId;
+  if (typeof query !== 'string' && query.clientActivityId !== exactId) return null;
+  const mode = typeof query === 'string' ? query : registered.activityMode;
+  let pendingFinish: Awaited<ReturnType<typeof readPendingReadonly>>;
+  try {
+    pendingFinish = await readPendingReadonly(exactId);
+  } catch {
+    // Storage uncertainty is not proof that a Finish payload is absent.
+    return null;
+  }
+  if (!recoveryAuthorityCurrent(authority)) return null;
+  if (pendingFinish) {
+    // Completion recovery is owned by the sync daemon. Discovery is read-only:
+    // any retained outbox (including a different/corrupt owner) keeps the
+    // terminal fence closed instead of being relabelled as resumable.
+    return null;
+  } else {
+    // Crash after installing the Finish fence but before writing any pending
+    // payload: no completion authority exists, so safely reopen this exact
+    // unfinished owner for Resume/Save.
+    const released = await releaseHikeTrackFinishSeal(
+      exactId,
+      registered.liveOwnerGeneration,
+      { shouldContinue: () => recoveryAuthorityCurrent(authority) },
+    );
+    if (!released || !recoveryAuthorityCurrent(authority)) return null;
+  }
   const candidates = (await listActiveHikes())
     .filter(meta => meta.session_id === exactId)
     .filter(meta => String(meta.user_id ?? '') === currentUserId)
     .sort((a, b) => (b.last_ts ?? b.started_at) - (a.last_ts ?? a.started_at));
+  if (!recoveryAuthorityCurrent(authority)) return null;
 
   for (const meta of candidates) {
     const rawPoints = await readActiveHikeTail(meta.session_id);
+    if (!recoveryAuthorityCurrent(authority)) return null;
     const points = rawPoints.map(toTrackPoint);
     const lastPointAt = points[points.length - 1]?.t ?? meta.last_ts ?? meta.started_at;
     const stats = calculateActivityStats(points);
@@ -161,6 +231,7 @@ export async function findRecoverableActivity(
         }) / 1000)
       : stats.activeDurationS;
     const eligibility = (await import('./activityContracts')).saveEligibility(points, stats.distanceM);
+    if (!recoveryAuthorityCurrent(authority)) return null;
     return {
       sessionId: meta.session_id,
       clientActivityId: meta.session_id,
@@ -214,22 +285,64 @@ export async function findRecoverableActivity(
 
 /** Restore the same writer/store contract for Hiking and Running. */
 export async function loadRecoverableActivity(activity: RecoverableActivity): Promise<boolean> {
+  const authority = captureRecoveryAuthority(activity.userId);
+  if (!authority || !await registeredActivityStillCurrent(activity, authority)) return false;
   // A jetsam-recovered task can still be registered with CoreLocation.
   // Stop it before rebuilding the store, then resumeTracking establishes
   // exactly one source for the current AppState.
   try {
     const Location = await import('expo-location');
+    if (!recoveryAuthorityCurrent(authority)) return false;
     if (await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)) {
+      if (!recoveryAuthorityCurrent(authority)) return false;
       await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+      if (!recoveryAuthorityCurrent(authority)) return false;
     }
   } catch { /* unavailable on Web/simulator; resume still owns foreground */ }
+  if (!recoveryAuthorityCurrent(authority)) return false;
   const rawPoints = await readActiveHikeTail(activity.sessionId);
+  if (!recoveryAuthorityCurrent(authority)) return false;
   const points = rawPoints.map(toTrackPoint);
   const last = points[points.length - 1] ?? null;
   const stats = calculateActivityStats(points);
-  const newOwnerGeneration = newSegmentId(`${activity.sessionId}-owner`);
+  // Keep the journal/registry generation unchanged while presenting the
+  // recovered Activity as paused. `resumeTracking` performs the strict,
+  // durable generation rollover before it re-enables a location source.
+  // Saving the preserved portion therefore seals the same generation that is
+  // already present in metadata, eliminating an unreleasable crash window.
+  const recoveredOwnerGeneration = activity.ownerGeneration;
   const recoverySegmentId = newSegmentId(activity.sessionId);
   const locationProviderSource = activity.locationProviderSource ?? 'real';
+  if (points.length > 0) {
+    await resumeHikeTrack(activity.sessionId, {
+      shouldContinue: () => recoveryAuthorityCurrent(authority),
+    });
+  } else {
+    await startHikeTrack(activity.sessionId, {
+      started_at: activity.startedAt,
+      activity_mode: activity.activityMode,
+      user_id: activity.userId,
+      owner_generation: recoveredOwnerGeneration,
+      remote_id: activity.remoteId ?? undefined,
+      location_source: locationProviderSource,
+    }, { shouldContinue: () => recoveryAuthorityCurrent(authority) });
+  }
+  if (!recoveryAuthorityCurrent(authority)) return false;
+  const backgroundFenced = await persistBackgroundContext(
+    null,
+    false,
+    null,
+    { shouldContinue: () => recoveryAuthorityCurrent(authority) },
+  );
+  if (!backgroundFenced || !recoveryAuthorityCurrent(authority)) return false;
+  const registryUpdated = await updateUnfinishedActivity(activity.userId, activity.sessionId, {
+    liveOwnerGeneration: recoveredOwnerGeneration,
+    currentSegmentId: recoverySegmentId,
+    nextSegmentStartReason: 'process-recovery',
+    activeDurationMs: Math.max(0, activity.durationS * 1000),
+    activeSinceMs: null,
+  }, { shouldCommit: () => recoveryAuthorityCurrent(authority) });
+  if (!registryUpdated || !recoveryAuthorityCurrent(authority)) return false;
   publishRecoveredBorrowedRoute(activity.borrowedRouteReference);
   useTrackingStore.setState({
     sessionId: activity.sessionId,
@@ -263,7 +376,7 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
       : last ? 'foreground' : null,
     foregroundRecoveryUntilMs: null,
     latestSourceCoordinate: last ? { ...last, t: last.t } : null,
-    liveOwnerGeneration: newOwnerGeneration,
+    liveOwnerGeneration: recoveredOwnerGeneration,
     liveOwnerAcceptAfterMs: activityTimestampForSource(
       locationProviderSource,
       Date.now(),
@@ -273,29 +386,10 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
     pendingSegmentStartReason: 'process-recovery',
     locationProviderSource,
   });
-  if (points.length > 0) {
-    await resumeHikeTrack(activity.sessionId);
-  } else {
-    await startHikeTrack(activity.sessionId, {
-      started_at: activity.startedAt,
-      activity_mode: activity.activityMode,
-      user_id: activity.userId,
-      owner_generation: newOwnerGeneration,
-      remote_id: activity.remoteId ?? undefined,
-      location_source: locationProviderSource,
-    });
-  }
-  await persistBackgroundContext(null, false);
-  await updateUnfinishedActivity(activity.userId, activity.sessionId, {
-    liveOwnerGeneration: newOwnerGeneration,
-    currentSegmentId: recoverySegmentId,
-    nextSegmentStartReason: 'process-recovery',
-    activeDurationMs: Math.max(0, activity.durationS * 1000),
-    activeSinceMs: null,
-  });
   // Reconcile Activity evidence that was journaled before a prior process
   // death but may not yet have reached the Memory store.
   for (const point of points) {
+    if (!recoveryAuthorityCurrent(authority)) return false;
     await recordMemoryEvidence({
       lat: point.lat,
       lng: point.lng,
@@ -309,7 +403,11 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
       continuityState: 'accepted',
     });
   }
-  if (points.length > 0) await flushRecordedMemoryEvidence();
+  if (points.length > 0) {
+    if (!recoveryAuthorityCurrent(authority)) return false;
+    await flushRecordedMemoryEvidence();
+  }
+  if (!recoveryAuthorityCurrent(authority)) return false;
   appendSimulatorLog('ACTIVITY_RECOVERY', 'activity_recovery_loaded', {
     providerSource: locationProviderSource,
     pointCount: points.length,
@@ -326,8 +424,10 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
 /** Restore and begin a fresh recording segment for this exact Activity. */
 export async function restoreRecoverableActivity(activity: RecoverableActivity): Promise<boolean> {
   if (!await loadRecoverableActivity(activity)) return false;
+  const authority = captureRecoveryAuthority(activity.userId);
+  if (!authority || !await registeredActivityStillCurrent(activity, authority)) return false;
   await useTrackingStore.getState().resumeTracking();
-  return useTrackingStore.getState().status === 'tracking';
+  return recoveryAuthorityCurrent(authority) && useTrackingStore.getState().status === 'tracking';
 }
 
 /** Finalize the preserved portion without resuming live GPS. */
@@ -336,21 +436,40 @@ export async function saveRecoverableActivity(
   sessionName?: string,
 ): Promise<boolean> {
   if (!await loadRecoverableActivity(activity)) return false;
+  const authority = captureRecoveryAuthority(activity.userId);
+  if (!authority || !await registeredActivityStillCurrent(activity, authority)) return false;
   return useTrackingStore.getState().stopTracking(sessionName);
 }
 
 export async function discardRecoverableActivity(activity: RecoverableActivity): Promise<void> {
-  if (String(useAppStore.getState().user?.id ?? '') !== activity.userId) {
+  const authority = captureRecoveryAuthority(activity.userId);
+  if (!authority) {
     throw new Error('activity_discard_owner_mismatch');
+  }
+  const registry = await getActivityRegistry(activity.userId);
+  if (!recoveryAuthorityCurrent(authority)
+    || registry.unfinished?.clientActivityId !== activity.clientActivityId
+    || registry.unfinished.liveOwnerGeneration !== activity.ownerGeneration) {
+    // Recovery UI can become stale while a pending Save or sync acknowledgement
+    // advances lifecycle. Only the exact currently-unfinished identity may be
+    // discarded; completed-local and tombstoned records are immutable here.
+    throw new Error('activity_discard_not_unfinished');
   }
   // The Activity journal is the crash-recoverable Memory intent. Disable the
   // headless lease first, then reconcile every accepted real point before the
   // journal can be tombstoned/deleted. If Memory persistence fails, Discard
   // fails closed and the recoverable Activity remains available to retry.
-  const fenced = await persistBackgroundContext(null, false);
+  const fenced = await persistBackgroundContext(
+    null,
+    false,
+    null,
+    { shouldContinue: () => recoveryAuthorityCurrent(authority) },
+  );
   if (!fenced) throw new Error('activity_discard_background_fence_failed');
   const acceptedPoints = await readActiveHikeTail(activity.sessionId);
+  if (!recoveryAuthorityCurrent(authority)) throw new Error('activity_discard_owner_mismatch');
   for (const point of acceptedPoints) {
+    if (!recoveryAuthorityCurrent(authority)) throw new Error('activity_discard_owner_mismatch');
     await recordMemoryEvidence({
       lat: point.lat,
       lng: point.lng,
@@ -364,20 +483,28 @@ export async function discardRecoverableActivity(activity: RecoverableActivity):
       continuityState: 'accepted',
     });
   }
-  if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
+  if (acceptedPoints.length > 0) {
+    if (!recoveryAuthorityCurrent(authority)) throw new Error('activity_discard_owner_mismatch');
+    await flushRecordedMemoryEvidence();
+  }
+  if (!recoveryAuthorityCurrent(authority)) throw new Error('activity_discard_owner_mismatch');
   await tombstoneActivity({
     userId: activity.userId,
     clientActivityId: activity.clientActivityId,
     serverActivityId: activity.remoteId,
-  });
-  publishRecoveredBorrowedRoute();
+  }, { shouldCommit: () => recoveryAuthorityCurrent(authority) });
+  if (recoveryAuthorityCurrent(authority)) publishRecoveredBorrowedRoute();
   await removePending(activity.clientActivityId, activity.userId);
   await discardActiveHike(activity.sessionId);
   // Install the server-side business tombstone even when a numeric shell is
   // known. This makes any reordered/lost start, append or finish retry a no-op.
-  const cancelled = await deleteRemoteSessionByClientId(activity.clientActivityId);
-  if (!cancelled && activity.remoteId) await deleteRemoteSession(activity.remoteId);
-  if (activity.locationProviderSource === 'simulator') {
+  if (recoveryAuthorityCurrent(authority)) {
+    const cancelled = await deleteRemoteSessionByClientId(activity.clientActivityId, activity.userId);
+    if (!cancelled && activity.remoteId && recoveryAuthorityCurrent(authority)) {
+      await deleteRemoteSession(activity.remoteId, activity.userId);
+    }
+  }
+  if (activity.locationProviderSource === 'simulator' && recoveryAuthorityCurrent(authority)) {
     appendSimulatorLog('ACTIVITY_RECOVERY', 'simulator_recovery_discarded', {
       pointCount: acceptedPoints.length,
     }, {

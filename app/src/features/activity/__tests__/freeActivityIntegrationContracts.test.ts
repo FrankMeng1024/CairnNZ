@@ -9,7 +9,9 @@ describe('Free Activity integration contracts', () => {
     const source = read('src/screens/HomeScreen.tsx');
     expect(source).toContain('getUnfinishedActivity(userId)');
     expect(source).toContain('clientActivityId: unfinished.clientActivityId');
-    expect(source).toContain('restoreRecoverableActivity(activity)');
+    expect(source).toContain('{ recoverClientActivityId: activity.clientActivityId }');
+    expect(source).not.toContain('restoreRecoverableActivity(activity)');
+    expect(source).toContain('recoveryLookupGenerationRef');
   });
 
   test.each(['HikingScreen.tsx', 'RunningScreen.tsx'])('%s blocks Start with the shared unfinished resolution surface', file => {
@@ -30,10 +32,13 @@ describe('Free Activity integration contracts', () => {
 
   test.each(['HikingScreen.tsx', 'RunningScreen.tsx'])('%s successful Finish resets one Detail over Trails Activities', file => {
     const source = read(`src/screens/${file}`);
-    const finish = source.slice(source.indexOf('const openCommittedDetail'), source.indexOf('if (detailOpenedFromBase) return'));
-    expect(finish).toContain('CommonActions.reset');
-    expect(finish).toContain("{ name: 'Routes', params: { initialTab: 'activities' } }");
-    expect(finish).toContain("{ name: 'MapHistory', params: { sessionId: committedId } }");
+    expect(source).toContain('<StopSummarySheet');
+    expect(source).toContain('onViewActivity');
+    expect(source).toContain('useSessionStore.getState().sessions.find');
+    expect(source).toContain('CommonActions.reset');
+    expect(source).toContain("{ name: 'Routes', params: { initialTab: 'activities' } }");
+    expect(source).toContain("{ name: 'MapHistory', params: { sessionId:");
+    expect(source).not.toContain('openCommittedDetail');
   });
 
   test('recovery is exact-ID, creates a process gap, and does not impose a 72-hour expiry', () => {
@@ -50,7 +55,8 @@ describe('Free Activity integration contracts', () => {
     const modal = read('src/components/UnfinishedRecoveryModal.tsx');
     expect(store).toContain('saveEligibility(');
     expect(recovery).toContain("import('./activityContracts')).saveEligibility");
-    expect(modal).toContain('disabled={data.saveEligible === false}');
+    expect(modal).toContain('disabled={data.saveEligible === false || actionPending}');
+    expect(modal).toContain('disabled={actionPending}');
   });
 
   test('borrowed friend Route geometry is durable only for unfinished Activity recovery', () => {
@@ -84,7 +90,8 @@ describe('Free Activity integration contracts', () => {
     const close = source.slice(source.indexOf('const closeSaveSheet'), source.indexOf('async function handleStart'));
     expect(open).not.toContain('pauseTracking()');
     expect(close).not.toContain('resumeTracking()');
-    expect(source).toContain('finishLifecycleBeforeSheet');
+    expect(source).toContain('committedRunActivityId');
+    expect(source).toContain('runStopSummaryPresentation');
     expect(source).not.toContain('Run Complete');
     expect(source).not.toMatch(/setRunState\(['"]complete/);
   });
@@ -135,6 +142,18 @@ describe('Free Activity integration contracts', () => {
     expect(server).toBeGreaterThan(durable);
     expect(source).toContain('const IMMEDIATE_SERVER_SAVE_BUDGET_MS = 4_000');
     expect(source).not.toContain('v412 wall-clock timeout 20s');
+  });
+
+  test('always-online failure and reconnect both wake the durable Activity worker', () => {
+    const tracking = read('src/store/useTrackingStore.ts');
+    const app = read('App.tsx');
+    const immediate = tracking.slice(
+      tracking.indexOf('if (durableSaveCommitted && !serverSaveAcknowledged)'),
+      tracking.indexOf('// Public encounter qualification', tracking.indexOf('if (durableSaveCommitted && !serverSaveAcknowledged)')),
+    );
+    expect(immediate).toContain("drainPending({ wakeReason: 'manual', force: true })");
+    expect(app).toContain("drainPending({ wakeReason: 'network_online' })");
+    expect(app).toContain("drainPending({ wakeReason: 'foreground' })");
   });
 
   test('Finish durably commits offline Base Final before optional Mapbox reconstruction', () => {
@@ -188,7 +207,11 @@ describe('Free Activity integration contracts', () => {
       source.indexOf('async function activateBackgroundSource'),
     );
     expect(source).not.toContain('drainInterval');
-    expect(handoff).toContain('await drainCommittedBackgroundLocations()');
+    const foregroundActivation = handoff.indexOf('await activateForegroundSource(expectedIntentEpoch)');
+    const deferredDrain = handoff.indexOf('void drainCommittedBackgroundLocations(false).then');
+    expect(foregroundActivation).toBeGreaterThan(0);
+    expect(deferredDrain).toBeGreaterThan(foregroundActivation);
+    expect(handoff).toContain('providerActivatedFirst: true');
     expect(source).toContain('await drainCommittedBackgroundLocations(true)');
   });
 
@@ -263,11 +286,13 @@ describe('Free Activity integration contracts', () => {
     expect(source).toContain("markRecordingContinuityUnavailable('background-provider-unavailable')");
   });
 
-  test('Finish uses one matched-or-canonical geometry contract for local and server detail', () => {
+  test('Finish uses one versioned Final artifact for local and server detail', () => {
     const source = read('src/store/useTrackingStore.ts');
-    expect(source).toContain('const finalDisplayTrackPoints = snappedTrackPoints ?? s.trackPoints');
+    expect(source).toContain('const finalDisplayTrackPoints = finalArtifact.points');
     expect(source).toContain('const v412Route3 = finalDisplayTrackPoints.map');
     expect(source).toContain('trackPoints: finalDisplayTrackPoints');
+    expect(source).toContain('finalGeometryRevision: finalArtifact.revision');
+    expect(source).toContain('displayFingerprint: finalArtifact.displayFingerprint');
     expect(source).toContain("algorithmVersion: 'pedestrian-final-v2-base'");
     expect(source).toContain('!snapRes.stats.displayRefined');
     expect(source).toContain('snapRes.stats.canonicalFallbackDistanceM');
@@ -348,16 +373,29 @@ describe('Free Activity integration contracts', () => {
     expect(foreground).toContain('ownerGeneration');
   });
 
-  test('authoritative Start conflict replaces the speculative identity before recovery materialization', () => {
+  test('authoritative Start conflict preserves terminal lifecycle before recovery materialization', () => {
     const source = read('src/store/useTrackingStore.ts');
     const conflict = source.slice(
       source.indexOf("startResolution.kind === 'conflict'"),
-      source.indexOf("set({ ...initialState, activityMode: mode, startError: 'unfinished-exists'", source.indexOf("startResolution.kind === 'conflict'")),
+      source.indexOf("crashLogger.breadcrumb('session:start:server-unavailable')", source.indexOf("startResolution.kind === 'conflict'")),
     );
-    expect(conflict).toContain('await replaceUnfinishedActivity');
+    expect(conflict).toContain('await reconcileStartConflict');
+    expect(conflict).toContain("disposition === 'completed-local'");
+    expect(conflict).toContain('await updateRemoteId(existing.clientActivityId, existing.id)');
     expect(conflict).toContain('await startHikeTrack');
-    expect(conflict.indexOf('await replaceUnfinishedActivity')).toBeLessThan(conflict.indexOf('await startHikeTrack'));
+    expect(conflict.indexOf('await reconcileStartConflict')).toBeLessThan(conflict.indexOf('await startHikeTrack'));
+    expect(conflict.indexOf("disposition === 'completed-local'")).toBeLessThan(conflict.indexOf('await startHikeTrack'));
     expect(source).toContain('await mapActivityServerId(userId, localSessionId, startResolution.serverActivityId)');
+  });
+
+  test('Hike and Run use the same terminal-aware Start error presentation', () => {
+    const shared = read('src/components/activity/ActivityRecordingChrome.tsx');
+    const hike = read('src/screens/HikingScreen.tsx');
+    const run = read('src/screens/RunningScreen.tsx');
+    expect(shared).toContain('activityStartErrorMessage');
+    expect(shared).toContain('Your previous Activity is safely saved and still syncing.');
+    expect(hike).toContain('startError={activityStartErrorMessage(startError)}');
+    expect(run).toContain('startError={activityStartErrorMessage(startError)}');
   });
 
   test('late point-upload responses cannot advance a newer Activity upload cursor', () => {
@@ -449,7 +487,7 @@ describe('Free Activity integration contracts', () => {
   test('Memory durable commit uses strict storage and captures account ownership before queueing', () => {
     const persistence = read('src/features/memory/services/memoryPersistence.ts');
     const evidence = read('src/features/memory/services/recordMemoryEvidence.ts');
-    expect(persistence).toContain('const serialized = JSON.stringify(payload)');
+    expect(persistence).toContain('serialized = JSON.stringify(serialize(merged.points, snapshot.initialRevealDone))');
     expect(persistence).toContain('storage.setItem(storageKey(userId), serialized, { strict: true })');
     expect(evidence.indexOf('const ownerUserId')).toBeLessThan(evidence.indexOf('const run = commitTail.then'));
     expect(evidence).toContain("throw new Error('memory_owner_changed')");
@@ -483,6 +521,7 @@ describe('Free Activity integration contracts', () => {
     expect(invokeCleanup).toBeGreaterThan(ack);
     expect(remove).toBeGreaterThan(0);
     expect(cleanup).toBeGreaterThan(remove);
+    expect(helper).not.toContain('removeLocalTrackPoints');
     expect(source).toContain('reconcileAcknowledgedActivityCleanup');
     expect(helper).toContain('await deleteAcknowledgedHikeTrackArtifacts(clientActivityId, userId)');
     expect(helper.indexOf('await removeAcknowledgedActivity')).toBeGreaterThan(cleanup);
@@ -527,7 +566,7 @@ describe('Free Activity integration contracts', () => {
     );
     expect(loader).toContain('detailTrackSnapshots.current.set(selectedSessionId');
     expect(loader).toContain('detailTrackSnapshots.current.get(selectedSessionId) ?? []');
-    expect(loader).toMatch(/}, \[selectedSessionId\]\);/);
+    expect(loader).toContain('}, [selectedSessionId, liveSelectedSession?.finalGeometryRevision]);');
     expect(loader).not.toMatch(/}, \[[^\]]*sessions[^\]]*\]\);/);
   });
 

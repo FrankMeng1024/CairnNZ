@@ -290,7 +290,7 @@ function ActivitiesLibrary() {
   const filtered = useMemo(() => filterActivities(sessions, query, mode), [sessions, query, mode]);
   const sections = useMemo(() => groupActivitiesByMonth(filtered), [filtered]);
   const showDiscovery = sessions.length >= ACTIVITY_DISCOVERY_THRESHOLD || query.length > 0 || mode !== 'all';
-  const retry = () => { void import('../services/syncDaemon').then(({ drainPending }) => drainPending()); };
+  const retry = () => { void import('../services/syncDaemon').then(({ drainPending }) => drainPending({ wakeReason: 'manual', force: true })); };
 
   if (sessions.length === 0) {
     return <EmptyLibraryState kind="activities" onPrimary={() => nav.navigate('Hiking')} onSecondary={() => nav.navigate('Running')} />;

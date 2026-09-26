@@ -38,6 +38,10 @@ import type { Marker } from '../store/useMarkerStore';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { segmentTrace } from '../features/activity/activityContracts';
+import {
+  commitActivityFinalArtifact,
+  loadActivityFinalArtifact,
+} from '../features/activity/activityFinalArtifact';
 import { ContentSurface } from '../components/ContentSurface';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SyncBadge } from '../components/SyncBadge';
@@ -447,6 +451,8 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
   onPress: () => void;
   onViewOnMap: () => void;
 }) {
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [discardPending, setDiscardPending] = useState(false);
   const theme = useVisualTheme();
   const isRun = session.activityMode === 'running';
   const dateStr = formatDate(session.startedAt);
@@ -521,43 +527,24 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
 
   const handleLongPressAbandon = () => {
     if (!isPendingSync) return;
-    Alert.alert(
-      'Discard this hike?',
-      '',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Discard',
-          style: 'destructive',
-          onPress: () => {
-            // Second confirmation
-            Alert.alert(
-              'Confirm discard?',
-              'This hike will be permanently deleted and cannot be recovered.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Confirm',
-                  style: 'destructive',
-                  onPress: async () => {
-                    try {
-                      // eslint-disable-next-line @typescript-eslint/no-require-imports
-                      const { abandonPending } = require('../services/syncDaemon');
-                      await abandonPending(session.id);
-                    } catch { /* silent */ }
-                  },
-                },
-              ],
-              { cancelable: true }
-            );
-          },
-        },
-      ],
-      { cancelable: true }
-    );
+    setDiscardOpen(true);
+  };
+
+  const discardPendingActivity = async () => {
+    if (discardPending) return;
+    setDiscardPending(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { abandonPending } = require('../services/syncDaemon');
+      await abandonPending(session.id);
+      setDiscardOpen(false);
+    } finally {
+      setDiscardPending(false);
+    }
   };
 
   return (
+    <>
     <View style={{ marginBottom: Spacing.sm }}>
       {isPendingSync ? (
         // O18 HIST-08: pending grey card is now tappable — triggers a manual
@@ -593,7 +580,13 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
                   {session.syncState === 'syncing'
                     ? 'Syncing…'
                     : session.syncState === 'sync_error'
-                      ? 'Sync issue · Retrying'
+                      ? session.syncFailureKind === 'auth_required'
+                        ? 'Saved here · Sign in to sync'
+                        : session.syncFailureKind === 'action_required'
+                          ? 'Saved here · Sync needs review'
+                          : session.syncFailureKind === 'dependency'
+                            ? 'Saved here · Resolve other Activity'
+                            : 'Saved here · Tap to retry sync'
                       : 'Waiting to sync'}
                 </Text>
               </View>
@@ -690,6 +683,33 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
       </Animated.View>
       )}
     </View>
+    <ModalCard
+      visible={discardOpen}
+      onDismiss={() => !discardPending && setDiscardOpen(false)}
+      dismissible={!discardPending}
+      testID="pending-activity-discard-confirmation"
+    >
+      <ModalCardHeader
+        title={`Discard saved ${isRun ? 'Run' : 'Hike'}?`}
+        body="This Activity is stored on this device and has not been confirmed by the server. Discarding removes the only retained copy and cannot be undone."
+      />
+      <View style={styles.deleteModalActions}>
+        <PrimaryButton
+          label="Discard Activity"
+          variant="destructive"
+          onPress={() => { void discardPendingActivity(); }}
+          loading={discardPending}
+          testID="pending-activity-discard-confirm"
+        />
+        <PrimaryButton
+          label="Keep Activity"
+          variant="secondary"
+          onPress={() => setDiscardOpen(false)}
+          disabled={discardPending}
+        />
+      </View>
+    </ModalCard>
+    </>
   );
 }
 
@@ -809,6 +829,7 @@ function MapHistoryObjectScreen() {
   // replacing a visible Activity with an empty state.
   const detailSessionSnapshots = useRef(new Map<string, TrackingSession>());
   const detailTrackSnapshots = useRef(new Map<string, import('../store/useSessionStore').TrackPoint[]>());
+  const detailTrackRevisions = useRef(new Map<string, number>());
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [tab, setTab] = useState<'routes' | 'flags'>('routes');
@@ -1014,6 +1035,10 @@ function MapHistoryObjectScreen() {
         ...retainedSelectedSession,
         remoteId: liveSelectedSession?.remoteId ?? retainedSelectedSession.remoteId,
         syncState: liveSelectedSession?.syncState ?? retainedSelectedSession.syncState,
+        finalGeometryState: liveSelectedSession?.finalGeometryState ?? retainedSelectedSession.finalGeometryState,
+        finalGeometryVersion: liveSelectedSession?.finalGeometryVersion ?? retainedSelectedSession.finalGeometryVersion,
+        finalGeometryRevision: liveSelectedSession?.finalGeometryRevision ?? retainedSelectedSession.finalGeometryRevision,
+        finalGeometryFingerprint: liveSelectedSession?.finalGeometryFingerprint ?? retainedSelectedSession.finalGeometryFingerprint,
       }
     : liveSelectedSession;
   const selectedMarker = markers.find(m => m.id === selectedMarkerId) ?? null;
@@ -1046,6 +1071,8 @@ function MapHistoryObjectScreen() {
       ? 'This Activity is syncing. Try renaming again when sync completes.'
       : result.reason === 'pending-missing'
         ? 'The pending Activity save could not be found. Rename was not applied.'
+        : result.reason === 'identity-conflict'
+          ? 'This Activity has a server identity conflict. Its name was not changed so another Activity cannot be modified by mistake.'
         : result.reason === 'not-found'
           ? 'This Activity no longer exists. Rename was not applied.'
           : 'Rename could not be saved. Check your connection and try again.';
@@ -1062,6 +1089,7 @@ function MapHistoryObjectScreen() {
     setRenameEditing(false);
     detailSessionSnapshots.current.delete(id);
     detailTrackSnapshots.current.delete(id);
+    detailTrackRevisions.current.delete(id);
     try {
       const result = await deleteSession(id);
       setSelectedSessionId(null);
@@ -1133,17 +1161,26 @@ function MapHistoryObjectScreen() {
       });
     }
     const retainedTrack = detailTrackSnapshots.current.get(selectedSessionId);
-    if (retainedTrack) {
+    const requestedRevision = session?.finalGeometryRevision ?? 0;
+    const retainedRevision = detailTrackRevisions.current.get(selectedSessionId) ?? 0;
+    if (retainedTrack && retainedRevision >= requestedRevision) {
       setLoadedTrackPoints(retainedTrack);
       return;
     }
-    if (session && Array.isArray(session.trackPoints) && session.trackPoints.length >= 2) {
+    const hasVisibleLocalFallback = !!(session
+      && Array.isArray(session.trackPoints)
+      && session.trackPoints.length >= 2);
+    if (hasVisibleLocalFallback && session) {
       const snapshot = session.trackPoints.map(point => ({ ...point }));
       detailTrackSnapshots.current.set(selectedSessionId, snapshot);
+      detailTrackRevisions.current.set(selectedSessionId, requestedRevision);
       setLoadedTrackPoints(snapshot);
-      return;
+      if (requestedRevision > 0) return;
     }
-    setLoadedTrackPoints(null);
+    // Keep the already-rendered local Final visible while artifact/server
+    // restoration runs. Clearing it here caused a route → spinner → route
+    // flash whenever a revision-0 local snapshot was the initial authority.
+    if (!hasVisibleLocalFallback) setLoadedTrackPoints(null);
     let cancelled = false;
     // O6 (2026-07-26): 添加 15s 超时。之前 fetchSessionDetail 无超时,
     // 若网络卡住 (server slow / 用户切飞行模式 mid-fetch) 就永远
@@ -1153,8 +1190,18 @@ function MapHistoryObjectScreen() {
     const timeoutMs = 15000;
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     (async () => {
+      const ownerUserId = useSessionStore.getState().currentUserId;
+      const clientActivityId = session?.clientActivityId ?? session?.id ?? selectedSessionId;
+      const artifact = await loadActivityFinalArtifact(ownerUserId, clientActivityId);
+      if (!cancelled && artifact) {
+        const snapshot = artifact.points.map(point => ({ ...point }));
+        detailTrackSnapshots.current.set(selectedSessionId, snapshot);
+        detailTrackRevisions.current.set(selectedSessionId, artifact.revision);
+        setLoadedTrackPoints(snapshot);
+        return;
+      }
       const remoteId = session?.remoteId;
-      if (remoteId != null) {
+      if (remoteId != null && !session?.identityConflict) {
         const detailPromise = fetchSessionDetail(remoteId);
         const timeoutPromise = new Promise<null>((resolve) => {
           timeoutHandle = setTimeout(() => resolve(null), timeoutMs);
@@ -1179,8 +1226,17 @@ function MapHistoryObjectScreen() {
             segmentId: p.segment_id ?? p.segmentId ?? 'legacy-0',
             segmentStartReason: p.segment_start_reason ?? p.segmentStartReason,
           }));
-          detailTrackSnapshots.current.set(selectedSessionId, normalised);
-          setLoadedTrackPoints(normalised);
+          const restored = await commitActivityFinalArtifact({
+            ownerUserId,
+            clientActivityId,
+            canonicalPoints: normalised,
+            displayPoints: normalised,
+            source: 'server-restored',
+          }).catch(() => null);
+          const restoredPoints = restored?.artifact.points ?? normalised;
+          detailTrackSnapshots.current.set(selectedSessionId, restoredPoints);
+          if (restored) detailTrackRevisions.current.set(selectedSessionId, restored.artifact.revision);
+          setLoadedTrackPoints(restoredPoints);
           return;
         }
         // O6: server 请求 timeout 或 route_points 为空/太短 → 落 local。
@@ -1193,6 +1249,7 @@ function MapHistoryObjectScreen() {
       if (!cancelled) {
         const snapshot = local ?? [];
         detailTrackSnapshots.current.set(selectedSessionId, snapshot);
+        detailTrackRevisions.current.set(selectedSessionId, requestedRevision);
         setLoadedTrackPoints(snapshot);
       }
     })().catch(() => {
@@ -1205,11 +1262,7 @@ function MapHistoryObjectScreen() {
       cancelled = true;
       if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
     };
-  // Route params are mount-lifetime authority for this Detail. Retain the
-  // established selectedSessionId-only loader contract so a SessionStore
-  // refresh cannot restart or replace a mounted trace snapshot.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSessionId]);
+  }, [selectedSessionId, liveSelectedSession?.finalGeometryRevision]);
 
   // Merge loaded track points into the selected session for display.
   // v261: when loadedTrackPoints === null we are still loading; pass [] so
@@ -1771,7 +1824,7 @@ function MapHistoryObjectScreen() {
                       <TouchableOpacity
                         key={`${notice.kind}-${notice.title}`}
                         style={styles.activityStateRow}
-                        onPress={() => { void import('../services/syncDaemon').then(({ drainPending }) => drainPending()); }}
+                        onPress={() => { void import('../services/syncDaemon').then(({ drainPending }) => drainPending({ wakeReason: 'manual', force: true })); }}
                         accessibilityRole="button"
                         accessibilityLabel="Retry Activity sync"
                       >
@@ -2091,11 +2144,7 @@ function MapHistoryObjectScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[cardStyles.deleteBtn, { flex: 1, borderColor: Colors.primary, backgroundColor: Colors.primary }]}
-                  onPress={() => {
-                    // Route edit lives in RouteEditorScreen (per route-rules.md §4).
-                    // Concept row-02 shows an Edit Route CTA on Route Detail.
-                    (nav as any).navigate('RouteEditor', { fromSessionId: selectedSession.id });
-                  }}
+                  onPress={openActivityRouteDraft}
                 >
                   <Icon name="Edit3" size={IconSize.sm} color="#fff" strokeWidth={2} />
                   <Text style={[cardStyles.deleteBtnText, { color: '#fff' }]}>Edit Route</Text>

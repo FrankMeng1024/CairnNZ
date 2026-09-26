@@ -37,7 +37,7 @@ export function useActivitySaveLossRecovery(mode: ActivityMode): void {
         });
       }
       const { drainPending } = require('../../services/syncDaemon');
-      await drainPending();
+      await drainPending({ wakeReason: 'manual', force: true });
       const { listPending } = require('../../services/pendingSyncStore');
       const stillPending = (await listPending()).some(
         (entry: any) => entry.localId === payload?.localId,
@@ -95,4 +95,3 @@ export function useActivitySaveLossRecovery(mode: ActivityMode): void {
     return () => { try { subscription.remove(); } catch { /* no-op */ } };
   }, [present, saveLostSessionId]);
 }
-

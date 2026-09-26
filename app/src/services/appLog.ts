@@ -84,6 +84,7 @@ function scheduleFlush() {
     flushTimer = null;
     void flushNow();
   }, FLUSH_DEBOUNCE_MS);
+  (flushTimer as any)?.unref?.();
 }
 
 /**
@@ -131,6 +132,7 @@ export async function flushNow(): Promise<void> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+    (timer as any)?.unref?.();
     try {
       const res = await fetch(`${API_BASE_URL}${ENDPOINT}`, {
         method: 'POST',

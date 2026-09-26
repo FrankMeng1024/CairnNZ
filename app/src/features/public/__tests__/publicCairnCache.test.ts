@@ -28,7 +28,11 @@ jest.mock('../../friends/services/friendContent', () => ({ purgeFriendContent: m
 jest.mock('../../../store/useFriendStore', () => ({ useFriendStore: { setState: mockFriendSetState } }));
 jest.mock('../../../store/useMarkerStore', () => ({ useMarkerStore: { setState: mockMarkerSetState } }));
 
-import { __publicCairnTest, usePublicCairnStore } from '../services/publicCairns';
+import {
+  __publicCairnTest,
+  queuePublicActivityReconciliation,
+  usePublicCairnStore,
+} from '../services/publicCairns';
 
 const mockFetch = jest.requireMock('../../../services/apiService').authenticatedFetch as jest.Mock;
 const mockSetItem = jest.requireMock('../../../store/storage').storage.setItem as jest.Mock;
@@ -510,6 +514,56 @@ describe('Public Cairn shared list/detail authority', () => {
     await usePublicCairnStore.getState().initialize('viewer-a');
     expect(usePublicCairnStore.getState()).toMatchObject({ enabled: false, entries: [], details: {} });
     expect(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`)).not.toContain('public:1:1:1');
+  });
+
+  test('a capability kill switch clears content but preserves and later drains a durable Activity reconciliation', async () => {
+    const activityId = '11111111-1111-4111-8111-111111111111';
+    await expect(queuePublicActivityReconciliation('viewer-a', activityId)).resolves.toBe(true);
+    expect(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`)).toContain(`encounter:${activityId}`);
+
+    mockFetch.mockResolvedValueOnce(response(200, { enabled: false }));
+    await usePublicCairnStore.getState().initialize('viewer-a');
+    const disabled = mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`) ?? '';
+    expect(disabled).toContain(`encounter:${activityId}`);
+    expect(disabled).not.toContain('public:1:1:1');
+
+    __publicCairnTest.reset();
+    mockFetch
+      .mockResolvedValueOnce(response(200, { enabled: true }))
+      .mockResolvedValueOnce(response(200, { accepted: true }))
+      .mockResolvedValueOnce(response(200, scene([])));
+    await usePublicCairnStore.getState().initialize('viewer-a');
+    expect(mockFetch.mock.calls.filter(([path]) => path === '/api/public-cairns/encounters/verify')).toHaveLength(1);
+    expect(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`) ?? '').not.toContain(`encounter:${activityId}`);
+  });
+
+  test('a capability kill switch preserves durable suppression and action queues without retaining Public content', async () => {
+    await initialize();
+    mockFetch.mockRejectedValueOnce(new Error('offline'));
+    await expect(usePublicCairnStore.getState().hide('1')).resolves.toEqual({ status: 'queued_offline' });
+    mockFetch.mockResolvedValueOnce(response(200, { enabled: false }));
+    await usePublicCairnStore.getState().initialize('viewer-a');
+    const disabled = JSON.parse(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`) ?? '{}');
+    expect(disabled.entries).toEqual({});
+    expect(disabled.details).toEqual({});
+    expect(disabled.hiddenIds).toEqual(['1']);
+    expect(Object.keys(disabled.pendingActions)).toContain('hide:1');
+  });
+
+  test('authentication expiry is retained for retry and is not mislabeled as offline', async () => {
+    await initialize();
+    mockFetch.mockResolvedValueOnce(response(401, { code: 'TOKEN_EXPIRED' }));
+    await expect(usePublicCairnStore.getState().thanks('1')).resolves.toEqual({ status: 'auth_required' });
+    expect(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`) ?? '').toContain('thanks:1');
+  });
+
+  test('an API failure is queued as retryable while a validation rejection is terminal', async () => {
+    await initialize();
+    mockFetch.mockResolvedValueOnce(response(503, { code: 'TEMPORARY' }));
+    await expect(usePublicCairnStore.getState().thanks('1')).resolves.toEqual({ status: 'queued_retry' });
+    mockFetch.mockResolvedValueOnce(response(400, { code: 'INVALID_ACTION' }));
+    await expect(usePublicCairnStore.getState().thanks('1')).resolves.toEqual({ status: 'rejected' });
+    expect(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`) ?? '').not.toContain('thanks:1');
   });
 
   test.each([7301, 7302, 7303])('stateful sequence seed %i preserves account, revision, Hide and reload invariants', async seed => {

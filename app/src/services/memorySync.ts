@@ -23,6 +23,14 @@ import {
   useMemoryStore,
   VisitedPoint,
 } from '../features/memory/store/useMemoryStore';
+import { purgeDurableMemoryEvidence } from '../features/memory/services/memoryEvidenceJournal';
+import {
+  beginMemoryPersistenceReset,
+  commitMemoryPersistenceReset,
+  flushMemoryNow,
+} from '../features/memory/services/memoryPersistence';
+import { purgeFogDisplayCache } from '../features/memory/services/fogDisplayCache';
+import { resetH3PersistenceForUser } from '../features/memory/services/h3Persistence';
 
 const PUSH_DEBOUNCE_MS = 30_000;
 const PUSH_MAX_WAIT_MS = 60_000;
@@ -32,6 +40,7 @@ const HTTP_TIMEOUT_MS = 30_000;
 const PULL_PAGE_LIMIT = 10_000;
 const PULL_MAX_PAGES = 50;
 const RETRY_PULL_DELAY_MS = 1_500;
+const RETRY_PULL_MAX_DELAY_MS = 60_000;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 /** Are we currently performing a push or pull? Serializes pushes/pulls. */
@@ -43,11 +52,42 @@ let unsubscribe: (() => void) | null = null;
 /** O2 fix: separate controllers per op, aborted only on detach. */
 let pushAbortController: AbortController | null = null;
 let pullAbortController: AbortController | null = null;
+let pullRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let pullRetryAttempt = 0;
 /** Epoch token, bumped on every detach/reset. */
 let epoch = 0;
 let pendingBurstStartedAt: number | null = null;
 let authBlocked = false;
 let syncMetrics = { pushRequests: 0, pushedPoints: 0, pushedPresenceWitnesses: 0, authBlocked: false };
+
+function currentAuthenticatedOwnerIs(userId: string): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useAppStore } = require('../store/useAppStore');
+    const state = useAppStore.getState();
+    return state.isLoggedIn === true && String(state.user?.id ?? '') === userId;
+  } catch {
+    return false;
+  }
+}
+
+function clearPullRetry(): void {
+  if (pullRetryTimer) clearTimeout(pullRetryTimer);
+  pullRetryTimer = null;
+  pullRetryAttempt = 0;
+}
+
+function schedulePullRetry(userId: string, opts?: { reconcile?: boolean }): void {
+  if (pullRetryTimer || userId !== activeUserId || !currentAuthenticatedOwnerIs(userId)) return;
+  const scheduledEpoch = epoch;
+  const delay = Math.min(RETRY_PULL_MAX_DELAY_MS, RETRY_PULL_DELAY_MS * (2 ** pullRetryAttempt));
+  pullRetryAttempt = Math.min(pullRetryAttempt + 1, 6);
+  pullRetryTimer = setTimeout(() => {
+    pullRetryTimer = null;
+    if (scheduledEpoch !== epoch || userId !== activeUserId || !currentAuthenticatedOwnerIs(userId)) return;
+    void pullMemoryFromServer(userId, opts);
+  }, delay);
+}
 
 export function resetMemorySyncMetrics(): void {
   syncMetrics = { pushRequests: 0, pushedPoints: 0, pushedPresenceWitnesses: 0, authBlocked };
@@ -78,6 +118,18 @@ interface EchoEntry {
   cid: string;
 }
 
+export type MemoryPushResult = {
+  status: 'acknowledged' | 'nothing_to_push' | 'busy' | 'auth_required' | 'owner_mismatch' | 'backoff' | 'failed';
+  acceptedPointCids: string[];
+  acceptedPresenceCids: string[];
+};
+
+const emptyPushResult = (status: MemoryPushResult['status']): MemoryPushResult => ({
+  status,
+  acceptedPointCids: [],
+  acceptedPresenceCids: [],
+});
+
 /**
  * O2 fix: separate AbortController per op. Detach is the only thing
  * that aborts both. Internal request timeouts use the same controller
@@ -97,7 +149,7 @@ async function fetchWithTimeout(
 }
 
 export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: boolean }): Promise<void> {
-  if (!userId) return;
+  if (!userId || userId !== activeUserId || !currentAuthenticatedOwnerIs(userId)) return;
   const reconcile = !!opts?.reconcile;
   // BUG-E fix (v371 post-OTA): reconcile=true forces a full server sweep
   // and treats server response as canonical truth. Without it, the
@@ -116,9 +168,7 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
     require('../services/bootDiagnostics').markBootPhase('pull_memory_entry', { reconcile });
   } catch {/* ignore */}
   if (pullRunning || pushRunning) {
-    setTimeout(() => {
-      if (userId === activeUserId) void pullMemoryFromServer(userId);
-    }, RETRY_PULL_DELAY_MS);
+    schedulePullRetry(userId, opts);
     return;
   }
   pullRunning = true;
@@ -132,6 +182,9 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
   let { afterTs, afterCid } = pullCursor;
   const accumulated: ServerPoint[] = [];
   let aborted = false;
+  let completeSnapshot = false;
+  let retryableFailure = false;
+  let authFailure = false;
   try {
     for (let page = 0; page < PULL_MAX_PAGES; page++) {
       try {
@@ -139,13 +192,24 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
         require('../services/bootDiagnostics').markBootPhase('pull_memory_before_fetch', { page });
       } catch {/* ignore */}
       const url = `/api/memory/points?after_ts=${afterTs}&after_cid=${encodeURIComponent(afterCid)}&until=${pullStartTs}&limit=${PULL_PAGE_LIMIT}`;
-      const res = await fetchWithTimeout(url, { method: 'GET' }, myCtrl);
+      const res = await fetchWithTimeout(url, {
+        method: 'GET',
+        expectedUserId: myUserId,
+      }, myCtrl);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../services/bootDiagnostics').markBootPhase('pull_memory_after_fetch', { page, ok: res.ok, status: res.status });
       } catch {/* ignore */}
-      if (myEpoch !== epoch || myUserId !== activeUserId) { aborted = true; return; }
-      if (!res.ok) { aborted = true; return; }
+      if (myEpoch !== epoch || myUserId !== activeUserId || !currentAuthenticatedOwnerIs(myUserId)) {
+        aborted = true;
+        return;
+      }
+      if (!res.ok) {
+        aborted = true;
+        authFailure = res.status === 401 || res.status === 403;
+        retryableFailure = res.status === 408 || res.status === 425 || res.status === 429 || res.status >= 500;
+        break;
+      }
       // v314 fix: guard against MB-sized response bodies. res.json() on
       // a huge body sync-blocks the main thread in Hermes (no streaming),
       // matching the 9s watchdog SIGKILL pattern observed in v312/v313
@@ -164,23 +228,37 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
           });
         } catch {/* ignore */}
         aborted = true;
-        return;
+        retryableFailure = true;
+        break;
       }
       const body = await res.json();
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../services/bootDiagnostics').markBootPhase('pull_memory_after_parse', { page, n: (body.points ?? []).length });
       } catch {/* ignore */}
-      if (myEpoch !== epoch || myUserId !== activeUserId) { aborted = true; return; }
-      const batch: ServerPoint[] = (body.points ?? []).filter((p: any): p is ServerPoint =>
-        typeof p?.lat === 'number' && typeof p?.lng === 'number' &&
-        typeof p?.ts === 'number' && typeof p?.cid === 'string'
+      if (myEpoch !== epoch || myUserId !== activeUserId || !currentAuthenticatedOwnerIs(myUserId)) {
+        aborted = true;
+        return;
+      }
+      const rawBatch = body?.points;
+      const validBatch = Array.isArray(rawBatch) && rawBatch.every((p: any) =>
+        typeof p?.lat === 'number' && Number.isFinite(p.lat)
+        && typeof p?.lng === 'number' && Number.isFinite(p.lng)
+        && typeof p?.ts === 'number' && Number.isFinite(p.ts)
+        && typeof p?.cid === 'string' && p.cid.length > 0
       );
+      if (!validBatch) {
+        aborted = true;
+        retryableFailure = true;
+        break;
+      }
+      const batch = rawBatch as ServerPoint[];
       accumulated.push(...batch);
       if (batch.length < PULL_PAGE_LIMIT) {
         // Done — full snapshot acquired. Reset cursor so next pull
         // starts fresh.
         pullCursor = { afterTs: 0, afterCid: '' };
+        completeSnapshot = true;
         break;
       }
       const last = batch[batch.length - 1];
@@ -189,8 +267,10 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
       // O7: persist cursor in case we get aborted mid-pagination.
       pullCursor = { afterTs, afterCid };
     }
+    if (!completeSnapshot) aborted = true;
   } catch {
     aborted = true;
+    retryableFailure = true;
   } finally {
     pullRunning = false;
     if (pullAbortController === myCtrl) pullAbortController = null;
@@ -199,7 +279,18 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
     }
   }
 
-  if (myEpoch !== epoch || myUserId !== activeUserId) return;
+  if (myEpoch !== epoch || myUserId !== activeUserId || !currentAuthenticatedOwnerIs(myUserId)) return;
+
+  const publishInitialReconcile = async (outcome: 'success' | 'offline') => {
+    if (!reconcile || myEpoch !== epoch || myUserId !== activeUserId) return false;
+    try {
+      // Lazy access avoids making persistence initialization part of the
+      // Memory transport module graph.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return await require('../features/memory/services/memoryPersistence')
+        .publishInitialMemoryReconcile(myUserId, outcome);
+    } catch { return false; /* hydration may have detached at this exact boundary */ }
+  };
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -227,12 +318,20 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
         });
       } catch {/* ignore */}
       useMemoryStore.getState().replacePoints(localUnsynced, useMemoryStore.getState().initialRevealDone);
+      clearPullRetry();
+      await publishInitialReconcile('success');
       return;
     }
     // If we were aborted with NO pages, nothing to merge. Schedule a
     // retry so user data eventually loads.
-    if (aborted && pullCursor.afterTs > 0) {
-      setTimeout(() => { if (myUserId === activeUserId) void pullMemoryFromServer(myUserId); }, RETRY_PULL_DELAY_MS);
+    if (aborted) {
+      await publishInitialReconcile('offline');
+      if (authFailure) {
+        authBlocked = true;
+        syncMetrics.authBlocked = true;
+      } else if (retryableFailure) {
+        schedulePullRetry(myUserId, opts);
+      }
     }
     return;
   }
@@ -267,7 +366,15 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
           accumulated_n: accumulated.length, local_n: localPoints.length,
         });
       } catch {/* ignore */}
-      // Aborted reconcile: don't wipe; skip this run, leave local intact.
+      // Aborted reconcile: don't wipe; skip this run, leave local intact and
+      // retry even when the first failed page left the cursor at zero.
+      await publishInitialReconcile('offline');
+      if (authFailure) {
+        authBlocked = true;
+        syncMetrics.authBlocked = true;
+      } else if (retryableFailure) {
+        schedulePullRetry(myUserId, opts);
+      }
       return;
     }
     try {
@@ -290,6 +397,8 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
     } catch {/* ignore */}
     const merged = [...serverPoints, ...localUnsynced].sort((a, b) => a.ts - b.ts);
     useMemoryStore.getState().replacePoints(merged, useMemoryStore.getState().initialRevealDone);
+    clearPullRetry();
+    await publishInitialReconcile('success');
     return;
   }
 
@@ -313,6 +422,7 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
   // O10: skip replacePoints if merge is identical to current state
   // — avoids unnecessary fog/cairn rebuild on no-op pulls.
   if (sameContent(merged, localPoints)) {
+    clearPullRetry();
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require('./appLog').log('v338.pull_memory_skip_same_content', {
@@ -332,14 +442,18 @@ export async function pullMemoryFromServer(userId: string, opts?: { reconcile?: 
     });
   } catch { /* ignore */ }
   useMemoryStore.getState().replacePoints(merged, useMemoryStore.getState().initialRevealDone);
+  if (!aborted) clearPullRetry();
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('../services/bootDiagnostics').markBootPhase('pull_memory_after_replacepoints');
   } catch {/* ignore */}
 
   // If we got aborted mid-pagination, schedule resume on remaining pages.
-  if (aborted && pullCursor.afterTs > 0) {
-    setTimeout(() => { if (myUserId === activeUserId) void pullMemoryFromServer(myUserId); }, RETRY_PULL_DELAY_MS);
+  if (aborted && authFailure) {
+    authBlocked = true;
+    syncMetrics.authBlocked = true;
+  } else if (aborted && retryableFailure && pullCursor.afterTs > 0) {
+    schedulePullRetry(myUserId);
   }
 }
 
@@ -352,19 +466,22 @@ function sameContent(a: VisitedPoint[], b: VisitedPoint[]): boolean {
     if (a[i].lat !== b[i].lat || a[i].lng !== b[i].lng) return false;
     if (a[i].evidenceSource !== b[i].evidenceSource) return false;
     if (a[i].sourceActivityClientId !== b[i].sourceActivityClientId) return false;
+    if (a[i].sourceSegmentId !== b[i].sourceSegmentId) return false;
     if (a[i].horizontalAccuracyM !== b[i].horizontalAccuracyM) return false;
     if (a[i].continuityState !== b[i].continuityState) return false;
   }
   return true;
 }
 
-async function pushPendingPoints(): Promise<void> {
-  if (authBlocked) return;
+async function pushPendingPoints(options?: { sourceActivityClientId?: string }): Promise<MemoryPushResult> {
+  if (authBlocked) return emptyPushResult('auth_required');
   if (pushRunning || pullRunning) {
     schedulePush(PUSH_DEBOUNCE_MS);
-    return;
+    return emptyPushResult('busy');
   }
-  if (!activeUserId) return;
+  if (!activeUserId || !currentAuthenticatedOwnerIs(activeUserId)) {
+    return emptyPushResult('owner_mismatch');
+  }
   // v407 fix #2: 若未登录(pre-warm 阶段 hydrate 已 attach 但用户还没登录),
   // 不推。避免 401 → apiService 走 auto-logout → 清刚 pre-warm 的 sessions/markers。
   // subscriber 依然订阅,用户登录后 next unsynced count 变化会 re-trigger push。
@@ -373,23 +490,26 @@ async function pushPendingPoints(): Promise<void> {
     const { useAppStore } = require('../store/useAppStore');
     if (!useAppStore.getState().isLoggedIn) {
       // Reschedule for after login flip — subscriber will pick it up naturally.
-      return;
+      return emptyPushResult('auth_required');
     }
   } catch { /* module cycle safety */ }
   const now = Date.now();
   if (now < backoffUntil) {
     schedulePush(backoffUntil - now);
-    return;
+    return emptyPushResult('backoff');
   }
   const myEpoch = epoch;
   const myUserId = activeUserId;
   const memoryState = useMemoryStore.getState();
   const allPoints = memoryState.points;
-  const pending = allPoints.filter((p) => !p.synced);
-  const pendingPresence = (memoryState.presenceWitnesses ?? []).filter((witness) => !witness.synced);
+  const sourceActivityClientId = options?.sourceActivityClientId;
+  const pending = allPoints.filter((p) => !p.synced
+    && (!sourceActivityClientId || p.sourceActivityClientId === sourceActivityClientId));
+  const pendingPresence = (memoryState.presenceWitnesses ?? []).filter((witness) => !witness.synced
+    && (!sourceActivityClientId || witness.sourceActivityClientId === sourceActivityClientId));
   if (pending.length === 0 && pendingPresence.length === 0) {
     pendingBurstStartedAt = null;
-    return;
+    return emptyPushResult('nothing_to_push');
   }
 
   const batch = pending.slice(0, MAX_BATCH);
@@ -399,12 +519,14 @@ async function pushPendingPoints(): Promise<void> {
   const myCtrl = pushAbortController;
   useMemoryStore.getState().bumpInFlight(1);
   let serverError = false;
+  let result = emptyPushResult('failed');
   try {
     syncMetrics.pushRequests += 1;
     syncMetrics.pushedPoints += batch.length;
     syncMetrics.pushedPresenceWitnesses += presenceBatch.length;
     const res = await fetchWithTimeout('/api/memory/points', {
       method: 'POST',
+      expectedUserId: myUserId,
       body: JSON.stringify({
         points: batch.map((p) => ({
           lat: p.lat,
@@ -433,19 +555,57 @@ async function pushPendingPoints(): Promise<void> {
         })),
       }),
     }, myCtrl);
-    if (myEpoch !== epoch || myUserId !== activeUserId) return;
+    if (myEpoch !== epoch || myUserId !== activeUserId || !currentAuthenticatedOwnerIs(myUserId)) {
+      return emptyPushResult('owner_mismatch');
+    }
     if (res.ok) {
       const body = await res.json().catch(() => null);
-      const echo: Array<EchoEntry | null> = Array.isArray(body?.points) ? body.points : [];
+      if (myEpoch !== epoch || myUserId !== activeUserId || !currentAuthenticatedOwnerIs(myUserId)) {
+        return emptyPushResult('owner_mismatch');
+      }
+      const rawEcho = body?.points;
+      const echoShapeValid = Array.isArray(rawEcho)
+        && rawEcho.length === batch.length
+        && rawEcho.every((entry: any, index: number) => entry === null || (
+          Number.isInteger(entry?.batch_index)
+          && entry.batch_index === index
+          && Number(entry.ts) === batch[index].ts
+          && typeof entry.cid === 'string'
+          && entry.cid.length > 0
+        ));
+      const echo: Array<EchoEntry | null> = echoShapeValid ? rawEcho : [];
       useMemoryStore.getState().applyServerEchoForPushAligned(batch, echo);
-      const acceptedPresenceCids = (Array.isArray(body?.presence_witnesses) ? body.presence_witnesses : [])
-        .map((entry: any) => String(entry?.cid ?? ''))
+      const acceptedPointCids = echo
+        .map(entry => String(entry?.cid ?? ''))
         .filter(Boolean);
+      const sentPresenceCids = new Set(presenceBatch.map(entry => entry.cid));
+      const rawPresenceEcho = body?.presence_witnesses;
+      const presenceEchoShapeValid = Array.isArray(rawPresenceEcho)
+        && rawPresenceEcho.every((entry: any) => (
+          typeof entry?.cid === 'string'
+          && sentPresenceCids.has(entry.cid)
+          && Number.isFinite(Number(entry.observed_at_ms))
+        ));
+      const acceptedPresenceCids = presenceEchoShapeValid
+        ? [...new Set(rawPresenceEcho.map((entry: any) => String(entry.cid)))]
+        : [];
       useMemoryStore.getState().markPresenceWitnessesSynced(presenceBatch, acceptedPresenceCids);
-      backoffUntil = 0;
-      const hasMore = pending.length > MAX_BATCH || pendingPresence.length > MAX_BATCH;
-      pendingBurstStartedAt = hasMore ? Date.now() : null;
-      if (hasMore) schedulePush(0);
+      const completeEcho = echoShapeValid
+        && presenceEchoShapeValid
+        && acceptedPointCids.length === batch.length
+        && acceptedPresenceCids.length === presenceBatch.length;
+      if (completeEcho) {
+        result = { status: 'acknowledged', acceptedPointCids, acceptedPresenceCids };
+        backoffUntil = 0;
+        const hasMore = pending.length > MAX_BATCH || pendingPresence.length > MAX_BATCH;
+        pendingBurstStartedAt = hasMore ? Date.now() : null;
+        if (hasMore) schedulePush(0);
+      } else {
+        // A 2xx is not durability proof when even one submitted record is
+        // absent from the server echo. Keep every unacknowledged item queued.
+        serverError = true;
+        result = emptyPushResult('failed');
+      }
     } else if (res.status === 401) {
       // A final 401 after authenticatedFetch's own refresh path is not a
       // transient network error. Preserve local evidence and wait for a real
@@ -453,11 +613,14 @@ async function pushPendingPoints(): Promise<void> {
       authBlocked = true;
       syncMetrics.authBlocked = true;
       pendingBurstStartedAt = null;
+      result = emptyPushResult('auth_required');
     } else {
       serverError = true;
+      result = emptyPushResult('failed');
     }
   } catch {
     serverError = true;
+    result = emptyPushResult('failed');
   } finally {
     pushRunning = false;
     if (pushAbortController === myCtrl) pushAbortController = null;
@@ -471,6 +634,7 @@ async function pushPendingPoints(): Promise<void> {
     backoffUntil = Date.now() + BACKOFF_MS;
     schedulePush(BACKOFF_MS);
   }
+  return result;
 }
 
 function schedulePush(delayMs = PUSH_DEBOUNCE_MS): void {
@@ -532,6 +696,7 @@ export function detachMemorySync(): void {
     clearTimeout(pushTimer);
     pushTimer = null;
   }
+  clearPullRetry();
   if (unsubscribe) {
     unsubscribe();
     unsubscribe = null;
@@ -546,12 +711,56 @@ export function detachMemorySync(): void {
   pullCursor = { afterTs: 0, afterCid: '' };
 }
 
-export async function pushMemoryNow(): Promise<void> {
+export async function pushMemoryNow(): Promise<MemoryPushResult> {
   if (pushTimer) {
     clearTimeout(pushTimer);
     pushTimer = null;
   }
-  await pushPendingPoints();
+  return pushPendingPoints();
+}
+
+/**
+ * Flush and prove Memory evidence for one immutable Activity identity. This
+ * bypasses unrelated older batches but still requires the normal authenticated
+ * endpoint's exact echo. Public discovery cannot treat a busy, auth, backoff,
+ * partial, or HTTP outcome as acknowledgement.
+ */
+export async function pushMemoryForActivityNow(input: {
+  ownerUserId: string;
+  sourceActivityClientId: string;
+}): Promise<{ acknowledged: boolean; reason: MemoryPushResult['status'] | 'missing_evidence' | 'partial' }> {
+  if (!input.ownerUserId || activeUserId !== input.ownerUserId) {
+    return { acknowledged: false, reason: 'owner_mismatch' };
+  }
+  const matchesActivity = (value: { sourceActivityClientId?: string }) => (
+    value.sourceActivityClientId === input.sourceActivityClientId
+  );
+  const evidence = () => {
+    const state = useMemoryStore.getState();
+    const points = state.points.filter(matchesActivity);
+    const presence = (state.presenceWitnesses ?? []).filter(matchesActivity);
+    return {
+      total: points.length + presence.length,
+      unsynced: points.filter(point => !point.synced).length
+        + presence.filter(witness => !witness.synced).length,
+    };
+  };
+  let current = evidence();
+  if (current.total === 0) return { acknowledged: false, reason: 'missing_evidence' };
+  if (current.unsynced === 0) return { acknowledged: true, reason: 'nothing_to_push' };
+
+  for (let batchIndex = 0; batchIndex < 50 && current.unsynced > 0; batchIndex += 1) {
+    const before = current.unsynced;
+    const pushed = await pushPendingPoints({ sourceActivityClientId: input.sourceActivityClientId });
+    if (pushed.status !== 'acknowledged' && pushed.status !== 'nothing_to_push') {
+      return { acknowledged: false, reason: pushed.status };
+    }
+    current = evidence();
+    if (current.unsynced >= before) return { acknowledged: false, reason: 'partial' };
+  }
+  return current.unsynced === 0
+    ? { acknowledged: true, reason: 'acknowledged' }
+    : { acknowledged: false, reason: 'partial' };
 }
 
 /** Resume a 401-paused Memory outbox only after authentication is known good. */
@@ -561,6 +770,12 @@ export function notifyMemoryAuthRefreshed(userId: string): void {
   syncMetrics.authBlocked = false;
   backoffUntil = 0;
   if (useMemoryStore.getState()._unsyncedCount + (useMemoryStore.getState()._unsyncedPresenceCount ?? 0) > 0) schedulePush(0);
+  const hydration = useMemoryStore.getState().localHydration;
+  if (hydration?.ownerUserId === userId
+    && hydration.requiresInitialReconcile
+    && hydration.initialReconcile !== 'success') {
+    schedulePullRetry(userId, { reconcile: true });
+  }
 }
 
 /** Force-clear memory on the server.
@@ -582,10 +797,14 @@ export function notifyMemoryAuthRefreshed(userId: string): void {
  * the earlier operations, not this new one.
  */
 export async function deleteAllMemoryFromServer(expectedUserId: string): Promise<boolean> {
-  if (!expectedUserId || activeUserId !== expectedUserId) return false;
+  if (!expectedUserId
+    || activeUserId !== expectedUserId
+    || !currentAuthenticatedOwnerIs(expectedUserId)) return false;
   // (1) invalidate any in-flight push/pull results
   epoch += 1;
   const deleteEpoch = epoch;
+  const persistenceResetEpoch = beginMemoryPersistenceReset(expectedUserId);
+  clearPullRetry();
   // (2) cancel any debounced push scheduled to fire imminently
   if (pushTimer) {
     clearTimeout(pushTimer);
@@ -619,12 +838,37 @@ export async function deleteAllMemoryFromServer(expectedUserId: string): Promise
       && deleteEpoch === epoch
       && activeUserId === expectedUserId
       && liveOwnerId === expectedUserId) {
-      // (5) local clear
-      useMemoryStore.getState().clearAll();
+      // (5) Fence the independent headless evidence journal before clearing
+      // the mounted projection. Otherwise the next hydrate would replay the
+      // just-deleted route and could upload it again.
+      try {
+        await purgeDurableMemoryEvidence(expectedUserId);
+        await purgeFogDisplayCache(expectedUserId, { permanent: false });
+        await resetH3PersistenceForUser(expectedUserId);
+      } catch {
+        // Privacy completion is fail-closed. Do not clear the visible/durable
+        // snapshot while an independent precise-evidence store may remain.
+        await flushMemoryNow().catch(() => undefined);
+        schedulePush(0);
+        return false;
+      }
+      const ownerAfterPurge = require('../store/useAppStore').useAppStore.getState().user?.id;
+      if (deleteEpoch !== epoch
+        || activeUserId !== expectedUserId
+        || String(ownerAfterPurge ?? '') !== expectedUserId) return false;
+      try {
+        await commitMemoryPersistenceReset(expectedUserId, persistenceResetEpoch);
+      } catch {
+        return false;
+      }
       return true;
     }
+    await flushMemoryNow().catch(() => undefined);
+    schedulePush(0);
     return false;
   } catch {
+    await flushMemoryNow().catch(() => undefined);
+    schedulePush(0);
     return false;
   }
 }

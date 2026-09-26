@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, Animated, InteractionManager } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -55,6 +55,8 @@ import { AppButton } from '../../../components/AppButton';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { useAppStore } from '../../../store/useAppStore';
 import { usePublicCairnStore } from '../../public/services/publicCairns';
+import { pullMemoryFromServer } from '../../../services/memorySync';
+import { publishInitialMemoryReconcile } from '../services/memoryPersistence';
 // v427: async hierarchy from /api/hierarchy (world-wide data)
 import { fetchDeepest } from '../services/hierarchyService';
 // v424 hierarchy panel
@@ -82,13 +84,7 @@ type FailReason = 'permission' | 'timeout' | 'error';
 // (tab switching). Does NOT survive app cold start — that's fine.
 // Dev caveat: Metro fast refresh resets module scope, so the fix is only
 // verifiable on release builds.
-let _lastKnownCoord: { lat: number; lng: number; ts: number } | null = null;
-
-// Bug fix: track whether fog+map have successfully loaded at least once
-// in this JS session. On subsequent mounts (tab switch / 5-min remount),
-// skip the 8s loading overlay entirely — show the map immediately since
-// cached tiles + module-level fog shape make reload near-instant.
-let _fogEverReady = false;
+const _lastKnownCoordByOwner = new Map<string, { lat: number; lng: number; ts: number }>();
 
 // v357 diagnostic: module-scope counter for MemoryScreen render invocations.
 // Counts across mount/unmount within the same JS session so we can tell
@@ -138,6 +134,7 @@ export function MemoryScreen() {
   const memoryPoints = useMemoryStore((s) => s.points);
   const syntheticTestPoints = useMemoryStore((s) => s.testPoints);
   const presenceWitnesses = useMemoryStore((s) => s.presenceWitnesses);
+  const localHydration = useMemoryStore((s) => s.localHydration);
   const debugMode = useSettingsStore((s) => s.debugMode);
   const simulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
   const simulatorCurrent = useActivitySimulatorStore((s) => s.current);
@@ -165,6 +162,7 @@ export function MemoryScreen() {
   const [refetchToken, setRefetchToken] = useState(0);
   const [recenterToken, setRecenterToken] = useState(0);
   const [mountKey, setMountKey] = useState(0);
+  const mountKeyRef = useRef(0);
   const [showHint, setShowHint] = useState(false);
   // Toast shown after friend fog finishes loading in background.
   const [friendFogToast, setFriendFogToast] = useState<string | null>(null);
@@ -209,8 +207,6 @@ export function MemoryScreen() {
   //
   // States: 'loading' (overlay opaque) | 'ready' (faded out) | 'slow'
   // (faded out + banner).
-  const [loadingState, setLoadingState] = useState<'loading' | 'ready' | 'slow'>('loading');
-  const [loadingStage, setLoadingStage] = useState<0 | 1 | 2>(0); // 0..2s / 2..5s / 5s+
   const [mapReady, setMapReady] = useState(false);
   // Sprint 70 STORY-00540 + 542: 5-friend pick modal + paywall when 6+.
   const [pickModalOpen, setPickModalOpen] = useState(false);
@@ -227,6 +223,7 @@ export function MemoryScreen() {
   const hydrateFriendProjections = useFriendMemoryStore((s) => s.hydrate);
   const friendProjectionError = useFriendMemoryStore((s) => s.error);
   const userId = useAppStore((s) => s.user?.id ?? null);
+  const activeOwnerId = userId == null ? null : String(userId);
   const publicEnabled = usePublicCairnStore((s) => s.enabled);
   const publicEntries = usePublicCairnStore((s) => s.entries);
   const publicNewlySurfacedId = usePublicCairnStore((s) => s.newlySurfacedId);
@@ -309,127 +306,26 @@ export function MemoryScreen() {
   }, [subscriptions, loadCircleMarkers, loadFriendProjections]);
 
   const handleCameraCenter = useCallback(
-    (lat: number, lng: number) => {
+    (lat: number, lng: number, sourceMountKey: number) => {
+      if (mountKeyRef.current !== sourceMountKey) return;
       cameraCenterRef.current = { lat, lng };
     },
     [],
   );
-  const handleMapUnavailable = useCallback(() => {
+  const handleMapUnavailable = useCallback((sourceMountKey: number) => {
+    if (mountKeyRef.current !== sourceMountKey) return;
     log('memory.map_renderer_unavailable', {});
     // The fallback is a completed, usable state. It has no fog renderer, so
     // satisfy both presentation gates without claiming geometry was drawn.
     setMapReady(true);
     setFogReady(true);
   }, []);
-  // v363: user-dismissed banner state. When user taps the X close on
-  // the slow-network banner, hide it for the rest of this Memory tab
-  // session. Resets on mountKey bump.
-  const [slowBannerDismissed, setSlowBannerDismissed] = useState(false);
-  const overlayOpacity = useRef(new Animated.Value(1)).current;
-  const overlayHiddenRef = useRef(false);
-  const overlayFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stageTimer1Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stageTimer2Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // v368: when the slow banner appears, hold it visible for AT LEAST
-  // SLOW_BANNER_MIN_MS so the user actually has time to read it.
-  // Without this, a network that completes a few ms after the timeout
-  // would show the banner for a single frame — a confusing flash.
-  // slowShownAtRef = timestamp banner became visible; bannerMinShowTimerRef
-  // = pending timer that will re-evaluate map-ready state once the
-  // minimum has elapsed.
-  const slowShownAtRef = useRef<number>(0);
-  const bannerMinShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Reset overlay state on each remount (mountKey bump).
+  // MemoryMap owns the one canonical basemap loading/error overlay. This
+  // parent tracks only the independent Fog restoration phase.
   useEffect(() => {
-    // Bug fix: if fog+map loaded successfully before in this JS session,
-    // skip the loading overlay entirely — cached tiles + module-level fog
-    // shape make reload near-instant. No 8s timer needed.
-    if (_fogEverReady) {
-      overlayHiddenRef.current = true;
-      overlayOpacity.setValue(0);
-      setMapReady(true);
-      setFogReady(true);
-      setLoadingState('ready');
-      setLoadingStage(0);
-      setSlowBannerDismissed(false);
-      slowShownAtRef.current = 0;
-      log('memory.overlay_skipped_fog_ever_ready', { mountKey });
-      return () => {};
-    }
-    overlayHiddenRef.current = false;
     setMapReady(false);
     setFogReady(false);
-    setLoadingState('loading');
-    setLoadingStage(0);
-    setSlowBannerDismissed(false); // v363: reset dismissal on remount
-    slowShownAtRef.current = 0; // v368
-    overlayOpacity.setValue(1);
-    if (overlayFadeTimerRef.current) {
-      clearTimeout(overlayFadeTimerRef.current);
-      overlayFadeTimerRef.current = null;
-    }
-    if (stageTimer1Ref.current) clearTimeout(stageTimer1Ref.current);
-    if (stageTimer2Ref.current) clearTimeout(stageTimer2Ref.current);
-    if (bannerMinShowTimerRef.current) {
-      clearTimeout(bannerMinShowTimerRef.current);
-      bannerMinShowTimerRef.current = null;
-    }
-    // Stage transitions: stage 1 at 2s, stage 2 at 5s.
-    stageTimer1Ref.current = setTimeout(() => setLoadingStage(1), 2000);
-    stageTimer2Ref.current = setTimeout(() => setLoadingStage(2), 5000);
-    // 8s hard timeout: fade overlay AND switch to 'slow' state which
-    // shows the retry banner.
-    overlayFadeTimerRef.current = setTimeout(() => {
-      if (!overlayHiddenRef.current) {
-        log('v360.overlay_timeout_slow', {});
-        overlayHiddenRef.current = true;
-        setLoadingState('slow');
-        slowShownAtRef.current = Date.now(); // v368: stamp visibility start
-        Animated.timing(overlayOpacity, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
-      }
-    }, 8000);
-    return () => {
-      if (overlayFadeTimerRef.current) {
-        clearTimeout(overlayFadeTimerRef.current);
-        overlayFadeTimerRef.current = null;
-      }
-      if (stageTimer1Ref.current) clearTimeout(stageTimer1Ref.current);
-      if (stageTimer2Ref.current) clearTimeout(stageTimer2Ref.current);
-      if (bannerMinShowTimerRef.current) {
-        clearTimeout(bannerMinShowTimerRef.current);
-        bannerMinShowTimerRef.current = null;
-      }
-    };
-  }, [mountKey, overlayOpacity]);
-
-  // Basemap readiness and Memory restoration are different truths. Reveal
-  // the usable map as soon as Mapbox paints; Fog restoration may continue
-  // behind a quiet, delayed status below the scope controls.
-  useEffect(() => {
-    if (!mapReady) return;
-    if (overlayFadeTimerRef.current) {
-      clearTimeout(overlayFadeTimerRef.current);
-      overlayFadeTimerRef.current = null;
-    }
-    if (stageTimer1Ref.current) clearTimeout(stageTimer1Ref.current);
-    if (stageTimer2Ref.current) clearTimeout(stageTimer2Ref.current);
-
-    if (!overlayHiddenRef.current) {
-      overlayHiddenRef.current = true;
-      log('memory.basemap_ready_fadeout', { fogReady });
-      Animated.timing(overlayOpacity, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    }
-    setLoadingState(fogReady ? 'ready' : 'loading');
-  }, [mapReady, fogReady, overlayOpacity]);
+  }, [mountKey]);
 
   useEffect(() => {
     setRestoringMemoryVisible(false);
@@ -441,15 +337,31 @@ export function MemoryScreen() {
   // Retry handler: reset state + bump refetchToken to re-trigger pull.
   const handleRetryLoad = () => {
     log('v360.user_retry');
-    setLoadingState('loading');
-    setLoadingStage(0);
     setMapReady(false);
     setFogReady(false);
-    overlayHiddenRef.current = false;
-    overlayOpacity.setValue(1);
     setRefetchToken((n) => n + 1);
-    setMountKey((n) => n + 1);
+    setMountKey((n) => {
+      const next = n + 1;
+      mountKeyRef.current = next;
+      return next;
+    });
   };
+
+  const initialMemoryOffline = Boolean(
+    userId
+    && localHydration.ownerUserId === String(userId)
+    && localHydration.status === 'ready'
+    && localHydration.requiresInitialReconcile
+    && localHydration.initialReconcile === 'offline'
+  );
+  const handleRetryInitialMemory = useCallback(async () => {
+    if (!userId) return;
+    const owner = String(userId);
+    if (!await publishInitialMemoryReconcile(owner, 'pending')) return;
+    setFogUnavailable(false);
+    setFogReady(false);
+    await pullMemoryFromServer(owner, { reconcile: true });
+  }, [userId]);
 
   // v333: Recenter button is hidden until the user actively pans/zooms.
   // User intent (decision E): "an icon like Hiking — only appears after I
@@ -499,10 +411,6 @@ export function MemoryScreen() {
   const lastRefetchAtRef = useRef(0);
   // S3 fix: separate debounce for the EXPENSIVE map remount.
   const lastMountAtRef = useRef(0);
-  // O1 (2026-07-26): mountKey ref mirror,供 useFocusEffect 空 deps closure
-  // 读 latest 值 (原直接读 mountKey state 是 stale closure,log 恒 0)。
-  const mountKeyRef = useRef(0);
-
   useEffect(() => {
     if (!settingsHydrated) return;
     if (!firstVisitDone) setShowHint(true);
@@ -690,6 +598,37 @@ export function MemoryScreen() {
         ? { lat: watcherFix.lat, lng: watcherFix.lng }
         : null;
 
+  const ownedEvidenceCenter = useMemo<FixState | null>(() => {
+    if (!activeOwnerId
+      || localHydration.ownerUserId !== activeOwnerId
+      || localHydration.status !== 'ready') return null;
+    const candidates = syntheticQaAuthority
+      ? syntheticTestPoints.map(point => ({ lat: point.lat, lng: point.lng, ts: point.ts }))
+      : [
+          ...memoryPoints.map(point => ({ lat: point.lat, lng: point.lng, ts: point.ts })),
+          ...presenceWitnesses.map(witness => ({
+            lat: witness.lat,
+            lng: witness.lng,
+            ts: witness.observedAtMs,
+          })),
+        ];
+    let latest: { lat: number; lng: number; ts: number } | null = null;
+    for (const candidate of candidates) {
+      if (!Number.isFinite(candidate.lat) || !Number.isFinite(candidate.lng)
+        || !Number.isFinite(candidate.ts)) continue;
+      if (!latest || candidate.ts > latest.ts) latest = candidate;
+    }
+    return latest ? { lat: latest.lat, lng: latest.lng } : null;
+  }, [
+    activeOwnerId,
+    localHydration.ownerUserId,
+    localHydration.status,
+    memoryPoints,
+    presenceWitnesses,
+    syntheticQaAuthority,
+    syntheticTestPoints,
+  ]);
+
   // v333: stableCoord — fix the "Looking for your position…" flicker
   // (Spike L true root cause). When the Zustand selectors briefly
   // resolve coord to null within a single render commit cycle (e.g.
@@ -702,11 +641,14 @@ export function MemoryScreen() {
   // QA note: dev fast-refresh resets module scope; verify the fix on a
   // release build, not dev/Metro.
   useEffect(() => {
-    if (coord) _lastKnownCoord = { lat: coord.lat, lng: coord.lng, ts: Date.now() };
-  }, [coord]);
+    if (coord && activeOwnerId) {
+      _lastKnownCoordByOwner.set(activeOwnerId, { lat: coord.lat, lng: coord.lng, ts: Date.now() });
+    }
+  }, [activeOwnerId, coord]);
+  const cachedLiveCoord = activeOwnerId ? _lastKnownCoordByOwner.get(activeOwnerId) : null;
   const stableCoord: FixState | null = coord ?? (
-    _lastKnownCoord && Date.now() - _lastKnownCoord.ts < 30_000
-      ? { lat: _lastKnownCoord.lat, lng: _lastKnownCoord.lng }
+    cachedLiveCoord && Date.now() - cachedLiveCoord.ts < 30_000
+      ? { lat: cachedLiveCoord.lat, lng: cachedLiveCoord.lng }
       : null
   );
 
@@ -723,11 +665,21 @@ export function MemoryScreen() {
   // MemoryMap with this last-known value instead of tearing it down
   // to a "Looking for position" overlay. Map never unmounts after
   // first successful render → no full-screen flash during pinch/zoom.
-  const lastRenderedCoordRef = useRef<{ lat: number; lng: number } | null>(null);
-  if (stableCoord) {
-    lastRenderedCoordRef.current = { lat: stableCoord.lat, lng: stableCoord.lng };
+  const lastRenderedCoordRef = useRef<{
+    ownerUserId: string;
+    coord: { lat: number; lng: number };
+  } | null>(null);
+  const nextMapCenter = stableCoord ?? ownedEvidenceCenter;
+  if (activeOwnerId && nextMapCenter) {
+    lastRenderedCoordRef.current = {
+      ownerUserId: activeOwnerId,
+      coord: { lat: nextMapCenter.lat, lng: nextMapCenter.lng },
+    };
   }
-  const persistentCoord = lastRenderedCoordRef.current;
+  const persistentCoord = activeOwnerId
+    && lastRenderedCoordRef.current?.ownerUserId === activeOwnerId
+    ? lastRenderedCoordRef.current.coord
+    : null;
 
   // v357 diagnostic: log every render of MemoryScreen body. ctx tells us
   // (a) which render index this is, (b) whether we have a coord to draw
@@ -787,8 +739,9 @@ export function MemoryScreen() {
     // onCameraChanged should also fire later, but relying on it alone
     // was unreliable for imperative camera moves.
     if (persistentCoord) {
-      cameraCenterRef.current = { lat: persistentCoord.lat, lng: persistentCoord.lng };
-      log('v445.recenter_camera_ref_set', { lat: persistentCoord.lat, lng: persistentCoord.lng });
+      const target = stableCoord ?? persistentCoord;
+      cameraCenterRef.current = { lat: target.lat, lng: target.lng };
+      log('v445.recenter_camera_ref_set', { lat: target.lat, lng: target.lng });
     }
     // R7 fix: only refetch GPS if we have nothing OR our cached fix is
     // older than the freshness window. Otherwise just camera-flyTo.
@@ -882,22 +835,35 @@ export function MemoryScreen() {
           ref={mapRef}
           centerLat={persistentCoord.lat}
           centerLng={persistentCoord.lng}
+          showUserLocation={Boolean(stableCoord)}
           recenterToken={recenterToken}
           flyToTarget={flyToTarget}
-          onMapMoved={() => setMapMoved(true)}
-          onCameraCenter={handleCameraCenter}
+          onMapMoved={() => {
+            if (mountKeyRef.current === mountKey) setMapMoved(true);
+          }}
+          onCameraCenter={(lat, lng) => handleCameraCenter(lat, lng, mountKey)}
           onMapFullyReady={() => {
+            if (mountKeyRef.current !== mountKey) return;
             log('v359.map_fully_ready_cb', {});
             setMapReady(true);
           }}
-          onMapUnavailable={handleMapUnavailable}
+          onMapUnavailable={() => handleMapUnavailable(mountKey)}
+          onFogPreparing={() => {
+            if (mountKeyRef.current !== mountKey) return;
+            setFogUnavailable(false);
+            setFogReady(false);
+          }}
           onFogReady={() => {
+            if (mountKeyRef.current !== mountKey) return;
             log('v359.fog_ready_cb', {});
-            _fogEverReady = true;
             setFogUnavailable(false);
             setFogReady(true);
           }}
-          onFogUnavailable={() => setFogUnavailable(true)}
+          onFogUnavailable={() => {
+            if (mountKeyRef.current !== mountKey) return;
+            setFogReady(false);
+            setFogUnavailable(true);
+          }}
           qaWorkspaceActive={syntheticQaAuthority}
           key={`map-${mountKey}`}
         />
@@ -953,7 +919,7 @@ export function MemoryScreen() {
         </View>
       )}
 
-      {persistentCoord && mapMoved && (
+      {persistentCoord && stableCoord && mapMoved && (
         <TouchableOpacity
           style={[styles.recenterBtn, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
           onPress={() => {
@@ -1043,80 +1009,6 @@ export function MemoryScreen() {
         </TouchableOpacity>
       )}
 
-      {/* v359: loading overlay covering MemoryMap until both gates fire
-          (Mapbox onDidFinishRenderingMapFully + FogLayer first holes) or
-          3s timeout. pointerEvents="none" so user gestures pass through
-          to the back button and (once visible) the map. Only shown when
-          persistentCoord exists — the no-coord branches above render
-          their own full-screen UI and don't need this overlay. */}
-      {persistentCoord && (
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.loadingOverlay, { opacity: overlayOpacity, backgroundColor: theme.background }]}
-        >
-          <View style={styles.loadingInner}>
-            <View style={[styles.loadingLogoCircle, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
-              <CairnIcon name="memory" size={38} color={theme.iconActive} accent={theme.accent} active />
-            </View>
-            <Text style={[styles.loadingEyebrow, { color: theme.foregroundSecondary }]}>YOUR MEMORY</Text>
-            <Text style={[styles.loadingTitle, { color: theme.foreground }]}>Opening your map</Text>
-            <Text style={[styles.loadingSub, { color: theme.foregroundSecondary }]}>
-              {loadingStage === 0
-                ? 'Loading map…'
-                : loadingStage === 1
-                  ? 'Restoring explored places…'
-                  : 'Finishing your Memory view…'}
-            </Text>
-            <ActivityIndicator
-              color={theme.primary}
-              size="small"
-              style={styles.loadingSpinner}
-            />
-          </View>
-        </Animated.View>
-      )}
-      {/* v366: slow-network banner — height-matched frosted pill that
-          starts AFTER a visible gap from the back button and stretches
-          to the screen right edge.
-          User feedback on v365: bar was hugging the back button (gap too
-          small), height didn't match back button (32 vs 31), and sepia
-          brown looked off against the rest of the UI.
-          v366 fixes:
-            - left: 100 (12 topBar gutter + ~72 BackButton width + 16 gap)
-            - height 31, paddingVertical 7 (matches BackButton.pillContent)
-            - borderRadius 20 (Radius.pill, same as BackButton)
-            - frosted-light background rgba(255,255,255,0.85) + dark
-              text + soft card shadow — visually consistent with the
-              back button instead of a foreign sepia bar
-          Mapbox auto-retries tile loading underneath; user can dismiss
-          via the X button. English copy only. */}
-      {persistentCoord && loadingState === 'slow' && !mapReady && !slowBannerDismissed && (
-        <View
-          style={[styles.slowBanner, { top: insets.top + 8, left: 100, right: 12 }]}
-          pointerEvents="box-none"
-        >
-          <ActivityIndicator
-            color={Colors.primary}
-            size="small"
-            style={styles.slowBannerSpinner}
-          />
-          <Text style={styles.slowBannerText} numberOfLines={1}>
-            Map is taking longer…
-          </Text>
-          <TouchableOpacity
-            style={styles.slowBannerClose}
-            onPress={() => {
-              log('v363.slow_banner_dismissed');
-              setSlowBannerDismissed(true);
-            }}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.slowBannerCloseText}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Friend fog loaded toast — brief non-blocking confirmation */}
       {friendFogToast !== null && (
         <View
@@ -1130,15 +1022,30 @@ export function MemoryScreen() {
         </View>
       )}
 
-      {persistentCoord && restoringMemoryVisible && !fogReady ? (
+      {persistentCoord && restoringMemoryVisible && !fogReady && !initialMemoryOffline ? (
         <View
-          style={[styles.memoryRestoreBanner, { top: insets.top + 116, backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+          style={[styles.memoryRestoreBanner, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
           pointerEvents="none"
           testID="memory-restoring-status"
         >
           <ActivityIndicator color={theme.primary} size="small" style={styles.slowBannerSpinner} />
           <Text style={[styles.slowBannerText, { color: theme.foregroundSecondary }]} numberOfLines={1}>Restoring Memory…</Text>
         </View>
+      ) : null}
+
+      {persistentCoord && initialMemoryOffline ? (
+        <TouchableOpacity
+          style={[styles.memoryRestoreBanner, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+          onPress={handleRetryInitialMemory}
+          accessibilityRole="button"
+          accessibilityLabel="Connect and retry restoring Memory"
+          testID="memory-initial-reconcile-offline"
+        >
+          <Icon name="CloudOff" size={14} color={theme.iconInactive} strokeWidth={2.2} />
+          <Text style={[styles.slowBannerText, { color: theme.foregroundSecondary, marginLeft: 7 }]} numberOfLines={2}>
+            Connect to restore Memory · Tap to retry
+          </Text>
+        </TouchableOpacity>
       ) : null}
 
       {friendProjectionError === 'offline' && memoryScope !== 'self' ? (
@@ -1503,57 +1410,6 @@ const styles = StyleSheet.create({
   hintTitle: { fontSize: 17, fontWeight: '600', color: Colors.textPrimary, marginBottom: 10 },
   hintBody:  { fontSize: 13, lineHeight: 19, color: Colors.textSecondary, marginBottom: 18 },
   // v359: loading overlay — covers the entire MemoryMap during the
-  // map+fog hydrate window. Cream background matches the screen root
-  // so the cream→overlay transition is invisible; only the overlay→map
-  // fade-out is perceived.
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: MemoryColors.cream,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 5,
-  },
-  loadingInner: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-  },
-  loadingLogoCircle: {
-    width: 84, height: 84, borderRadius: 42,
-    backgroundColor: '#fffaf0',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: '#e8dfc8',
-    shadowColor: '#5b4628',
-    shadowOpacity: 0.10,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-    marginBottom: 18,
-  },
-  loadingTitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    letterSpacing: -0.25,
-    marginBottom: 6,
-  },
-  loadingEyebrow: {
-    fontSize: 9,
-    lineHeight: 12,
-    fontWeight: '700',
-    letterSpacing: 1.45,
-    marginBottom: 6,
-  },
-  loadingSub: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 18,
-  },
-  loadingSpinner: {
-    marginTop: 4,
-  },
   // v366 slow-network banner — frosted pill matched to BackButton.
   // Height = BackButton.pillContent (paddingVertical 7 + small font ~17
   // line-height = 31). borderRadius = Radius.pill (20). White semi-
@@ -1577,7 +1433,11 @@ const styles = StyleSheet.create({
   },
   memoryRestoreBanner: {
     position: 'absolute',
+    left: '50%',
+    top: '50%',
     alignSelf: 'center',
+    transform: [{ translateX: -105 }, { translateY: -16 }],
+    width: 210,
     minHeight: 32,
     maxWidth: 210,
     borderRadius: 18,
@@ -1597,17 +1457,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     flex: 1,
-  },
-  slowBannerClose: {
-    width: 20, height: 20, borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
-  slowBannerCloseText: {
-    color: Colors.primary,
-    fontSize: 11,
-    fontWeight: '700',
-    opacity: 0.7,
   },
 });

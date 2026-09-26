@@ -5,7 +5,12 @@ const mockStorage = {
   removeItem: jest.fn(async () => undefined),
   getItem: jest.fn(async () => null),
 };
-const mockSessionState = { clearSessions: jest.fn(), hydrate: jest.fn(async () => undefined), sessions: [] };
+const mockSessionState = {
+  clearSessions: jest.fn(),
+  hydrate: jest.fn(async () => undefined),
+  mergeRemoteSessions: jest.fn(async () => undefined),
+  sessions: [] as any[],
+};
 const mockMarkerState = { clearMarkers: jest.fn(), hydrate: jest.fn(async () => undefined) };
 const mockTrackingState = {
   suspendForUserSwitch: jest.fn(async () => undefined),

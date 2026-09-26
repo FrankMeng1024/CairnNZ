@@ -96,12 +96,31 @@ export function activityDetailNotices(state: ActivityRouteState): ActivityDetail
       title: 'Syncing Activity',
       detail: 'The local Activity remains available while Cairn sends it.',
     });
-  } else if (state.serverSync === 'error') {
+  } else if (state.serverSync === 'retryable_error') {
     notices.push({
       kind: 'sync',
       title: 'Retry sync',
       detail: 'The Activity is safe on this iPhone, but server sync needs another try.',
       action: 'retry-sync',
+    });
+  } else if (state.serverSync === 'auth_required') {
+    notices.push({
+      kind: 'sync',
+      title: 'Sign in to sync',
+      detail: 'The Activity is safe on this device. Sign in again, then retry sync.',
+      action: 'retry-sync',
+    });
+  } else if (state.serverSync === 'action_required') {
+    notices.push({
+      kind: 'sync',
+      title: 'Activity saved · sync needs review',
+      detail: 'Cairn kept the complete local Activity and stopped automatic retries after the server rejected its data.',
+    });
+  } else if (state.serverSync === 'dependency') {
+    notices.push({
+      kind: 'sync',
+      title: 'Activity saved · another Activity is unresolved',
+      detail: 'Resolve the other unfinished Activity before retrying this upload. Neither record was merged or removed.',
     });
   }
 

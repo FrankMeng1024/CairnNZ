@@ -24,6 +24,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppStore } from '../store/useAppStore';
 import { useTrackingStore } from '../store/useTrackingStore';
+import { useSessionStore } from '../store/useSessionStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { useRouteStore } from '../store/useRouteStore';
 import { routeMatchesIdentity } from '../features/route/routeContracts';
@@ -71,6 +72,7 @@ import {
 } from '../features/activity/activityOperationalState';
 import { saveEligibility } from '../features/activity/activityContracts';
 import { deriveActivityLocationHealth } from '../features/activity/activityLocationHealth';
+import { buildBaseFinalTrackPoints } from '../features/activity/activityFinalArtifact';
 import {
   findRecoverableActivity,
   restoreRecoverableActivity,
@@ -83,6 +85,7 @@ import {
   ActivityRecenterButton,
   ActivityStartDock,
   ActivityTopChrome,
+  activityStartErrorMessage,
   type ActivityNoticePresentation,
   type ActivityStatusTone,
 } from '../components/activity/ActivityRecordingChrome';
@@ -128,6 +131,7 @@ export function HikingScreen() {
   const nav = useNavigation<Nav>();
   const entryRoute = useRoute<any>();
   const requestedRouteId = entryRoute.params?.routeId as string | undefined;
+  const requestedRecoveryId = entryRoute.params?.recoverClientActivityId as string | undefined;
   const sharedRouteLease = entryRoute.params?.sharedRouteLease as any;
   const sharedRouteKey = sharedRouteLease ? `shared:${sharedRouteLease.leaseId}` : null;
   const isFocused = useIsFocused();
@@ -292,9 +296,24 @@ export function HikingScreen() {
   // the chosen name.
   const [stopSummary, setStopSummary] = useState<null | {
     distanceM: number; durationS: number; elevationGainM: number;
-    activityMode: 'hiking' | 'running'; trackPoints: Array<{ lat: number; lng: number }>;
+    activityMode: 'hiking' | 'running'; trackPoints: Array<{ lat: number; lng: number; segmentId?: string }>;
     startedAt: number;
   }>(null);
+  const [committedActivityId, setCommittedActivityId] = useState<string | null>(null);
+  const stopSummaryPresentation = useMemo(() => stopSummary ? (committedActivityId ? stopSummary : {
+    ...stopSummary,
+    distanceM,
+    durationS,
+    elevationGainM,
+    activityMode,
+    // Recording intentionally continues while naming. Recompute the same Base
+    // Final contract live so the preview and confirmed revision stay aligned.
+    trackPoints: buildBaseFinalTrackPoints(trackPoints).map(point => ({
+      lat: point.lat,
+      lng: point.lng,
+      segmentId: point.segmentId,
+    })),
+  }) : null, [activityMode, committedActivityId, distanceM, durationS, elevationGainM, stopSummary, trackPoints]);
   // O18 ONB-04: shared permission-denied modal state. When the user
   // rejects GPS on the initial prime effect (line ~525) or on Start Hike,
   // show a modal with Open Settings + Not now instead of silent return.
@@ -341,19 +360,35 @@ export function HikingScreen() {
   const hydrationTs = useAppStore(s => s.hydrationTs ?? 0);
   const [unfinished, setUnfinished] = useState<RecoverableActivity | null>(null);
   const [unfinishedResolutionRequested, setUnfinishedResolutionRequested] = useState(false);
+  const recoveryLookupGenerationRef = useRef(0);
+  useEffect(() => {
+    recoveryLookupGenerationRef.current += 1;
+    setUnfinished(null);
+    setUnfinishedResolutionRequested(false);
+  }, [simulatorOwnerUserId]);
   useEffect(() => {
     // 只在非 tracking/paused 状态下检测: 用户已经在 recording 中不该弹恢复
     if (hasLiveSession) return;
+    const requestedOwner = String(simulatorOwnerUserId ?? '');
+    if (!requestedOwner) return;
     {
       let current = true;
+      const lookupGeneration = ++recoveryLookupGenerationRef.current;
       const timer = setTimeout(() => {
-        void findRecoverableActivity('hiking').then(activity => {
-          if (current) setUnfinished(activity);
-        });
+        const requested = requestedRecoveryId
+          ? { clientActivityId: requestedRecoveryId, userId: requestedOwner }
+          : 'hiking' as const;
+        void findRecoverableActivity(requested).then(activity => {
+          if (!current
+            || lookupGeneration !== recoveryLookupGenerationRef.current
+            || String(useAppStore.getState().user?.id ?? '') !== requestedOwner) return;
+          setUnfinished(activity);
+          if (requestedRecoveryId && activity) setUnfinishedResolutionRequested(true);
+        }).catch(() => undefined);
       }, 100);
       return () => { current = false; clearTimeout(timer); };
     }
-  }, [hydrationTs, hasLiveSession]);
+  }, [hydrationTs, hasLiveSession, requestedRecoveryId, simulatorOwnerUserId]);
 
   useEffect(() => { void loadRoutes(); }, [loadRoutes]);
   useEffect(() => {
@@ -431,7 +466,7 @@ export function HikingScreen() {
                 });
               }
               const { drainPending } = require('../services/syncDaemon');
-              await drainPending();
+              await drainPending({ wakeReason: 'manual', force: true });
               // Sprint 6 round-9 review R9B4 fix: drainPending catches
               // per-hike errors internally (markAttempt) so a "successful"
               // drain doesn't prove OUR hike uploaded. Explicitly check
@@ -530,7 +565,7 @@ export function HikingScreen() {
                   });
                 }
                 const { drainPending } = require('../services/syncDaemon');
-                await drainPending();
+                await drainPending({ wakeReason: 'manual', force: true });
                 const { listPending } = require('../services/pendingSyncStore');
                 const stillPending = (await listPending()).some(
                   (h: any) => h.localId === payload?.localId,
@@ -666,7 +701,8 @@ export function HikingScreen() {
       clearActivityRouteReference();
       if (borrowedUse) await finalizeBorrowedRouteUse(borrowedUse, 'discarded').catch(() => {});
       const authoritative = await findRecoverableActivity('hiking');
-      if (authoritative) {
+      if (authoritative
+        && String(useAppStore.getState().user?.id ?? '') === authoritative.userId) {
         setUnfinished(authoritative);
         setUnfinishedResolutionRequested(true);
       }
@@ -689,8 +725,22 @@ export function HikingScreen() {
     setUi('map');
   }
 
-  // Unified save-then-navigate helper. Every successful completion lands on
-  // Activity Detail; unsuccessful local commit remains paused/retryable.
+  const openActivityDetail = (clientActivityId: string) => {
+    nav.dispatch(
+      CommonActions.reset({
+        index: 2,
+        routes: [
+          { name: 'Home' },
+          { name: 'Routes', params: { initialTab: 'activities' } },
+          { name: 'MapHistory', params: { sessionId: clientActivityId } },
+        ],
+      }),
+    );
+  };
+
+  // First commit the Activity, then show the exact verified Final artifact.
+  // Navigation is a second explicit action so a provisional live/Base trace
+  // is never presented as the route that Detail and Save as Route will use.
   async function saveHikeAndNav(name: string) {
     // O14 Bug 4 fix: flip saving state BEFORE dismissing the sheet so
     // the sheet shows "Saving…" spinner + disabled buttons while
@@ -700,65 +750,45 @@ export function HikingScreen() {
     const preState = useTrackingStore.getState();
     const capturedSessionId = preState.sessionId;
     let saved = false;
-    let detailOpenedFromBase = false;
-    const openCommittedDetail = (committedId: string) => {
-      if (!useAppStore.getState().isLoggedIn || detailOpenedFromBase) return;
-      detailOpenedFromBase = true;
-      setSavingHike(false);
-      setStopSummary(null);
-      nav.dispatch(
-        CommonActions.reset({
-          index: 2,
-          routes: [
-            { name: 'Home' },
-            { name: 'Routes', params: { initialTab: 'activities' } },
-            { name: 'MapHistory', params: { sessionId: committedId } },
-          ],
-        }),
-      );
-    };
     try {
-      saved = await stopTracking(name, openCommittedDetail);
+      saved = await stopTracking(name);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[activity] stopTracking error:', String(err));
     }
-    if (detailOpenedFromBase) return;
     setSavingHike(false);
-    if (saved || useTrackingStore.getState().lastStopReason === 'too-short') {
+    if (useTrackingStore.getState().lastStopReason === 'too-short') {
       setStopSummary(null);
+      return;
     }
 
     // v407 fix #3: snapshot isLoggedIn before nav — auto-logout during
     // stopTracking would leave only Auth in the stack and reset would
     // throw.
     const stillLoggedIn = useAppStore.getState().isLoggedIn;
-    if (!saved || !stillLoggedIn) {
+    if (!saved || !stillLoggedIn || !capturedSessionId) {
       // Too-short/local failure remains on the Activity surface. TooShortSheet
       // is driven by lastStopReason; a storage failure remains paused.
       // Not-logged-in: auto-logout handler owns the redirect to Auth.
       return;
     }
-
-    try {
-      if (capturedSessionId) {
-        // Primary "View Activity" — land on MapHistory detail with the
-        // Routes(activities) list as the back-stack target.
-        nav.dispatch(
-          CommonActions.reset({
-            index: 2,
-            routes: [
-              { name: 'Home' },
-              { name: 'Routes', params: { initialTab: 'activities' } },
-              { name: 'MapHistory', params: { sessionId: capturedSessionId } },
-            ],
-          })
-        );
-      }
-    } catch (navErr) {
-      // eslint-disable-next-line no-console
-      console.warn('[v407] nav.reset failed:', String(navErr));
-    }
+    const session = useSessionStore.getState().sessions.find(item => (
+      item.clientActivityId === capturedSessionId || item.id === capturedSessionId
+    ));
+    if (!session) return;
+    setCommittedActivityId(capturedSessionId);
+    setStopSummary({
+      distanceM: session.distanceM,
+      durationS: session.durationS,
+      elevationGainM: session.elevationGainM,
+      activityMode: session.activityMode,
+      trackPoints: session.trackPoints.map(point => ({
+        lat: point.lat,
+        lng: point.lng,
+        segmentId: point.segmentId,
+      })),
+      startedAt: session.startedAt,
+    });
   }
 
   // O12: settings-aware distance format (metric vs imperial).
@@ -933,47 +963,51 @@ export function HikingScreen() {
       data={unfinished}
       onContinue={async () => {
         const u = unfinished;
-        if (!u) return;
+        if (!u) return false;
         try {
-          await restoreRecoverableActivity(u);
+          const restored = await restoreRecoverableActivity(u);
+          if (!restored) return false;
+          setUnfinishedResolutionRequested(false);
+          setUnfinished(null);
+          return true;
         } catch (_recoverErr) {
           try {
             const cl = require('../services/crashLogger');
             (cl.crashLogger ?? cl.default)?.breadcrumb?.(`v412:recovery_continue_failed ${String(_recoverErr).slice(0, 80)}`);
           } catch { /* silent */ }
+          return false;
         }
-        setUnfinishedResolutionRequested(false);
-        setUnfinished(null);
       }}
       onSave={async () => {
         const u = unfinished;
-        if (!u) return;
+        if (!u) return false;
         try {
           const saved = await saveRecoverableActivity(u);
-          if (saved) {
-            nav.dispatch(
-              CommonActions.reset({
-                index: 2,
-                routes: [
-                  { name: 'Home' },
-                  { name: 'Routes', params: { initialTab: 'activities' } },
-                  { name: 'MapHistory', params: { sessionId: u.clientActivityId } },
-                ],
-              }),
-            );
-          }
-        } catch { /* local journal remains recoverable */ }
-        setUnfinishedResolutionRequested(false);
-        setUnfinished(null);
+          if (!saved) return false;
+          setUnfinishedResolutionRequested(false);
+          setUnfinished(null);
+          nav.dispatch(
+            CommonActions.reset({
+              index: 2,
+              routes: [
+                { name: 'Home' },
+                { name: 'Routes', params: { initialTab: 'activities' } },
+                { name: 'MapHistory', params: { sessionId: u.clientActivityId } },
+              ],
+            }),
+          );
+          return true;
+        } catch { return false; /* local journal remains recoverable */ }
       }}
       onDiscard={async () => {
         const u = unfinished;
-        if (!u) return;
+        if (!u) return false;
         try {
           await discardRecoverableActivity(u);
-        } catch { /* keep the prompt dismissible; disk delete is idempotent */ }
-        setUnfinishedResolutionRequested(false);
-        setUnfinished(null);
+          setUnfinishedResolutionRequested(false);
+          setUnfinished(null);
+          return true;
+        } catch { return false; /* retained data remains actionable */ }
       }}
     />
   );
@@ -1066,12 +1100,17 @@ export function HikingScreen() {
       setShowTooShortConfirm(true);
       return;
     }
+    setCommittedActivityId(null);
     setStopSummary({
       distanceM: current.distanceM,
       durationS: current.durationS,
       elevationGainM: current.elevationGainM,
       activityMode: current.activityMode,
-      trackPoints: current.trackPoints.map(point => ({ lat: point.lat, lng: point.lng })),
+      trackPoints: buildBaseFinalTrackPoints(current.trackPoints).map(point => ({
+        lat: point.lat,
+        lng: point.lng,
+        segmentId: point.segmentId,
+      })),
       startedAt: current.startedAt!,
     });
   };
@@ -1130,11 +1169,7 @@ export function HikingScreen() {
           onStart={handleStartHike}
           onOpenSettings={backgroundTrackingWarning ? () => { void Linking.openSettings(); } : undefined}
           starting={operationalState === 'starting'}
-          startError={startError === 'permission-denied'
-            ? 'Location permission is needed to start.'
-            : startError
-              ? 'Couldn’t start GPS. Check location settings and try again.'
-              : null}
+          startError={activityStartErrorMessage(startError)}
         />
 
         {/* Route picker sheet — non-fullscreen, slides up from bottom */}
@@ -1347,12 +1382,22 @@ export function HikingScreen() {
           name). Cancelling here keeps tracking running. */}
       {stopSummary && (
         <StopSummarySheet
-          summary={stopSummary}
+          summary={stopSummaryPresentation ?? stopSummary}
           saving={savingHike}
           savingStep={savingHikeStep}
           onCancel={() => {
-            // No state restoration is inferred or attempted: confirmation
-            // never changed Recording/Paused in the first place.
+            if (committedActivityId) {
+              setCommittedActivityId(null);
+              setStopSummary(null);
+              nav.dispatch(CommonActions.reset({
+                index: 1,
+                routes: [
+                  { name: 'Home' },
+                  { name: 'Routes', params: { initialTab: 'activities' } },
+                ],
+              }));
+              return;
+            }
             finishLifecycleBeforeSummary.current = null;
             setStopSummary(null);
           }}
@@ -1360,6 +1405,7 @@ export function HikingScreen() {
             // The store owns the crash-safe order: durable tombstone first,
             // then pending cancellation, server cancellation and file cleanup.
             await discardCurrentSession();
+            setCommittedActivityId(null);
             setStopSummary(null);
           }}
           onConfirm={async (name) => {
@@ -1367,6 +1413,10 @@ export function HikingScreen() {
             // save then nav.reset into MapHistory detail (existing v405
             // behavior).
             await saveHikeAndNav(name);
+          }}
+          committed={Boolean(committedActivityId)}
+          onViewActivity={() => {
+            if (committedActivityId) openActivityDetail(committedActivityId);
           }}
           // O1: removed onSaveAsRoute prop — hike is activity not template
         />

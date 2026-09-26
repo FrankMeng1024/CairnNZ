@@ -15,8 +15,8 @@
  *
  * Failure handling:
  *   - Network error → keep in queue, increment attempts
- *   - 401 → stop draining (would just loop), wait for next foreground
- *   - 4xx other than 401 → assume bad input, drop entry (log breadcrumb)
+ *   - 401 → retain as auth-required for a later authenticated wake
+ *   - 4xx other than 401 → retain as action-required; never erase evidence
  *   - 5xx → keep in queue, exponential backoff
  *
  * Out of scope (deliberate):
@@ -32,8 +32,6 @@ import { authenticatedFetch } from './apiService';
 import { crashLogger } from './crashLogger';
 
 const STORAGE_KEY = '@cairn:offline_queue:v1';
-const MAX_ATTEMPTS = 8; // ~beyond this, drop with a breadcrumb
-
 type OfflineOpKind =
   | 'session_append'
   | 'session_finalize'
@@ -56,18 +54,30 @@ interface OfflineOp {
   lastTriedAt?: number;
   /** Last error message (best-effort, for diagnostics only). */
   lastError?: string;
+  /** Retry policy derived from the actual last response. */
+  failureKind?: 'retryable' | 'auth_required' | 'action_required';
+  /** Immutable account owner. Unowned legacy rows are retained but never sent. */
+  userId?: string;
+  /** Stable Activity UUID; numeric session IDs are not business identity. */
+  clientActivityId?: string;
 }
 
 // ── Storage primitives ─────────────────────────────────────────────────────
 
 async function readQueue(): Promise<OfflineOp[]> {
+  let raw: string | null = null;
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+    if (!Array.isArray(parsed)) throw new Error('offline_queue_non_array');
+    return parsed;
+  } catch (error) {
+    if (raw) {
+      await AsyncStorage.setItem(`${STORAGE_KEY}:quarantine:${Date.now()}`, raw).catch(() => undefined);
+    }
+    crashLogger.breadcrumb(`offlineQueue:read:corrupt ${String(error).slice(0, 80)}`);
+    throw new Error('offline_queue_corrupt');
   }
 }
 
@@ -76,6 +86,7 @@ async function writeQueue(ops: OfflineOp[]): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ops));
   } catch (err) {
     crashLogger.breadcrumb(`offlineQueue:write:failed ${String(err).slice(0, 80)}`);
+    throw err;
   }
 }
 
@@ -92,7 +103,9 @@ export function makeOp(
   method: OfflineOp['method'],
   body: any,
   opId: string,
+  authority: { userId: string; clientActivityId?: string },
 ): OfflineOp {
+  if (!authority?.userId || authority.userId === 'guest') throw new Error('offline_operation_owner_required');
   return {
     opId,
     kind,
@@ -101,6 +114,8 @@ export function makeOp(
     body,
     attempts: 0,
     enqueuedAt: Date.now(),
+    userId: authority.userId,
+    clientActivityId: authority.clientActivityId,
   };
 }
 
@@ -114,6 +129,7 @@ export function makeOp(
  * prevents server 413 payload-too-large errors.
  */
 const CHUNK_SIZE_BYTES = 512 * 1024;
+const SESSION_APPEND_MAX_POINTS = 500;
 
 function estimatePayloadBytes(body: any): number {
   try { return JSON.stringify(body).length; } catch { return 0; }
@@ -122,6 +138,54 @@ function estimatePayloadBytes(body: any): number {
 // UUID v4 fallback (no crypto dep on some RN versions).
 function makeChunkOpId(baseOpId: string, idx: number): string {
   return `${baseOpId}-chunk-${idx}`;
+}
+
+function normalizeAppendPoint(point: any): any {
+  if (!point || typeof point !== 'object') return point;
+  const normalized = { ...point };
+  for (const key of ['acc', 'v_acc', 'speed_mps', 'course_deg']) {
+    const value = normalized[key];
+    if (value != null && (!Number.isFinite(value) || value < 0)) normalized[key] = null;
+  }
+  if (normalized.t != null && Number.isFinite(normalized.t)) normalized.t = Math.floor(normalized.t);
+  return normalized;
+}
+
+/** Repair legacy queued batches before dispatch without changing their order. */
+function normalizeAndChunkAppend(op: OfflineOp): OfflineOp[] {
+  if (op.kind !== 'session_append' || !Array.isArray(op.body?.points)) return [op];
+  const points = op.body.points.map(normalizeAppendPoint);
+  const bytes = estimatePayloadBytes({ ...op.body, points });
+  const byteBound = bytes > CHUNK_SIZE_BYTES
+    ? Math.max(1, Math.floor(points.length * (CHUNK_SIZE_BYTES / bytes) * 0.9))
+    : SESSION_APPEND_MAX_POINTS;
+  const pointsPerChunk = Math.min(SESSION_APPEND_MAX_POINTS, byteBound);
+  if (points.length <= pointsPerChunk) {
+    const changed = JSON.stringify(points) !== JSON.stringify(op.body.points);
+    return [{
+      ...op,
+      body: { ...op.body, points },
+      ...(changed ? {
+        attempts: 0,
+        lastTriedAt: undefined,
+        lastError: undefined,
+        failureKind: undefined,
+      } : {}),
+    }];
+  }
+  const chunks: OfflineOp[] = [];
+  for (let offset = 0, index = 0; offset < points.length; offset += pointsPerChunk, index += 1) {
+    chunks.push({
+      ...op,
+      opId: makeChunkOpId(op.opId, index),
+      body: { ...op.body, points: points.slice(offset, offset + pointsPerChunk) },
+      attempts: 0,
+      lastTriedAt: undefined,
+      lastError: undefined,
+      failureKind: undefined,
+    });
+  }
+  return chunks;
 }
 
 // O1 (2026-07-26) race fix: enqueue 是 read-modify-write,并发调用
@@ -140,31 +204,28 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 async function enqueueImpl(op: OfflineOp): Promise<void> {
-  // v409 fix #8: chunk session_append if payload too large.
+  if (!op.userId || op.userId === 'guest') throw new Error('offline_operation_owner_required');
+  // Enforce both server bounds when first queued. The same migration also
+  // runs during drain so operations written by older OTAs recover in place.
   if (op.kind === 'session_append' && op.body?.points && Array.isArray(op.body.points)) {
-    const bytes = estimatePayloadBytes(op.body);
-    if (bytes > CHUNK_SIZE_BYTES) {
-      const points = op.body.points as any[];
-      // Estimate points per chunk based on avg size
-      const pointsPerChunk = Math.max(1, Math.floor(points.length * (CHUNK_SIZE_BYTES / bytes) * 0.9));
+    const chunks = normalizeAndChunkAppend(op);
+    if (chunks.length > 1) {
       const q = await readQueue();
-      let idx = 0;
-      for (let i = 0; i < points.length; i += pointsPerChunk) {
-        const slice = points.slice(i, i + pointsPerChunk);
-        const chunkOp: OfflineOp = {
-          ...op,
-          opId: makeChunkOpId(op.opId, idx),
-          body: { ...op.body, points: slice },
-          attempts: 0,
-          enqueuedAt: Date.now(),
-        };
-        if (!q.find(o => o.opId === chunkOp.opId)) q.push(chunkOp);
-        idx++;
+      for (const chunkOp of chunks) {
+        const duplicate = q.find(o => o.opId === chunkOp.opId || (
+          o.userId === chunkOp.userId
+          && o.clientActivityId === chunkOp.clientActivityId
+          && o.kind === chunkOp.kind
+          && o.path === chunkOp.path
+          && JSON.stringify(o.body) === JSON.stringify(chunkOp.body)
+        ));
+        if (!duplicate) q.push(chunkOp);
       }
       await writeQueue(q);
-      crashLogger.breadcrumb(`offlineQueue:enqueue:chunked kind=${op.kind} chunks=${idx} bytes=${bytes} size=${q.length}`);
+      crashLogger.breadcrumb(`offlineQueue:enqueue:chunked kind=${op.kind} chunks=${chunks.length} size=${q.length}`);
       return;
     }
+    [op] = chunks;
   }
   const q = await readQueue();
   const existing = q.find(o => o.opId === op.opId);
@@ -172,7 +233,12 @@ async function enqueueImpl(op: OfflineOp): Promise<void> {
     existing.attempts += 1;
     existing.lastTriedAt = Date.now();
   } else {
-    q.push(op);
+    const equivalent = q.find(o => o.userId === op.userId
+      && o.clientActivityId === op.clientActivityId
+      && o.kind === op.kind
+      && o.path === op.path
+      && JSON.stringify(o.body) === JSON.stringify(op.body));
+    if (!equivalent) q.push(op);
   }
   await writeQueue(q);
   crashLogger.breadcrumb(`offlineQueue:enqueue kind=${op.kind} size=${q.length}`);
@@ -183,17 +249,25 @@ export async function enqueue(op: OfflineOp): Promise<void> {
 }
 
 /**
- * Try to send each queued op. Stops on 401 (auth) so we don't loop
- * forever on a stale token. Drops 4xx (other) entries — bad payload
- * isn't going to fix itself. Keeps 5xx + network errors for retry.
+ * Try to send each queued op. Committed operations are not deleted merely
+ * for exhausting retries or receiving a client error; permanent failures
+ * remain inspectable while unrelated entries continue draining.
  */
 let draining = false;
-export async function drain(): Promise<void> {
-  if (draining) return; // re-entrancy guard — concurrent triggers (foreground + online) coalesce
+let pendingDrainOwner: string | null = null;
+export async function drain(expectedOwnerUserId: string): Promise<void> {
+  if (!expectedOwnerUserId || expectedOwnerUserId === 'guest') return;
+  if (draining) {
+    // Coalesce same-owner wakes and retain a different owner's wake. A fast
+    // account switch must not leave B's queue asleep behind A's old flight.
+    pendingDrainOwner = expectedOwnerUserId;
+    return;
+  }
   draining = true;
   try {
-    let q = await readQueue();
+    let q = (await readQueue()).flatMap(normalizeAndChunkAppend);
     if (q.length === 0) return;
+    await writeQueue(q);
     crashLogger.breadcrumb(`offlineQueue:drain:start size=${q.length}`);
     // O1 (2026-07-26) race fix: 记录 drain 开始时的 opId 集合。drain 循环
     // 里可能 await 每个 op 的 fetch (数秒),期间 enqueue 会串行加新 op 进 queue。
@@ -201,9 +275,18 @@ export async function drain(): Promise<void> {
     // 现在: drain 尾部 serialize + re-read + 保留 drain 期间新增的 op。
     const drainStartIds = new Set(q.map((o) => o.opId));
     const remaining: OfflineOp[] = [];
-    let stopped = false;
     for (const op of q) {
-      if (stopped) {
+      if (!op.userId) {
+        op.failureKind = 'action_required';
+        op.lastError = 'legacy_owner_unresolved';
+        remaining.push(op);
+        continue;
+      }
+      if (op.userId !== expectedOwnerUserId) {
+        remaining.push(op);
+        continue;
+      }
+      if (op.failureKind === 'action_required') {
         remaining.push(op);
         continue;
       }
@@ -222,44 +305,72 @@ export async function drain(): Promise<void> {
           // 401 should NOT logout — this is a background retry, the
           // user might have a valid session that hasn't loaded yet.
           skipLogoutOn401: true,
+          expectedUserId: expectedOwnerUserId,
         });
+        let liveOwnerUserId = '';
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          liveOwnerUserId = String(require('../store/useAppStore').useAppStore.getState().user?.id ?? '');
+        } catch { /* fail closed below */ }
+        if (liveOwnerUserId !== expectedOwnerUserId) {
+          // The request used A's captured authority, but its acknowledgement
+          // arrived after B took over. Retain the idempotent op for A's next
+          // authenticated drain instead of letting B's lifecycle consume it.
+          remaining.push(op);
+          pendingDrainOwner = liveOwnerUserId || pendingDrainOwner;
+          continue;
+        }
         if (res.ok) {
           // success — drop entry
           crashLogger.breadcrumb(`offlineQueue:sent kind=${op.kind} attempts=${op.attempts}`);
           continue;
         }
         if (res.status === 401) {
-          // stop the drain — token's bad, retry later
           op.attempts += 1;
           op.lastTriedAt = Date.now();
           op.lastError = `401`;
+          op.failureKind = 'auth_required';
           remaining.push(op);
-          stopped = true;
           continue;
         }
         if (res.status >= 400 && res.status < 500) {
-          // client error — payload is invalid, don't retry forever
-          crashLogger.breadcrumb(`offlineQueue:drop kind=${op.kind} status=${res.status}`);
+          let responseCode = '';
+          try { responseCode = String((await res.json())?.code ?? ''); } catch { /* no structured body */ }
+          if (res.status === 404 && responseCode === 'SESSION_NOT_FOUND_RESYNC'
+            && op.kind === 'session_append' && op.clientActivityId) {
+            try {
+              // A full pending atomic Save supersedes incremental append chunks.
+              // Dropping them is safe only after matching exact owner+Activity.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { listPending } = require('./pendingSyncStore');
+              const pending = await listPending();
+              if (pending.some((item: any) => item.userId === op.userId
+                && item.localId === op.clientActivityId)) {
+                crashLogger.breadcrumb(`offlineQueue:append_superseded activity=${op.clientActivityId.slice(0, 8)}`);
+                continue;
+              }
+            } catch { /* retain below if authority cannot be proven */ }
+          }
+          op.attempts += 1;
+          op.lastTriedAt = Date.now();
+          op.lastError = `status=${res.status}`;
+          op.failureKind = 'action_required';
+          remaining.push(op);
+          crashLogger.breadcrumb(`offlineQueue:action_required kind=${op.kind} status=${res.status}`);
           continue;
         }
         // 5xx or unknown — keep, backoff
         op.attempts += 1;
         op.lastTriedAt = Date.now();
         op.lastError = `status=${res.status}`;
-        if (op.attempts >= MAX_ATTEMPTS) {
-          crashLogger.breadcrumb(`offlineQueue:exhausted kind=${op.kind}`);
-          continue; // drop
-        }
+        op.failureKind = 'retryable';
         remaining.push(op);
       } catch (err) {
         // network error — keep, backoff
         op.attempts += 1;
         op.lastTriedAt = Date.now();
         op.lastError = String(err).slice(0, 80);
-        if (op.attempts >= MAX_ATTEMPTS) {
-          crashLogger.breadcrumb(`offlineQueue:exhausted kind=${op.kind}`);
-          continue;
-        }
+        op.failureKind = 'retryable';
         remaining.push(op);
       }
     }
@@ -285,7 +396,32 @@ export async function drain(): Promise<void> {
     crashLogger.breadcrumb(`offlineQueue:drain:end remaining=${remaining.length}`);
   } finally {
     draining = false;
+    const nextOwner = pendingDrainOwner;
+    pendingDrainOwner = null;
+    if (nextOwner && nextOwner !== 'guest') {
+      void drain(nextOwner);
+    }
   }
+}
+
+/** Remove obsolete incremental chunks only after the full atomic Save ACKs. */
+export async function retireActivityAppendOps(
+  userId: string,
+  clientActivityId: string,
+  remoteId?: number,
+): Promise<void> {
+  if (!userId || !clientActivityId) return;
+  await serialize(async () => {
+    const queue = await readQueue();
+    const remotePathPrefix = remoteId == null ? null : `/api/sessions/${remoteId}/append-points`;
+    const next = queue.filter(op => !(
+      op.kind === 'session_append'
+      && op.userId === userId
+      && (op.clientActivityId === clientActivityId
+        || (!!remotePathPrefix && !op.clientActivityId && op.path === remotePathPrefix))
+    ));
+    if (next.length !== queue.length) await writeQueue(next);
+  });
 }
 
 /**

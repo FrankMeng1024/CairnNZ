@@ -78,7 +78,10 @@ function queuedFeedbackContract(source: string): boolean {
   const thanks = source.slice(thanksStart, reportStart);
   const actionFence = action.indexOf("if (!screenActionIsCurrent(ticket) || result.status === 'superseded') return;");
   const actionQueued = action.indexOf("if (result.status === 'queued_offline')");
-  const actionFeedback = action.indexOf('showPublicActionFeedback(', actionQueued);
+  const actionFeedback = action.indexOf(
+    "showPublicActionFeedback(\n          selected === 'hide' ? 'Hidden here' : 'Blocked here',\n          'This change is saved on this device and will retry when you are connected.',\n        );",
+    actionQueued,
+  );
   const actionUnavailable = action.indexOf("} else if (result.status === 'unavailable')", actionQueued);
   const navigation = action.indexOf('nav.goBack();');
   const thanksFence = thanks.indexOf("if (!screenActionIsCurrent(ticket) || result.status === 'superseded') return;");
@@ -604,7 +607,9 @@ describe('PublicCairnDetailScreen durable action feedback', () => {
 
   test('queued feedback source contract rejects removal, platform bypass, stale fence loss, and navigation-first order', () => {
     const source = fs.readFileSync(publicDetailSourcePath, 'utf8');
-    const withoutActionFeedback = source.replace('        showPublicActionFeedback(\n', '        removedPublicActionFeedback(\n');
+    const withoutActionFeedback = replaceExact(source,
+      "        showPublicActionFeedback(\n          selected === 'hide' ? 'Hidden here' : 'Blocked here',\n          'This change is saved on this device and will retry when you are connected.',\n        );",
+      "        removedPublicActionFeedback(\n          selected === 'hide' ? 'Hidden here' : 'Blocked here',\n          'This change is saved on this device and will retry when you are connected.',\n        );");
     const withoutThanksFeedback = replaceExact(source,
       "        showPublicActionFeedback('Thanks saved', 'Your Thanks will retry when you are connected.');",
       "        removedPublicActionFeedback('Thanks saved', 'Your Thanks will retry when you are connected.');");

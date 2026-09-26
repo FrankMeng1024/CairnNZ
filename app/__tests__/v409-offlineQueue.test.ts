@@ -27,6 +27,9 @@ jest.mock('../src/services/apiService', () => ({
 jest.mock('../src/services/crashLogger', () => ({
   crashLogger: { breadcrumb: jest.fn() },
 }));
+jest.mock('../src/store/useAppStore', () => ({
+  useAppStore: { getState: () => ({ user: { id: 'account-a' } }) },
+}));
 
 jest.mock('../src/services/networkMonitor', () => ({
   __esModule: true,
@@ -45,6 +48,7 @@ type QueueSnapshotItem = {
 const readQueueSnapshot = async (): Promise<QueueSnapshotItem[]> =>
   JSON.parse(mockStore[QUEUE_KEY] ?? '[]') as QueueSnapshotItem[];
 const clearQueue = async () => { delete mockStore[QUEUE_KEY]; };
+const authority = { userId: 'account-a', clientActivityId: 'activity-a' };
 
 describe('v409 offlineQueue', () => {
   beforeEach(async () => {
@@ -55,7 +59,7 @@ describe('v409 offlineQueue', () => {
   describe('backoff exponential (v409 fix #7)', () => {
     it('backoff formula = min(2^attempts * 5s, 30min)', async () => {
       // Enqueue 1 op with attempts=3, lastTriedAt=now
-      const op = { ...makeOp('session_append', '/api/x', 'PATCH', { points: [] }, 'test-1'), attempts: 3, lastTriedAt: Date.now() };
+      const op = { ...makeOp('session_append', '/api/x', 'PATCH', { points: [] }, 'test-1', authority), attempts: 3, lastTriedAt: Date.now() };
       await enqueue(op);
       let snapshot = await readQueueSnapshot();
       expect(snapshot).toHaveLength(1);
@@ -63,7 +67,7 @@ describe('v409 offlineQueue', () => {
       // Try drain immediately — should skip because backoff not elapsed
       // Expected backoff for attempts=3: 2^3 * 5000 = 40s. Just tried, so skip.
       (authenticatedFetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
-      await drain();
+      await drain('account-a');
       snapshot = await readQueueSnapshot();
       expect(snapshot).toHaveLength(1); // still there (skipped due to backoff)
       expect(authenticatedFetch).not.toHaveBeenCalled();
@@ -72,23 +76,23 @@ describe('v409 offlineQueue', () => {
       snapshot[0].lastTriedAt = Date.now() - 41_000;
       await clearQueue();
       await enqueue(snapshot[0]);
-      await drain();
+      await drain('account-a');
       expect(authenticatedFetch).toHaveBeenCalledTimes(1);
     });
 
     it('backoff caps at 30min for high attempts', async () => {
       // attempts=10, 2^10 * 5s = 5120s > 1800s cap. Just tried:
-      const op = { ...makeOp('session_append', '/api/x', 'PATCH', { points: [] }, 'test-2'), attempts: 10, lastTriedAt: Date.now() - (30 * 60 * 1000 - 5_000) };
+      const op = { ...makeOp('session_append', '/api/x', 'PATCH', { points: [] }, 'test-2', authority), attempts: 10, lastTriedAt: Date.now() - (30 * 60 * 1000 - 5_000) };
       await enqueue(op);
       (authenticatedFetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
-      await drain();
+      await drain('account-a');
       // 29m55s < 30min cap → still skip
       expect(authenticatedFetch).not.toHaveBeenCalled();
 
       // Fast-forward past 30min:
       await clearQueue();
       await enqueue({ ...op, lastTriedAt: Date.now() - (31 * 60 * 1000) });
-      await drain();
+      await drain('account-a');
       expect(authenticatedFetch).toHaveBeenCalledTimes(1); // now sends
     });
   });
@@ -101,7 +105,7 @@ describe('v409 offlineQueue', () => {
         lng: 121.6 + i * 0.00001,
         t: 1720260000000 + i * 1000,
       }));
-      const op = makeOp('session_append', '/api/sessions/9999/append-points', 'PATCH', { points }, 'test-big');
+      const op = makeOp('session_append', '/api/sessions/9999/append-points', 'PATCH', { points }, 'test-big', authority);
       // Sanity check payload actually > 512KB
       const payloadSize = JSON.stringify(op.body).length;
       expect(payloadSize).toBeGreaterThan(512 * 1024);
@@ -124,7 +128,7 @@ describe('v409 offlineQueue', () => {
       const points = Array.from({ length: 100 }, (_, i) => ({
         lat: 31.2, lng: 121.6, t: 1720260000000 + i * 1000,
       }));
-      const op = makeOp('session_append', '/api/sessions/9999/append-points', 'PATCH', { points }, 'test-small');
+      const op = makeOp('session_append', '/api/sessions/9999/append-points', 'PATCH', { points }, 'test-small', authority);
       await enqueue(op);
       const snapshot = await readQueueSnapshot();
       expect(snapshot).toHaveLength(1);
@@ -133,7 +137,7 @@ describe('v409 offlineQueue', () => {
 
     it('does NOT chunk non-session_append kinds', async () => {
       // Even if body is huge, only session_append triggers chunking
-      const op = makeOp('marker_create', '/api/markers', 'POST', { blob: 'x'.repeat(1_000_000) }, 'test-marker');
+      const op = makeOp('marker_create', '/api/markers', 'POST', { blob: 'x'.repeat(1_000_000) }, 'test-marker', authority);
       await enqueue(op);
       const snapshot = await readQueueSnapshot();
       expect(snapshot).toHaveLength(1);
@@ -142,7 +146,7 @@ describe('v409 offlineQueue', () => {
 
   describe('persisted queue isolation', () => {
     it('snapshot returns copies (mutation safe)', async () => {
-      await enqueue(makeOp('session_append', '/api/sessions/1/append-points', 'PATCH', { points: [] }, 'test-a'));
+      await enqueue(makeOp('session_append', '/api/sessions/1/append-points', 'PATCH', { points: [] }, 'test-a', authority));
       const s1 = await readQueueSnapshot();
       s1[0].attempts = 999;
       const s2 = await readQueueSnapshot();
@@ -150,8 +154,10 @@ describe('v409 offlineQueue', () => {
     });
 
     it('clearQueue empties everything', async () => {
-      await enqueue(makeOp('session_append', '/api/sessions/1/append-points', 'PATCH', { points: [] }, 'a'));
-      await enqueue(makeOp('session_append', '/api/sessions/1/append-points', 'PATCH', { points: [] }, 'b'));
+      await enqueue(makeOp('session_append', '/api/sessions/1/append-points', 'PATCH', { points: [] }, 'a', authority));
+      await enqueue(makeOp('session_append', '/api/sessions/1/append-points', 'PATCH', {
+        points: [{ lat: -41, lng: 174, t: 1_000 }],
+      }, 'b', authority));
       expect((await readQueueSnapshot()).length).toBe(2);
       await clearQueue();
       expect((await readQueueSnapshot()).length).toBe(0);

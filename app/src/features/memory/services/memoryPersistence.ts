@@ -29,9 +29,20 @@ import { storage } from '../../../store/storage';
 import { MemoryPresenceWitness, useMemoryStore, VisitedPoint } from '../store/useMemoryStore';
 import {
   hasMemoryHydrateFailedBefore,
+  clearMemoryHydrateState,
+  isMemoryHydrateRecoveryReconciled,
+  markMemoryHydrateRecovery,
+  markMemoryHydrateRecoveryReconciled,
   markMemoryHydrateInProgress,
   markMemoryHydrateSuccess,
+  usesMemoryHydrateRecovery,
 } from '../lib/memoryHydrateGate';
+import {
+  compactDurableMemoryEvidence,
+  durableMemoryEvidenceDigest,
+  listDurableMemoryEvidence,
+  mergeDurableMemoryEvidence,
+} from './memoryEvidenceJournal';
 
 
 // v0.2.6.3: schema bumped from v2 (point array, no cid) to v3 (cid required).
@@ -46,7 +57,9 @@ import {
 // the key forces a fresh pull from server which now contains 413 points
 // for user 4 (vs 367 in v355) including the 46 points for the "back" hike.
 const STORAGE_KEY_PREFIX = 'cairn:memory:tiles:v5:';
+const RECOVERY_STORAGE_KEY_PREFIX = 'cairn:memory:tiles:recovery-v1:';
 const PRESENCE_STORAGE_KEY_PREFIX = 'cairn:memory:presence:v1:';
+const RECOVERY_PRESENCE_STORAGE_KEY_PREFIX = 'cairn:memory:presence:recovery-v1:';
 // Debug Raw GPS evidence is durable for reproducible QA, but its separate key
 // and store collection prevent it from entering Personal sync or sharing.
 const SYNTHETIC_STORAGE_KEY_PREFIX = 'cairn:memory:synthetic:v1:';
@@ -72,6 +85,10 @@ let persistenceState: 'detached' | 'hydrating' | 'writable' | 'blocked' = 'detac
  * this and bail out, so concurrent user switches can't corrupt state.
  */
 let generation = 0;
+let hydrationFlight: { userId: string; promise: Promise<void> } | null = null;
+let persistenceWriteTail: Promise<void> = Promise.resolve();
+const ownerWriteEpoch = new Map<string, number>();
+const recoveryStorageOwners = new Set<string>();
 let persistenceMetrics = {
   writes: 0,
   coverageWrites: 0,
@@ -80,6 +97,68 @@ let persistenceMetrics = {
   totalWriteMs: 0,
   maxWriteMs: 0,
 };
+
+function publishLocalHydration(
+  ownerUserId: string | null,
+  status: 'detached' | 'hydrating' | 'ready' | 'blocked',
+  options: {
+    requiresInitialReconcile?: boolean;
+    initialReconcile?: 'not_required' | 'pending' | 'success' | 'offline';
+  } = {},
+): void {
+  if (typeof useMemoryStore.setState !== 'function') return;
+  useMemoryStore.setState(state => ({
+    localHydration: {
+      ownerUserId,
+      status,
+      requiresInitialReconcile: options.requiresInitialReconcile
+        ?? (state.localHydration?.ownerUserId === ownerUserId
+          ? state.localHydration.requiresInitialReconcile
+          : false),
+      initialReconcile: options.initialReconcile
+        ?? (state.localHydration?.ownerUserId === ownerUserId
+          ? state.localHydration.initialReconcile
+          : 'not_required'),
+      revision: (state.localHydration?.revision ?? 0) + 1,
+    },
+  }));
+}
+
+/** Publish the typed first cloud-reconcile outcome only for the account that
+ * still owns the writable local projection. Local durable Memory never waits
+ * on this; only a genuinely fresh-empty projection does. */
+export async function publishInitialMemoryReconcile(
+  userId: string,
+  outcome: 'pending' | 'success' | 'offline',
+): Promise<boolean> {
+  if (currentUserId !== userId || persistenceState !== 'writable') return false;
+  const hydration = useMemoryStore.getState().localHydration;
+  if (hydration?.ownerUserId !== userId || hydration.status !== 'ready') return false;
+  if (!hydration.requiresInitialReconcile) return true;
+  if (outcome === 'success') {
+    try {
+      // A cloud snapshot becomes presentation authority only after its exact
+      // merged projection is durable. A crash before this boundary safely
+      // leaves recovery marked incomplete for the next boot.
+      await flushMemoryNow();
+      if (currentUserId !== userId || persistenceState !== 'writable') return false;
+      if (recoveryStorageOwners.has(userId)) {
+        await markMemoryHydrateRecoveryReconciled(userId);
+      }
+    } catch {
+      publishLocalHydration(userId, 'ready', {
+        requiresInitialReconcile: true,
+        initialReconcile: 'offline',
+      });
+      return false;
+    }
+  }
+  publishLocalHydration(userId, 'ready', {
+    requiresInitialReconcile: true,
+    initialReconcile: outcome,
+  });
+  return true;
+}
 
 export function resetMemoryPersistenceMetrics(): void {
   persistenceMetrics = {
@@ -94,6 +173,32 @@ export function resetMemoryPersistenceMetrics(): void {
 
 export function getMemoryPersistenceMetrics(): typeof persistenceMetrics {
   return { ...persistenceMetrics };
+}
+
+async function serializePersistenceWrite<T>(work: () => Promise<T>): Promise<T> {
+  const previous = persistenceWriteTail;
+  let release!: () => void;
+  persistenceWriteTail = new Promise<void>(resolve => { release = resolve; });
+  await previous.catch(() => undefined);
+  try {
+    return await work();
+  } finally {
+    release();
+  }
+}
+
+export function getMemoryOwnerWriteEpoch(userId: string): number {
+  return ownerWriteEpoch.get(userId) ?? 0;
+}
+
+/** Fence producers immediately when a server-confirmed reset is being
+ * attempted. Calls already queued under the prior epoch may finish their WAL
+ * append, but cannot project into or rewrite the post-reset snapshot. */
+export function beginMemoryPersistenceReset(userId: string): number {
+  const next = getMemoryOwnerWriteEpoch(userId) + 1;
+  ownerWriteEpoch.set(userId, next);
+  if (currentUserId === userId) clearTimers();
+  return next;
 }
 
 // O1: removed bytesToBase64/base64ToBytes — 0 callers, `void` suppression
@@ -334,12 +439,24 @@ function deserializePresence(raw: string): MemoryPresenceWitness[] | null {
   }
 }
 
-function storageKey(userId: string): string {
+function preservedStorageKey(userId: string): string {
   return `${STORAGE_KEY_PREFIX}${userId}`;
 }
 
+function recoveryStorageKey(userId: string): string {
+  return `${RECOVERY_STORAGE_KEY_PREFIX}${userId}`;
+}
+
+function storageKey(userId: string): string {
+  return recoveryStorageOwners.has(userId)
+    ? recoveryStorageKey(userId)
+    : preservedStorageKey(userId);
+}
+
 function presenceStorageKey(userId: string): string {
-  return `${PRESENCE_STORAGE_KEY_PREFIX}${userId}`;
+  return recoveryStorageOwners.has(userId)
+    ? `${RECOVERY_PRESENCE_STORAGE_KEY_PREFIX}${userId}`
+    : `${PRESENCE_STORAGE_KEY_PREFIX}${userId}`;
 }
 
 function syntheticStorageKey(userId: string): string {
@@ -383,37 +500,132 @@ function clearTimers(): void {
  * we'd serialize empty (or worse, the new user's points) to the OLD
  * user's storage key.
  */
-async function flush(userId: string, snapshot: { points: VisitedPoint[]; initialRevealDone: boolean }): Promise<void> {
+async function mergeLatestDurableState(
+  userId: string,
+  localPoints: VisitedPoint[],
+  localPresence: MemoryPresenceWitness[],
+): Promise<{
+  points: VisitedPoint[];
+  presenceWitnesses: MemoryPresenceWitness[];
+  evidenceDigest: string;
+}> {
+  const [rawCoverage, rawPresence, events] = await Promise.all([
+    storage.getItemStrict(storageKey(userId)),
+    storage.getItemStrict(presenceStorageKey(userId)),
+    listDurableMemoryEvidence(userId),
+  ]);
+  const diskCoverage = rawCoverage === null ? null : deserialize(rawCoverage);
+  const diskPresence = rawPresence === null ? null : deserializePresence(rawPresence);
+  if (rawCoverage !== null && !diskCoverage) throw new Error('memory_persistence_merge_corrupt');
+  if (rawPresence !== null && !diskPresence) throw new Error('memory_presence_merge_corrupt');
+  const merged = mergeDurableMemoryEvidence(
+    [...(diskCoverage?.points ?? []), ...localPoints],
+    [...(diskPresence ?? []), ...localPresence],
+    events,
+  );
+  return { ...merged, evidenceDigest: durableMemoryEvidenceDigest(events) };
+}
+
+function publishMergedStateIfOwned(
+  userId: string,
+  points: VisitedPoint[],
+  witnesses: MemoryPresenceWitness[],
+): void {
+  if (currentUserId !== userId) return;
+  const state = useMemoryStore.getState();
+  const pointSignature = (values: VisitedPoint[]) => values
+    .map(point => [
+      point.cid,
+      point.lat,
+      point.lng,
+      point.ts,
+      point.synced ? 1 : 0,
+      point.evidenceSource,
+      point.sourceActivityClientId ?? '',
+      point.sourceSegmentId ?? '',
+      point.horizontalAccuracyM ?? '',
+      point.continuityState ?? '',
+    ].join(':'))
+    .sort().join('|');
+  const presenceSignature = (values: MemoryPresenceWitness[]) => values
+    .map(witness => [
+      witness.cid,
+      witness.firstLat,
+      witness.firstLng,
+      witness.firstObservedAtMs,
+      witness.lat,
+      witness.lng,
+      witness.observedAtMs,
+      witness.evidenceSource,
+      witness.sourceActivityClientId ?? '',
+      witness.sourceSegmentId ?? '',
+      witness.horizontalAccuracyM,
+      witness.continuityState,
+      witness.synced ? 1 : 0,
+    ].join(':'))
+    .sort().join('|');
+  if (pointSignature(state.points) !== pointSignature(points)) {
+    state.replacePoints(points, state.initialRevealDone);
+  }
+  if (presenceSignature(state.presenceWitnesses ?? []) !== presenceSignature(witnesses)) {
+    useMemoryStore.getState().replacePresenceWitnesses(witnesses);
+  }
+}
+
+async function flushUnsafe(userId: string, snapshot: { points: VisitedPoint[]; initialRevealDone: boolean }): Promise<void> {
   if (!userId) return;
-  const payload = serialize(snapshot.points, snapshot.initialRevealDone);
-  const serialized = JSON.stringify(payload);
   const startedAt = Date.now();
-  // Memory evidence is a committed product record, not a best-effort cache.
-  // Propagate quota / disk errors so recordMemoryEvidence cannot report a
-  // durable commit when AsyncStorage rejected the write.
-  await storage.setItem(storageKey(userId), serialized, { strict: true });
+  let serialized = '';
+  let localPoints = snapshot.points;
+  let localPresence = currentUserId === userId
+    ? (useMemoryStore.getState().presenceWitnesses ?? []).slice()
+    : [];
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const merged = await mergeLatestDurableState(userId, localPoints, localPresence);
+    serialized = JSON.stringify(serialize(merged.points, snapshot.initialRevealDone));
+    // Memory evidence is a committed product record, not a best-effort cache.
+    await storage.setItem(storageKey(userId), serialized, { strict: true });
+    const after = await listDurableMemoryEvidence(userId);
+    publishMergedStateIfOwned(userId, merged.points, merged.presenceWitnesses);
+    if (durableMemoryEvidenceDigest(after) === merged.evidenceDigest) break;
+    localPoints = merged.points;
+    localPresence = merged.presenceWitnesses;
+  }
   const elapsedMs = Math.max(0, Date.now() - startedAt);
   persistenceMetrics.writes += 1;
   persistenceMetrics.coverageWrites += 1;
   persistenceMetrics.bytes += serialized.length;
   persistenceMetrics.totalWriteMs += elapsedMs;
   persistenceMetrics.maxWriteMs = Math.max(persistenceMetrics.maxWriteMs, elapsedMs);
+  await compactDurableMemoryEvidence(userId).catch(() => undefined);
 }
 
-async function flushPresence(userId: string, witnesses: MemoryPresenceWitness[]): Promise<void> {
+async function flushPresenceUnsafe(userId: string, witnesses: MemoryPresenceWitness[]): Promise<void> {
   if (!userId) return;
-  const serialized = JSON.stringify(serializePresence(witnesses));
   const startedAt = Date.now();
-  await storage.setItem(presenceStorageKey(userId), serialized, { strict: true });
+  let serialized = '';
+  let localPresence = witnesses;
+  let localPoints = currentUserId === userId ? useMemoryStore.getState().points.slice() : [];
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const merged = await mergeLatestDurableState(userId, localPoints, localPresence);
+    serialized = JSON.stringify(serializePresence(merged.presenceWitnesses));
+    await storage.setItem(presenceStorageKey(userId), serialized, { strict: true });
+    const after = await listDurableMemoryEvidence(userId);
+    publishMergedStateIfOwned(userId, merged.points, merged.presenceWitnesses);
+    if (durableMemoryEvidenceDigest(after) === merged.evidenceDigest) break;
+    localPoints = merged.points;
+    localPresence = merged.presenceWitnesses;
+  }
   const elapsedMs = Math.max(0, Date.now() - startedAt);
   persistenceMetrics.writes += 1;
   persistenceMetrics.presenceWrites += 1;
   persistenceMetrics.bytes += serialized.length;
   persistenceMetrics.totalWriteMs += elapsedMs;
   persistenceMetrics.maxWriteMs = Math.max(persistenceMetrics.maxWriteMs, elapsedMs);
+  await compactDurableMemoryEvidence(userId).catch(() => undefined);
 }
 
-async function flushSynthetic(userId: string, points: VisitedPoint[]): Promise<void> {
+async function flushSyntheticUnsafe(userId: string, points: VisitedPoint[]): Promise<void> {
   if (!userId) return;
   const serialized = JSON.stringify(serializeSynthetic(points));
   const startedAt = Date.now();
@@ -423,6 +635,30 @@ async function flushSynthetic(userId: string, points: VisitedPoint[]): Promise<v
   persistenceMetrics.bytes += serialized.length;
   persistenceMetrics.totalWriteMs += elapsedMs;
   persistenceMetrics.maxWriteMs = Math.max(persistenceMetrics.maxWriteMs, elapsedMs);
+}
+
+function flush(userId: string, snapshot: { points: VisitedPoint[]; initialRevealDone: boolean }): Promise<void> {
+  const epochAtRequest = getMemoryOwnerWriteEpoch(userId);
+  return serializePersistenceWrite(async () => {
+    if (getMemoryOwnerWriteEpoch(userId) !== epochAtRequest) return;
+    await flushUnsafe(userId, snapshot);
+  });
+}
+
+function flushPresence(userId: string, witnesses: MemoryPresenceWitness[]): Promise<void> {
+  const epochAtRequest = getMemoryOwnerWriteEpoch(userId);
+  return serializePersistenceWrite(async () => {
+    if (getMemoryOwnerWriteEpoch(userId) !== epochAtRequest) return;
+    await flushPresenceUnsafe(userId, witnesses);
+  });
+}
+
+function flushSynthetic(userId: string, points: VisitedPoint[]): Promise<void> {
+  const epochAtRequest = getMemoryOwnerWriteEpoch(userId);
+  return serializePersistenceWrite(async () => {
+    if (getMemoryOwnerWriteEpoch(userId) !== epochAtRequest) return;
+    await flushSyntheticUnsafe(userId, points);
+  });
 }
 
 /**
@@ -550,6 +786,69 @@ export async function flushMemoryNow(options: { coverage?: boolean; presence?: b
   if (writePresence) {
     await flushPresence(userId, (state.presenceWitnesses ?? []).slice());
   }
+  if (writeCoverage && writePresence) {
+    await compactDurableMemoryEvidence(userId, { force: true });
+  }
+}
+
+/** Complete a Memory reset only after the remote DELETE and evidence-journal
+ * purge have succeeded/been attempted. This runs behind every older snapshot
+ * write, then commits and verifies empty owner snapshots before returning. */
+export async function commitMemoryPersistenceReset(userId: string, resetEpoch: number): Promise<void> {
+  if (!userId || getMemoryOwnerWriteEpoch(userId) !== resetEpoch) {
+    throw new Error('memory_reset_epoch_stale');
+  }
+  await serializePersistenceWrite(async () => {
+    if (getMemoryOwnerWriteEpoch(userId) !== resetEpoch) throw new Error('memory_reset_epoch_stale');
+    const emptyCoverage = JSON.stringify(serialize([], false));
+    const emptyPresence = JSON.stringify(serializePresence([]));
+    const emptySynthetic = JSON.stringify(serializeSynthetic([]));
+    const coverageKeys = [preservedStorageKey(userId), recoveryStorageKey(userId)];
+    const presenceKeys = [
+      `${PRESENCE_STORAGE_KEY_PREFIX}${userId}`,
+      `${RECOVERY_PRESENCE_STORAGE_KEY_PREFIX}${userId}`,
+    ];
+    for (const key of coverageKeys) {
+      await storage.setItem(key, emptyCoverage, { strict: true });
+    }
+    for (const key of presenceKeys) {
+      await storage.setItem(key, emptyPresence, { strict: true });
+    }
+    await storage.setItem(syntheticStorageKey(userId), emptySynthetic, { strict: true });
+    const [coverageChecks, presenceChecks, syntheticCheck] = await Promise.all([
+      Promise.all(coverageKeys.map(key => storage.getItemStrict(key))),
+      Promise.all(presenceKeys.map(key => storage.getItemStrict(key))),
+      storage.getItemStrict(syntheticStorageKey(userId)),
+    ]);
+    if (coverageChecks.some(value => value !== emptyCoverage)
+      || presenceChecks.some(value => value !== emptyPresence)
+      || syntheticCheck !== emptySynthetic) {
+      throw new Error('memory_reset_snapshot_verify_failed');
+    }
+    await clearMemoryHydrateState(userId);
+    recoveryStorageOwners.delete(userId);
+    if (currentUserId === userId) {
+      clearTimers();
+      useMemoryStore.getState().clearAll();
+      publishLocalHydration(userId, 'ready', {
+        requiresInitialReconcile: false,
+        initialReconcile: 'not_required',
+      });
+    }
+  });
+}
+
+/** Foreground repair boundary for evidence committed by a headless runtime. */
+export async function reconcileDurableMemoryEvidenceNow(): Promise<void> {
+  const userId = currentUserId;
+  if (!userId || persistenceState !== 'writable') return;
+  const state = useMemoryStore.getState();
+  const merged = await mergeLatestDurableState(
+    userId,
+    state.points.slice(),
+    (state.presenceWitnesses ?? []).slice(),
+  );
+  publishMergedStateIfOwned(userId, merged.points, merged.presenceWitnesses);
 }
 
 /** Force the isolated Debug Raw GPS realm to disk without touching Personal Memory. */
@@ -584,6 +883,18 @@ export async function ensureMemoryPersistenceForUser(userId: string): Promise<vo
  */
 export async function hydrateMemoryForUser(userId: string): Promise<void> {
   if (!userId) return;
+  if (hydrationFlight?.userId === userId) return hydrationFlight.promise;
+  const promise = hydrateMemoryForUserOnce(userId);
+  hydrationFlight = { userId, promise };
+  try {
+    await promise;
+  } finally {
+    if (hydrationFlight?.promise === promise) hydrationFlight = null;
+  }
+}
+
+async function hydrateMemoryForUserOnce(userId: string): Promise<void> {
+  if (!userId) return;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('../../../services/bootDiagnostics').markBootPhase('memhydrate_entry');
@@ -598,98 +909,130 @@ export async function hydrateMemoryForUser(userId: string): Promise<void> {
   useMemoryStore.getState().resetForUserSwitch();
   currentUserId = userId;
   persistenceState = 'hydrating';
-
-  const block = (reason: string): never => {
-    persistenceState = 'blocked';
-    throw new Error(reason);
-  };
-
-  if (hasMemoryHydrateFailedBefore()) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require('../../../services/bootDiagnostics').markBootPhase('memhydrate_gate_blocked');
-    } catch {/* ignore */}
-    block('memory_hydration_previously_failed');
-  }
+  publishLocalHydration(userId, 'hydrating', {
+    requiresInitialReconcile: false,
+    initialReconcile: 'not_required',
+  });
+  const isCurrentHydration = () => myGeneration === generation && currentUserId === userId;
 
   try {
-    await markMemoryHydrateInProgress();
-  } catch {
-    block('memory_hydration_gate_write_failed');
-  }
-  let raw: string | null = null;
-  let rawPresence: string | null = null;
-  let rawSynthetic: string | null = null;
-  try {
-    raw = await storage.getItem(storageKey(userId));
-    rawPresence = await storage.getItem(presenceStorageKey(userId));
-    rawSynthetic = await storage.getItem(syntheticStorageKey(userId));
-  } catch {
-    block('memory_hydration_read_failed');
-  }
-  if (myGeneration !== generation) return;
-
-  if (raw !== null) {
-    const MAX_RAW_BYTES = 500_000;
-    if (raw.length > MAX_RAW_BYTES) {
+    let recoveryMode = await usesMemoryHydrateRecovery(userId);
+    let recoveryReconciled = recoveryMode
+      ? await isMemoryHydrateRecoveryReconciled(userId)
+      : false;
+    if (!isCurrentHydration()) return;
+    if (await hasMemoryHydrateFailedBefore(userId)) {
+      if (!isCurrentHydration()) return;
+      await markMemoryHydrateRecovery(userId);
+      if (!isCurrentHydration()) return;
+      recoveryMode = true;
+      recoveryReconciled = false;
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_payload_too_large', {
-          raw_len: raw.length,
-          limit: MAX_RAW_BYTES,
-        });
+        require('../../../services/bootDiagnostics').markBootPhase('memhydrate_recovery_namespace');
       } catch {/* ignore */}
-      block('memory_hydration_payload_too_large');
     }
-    const decoded = deserialize(raw);
-    if (!decoded) {
+    if (recoveryMode) recoveryStorageOwners.add(userId);
+    const readingRecoverySnapshot = recoveryMode;
+    await markMemoryHydrateInProgress(userId);
+    if (!isCurrentHydration()) return;
+
+    let [raw, rawPresence, rawSynthetic] = await Promise.all([
+      storage.getItemStrict(storageKey(userId)),
+      storage.getItemStrict(presenceStorageKey(userId)),
+      storage.getItem(syntheticStorageKey(userId)),
+    ]);
+    if (!isCurrentHydration()) return;
+
+    if (raw !== null) {
+      const MAX_RAW_BYTES = 500_000;
+      const decoded = raw.length <= MAX_RAW_BYTES ? deserialize(raw) : null;
+      if (!decoded) {
+        if (readingRecoverySnapshot) throw new Error('memory_recovery_snapshot_corrupt');
+        // Never overwrite the suspect v5 bytes. Future writes move to the
+        // recovery namespace and the first server reconcile can regenerate
+        // the visible projection.
+        await markMemoryHydrateRecovery(userId);
+        if (!isCurrentHydration()) return;
+        recoveryStorageOwners.add(userId);
+        recoveryMode = true;
+        recoveryReconciled = false;
+        raw = null;
+      } else {
+        const needsRevealMigration = decoded.initialRevealDone && decoded.points.length < 50;
+        const inMemoryUnsynced = useMemoryStore.getState().points.filter((point) => !point.synced);
+        const mergedForHydrate = inMemoryUnsynced.length > 0
+          ? [...decoded.points, ...inMemoryUnsynced].sort((a, b) => a.ts - b.ts)
+          : decoded.points;
+        useMemoryStore.getState().replacePoints(
+          mergedForHydrate,
+          needsRevealMigration ? false : decoded.initialRevealDone,
+        );
+      }
+    }
+
+    if (rawPresence !== null) {
+      const MAX_PRESENCE_RAW_BYTES = 750_000;
+      const witnesses = rawPresence.length <= MAX_PRESENCE_RAW_BYTES
+        ? deserializePresence(rawPresence)
+        : null;
+      if (!witnesses) {
+        if (readingRecoverySnapshot) throw new Error('memory_recovery_presence_corrupt');
+        // Presence is independent evidence. Preserve the suspect bytes under
+        // the original key and move every future snapshot for this owner to
+        // recovery keys; a malformed auxiliary record must never strand an
+        // otherwise valid coverage journal or be overwritten as "empty".
+        await markMemoryHydrateRecovery(userId);
+        if (!isCurrentHydration()) return;
+        recoveryStorageOwners.add(userId);
+        recoveryMode = true;
+        recoveryReconciled = false;
+        rawPresence = null;
+      } else {
+        useMemoryStore.getState().replacePresenceWitnesses(witnesses);
+      }
+    }
+
+    // Headless Activity writers have their own JS runtime and can outlive a
+    // mounted store snapshot. Replay them before declaring local readiness.
+    const durableEvents = await listDurableMemoryEvidence(userId);
+    if (!isCurrentHydration()) return;
+    if (durableEvents.length > 0) {
+      const state = useMemoryStore.getState();
+      const merged = mergeDurableMemoryEvidence(
+        state.points,
+        state.presenceWitnesses ?? [],
+        durableEvents,
+      );
+      state.replacePoints(merged.points, state.initialRevealDone);
+      useMemoryStore.getState().replacePresenceWitnesses(merged.presenceWitnesses);
+    }
+
+    if (rawSynthetic !== null && rawSynthetic.length <= 500_000) {
+      const decodedSynthetic = deserializeSynthetic(rawSynthetic);
+      if (decodedSynthetic) useMemoryStore.getState().replaceTestPoints(decodedSynthetic);
+    }
+
+    await markMemoryHydrateSuccess(userId);
+    if (!isCurrentHydration()) return;
+    persistenceState = 'writable';
+    const requiresInitialReconcile = raw === null || (recoveryMode && !recoveryReconciled);
+    publishLocalHydration(userId, 'ready', {
+      requiresInitialReconcile,
+      initialReconcile: requiresInitialReconcile ? 'pending' : 'not_required',
+    });
+    unsubscribe = useMemoryStore.subscribe((next, previous) => {
+      if (next.points !== previous.points || next.initialRevealDone !== previous.initialRevealDone) scheduleFlush();
+      if (next.presenceWitnesses !== previous.presenceWitnesses) schedulePresenceFlush();
+      if (next.testPoints !== previous.testPoints) scheduleSyntheticFlush();
+    });
+  } catch (error) {
+    if (isCurrentHydration()) {
       persistenceState = 'blocked';
-      throw new Error('memory_hydration_corrupt_or_partial');
+      publishLocalHydration(userId, 'blocked');
     }
-
-    const needsRevealMigration = decoded.initialRevealDone && decoded.points.length < 50;
-    const inMemoryUnsynced = useMemoryStore.getState().points.filter((point) => !point.synced);
-    const mergedForHydrate = inMemoryUnsynced.length > 0
-      ? [...decoded.points, ...inMemoryUnsynced].sort((a, b) => a.ts - b.ts)
-      : decoded.points;
-    useMemoryStore.getState().replacePoints(
-      mergedForHydrate,
-      needsRevealMigration ? false : decoded.initialRevealDone,
-    );
+    throw error;
   }
-
-  if (rawPresence !== null) {
-    const MAX_PRESENCE_RAW_BYTES = 750_000;
-    if (rawPresence.length > MAX_PRESENCE_RAW_BYTES) {
-      block('memory_presence_hydration_payload_too_large');
-    }
-    const witnesses = deserializePresence(rawPresence);
-    if (!witnesses) {
-      persistenceState = 'blocked';
-      throw new Error('memory_presence_hydration_corrupt_or_partial');
-    }
-    useMemoryStore.getState().replacePresenceWitnesses(witnesses);
-  }
-
-  // Synthetic QA data is disposable and never an authority for Personal
-  // Memory. A corrupt/obsolete QA payload is ignored instead of blocking the
-  // user's real Memory hydration.
-  if (rawSynthetic !== null && rawSynthetic.length <= 500_000) {
-    const decodedSynthetic = deserializeSynthetic(rawSynthetic);
-    if (decodedSynthetic) useMemoryStore.getState().replaceTestPoints(decodedSynthetic);
-  }
-
-  await markMemoryHydrateSuccess();
-  if (myGeneration !== generation) return;
-  persistenceState = 'writable';
-  unsubscribe = useMemoryStore.subscribe((next, previous) => {
-    // Sync counters/status are UI state, not durable exploration mutations.
-    // Presence has its own bounded record so a non-spatial update never
-    // serializes lifetime exploration geometry.
-    if (next.points !== previous.points || next.initialRevealDone !== previous.initialRevealDone) scheduleFlush();
-    if (next.presenceWitnesses !== previous.presenceWitnesses) schedulePresenceFlush();
-    if (next.testPoints !== previous.testPoints) scheduleSyntheticFlush();
-  });
 }
 
 /**
@@ -706,6 +1049,7 @@ export async function detachMemoryPersistence(invalidateInFlight = true): Promis
   clearTimers();
   if (currentUserId) {
     const userId = currentUserId;
+    publishLocalHydration(userId, 'detached');
     // Snapshot store BEFORE clearing currentUserId so we capture the
     // OLD user's content even if a concurrent clearAll runs after.
     const state = useMemoryStore.getState();
@@ -722,5 +1066,6 @@ export async function detachMemoryPersistence(invalidateInFlight = true): Promis
     }
   } else {
     persistenceState = 'detached';
+    publishLocalHydration(null, 'detached');
   }
 }

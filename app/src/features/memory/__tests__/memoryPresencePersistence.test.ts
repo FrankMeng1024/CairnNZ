@@ -1,4 +1,13 @@
 describe('Memory presence persistence boundary', () => {
+  beforeEach(() => {
+    jest.doMock('../services/memoryEvidenceJournal', () => ({
+      ...jest.requireActual('../services/memoryEvidenceJournal'),
+      listDurableMemoryEvidence: jest.fn(async () => []),
+      durableMemoryEvidenceDigest: jest.fn(() => '0:0'),
+      compactDurableMemoryEvidence: jest.fn(async () => 0),
+    }));
+  });
+
   afterEach(() => {
     jest.restoreAllMocks();
     jest.resetModules();
@@ -10,6 +19,7 @@ describe('Memory presence persistence boundary', () => {
     jest.doMock('../../../store/storage', () => ({
       storage: {
         getItem: jest.fn(async (key: string) => values.get(key) ?? null),
+        getItemStrict: jest.fn(async (key: string) => values.get(key) ?? null),
         setItem,
       },
     }));
@@ -18,7 +28,9 @@ describe('Memory presence persistence boundary', () => {
     }));
     jest.doMock('../services/lastFixCache', () => ({ persistLastFix: jest.fn() }));
     jest.doMock('../lib/memoryHydrateGate', () => ({
-      hasMemoryHydrateFailedBefore: jest.fn(() => false),
+      hasMemoryHydrateFailedBefore: jest.fn(async () => false),
+      usesMemoryHydrateRecovery: jest.fn(async () => false),
+      markMemoryHydrateRecovery: jest.fn(async () => undefined),
       markMemoryHydrateInProgress: jest.fn(async () => undefined),
       markMemoryHydrateSuccess: jest.fn(async () => undefined),
     }));
@@ -67,6 +79,7 @@ describe('Memory presence persistence boundary', () => {
     jest.doMock('../../../store/storage', () => ({
       storage: {
         getItem: jest.fn(async (key: string) => values.get(key) ?? null),
+        getItemStrict: jest.fn(async (key: string) => values.get(key) ?? null),
         setItem: jest.fn(async (key: string, value: string) => { values.set(key, value); }),
       },
     }));
@@ -75,7 +88,9 @@ describe('Memory presence persistence boundary', () => {
     }));
     jest.doMock('../services/lastFixCache', () => ({ persistLastFix: jest.fn() }));
     jest.doMock('../lib/memoryHydrateGate', () => ({
-      hasMemoryHydrateFailedBefore: jest.fn(() => false),
+      hasMemoryHydrateFailedBefore: jest.fn(async () => false),
+      usesMemoryHydrateRecovery: jest.fn(async () => false),
+      markMemoryHydrateRecovery: jest.fn(async () => undefined),
       markMemoryHydrateInProgress: jest.fn(async () => undefined),
       markMemoryHydrateSuccess: jest.fn(async () => undefined),
     }));
@@ -115,5 +130,58 @@ describe('Memory presence persistence boundary', () => {
       }),
     ]);
     await persistence.detachMemoryPersistence();
+  });
+
+  test('corrupt presence bytes stay quarantined while new evidence uses recovery keys', async () => {
+    const originalPresence = '{corrupt-owner-evidence';
+    const values = new Map<string, string>([
+      ['cairn:memory:tiles:v5:account-a', JSON.stringify({
+        v: 4,
+        initialRevealDone: true,
+        points: [{ a: -45, o: 170, t: 1_000, s: 1, c: 'coverage-a', e: 'h', n: 'u' }],
+      })],
+      ['cairn:memory:presence:v1:account-a', originalPresence],
+    ]);
+    const setItem = jest.fn(async (key: string, value: string) => { values.set(key, value); });
+    jest.doMock('../../../store/storage', () => ({
+      storage: {
+        getItem: jest.fn(async (key: string) => values.get(key) ?? null),
+        getItemStrict: jest.fn(async (key: string) => values.get(key) ?? null),
+        setItem,
+      },
+    }));
+    jest.doMock('../store/useH3VisitedStore', () => ({
+      useH3VisitedStore: { getState: () => ({ addPointToCells: jest.fn(), clear: jest.fn(), bulkImport: jest.fn() }) },
+    }));
+    jest.doMock('../services/lastFixCache', () => ({ persistLastFix: jest.fn() }));
+    jest.doMock('../lib/memoryHydrateGate', () => ({
+      hasMemoryHydrateFailedBefore: jest.fn(async () => false),
+      usesMemoryHydrateRecovery: jest.fn(async () => false),
+      markMemoryHydrateRecovery: jest.fn(async () => undefined),
+      markMemoryHydrateInProgress: jest.fn(async () => undefined),
+      markMemoryHydrateSuccess: jest.fn(async () => undefined),
+    }));
+    jest.doMock('../../../services/bootDiagnostics', () => ({ markBootPhase: jest.fn() }));
+
+    const { useMemoryStore } = require('../store/useMemoryStore');
+    const persistence = require('../services/memoryPersistence');
+    await expect(persistence.hydrateMemoryForUser('account-a')).resolves.toBeUndefined();
+    expect(useMemoryStore.getState().points).toHaveLength(1);
+    expect(useMemoryStore.getState().presenceWitnesses).toEqual([]);
+
+    useMemoryStore.getState().recordPoint(-45.002, 170.002, 172_800_000, {
+      source: 'passive_real', horizontalAccuracyM: 8, continuityState: 'accepted',
+    });
+    await persistence.flushMemoryNow({ coverage: false, presence: true });
+
+    expect(values.get('cairn:memory:presence:v1:account-a')).toBe(originalPresence);
+    expect(values.get('cairn:memory:presence:recovery-v1:account-a')).toContain('"v":1');
+    expect(setItem).not.toHaveBeenCalledWith(
+      'cairn:memory:presence:v1:account-a',
+      expect.any(String),
+      expect.anything(),
+    );
+    await persistence.detachMemoryPersistence();
+    await new Promise(resolve => setTimeout(resolve, 120));
   });
 });

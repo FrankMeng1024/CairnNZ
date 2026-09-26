@@ -19,7 +19,7 @@
   },
   "jest": {
     "preset": "jest-expo",
-    "setupFilesAfterFramework": [
+    "setupFilesAfterEnv": [
       "@testing-library/jest-native/extend-expect"
     ],
     "testMatch": [
@@ -37,7 +37,9 @@
     ],
     "moduleNameMapper": {
       "^expo-location$": "<rootDir>/__mocks__/expo-location.ts",
-      "^expo-speech$": "<rootDir>/__mocks__/expo-speech.ts"
+      "^expo-file-system/legacy$": "<rootDir>/__mocks__/expo-file-system-legacy.ts",
+      "^expo-speech$": "<rootDir>/__mocks__/expo-speech.ts",
+      "^@react-native-async-storage/async-storage$": "<rootDir>/__mocks__/async-storage.ts"
     }
   },
   "dependencies": {

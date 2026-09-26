@@ -6,7 +6,7 @@ import { useAppStore } from '../../../store/useAppStore';
 import { useTrackingStore } from '../../../store/useTrackingStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { recordMemoryEvidence } from '../services/recordMemoryEvidence';
-import { flushMemoryNow } from '../services/memoryPersistence';
+import { flushMemoryNow, reconcileDurableMemoryEvidenceNow } from '../services/memoryPersistence';
 import { useSettingsStore } from '../../../store/useSettingsStore';
 import { selectedActivityLocationSource } from '../../activitySimulator/activityLocationProvider';
 import { activitySimulatorEngine } from '../../activitySimulator/activitySimulatorEngine';
@@ -32,6 +32,13 @@ export function PassiveMemoryRecorder() {
   useEffect(() => {
     let cancelled = false;
     let unsubscribeSimulator: (() => void) | null = null;
+    const ownerUserId = userId == null ? '' : String(userId);
+    const ownerIsCurrent = () => {
+      const auth = useAppStore.getState();
+      return !cancelled
+        && auth.isLoggedIn === true
+        && String(auth.user?.id ?? '') === ownerUserId;
+    };
     const stop = () => {
       subscription.current?.remove();
       subscription.current = null;
@@ -39,16 +46,16 @@ export function PassiveMemoryRecorder() {
       unsubscribeSimulator = null;
     };
     const start = async () => {
-      if (cancelled || subscription.current || unsubscribeSimulator || !enabled || !isLoggedIn || !userId) return;
+      if (cancelled || subscription.current || unsubscribeSimulator || !enabled || !isLoggedIn || !ownerUserId) return;
       if (selectedActivityLocationSource() === 'simulator') {
         activitySimulatorEngine.startRuntime();
         unsubscribeSimulator = activitySimulatorEngine.subscribePassive(sample => {
-          if (cancelled || useTrackingStore.getState().status !== 'idle') return;
+          if (!ownerIsCurrent() || useTrackingStore.getState().status !== 'idle') return;
           if (sample.accuracy > MAX_ACCEPTABLE_HORIZONTAL_ACCURACY_M) {
             appendSimulatorLog('GPS_REJECT', 'passive_memory_location_rejected', {
               rejectionReason: 'poor-accuracy',
               accuracy: sample.accuracy,
-            }, { userId: String(userId), virtualTimestamp: sample.timestamp });
+            }, { userId: ownerUserId, virtualTimestamp: sample.timestamp });
             return;
           }
           useMemoryStore.getState().setLastWatcherFix(sample.lat, sample.lng, sample.timestamp);
@@ -57,7 +64,7 @@ export function PassiveMemoryRecorder() {
             lng: sample.lng,
             atMs: sample.timestamp,
             source: 'simulator_test',
-            ownerUserId: String(userId),
+            ownerUserId,
             horizontalAccuracyM: sample.accuracy,
             continuityState: 'accepted',
           }).then(result => {
@@ -66,18 +73,19 @@ export function PassiveMemoryRecorder() {
               deduplicated: result.deduplicated,
               lat: sample.lat,
               lng: sample.lng,
-            }, { userId: String(userId), virtualTimestamp: sample.timestamp });
+            }, { userId: ownerUserId, virtualTimestamp: sample.timestamp });
           }).catch(error => {
             appendSimulatorLog('ERROR', 'passive_memory_commit_failed', {
               errorCode: String(error).slice(0, 120),
-            }, { userId: String(userId), virtualTimestamp: sample.timestamp });
+            }, { userId: ownerUserId, virtualTimestamp: sample.timestamp });
           });
         });
         return;
       }
       const permission = await Location.getForegroundPermissionsAsync();
-      if (permission.status !== 'granted' || cancelled) return;
+      if (permission.status !== 'granted' || !ownerIsCurrent()) return;
       const watcher = await Location.watchPositionAsync(OPTIONS, location => {
+        if (!ownerIsCurrent()) return;
         const atMs = location.timestamp ?? Date.now();
         const accuracy = location.coords.accuracy;
         if (accuracy !== null && accuracy > MAX_ACCEPTABLE_HORIZONTAL_ACCURACY_M) return;
@@ -92,15 +100,25 @@ export function PassiveMemoryRecorder() {
           lng: location.coords.longitude,
           atMs,
           source: 'passive_real',
+          ownerUserId,
           horizontalAccuracyM: accuracy ?? undefined,
           continuityState: 'accepted',
+        }).catch(error => {
+          appendSimulatorLog('ERROR', 'passive_memory_commit_failed', {
+            errorCode: String(error).slice(0, 120),
+          }, { userId: ownerUserId, virtualTimestamp: atMs });
         });
       });
       if (cancelled) watcher.remove();
       else subscription.current = watcher;
     };
     const appState = AppState.addEventListener('change', next => {
-      if (next === 'active') void start();
+      if (next === 'active') {
+        // Active Hike/Run evidence may have committed in TaskManager's
+        // separate runtime. Reconcile it even when passive exploration is off.
+        if (ownerIsCurrent()) void reconcileDurableMemoryEvidenceNow().catch(() => {});
+        void start();
+      }
       if (next === 'background') {
         stop();
         void flushMemoryNow().catch(() => {});

@@ -73,6 +73,7 @@ interface MapViewProps {
   onWillStartLoadingMap?: () => void;
   onDidFinishLoadingMap?: () => void;
   onDidFinishRenderingMapFully?: () => void;
+  onDidFinishRenderingFrameFully?: () => void;
   // v297 — high-frequency camera change events used by PinAdjustStep
   // to keep a "latest pan position" ref in sync with map state, so
   // the confirm-tap handler can read the true map center without the
@@ -108,6 +109,7 @@ export function MapView({
   onWillStartLoadingMap,
   onDidFinishLoadingMap,
   onDidFinishRenderingMapFully,
+  onDidFinishRenderingFrameFully,
   children,
 }: MapViewProps) {
   const mapRef = useRef<MapRef | null>(null);
@@ -239,6 +241,7 @@ export function MapView({
             // properties.center + properties.zoom identically.
             onMapIdle?.({ properties: { center: [c.lng, c.lat], zoom: z } });
             onDidFinishRenderingMapFully?.();
+            onDidFinishRenderingFrameFully?.();
           }}
           onMove={(e) => {
             if (!onCameraChanged) return;

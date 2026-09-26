@@ -8,7 +8,40 @@
  * create duplicate sessions.
  */
 import { authenticatedFetch } from './apiService';
-import { enqueue, makeOp, uuidv4 } from './offlineQueue';
+import { enqueue, makeOp, retireActivityAppendOps, uuidv4 } from './offlineQueue';
+
+/**
+ * A native fetch can remain pending indefinitely after a radio transition.
+ * Every Activity mutation therefore owns a real wall-clock deadline. Aborting
+ * helps the native transport release resources; the rejecting race is the
+ * liveness guarantee even on a fetch implementation that ignores AbortSignal.
+ */
+export const ACTIVITY_MUTATION_TIMEOUT_MS = 8_000;
+
+async function authenticatedFetchWithDeadline(
+  path: string,
+  options: RequestInit & { expectedUserId?: string },
+  timeoutMs = ACTIVITY_MUTATION_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      const error: any = new Error('activity_transport_timeout');
+      error.code = 'ACTIVITY_TRANSPORT_TIMEOUT';
+      reject(error);
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      authenticatedFetch(path, { ...options, signal: controller.signal }),
+      deadline,
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 // GPS point shape used by both legacy POST and new incremental flows.
 interface TrackPointLike {
@@ -32,10 +65,35 @@ function integerEpoch(value: number): number {
 }
 
 /** Normalize both newly captured and already-persisted pending payloads. */
-export function normalizeActivityPointTimestamps<T extends { t?: number }>(points: T[]): T[] {
-  return points.map(point => point.t == null
-    ? point
-    : { ...point, t: integerEpoch(point.t) });
+function normalizeUnavailableSensorValue(value: number | null | undefined): number | null | undefined {
+  return value != null && (!Number.isFinite(value) || value < 0) ? null : value;
+}
+
+/**
+ * Core Location uses negative values (normally -1) for unavailable accuracy,
+ * speed and course. Those sentinels are provider metadata, not measurements;
+ * convert them to JSON null at every HTTP boundary, including replay of a
+ * pending payload captured by an older client.
+ */
+export function normalizeActivityPointTimestamps<T extends {
+  t?: number;
+  acc?: number | null;
+  v_acc?: number | null;
+  speed_mps?: number | null;
+  course_deg?: number | null;
+}>(points: T[]): T[] {
+  return points.map(point => ({
+    ...point,
+    ...(point.t == null ? {} : { t: integerEpoch(point.t) }),
+    ...(!Object.prototype.hasOwnProperty.call(point, 'acc')
+      ? {} : { acc: normalizeUnavailableSensorValue(point.acc) }),
+    ...(!Object.prototype.hasOwnProperty.call(point, 'v_acc')
+      ? {} : { v_acc: normalizeUnavailableSensorValue(point.v_acc) }),
+    ...(!Object.prototype.hasOwnProperty.call(point, 'speed_mps')
+      ? {} : { speed_mps: normalizeUnavailableSensorValue(point.speed_mps) }),
+    ...(!Object.prototype.hasOwnProperty.call(point, 'course_deg')
+      ? {} : { course_deg: normalizeUnavailableSensorValue(point.course_deg) }),
+  } as T));
 }
 
 interface SessionPayload {
@@ -55,7 +113,7 @@ interface SessionPayload {
   flags?: Array<{ lat: number; lng: number; note: string; timestamp: string }>;
 }
 
-interface RemoteSession {
+export interface RemoteSession {
   id: number;
   client_activity_id?: string | null;
   user_id: number;
@@ -88,9 +146,32 @@ export async function startSession(
   type: 'hiking' | 'running',
   startTime: string,
   clientActivityId?: string,
+  expectedOwnerUserId?: string,
 ): Promise<number | null> {
-  const resolution = await startSessionResolved(type, startTime, clientActivityId);
+  const resolution = await startSessionResolved(type, startTime, clientActivityId, expectedOwnerUserId);
   return resolution.kind === 'started' ? resolution.serverActivityId : null;
+}
+
+export function parseRemoteSessionList(value: unknown): RemoteSession[] {
+  const sessions = (value as any)?.sessions;
+  if (!Array.isArray(sessions)) throw new Error('fetchSessions malformed response');
+  for (const session of sessions) {
+    if (!session
+      || !Number.isInteger(session.id)
+      || (session.type !== 'hiking' && session.type !== 'running')
+      || typeof session.start_time !== 'string'
+      || typeof session.end_time !== 'string'
+      || !Number.isFinite(Number(session.distance_m))
+      || !Number.isFinite(Number(session.duration_s))
+      || (session.client_activity_id != null && typeof session.client_activity_id !== 'string')) {
+      throw new Error('fetchSessions malformed session');
+    }
+  }
+  return sessions.map((session: any) => ({
+    ...session,
+    distance_m: Number(session.distance_m),
+    duration_s: Number(session.duration_s),
+  })) as RemoteSession[];
 }
 
 export interface RemoteUnfinishedActivity {
@@ -104,8 +185,29 @@ export interface RemoteUnfinishedActivity {
 
 export type StartSessionResolution =
   | { kind: 'started'; serverActivityId: number; clientActivityId: string | null }
-  | { kind: 'conflict'; code: string; existing: RemoteUnfinishedActivity | null }
-  | { kind: 'unavailable' };
+  | {
+      kind: 'conflict';
+      code: string;
+      existing: RemoteUnfinishedActivity | null;
+      existingActivities: RemoteUnfinishedActivity[];
+    }
+  | { kind: 'unavailable'; status: number; code: string | null; retryable: boolean };
+
+function parseRemoteUnfinishedActivity(value: any): RemoteUnfinishedActivity | null {
+  if (!value
+    || !Number.isInteger(value.id)
+    || typeof value.client_activity_id !== 'string'
+    || (value.type !== 'hiking' && value.type !== 'running')
+    || typeof value.start_time !== 'string') return null;
+  return {
+    id: value.id,
+    clientActivityId: value.client_activity_id,
+    type: value.type,
+    startedAt: value.start_time,
+    pointCount: Number(value.point_count ?? 0),
+    rawPointCount: Number(value.raw_point_count ?? 0),
+  };
+}
 
 /**
  * Start with an explicit singleton result. A network timeout is not a failed
@@ -116,65 +218,72 @@ export async function startSessionResolved(
   type: 'hiking' | 'running',
   startTime: string,
   clientActivityId?: string,
+  expectedOwnerUserId?: string,
   timeoutMs = 5_000,
 ): Promise<StartSessionResolution> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await authenticatedFetch('/api/sessions/start', {
+    const res = await authenticatedFetchWithDeadline('/api/sessions/start', {
       method: 'POST',
+      expectedUserId: expectedOwnerUserId,
       headers: clientActivityId ? { 'X-Idempotency-Key': clientActivityId } : undefined,
-      signal: controller.signal,
       body: JSON.stringify({
         type,
         start_time: startTime,
         ...(clientActivityId ? { client_activity_id: clientActivityId, client_op_id: clientActivityId } : {}),
       }),
-    });
+    }, timeoutMs);
     if (res.status === 409) {
       let body: any = null;
       try { body = await res.json(); } catch { /* malformed conflict */ }
-      const existing = body?.existing_activity;
+      const existing = parseRemoteUnfinishedActivity(body?.existing_activity);
+      const existingActivities = Array.isArray(body?.existing_activities)
+        ? body.existing_activities
+          .map(parseRemoteUnfinishedActivity)
+          .filter((item: RemoteUnfinishedActivity | null): item is RemoteUnfinishedActivity => item !== null)
+        : [];
       return {
         kind: 'conflict',
         code: typeof body?.code === 'string' ? body.code : 'UNFINISHED_ACTIVITY_EXISTS',
-        existing: existing
-          && typeof existing.id === 'number'
-          && typeof existing.client_activity_id === 'string'
-          && (existing.type === 'hiking' || existing.type === 'running')
-          ? {
-              id: existing.id,
-              clientActivityId: existing.client_activity_id,
-              type: existing.type,
-              startedAt: existing.start_time,
-              pointCount: Number(existing.point_count ?? 0),
-              rawPointCount: Number(existing.raw_point_count ?? 0),
-            }
-          : null,
+        existing,
+        existingActivities,
       };
     }
-    if (!res.ok) return { kind: 'unavailable' };
+    if (!res.ok) {
+      let body: any = null;
+      try { body = await res.json(); } catch { /* preserve HTTP classification */ }
+      return {
+        kind: 'unavailable',
+        status: res.status,
+        code: typeof body?.code === 'string' ? body.code : null,
+        retryable: res.status === 408 || res.status === 425 || res.status === 429 || res.status >= 500,
+      };
+    }
     const data = await res.json();
-    if (typeof data?.id !== 'number') return { kind: 'unavailable' };
-    if (clientActivityId && data?.client_activity_id !== clientActivityId) return { kind: 'unavailable' };
+    if (typeof data?.id !== 'number') {
+      return { kind: 'unavailable', status: res.status, code: 'MALFORMED_START_RESPONSE', retryable: false };
+    }
+    if (clientActivityId && data?.client_activity_id !== clientActivityId) {
+      return { kind: 'unavailable', status: res.status, code: 'CLIENT_ACTIVITY_ID_MISMATCH', retryable: false };
+    }
     return {
       kind: 'started',
       serverActivityId: data.id,
       clientActivityId: data?.client_activity_id ?? null,
     };
   } catch {
-    return { kind: 'unavailable' };
-  } finally {
-    clearTimeout(timeout);
+    return { kind: 'unavailable', status: 0, code: 'TRANSPORT_UNAVAILABLE', retryable: true };
   }
 }
 
 /** Cancel a stale/late remote shell using the immutable business identity. */
-export async function deleteRemoteSessionByClientId(clientActivityId: string): Promise<boolean> {
+export async function deleteRemoteSessionByClientId(
+  clientActivityId: string,
+  expectedUserId?: string,
+): Promise<boolean> {
   try {
-    const res = await authenticatedFetch(
+    const res = await authenticatedFetchWithDeadline(
       `/api/sessions/client/${encodeURIComponent(clientActivityId)}`,
-      { method: 'DELETE' },
+      { method: 'DELETE', ...(expectedUserId ? { expectedUserId } : {}) },
     );
     return res.ok || res.status === 404;
   } catch {
@@ -191,27 +300,39 @@ export async function deleteRemoteSessionByClientId(clientActivityId: string): P
 export async function appendPoints(
   remoteId: number,
   points: TrackPointLike[],
+  authority: { userId: string; clientActivityId: string },
 ): Promise<boolean> {
   if (points.length === 0) return true;
   const normalizedPoints = normalizeActivityPointTimestamps(points);
-  const opId = uuidv4();
   const path = `/api/sessions/${remoteId}/append-points`;
-  const body = { points: normalizedPoints, client_op_id: opId };
-  try {
-    const res = await authenticatedFetch(path, {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-    });
-    if (res.ok) return true;
-    // 4xx (other than 401) are bad payloads — don't retry. 5xx + 401
-    // and network errors are retryable.
-    if (res.status >= 400 && res.status < 500 && res.status !== 401) return false;
-    await enqueue(makeOp('session_append', path, 'PATCH', { points: normalizedPoints }, opId));
-    return false;
-  } catch {
-    await enqueue(makeOp('session_append', path, 'PATCH', { points: normalizedPoints }, opId));
-    return false;
+  // The server contract is max 500 points. A long foreground interval or a
+  // recovered journal can legitimately exceed that; every bounded chunk gets
+  // its own stable operation identity and is sent in chronological order.
+  const chunks: TrackPointLike[][] = [];
+  for (let offset = 0; offset < normalizedPoints.length; offset += 500) {
+    chunks.push(normalizedPoints.slice(offset, offset + 500));
   }
+  let allAcknowledged = true;
+  for (const chunk of chunks) {
+    const opId = uuidv4();
+    const body = { points: chunk, client_op_id: opId };
+    try {
+      const res = await authenticatedFetchWithDeadline(path, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+        expectedUserId: authority.userId,
+      });
+      if (res.ok) continue;
+      allAcknowledged = false;
+      // Preserve the exact chunk for retry/diagnosis. The durable queue owns
+      // classification of the HTTP outcome; a 400 must never make points vanish.
+      await enqueue(makeOp('session_append', path, 'PATCH', { points: chunk }, opId, authority));
+    } catch {
+      allAcknowledged = false;
+      await enqueue(makeOp('session_append', path, 'PATCH', { points: chunk }, opId, authority));
+    }
+  }
+  return allAcknowledged;
 }
 
 /**
@@ -241,7 +362,7 @@ export async function appendPoints(
  */
 export async function fetchSessionDetail(remoteId: number): Promise<RemoteSession | null> {
   try {
-    const res = await authenticatedFetch(`/api/sessions/${remoteId}`);
+    const res = await authenticatedFetchWithDeadline(`/api/sessions/${remoteId}`, {});
     if (!res.ok) return null;
     const data = await res.json();
     return data?.session ?? null;
@@ -260,7 +381,7 @@ export async function renameRemoteSession(
   name: string,
 ): Promise<RenameRemoteSessionResult> {
   try {
-    const response = await authenticatedFetch(`/api/sessions/${remoteId}/name`, {
+    const response = await authenticatedFetchWithDeadline(`/api/sessions/${remoteId}/name`, {
       method: 'PATCH',
       body: JSON.stringify({ name }),
     });
@@ -342,11 +463,12 @@ export function normalizeActivitySavePayloadTimestamps(
   };
 }
 
-export async function saveHikeAtomic(
+async function performSaveHikeAtomic(
   remoteId: number,
   payload: SaveHikeAtomicPayload,
   idempotencyKey: string,
   clientActivityId: string,
+  expectedOwnerUserId?: string,
 ): Promise<SaveHikeAtomicResult> {
   // Pending payloads created by O39 can contain Core Location's fractional
   // milliseconds. Normalize again on every replay so they recover without a
@@ -378,20 +500,22 @@ export async function saveHikeAtomic(
   // saveHikeAtomic so we don't fall into pending on a single flake.
   // Idempotency key stays the same → server treats retry as replay if
   // it did succeed on attempt 1 but the response never came back.
-  const doFetch = () => authenticatedFetch(path, {
+  const doFetch = () => authenticatedFetchWithDeadline(path, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       'X-Idempotency-Key': idempotencyKey,
     },
     body: JSON.stringify({ ...payload, client_activity_id: clientActivityId }),
+    expectedUserId: expectedOwnerUserId,
   });
   let res: Response;
   let lastNetErrMsg = '';
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       res = await doFetch();
-      if (res.ok || res.status >= 400 && res.status < 500) {
+      if (res.ok || (res.status >= 400 && res.status < 500
+        && res.status !== 408 && res.status !== 425 && res.status !== 429)) {
         // Success or a 4xx that a retry can't fix — break out.
         break;
       }
@@ -486,30 +610,61 @@ export async function saveHikeAtomic(
   return body as SaveHikeAtomicResult;
 }
 
+const atomicSaveFlights = new Map<string, Promise<SaveHikeAtomicResult>>();
 
-export async function deleteRemoteSession(remoteId: number): Promise<boolean> {
+/** One client worker owns an Activity Save even when the UI budget expires. */
+export function saveHikeAtomic(
+  remoteId: number,
+  payload: SaveHikeAtomicPayload,
+  idempotencyKey: string,
+  clientActivityId: string,
+  expectedOwnerUserId?: string,
+): Promise<SaveHikeAtomicResult> {
+  const flightKey = `${expectedOwnerUserId ?? 'unscoped'}:${clientActivityId}:${idempotencyKey}`;
+  const existing = atomicSaveFlights.get(flightKey);
+  if (existing) return existing;
+  const flight = performSaveHikeAtomic(
+    remoteId,
+    payload,
+    idempotencyKey,
+    clientActivityId,
+    expectedOwnerUserId,
+  )
+    .then(async (result) => {
+      if (expectedOwnerUserId) {
+        await retireActivityAppendOps(expectedOwnerUserId, clientActivityId, result.session_id)
+          .catch(() => undefined);
+      }
+      return result;
+    })
+    .finally(() => {
+      if (atomicSaveFlights.get(flightKey) === flight) atomicSaveFlights.delete(flightKey);
+    });
+  atomicSaveFlights.set(flightKey, flight);
+  return flight;
+}
+
+
+export async function deleteRemoteSession(remoteId: number, expectedUserId?: string): Promise<boolean> {
   try {
-    const res = await authenticatedFetch(`/api/sessions/${remoteId}`, { method: 'DELETE' });
+    const res = await authenticatedFetchWithDeadline(`/api/sessions/${remoteId}`, {
+      method: 'DELETE',
+      ...(expectedUserId ? { expectedUserId } : {}),
+    });
     return res.ok;
   } catch {
     return false;
   }
 }
 export async function fetchSessions(): Promise<RemoteSession[]> {
-  // R96 修补 C.1: 5xx / 网络错 → throw,不再吞成空数组。
-  // 之前 fetchSessions 遇 500 静默返回 [],useAppStore.hydrate 无条件用
-  // 空 remote 覆盖本地 → 用户重开 app 看到"activity 全消失"。
-  // 现在:
-  //   - 2xx: 返回真实数据
-  //   - 4xx: 返回 []（认为服务器说"没有",可能是 auth 问题让 caller 保守走）
-  //   - 5xx / 网络错: throw,让 useAppStore.hydrate catch → 保留本地 preservedLocals
-  const res = await authenticatedFetch('/api/sessions');
+  // Every non-success response is a failed refresh, never an authoritative
+  // empty list. This includes expired auth, permission errors, rate limits and
+  // schema/route failures; callers retain durable local history and present the
+  // actual failure through their owning operation.
+  const res = await authenticatedFetchWithDeadline('/api/sessions', {});
   if (!res.ok) {
-    if (res.status >= 500) {
-      throw new Error(`fetchSessions server error ${res.status}`);
-    }
-    return [];
+    throw new Error(`fetchSessions failed ${res.status}`);
   }
   const data = await res.json();
-  return data?.sessions ?? [];
+  return parseRemoteSessionList(data);
 }

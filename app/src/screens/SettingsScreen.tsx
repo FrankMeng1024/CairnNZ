@@ -31,6 +31,7 @@ import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
+import { PasswordField } from '../components/PasswordField';
 import { FontSize, IconSize, Radius, Spacing } from '../components/tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useScenicTimeState } from '../hooks/useScenicTimeState';
@@ -1022,9 +1023,9 @@ export function SettingsScreen() {
       <ModalCard visible={passwordOpen} onDismiss={() => !passwordSaving && setPasswordOpen(false)} dismissible={!passwordSaving} testID="settings-password-modal">
         <ModalCardHeader title="Change password" body="Other signed-in devices will be signed out." onClose={passwordSaving ? undefined : () => setPasswordOpen(false)} />
         <View style={styles.stackSmall}>
-          <TextField label="Current password" value={currentPassword} onChangeText={(value) => { setCurrentPassword(value); setPasswordError(''); }} secureTextEntry autoCapitalize="none" testID="settings-current-password" />
-          <TextField label="New password" value={nextPassword} onChangeText={(value) => { setNextPassword(value); setPasswordError(''); }} secureTextEntry autoCapitalize="none" testID="settings-new-password" />
-          <TextField label="Confirm new password" value={passwordConfirmation} onChangeText={(value) => { setPasswordConfirmation(value); setPasswordError(''); }} secureTextEntry autoCapitalize="none" error={passwordError || undefined} testID="settings-confirm-password" />
+          <PasswordField label="Current password" value={currentPassword} onChangeText={(value) => { setCurrentPassword(value); setPasswordError(''); }} testID="settings-current-password" />
+          <PasswordField label="New password" value={nextPassword} onChangeText={(value) => { setNextPassword(value); setPasswordError(''); }} testID="settings-new-password" isNew />
+          <PasswordField label="Confirm new password" value={passwordConfirmation} onChangeText={(value) => { setPasswordConfirmation(value); setPasswordError(''); }} error={passwordError || undefined} testID="settings-confirm-password" isNew />
           <View style={styles.passwordRules} testID="settings-password-rules">
             {PASSWORD_RULES.map((rule) => {
               const met = passwordRuleState(nextPassword)[rule.key];

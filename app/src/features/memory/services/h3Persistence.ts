@@ -44,6 +44,8 @@ let currentUserId: string | null = null;
 let generation = 0;
 let latestSnapshotUserId: string | null = null;
 let persistenceMetrics = { writes: 0, bytes: 0 };
+let storageEpoch = 0;
+let storageWriteTail: Promise<void> = Promise.resolve();
 
 export function resetH3PersistenceMetrics(): void {
   persistenceMetrics = { writes: 0, bytes: 0 };
@@ -99,13 +101,47 @@ function clearTimers(): void {
 
 async function flush(userId: string, snapshot: Map<string, VisitedCell>): Promise<void> {
   if (!userId) return;
+  const requestedEpoch = storageEpoch;
+  const previous = storageWriteTail;
+  let release!: () => void;
+  storageWriteTail = new Promise<void>(resolve => { release = resolve; });
+  await previous.catch(() => undefined);
   try {
+    if (requestedEpoch !== storageEpoch) return;
     const serialized = JSON.stringify(serialize(snapshot));
-    await storage.setItem(storageKey(userId), serialized);
+    await storage.setItem(storageKey(userId), serialized, { strict: true });
+    if (requestedEpoch !== storageEpoch) return;
     persistenceMetrics.writes += 1;
     persistenceMetrics.bytes += serialized.length;
   } catch {
-    // Disk full / quota exceeded → silent drop. Next flush retries.
+    // Derived cache can be rebuilt from Memory points. A later mutation
+    // schedules another flush; privacy-reset writes use a strict API below.
+  } finally {
+    release();
+  }
+}
+
+/** Persist and verify an empty derived cache before clearing its live view.
+ * The storage epoch fences older queued/in-flight writes from resurrecting
+ * precise cells after a successful privacy reset. */
+export async function resetH3PersistenceForUser(userId: string): Promise<void> {
+  if (!userId) throw new Error('h3_reset_owner_required');
+  storageEpoch += 1;
+  const resetEpoch = storageEpoch;
+  clearTimers();
+  const previous = storageWriteTail;
+  let release!: () => void;
+  storageWriteTail = new Promise<void>(resolve => { release = resolve; });
+  await previous.catch(() => undefined);
+  try {
+    if (resetEpoch !== storageEpoch) throw new Error('h3_reset_epoch_stale');
+    const empty = JSON.stringify(serialize(new Map()));
+    await storage.setItem(storageKey(userId), empty, { strict: true });
+    const verified = await storage.getItemStrict(storageKey(userId));
+    if (verified !== empty) throw new Error('h3_reset_verify_failed');
+    if (currentUserId === userId) useH3VisitedStore.getState().clear();
+  } finally {
+    release();
   }
 }
 

@@ -38,8 +38,21 @@ describe('Activity / sync / Final / Route state separation', () => {
       trackPoints: [point(0), point(1)],
     });
     expect(state.localReadiness).toBe('ready');
-    expect(state.serverSync).toBe('error');
+    expect(state.serverSync).toBe('retryable_error');
     expect(state.routeReadiness).toBe('needs_review');
     expect(activityRouteStateCopy(state).syncLabel).toContain('retry');
+  });
+
+  test.each([
+    ['auth_required', 'auth_required', 'Sign in'],
+    ['action_required', 'action_required', 'needs review'],
+    ['dependency', 'dependency', 'another Activity'],
+  ] as const)('preserves %s as a distinct visible state', (failure, expected, copy) => {
+    const state = deriveActivityRouteState({
+      session: { syncState: 'sync_error', syncFailureKind: failure, finalGeometryState: 'base_ready' },
+      trackPoints: [point(0), point(1)],
+    });
+    expect(state.serverSync).toBe(expected);
+    expect(activityRouteStateCopy(state).syncLabel).toContain(copy);
   });
 });
