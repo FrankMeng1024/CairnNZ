@@ -21,6 +21,7 @@ import {
   listPending,
   markPendingPreparationPhase,
   markPendingUploadReady,
+  readPendingReadonly,
   savePending,
   removePending,
   markAttempt,
@@ -67,7 +68,7 @@ function schedulePendingRetry(pending: PendingHike[]): void {
   const nextDueAt = pending
     .filter(hike => isCurrentActivityOwner(hike.userId)
       && hike.lastAttemptAt
-      && (!hike.failureKind || hike.failureKind === 'retryable'))
+      && (!hike.failureKind || hike.failureKind === 'retryable' || hike.failureKind === 'dependency'))
     .reduce((earliest, hike) => Math.min(
       earliest,
       Number(hike.lastAttemptAt) + retryBackoffMs(hike.attemptCount),
@@ -109,7 +110,26 @@ function isCurrentActivityOwner(userId: string): boolean {
  */
 export async function recoverPreparingActivityCompletion(hike: PendingHike): Promise<boolean> {
   if (hike.uploadState !== 'preparing') return true;
-  if (isPendingPreparationActive(hike.localId) || !isCurrentActivityOwner(hike.userId)) return false;
+  if (!isCurrentActivityOwner(hike.userId)) return false;
+  // A durable Final job owns the preparation fence across process death.
+  // Resume it before generic Base recovery; otherwise a restart could upload
+  // Base under the same idempotency key while a newer artifact is pending.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const refinement = require('../features/activity/activityFinalRefinementQueue');
+    const result = await refinement.resumeActivityFinalRefinement(hike.userId, hike.localId);
+    if (result !== 'absent') {
+      if (result !== 'complete') return false;
+      const refreshed = await readPendingReadonly(hike.localId);
+      if (!refreshed || refreshed.userId !== hike.userId) return false;
+      Object.assign(hike, refreshed);
+      return refreshed.uploadState === 'ready';
+    }
+  } catch (refinementError) {
+    crashLogger.breadcrumb(`activity:finish_refinement_resume_failed ${String(refinementError).slice(0, 80)}`);
+    return false;
+  }
+  if (isPendingPreparationActive(hike.localId)) return false;
   if (!hike.summary || !hike.finalArtifact) return false;
   // Lazy import keeps headless/unit startup free of the full AsyncStorage
   // adapter until an interrupted Finish actually needs reconstruction.
@@ -314,7 +334,11 @@ export async function drainPending(opts?: {
       for (const hike of list) {
         const explicitRetry = opts?.force || opts?.wakeReason === 'manual';
         const authRefreshRetry = opts?.wakeReason === 'hydrate' && hike.failureKind === 'auth_required';
-        if (!explicitRetry && !authRefreshRetry
+        const dependencyRetry = hike.failureKind === 'dependency'
+          && (opts?.wakeReason === 'hydrate'
+            || opts?.wakeReason === 'foreground'
+            || opts?.wakeReason === 'scheduled_retry');
+        if (!explicitRetry && !authRefreshRetry && !dependencyRetry
           && hike.failureKind && hike.failureKind !== 'retryable') {
           result.skipped += 1;
           done += 1;

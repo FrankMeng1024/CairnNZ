@@ -50,6 +50,12 @@ import {
 } from '../features/activity/activityLocationHealth';
 import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay';
 import { CairnPinV10 } from '../features/memory/components/CairnPinV10';
+import {
+  ACTIVITY_ROAD_CONTEXT_QUERY_RADIUS_PX,
+  buildActivityRoadContext,
+  deriveRoadAwareLiveTrack,
+  type ActivityRoadContext,
+} from '../features/activity/activityRoadContext';
 
 // Session-local readiness memory: cold entry keeps the intentional Cairn
 // preparation boundary; subsequent ready-from-cache entries suppress only a
@@ -436,6 +442,7 @@ export function HikingMap({
   const [reduceMotion, setReduceMotion] = useState(false);
   const [mapAppState, setMapAppState] = useState(AppState.currentState);
   const [routeStyleGeneration, setRouteStyleGeneration] = useState(0);
+  const [roadViewportGeneration, setRoadViewportGeneration] = useState(0);
   useEffect(() => {
     let mounted = true;
     void AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
@@ -576,16 +583,27 @@ export function HikingMap({
   // and sent to Mapbox for each accepted point.
   const GAP_THRESHOLD_MS = 120_000;
   const GAP_DIST_THRESHOLD_M = 200;
+  const [roadContext, setRoadContext] = useState<ActivityRoadContext | null>(null);
+  const effectiveRoadContext = roadContext
+    && roadContext.styleGeneration === routeStyleGeneration
+    && roadContext.viewportGeneration === roadViewportGeneration
+    && mapFirstRender
+    ? roadContext
+    : null;
+  const roadAwareTrackPoints = useMemo(
+    () => simulatorEnabled ? trackPoints : deriveRoadAwareLiveTrack(trackPoints, effectiveRoadContext),
+    [effectiveRoadContext, simulatorEnabled, trackPoints],
+  );
   const routePresentationRef = useRef(createIncrementalRoutePresentation());
   const routePresentation = useMemo(() => {
     routePresentationRef.current = updateIncrementalRoutePresentation(
       routePresentationRef.current,
-      trackPoints,
+      roadAwareTrackPoints,
       GAP_THRESHOLD_MS,
       GAP_DIST_THRESHOLD_M,
     );
     return routePresentationRef.current;
-  }, [trackPoints]);
+  }, [roadAwareTrackPoints]);
   const activeConfirmedSegment = routePresentation.activeHead;
   const trackingStatus = useTrackingStore(s => s.status);
   const trackingIsFinishing = useTrackingStore(s => s.isFinishing);
@@ -715,10 +733,183 @@ export function HikingMap({
   const cameraRef = useRef<any>(null);
   // The bounded bridge exposes only map center selection to the QA panel.
   const mapViewRef = useRef<any>(null);
+  const roadQueryGenerationRef = useRef(0);
+  const pendingRoadViewportSignatureRef = useRef<string | null>(null);
+  const appliedRoadViewportSignatureRef = useRef<string | null>(null);
+  const lastRoadQueryRef = useRef<{
+    lat: number;
+    lng: number;
+    timestamp: number | null;
+    styleGeneration: number;
+    viewportGeneration: number;
+  } | null>(null);
   const flyToStateRef = useRef<{ startedAt: number; timeout: ReturnType<typeof setTimeout> | null } | null>(null);
   const firstRealLocationSeenRef = useRef(false);
   const initialCameraAppliedRef = useRef(false);
   const mapboxCadenceRef = useRef(createMapboxCadenceState());
+
+  useEffect(() => {
+    const tail = trackPoints[trackPoints.length - 1];
+    const map = mapViewRef.current;
+    const eligible = Boolean(
+      tail
+      && trackPoints.length >= 2
+      && !simulatorEnabled
+      && isFocused
+      && mapAppState === 'active'
+      && trackingStatus === 'tracking'
+      && mapFirstRender
+      && map
+      && typeof map.getPointInView === 'function'
+      && typeof map.getVisibleBounds === 'function'
+      && typeof map.queryRenderedFeaturesInRect === 'function',
+    );
+    if (!eligible || !tail || !map) {
+      setRoadContext(null);
+      return undefined;
+    }
+
+    const previous = lastRoadQueryRef.current;
+    const tailTimestamp = tail.t ?? null;
+    const styleOrViewportChanged = !previous
+      || previous.styleGeneration !== routeStyleGeneration
+      || previous.viewportGeneration !== roadViewportGeneration;
+    const movedM = previous ? haversineM(previous, tail) : Number.POSITIVE_INFINITY;
+    const observationElapsedMs = previous?.timestamp != null && tailTimestamp != null
+      ? tailTimestamp - previous.timestamp
+      : Number.POSITIVE_INFINITY;
+    // Local rendered-feature queries are event-driven. They are not Mapbox
+    // network API requests and never run for stationary receipts or puck,
+    // recenter, preview, passive Memory, or reload work.
+    if (!styleOrViewportChanged && movedM < 12 && observationElapsedMs < 15_000) {
+      return undefined;
+    }
+    lastRoadQueryRef.current = {
+      lat: tail.lat,
+      lng: tail.lng,
+      timestamp: tailTimestamp,
+      styleGeneration: routeStyleGeneration,
+      viewportGeneration: roadViewportGeneration,
+    };
+    const queryGeneration = ++roadQueryGenerationRef.current;
+    let cancelled = false;
+    void (async () => {
+      const startedAt = Date.now();
+      let visibleBounds: [[number, number], [number, number]] | null = null;
+      let screenRect: [number, number, number, number] | null = null;
+      let radiusM = 45;
+      try {
+        const resolvedBounds = await map.getVisibleBounds();
+        if (!Array.isArray(resolvedBounds) || resolvedBounds.length < 2) {
+          throw new Error('invalid-visible-bounds');
+        }
+        visibleBounds = resolvedBounds as [[number, number], [number, number]];
+        const [[rightLng, topLat], [leftLng, bottomLat]] = visibleBounds;
+        const longitudeVisible = leftLng <= rightLng
+          ? tail.lng >= leftLng && tail.lng <= rightLng
+          : tail.lng >= leftLng || tail.lng <= rightLng;
+        const inViewport = longitudeVisible && tail.lat >= bottomLat && tail.lat <= topLat;
+        if (!inViewport) {
+          if (!cancelled && queryGeneration === roadQueryGenerationRef.current) {
+            setRoadContext(buildActivityRoadContext({
+              features: null,
+              center: tail,
+              observedThroughTimestamp: tailTimestamp,
+              mapMountId: mapMountIdRef.current,
+              styleGeneration: routeStyleGeneration,
+              viewportGeneration: roadViewportGeneration,
+              queryGeneration,
+              queriedAtMs: Date.now(),
+              queryDurationMs: Date.now() - startedAt,
+              screenRect: null,
+              visibleBounds,
+              radiusM,
+              availability: 'outside-viewport',
+            }));
+          }
+          return;
+        }
+        const point = await map.getPointInView([tail.lng, tail.lat]);
+        if (!Array.isArray(point) || !Number.isFinite(point[0]) || !Number.isFinite(point[1])) {
+          throw new Error('invalid-point-in-view');
+        }
+        const radius = ACTIVITY_ROAD_CONTEXT_QUERY_RADIUS_PX;
+        screenRect = [point[1] - radius, point[0] - radius, point[1] + radius, point[0] + radius];
+        if (typeof map.getCoordinateFromView === 'function') {
+          const edge = await map.getCoordinateFromView([point[0] + radius, point[1]]);
+          if (Array.isArray(edge) && Number.isFinite(edge[0]) && Number.isFinite(edge[1])) {
+            radiusM = Math.max(4, Math.min(120, haversineM(tail, { lng: edge[0], lat: edge[1] })));
+          }
+        }
+        const features = await map.queryRenderedFeaturesInRect(screenRect, [], null);
+        if (cancelled || queryGeneration !== roadQueryGenerationRef.current) return;
+        const context = buildActivityRoadContext({
+          features,
+          center: tail,
+          observedThroughTimestamp: tailTimestamp,
+          mapMountId: mapMountIdRef.current,
+          styleGeneration: routeStyleGeneration,
+          viewportGeneration: roadViewportGeneration,
+          queryGeneration,
+          queriedAtMs: Date.now(),
+          queryDurationMs: Date.now() - startedAt,
+          screenRect,
+          visibleBounds,
+          radiusM,
+        });
+        setRoadContext(context);
+        appendSimulatorLog('MAP_STATE', 'activity_road_context_queried', {
+          screen: telemetryScreenPrefix,
+          queryGeneration,
+          queryDurationMs: context.queryDurationMs,
+          availability: context.availability,
+          renderedFeatureCount: context.structure.renderedFeatureCount,
+          roadFeatureCount: context.structure.roadFeatureCount,
+          sourceLayerCount: context.structure.sourceLayerIds.length,
+          styleLayerCount: context.structure.styleLayerIds.length,
+          coverageRadiusM: context.coverage.radiusM,
+          networkRequestCount: 0,
+        }, {
+          clientActivityId: useTrackingStore.getState().sessionId,
+          coordinateSource: 'real',
+        });
+      } catch (error) {
+        if (cancelled || queryGeneration !== roadQueryGenerationRef.current) return;
+        setRoadContext(buildActivityRoadContext({
+          features: null,
+          center: tail,
+          observedThroughTimestamp: tailTimestamp,
+          mapMountId: mapMountIdRef.current,
+          styleGeneration: routeStyleGeneration,
+          viewportGeneration: roadViewportGeneration,
+          queryGeneration,
+          queriedAtMs: Date.now(),
+          queryDurationMs: Date.now() - startedAt,
+          screenRect,
+          visibleBounds,
+          radiusM,
+          availability: 'query-error',
+        }));
+        appendSimulatorLog('MAP_STATE', 'activity_road_context_query_failed', {
+          screen: telemetryScreenPrefix,
+          queryGeneration,
+          error: error instanceof Error ? error.message : String(error),
+          networkRequestCount: 0,
+        }, { coordinateSource: 'real' });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [
+    isFocused,
+    mapAppState,
+    mapFirstRender,
+    roadViewportGeneration,
+    routeStyleGeneration,
+    simulatorEnabled,
+    telemetryScreenPrefix,
+    trackPoints,
+    trackingStatus,
+  ]);
 
   useEffect(() => () => {
     if (flyToStateRef.current?.timeout) clearTimeout(flyToStateRef.current.timeout);
@@ -928,6 +1119,11 @@ export function HikingMap({
     activityMapHasRendered = true;
     setMapFirstRender(true);
     setMapLoadState('loading');
+    const pendingViewport = pendingRoadViewportSignatureRef.current;
+    if (pendingViewport && pendingViewport !== appliedRoadViewportSignatureRef.current) {
+      appliedRoadViewportSignatureRef.current = pendingViewport;
+      setRoadViewportGeneration(generation => generation + 1);
+    }
     if (!activitySimulatorBuildCapable) return;
     useActivitySimulatorStore.getState().setMapDiagnostics({
       mountId: mapMountIdRef.current,
@@ -1022,6 +1218,18 @@ export function HikingMap({
         // Mapbox fires onCameraChanged for every camera move including
         // programmatic ones; we only react to gestures.
         onCameraChanged={(state: any) => {
+          if (state?.gestures?.isGestureActive) {
+            const properties = state?.properties ?? state ?? {};
+            const center = properties.center ?? properties.centerCoordinate ?? [];
+            pendingRoadViewportSignatureRef.current = JSON.stringify({
+              center: Array.isArray(center)
+                ? center.slice(0, 2).map(value => Math.round(Number(value) * 100_000) / 100_000)
+                : null,
+              zoom: Math.round(Number(properties.zoom ?? properties.zoomLevel ?? 0) * 10) / 10,
+              bearing: Math.round(Number(properties.heading ?? properties.bearing ?? 0)),
+              pitch: Math.round(Number(properties.pitch ?? 0)),
+            });
+          }
           if (simulatorControlsEnabled && simulatorCenterPickerVisible && state?.gestures?.isGestureActive) {
             const center = state?.properties?.center
               ?? state?.properties?.centerCoordinate

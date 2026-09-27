@@ -2,12 +2,16 @@ import type { ActivityMode } from '../../store/useSessionStore';
 import { haversineM } from '../../utils/geo';
 
 export const REAL_GPS_CONTINUITY_VERSION = 3;
-export const REAL_GPS_CANDIDATE_MAX_AGE_MS = 5_000;
-export const REAL_GPS_REACQUISITION_CANDIDATE_MAX_AGE_MS = 20_000;
+// A normal energy-saving provider may deliver usable observations 8–15 s
+// apart. Candidate support therefore survives one such interval plus bridge
+// jitter. Receipt-time bounds still prevent an old candidate living forever,
+// while observation timestamps continue to govern physical plausibility.
+export const REAL_GPS_CANDIDATE_MAX_AGE_MS = 20_000;
+export const REAL_GPS_REACQUISITION_CANDIDATE_MAX_AGE_MS = 45_000;
 
 const MAX_HORIZONTAL_ACCURACY_M = 25;
 const MAX_RECENT_OBSERVATIONS = 6;
-const MAX_RECENT_AGE_MS = 8_000;
+const MAX_RECENT_AGE_MS = 45_000;
 const MAX_CANDIDATE_OBSERVATIONS = 4;
 const MIN_REACQUISITION_CANDIDATE_INTERVAL_MS = 20_000;
 const MAX_ESTABLISHED_EDGE_AGE_MS = 20_000;
@@ -574,6 +578,10 @@ function reportedStationary(point: RealGpsObservation): boolean {
   return hasReliableReportedSpeed(point) && Number(point.speed) < REPORTED_STATIONARY_SPEED_MPS;
 }
 
+function explicitlyNearZeroSpeed(point: RealGpsObservation): boolean {
+  return hasReliableReportedSpeed(point) && Number(point.speed) < 0.2;
+}
+
 function absoluteEdgesPlausible(
   points: Array<Pick<RealGpsObservation, 'lat' | 'lng' | 't'>>,
   mode: ActivityMode,
@@ -874,8 +882,30 @@ export function evaluateRealGpsObservation(
     );
     return lowerBoundM / dtS <= MODE_MAX_SPEED_MPS[mode];
   });
+  const priorCandidateHasNearZeroSpeed = evidence.slice(0, -1).some(explicitlyNearZeroSpeed);
+  const currentSpeedUnavailable = current.speed == null
+    || !Number.isFinite(current.speed)
+    || current.speed < 0;
+  const positionTail = evidence.slice(-3);
+  const positionTailFeatures = featuresFor(positionTail);
+  const coherentThreeFixPositionTail = positionTail.length >= 3
+    && positionTailFeatures.durationMs <= 10_000
+    && positionTailFeatures.netM >= 2
+    && positionTailFeatures.progressRatio >= 0.78
+    && positionTailFeatures.directionVariabilityDeg <= 45
+    && absoluteEdgesPlausible(positionTail, mode);
+  const guardedStopTransition = pending.reason === 'possible-stationary-jitter'
+    && !coherentThreeFixPositionTail
+    && (
+      (explicitlyNearZeroSpeed(current) && (diagnosticsFor(observedState, current).dtFromTrustedMs ?? 0) >= 5_000)
+      || (priorCandidateHasNearZeroSpeed && currentSpeedUnavailable)
+    );
   const candidateProgressConfirmed = pending.reason === 'possible-stationary-jitter'
-    ? stationaryCandidateShowsRealProgress(base, evidence, mode)
+    // One long-interval near-zero fix followed by unavailable scalar speed is
+    // a stop transition, not enough support to turn drift into a last edge.
+    // Short-cadence coherent slow walking/backtracks still use positional
+    // evidence, and two explicit moving fixes still resume promptly.
+    ? !guardedStopTransition && stationaryCandidateShowsRealProgress(base, evidence, mode)
     : pending.reason === 'large-lateral-innovation'
       ? showsCumulativeProgress(sequenceFeatures)
         && sequenceFeatures.progressRatio >= 0.68
@@ -889,11 +919,18 @@ export function evaluateRealGpsObservation(
     // evidence) may be promoted. This is what prevents startup refinement from
     // becoming a delayed false route when the user finally departs.
     const candidateBeganPromptly = first.t - base.t <= REAL_GPS_CANDIDATE_MAX_AGE_MS;
+    const currentExplicitlyMoving = hasReliableReportedSpeed(current)
+      && Number(current.speed) >= REPORTED_STATIONARY_SPEED_MPS;
+    const pendingContainsNearZeroSpeed = pending.observations.some(explicitlyNearZeroSpeed);
     const confirmedCandidates = pending.reason === 'possible-stationary-jitter'
-      && !candidateBeganPromptly
+      && (!candidateBeganPromptly || currentExplicitlyMoving)
       ? pending.observations.filter(candidate => (
-          hasReliableReportedSpeed(candidate)
-          && Number(candidate.speed) >= REPORTED_STATIONARY_SPEED_MPS
+          !explicitlyNearZeroSpeed(candidate)
+          && !(pendingContainsNearZeroSpeed && (
+            candidate.speed == null
+            || !Number.isFinite(candidate.speed)
+            || candidate.speed < 0
+          ))
         ))
       : pending.observations;
     const cleared = { ...observedState, pending: null, motionState: 'moving' as const };

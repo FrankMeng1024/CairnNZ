@@ -12,6 +12,7 @@ import { deleteRemoteSession, deleteRemoteSessionByClientId } from '../../servic
 import { BACKGROUND_LOCATION_TASK, persistBackgroundContext } from '../../services/backgroundLocationTask';
 import { useAppStore } from '../../store/useAppStore';
 import {
+  buildActivityDistanceAccumulator,
   calculateLifecycleDurationMs,
   calculateActivityStats,
   newSegmentId,
@@ -356,6 +357,7 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
     isFinishing: false,
     startError: null,
     distanceM: stats.distanceM,
+    distanceAccumulator: buildActivityDistanceAccumulator(points),
     durationS: activity.durationS,
     activeDurationAccumulatedMs: Math.max(0, activity.durationS * 1000),
     activeDurationStartedAtMs: null,
@@ -438,7 +440,7 @@ export async function saveRecoverableActivity(
   if (!await loadRecoverableActivity(activity)) return false;
   const authority = captureRecoveryAuthority(activity.userId);
   if (!authority || !await registeredActivityStillCurrent(activity, authority)) return false;
-  return useTrackingStore.getState().stopTracking(sessionName);
+  return Boolean(await useTrackingStore.getState().stopTracking(sessionName));
 }
 
 export async function discardRecoverableActivity(activity: RecoverableActivity): Promise<void> {

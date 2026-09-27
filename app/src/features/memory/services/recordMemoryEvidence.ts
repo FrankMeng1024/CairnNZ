@@ -59,7 +59,7 @@ export function recordMemoryEvidence(args: {
    * store. This authority is valid only after backgroundLocationTask has
    * revalidated the durable Activity lease under its ownership mutex.
    */
-  ownerAuthority?: 'durable_activity_lease';
+  ownerAuthority?: 'durable_activity_lease' | 'durable_passive_lease';
 }): Promise<{
   committed: boolean;
   deduplicated: boolean;
@@ -78,9 +78,12 @@ export function recordMemoryEvidence(args: {
   const durableActivityLease = args.ownerAuthority === 'durable_activity_lease'
     && args.source === 'activity_real'
     && Boolean(args.ownerUserId);
+  const durablePassiveLease = args.ownerAuthority === 'durable_passive_lease'
+    && args.source === 'passive_real'
+    && Boolean(args.ownerUserId);
   const ownerIsCurrent = () => {
     const liveOwnerId = String(useAppStore.getState().user?.id ?? '');
-    return liveOwnerId ? liveOwnerId === ownerUserId : durableActivityLease;
+    return liveOwnerId ? liveOwnerId === ownerUserId : (durableActivityLease || durablePassiveLease);
   };
   let result = {
     committed: false,
@@ -97,7 +100,7 @@ export function recordMemoryEvidence(args: {
     if (!ownerIsCurrent()) {
       throw new Error('memory_owner_changed');
     }
-    if (durableActivityLease) {
+    if (durableActivityLease || durablePassiveLease) {
       // TaskManager may execute in a separate JS runtime. It owns only the
       // immutable evidence journal; hydrating/writing the shared AsyncStorage
       // snapshot here can race an account switch or privacy reset in the UI
@@ -107,7 +110,7 @@ export function recordMemoryEvidence(args: {
         lat: args.lat,
         lng: args.lng,
         atMs: evidenceAtMs,
-        source: 'activity_real',
+        source: args.source as Exclude<MemoryEvidenceSource, 'simulator_test'>,
         sourceActivityClientId: args.sourceActivityClientId,
         sourceSegmentId: args.sourceSegmentId,
         horizontalAccuracyM: args.horizontalAccuracyM,

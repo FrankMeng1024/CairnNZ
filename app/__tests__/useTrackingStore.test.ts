@@ -147,9 +147,15 @@ jest.mock('../src/services/autoPauseMonitor', () => ({
 }));
 
 const { useTrackingStore } = require('../src/store/useTrackingStore');
+const {
+  resetActivityMemoryProjectionForTests,
+  waitForAllActivityMemoryProjections,
+} = require('../src/features/activity/activityMemoryProjector');
 
 describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await waitForAllActivityMemoryProjections();
+    resetActivityMemoryProjectionForTests();
     useTrackingStore.setState(useTrackingStore.getInitialState(), true);
     useTrackingStore.setState({
       status: 'tracking',
@@ -200,11 +206,12 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
       ownerGeneration: 'test-owner-generation',
     }, 1_000);
 
-    expect(decision).toMatchObject({ accepted: true, memoryCommitted: true });
+    expect(decision).toMatchObject({ accepted: true, memoryProjectionPending: true });
     expect(useTrackingStore.getState()).toMatchObject({
       status: 'tracking',
       remoteSessionId: null,
     });
+    await waitForAllActivityMemoryProjections();
     expect(recordMemoryEvidence.mock.calls.length).toBe(callsBefore + 1);
     expect(recordMemoryEvidence).toHaveBeenLastCalledWith(expect.objectContaining({
       source: 'activity_real',
@@ -287,10 +294,12 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
 
   it('reacquires from the last accepted anchor even after a recent rejected fix', async () => {
     await useTrackingStore.getState().addTrackPoint({ lat: -41, lng: 174, accuracy: 5 }, 1_000);
+    const qualifiedBeforeOutlier = useTrackingStore.getState().latestSourceCoordinate;
     const rejected = await useTrackingStore.getState().addTrackPoint(
       { lat: -41, lng: 174, accuracy: 60 },
       590_000,
     );
+    expect(useTrackingStore.getState().latestSourceCoordinate).toEqual(qualifiedBeforeOutlier);
     const pending = await useTrackingStore.getState().addTrackPoint(
       { lat: -41.01, lng: 174, accuracy: 5 },
       601_000,
@@ -338,6 +347,7 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
     expect(new Set(state.trackPoints.map((item: any) => item.segmentId))).toHaveProperty('size', 3);
     expect(state.distanceM).toBeGreaterThan(30);
     expect(state.distanceM).toBeLessThan(40);
+    await waitForAllActivityMemoryProjections();
     const memoryCalls = require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence.mock.calls
       .map((call: any[]) => call[0])
       .filter((item: any) => item.source === 'activity_real');
@@ -378,6 +388,7 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
     expect(state.distanceM).toBeGreaterThan(9);
     expect(state.distanceM).toBeLessThan(11);
     expect(decisions.slice(3).every(decision => decision.accepted === false)).toBe(true);
+    await waitForAllActivityMemoryProjections();
     expect(memory.mock.calls.length - memoryCallsBefore).toBe(3);
   });
 
@@ -1042,8 +1053,8 @@ describe('useTrackingStore — P0 operation guards', () => {
     const first = useTrackingStore.getState().stopTracking();
     const second = useTrackingStore.getState().stopTracking();
 
-    await expect(second).resolves.toBe(false);
-    await expect(first).resolves.toBe(false);
+    await expect(second).resolves.toBeNull();
+    await expect(first).resolves.toBeNull();
     const { deleteRemoteSession } = require('../src/services/sessionService');
     // Opening Finish on an ineligible Activity preserves the same unfinished
     // Activity and its server mapping until the user explicitly discards it.
@@ -1103,7 +1114,12 @@ describe('useTrackingStore — P0 operation guards', () => {
     } finally {
       releaseFence?.(true);
     }
-    await expect(finishing).resolves.toBe(false);
+    await expect(finishing).resolves.toMatchObject({
+      status: 'recoverable-failure',
+      localCommit: 'not-committed',
+      clientActivityId: 'finish-fence-activity',
+      reason: 'local-commit-failed',
+    });
   });
 
   it('failed Resume acquisition leaves the Activity paused and clears durable native ownership', async () => {

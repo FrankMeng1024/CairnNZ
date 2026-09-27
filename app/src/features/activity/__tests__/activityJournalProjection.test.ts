@@ -1,5 +1,8 @@
 import type { CanonicalJournalPoint } from '../../../services/hikeTrackWriter';
-import { projectActivityJournal } from '../activityJournalProjection';
+import {
+  projectAcceptedActivityPoints,
+  projectActivityJournal,
+} from '../activityJournalProjection';
 import { buildBaseFinalTrackPoints } from '../activityFinalArtifact';
 
 function point(
@@ -78,6 +81,26 @@ describe('durable Activity journal projection', () => {
     const rebasedProjection = projectActivityJournal(currentStateAtCommit, journal);
     expect(rebasedProjection.canonical).toHaveLength(97);
     expect(rebasedProjection.canonical.at(-1)).toMatchObject({ rawOrdinal: 97 });
+  });
+
+  test('a WAL replay published while an accepted foreground write is in flight cannot be overwritten by its stale transition', () => {
+    const journal = Array.from({ length: 96 }, (_, index) => point(index));
+    const stateWhenForegroundAcceptanceStarted = journal.slice(0, 72);
+    const acceptedForegroundFix = point(96, 'segment-a', 'foreground');
+
+    const stateAfterReplay = projectActivityJournal(
+      stateWhenForegroundAcceptanceStarted,
+      journal,
+    ).canonical;
+    const committed = projectAcceptedActivityPoints(
+      stateAfterReplay,
+      [acceptedForegroundFix],
+    );
+
+    expect(committed.canonical).toHaveLength(97);
+    expect(committed.canonical[71]).toMatchObject({ rawOrdinal: 72 });
+    expect(committed.canonical[95]).toMatchObject({ rawOrdinal: 96 });
+    expect(committed.canonical.at(-1)).toMatchObject({ rawOrdinal: 97 });
   });
 
   test.each(['hiking', 'running'])('%s keeps a frozen prefix through headless writes, restore, continuation, and Finish', () => {

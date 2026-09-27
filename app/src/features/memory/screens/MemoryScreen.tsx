@@ -567,6 +567,11 @@ export function MemoryScreen() {
         const loc = (await Promise.race([locPromise, timeoutPromise])) as Awaited<typeof locPromise>;
         if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = null; }
         if (cancelled) return;
+        if (loc.coords.accuracy != null && loc.coords.accuracy > 25) {
+          log('memory.gps_fix_unqualified', { accuracy: loc.coords.accuracy });
+          setFailReason('error');
+          return;
+        }
         log('memory.gps_fix_ok', { accuracy: loc.coords.accuracy });
         setOneShot({ lat: loc.coords.latitude, lng: loc.coords.longitude });
       } catch (e: any) {

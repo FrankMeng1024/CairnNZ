@@ -581,6 +581,15 @@ export async function resetForResync(localId: string): Promise<boolean> {
       const rand = (n: number) => Math.random().toString(16).slice(2, 2 + n).padEnd(n, '0');
       newKey = `${rand(8)}-${rand(4)}-${rand(4)}-${rand(4)}-${rand(12)}`;
       hike.idempotencyKey = newKey;
+      // A dead numeric pointer is a path repair, not a terminal validation
+      // failure. Clear dependency/action metadata and leave a bounded retry
+      // wake so the new Start+Save path cannot sleep forever.
+      hike.attemptCount = 0;
+      hike.lastAttemptAt = Date.now();
+      hike.failureKind = 'retryable';
+      hike.failureStatus = null;
+      hike.failureCode = 'RESYNC_READY';
+      hike.failureMessage = 'Server Activity identity will be recreated.';
     });
     breadcrumb(`pendingSync:resetForResync localId=${localId} newKey=${newKey.slice(0, 8)}`);
     return true;

@@ -81,6 +81,7 @@ jest.mock('../../../services/backgroundLocationTask', () => ({
   BACKGROUND_LOCATION_TASK: 'qa-bg', registerBackgroundTask: jest.fn(async () => true),
   drainBackgroundLocations: jest.fn(() => []), settleBackgroundLocationWrites: jest.fn(async () => undefined),
   persistBackgroundContext: jest.fn(async () => true),
+  readDurableActivityContext: jest.fn(async () => null),
 }));
 jest.mock('../../../services/hikeTrackWriter', () => ({
   appendHikePoint: jest.fn(async () => undefined), startHikeTrack: jest.fn(async () => undefined),
@@ -138,6 +139,7 @@ const { advanceRawGpsModel, createRawGpsModelState, REALISTIC_GPS_PROFILE } = re
 const { destinationPoint } = require('../../activitySimulator/geodesy');
 const { deriveLivePace } = require('../../activity/livePace');
 const { correlateLivePipelineTrace } = require('../../../../scripts/lib/revision03-live-pipeline-correlation.cjs');
+const { waitForAllActivityMemoryProjections } = require('../../activity/activityMemoryProjector');
 
 type Truth = {
   t: number;
@@ -470,9 +472,14 @@ describe('revision-03 realistic Raw GPS -> live isolated Memory pipeline', () =>
     expect(stationaryStage.coverageCount - stationaryStartStage.coverageCount).toBeLessThan(3);
 
     const finishStarted = performance.now();
+    const activityId = useTrackingStore.getState().sessionId;
     const finished = await useTrackingStore.getState().stopTracking(`R-GPS-01 ${seed}`);
     const finishMs = performance.now() - finishStarted;
-    expect(finished).toBe(true);
+    expect(finished).toMatchObject({
+      status: 'saved-local',
+      clientActivityId: activityId,
+      localCommit: 'committed',
+    });
     const afterFinish = trackingSnapshot('after-finish-handler');
     stages.push(afterFinish);
     expect(afterFinish.status).toBe('idle');
@@ -775,17 +782,23 @@ describe('revision-03 realistic Raw GPS -> live isolated Memory pipeline', () =>
         presenceCount: useMemoryStore.getState().presenceWitnesses.length,
       };
       expect(decisions.some(decision => decision.accepted)).toBe(true);
-      expect(await useTrackingStore.getState().stopTracking(`R-GPS-07 ${scenarioId}`)).toBe(true);
+      const activityId = useTrackingStore.getState().sessionId;
+      await expect(useTrackingStore.getState().stopTracking(`R-GPS-07 ${scenarioId}`)).resolves.toMatchObject({
+        status: 'saved-local',
+        clientActivityId: activityId,
+      });
       return { raw, decisions, beforeFinish };
     };
 
     const first = await feedRealActivity('707100000001', 0);
+    await waitForAllActivityMemoryProjections();
     const firstCoverage = useMemoryStore.getState().points.length;
     const firstPresence = useMemoryStore.getState().presenceWitnesses.length;
     expect(firstCoverage).toBeGreaterThan(0);
     expect(firstPresence).toBeGreaterThan(0);
 
     const returned = await feedRealActivity('707100000002', 3_600_000);
+    await waitForAllActivityMemoryProjections();
     const afterReturn = useMemoryStore.getState();
     expect(afterReturn.points).toHaveLength(firstCoverage);
     expect(afterReturn.presenceWitnesses.length).toBeGreaterThan(firstPresence);

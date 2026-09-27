@@ -124,6 +124,21 @@ describe('real GPS physical continuity', () => {
     expect(confirmed.confirmedCandidate).toEqual(reacquired);
   });
 
+  test('a 15-second provider cadence keeps coherent candidate support live instead of expiring every fix', () => {
+    let state = createRealGpsContinuityState();
+    state = accept(state, observation(0, 0, 1_000, { accuracy: 5, speed: null }));
+    state = accept(state, observation(0, 12, 16_000, { accuracy: 5, speed: null }));
+    const candidate = observation(0, 300, 46_000, { accuracy: 7, speed: null });
+    const pending = evaluateRealGpsObservation(state, candidate, 'hiking', 100_000);
+    expect(pending.kind).toBe('QUARANTINE');
+    const supported = observation(0, 312, 61_000, { accuracy: 6, speed: null });
+    const resolved = evaluateRealGpsObservation(pending.state, supported, 'hiking', 115_000);
+    expect(resolved).toMatchObject({
+      kind: 'ACCEPT',
+      candidateEvent: { type: 'candidate_confirmed' },
+    });
+  });
+
   test('a long but physically plausible relocation still requires a corroborated gap', () => {
     let state = createRealGpsContinuityState();
     state = accept(state, observation(0, 0, 1_000, { accuracy: 5, speed: null }));
@@ -307,7 +322,7 @@ describe('real GPS physical continuity', () => {
       speedAccuracy: null,
     });
     const resolved = evaluateRealGpsObservation(pending.state, timeoutFix, 'hiking', timeoutFix.t);
-    expect(resolved.candidateEvent?.type).toBe('candidate_timeout');
+    expect(resolved.candidateEvent?.type).not.toBe('candidate_timeout');
     expect(resolved.kind).not.toBe('ACCEPT');
     expect(resolved.state.traversalAnchor?.observationId).toBe(anchor.observationId);
     expect(resolved.confirmedCandidates ?? []).toHaveLength(0);
@@ -365,8 +380,8 @@ describe('real GPS physical continuity', () => {
     const resolved = evaluateRealGpsObservation(pending.state, realDeparture, 'hiking', realDeparture.t);
     expect(resolved).toMatchObject({
       kind: 'ACCEPT',
-      reason: 'candidate-timeout',
-      candidateEvent: { type: 'candidate_timeout' },
+      reason: 'candidate-new-direction-confirmed',
+      candidateEvent: { type: 'candidate_confirmed' },
     });
   });
 
@@ -708,7 +723,7 @@ describe('real GPS physical continuity', () => {
     const departure = observation(0, 12, 16_000, { speed: 1.1, accuracy: 14 });
     result = ingest(state, departure);
     expect(result.decision.kind).toBe('ACCEPT');
-    expect(result.decision.confirmedCandidates).toEqual([]);
+    expect(result.decision.confirmedCandidates ?? []).toEqual([]);
     expect(result.accepted).toEqual([departure]);
   });
 

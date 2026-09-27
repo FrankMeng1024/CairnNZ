@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CommonActions, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { useSessionStore, loadTrackPoints } from '../store/useSessionStore';
+import { useSessionStore, loadActivityTrackPoints } from '../store/useSessionStore';
 import { useTrackingStore } from '../store/useTrackingStore';
 import { fetchSessionDetail } from '../services/sessionService';
 import { useRouteStore } from '../store/useRouteStore';
@@ -1301,7 +1301,9 @@ function MapHistoryObjectScreen() {
       // back to local cache. If local also empty, set [] so UI can stop the
       // spinner and show the correct message ("too short" for distanceM===0
       // sessions, or a clean "no route data" state for others).
-      const local = await loadTrackPoints(selectedSessionId);
+      const local = session
+        ? await loadActivityTrackPoints(session)
+        : [];
       if (!cancelled) {
         const candidate = local ?? [];
         const snapshot = activityFinalPointsMatchExpected(candidate, expectedFinalFingerprint)
@@ -1321,7 +1323,14 @@ function MapHistoryObjectScreen() {
       cancelled = true;
       if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
     };
-  }, [selectedSessionId, liveSelectedSession?.finalGeometryRevision]);
+  }, [
+    selectedSessionId,
+    liveSelectedSession?.clientActivityId,
+    liveSelectedSession?.remoteId,
+    liveSelectedSession?.serverActivityId,
+    liveSelectedSession?.finalGeometryRevision,
+    liveSelectedSession?.finalGeometryFingerprint,
+  ]);
 
   // Merge loaded track points into the selected session for display.
   // v261: when loadedTrackPoints === null we are still loading; pass [] so

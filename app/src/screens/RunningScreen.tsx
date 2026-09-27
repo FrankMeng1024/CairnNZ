@@ -47,6 +47,7 @@ import {
   isActivitySessionVisible,
 } from '../features/activity/activityOperationalState';
 import { saveEligibility } from '../features/activity/activityContracts';
+import { buildBaseFinalTrackPoints } from '../features/activity/activityFinalArtifact';
 import { deriveActivityLocationHealth } from '../features/activity/activityLocationHealth';
 import { deriveLivePace } from '../features/activity/livePace';
 import {
@@ -224,7 +225,31 @@ export function RunningScreen() {
   const [showSaveSheet, setShowSaveSheet] = useState(false);
   const [runStopSummary, setRunStopSummary] = useState<StopSummary | null>(null);
   const [committedRunActivityId, setCommittedRunActivityId] = useState<string | null>(null);
+  const committedRunActivity = useSessionStore(state => committedRunActivityId
+    ? state.sessions.find(session => (
+        session.clientActivityId === committedRunActivityId || session.id === committedRunActivityId
+      )) ?? null
+    : null);
   const [savingRun, setSavingRun] = useState(false);
+  useEffect(() => {
+    if (!committedRunActivity || committedRunActivity.trackPoints.length < 2) return;
+    setRunStopSummary(previous => previous ? {
+      ...previous,
+      distanceM: committedRunActivity.distanceM,
+      durationS: committedRunActivity.durationS,
+      elevationGainM: committedRunActivity.elevationGainM,
+      activityMode: committedRunActivity.activityMode,
+      startedAt: committedRunActivity.startedAt,
+      trackPoints: committedRunActivity.trackPoints.map(point => ({
+        lat: point.lat,
+        lng: point.lng,
+        segmentId: point.segmentId,
+      })),
+    } : previous);
+  }, [
+    committedRunActivity?.finalGeometryFingerprint,
+    committedRunActivity?.finalGeometryRevision,
+  ]);
 
   // Real tracking store
   const status = useTrackingStore(s => s.status);
@@ -300,7 +325,7 @@ export function RunningScreen() {
         durationS,
         elevationGainM,
         startedAt: startedAt ?? runStopSummary.startedAt,
-        trackPoints: trackPoints.map(point => ({
+        trackPoints: buildBaseFinalTrackPoints(trackPoints).map(point => ({
           lat: point.lat,
           lng: point.lng,
           segmentId: point.segmentId,
@@ -508,7 +533,7 @@ export function RunningScreen() {
       durationS: current.durationS,
       elevationGainM: current.elevationGainM,
       activityMode: 'running',
-      trackPoints: current.trackPoints.map(point => ({
+      trackPoints: buildBaseFinalTrackPoints(current.trackPoints).map(point => ({
         lat: point.lat,
         lng: point.lng,
         segmentId: point.segmentId,
@@ -590,34 +615,31 @@ export function RunningScreen() {
     // 'stopped' if a real stop happened (status moved off tracking).
     // O18 RUN-07: capture sessionId before stopTracking clears it so
     // 'View Activity' can navigate to MapHistory.
-    const capturedId = useTrackingStore.getState().sessionId;
     const trimmed = name && name.trim().length > 0 ? name.trim() : undefined;
     setSavingRun(true);
-    let saved = false;
+    let finishResult = null;
     try {
-      saved = await stopTracking(trimmed);
+      finishResult = await stopTracking(trimmed, clientActivityId => {
+        setCommittedRunActivityId(clientActivityId);
+      });
     } finally {
       setSavingRun(false);
     }
     const stillTracking = useTrackingStore.getState().status !== 'idle';
     const stopReason = useTrackingStore.getState().lastStopReason;
-    if (saved && !stillTracking && capturedId) {
-      const session = useSessionStore.getState().sessions.find(item => (
-        item.clientActivityId === capturedId || item.id === capturedId
-      ));
-      if (!session) return;
-      setCommittedRunActivityId(capturedId);
+    if (finishResult?.status === 'saved-local' && !stillTracking) {
+      setCommittedRunActivityId(finishResult.clientActivityId);
       setRunStopSummary({
-        distanceM: session.distanceM,
-        durationS: session.durationS,
-        elevationGainM: session.elevationGainM,
-        activityMode: session.activityMode,
-        trackPoints: session.trackPoints.map(point => ({
+        distanceM: finishResult.distanceM,
+        durationS: finishResult.durationS,
+        elevationGainM: finishResult.elevationGainM,
+        activityMode: finishResult.activityMode,
+        trackPoints: finishResult.trackPoints.map(point => ({
           lat: point.lat,
           lng: point.lng,
           segmentId: point.segmentId,
         })),
-        startedAt: session.startedAt,
+        startedAt: finishResult.startedAt,
       });
     } else if (stopReason !== 'too-short') {
       closeSaveSheet();
@@ -873,7 +895,7 @@ export function RunningScreen() {
   }
 
   // ── Pre-start ─────────────────────────────────────────────────────────────
-  if (!isActivitySessionVisible(operationalState)) {
+  if (!isActivitySessionVisible(operationalState) && !showSaveSheet) {
     return (
       <View style={{ flex: 1, backgroundColor: runTheme.background }}>
         {runMapSurface}
@@ -1123,6 +1145,7 @@ export function RunningScreen() {
           saving={savingRun}
           savingStep={savingHikeStep}
           committed={Boolean(committedRunActivityId)}
+          refining={committedRunActivity?.finalGeometryState === 'refining'}
           onCancel={() => {
             if (committedRunActivityId) {
               closeSaveSheet();

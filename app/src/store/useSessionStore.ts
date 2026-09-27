@@ -306,6 +306,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         serverActivityId: remoteSessionId,
       });
       try {
+        const { cancelActivityFinalRefinement } = require('../features/activity/activityFinalRefinementQueue');
+        await cancelActivityFinalRefinement(userId, clientActivityId);
+      } catch { /* a legacy Activity has no refinement job */ }
+      try {
         const { removePending } = require('../services/pendingSyncStore');
         await removePending(clientActivityId, userId);
       } catch { /* no pending payload */ }
@@ -466,6 +470,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   removeLocal: async (localId, requestedOwnerUserId) => {
     const ownerUserId = String(requestedOwnerUserId ?? get().currentUserId ?? '');
     if (!ownerUserId || ownerUserId === 'guest') return;
+    try {
+      const { cancelActivityFinalRefinement } = require('../features/activity/activityFinalRefinementQueue');
+      await cancelActivityFinalRefinement(ownerUserId, localId);
+    } catch { /* a legacy Activity has no refinement job */ }
     const run = sessionWriteTail.then(async () => {
       const live = get();
       const base = live.currentUserId === ownerUserId
@@ -606,6 +614,27 @@ export async function loadTrackPoints(sessionId: string): Promise<TrackPoint[]> 
   } catch {
     return [];
   }
+}
+
+/** Resolve every durable key a local/server identity may have used. */
+export async function loadActivityTrackPoints(
+  session: Pick<TrackingSession, 'id' | 'clientActivityId' | 'remoteId' | 'serverActivityId'>,
+): Promise<TrackPoint[]> {
+  const identities = [
+    session.clientActivityId,
+    session.id,
+    session.remoteId == null ? null : String(session.remoteId),
+    session.serverActivityId == null ? null : String(session.serverActivityId),
+  ].filter((value, index, values): value is string => (
+    typeof value === 'string' && value.length > 0 && values.indexOf(value) === index
+  ));
+  let partial: TrackPoint[] = [];
+  for (const identity of identities) {
+    const candidate = await loadTrackPoints(identity);
+    if (candidate.length >= 2) return candidate;
+    if (candidate.length > partial.length) partial = candidate;
+  }
+  return partial;
 }
 
 export async function removeLocalTrackPoints(userId: string, sessionId: string): Promise<void> {

@@ -17,8 +17,8 @@
       "bundleIdentifier": "com.yiiling.cairn",
       "usesAppleSignIn": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Cairn uses your location to record your hikes and show nearby cairns on the map.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Cairn keeps recording your hike when the screen is off or you switch apps.",
+        "NSLocationWhenInUseUsageDescription": "Cairn uses your location to record Hikes and Runs, show your qualified map position, and—when you turn it on—add places you explore outside an Activity.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Cairn uses background location to keep an active Hike or Run complete and, only with separate optional consent, to add places explored during ordinary walks while the screen is locked or another app is open.",
         "NSMotionUsageDescription": "Cairn uses your device orientation to show which way you're facing on the map.",
         "NSPhotoLibraryUsageDescription": "Cairn attaches photos you pick to feedback reports so we can help faster.",
         "UIBackgroundModes": [
@@ -48,8 +48,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Cairn keeps recording your hike when the screen is off or you switch apps.",
-          "locationWhenInUsePermission": "Cairn uses your location to record your hikes and show nearby cairns on the map."
+          "locationAlwaysAndWhenInUsePermission": "Cairn uses background location to keep an active Hike or Run complete and, only with separate optional consent, to add places explored during ordinary walks while the screen is locked or another app is open.",
+          "locationWhenInUsePermission": "Cairn uses your location to record Hikes and Runs, show your qualified map position, and—when you turn it on—add places you explore outside an Activity."
         }
       ],
       [

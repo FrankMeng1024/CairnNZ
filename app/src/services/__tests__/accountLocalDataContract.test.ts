@@ -47,6 +47,9 @@ jest.mock('../../services/debugLogger', () => ({
 jest.mock('../../features/memory/services/memoryEvidenceJournal', () => ({
   purgeDurableMemoryEvidence: jest.fn(async () => undefined),
 }));
+jest.mock('../../features/activity/activityFinalRefinementQueue', () => ({
+  cancelAllActivityFinalRefinementsForOwner: jest.fn(async () => undefined),
+}));
 
 const { purgeDeletedAccountLocalData } = require('../accountLocalData');
 
@@ -66,9 +69,13 @@ describe('deleted-account local ownership isolation', () => {
       'debugLogger.clearAllSessions()',
       'deleteAcknowledgedHikeTrackArtifacts(activityId, owner)',
       'purgeDurableMemoryEvidence(owner)',
+      'cancelAllActivityFinalRefinementsForOwner(owner)',
       'cairn_sessions_${owner}',
       'cairn_trackpoints_${owner}_',
       '@cairn:activity_final:v1:${owner}:',
+      '@cairn:activity_final_refinement:v1:${owner}:',
+      '@cairn:activity_final_refinement:index:v1:${owner}',
+      'cairn:activity-mapbox-governor:v1:${encodeURIComponent(owner)}:',
       '@cairn:activity_registry:v1:${owner}',
       '@cairn:offline_markers:v2:${owner}',
       '@cairn:offline_routes:v1:${owner}',
@@ -107,6 +114,10 @@ describe('deleted-account local ownership isolation', () => {
     mockAsyncValues.set('cairn_trackpoints_B_activity-b', 'private-b');
     mockAsyncValues.set('hierarchy:deepest:scope:A:trail', 'private-a');
     mockAsyncValues.set('hierarchy:deepest:scope:B:trail', 'private-b');
+    mockAsyncValues.set('@cairn:activity_final_refinement:v1:A:activity-a', 'private-a');
+    mockAsyncValues.set('@cairn:activity_final_refinement:v1:B:activity-b', 'private-b');
+    mockAsyncValues.set('cairn:activity-mapbox-governor:v1:A:activity-a', 'private-a');
+    mockAsyncValues.set('cairn:activity-mapbox-governor:v1:B:activity-b', 'private-b');
 
     await purgeDeletedAccountLocalData('A');
 
@@ -118,6 +129,10 @@ describe('deleted-account local ownership isolation', () => {
     expect(mockAsyncValues.get('cairn_trackpoints_B_activity-b')).toBe('private-b');
     expect(mockAsyncValues.has('hierarchy:deepest:scope:A:trail')).toBe(false);
     expect(mockAsyncValues.get('hierarchy:deepest:scope:B:trail')).toBe('private-b');
+    expect(mockAsyncValues.has('@cairn:activity_final_refinement:v1:A:activity-a')).toBe(false);
+    expect(mockAsyncValues.get('@cairn:activity_final_refinement:v1:B:activity-b')).toBe('private-b');
+    expect(mockAsyncValues.has('cairn:activity-mapbox-governor:v1:A:activity-a')).toBe(false);
+    expect(mockAsyncValues.get('cairn:activity-mapbox-governor:v1:B:activity-b')).toBe('private-b');
     expect(mockMultiRemove).toHaveBeenCalledTimes(1);
   });
 

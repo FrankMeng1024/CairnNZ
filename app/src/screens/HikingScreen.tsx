@@ -299,7 +299,12 @@ export function HikingScreen() {
     activityMode: 'hiking' | 'running'; trackPoints: Array<{ lat: number; lng: number; segmentId?: string }>;
     startedAt: number;
   }>(null);
-  const [committedActivityId, setCommittedActivityId] = useState<string | null>(null);
+      const [committedActivityId, setCommittedActivityId] = useState<string | null>(null);
+      const committedActivity = useSessionStore(state => committedActivityId
+        ? state.sessions.find(session => (
+            session.clientActivityId === committedActivityId || session.id === committedActivityId
+          )) ?? null
+        : null);
   const stopSummaryPresentation = useMemo(() => stopSummary ? (committedActivityId ? stopSummary : {
     ...stopSummary,
     distanceM,
@@ -331,7 +336,26 @@ export function HikingScreen() {
   // Keep the sheet mounted with a "Saving…" spinner until the authoritative
   // local completion boundary returns. A transport timeout must never make
   // the UI claim that an uncommitted Activity was saved.
-  const [savingHike, setSavingHike] = useState(false);
+      const [savingHike, setSavingHike] = useState(false);
+      useEffect(() => {
+        if (!committedActivity || committedActivity.trackPoints.length < 2) return;
+        setStopSummary(previous => previous ? {
+          ...previous,
+          distanceM: committedActivity.distanceM,
+          durationS: committedActivity.durationS,
+          elevationGainM: committedActivity.elevationGainM,
+          activityMode: committedActivity.activityMode,
+          startedAt: committedActivity.startedAt,
+          trackPoints: committedActivity.trackPoints.map(point => ({
+            lat: point.lat,
+            lng: point.lng,
+            segmentId: point.segmentId,
+          })),
+        } : previous);
+      }, [
+        committedActivity?.finalGeometryFingerprint,
+        committedActivity?.finalGeometryRevision,
+      ]);
   // R21 (2026-08-18 user "finish如果too short现在没任何提示 应该有提示 让
   // 用户选择resume 或者discard"): local flag that forces TooShortSheet
   // when the Finish button detects an obviously-too-short hike. This
@@ -746,12 +770,11 @@ export function HikingScreen() {
     // the sheet shows "Saving…" spinner + disabled buttons while
     // stopTracking runs its flush+rename chain (up to 15s wall).
     setSavingHike(true);
-    // Snapshot identity before stopTracking clears the live store.
-    const preState = useTrackingStore.getState();
-    const capturedSessionId = preState.sessionId;
-    let saved = false;
+    let finishResult = null;
     try {
-      saved = await stopTracking(name);
+      finishResult = await stopTracking(name, clientActivityId => {
+        setCommittedActivityId(clientActivityId);
+      });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[activity] stopTracking error:', String(err));
@@ -766,28 +789,24 @@ export function HikingScreen() {
     // stopTracking would leave only Auth in the stack and reset would
     // throw.
     const stillLoggedIn = useAppStore.getState().isLoggedIn;
-    if (!saved || !stillLoggedIn || !capturedSessionId) {
+    if (!finishResult || finishResult.status !== 'saved-local' || !stillLoggedIn) {
       // Too-short/local failure remains on the Activity surface. TooShortSheet
       // is driven by lastStopReason; a storage failure remains paused.
       // Not-logged-in: auto-logout handler owns the redirect to Auth.
       return;
     }
-    const session = useSessionStore.getState().sessions.find(item => (
-      item.clientActivityId === capturedSessionId || item.id === capturedSessionId
-    ));
-    if (!session) return;
-    setCommittedActivityId(capturedSessionId);
+    setCommittedActivityId(finishResult.clientActivityId);
     setStopSummary({
-      distanceM: session.distanceM,
-      durationS: session.durationS,
-      elevationGainM: session.elevationGainM,
-      activityMode: session.activityMode,
-      trackPoints: session.trackPoints.map(point => ({
+      distanceM: finishResult.distanceM,
+      durationS: finishResult.durationS,
+      elevationGainM: finishResult.elevationGainM,
+      activityMode: finishResult.activityMode,
+      trackPoints: finishResult.trackPoints.map(point => ({
         lat: point.lat,
         lng: point.lng,
         segmentId: point.segmentId,
       })),
-      startedAt: session.startedAt,
+      startedAt: finishResult.startedAt,
     });
   }
 
@@ -1126,7 +1145,7 @@ export function HikingScreen() {
     );
   }
 
-  if (!activitySessionVisible) {
+  if (!activitySessionVisible && !stopSummary) {
     return (
       <>
       <View style={[styles.container, { backgroundColor: hikeTheme.background }]}>
@@ -1415,6 +1434,7 @@ export function HikingScreen() {
             await saveHikeAndNav(name);
           }}
           committed={Boolean(committedActivityId)}
+          refining={committedActivity?.finalGeometryState === 'refining'}
           onViewActivity={() => {
             if (committedActivityId) openActivityDetail(committedActivityId);
           }}

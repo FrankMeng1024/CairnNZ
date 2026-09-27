@@ -32,7 +32,8 @@ describe('Settings product and correctness convergence', () => {
     expect(settings).toContain("{ key: 'metric', label: 'Metric' }");
     expect(settings).toContain("{ key: 'imperial', label: 'Imperial' }");
     for (const appearance of ['Auto', 'Day', 'Sunset', 'Night']) expect(settings).toContain(`label: '${appearance}'`);
-    expect(settings).toContain('Updates exploration outside an Activity while the app is on screen');
+    expect(settings).toContain('Updates Memory during ordinary walks, including normal lock and background use');
+    expect(settings).toContain('Updates while Cairn is open on this installed build');
     expect(settings).toContain('On in Cairn · unavailable until foreground location is allowed in iOS');
     expect(settings).toContain("updateSetting('hapticFeedback'");
   });

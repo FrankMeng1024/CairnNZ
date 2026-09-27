@@ -1,7 +1,11 @@
 import type { CanonicalJournalPoint } from '../../services/hikeTrackWriter';
 import type { TrackPoint } from '../../store/useSessionStore';
 import { buildCausalLiveRoute } from './causalLiveRoute';
-import { calculateActivityStats } from './activityContracts';
+import {
+  buildActivityDistanceAccumulator,
+  calculateActivityStats,
+  type ActivityDistanceAccumulator,
+} from './activityContracts';
 
 function pointKey(point: TrackPoint): string {
   const rawOrdinal = point.rawOrdinal;
@@ -26,10 +30,40 @@ function asTrackPoint(point: CanonicalJournalPoint | TrackPoint): TrackPoint {
   };
 }
 
+function projectMergedActivityPoints(
+  current: ReadonlyArray<TrackPoint>,
+  incoming: ReadonlyArray<CanonicalJournalPoint | TrackPoint>,
+): ActivityJournalProjection {
+  const byKey = new Map<string, TrackPoint>();
+  for (const point of current) byKey.set(pointKey(point), asTrackPoint(point));
+  let appendedFromJournal = 0;
+  for (const incomingPoint of incoming) {
+    const point = asTrackPoint(incomingPoint);
+    const key = pointKey(point);
+    if (!byKey.has(key)) appendedFromJournal += 1;
+    // Durable/rebased evidence wins when an in-memory twin differs.
+    byKey.set(key, point);
+  }
+  const canonical = Array.from(byKey.values()).sort((left, right) => (
+    left.t - right.t
+    || (left.rawOrdinal ?? Number.MAX_SAFE_INTEGER) - (right.rawOrdinal ?? Number.MAX_SAFE_INTEGER)
+  ));
+  const stats = calculateActivityStats(canonical);
+  return {
+    canonical,
+    live: buildCausalLiveRoute(canonical),
+    distanceM: stats.distanceM,
+    distanceAccumulator: buildActivityDistanceAccumulator(canonical),
+    elevationGainM: stats.elevationGainM,
+    appendedFromJournal,
+  };
+}
+
 export interface ActivityJournalProjection {
   canonical: TrackPoint[];
   live: TrackPoint[];
   distanceM: number;
+  distanceAccumulator: ActivityDistanceAccumulator;
   elevationGainM: number;
   appendedFromJournal: number;
 }
@@ -45,26 +79,18 @@ export function projectActivityJournal(
   current: ReadonlyArray<TrackPoint>,
   journal: ReadonlyArray<CanonicalJournalPoint>,
 ): ActivityJournalProjection {
-  const byKey = new Map<string, TrackPoint>();
-  for (const point of current) byKey.set(pointKey(point), asTrackPoint(point));
-  let appendedFromJournal = 0;
-  for (const journalPoint of journal) {
-    const point = asTrackPoint(journalPoint);
-    const key = pointKey(point);
-    if (!byKey.has(key)) appendedFromJournal += 1;
-    // The checksummed journal wins when an in-memory twin differs.
-    byKey.set(key, point);
-  }
-  const canonical = Array.from(byKey.values()).sort((left, right) => (
-    left.t - right.t
-    || (left.rawOrdinal ?? Number.MAX_SAFE_INTEGER) - (right.rawOrdinal ?? Number.MAX_SAFE_INTEGER)
-  ));
-  const stats = calculateActivityStats(canonical);
-  return {
-    canonical,
-    live: buildCausalLiveRoute(canonical),
-    distanceM: stats.distanceM,
-    elevationGainM: stats.elevationGainM,
-    appendedFromJournal,
-  };
+  return projectMergedActivityPoints(current, journal);
+}
+
+/**
+ * Publish accepted points against the canonical state that exists after their
+ * WAL append settles. A background takeover/replay is allowed to advance the
+ * store during that await; this merge prevents the accepted point's earlier,
+ * stale transition snapshot from deleting the replayed prefix or tail.
+ */
+export function projectAcceptedActivityPoints(
+  current: ReadonlyArray<TrackPoint>,
+  accepted: ReadonlyArray<TrackPoint>,
+): ActivityJournalProjection {
+  return projectMergedActivityPoints(current, accepted);
 }
