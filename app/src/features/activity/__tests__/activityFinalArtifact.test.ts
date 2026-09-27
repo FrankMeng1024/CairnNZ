@@ -8,6 +8,8 @@ jest.mock('../../../store/storage', () => ({
 }));
 
 import {
+  activityFinalArtifactMatchesExpected,
+  activityFinalPointsMatchExpected,
   activityGeometryFingerprint,
   buildBaseFinalTrackPoints,
   commitActivityFinalArtifact,
@@ -57,5 +59,16 @@ describe('versioned Activity Final artifact', () => {
       displayPoints: base, source: 'base', expectedRevision: first.artifact.revision,
     });
     expect(delayedBase.artifact).toEqual(second.artifact);
+    expect(activityFinalArtifactMatchesExpected(
+      second.artifact,
+      second.artifact.revision,
+      second.artifact.displayFingerprint,
+    )).toBe(true);
+    expect(activityFinalArtifactMatchesExpected(
+      first.artifact,
+      second.artifact.revision,
+      second.artifact.displayFingerprint,
+    )).toBe(false);
+    expect(activityFinalPointsMatchExpected(base, second.artifact.displayFingerprint)).toBe(false);
   });
 });

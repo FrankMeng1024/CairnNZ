@@ -186,6 +186,32 @@ export async function settleBackgroundLocationWrites(): Promise<void> {
   await withOwnershipBoundary(async () => undefined);
 }
 
+/** Atomic read-side handoff for the foreground classifier. The live bit is
+ * checked with both identity records inside the ownership boundary so a
+ * partial acquire/release can never masquerade as a current owner. */
+export async function readDurableActivityContext(): Promise<DurableActivityContext | null> {
+  return withOwnershipBoundary(async () => {
+    try {
+      const active = await AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE);
+      if (active !== '1') return null;
+      const sessionId = await AsyncStorage.getItem(STORAGE_KEY_SESSION);
+      const encoded = await AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT);
+      if (!sessionId || !encoded) return null;
+      const parsed = JSON.parse(encoded) as DurableActivityContext;
+      if (
+        parsed?.clientActivityId !== sessionId
+        || !parsed.userId
+        || !parsed.ownerGeneration
+        || !parsed.segmentId
+        || (parsed.activityMode !== 'hiking' && parsed.activityMode !== 'running')
+      ) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  });
+}
+
 function roundedDiagnostic(value: number | null | undefined): number | null {
   return value != null && Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
 }

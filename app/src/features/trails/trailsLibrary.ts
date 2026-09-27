@@ -1,5 +1,6 @@
 import type { Route } from '../../store/useRouteStore';
 import type { ActivityMode, TrackingSession } from '../../store/useSessionStore';
+import { PRODUCT_LOCALE } from '../../utils/dateFormat';
 
 export type TrailsTab = 'activities' | 'routes';
 export type ActivityModeFilter = 'all' | ActivityMode;
@@ -13,7 +14,7 @@ export interface ActivityMonthSection {
 export const ACTIVITY_DISCOVERY_THRESHOLD = 8;
 
 function normalized(value: string | undefined): string {
-  return (value ?? '').trim().toLocaleLowerCase();
+  return (value ?? '').trim().toLocaleLowerCase(PRODUCT_LOCALE);
 }
 
 export function filterActivities(
@@ -34,9 +35,9 @@ export function filterActivities(
 
 export function groupActivitiesByMonth(
   sessions: readonly TrackingSession[],
-  locale?: string,
+  _runtimeLocale?: string,
 ): ActivityMonthSection[] {
-  const formatter = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' });
+  const formatter = new Intl.DateTimeFormat(PRODUCT_LOCALE, { month: 'long', year: 'numeric' });
   const sections: ActivityMonthSection[] = [];
   for (const session of sessions) {
     const date = new Date(session.startedAt);
@@ -53,7 +54,7 @@ export function activityDisplayName(session: TrackingSession): string {
   return session.activityMode === 'running' ? 'Run' : 'Hike';
 }
 
-export function activityDateLabel(timestamp: number, now = Date.now(), locale?: string): string {
+export function activityDateLabel(timestamp: number, now = Date.now(), _runtimeLocale?: string): string {
   const date = new Date(timestamp);
   const today = new Date(now);
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
@@ -61,7 +62,7 @@ export function activityDateLabel(timestamp: number, now = Date.now(), locale?: 
   const days = Math.round((startOfToday - startOfDate) / 86_400_000);
   if (days === 0) return 'Today';
   if (days === 1) return 'Yesterday';
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(date);
+  return new Intl.DateTimeFormat(PRODUCT_LOCALE, { day: 'numeric', month: 'short' }).format(date);
 }
 
 export function filterRoutes(routes: readonly Route[], query: string): Route[] {

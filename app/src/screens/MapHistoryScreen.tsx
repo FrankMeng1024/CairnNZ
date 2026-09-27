@@ -7,7 +7,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   ActivityIndicator, View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert,
-  Dimensions, Animated, Easing, Platform, TextInput, Keyboard,
+  Dimensions, Animated, Easing, Platform, TextInput, Keyboard, AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,6 +25,7 @@ import { getCurrentRegion } from '../config/regions';
 import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { formatDuration, formatDate, getRelativeTime, haversineM } from '../utils/geo';
+import { formatProductTime } from '../utils/dateFormat';
 import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
@@ -39,6 +40,9 @@ import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { segmentTrace } from '../features/activity/activityContracts';
 import {
+  activityFinalArtifactMatchesExpected,
+  activityFinalPointsMatchExpected,
+  activityGeometryFingerprint,
   commitActivityFinalArtifact,
   loadActivityFinalArtifact,
 } from '../features/activity/activityFinalArtifact';
@@ -50,6 +54,7 @@ import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay'
 import {
   deriveActivityRouteState,
 } from '../features/activity/activityRouteState';
+import { activityDetailMapBindingIdentity } from '../features/activity/activityDetailMapLifecycle';
 import {
   activityDetailNotices,
   activityMatchesTarget,
@@ -123,6 +128,33 @@ function PressRow({
 // Renders the session track as a polyline on top of a real Mapbox map.
 // Used in place of the SVG-on-coloured-panel TrackPolyline when
 // @rnmapbox/maps is available (i.e. on a real device, not web).
+function detailRouteBounds(points: TrackingSession['trackPoints']): {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+} | null {
+  if (points.length < 2) return null;
+  const lats = points.map(point => point.lat);
+  const lngs = points.map(point => point.lng);
+  let minLat = Math.min(...lats);
+  let maxLat = Math.max(...lats);
+  let minLng = Math.min(...lngs);
+  let maxLng = Math.max(...lngs);
+  const minimumSpanDegrees = 0.005;
+  if (maxLat - minLat < minimumSpanDegrees) {
+    const centre = (minLat + maxLat) / 2;
+    minLat = centre - minimumSpanDegrees / 2;
+    maxLat = centre + minimumSpanDegrees / 2;
+  }
+  if (maxLng - minLng < minimumSpanDegrees) {
+    const centre = (minLng + maxLng) / 2;
+    minLng = centre - minimumSpanDegrees / 2;
+    maxLng = centre + minimumSpanDegrees / 2;
+  }
+  return { minLat, maxLat, minLng, maxLng };
+}
+
 function NativeTrackMap({ session, markers }: { session: TrackingSession; markers: Marker[] }) {
   const pts = session.trackPoints;
   const color = session.activityMode === 'running' ? Colors.running : Colors.primary;
@@ -139,42 +171,38 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
   const [mapReady, setMapReady] = useState(false);
   const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
   const [mapEpoch, setMapEpoch] = useState(0);
+  const [detailStyleGeneration, setDetailStyleGeneration] = useState(0);
   const cameraRef = useRef<any>(null);
+  const lastCameraFitRef = useRef<string | null>(null);
+  const bounds = useMemo(() => detailRouteBounds(pts), [pts]);
+  const geometryIdentity = useMemo(() => activityGeometryFingerprint(pts), [pts]);
+  const mapBindingIdentity = activityDetailMapBindingIdentity(geometryIdentity, detailStyleGeneration);
 
   useEffect(() => {
     if (mapReady || !MapView || pts.length < 2) return undefined;
     const timeout = setTimeout(() => setMapLoadState('slow'), 8000);
     return () => clearTimeout(timeout);
   }, [mapEpoch, mapReady, pts.length]);
-  if (!MapView || pts.length < 2) return null;
-
-  // Bounding box of the track for camera fit.
-  const lats = pts.map(p => p.lat);
-  const lngs = pts.map(p => p.lng);
-  let minLat = Math.min(...lats);
-  let maxLat = Math.max(...lats);
-  let minLng = Math.min(...lngs);
-  let maxLng = Math.max(...lngs);
-
-  // Guard against degenerate bounding boxes — if the track is very
-  // short or stationary (user paused/idle GPS), the bbox can be only
-  // a few metres across, which makes Mapbox fit at maximum zoom and
-  // shows just a single dot with no surrounding context. Expand the
-  // bbox to a minimum ~600m visual span so users always see the
-  // surrounding road network.
-  const MIN_SPAN_DEG = 0.005; // ~555m at NZ latitudes
-  const latSpan = maxLat - minLat;
-  const lngSpan = maxLng - minLng;
-  if (latSpan < MIN_SPAN_DEG) {
-    const cLat = (minLat + maxLat) / 2;
-    minLat = cLat - MIN_SPAN_DEG / 2;
-    maxLat = cLat + MIN_SPAN_DEG / 2;
-  }
-  if (lngSpan < MIN_SPAN_DEG) {
-    const cLng = (minLng + maxLng) / 2;
-    minLng = cLng - MIN_SPAN_DEG / 2;
-    maxLng = cLng + MIN_SPAN_DEG / 2;
-  }
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') setDetailStyleGeneration(generation => generation + 1);
+    });
+    return () => subscription.remove();
+  }, []);
+  useEffect(() => {
+    if (!mapReady || !bounds || !cameraRef.current) return;
+    const fitIdentity = `${mapEpoch}:${mapBindingIdentity}`;
+    if (lastCameraFitRef.current === fitIdentity) return;
+    lastCameraFitRef.current = fitIdentity;
+    cameraRef.current?.fitBounds(
+      [bounds.maxLng, bounds.maxLat],
+      [bounds.minLng, bounds.minLat],
+      [60, 40, 60, 40],
+      0,
+    );
+  }, [bounds, mapBindingIdentity, mapEpoch, mapReady]);
+  if (!MapView || !bounds || pts.length < 2) return null;
+  const { minLat, maxLat, minLng, maxLng } = bounds;
 
   const start = pts[0];
   const end = pts[pts.length - 1];
@@ -204,6 +232,13 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
       attributionPosition={{ top: 112, right: 8 }}
       scaleBarEnabled={false}
       compassEnabled={false}
+      onWillStartLoadingMap={() => {
+        setMapReady(false);
+        setMapLoadState('loading');
+      }}
+      onDidFinishLoadingStyle={() => {
+        setDetailStyleGeneration(generation => generation + 1);
+      }}
       onDidFinishLoadingMap={() => { setMapReady(true); setMapLoadState('loading'); }}
       onDidFinishRenderingMapFully={() => { setMapReady(true); setMapLoadState('loading'); }}
       onMapLoadingError={() => setMapLoadState('error')}
@@ -253,11 +288,13 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
           <>
             {solidFeatures.length > 0 && (
               <ShapeSource
-                id="track-line"
+                key={`track-line-${mapBindingIdentity}`}
+                id={`track-line-${mapBindingIdentity}`}
                 shape={{ type: 'FeatureCollection', features: solidFeatures }}
               >
                 <LineLayer
-                  id="track-line-layer"
+                  id={`track-line-layer-${mapBindingIdentity}`}
+                  slot="top"
                   style={{
                     lineColor: color,
                     // Chosen Final points are rendered exactly as persisted.
@@ -1163,13 +1200,21 @@ function MapHistoryObjectScreen() {
     const retainedTrack = detailTrackSnapshots.current.get(selectedSessionId);
     const requestedRevision = session?.finalGeometryRevision ?? 0;
     const retainedRevision = detailTrackRevisions.current.get(selectedSessionId) ?? 0;
-    if (retainedTrack && retainedRevision >= requestedRevision) {
+    const expectedFinalFingerprint = session?.finalGeometryFingerprint ?? null;
+    const retainedFingerprintMatches = !expectedFinalFingerprint
+      || (retainedTrack && activityGeometryFingerprint(retainedTrack) === expectedFinalFingerprint);
+    if (retainedTrack && retainedRevision >= requestedRevision && retainedFingerprintMatches) {
       setLoadedTrackPoints(retainedTrack);
       return;
     }
     const hasVisibleLocalFallback = !!(session
       && Array.isArray(session.trackPoints)
-      && session.trackPoints.length >= 2);
+      && session.trackPoints.length >= 2
+      && (
+        requestedRevision === 0
+        || !expectedFinalFingerprint
+        || activityGeometryFingerprint(session.trackPoints) === expectedFinalFingerprint
+      ));
     if (hasVisibleLocalFallback && session) {
       const snapshot = session.trackPoints.map(point => ({ ...point }));
       detailTrackSnapshots.current.set(selectedSessionId, snapshot);
@@ -1193,7 +1238,11 @@ function MapHistoryObjectScreen() {
       const ownerUserId = useSessionStore.getState().currentUserId;
       const clientActivityId = session?.clientActivityId ?? session?.id ?? selectedSessionId;
       const artifact = await loadActivityFinalArtifact(ownerUserId, clientActivityId);
-      if (!cancelled && artifact) {
+      if (!cancelled && artifact && activityFinalArtifactMatchesExpected(
+        artifact,
+        requestedRevision,
+        expectedFinalFingerprint,
+      )) {
         const snapshot = artifact.points.map(point => ({ ...point }));
         detailTrackSnapshots.current.set(selectedSessionId, snapshot);
         detailTrackRevisions.current.set(selectedSessionId, artifact.revision);
@@ -1226,18 +1275,25 @@ function MapHistoryObjectScreen() {
             segmentId: p.segment_id ?? p.segmentId ?? 'legacy-0',
             segmentStartReason: p.segment_start_reason ?? p.segmentStartReason,
           }));
-          const restored = await commitActivityFinalArtifact({
-            ownerUserId,
-            clientActivityId,
-            canonicalPoints: normalised,
-            displayPoints: normalised,
-            source: 'server-restored',
-          }).catch(() => null);
-          const restoredPoints = restored?.artifact.points ?? normalised;
-          detailTrackSnapshots.current.set(selectedSessionId, restoredPoints);
-          if (restored) detailTrackRevisions.current.set(selectedSessionId, restored.artifact.revision);
-          setLoadedTrackPoints(restoredPoints);
-          return;
+          // A delayed server response is not permission to downgrade a known
+          // local Final revision. Cross-device/legacy rows without an expected
+          // fingerprint retain the existing server-restoration behavior.
+          if (!activityFinalPointsMatchExpected(normalised, expectedFinalFingerprint)) {
+            // Continue to the durable local cache below.
+          } else {
+            const restored = await commitActivityFinalArtifact({
+              ownerUserId,
+              clientActivityId,
+              canonicalPoints: normalised,
+              displayPoints: normalised,
+              source: 'server-restored',
+            }).catch(() => null);
+            const restoredPoints = restored?.artifact.points ?? normalised;
+            detailTrackSnapshots.current.set(selectedSessionId, restoredPoints);
+            if (restored) detailTrackRevisions.current.set(selectedSessionId, restored.artifact.revision);
+            setLoadedTrackPoints(restoredPoints);
+            return;
+          }
         }
         // O6: server 请求 timeout 或 route_points 为空/太短 → 落 local。
       }
@@ -1247,7 +1303,10 @@ function MapHistoryObjectScreen() {
       // sessions, or a clean "no route data" state for others).
       const local = await loadTrackPoints(selectedSessionId);
       if (!cancelled) {
-        const snapshot = local ?? [];
+        const candidate = local ?? [];
+        const snapshot = activityFinalPointsMatchExpected(candidate, expectedFinalFingerprint)
+          ? candidate
+          : [];
         detailTrackSnapshots.current.set(selectedSessionId, snapshot);
         detailTrackRevisions.current.set(selectedSessionId, requestedRevision);
         setLoadedTrackPoints(snapshot);
@@ -1761,7 +1820,7 @@ function MapHistoryObjectScreen() {
                   {'  ·  '}
                   {formatDate(selectedSession.startedAt)}
                   {'  ·  '}
-                  {new Date(selectedSession.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {formatProductTime(selectedSession.startedAt)}
                 </Text>
               </View>
 

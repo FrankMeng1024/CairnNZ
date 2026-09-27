@@ -77,6 +77,14 @@ describe('Trails personal journey library projection', () => {
     expect(activityDateLabel(now - 86_400_000, now, 'en-NZ')).toBe('Yesterday');
   });
 
+  it('keeps Cairn-owned Activity dates English under a Chinese runtime locale', () => {
+    const timestamp = new Date(2026, 8, 13, 12).getTime();
+    expect(groupActivitiesByMonth([activity('a', timestamp)], 'zh-CN')[0].title)
+      .toBe('September 2026');
+    expect(activityDateLabel(timestamp, timestamp + 3 * 86_400_000, 'zh-CN'))
+      .toBe('13 Sept');
+  });
+
   it('searches owned Routes by name and communicates future-intent mode', () => {
     const routes = [route('older', 1, 'Milford Foreshore'), route('newer', 2, 'Kepler return')];
     routes[0].activityMode = 'hiking';

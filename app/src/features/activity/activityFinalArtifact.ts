@@ -37,6 +37,25 @@ export function activityGeometryFingerprint(points: ReadonlyArray<Pick<TrackPoin
   return hash.toString(16).padStart(8, '0');
 }
 
+export function activityFinalPointsMatchExpected(
+  points: ReadonlyArray<Pick<TrackPoint, 'lat' | 'lng' | 'segmentId'>>,
+  expectedFingerprint: string | null | undefined,
+): boolean {
+  return points.length >= 2 && (
+    !expectedFingerprint || activityGeometryFingerprint(points) === expectedFingerprint
+  );
+}
+
+export function activityFinalArtifactMatchesExpected(
+  artifact: ActivityFinalArtifact,
+  requiredRevision: number,
+  expectedFingerprint: string | null | undefined,
+): boolean {
+  return artifact.revision >= requiredRevision
+    && artifact.displayFingerprint === activityGeometryFingerprint(artifact.points)
+    && activityFinalPointsMatchExpected(artifact.points, expectedFingerprint);
+}
+
 export function buildBaseFinalTrackPoints(points: TrackPoint[]): TrackPoint[] {
   return segmentTrace(points).segments.flatMap(segment => {
     const first = segment[0];

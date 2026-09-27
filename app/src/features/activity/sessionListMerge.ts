@@ -87,6 +87,11 @@ export function mergeHydratedSessionLists(
         : localStillOwnsSync ? local.syncFailureCode : undefined,
       finalGeometryState: local.finalGeometryState ?? remote.finalGeometryState,
       finalGeometryVersion: local.finalGeometryVersion ?? remote.finalGeometryVersion,
+      // The geometry array above remains local, so its revision identity must
+      // remain local as well. A delayed server list has no authority to pair
+      // older metadata with newer local Final points (or vice versa).
+      finalGeometryRevision: local.finalGeometryRevision ?? remote.finalGeometryRevision,
+      finalGeometryFingerprint: local.finalGeometryFingerprint ?? remote.finalGeometryFingerprint,
       ...(conflictingServerMapping ? {
         identityConflict: {
           kind: 'server_mapping' as const,

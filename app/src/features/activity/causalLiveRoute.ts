@@ -180,7 +180,11 @@ function stabilizeDisplayTail(
   });
 }
 
-function simplifyTail(points: TrackPoint[], preserveStart = false): TrackPoint[] {
+function simplifyTail(
+  points: TrackPoint[],
+  preserveStart = false,
+  requiredFreezeBoundaryIndex: number | null = null,
+): TrackPoint[] {
   if (points.length <= 2) return points.slice();
   const accuracies = points.flatMap(point => (
     point.accuracy != null && Number.isFinite(point.accuracy) && point.accuracy > 0 ? [point.accuracy] : []
@@ -221,9 +225,19 @@ function simplifyTail(points: TrackPoint[], preserveStart = false): TrackPoint[]
     const outgoingMs = stabilized[index + 1].t - stabilized[index].t;
     return incomingMs >= 12_000 || outgoingMs >= 12_000;
   });
+  if (
+    requiredFreezeBoundaryIndex != null
+    && requiredFreezeBoundaryIndex >= 0
+    && requiredFreezeBoundaryIndex < stabilized.length
+  ) boundaries.push(requiredFreezeBoundaryIndex);
+  boundaries.sort((left, right) => left - right);
+  const uniqueBoundaries = boundaries.filter((value, index) => index === 0 || value !== boundaries[index - 1]);
   const result: TrackPoint[] = [];
-  for (let index = 1; index < boundaries.length; index += 1) {
-    const subsection = rdp(stabilized.slice(boundaries[index - 1], boundaries[index] + 1), toleranceM);
+  for (let index = 1; index < uniqueBoundaries.length; index += 1) {
+    const subsection = rdp(
+      stabilized.slice(uniqueBoundaries[index - 1], uniqueBoundaries[index] + 1),
+      toleranceM,
+    );
     result.push(...(result.length > 0 ? subsection.slice(1) : subsection));
   }
   return result;
@@ -285,7 +299,16 @@ export function appendCausalLivePoint(
   // Two immutable canonical context points let the boundary settle against
   // both sides before it freezes; they are never republished or revised.
   const contextStart = Math.max(0, mutableStart - 2);
-  const liveTail = simplifyTail(evidence.slice(contextStart), contextStart === 0)
+  // The oldest mutable point is the handoff between frozen prefix and recent
+  // tail. It must survive simplification so that, when the window advances,
+  // a settled boundary becomes durable history. Previously both context
+  // points could be simplified away and then filtered out, leaving only the
+  // Activity start plus the newest point on broad curves/self-crossings.
+  const liveTail = simplifyTail(
+    evidence.slice(contextStart),
+    contextStart === 0,
+    mutableStart - contextStart,
+  )
     .filter(candidate => candidate.t >= cutoffT);
   return [...prefix, ...liveTail];
 }

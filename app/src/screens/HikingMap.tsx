@@ -102,6 +102,7 @@ function createContinuousRouteNodes(coordinatesValue: [number, number][]) {
 }
 
 function ContinuousConfirmedRoute({
+  id,
   coordinates,
   lineColor,
   casingColor,
@@ -114,6 +115,7 @@ function ContinuousConfirmedRoute({
   targetTimestamp,
   telemetryScreen,
 }: {
+  id: string;
   coordinates: [number, number][];
   lineColor: string;
   casingColor: string;
@@ -259,9 +261,9 @@ function ContinuousConfirmedRoute({
   }, [coordinates, nodes, reduceMotion, targetTimestamp, telemetryScreen]);
 
   return (
-    <AnimatedShapeSource id="track-confirmed-continuous" shape={nodes.shape}>
-      <LineLayer id="track-confirmed-continuous-casing" slot="top" style={{ lineColor: casingColor, lineOpacity: casingOpacity, lineWidth: casingWidth, lineCap: 'round', lineJoin: 'round', lineEmissiveStrength: emissiveStrength }} />
-      <LineLayer id="track-confirmed-continuous-layer" slot="top" style={{ lineColor, lineWidth, lineCap: 'round', lineJoin: 'round', lineEmissiveStrength: emissiveStrength }} />
+    <AnimatedShapeSource id={`${id}-source`} shape={nodes.shape}>
+      <LineLayer id={`${id}-casing`} slot="top" style={{ lineColor: casingColor, lineOpacity: casingOpacity, lineWidth: casingWidth, lineCap: 'round', lineJoin: 'round', lineEmissiveStrength: emissiveStrength }} />
+      <LineLayer id={`${id}-layer`} slot="top" style={{ lineColor, lineWidth, lineCap: 'round', lineJoin: 'round', lineEmissiveStrength: emissiveStrength }} />
     </AnimatedShapeSource>
   );
 }
@@ -433,6 +435,7 @@ export function HikingMap({
   const mapPresentation = activityMapPresentation(mapTheme, activityVariant);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [mapAppState, setMapAppState] = useState(AppState.currentState);
+  const [routeStyleGeneration, setRouteStyleGeneration] = useState(0);
   useEffect(() => {
     let mounted = true;
     void AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
@@ -448,6 +451,11 @@ export function HikingMap({
     const subscription = AppState.addEventListener('change', setMapAppState);
     return () => subscription.remove();
   }, []);
+  useEffect(() => {
+    if (mapAppState === 'active') {
+      setRouteStyleGeneration(generation => generation + 1);
+    }
+  }, [mapAppState]);
 
   // R114/O22 (2026-08-08) Bug 4: watch network state. When offline, Mapbox
   // tiles fail to fetch → map renders black/white. Overlay a friendly
@@ -887,6 +895,9 @@ export function HikingMap({
   }, [instantCamera, mapEpoch]);
 
   const markStyleLoaded = () => {
+    // A native style reload can discard custom sources without unmounting
+    // their React owners. Rebind every frozen chunk and the bounded head.
+    setRouteStyleGeneration(generation => generation + 1);
     if (!activitySimulatorBuildCapable) return;
     useActivitySimulatorStore.getState().setMapDiagnostics({
       mountId: mapMountIdRef.current,
@@ -1130,8 +1141,8 @@ export function HikingMap({
         {/* Stable chunks never retransmit when only the live head changes. */}
         {routePresentation.staticChunks.map((chunk, index) => (
           <StaticConfirmedRoute
-            key={chunk.key}
-            id={`track-body-${index}`}
+            key={`${chunk.key}:style-${routeStyleGeneration}`}
+            id={`track-body-${index}-style-${routeStyleGeneration}`}
             coordinates={chunk.coordinates}
             lineColor={activityTraceColor}
             casingColor={mapPresentation.routeCasingColor}
@@ -1143,7 +1154,8 @@ export function HikingMap({
         ))}
         {animateConfirmedHead && activeConfirmedSegment ? (
           <ContinuousConfirmedRoute
-            key={activeConfirmedSegment.key}
+            key={`${activeConfirmedSegment.key}:style-${routeStyleGeneration}`}
+            id={`track-confirmed-continuous-style-${routeStyleGeneration}`}
             coordinates={activeConfirmedSegment.coordinates}
             lineColor={activityTraceColor}
             casingColor={mapPresentation.routeCasingColor}
@@ -1158,8 +1170,8 @@ export function HikingMap({
           />
         ) : activeConfirmedSegment ? (
           <StaticConfirmedRoute
-            key={activeConfirmedSegment.key}
-            id="track-active"
+            key={`${activeConfirmedSegment.key}:style-${routeStyleGeneration}`}
+            id={`track-active-style-${routeStyleGeneration}`}
             coordinates={activeConfirmedSegment.coordinates}
             lineColor={activityTraceColor}
             casingColor={mapPresentation.routeCasingColor}

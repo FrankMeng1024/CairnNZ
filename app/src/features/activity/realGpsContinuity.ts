@@ -15,6 +15,11 @@ const MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS = 120_000;
 const CANDIDATE_MIN_TURN_DEG = 82;
 const CANDIDATE_MIN_STEP_M = 18;
 const CANDIDATE_MIN_INNOVATION_M = 12;
+// Stage 1 is intentionally more sensitive than the hard outlier gate above.
+// An uncertainty-sized heading break is held for one following fix instead of
+// being written immediately to canonical truth. Persistent motion confirms it;
+// an opposing return remains raw audit evidence only.
+const MICRO_TURN_MIN_DEG = 32;
 const REPORTED_STATIONARY_SPEED_MPS = 0.5;
 
 const MODE_MAX_SPEED_MPS: Record<ActivityMode, number> = {
@@ -673,7 +678,15 @@ function classifyWithoutPending(
     && (diagnostics.headingDeltaDeg ?? 0) >= CANDIDATE_MIN_TURN_DEG
     && (accuracyM >= 12 || (diagnostics.predictionInnovationM ?? 0) >= 25)
   );
-  if (allowLateralQuarantine && suspiciousLateralInnovation) {
+  const uncertaintySizedHeadingBreak = (
+    (diagnostics.dtFromTrustedMs ?? 0) > 0
+    && (diagnostics.dtFromTrustedMs ?? 0) <= 8_000
+    && (diagnostics.displacementFromTrustedM ?? 0) >= Math.max(3.5, accuracyM * 0.42)
+    && (diagnostics.predictionInnovationM ?? 0) >= Math.max(3, accuracyM * 0.38)
+    && (diagnostics.predictionInnovationM ?? 0) <= Math.max(18, accuracyM * 2.1)
+    && (diagnostics.headingDeltaDeg ?? 0) >= MICRO_TURN_MIN_DEG
+  );
+  if (allowLateralQuarantine && (suspiciousLateralInnovation || uncertaintySizedHeadingBreak)) {
     return createPending(state, current, 'large-lateral-innovation', nowMs);
   }
 
@@ -863,7 +876,11 @@ export function evaluateRealGpsObservation(
   });
   const candidateProgressConfirmed = pending.reason === 'possible-stationary-jitter'
     ? stationaryCandidateShowsRealProgress(base, evidence, mode)
-    : showsCumulativeProgress(sequenceFeatures);
+    : pending.reason === 'large-lateral-innovation'
+      ? showsCumulativeProgress(sequenceFeatures)
+        && sequenceFeatures.progressRatio >= 0.68
+        && sequenceFeatures.directionVariabilityDeg <= 48
+      : showsCumulativeProgress(sequenceFeatures);
   if (everyEdgePlausible && candidateProgressConfirmed) {
     // A long, low-speed stationary tail must not be retroactively relabelled
     // as walking merely because the *current* fix supplies independent moving

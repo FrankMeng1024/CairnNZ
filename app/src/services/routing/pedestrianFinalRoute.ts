@@ -658,7 +658,10 @@ function collapseTransientLateralSpikes(
   if (points.length < 5) {
     return { points: points.slice(), removedCount: 0, maximumRemovedDepthM: 0 };
   }
-  const maximumDepthM = clamp(uncertaintyM * 0.65, 4.5, 9);
+  // Stage 3 must still repair a short accepted burst when accuracy degrades.
+  // The temporal/rejoin/opposing-turn/support gates below bound this; a larger
+  // uncertainty envelope alone never authorizes straightening a path.
+  const maximumDepthM = clamp(uncertaintyM * 0.78, 4.5, 16);
   const removed = new Set<number>();
   let removedCount = 0;
   let maximumRemovedDepthM = 0;

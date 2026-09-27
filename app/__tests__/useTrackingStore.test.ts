@@ -88,6 +88,7 @@ jest.mock('../src/services/backgroundLocationTask', () => ({
   registerBackgroundTask: jest.fn(async () => true),
   drainBackgroundLocations: jest.fn(() => []),
   settleBackgroundLocationWrites: jest.fn(async () => undefined),
+  readDurableActivityContext: jest.fn(async () => null),
   persistBackgroundContext: jest.fn(async () => true),
 }));
 jest.mock('../src/services/hikeTrackWriter', () => ({

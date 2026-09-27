@@ -331,7 +331,9 @@ describe('Free Activity integration contracts', () => {
     // bounded-tail outcomes are tested behaviorally.
     expect(map).toContain('new AnimatedCoordinatesArrayClass(coordinatesValue)');
     expect(map).toContain('planContinuousRouteTarget(coordinates, stableCountRef.current)');
-    expect(map).toContain('id="track-confirmed-continuous"');
+    // The semantic prefix remains stable, while the style generation forces
+    // RNMapbox to recreate the source/layers after native style loss.
+    expect(map).toContain('id={`track-confirmed-continuous-style-${routeStyleGeneration}`}');
     expect(map).not.toContain('id="track-confirmed-head"');
     expect(map).not.toContain('id="track-confirmed-body"');
     expect(map).toContain("mapAppState === 'active'");

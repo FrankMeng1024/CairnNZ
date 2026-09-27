@@ -40,4 +40,23 @@ describe('Activity P0 source contract', () => {
     expect(hikingMap).not.toContain('logoEnabled={false}');
     expect(hikingMap).not.toContain('attributionEnabled={false}');
   });
+
+  it('rebinds the full live route after every native style generation', () => {
+    const hikingMap = read('screens/HikingMap.tsx');
+    expect(hikingMap).toContain('routeStyleGeneration');
+    expect(hikingMap).toContain('setRouteStyleGeneration');
+    expect(hikingMap).toMatch(/key=\{`\$\{chunk\.key\}:style-\$\{routeStyleGeneration\}`\}/);
+  });
+
+  it('binds Activity Detail Final geometry above the style and refits by geometry identity', () => {
+    const history = read('screens/MapHistoryScreen.tsx');
+    expect(history).toContain('onDidFinishLoadingStyle');
+    expect(history).toContain('detailStyleGeneration');
+    expect(history).toContain('activityGeometryFingerprint(pts)');
+    expect(history).toContain('activityGeometryFingerprint(session.trackPoints) === expectedFinalFingerprint');
+    expect(history).toContain('activityFinalArtifactMatchesExpected(');
+    expect(history).toContain('activityFinalPointsMatchExpected(normalised, expectedFinalFingerprint)');
+    expect(history).toMatch(/id=\{`track-line-layer-[\s\S]{0,180}slot="top"/);
+    expect(history).toContain('cameraRef.current?.fitBounds');
+  });
 });

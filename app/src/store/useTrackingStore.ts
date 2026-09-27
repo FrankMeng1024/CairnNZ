@@ -66,8 +66,10 @@ import {
   registerBackgroundTask,
   drainBackgroundLocations,
   persistBackgroundContext,
+  readDurableActivityContext,
   settleBackgroundLocationWrites,
 } from '../services/backgroundLocationTask';
+import { reconcileActivityContinuityAfterJournal } from '../features/activity/activityContinuityReconciliation';
 import {
   calculateLifecycleDurationMs,
   calculateActivityStats,
@@ -5768,6 +5770,7 @@ async function drainCommittedBackgroundLocations(
   committedBeforeFence = false,
 ): Promise<number> {
   await settleBackgroundLocationWrites();
+  const durableContext = await readDurableActivityContext();
   const drained = drainBackgroundLocations().sort((a, b) => a.timestamp - b.timestamp);
   // Foreground presentation may recover immediately from the newest
   // Activity-owned background observation. It must not wait for a brand-new
@@ -5794,7 +5797,7 @@ async function drainCommittedBackgroundLocations(
     });
   }
   const owner = useTrackingStore.getState();
-  if (owner.sessionId && owner.ownerUserId && owner.locationProviderSource === 'real') {
+  if (owner.sessionId && owner.ownerUserId && owner.liveOwnerGeneration && owner.locationProviderSource === 'real') {
     // The queue is only an in-process latency hint. A headless JS runtime can
     // disappear before foreground takeover, so rebuild from the complete WAL
     // instead of replaying only this module instance's mutable tail.
@@ -5804,38 +5807,64 @@ async function drainCommittedBackgroundLocations(
     if (projectionOwner.sessionId !== owner.sessionId
       || projectionOwner.ownerUserId !== owner.ownerUserId
       || projectionOwner.liveOwnerGeneration !== owner.liveOwnerGeneration) return drained.length;
-    const ownedJournal = journal.filter((point: any) => point.clientActivityId === owner.sessionId);
+    const ownedJournal = journal.filter((point: any) => (
+      point.clientActivityId === owner.sessionId
+      && point.ownerGeneration === owner.liveOwnerGeneration
+    ));
     if (ownedJournal.length > 0) {
       // Foreground capture may already be live while a long WAL read settles.
-      // Rebase on the current published prefix so reconciliation can add the
-      // frozen background tail without replacing newly committed fixes.
-      const projection = projectActivityJournal(projectionOwner.trackPoints, ownedJournal);
-      const tail = projection.canonical[projection.canonical.length - 1] as SegmentedTrackPoint | undefined;
-      const existingRawKeys = new Set(projectionOwner.trackPointsRaw.map(point => (
-        point.rawOrdinal != null
-          ? `${point.segmentId ?? 'legacy'}:${point.rawOrdinal}`
-          : `${point.segmentId ?? 'legacy'}:${point.t}:${point.lat}:${point.lng}`
-      )));
-      const missingRaw = projection.canonical.filter(point => !existingRawKeys.has(
-        point.rawOrdinal != null
-          ? `${point.segmentId ?? 'legacy'}:${point.rawOrdinal}`
-          : `${point.segmentId ?? 'legacy'}:${point.t}:${point.lat}:${point.lng}`,
-      ));
-      useTrackingStore.setState(state => (
-        state.sessionId !== owner.sessionId || state.ownerUserId !== owner.ownerUserId
-          ? state
-          : {
-              trackPoints: projection.canonical,
-              trackPointsSmoothed: projection.live,
-              trackPointsRaw: [...state.trackPointsRaw, ...missingRaw],
-              distanceM: projection.distanceM,
-              elevationGainM: projection.elevationGainM,
-              lastCoordinate: tail ?? state.lastCoordinate,
-              lastCoordinateTime: tail?.t ?? state.lastCoordinateTime,
-              lastFixTimestamp: tail?.t ?? state.lastFixTimestamp,
-              currentSegmentId: tail?.segmentId ?? state.currentSegmentId,
-            }
-      ));
+      // Rebase *inside* the synchronous state transaction. A foreground fix can
+      // commit after the WAL read (and even after the identity fence above); a
+      // projection calculated outside this updater would replace that new tail
+      // with the older snapshot it observed.
+      let projection = projectActivityJournal(projectionOwner.trackPoints, ownedJournal);
+      let missingRaw: TrackPoint[] = [];
+      useTrackingStore.setState(state => {
+        if (state.sessionId !== owner.sessionId
+          || state.ownerUserId !== owner.ownerUserId
+          || state.liveOwnerGeneration !== owner.liveOwnerGeneration) return state;
+        projection = projectActivityJournal(state.trackPoints, ownedJournal);
+        const tail = projection.canonical[projection.canonical.length - 1] as SegmentedTrackPoint | undefined;
+        const existingRawKeys = new Set(state.trackPointsRaw.map(point => (
+          point.rawOrdinal != null
+            ? `${point.segmentId ?? 'legacy'}:${point.rawOrdinal}`
+            : `${point.segmentId ?? 'legacy'}:${point.t}:${point.lat}:${point.lng}`
+        )));
+        missingRaw = projection.canonical.filter(point => !existingRawKeys.has(
+          point.rawOrdinal != null
+            ? `${point.segmentId ?? 'legacy'}:${point.rawOrdinal}`
+            : `${point.segmentId ?? 'legacy'}:${point.t}:${point.lat}:${point.lng}`,
+        ));
+        return {
+          trackPoints: projection.canonical,
+          trackPointsSmoothed: projection.live,
+          trackPointsRaw: [...state.trackPointsRaw, ...missingRaw],
+          distanceM: projection.distanceM,
+          elevationGainM: projection.elevationGainM,
+          lastCoordinate: tail ?? state.lastCoordinate,
+          lastCoordinateTime: tail?.t ?? state.lastCoordinateTime,
+          lastFixTimestamp: tail?.t ?? state.lastFixTimestamp,
+          currentSegmentId: tail?.segmentId ?? state.currentSegmentId,
+        };
+      });
+      const continuity = reconcileActivityContinuityAfterJournal({
+        clientActivityId: owner.sessionId,
+        ownerGeneration: owner.liveOwnerGeneration,
+        journal: ownedJournal,
+        durableContext,
+        currentRawOrdinal: realGpsRawOrdinal,
+      });
+      const restoredTimestamp = continuity.continuityState.latestObservationTimestamp ?? 0;
+      const currentTimestamp = realGpsContinuityState.latestObservationTimestamp ?? 0;
+      // A foreground fix may commit while a long WAL read is in flight. Never
+      // roll that classifier back; only adopt a journal/context checkpoint at
+      // least as recent as the mounted one.
+      if (restoredTimestamp >= currentTimestamp) {
+        realGpsContinuityState = continuity.continuityState;
+        realGpsContinuitySessionId = owner.sessionId;
+      }
+      realGpsRawOrdinal = Math.max(realGpsRawOrdinal, continuity.rawOrdinal);
+      schedulePendingCandidateTimeout(useTrackingStore.getState());
       // Current builds already persist headless Memory at callback time. Replay
       // only points absent from the mounted raw projection so older journals are
       // repaired without rewalking a multi-hour history on every foreground.
@@ -5864,6 +5893,8 @@ async function drainCommittedBackgroundLocations(
         projectedPointCount: projection.canonical.length,
         displayedPointCount: projection.live.length,
         appendedFromJournal: projection.appendedFromJournal,
+        continuityHandoffSource: continuity.source,
+        rawOrdinalHighWatermark: realGpsRawOrdinal,
         queueHintCount: drained.length,
         committedBeforeFence,
       }, {
@@ -5925,6 +5956,33 @@ async function stopRealBackgroundSourceForHandoff(): Promise<void> {
   backgroundTaskActive = false;
 }
 
+async function restoreForegroundContinuityFromDurableContext(
+  owner: TrackingState,
+): Promise<'durable-context' | 'unavailable'> {
+  if (!owner.sessionId || !owner.liveOwnerGeneration) return 'unavailable';
+  const durableContext = await readDurableActivityContext();
+  if (
+    durableContext?.clientActivityId !== owner.sessionId
+    || durableContext.ownerGeneration !== owner.liveOwnerGeneration
+  ) return 'unavailable';
+  const reconciled = reconcileActivityContinuityAfterJournal({
+    clientActivityId: owner.sessionId,
+    ownerGeneration: owner.liveOwnerGeneration,
+    journal: [],
+    durableContext,
+    currentRawOrdinal: realGpsRawOrdinal,
+  });
+  const restoredTimestamp = reconciled.continuityState.latestObservationTimestamp ?? 0;
+  const currentTimestamp = realGpsContinuityState.latestObservationTimestamp ?? 0;
+  if (restoredTimestamp >= currentTimestamp) {
+    realGpsContinuityState = reconciled.continuityState;
+    realGpsContinuitySessionId = owner.sessionId;
+  }
+  realGpsRawOrdinal = Math.max(realGpsRawOrdinal, reconciled.rawOrdinal);
+  schedulePendingCandidateTimeout(owner);
+  return 'durable-context';
+}
+
 async function transitionToForegroundSource(expectedIntentEpoch?: number): Promise<void> {
   const owner = useTrackingStore.getState();
   const intentIsCurrent = () => expectedIntentEpoch == null || (
@@ -5945,6 +6003,12 @@ async function transitionToForegroundSource(expectedIntentEpoch?: number): Promi
     coordinateSource: 'real',
   });
   await stopRealBackgroundSourceForHandoff();
+  // Restore headless ordering before the first foreground callback. The old
+  // ordering activated the watcher first, allowing a new fix to reuse a raw
+  // ordinal and compare against the pre-background trusted anchor.
+  const continuityHandoff = intentIsCurrent()
+    ? await restoreForegroundContinuityFromDurableContext(owner)
+    : 'unavailable';
   if (intentIsCurrent()) await refreshRealBackgroundAuthorization(false);
   if (intentIsCurrent()) await activateForegroundSource(expectedIntentEpoch);
   const active = isCurrentLocationSourceActive();
@@ -5971,6 +6035,7 @@ async function transitionToForegroundSource(expectedIntentEpoch?: number): Promi
   appendSimulatorLog('PROVIDER', 'real_activity_foreground_takeover', {
     phase: 'completed',
     reconciliation: 'scheduled',
+    continuityHandoff,
     foregroundWatcherActive: Boolean(locationSubscription),
     backgroundTaskActive,
   }, {

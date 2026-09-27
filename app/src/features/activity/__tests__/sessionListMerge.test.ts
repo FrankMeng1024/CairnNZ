@@ -53,6 +53,8 @@ describe('loss-resistant Activity list reconciliation', () => {
       syncFailureCode: 'UPSTREAM_DOWN',
       finalGeometryState: 'enhanced',
       finalGeometryVersion: 'pedestrian-final-v2-base',
+      finalGeometryRevision: 2,
+      finalGeometryFingerprint: 'final-v2',
       trackPoints: [{ lat: -41, lng: 174, t: 100 }],
     });
     const remote = session({
@@ -62,6 +64,8 @@ describe('loss-resistant Activity list reconciliation', () => {
       remoteId: 91,
       serverActivityId: 91,
       syncState: 'synced',
+      finalGeometryRevision: 1,
+      finalGeometryFingerprint: 'stale-server',
       trackPoints: [],
     });
     expect(mergeHydratedSessionLists([local], [remote])).toEqual([
@@ -72,6 +76,8 @@ describe('loss-resistant Activity list reconciliation', () => {
         syncFailureStatus: 503,
         syncFailureCode: 'UPSTREAM_DOWN',
         finalGeometryState: 'enhanced',
+        finalGeometryRevision: 2,
+        finalGeometryFingerprint: 'final-v2',
         trackPoints: [{ lat: -41, lng: 174, t: 100 }],
       }),
     ]);

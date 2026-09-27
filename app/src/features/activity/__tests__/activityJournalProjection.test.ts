@@ -1,5 +1,6 @@
 import type { CanonicalJournalPoint } from '../../../services/hikeTrackWriter';
 import { projectActivityJournal } from '../activityJournalProjection';
+import { buildBaseFinalTrackPoints } from '../activityFinalArtifact';
 
 function point(
   index: number,
@@ -61,5 +62,46 @@ describe('durable Activity journal projection', () => {
     const projected = projectActivityJournal([durable[0], durable[1]], durable);
     expect(projected.canonical).toHaveLength(3);
     expect(projected.appendedFromJournal).toBe(1);
+  });
+
+  test('rebasing at commit time retains a foreground fix accepted while the WAL read was in flight', () => {
+    const journal = Array.from({ length: 96 }, (_, index) => point(index));
+    const stateAtReadStart = journal.slice(0, 72);
+    const staleProjection = projectActivityJournal(stateAtReadStart, journal);
+    const concurrentForegroundFix = point(96, 'segment-a', 'foreground');
+
+    // This is the old failure: committing a projection calculated before the
+    // new foreground fix silently drops that fix.
+    expect(staleProjection.canonical.at(-1)).toMatchObject({ rawOrdinal: 96 });
+
+    const currentStateAtCommit = [...stateAtReadStart, concurrentForegroundFix];
+    const rebasedProjection = projectActivityJournal(currentStateAtCommit, journal);
+    expect(rebasedProjection.canonical).toHaveLength(97);
+    expect(rebasedProjection.canonical.at(-1)).toMatchObject({ rawOrdinal: 97 });
+  });
+
+  test.each(['hiking', 'running'])('%s keeps a frozen prefix through headless writes, restore, continuation, and Finish', () => {
+    const foreground = Array.from({ length: 72 }, (_, index) => point(index, 'segment-a', 'foreground'));
+    const headless = Array.from({ length: 24 }, (_, offset) => point(offset + 72, 'segment-a', 'background'));
+    const restored = projectActivityJournal(foreground, [...foreground, ...headless]);
+    expect(restored.canonical).toHaveLength(96);
+    expect(restored.canonical.slice(0, 72)).toEqual(foreground.map(item => expect.objectContaining({
+      t: item.t,
+      rawOrdinal: item.rawOrdinal,
+    })));
+
+    const continued = Array.from({ length: 12 }, (_, offset) => point(offset + 96, 'segment-a', 'foreground'));
+    const afterContinuation = projectActivityJournal(
+      restored.canonical,
+      [...foreground, ...headless, ...continued],
+    );
+    expect(afterContinuation.canonical).toHaveLength(108);
+    expect(afterContinuation.canonical[0]).toMatchObject({ rawOrdinal: 1, t: 1_000 });
+    expect(afterContinuation.canonical.at(-1)).toMatchObject({ rawOrdinal: 108, t: 108_000 });
+    expect(afterContinuation.live[0]).toMatchObject({ rawOrdinal: 1, t: 1_000 });
+
+    const finish = buildBaseFinalTrackPoints(afterContinuation.canonical);
+    expect(finish[0]).toMatchObject({ t: afterContinuation.canonical[0].t });
+    expect(finish.at(-1)).toMatchObject({ t: afterContinuation.canonical.at(-1)!.t });
   });
 });

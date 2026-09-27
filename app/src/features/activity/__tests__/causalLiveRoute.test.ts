@@ -50,6 +50,18 @@ describe('causal Live route presentation', () => {
     expect(live.filter(point => point.segmentId === 'b')).toHaveLength(2);
   });
 
+  test('freezes a supported curved/self-crossing prefix instead of retaining only start and newest', () => {
+    const figureEight = Array.from({ length: 73 }, (_unused, index) => {
+      const angle = Math.PI * 2 * index / 72;
+      return sample(60 * Math.sin(angle), 32 * Math.sin(angle * 2), index);
+    });
+    const live = buildCausalLiveRoute(figureEight);
+    expect(live.length).toBeGreaterThan(12);
+    expect(length(live) / length(figureEight)).toBeGreaterThan(0.8);
+    expect(live[0].t).toBe(figureEight[0].t);
+    expect(live.at(-1)?.t).toBe(figureEight.at(-1)?.t);
+  });
+
   test('is causal: each publication is derived only from the observed prefix', () => {
     const points = Array.from({ length: 20 }, (_, index) => sample(index * 4, Math.sin(index) * 3, index));
     let published: TrackPoint[] = [];
