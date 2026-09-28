@@ -13,6 +13,10 @@ import type { RealGpsContinuityState, RealGpsObservation } from '../features/act
 export const PASSIVE_MEMORY_BACKGROUND_TASK = 'cairn-passive-memory-location-v1';
 export const PASSIVE_MEMORY_ACTIVE_KEY = 'cairn:passive-memory:active:v1';
 export const PASSIVE_MEMORY_CONTEXT_KEY = 'cairn:passive-memory:context:v1';
+// Mirrored from backgroundLocationTask without importing that top-level native
+// registrar into the passive headless runtime. The Activity live bit is the
+// durable priority authority; `1` always preempts Passive Memory.
+const ACTIVITY_ACTIVE_KEY = 'cairn_bg_hike_active';
 
 export interface DurablePassiveMemoryContext {
   v: 1;
@@ -46,6 +50,11 @@ export async function acquirePassiveMemoryLease(args: {
   rawOrdinal?: number;
 }): Promise<DurablePassiveMemoryContext> {
   return withOwnership(async () => {
+    if (await AsyncStorage.getItem(ACTIVITY_ACTIVE_KEY) === '1') {
+      await AsyncStorage.setItem(PASSIVE_MEMORY_ACTIVE_KEY, '0');
+      await AsyncStorage.removeItem(PASSIVE_MEMORY_CONTEXT_KEY);
+      throw new Error('passive_memory_preempted_by_activity');
+    }
     const context: DurablePassiveMemoryContext = {
       v: 1,
       ownerUserId: args.ownerUserId,
@@ -76,10 +85,11 @@ export async function releasePassiveMemoryLease(expectedEpoch?: string): Promise
 }
 
 async function currentContext(): Promise<DurablePassiveMemoryContext | null> {
-  if ((await AsyncStorage.getItem(PASSIVE_MEMORY_ACTIVE_KEY)) !== '1') return null;
-  const raw = await AsyncStorage.getItem(PASSIVE_MEMORY_CONTEXT_KEY);
-  if (!raw) return null;
   try {
+    if ((await AsyncStorage.getItem(ACTIVITY_ACTIVE_KEY)) === '1') return null;
+    if ((await AsyncStorage.getItem(PASSIVE_MEMORY_ACTIVE_KEY)) !== '1') return null;
+    const raw = await AsyncStorage.getItem(PASSIVE_MEMORY_CONTEXT_KEY);
+    if (!raw) return null;
     const context = JSON.parse(raw) as DurablePassiveMemoryContext;
     return context?.v === 1
       && context.consentVersion === 1
@@ -99,41 +109,66 @@ export async function readPassiveMemoryContext(): Promise<DurablePassiveMemoryCo
 export async function startPassiveMemoryBackgroundUpdates(
   context: DurablePassiveMemoryContext,
 ): Promise<boolean> {
-  if (!passiveBackgroundMemoryCapability().supported) return false;
-  const permission = await Location.getBackgroundPermissionsAsync();
-  if (permission.status !== Location.PermissionStatus.GRANTED) return false;
-  if (await Location.hasStartedLocationUpdatesAsync(PASSIVE_MEMORY_BACKGROUND_TASK)) return true;
-  await Location.startLocationUpdatesAsync(PASSIVE_MEMORY_BACKGROUND_TASK, {
-    accuracy: Location.Accuracy.Balanced,
-    distanceInterval: 15,
-    timeInterval: 15_000,
-    deferredUpdatesDistance: 30,
-    deferredUpdatesInterval: 15_000,
-    pausesUpdatesAutomatically: true,
-    activityType: Location.ActivityType.Fitness,
-    showsBackgroundLocationIndicator: false,
-    foregroundService: Platform.OS === 'android' ? {
-      notificationTitle: 'Cairn Memory is active',
-      notificationBody: 'Recording explored places while you walk',
-      notificationColor: '#5D7C46',
-    } : undefined,
+  return withOwnership(async () => {
+    const authorityCurrent = async () => {
+      const current = await currentContext();
+      return current?.epoch === context.epoch
+        && current.ownerUserId === context.ownerUserId;
+    };
+    if (!passiveBackgroundMemoryCapability().supported || !await authorityCurrent()) return false;
+    const permission = await Location.getBackgroundPermissionsAsync();
+    if (permission.status !== Location.PermissionStatus.GRANTED || !await authorityCurrent()) return false;
+    const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(PASSIVE_MEMORY_BACKGROUND_TASK);
+    if (!await authorityCurrent()) return false;
+    if (!alreadyStarted) {
+      await Location.startLocationUpdatesAsync(PASSIVE_MEMORY_BACKGROUND_TASK, {
+        accuracy: Location.Accuracy.Balanced,
+        distanceInterval: 15,
+        timeInterval: 15_000,
+        deferredUpdatesDistance: 30,
+        deferredUpdatesInterval: 15_000,
+        pausesUpdatesAutomatically: true,
+        activityType: Location.ActivityType.Fitness,
+        showsBackgroundLocationIndicator: false,
+        foregroundService: Platform.OS === 'android' ? {
+          notificationTitle: 'Cairn Memory is active',
+          notificationBody: 'Recording explored places while you walk',
+          notificationColor: '#5D7C46',
+        } : undefined,
+      });
+      // Permission, OFF/logout, a new passive epoch, or Activity can change
+      // while native start is unresolved. Revalidate before claiming success.
+      if (!await authorityCurrent()) {
+        await Location.stopLocationUpdatesAsync(PASSIVE_MEMORY_BACKGROUND_TASK).catch(() => undefined);
+        return false;
+      }
+    }
+    appendSimulatorLog('PROVIDER', 'passive_memory_background_started_v1', {
+      epochSuffix: context.epoch.slice(-8),
+      distanceIntervalM: 15,
+      deferredUpdatesDistanceM: 30,
+      deferredUpdatesIntervalMs: 15_000,
+    }, { userId: context.ownerUserId, coordinateSource: 'none', force: true });
+    return true;
   });
-  appendSimulatorLog('PROVIDER', 'passive_memory_background_started_v1', {
-    epochSuffix: context.epoch.slice(-8),
-    distanceIntervalM: 15,
-    deferredUpdatesDistanceM: 30,
-    deferredUpdatesIntervalMs: 15_000,
-  }, { userId: context.ownerUserId, coordinateSource: 'none', force: true });
-  return true;
 }
 
 export async function stopPassiveMemoryBackgroundUpdates(expectedEpoch?: string): Promise<void> {
-  await releasePassiveMemoryLease(expectedEpoch).catch(() => false);
-  try {
-    if (await Location.hasStartedLocationUpdatesAsync(PASSIVE_MEMORY_BACKGROUND_TASK)) {
-      await Location.stopLocationUpdatesAsync(PASSIVE_MEMORY_BACKGROUND_TASK);
-    }
-  } catch { /* unavailable native task is already stopped */ }
+  await withOwnership(async () => {
+    const raw = await AsyncStorage.getItem(PASSIVE_MEMORY_CONTEXT_KEY).catch(() => null);
+    let current: DurablePassiveMemoryContext | null = null;
+    try { current = raw ? JSON.parse(raw) as DurablePassiveMemoryContext : null; } catch {}
+    // An obsolete cleanup is not authorized to stop the newer epoch's native
+    // task. Lease and native stop share this same serialized boundary.
+    if (expectedEpoch && current && current.epoch !== expectedEpoch) return;
+    await AsyncStorage.setItem(PASSIVE_MEMORY_ACTIVE_KEY, '0');
+    await AsyncStorage.removeItem(PASSIVE_MEMORY_CONTEXT_KEY);
+    try {
+      if (await Location.hasStartedLocationUpdatesAsync(PASSIVE_MEMORY_BACKGROUND_TASK)) {
+        await Location.stopLocationUpdatesAsync(PASSIVE_MEMORY_BACKGROUND_TASK);
+      }
+    } catch { /* unavailable native task is already stopped */ }
+  });
 }
 
 export async function handlePassiveMemoryBackgroundTask({ data, error }: { data: any; error: any }): Promise<void> {
@@ -207,6 +242,7 @@ export async function handlePassiveMemoryBackgroundTask({ data, error }: { data:
           horizontalAccuracyM: point.accuracy ?? undefined,
           continuityState: 'accepted',
           ownerAuthority: 'durable_passive_lease',
+          ownerAuthorityEpoch: context.epoch,
         });
         acceptedCount += 1;
       }

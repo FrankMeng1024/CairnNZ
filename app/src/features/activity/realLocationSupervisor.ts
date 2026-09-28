@@ -37,6 +37,7 @@ export interface RealLocationSupervisorSnapshot {
   lastObservationTimestampMs: number | null;
   lastFreshObservationReceiptMs: number | null;
   lastProcessingCompletedMs: number | null;
+  watchdogScheduledAtMs: number | null;
 }
 
 export interface RealLocationStreamHandle {
@@ -55,6 +56,10 @@ interface SupervisorDependencies<TObservation, TOptions> {
   setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
   retryDelaysMs?: number[];
+  /** Provider liveness means callback receipt, not user movement. A stationary
+   * callback keeps the stream healthy; a completely silent handle is fenced. */
+  startupSilenceMs?: number;
+  callbackSilenceMs?: number;
   isTerminalWithoutRetry?: (error: unknown) => boolean;
 }
 
@@ -81,8 +86,10 @@ export class RealLocationSupervisor<TObservation, TOptions> {
   private handle: RealLocationStreamHandle | null = null;
   private inFlightToken: number | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private watchdogTimer: ReturnType<typeof setTimeout> | null = null;
   private retryAttempt = 0;
   private retryScheduledAtMs: number | null = null;
+  private watchdogScheduledAtMs: number | null = null;
   private activeIdentity: string | null = null;
   private recoverableError: string | null = null;
   private terminalError: string | null = null;
@@ -90,6 +97,8 @@ export class RealLocationSupervisor<TObservation, TOptions> {
   private lastObservationTimestampMs: number | null = null;
   private lastFreshObservationReceiptMs: number | null = null;
   private lastProcessingCompletedMs: number | null = null;
+  private readonly startupSilenceMs: number;
+  private readonly callbackSilenceMs: number;
 
   constructor(dependencies: SupervisorDependencies<TObservation, TOptions>) {
     this.startStream = dependencies.startStream;
@@ -97,6 +106,10 @@ export class RealLocationSupervisor<TObservation, TOptions> {
     this.setTimer = dependencies.setTimer ?? setTimeout;
     this.clearTimer = dependencies.clearTimer ?? clearTimeout;
     this.retryDelaysMs = dependencies.retryDelaysMs ?? [1_000, 5_000, 15_000, 60_000];
+    // Deliberately generous relative to the native 10–15 s Activity options.
+    // These bounds detect a dead stream, not slow/stationary movement.
+    this.startupSilenceMs = dependencies.startupSilenceMs ?? 120_000;
+    this.callbackSilenceMs = dependencies.callbackSilenceMs ?? 300_000;
     this.isTerminalWithoutRetry = dependencies.isTerminalWithoutRetry ?? (() => false);
   }
 
@@ -120,6 +133,7 @@ export class RealLocationSupervisor<TObservation, TOptions> {
       lastObservationTimestampMs: this.lastObservationTimestampMs,
       lastFreshObservationReceiptMs: this.lastFreshObservationReceiptMs,
       lastProcessingCompletedMs: this.lastProcessingCompletedMs,
+      watchdogScheduledAtMs: this.watchdogScheduledAtMs,
     };
   }
 
@@ -178,7 +192,12 @@ export class RealLocationSupervisor<TObservation, TOptions> {
       this.clearTimer(this.retryTimer);
       this.retryTimer = null;
     }
+    if (this.watchdogTimer) {
+      this.clearTimer(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
     this.retryScheduledAtMs = null;
+    this.watchdogScheduledAtMs = null;
   }
 
   private async reconcile(): Promise<void> {
@@ -205,13 +224,23 @@ export class RealLocationSupervisor<TObservation, TOptions> {
     this.terminalError = null;
     this.recoverableError = null;
     let failedBeforeResolution = false;
+    let callbackObserved = false;
     this.publish();
     const terminal = (error: unknown) => {
       if (token !== this.providerGeneration || this.activeIdentity !== expectedIdentity) return;
       failedBeforeResolution = true;
+      // Fence the failed generation before notifying consumers or scheduling
+      // retry. Delayed callbacks and a late start resolution are now inert.
+      this.providerGeneration += 1;
       this.terminalError = errorCode(error);
       this.recoverableError = this.isTerminalWithoutRetry(error) ? null : this.terminalError;
       this.inFlightToken = null;
+      this.activeIdentity = null;
+      if (this.watchdogTimer) {
+        this.clearTimer(this.watchdogTimer);
+        this.watchdogTimer = null;
+      }
+      this.watchdogScheduledAtMs = null;
       if (this.handle) {
         try { this.handle.remove(); } catch { /* best effort */ }
         this.handle = null;
@@ -228,11 +257,20 @@ export class RealLocationSupervisor<TObservation, TOptions> {
           const live = this.effectiveConsumer();
           if (!live || this.identity(live) !== expectedIdentity) return;
           const receiptMs = this.now();
+          callbackObserved = true;
           this.lastCallbackReceiptMs = receiptMs;
-          if (this.lastObservationTimestampMs == null || observationTimestampMs > this.lastObservationTimestampMs) {
+          const fresh = this.lastObservationTimestampMs == null
+            || observationTimestampMs > this.lastObservationTimestampMs;
+          if (fresh) {
             this.lastObservationTimestampMs = observationTimestampMs;
             this.lastFreshObservationReceiptMs = receiptMs;
+            // A native handle is not recovery evidence. A fresh observation is.
+            this.retryAttempt = 0;
+            this.retryScheduledAtMs = null;
+            this.recoverableError = null;
+            this.terminalError = null;
           }
+          this.armWatchdog(token, expectedIdentity, terminal, this.callbackSilenceMs);
           this.publish();
           Promise.resolve(live.onObservation({ observation, observationTimestampMs }))
             .catch(() => undefined)
@@ -250,12 +288,33 @@ export class RealLocationSupervisor<TObservation, TOptions> {
       }
       this.handle = handle;
       this.inFlightToken = null;
-      this.retryAttempt = 0;
       this.retryScheduledAtMs = null;
+      this.armWatchdog(
+        token,
+        expectedIdentity,
+        terminal,
+        callbackObserved ? this.callbackSilenceMs : this.startupSilenceMs,
+      );
       this.publish();
     } catch (error) {
       terminal(error);
     }
+  }
+
+  private armWatchdog(
+    token: number,
+    expectedIdentity: string,
+    terminal: (error: unknown) => void,
+    delayMs: number,
+  ): void {
+    if (this.watchdogTimer) this.clearTimer(this.watchdogTimer);
+    this.watchdogScheduledAtMs = this.now() + delayMs;
+    this.watchdogTimer = this.setTimer(() => {
+      this.watchdogTimer = null;
+      this.watchdogScheduledAtMs = null;
+      if (token !== this.providerGeneration || this.activeIdentity !== expectedIdentity) return;
+      terminal(new Error('provider-silent-stream'));
+    }, delayMs);
   }
 
   private scheduleRetry(expectedIdentity: string): void {

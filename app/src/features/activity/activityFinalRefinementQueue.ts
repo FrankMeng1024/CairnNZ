@@ -18,6 +18,7 @@ import {
 import { appendSimulatorLog } from '../activitySimulator/simulatorLog';
 import { segmentTrace, toServerPoint } from './activityContracts';
 import {
+  activityGeometryFingerprint,
   commitActivityFinalArtifact,
   loadActivityFinalArtifact,
   type ActivityFinalArtifact,
@@ -48,6 +49,8 @@ export type ActivityFinalRefinementRunResult =
 const ROOT = '@cairn:activity_final_refinement:v1:';
 const INDEX = '@cairn:activity_final_refinement:index:v1:';
 const flights = new Map<string, Promise<ActivityFinalRefinementRunResult>>();
+const controllers = new Map<string, AbortController>();
+const jobWriteTails = new Map<string, Promise<void>>();
 
 const jobKey = (ownerUserId: string, clientActivityId: string) => `${ROOT}${ownerUserId}:${clientActivityId}`;
 const indexKey = (ownerUserId: string) => `${INDEX}${ownerUserId}`;
@@ -72,11 +75,60 @@ async function readJob(ownerUserId: string, clientActivityId: string): Promise<A
   }
 }
 
+async function withJobMutation<T>(
+  ownerUserId: string,
+  clientActivityId: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const key = jobKey(ownerUserId, clientActivityId);
+  const previous = jobWriteTails.get(key)?.catch(() => undefined) ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>(resolve => { release = resolve; });
+  jobWriteTails.set(key, next);
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (jobWriteTails.get(key) === next) jobWriteTails.delete(key);
+  }
+}
+
 async function writeJob(job: ActivityFinalRefinementJob): Promise<void> {
-  const encoded = JSON.stringify(job);
-  const key = jobKey(job.ownerUserId, job.clientActivityId);
-  await storage.setItem(key, encoded, { strict: true });
-  if (await storage.getItem(key) !== encoded) throw new Error('activity_refinement_job_verify_failed');
+  await withJobMutation(job.ownerUserId, job.clientActivityId, async () => {
+    const existing = await readJob(job.ownerUserId, job.clientActivityId);
+    // Durable cancellation is monotonic. A stale async completion must never
+    // revive a deleted job after the cancel write wins.
+    if (existing?.status === 'cancelled' && job.status !== 'cancelled') return;
+    const encoded = JSON.stringify(job);
+    const key = jobKey(job.ownerUserId, job.clientActivityId);
+    await storage.setItem(key, encoded, { strict: true });
+    if (await storage.getItem(key) !== encoded) throw new Error('activity_refinement_job_verify_failed');
+  });
+}
+
+async function stoppedRunResult(
+  job: ActivityFinalRefinementJob,
+  signal: AbortSignal,
+): Promise<Exclude<ActivityFinalRefinementRunResult, 'complete' | 'absent'> | null> {
+  const current = await readJob(job.ownerUserId, job.clientActivityId);
+  if (signal.aborted || !current || current.status === 'cancelled') {
+    finishPendingPreparation(job.clientActivityId);
+    return 'cancelled';
+  }
+  const ownerCurrent = useAppStore.getState().isLoggedIn
+    && String(useAppStore.getState().user?.id ?? '') === job.ownerUserId;
+  if (ownerCurrent) return null;
+  await writeJob({
+    ...current,
+    status: 'queued',
+    outcome: 'owner-deferred',
+    updatedAt: Date.now(),
+  });
+  finishPendingPreparation(job.clientActivityId);
+  return (await readJob(job.ownerUserId, job.clientActivityId))?.status === 'cancelled'
+    ? 'cancelled'
+    : 'deferred-owner';
 }
 
 async function addToIndex(ownerUserId: string, clientActivityId: string): Promise<void> {
@@ -114,7 +166,12 @@ async function publishArtifactAndRelease(
   job: ActivityFinalRefinementJob,
   artifact: ActivityFinalArtifact,
   outcome: ActivityFinalRefinementJob['outcome'],
+  signal?: AbortSignal,
 ): Promise<ActivityFinalRefinementRunResult> {
+  if (signal) {
+    const stopped = await stoppedRunResult(job, signal);
+    if (stopped) return stopped;
+  }
   const pending = await readPendingReadonly(job.clientActivityId);
   if (!pending || pending.userId !== job.ownerUserId) {
     await writeJob({
@@ -148,6 +205,10 @@ async function publishArtifactAndRelease(
       algorithmVersion: artifact.algorithmVersion,
     },
   });
+  if (signal) {
+    const stopped = await stoppedRunResult(job, signal);
+    if (stopped) return stopped;
+  }
   if (pending.summary) {
     const existing = useSessionStore.getState().sessions.find(session => (
       session.clientActivityId === job.clientActivityId || session.id === job.clientActivityId
@@ -175,7 +236,15 @@ async function publishArtifactAndRelease(
       finalGeometryFingerprint: artifact.displayFingerprint,
     }, job.ownerUserId);
   }
+  if (signal) {
+    const stopped = await stoppedRunResult(job, signal);
+    if (stopped) return stopped;
+  }
   await markPendingUploadReady(job.clientActivityId);
+  if (signal) {
+    const stopped = await stoppedRunResult(job, signal);
+    if (stopped) return stopped;
+  }
   await writeJob({
     ...currentJob,
     status: 'complete',
@@ -202,7 +271,7 @@ async function publishArtifactAndRelease(
   return 'complete';
 }
 
-async function executeJob(job: ActivityFinalRefinementJob): Promise<ActivityFinalRefinementRunResult> {
+async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal): Promise<ActivityFinalRefinementRunResult> {
   const currentOwner = useAppStore.getState().user?.id;
   if (!useAppStore.getState().isLoggedIn || String(currentOwner ?? '') !== job.ownerUserId) {
     await writeJob({ ...job, status: 'queued', outcome: 'owner-deferred', updatedAt: Date.now() });
@@ -218,6 +287,8 @@ async function executeJob(job: ActivityFinalRefinementJob): Promise<ActivityFina
     lastError: null,
   };
   await writeJob(running);
+  const stoppedBeforeRead = await stoppedRunResult(running, signal);
+  if (stoppedBeforeRead) return stoppedBeforeRead;
   const pending = await readPendingReadonly(job.clientActivityId);
   const baseArtifact = await loadActivityFinalArtifact(job.ownerUserId, job.clientActivityId);
   if (!pending || pending.userId !== job.ownerUserId || !baseArtifact) {
@@ -236,18 +307,18 @@ async function executeJob(job: ActivityFinalRefinementJob): Promise<ActivityFina
   }
   if (baseArtifact.revision > job.expectedBaseRevision && baseArtifact.source !== 'base') {
     return publishArtifactAndRelease(running, baseArtifact,
-      baseArtifact.source === 'matched' ? 'enhanced' : 'limited');
+      baseArtifact.source === 'matched' ? 'enhanced' : 'limited', signal);
   }
 
   const canonical = pending.payload.route_points_canonical.map(fromPendingPoint);
-  if (canonical.length < 2) return publishArtifactAndRelease(running, baseArtifact, 'base-retained');
+  if (canonical.length < 2) return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
   const canonicalSegments = segmentTrace(canonical).segments;
   const baseSegments = segmentTrace(baseArtifact.points).segments.map(segment => segment.slice());
   if (baseSegments.length !== canonicalSegments.length) {
-    return publishArtifactAndRelease(running, baseArtifact, 'base-retained');
+    return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
   }
   const authority = await resolveMapboxPublicTokenAuthority();
-  if (!authority.token) return publishArtifactAndRelease(running, baseArtifact, 'base-retained');
+  if (!authority.token) return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
 
   const governor = createActivityMapboxRequestGovernor({
     ownerUserId: job.ownerUserId,
@@ -257,6 +328,7 @@ async function executeJob(job: ActivityFinalRefinementJob): Promise<ActivityFina
   });
   const deadlineMs = Date.now() + 10_000;
   let matchedSegments = 0;
+  let locallyImprovedSegments = 0;
   let hybrid = false;
   const priority = canonicalSegments
     .map((segment, segmentIndex) => ({ segment, segmentIndex }))
@@ -264,6 +336,9 @@ async function executeJob(job: ActivityFinalRefinementJob): Promise<ActivityFina
     .sort((left, right) => right.segment.length - left.segment.length || left.segmentIndex - right.segmentIndex);
 
   for (const { segment, segmentIndex } of priority) {
+    // Durable job authority is checked before every segment/network dispatch.
+    const stoppedBeforeDispatch = await stoppedRunResult(running, signal);
+    if (stoppedBeforeDispatch) return stoppedBeforeDispatch;
     const remainingMs = deadlineMs - Date.now();
     if (remainingMs < 250) break;
     const result = await reconstructPedestrianFinalRoute(segment, {
@@ -275,7 +350,10 @@ async function executeJob(job: ActivityFinalRefinementJob): Promise<ActivityFina
       requestGovernor: governor,
       requestPhase: 'final',
       requestReason: 'durable-final-qualified-unresolved-corridor',
+      signal,
     });
+    const stoppedAfterDispatch = await stoppedRunResult(running, signal);
+    if (stoppedAfterDispatch) return stoppedAfterDispatch;
     if (!result.ok || result.points.length < 2) continue;
     const coverage = analyzeTrustedEndpointCoverage(segment, result.points);
     if (!coverage.eligibleForAnchoring) continue;
@@ -283,7 +361,7 @@ async function executeJob(job: ActivityFinalRefinementJob): Promise<ActivityFina
     if (!evaluateMatchedGeometryQuality(segment, anchored).accepted) continue;
     const first = segment[0];
     const last = segment[segment.length - 1];
-    baseSegments[segmentIndex] = anchored.map((point, index) => ({
+    const candidateSegment = anchored.map((point, index) => ({
       lat: point.lat,
       lng: point.lng,
       alt: point.alt,
@@ -291,34 +369,60 @@ async function executeJob(job: ActivityFinalRefinementJob): Promise<ActivityFina
       segmentId: first.segmentId,
       ...(index === 0 && first.segmentStartReason ? { segmentStartReason: first.segmentStartReason } : {}),
     }));
-    if (result.stats.acceptedMatchedDistanceM > 0.5) matchedSegments += 1;
+    const networkMatched = result.stats.acceptedMatchedDistanceM > 0.5;
+    const localImprovement = !networkMatched
+      && result.stats.displayRefined
+      && result.stats.wholeRouteValidation.accepted
+      && activityGeometryFingerprint(candidateSegment) !== activityGeometryFingerprint(baseSegments[segmentIndex])
+      && candidateSegment.length < baseSegments[segmentIndex].length;
+    if (!networkMatched && !localImprovement) continue;
+    baseSegments[segmentIndex] = candidateSegment;
+    if (networkMatched) matchedSegments += 1;
+    else locallyImprovedSegments += 1;
     hybrid = hybrid || result.stats.canonicalDerivedSectionCount > 0;
   }
-  const latestJob = await readJob(job.ownerUserId, job.clientActivityId);
-  const ownerStillCurrent = useAppStore.getState().isLoggedIn
-    && String(useAppStore.getState().user?.id ?? '') === job.ownerUserId;
-  if (!latestJob || latestJob.status === 'cancelled' || !ownerStillCurrent) {
-    finishPendingPreparation(job.clientActivityId);
-    return latestJob?.status === 'cancelled' ? 'cancelled' : 'deferred-owner';
+  const stoppedAfterSegments = await stoppedRunResult(running, signal);
+  if (stoppedAfterSegments) return stoppedAfterSegments;
+  if (matchedSegments === 0 && locallyImprovedSegments === 0) {
+    return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
   }
-  if (matchedSegments === 0) return publishArtifactAndRelease(running, baseArtifact, 'base-retained');
 
   const eligibleCount = priority.length;
-  const source = hybrid || matchedSegments < eligibleCount ? 'hybrid' as const : 'matched' as const;
-  const committed = await commitActivityFinalArtifact({
-    ownerUserId: job.ownerUserId,
-    clientActivityId: job.clientActivityId,
-    canonicalPoints: canonical,
-    displayPoints: baseSegments.flat(),
-    source,
-    expectedRevision: baseArtifact.revision,
+  const source = matchedSegments === 0
+    ? 'limited' as const
+    : hybrid || matchedSegments < eligibleCount ? 'hybrid' as const : 'matched' as const;
+  const stoppedBeforeCommit = await stoppedRunResult(running, signal);
+  if (stoppedBeforeCommit) return stoppedBeforeCommit;
+  // Serialize the artifact commit with durable job cancellation. Whichever
+  // authority wins this boundary is observable: cancellation first skips the
+  // commit; an already-entered local commit completes before cancellation can
+  // become durable and is subsequently removed by owner-scoped deletion.
+  const committed = await withJobMutation(job.ownerUserId, job.clientActivityId, async () => {
+    const authority = await readJob(job.ownerUserId, job.clientActivityId);
+    const ownerCurrent = useAppStore.getState().isLoggedIn
+      && String(useAppStore.getState().user?.id ?? '') === job.ownerUserId;
+    if (signal.aborted || !authority || authority.status === 'cancelled' || !ownerCurrent) return null;
+    return commitActivityFinalArtifact({
+      ownerUserId: job.ownerUserId,
+      clientActivityId: job.clientActivityId,
+      canonicalPoints: canonical,
+      displayPoints: baseSegments.flat(),
+      source,
+      expectedRevision: baseArtifact.revision,
+    });
   });
+  if (!committed) {
+    const stopped = await stoppedRunResult(running, signal);
+    return stopped ?? 'cancelled';
+  }
   const acceptedArtifact = committed.artifact;
+  const stoppedAfterCommit = await stoppedRunResult(running, signal);
+  if (stoppedAfterCommit) return stoppedAfterCommit;
   if (acceptedArtifact.canonicalFingerprint !== job.canonicalFingerprint) {
     throw new Error('activity_refinement_revision_contaminated');
   }
   return publishArtifactAndRelease(running, acceptedArtifact,
-    acceptedArtifact.source === 'matched' ? 'enhanced' : 'limited');
+    acceptedArtifact.source === 'matched' ? 'enhanced' : 'limited', signal);
 }
 
 export async function enqueueActivityFinalRefinement(input: {
@@ -357,14 +461,20 @@ export async function resumeActivityFinalRefinement(
   const key = jobKey(ownerUserId, clientActivityId);
   const active = flights.get(key);
   if (active) return active;
+  const controller = new AbortController();
+  controllers.set(key, controller);
   const run = (async () => {
     const job = await readJob(ownerUserId, clientActivityId);
     if (!job) return 'absent' as const;
     if (job.status === 'cancelled') return 'cancelled' as const;
     if (job.status === 'complete') return 'complete' as const;
     try {
-      return await executeJob(job);
+      return await executeJob(job, controller.signal);
     } catch (error) {
+      if (controller.signal.aborted) {
+        finishPendingPreparation(clientActivityId);
+        return 'cancelled' as const;
+      }
       const artifact = await loadActivityFinalArtifact(ownerUserId, clientActivityId);
       const latest = await readJob(ownerUserId, clientActivityId);
       if (artifact && latest && latest.status !== 'cancelled') {
@@ -375,7 +485,7 @@ export async function resumeActivityFinalRefinement(
         });
         // Refinement is optional. A durable exception retains the validated
         // Base and releases upload rather than trapping the saved Activity.
-        return publishArtifactAndRelease(latest, artifact, 'base-retained');
+        return publishArtifactAndRelease(latest, artifact, 'base-retained', controller.signal);
       }
       finishPendingPreparation(clientActivityId);
       return 'cancelled' as const;
@@ -386,6 +496,7 @@ export async function resumeActivityFinalRefinement(
     return await run;
   } finally {
     if (flights.get(key) === run) flights.delete(key);
+    if (controllers.get(key) === controller) controllers.delete(key);
   }
 }
 
@@ -404,8 +515,10 @@ export async function cancelActivityFinalRefinement(
       lastError: null,
     });
   }
-  const active = flights.get(key);
-  if (active) await active.catch(() => undefined);
+  // Abort only after durable cancellation. In-flight fetches stop and bounded
+  // workers cannot dispatch a subsequent request. Cleanup does not wait on a
+  // potentially slow network promise.
+  controllers.get(key)?.abort();
   finishPendingPreparation(clientActivityId);
 }
 
@@ -419,6 +532,15 @@ export async function cancelAllActivityFinalRefinementsForOwner(ownerUserId: str
   await Promise.all(ids.map(clientActivityId => (
     cancelActivityFinalRefinement(ownerUserId, clientActivityId)
   )));
+  // Account/privacy deletion must not race a local publish that had already
+  // crossed an uninterruptible storage boundary. Network fetches have been
+  // aborted above; wait only for the now-cancelled owner flights to settle
+  // before the caller removes owner-scoped pending/artifact data.
+  const settling = ids.flatMap(clientActivityId => {
+    const flight = flights.get(jobKey(ownerUserId, clientActivityId));
+    return flight ? [flight] : [];
+  });
+  if (settling.length > 0) await Promise.allSettled(settling);
 }
 
 export async function readActivityFinalRefinementJob(

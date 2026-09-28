@@ -6,6 +6,8 @@ import {
 } from '../causalLiveRoute';
 import { haversineM } from '../../../utils/geo';
 import type { TrackPoint } from '../../../store/useSessionStore';
+import { performance } from 'node:perf_hooks';
+import os from 'node:os';
 
 const LAT = -41.28;
 const sample = (eastM: number, northM: number, index: number, segmentId = 'a') => ({
@@ -96,5 +98,29 @@ describe('causal Live route presentation', () => {
         expect(travelled).toBeLessThanOrEqual(LIVE_MUTABLE_TAIL_MAX_DISTANCE_M + 0.01);
       }
     }
+  });
+
+  test('replays a 20,000-point recovery history with bounded-tail scaling', () => {
+    const elapsed: Record<number, number> = {};
+    for (const count of [1_000, 5_000, 20_000]) {
+      const history = Array.from({ length: count }, (_, index) => sample(
+        index * 1.1,
+        Math.sin(index / 31) * 2.5,
+        index,
+      ));
+      const startedAt = performance.now();
+      const live = buildCausalLiveRoute(history);
+      elapsed[count] = performance.now() - startedAt;
+      expect(live[0].t).toBe(history[0].t);
+      expect(live.at(-1)?.t).toBe(history.at(-1)?.t);
+    }
+    // A generous ratio catches the former repeated full-route copy/filter
+    // shape without turning normal shared-runner jitter into a false failure.
+    expect(elapsed[20_000]).toBeLessThan(Math.max(2_000, elapsed[5_000] * 8));
+    process.stderr.write(`causal-live-recovery-profile=${JSON.stringify({
+      machine: `${os.platform()} ${os.arch()} ${os.cpus()[0]?.model ?? 'unknown CPU'}`,
+      node: process.version,
+      elapsedMs: elapsed,
+    })}\n`);
   });
 });

@@ -37,7 +37,12 @@ jest.mock('../activityRegistry', () => ({
   getUnfinishedActivity: jest.fn(),
   registerUnfinishedActivity: jest.fn(),
   tombstoneActivity: jest.fn(async () => { mockOrder.push('tombstone'); }),
-  updateUnfinishedActivity: jest.fn(),
+  updateUnfinishedActivity: jest.fn(async () => true),
+}));
+jest.mock('../activityMemoryProjector', () => ({
+  scheduleActivityMemoryProjection: jest.fn(async () => { mockOrder.push('memory-intent'); }),
+  reconcileActivityMemoryProjection: jest.fn(async () => { mockOrder.push('memory-reconcile'); return true; }),
+  cancelActivityMemoryProjection: jest.fn(async () => { mockOrder.push('memory-cancel'); }),
 }));
 jest.mock('../../memory/services/recordMemoryEvidence', () => ({
   recordMemoryEvidence: jest.fn(async () => {
@@ -50,11 +55,13 @@ jest.mock('../../../services/pendingSyncStore', () => ({
   removePending: jest.fn(async () => { mockOrder.push('pending-delete'); }),
 }));
 
-import { discardRecoverableActivity, type RecoverableActivity } from '../activityRecovery';
+import { discardRecoverableActivity, saveRecoverableActivity, type RecoverableActivity } from '../activityRecovery';
 const { recordMemoryEvidence: mockRecordMemoryEvidence } = require('../../memory/services/recordMemoryEvidence');
 const { tombstoneActivity: mockTombstoneActivity } = require('../activityRegistry');
 const { getActivityRegistry: mockGetActivityRegistry } = require('../activityRegistry');
+const { getUnfinishedActivity: mockGetUnfinishedActivity } = require('../activityRegistry');
 const { discardActiveHike: mockDiscardActiveHike } = require('../../../services/hikeTrackWriter');
+const { useTrackingStore: mockTrackingStore } = require('../../../store/useTrackingStore');
 
 const activity: RecoverableActivity = {
   sessionId: 'activity-a',
@@ -88,24 +95,33 @@ describe('Activity journal as crash-recoverable Memory intent', () => {
       completed: [],
       tombstones: [],
     });
+    mockGetUnfinishedActivity.mockResolvedValue({
+      clientActivityId: activity.clientActivityId,
+      userId: activity.userId,
+      liveOwnerGeneration: activity.ownerGeneration,
+    });
+    mockTrackingStore.getState.mockReturnValue({
+      stopTracking: jest.fn(async () => ({
+        status: 'saved-local',
+        localCommit: 'committed',
+        clientActivityId: activity.clientActivityId,
+      })),
+    });
   });
 
   test('accepted headless point survives process death then Activity discard', async () => {
     await discardRecoverableActivity(activity);
-    expect(mockRecordMemoryEvidence).toHaveBeenCalledWith(expect.objectContaining({
-      lat: -41,
-      lng: 174,
-      atMs: 1_000,
-      ownerUserId: 'account-a',
-      source: 'activity_real',
-    }));
-    expect(mockOrder).toEqual(['fence', 'memory', 'memory-flush', 'tombstone', 'pending-delete', 'journal-delete']);
+    expect(mockOrder).toEqual([
+      'fence', 'memory-intent', 'memory-reconcile', 'tombstone', 'pending-delete',
+      'memory-cancel', 'journal-delete',
+    ]);
     expect(mockRouteSetState).toHaveBeenCalledWith({ activityRouteReference: null });
   });
 
   test('Memory persistence failure preserves the recoverable Activity journal', async () => {
-    mockRecordMemoryEvidence.mockRejectedValueOnce(new Error('disk-full'));
-    await expect(discardRecoverableActivity(activity)).rejects.toThrow('disk-full');
+    const projector = require('../activityMemoryProjector');
+    projector.reconcileActivityMemoryProjection.mockResolvedValueOnce(false);
+    await expect(discardRecoverableActivity(activity)).rejects.toThrow('activity_discard_memory_projection_incomplete');
     expect(mockTombstoneActivity).not.toHaveBeenCalled();
     expect(mockDiscardActiveHike).not.toHaveBeenCalled();
   });
@@ -121,6 +137,34 @@ describe('Activity journal as crash-recoverable Memory intent', () => {
     expect(mockOrder).toEqual([]);
     expect(mockTombstoneActivity).not.toHaveBeenCalled();
     expect(mockDiscardActiveHike).not.toHaveBeenCalled();
+  });
+
+  test.each(['hiking', 'running'] as const)('%s recovery Save clears only an exact committed Finish result', async (activityMode) => {
+    await expect(saveRecoverableActivity({ ...activity, activityMode })).resolves.toBe(true);
+    const stopTracking = mockTrackingStore.getState().stopTracking as jest.Mock;
+    stopTracking.mockResolvedValueOnce({
+      status: 'recoverable-failure',
+      localCommit: 'not-committed',
+      clientActivityId: activity.clientActivityId,
+      reason: 'local-commit-failed',
+    });
+    await expect(saveRecoverableActivity({ ...activity, activityMode })).resolves.toBe(false);
+    stopTracking.mockRejectedValueOnce(new Error('finish-threw'));
+    await expect(saveRecoverableActivity({ ...activity, activityMode })).rejects.toThrow('finish-threw');
+  });
+
+  test.each(['hiking', 'running'] as const)('%s recovery Save is single-flight under duplicate taps', async (activityMode) => {
+    let release!: (value: any) => void;
+    const stopTracking = jest.fn(() => new Promise(resolve => { release = resolve; }));
+    mockTrackingStore.getState.mockReturnValue({ stopTracking });
+    const candidate = { ...activity, activityMode };
+    const first = saveRecoverableActivity(candidate);
+    const second = saveRecoverableActivity(candidate);
+    for (let turn = 0; turn < 40 && !release; turn += 1) await Promise.resolve();
+    expect(release).toBeDefined();
+    release({ status: 'saved-local', localCommit: 'committed', clientActivityId: activity.clientActivityId });
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(stopTracking).toHaveBeenCalledTimes(1);
   });
 });
 jest.mock('@react-native-async-storage/async-storage', () =>

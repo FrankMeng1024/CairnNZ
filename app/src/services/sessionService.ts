@@ -54,7 +54,9 @@ interface TrackPointLike {
   acc?: number | null;
   v_acc?: number | null;
   speed_mps?: number | null;
+  speed_accuracy_mps?: number | null;
   course_deg?: number | null;
+  course_accuracy_deg?: number | null;
   raw_ordinal?: number;
   segment_id?: string;
   segment_start_reason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
@@ -80,7 +82,9 @@ export function normalizeActivityPointTimestamps<T extends {
   acc?: number | null;
   v_acc?: number | null;
   speed_mps?: number | null;
+  speed_accuracy_mps?: number | null;
   course_deg?: number | null;
+  course_accuracy_deg?: number | null;
 }>(points: T[]): T[] {
   return points.map(point => ({
     ...point,
@@ -91,8 +95,12 @@ export function normalizeActivityPointTimestamps<T extends {
       ? {} : { v_acc: normalizeUnavailableSensorValue(point.v_acc) }),
     ...(!Object.prototype.hasOwnProperty.call(point, 'speed_mps')
       ? {} : { speed_mps: normalizeUnavailableSensorValue(point.speed_mps) }),
+    ...(!Object.prototype.hasOwnProperty.call(point, 'speed_accuracy_mps')
+      ? {} : { speed_accuracy_mps: normalizeUnavailableSensorValue(point.speed_accuracy_mps) }),
     ...(!Object.prototype.hasOwnProperty.call(point, 'course_deg')
       ? {} : { course_deg: normalizeUnavailableSensorValue(point.course_deg) }),
+    ...(!Object.prototype.hasOwnProperty.call(point, 'course_accuracy_deg')
+      ? {} : { course_accuracy_deg: normalizeUnavailableSensorValue(point.course_accuracy_deg) }),
   } as T));
 }
 

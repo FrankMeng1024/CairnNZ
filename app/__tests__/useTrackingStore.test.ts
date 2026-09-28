@@ -23,6 +23,8 @@ const mockSecureStore = {
   setItemAsync: jest.fn(async () => undefined),
 };
 let mockAppStateChangeListener: ((state: string) => void) | null = null;
+const mockAsyncStorageValues = new Map<string, string>();
+const mockHikeJournalPoints: any[] = [];
 
 jest.mock('expo-location', () => ({ __esModule: true, ...mockLocation, default: mockLocation }));
 jest.mock('expo-secure-store', () => ({ __esModule: true, ...mockSecureStore, default: mockSecureStore }));
@@ -43,9 +45,11 @@ jest.mock('react-native', () => ({
   },
 }));
 jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => {}),
-  removeItem: jest.fn(async () => {}),
+  getItem: jest.fn(async (key: string) => mockAsyncStorageValues.get(key) ?? null),
+  setItem: jest.fn(async (key: string, value: string) => { mockAsyncStorageValues.set(key, value); }),
+  removeItem: jest.fn(async (key: string) => { mockAsyncStorageValues.delete(key); }),
+  getAllKeys: jest.fn(async () => [...mockAsyncStorageValues.keys()]),
+  multiRemove: jest.fn(async (keys: string[]) => { keys.forEach(key => mockAsyncStorageValues.delete(key)); }),
 }));
 jest.mock('../src/services/debugLogger', () => ({
   debugLogger: {
@@ -92,7 +96,7 @@ jest.mock('../src/services/backgroundLocationTask', () => ({
   persistBackgroundContext: jest.fn(async () => true),
 }));
 jest.mock('../src/services/hikeTrackWriter', () => ({
-  appendHikePoint: jest.fn(async () => {}),
+  appendHikePoint: jest.fn(async (point: any) => { mockHikeJournalPoints.push(point); }),
   startHikeTrack: jest.fn(async () => {}),
   updateHikeMeta: jest.fn(async () => {}),
   updateHikeMetaStrict: jest.fn(async () => {}),
@@ -103,6 +107,7 @@ jest.mock('../src/services/hikeTrackWriter', () => ({
   discardActiveHike: jest.fn(async () => {}),
   readActiveHikeTail: jest.fn(async () => []),
   truncateActiveHikeTrack: jest.fn(async () => {}),
+  readHikeTrackForProjection: jest.fn(async () => [...mockHikeJournalPoints]),
 }));
 jest.mock('../src/services/pendingSyncStore', () => ({
   beginPendingPreparation: jest.fn(),
@@ -156,6 +161,8 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
   beforeEach(async () => {
     await waitForAllActivityMemoryProjections();
     resetActivityMemoryProjectionForTests();
+    mockAsyncStorageValues.clear();
+    mockHikeJournalPoints.length = 0;
     useTrackingStore.setState(useTrackingStore.getInitialState(), true);
     useTrackingStore.setState({
       status: 'tracking',
@@ -531,6 +538,8 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAsyncStorageValues.clear();
+    mockHikeJournalPoints.length = 0;
     mockAppStateChangeListener = null;
     require('react-native').AppState.currentState = 'active';
     require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({ user: { id: 'tracking-test-user' } });

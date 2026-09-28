@@ -548,3 +548,38 @@ describe('bounded Directions fallback contract', () => {
     expect(result.stats.sections.some(section => section.networkSource === 'walking-directions')).toBe(true);
   });
 });
+
+describe('durable cancellation dispatch boundary', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => { global.fetch = originalFetch; });
+
+  test('abort stops every active request and bounded workers dispatch no later window', async () => {
+    const canonical = line(0, 2_000, 0, 260);
+    let invocations = 0;
+    global.fetch = jest.fn((_url: string, init?: RequestInit) => {
+      invocations += 1;
+      return new Promise((_resolve, reject) => {
+        const fail = () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        };
+        if (init?.signal?.aborted) fail();
+        else init?.signal?.addEventListener('abort', fail, { once: true });
+      });
+    }) as any;
+    const controller = new AbortController();
+    const running = reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: 'pk.test',
+      concurrency: 2,
+      directionsFallback: false,
+      signal: controller.signal,
+    });
+    for (let turn = 0; turn < 20 && invocations < 2; turn += 1) await Promise.resolve();
+    expect(invocations).toBe(2);
+    controller.abort();
+    await running;
+    await Promise.resolve();
+    expect(invocations).toBe(2);
+  });
+});

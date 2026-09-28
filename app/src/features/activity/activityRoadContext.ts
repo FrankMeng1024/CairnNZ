@@ -352,7 +352,7 @@ function projectToSegment(
   point: { lat: number; lng: number },
   start: [number, number],
   end: [number, number],
-): { lat: number; lng: number; distanceM: number } {
+): { lat: number; lng: number; distanceM: number; bearingDeg: number } {
   const lat0 = point.lat * Math.PI / 180;
   const xScale = Math.max(0.01, Math.cos(lat0));
   const ax = (start[0] - point.lng) * xScale;
@@ -369,14 +369,18 @@ function projectToSegment(
     lng: point.lng + (ax + ratio * dx) / xScale,
     lat: point.lat + ay + ratio * dy,
   };
-  return { ...projected, distanceM: haversineM(point, projected) };
+  const bearingDeg = (Math.atan2(
+    (end[0] - start[0]) * xScale,
+    end[1] - start[1],
+  ) * 180 / Math.PI + 360) % 360;
+  return { ...projected, distanceM: haversineM(point, projected), bearingDeg };
 }
 
 function nearestOnCorridor(
   point: { lat: number; lng: number },
   corridor: ActivityRoadCorridor,
-): { lat: number; lng: number; distanceM: number } | null {
-  let nearest: { lat: number; lng: number; distanceM: number } | null = null;
+): { lat: number; lng: number; distanceM: number; bearingDeg: number } | null {
+  let nearest: { lat: number; lng: number; distanceM: number; bearingDeg: number } | null = null;
   for (let index = 1; index < corridor.coordinates.length; index += 1) {
     const projected = projectToSegment(point, corridor.coordinates[index - 1], corridor.coordinates[index]);
     if (!nearest || projected.distanceM < nearest.distanceM) nearest = projected;
@@ -384,7 +388,31 @@ function nearestOnCorridor(
   return nearest;
 }
 
-export function deriveRoadAwareLiveTrack<T extends { lat: number; lng: number; t?: number; segmentId?: string }>(
+function bearingDegrees(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const lat0 = ((a.lat + b.lat) / 2) * Math.PI / 180;
+  return (Math.atan2((b.lng - a.lng) * Math.cos(lat0), b.lat - a.lat) * 180 / Math.PI + 360) % 360;
+}
+
+function headingDelta(a: number, b: number): number {
+  const direct = Math.abs(((b - a + 540) % 360) - 180);
+  // A rendered line has no travel direction; forward and reverse both agree.
+  return Math.min(direct, Math.abs(180 - direct));
+}
+
+function supportedOffsetM(point: { accuracy?: number | null }): number {
+  const accuracy = point.accuracy;
+  if (accuracy == null || !Number.isFinite(accuracy) || accuracy < 0) return 2;
+  if (accuracy <= 7) return Math.max(1.2, accuracy * 0.35);
+  return Math.min(MAX_LIVE_PRESENTATION_OFFSET_M, Math.max(2.5, accuracy * 0.45));
+}
+
+export function deriveRoadAwareLiveTrack<T extends {
+  lat: number;
+  lng: number;
+  t?: number;
+  segmentId?: string;
+  accuracy?: number | null;
+}>(
   canonicalPresentation: readonly T[],
   context: ActivityRoadContext | null,
 ): T[] {
@@ -405,14 +433,38 @@ export function deriveRoadAwareLiveTrack<T extends { lat: number; lng: number; t
 
   let chosen: ActivityRoadCorridor | null = null;
   let tailProjection: ReturnType<typeof nearestOnCorridor> = null;
+  let secondDistanceM = Number.POSITIVE_INFINITY;
   for (const corridor of context.corridors) {
     const projected = nearestOnCorridor(tail, corridor);
     if (projected && (!tailProjection || projected.distanceM < tailProjection.distanceM)) {
+      secondDistanceM = tailProjection?.distanceM ?? secondDistanceM;
       chosen = corridor;
       tailProjection = projected;
+    } else if (projected) {
+      secondDistanceM = Math.min(secondDistanceM, projected.distanceM);
     }
   }
-  if (!chosen || !tailProjection || tailProjection.distanceM > context.uncertainty.maxPresentationOffsetM) {
+  if (!chosen || !tailProjection
+    || tailProjection.distanceM > Math.min(context.uncertainty.maxPresentationOffsetM, supportedOffsetM(tail))) {
+    return canonicalPresentation as T[];
+  }
+  // Two nearby parallel candidates are map context, not proof of which path
+  // was walked. Retain the causal canonical tail under corridor ambiguity.
+  if (secondDistanceM <= tailProjection.distanceM + 1.5) return canonicalPresentation as T[];
+
+  const support = canonicalPresentation
+    .slice(-4)
+    .filter(point => (point.segmentId ?? null) === (tail.segmentId ?? null));
+  if (support.length < 3) return canonicalPresentation as T[];
+  const supportProjections = support.map(point => nearestOnCorridor(point, chosen!));
+  if (supportProjections.some((projected, index) => !projected
+    || projected.distanceM > Math.min(
+      context.uncertainty.maxPresentationOffsetM,
+      supportedOffsetM(support[index]),
+    ))) return canonicalPresentation as T[];
+  const rawHeading = bearingDegrees(support[0], support[support.length - 1]);
+  const corridorHeadings = supportProjections.map(projected => projected!.bearingDeg);
+  if (corridorHeadings.some(value => headingDelta(rawHeading, value) > 30)) {
     return canonicalPresentation as T[];
   }
 
@@ -420,7 +472,10 @@ export function deriveRoadAwareLiveTrack<T extends { lat: number; lng: number; t
   const prior = canonicalPresentation[priorIndex];
   if ((prior.segmentId ?? null) !== (tail.segmentId ?? null)) return canonicalPresentation as T[];
   const priorProjection = nearestOnCorridor(prior, chosen);
-  if (!priorProjection || priorProjection.distanceM > context.uncertainty.maxPresentationOffsetM) {
+  if (!priorProjection || priorProjection.distanceM > Math.min(
+    context.uncertainty.maxPresentationOffsetM,
+    supportedOffsetM(prior),
+  )) {
     return canonicalPresentation as T[];
   }
   const rawStepM = haversineM(prior, tail);

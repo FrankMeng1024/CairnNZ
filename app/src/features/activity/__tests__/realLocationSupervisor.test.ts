@@ -108,4 +108,57 @@ describe('RealLocationSupervisor', () => {
       lastFreshObservationReceiptMs: 100,
     });
   });
+
+  test('terminal failure fences every delayed callback and backoff resets only after fresh recovery evidence', async () => {
+    jest.useFakeTimers();
+    const callbacks: Array<(value: Observation, at: number) => void> = [];
+    const terminals: Array<(error: unknown) => void> = [];
+    const supervisor = new RealLocationSupervisor<Observation, Options>({
+      retryDelaysMs: [10, 20],
+      startStream: jest.fn(async (_options, observation, terminal) => {
+        callbacks.push(observation);
+        terminals.push(terminal);
+        return { remove: jest.fn() };
+      }),
+    });
+    const target = consumer();
+    await supervisor.setConsumer(target);
+    terminals[0](new Error('generation-one-ended'));
+    callbacks[0]({ id: 'late-after-terminal' }, 1);
+    expect(target.onObservation).not.toHaveBeenCalled();
+    expect(supervisor.snapshot().retryAttempt).toBe(1);
+    await jest.advanceTimersByTimeAsync(10);
+    expect(supervisor.snapshot()).toMatchObject({ streamActive: true, retryAttempt: 1 });
+    callbacks[1]({ id: 'fresh-recovery' }, 2);
+    expect(target.onObservation).toHaveBeenCalledTimes(1);
+    expect(supervisor.snapshot()).toMatchObject({ retryAttempt: 0, terminalError: null });
+    await supervisor.clear();
+    jest.useRealTimers();
+  });
+
+  test('a dead silent handle restarts within the watchdog bound while stationary callbacks keep it alive', async () => {
+    jest.useFakeTimers();
+    const callbacks: Array<(value: Observation, at: number) => void> = [];
+    const startStream = jest.fn(async (_options, observation) => {
+      callbacks.push(observation);
+      return { remove: jest.fn() };
+    });
+    const supervisor = new RealLocationSupervisor<Observation, Options>({
+      startStream,
+      retryDelaysMs: [10],
+      startupSilenceMs: 100,
+      callbackSilenceMs: 200,
+    });
+    await supervisor.setConsumer(consumer());
+    await jest.advanceTimersByTimeAsync(90);
+    callbacks[0]({ id: 'stationary-receipt' }, 1);
+    await jest.advanceTimersByTimeAsync(199);
+    expect(startStream).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(supervisor.snapshot()).toMatchObject({ streamActive: false, retryAttempt: 1 });
+    await jest.advanceTimersByTimeAsync(10);
+    expect(startStream).toHaveBeenCalledTimes(2);
+    await supervisor.clear();
+    jest.useRealTimers();
+  });
 });

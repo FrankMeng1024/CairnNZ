@@ -220,6 +220,8 @@ function AppRoot() {
         const current = useAppStore.getState();
         if (!current.isLoggedIn || String(current.user?.id ?? '') !== userId) return;
         attachMemorySync(userId);
+        const { resumeActivityMemoryProjectionsForOwner } = await import('./src/features/activity/activityMemoryProjector');
+        await resumeActivityMemoryProjectionsForOwner(userId);
         crashLogger.breadcrumb(`o41:mem_authority_attached user_id=${userId}`);
         void pullMemoryFromServer(userId, { reconcile: true });
         crashLogger.breadcrumb(`o41:mem_reconcile_started user_id=${userId}`);

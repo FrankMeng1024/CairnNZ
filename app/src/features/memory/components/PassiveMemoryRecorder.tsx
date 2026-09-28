@@ -130,7 +130,10 @@ export function PassiveMemoryRecorder() {
           ?? (persisted.continuityState.liveCoordinate
             ? {
                 ...persisted.continuityState.liveCoordinate,
-                t: persisted.latestObservationTimestampMs ?? Date.now(),
+                // latestObservationTimestampMs includes rejected raw input;
+                // only trusted/refined evidence may timestamp this position.
+                t: persisted.continuityState.lastTrusted?.t
+                  ?? persisted.acceptAfterMs,
               }
             : null);
         if (qualified) {
@@ -198,7 +201,8 @@ export function PassiveMemoryRecorder() {
         acceptAfterMs: Date.now(),
         continuityState: continuityRef.current,
         rawOrdinal: rawOrdinalRef.current,
-      });
+      }).catch(() => null);
+      if (!context) return;
       if (!ownerIsCurrent() || !passiveMayProduce() || backgroundEpochRef.current !== epoch) {
         await stopPassiveMemoryBackgroundUpdates(epoch);
         return;

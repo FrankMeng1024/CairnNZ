@@ -121,4 +121,20 @@ describe('activity-wide Mapbox request governor', () => {
       phase: 'final', kind: 'walking-directions', fingerprint: 'directions-c', reason: 'fallback-over-cap',
     })).resolves.toMatchObject({ allowed: false, reason: 'budget' });
   });
+
+  test('a permit released before dispatch does not count as an invocation', async () => {
+    const governor = createActivityMapboxRequestGovernor({
+      ownerUserId: 'owner-cancel', clientActivityId: 'activity-cancel', startedAtMs: 0, recordedDurationMs: 60_000,
+    });
+    const permit = await governor.authorize({
+      phase: 'final', kind: 'map-matching', fingerprint: 'cancel-before-fetch', reason: 'cancellation-race',
+    });
+    expect(permit.allowed).toBe(true);
+    await governor.releaseUndispatched(permit.receiptId!);
+    await expect(governor.snapshot()).resolves.toMatchObject({
+      finalMatchingInvocations: 0,
+      failedInvocations: 0,
+      abortedInvocations: 0,
+    });
+  });
 });

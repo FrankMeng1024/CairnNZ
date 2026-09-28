@@ -272,6 +272,20 @@ export function createActivityMapboxRequestGovernor(args: {
       });
     },
 
+    /** Release a permit when cancellation wins before fetch dispatch. It is
+     * not an invocation and therefore must not consume privacy/cost budget. */
+    async releaseUndispatched(receiptId: string): Promise<void> {
+      const receipt = activeReceipts.get(receiptId);
+      if (!receipt || receipt.stateKey !== key) return;
+      activeReceipts.delete(receiptId);
+      activeByActivity.set(key, Math.max(0, (activeByActivity.get(key) ?? 1) - 1));
+      await mutate(key, async () => {
+        const state = await load(args);
+        state.requests = state.requests.filter(item => item.receiptId !== receiptId);
+        await storage.setItem(key, JSON.stringify(state), { strict: true });
+      });
+    },
+
     async snapshot(): Promise<ActivityMapboxUsageSnapshot> {
       return usage(await load(args));
     },

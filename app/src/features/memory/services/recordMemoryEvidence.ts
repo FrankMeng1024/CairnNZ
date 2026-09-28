@@ -60,6 +60,9 @@ export function recordMemoryEvidence(args: {
    * revalidated the durable Activity lease under its ownership mutex.
    */
   ownerAuthority?: 'durable_activity_lease' | 'durable_passive_lease';
+  /** Exact passive lifecycle epoch. Revalidated at the durable append boundary
+   * so an OFF/logout/new epoch or Activity preemption cannot commit late. */
+  ownerAuthorityEpoch?: string;
 }): Promise<{
   committed: boolean;
   deduplicated: boolean;
@@ -101,6 +104,23 @@ export function recordMemoryEvidence(args: {
       throw new Error('memory_owner_changed');
     }
     if (durableActivityLease || durablePassiveLease) {
+      if (durablePassiveLease) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const [activityActive, passiveActive, passiveRaw] = await Promise.all([
+          AsyncStorage.getItem('cairn_bg_hike_active'),
+          AsyncStorage.getItem('cairn:passive-memory:active:v1'),
+          AsyncStorage.getItem('cairn:passive-memory:context:v1'),
+        ]);
+        let passiveContext: { ownerUserId?: string; epoch?: string } | null = null;
+        try { passiveContext = passiveRaw ? JSON.parse(passiveRaw) : null; } catch {}
+        if (activityActive === '1'
+          || passiveActive !== '1'
+          || passiveContext?.ownerUserId !== ownerUserId
+          || passiveContext?.epoch !== args.ownerAuthorityEpoch) {
+          throw new Error('memory_passive_authority_changed');
+        }
+      }
       // TaskManager may execute in a separate JS runtime. It owns only the
       // immutable evidence journal; hydrating/writing the shared AsyncStorage
       // snapshot here can race an account switch or privacy reset in the UI

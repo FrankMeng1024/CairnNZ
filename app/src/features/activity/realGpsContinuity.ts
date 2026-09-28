@@ -2,19 +2,19 @@ import type { ActivityMode } from '../../store/useSessionStore';
 import { haversineM } from '../../utils/geo';
 
 export const REAL_GPS_CONTINUITY_VERSION = 3;
-// A normal energy-saving provider may deliver usable observations 8–15 s
-// apart. Candidate support therefore survives one such interval plus bridge
-// jitter. Receipt-time bounds still prevent an old candidate living forever,
-// while observation timestamps continue to govern physical plausibility.
-export const REAL_GPS_CANDIDATE_MAX_AGE_MS = 20_000;
-export const REAL_GPS_REACQUISITION_CANDIDATE_MAX_AGE_MS = 45_000;
+// Kept as public diagnostic bounds. Candidate resolution no longer expires
+// from first-fix wall time: energy-saving providers legitimately deliver
+// sparse or batched observations. Physical observation gaps and coherent
+// positional progress below are authoritative instead.
+export const REAL_GPS_CANDIDATE_MAX_AGE_MS = 120_000;
+export const REAL_GPS_REACQUISITION_CANDIDATE_MAX_AGE_MS = 180_000;
 
 const MAX_HORIZONTAL_ACCURACY_M = 25;
 const MAX_RECENT_OBSERVATIONS = 6;
-const MAX_RECENT_AGE_MS = 45_000;
+const MAX_RECENT_AGE_MS = 300_000;
 const MAX_CANDIDATE_OBSERVATIONS = 4;
 const MIN_REACQUISITION_CANDIDATE_INTERVAL_MS = 20_000;
-const MAX_ESTABLISHED_EDGE_AGE_MS = 20_000;
+const MAX_ESTABLISHED_EDGE_AGE_MS = 120_000;
 const MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS = 120_000;
 const CANDIDATE_MIN_TURN_DEG = 82;
 const CANDIDATE_MIN_STEP_M = 18;
@@ -560,6 +560,9 @@ function createPending(
 
 function hasReliableReportedSpeed(point: RealGpsObservation): boolean {
   if (point.speed == null || !Number.isFinite(point.speed) || point.speed < 0) return false;
+  // Providers that omit scalar uncertainty still expose a useful weak motion
+  // signal. Explicitly broad uncertainty is never authoritative; positional
+  // coherence remains independently sufficient for sparse recovery.
   return point.speedAccuracy == null
     || !Number.isFinite(point.speedAccuracy)
     || point.speedAccuracy <= 0.8;
@@ -616,14 +619,16 @@ function stationaryCandidateShowsRealProgress(
   // Two larger, mutually consistent fixes are enough. Metre-cadence or slow
   // motion gets one more observation so cumulative evidence—not one giant
   // escape step—establishes traversal.
+  const uncertaintyScaleM = Math.max(...anchored.map(point => normalizedAccuracy(point.accuracy)));
   const strongTwoFixProgress = evidence.length >= 2
-    && evidence[0].t - base.t <= REAL_GPS_CANDIDATE_MAX_AGE_MS
-    && anchoredFeatures.netM >= 4
+    && anchoredFeatures.durationMs <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
+    && anchoredFeatures.netM >= Math.max(4, uncertaintyScaleM * 0.55)
     && anchoredFeatures.progressRatio >= 0.8
     && anchoredFeatures.directionVariabilityDeg <= 35;
   const metreCadenceProgress = evidence.length >= 3
     && localFeatures.durationMs >= 1_500
-    && anchoredFeatures.netM >= 2.2
+    && anchoredFeatures.durationMs <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
+    && anchoredFeatures.netM >= Math.max(2.2, uncertaintyScaleM * 0.45)
     && anchoredFeatures.directionVariabilityDeg <= 50;
   const independentSpeedSupport = anchoredFeatures.reportedMovingFraction >= 0.34
     && evidence.length >= 2
@@ -735,9 +740,9 @@ function classifyWithoutPending(
   }
 
   const currentEdgeSupportsMotion = (diagnostics.dtFromTrustedMs ?? 0) > 0
-    && (diagnostics.dtFromTrustedMs ?? 0) <= 5_000
+    && (diagnostics.dtFromTrustedMs ?? 0) <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
     && (diagnostics.displacementFromTrustedM ?? 0) >= 0.55
-    && (diagnostics.impliedSpeedMps ?? 0) >= 0.35
+    && (diagnostics.impliedSpeedMps ?? 0) >= 0.2
     && (diagnostics.impliedSpeedMps ?? 0) <= MODE_MAX_SPEED_MPS[mode] + 1;
   if (state.motionState === 'moving' && currentEdgeSupportsMotion) {
     return {
@@ -810,7 +815,13 @@ export function evaluateRealGpsObservation(
 
   const base = observedState.lastTrusted;
   const delayMs = Math.max(0, current.t - pending.observation.t);
-  if (!base || delayMs > realGpsCandidateMaxAgeMs(pending)) {
+  const priorCandidateObservation = pending.observations[pending.observations.length - 1]
+    ?? pending.observation;
+  const observationGapMs = Math.max(0, current.t - priorCandidateObservation.t);
+  // Candidate age from its first fix is not a liveness clock. Sparse/batched
+  // providers can establish the same physical trajectory over a longer wall
+  // interval. Only a gap with no observation continuity expires the episode.
+  if (!base || observationGapMs > realGpsCandidateMaxAgeMs(pending)) {
     const cleared = { ...observedState, pending: null, motionState: 'uncertain' as const };
     // O49 real `snap` incident: after a stationary-jitter Candidate expires,
     // an otherwise unsupported scalar speed must not create one final V edge.
@@ -889,8 +900,14 @@ export function evaluateRealGpsObservation(
   const positionTail = evidence.slice(-3);
   const positionTailFeatures = featuresFor(positionTail);
   const coherentThreeFixPositionTail = positionTail.length >= 3
-    && positionTailFeatures.durationMs <= 10_000
-    && positionTailFeatures.netM >= 2
+    && positionTailFeatures.durationMs <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
+    && positionTailFeatures.medianStepSpeedMps >= 0.1
+    && positionTailFeatures.netM >= Math.max(
+      2,
+      positionTailFeatures.medianAccuracyM >= 10
+        ? positionTailFeatures.medianAccuracyM * 0.6
+        : 0,
+    )
     && positionTailFeatures.progressRatio >= 0.78
     && positionTailFeatures.directionVariabilityDeg <= 45
     && absoluteEdgesPlausible(positionTail, mode);

@@ -46,4 +46,23 @@ describe('passive Memory continuity', () => {
     }
     expect(accepted.length).toBeGreaterThanOrEqual(3);
   });
+
+  test('a rejected raw fix cannot relabel the old trusted coordinate with its newer timestamp', () => {
+    const first = reducePassiveMemoryObservation(
+      createPassiveMemoryContinuityState(),
+      observation(0, 1_000),
+      1_100,
+    );
+    const rejected = reducePassiveMemoryObservation(
+      first.state,
+      observation(500, 60_000, { accuracy: 80 }),
+      60_100,
+    );
+    expect(rejected.decision.kind).toBe('REJECT');
+    expect(rejected.qualifiedPosition).toMatchObject({
+      lat: first.accepted[0].lat,
+      lng: first.accepted[0].lng,
+      t: 1_000,
+    });
+  });
 });

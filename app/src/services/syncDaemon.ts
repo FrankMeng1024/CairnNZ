@@ -44,6 +44,7 @@ import {
 import { deleteAcknowledgedHikeTrackArtifacts } from './hikeTrackWriter';
 import networkMonitor from './networkMonitor';
 import { toServerPoint } from '../features/activity/activityContracts';
+import { reconcileActivityMemoryProjection } from '../features/activity/activityMemoryProjector';
 
 let isDraining = false;
 let pendingSignal = false;
@@ -431,6 +432,11 @@ export async function cleanupAcknowledgedActivityArtifacts(
   );
   try {
     await removePending(clientActivityId, userId);
+    // ACK may remove the only Activity WAL. Reconcile its durable downstream
+    // responsibility first; a transient Memory failure keeps cleanup retryable.
+    if (!await reconcileActivityMemoryProjection(userId, clientActivityId)) {
+      throw new Error('activity_memory_projection_incomplete');
+    }
     // Retain compact Final display points after ACK. Explicit Activity/account
     // deletion owns their removal; only raw recovery material is cleaned here.
     await deleteAcknowledgedHikeTrackArtifacts(clientActivityId, userId);

@@ -268,6 +268,12 @@ export async function resumeScheduledDeletedAccountLocalPurge(
 export async function purgeDeletedAccountLocalData(userId: string): Promise<void> {
   const owner = exactOwner(userId);
 
+  // Fence Activity→Memory workers before deleting either repository. The
+  // durable purge marker prevents a late headless intent from resurrecting A.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const memoryProjection = require('../features/activity/activityMemoryProjector');
+  await memoryProjection.purgeActivityMemoryProjectionsForOwner(owner);
+
   // Fence and await optional Final work before removing its pending payload,
   // artifact and owner ledger. A late refinement must not recreate deleted
   // account data after this purge returns.

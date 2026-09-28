@@ -50,8 +50,10 @@ export interface HikePoint {
   acc?: number | null;
   alt?: number | null;
   speed?: number | null;
+  speedAccuracy?: number | null;
   vAcc?: number | null;
   course?: number | null;
+  courseAccuracy?: number | null;
   rawOrdinal?: number;
   src?: 'fg' | 'bg' | 'slc' | 'sim';
   conf?: number; // 1=high (GPS), 0.5=low (cell/WiFi), 0=gap fill only
@@ -73,7 +75,9 @@ export interface CanonicalJournalPoint {
   accuracy: number | null;
   verticalAccuracy: number | null;
   speed: number | null;
+  speedAccuracy: number | null;
   course: number | null;
+  courseAccuracy: number | null;
   rawOrdinal?: number;
   source: 'foreground' | 'background' | 'significant-change' | 'simulator';
   clientActivityId: string;
@@ -445,8 +449,10 @@ function toStoredPoint(point: HikePoint | CanonicalJournalPoint): HikePoint {
       acc: canonical.accuracy,
       alt: canonical.alt,
       speed: canonical.speed,
+      speedAccuracy: canonical.speedAccuracy,
       vAcc: canonical.verticalAccuracy,
       course: canonical.course,
+      courseAccuracy: canonical.courseAccuracy,
       rawOrdinal: canonical.rawOrdinal,
       src: canonical.source === 'simulator'
         ? 'sim'
@@ -473,7 +479,9 @@ export function toCanonicalJournalPoint(point: HikePoint, sessionId: string): Ca
     accuracy: point.acc ?? null,
     verticalAccuracy: point.vAcc ?? null,
     speed: point.speed ?? null,
+    speedAccuracy: point.speedAccuracy ?? null,
     course: point.course ?? null,
+    courseAccuracy: point.courseAccuracy ?? null,
     rawOrdinal: point.rawOrdinal,
     source: point.src === 'sim'
       ? 'simulator'
@@ -1010,6 +1018,55 @@ export async function readActiveHikeTail(
   } catch {
     return [];
   }
+}
+
+/** Strict projection reader spanning the unfinished and completed WAL
+ * locations. Unlike the UI recovery adapter, storage failure is not converted
+ * to an empty Activity: the durable Memory projector must retry rather than
+ * silently declare responsibility complete. */
+export async function readHikeTrackForProjection(
+  sessionId: string,
+): Promise<CanonicalJournalPoint[]> {
+  const fs = await getFs();
+  if (!fs) throw new Error('activity_projection_journal_unavailable');
+  await durableWriteTail.catch(() => {});
+  const paths = [
+    fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl',
+    fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl',
+  ];
+  for (const basePath of paths) {
+    let artifactExists = false;
+    let readable = false;
+    let best = '';
+    let bestCount = -1;
+    for (const path of activeCandidates(basePath)) {
+      let info: any;
+      try { info = await fs.getInfoAsync(path); } catch {
+        throw new Error('activity_projection_journal_stat_failed');
+      }
+      if (!info.exists) continue;
+      artifactExists = true;
+      try {
+        const value = await fs.readAsStringAsync(path);
+        readable = true;
+        const valid: string[] = [];
+        for (const line of value.split('\n')) {
+          if (!line.trim()) continue;
+          const decoded = decodeJournalLine(line);
+          if (!decoded) break;
+          valid.push(line);
+        }
+        if (valid.length > bestCount) {
+          bestCount = valid.length;
+          best = valid.join('\n');
+        }
+      } catch { /* another crash-recovery candidate may remain readable */ }
+    }
+    if (!artifactExists) continue;
+    if (!readable) throw new Error('activity_projection_journal_read_failed');
+    return parseCanonicalJournalLines(best ? best.split('\n') : [], sessionId, true);
+  }
+  throw new Error('activity_projection_journal_missing');
 }
 
 function parseCanonicalJournalLines(

@@ -1,5 +1,4 @@
 import type { TrackPoint } from '../../store/useSessionStore';
-import { haversineM } from '../../utils/geo';
 
 /** Live may settle only the immediately recent display tail. Canonical truth
  * is untouched, and Finish can still refine the complete Activity. */
@@ -13,13 +12,26 @@ function angleDelta(left: number, right: number): number {
   return delta > 180 ? 360 - delta : delta;
 }
 
+function localMetricDelta(from: TrackPoint, to: TrackPoint): { x: number; y: number } {
+  const deltaLng = ((to.lng - from.lng + 540) % 360) - 180;
+  const meanLatRad = (from.lat + to.lat) * Math.PI / 360;
+  return {
+    x: deltaLng * EARTH_METRES_PER_DEGREE * Math.cos(meanLatRad),
+    y: (to.lat - from.lat) * EARTH_METRES_PER_DEGREE,
+  };
+}
+
+/** All mutable presentation decisions are bounded to a few metres. A local
+ * tangent-plane measure avoids millions of spherical trig calls during WAL
+ * replay while remaining sub-centimetre-equivalent at that scale. */
+function displayDistanceM(from: TrackPoint, to: TrackPoint): number {
+  const delta = localMetricDelta(from, to);
+  return Math.hypot(delta.x, delta.y);
+}
+
 function bearing(from: TrackPoint, to: TrackPoint): number {
-  const lat1 = from.lat * Math.PI / 180;
-  const lat2 = to.lat * Math.PI / 180;
-  const dLng = (to.lng - from.lng) * Math.PI / 180;
-  const y = Math.sin(dLng) * Math.cos(lat2);
-  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  const delta = localMetricDelta(from, to);
+  return (Math.atan2(delta.x, delta.y) * 180 / Math.PI + 360) % 360;
 }
 
 function pointToSegmentDistanceM(point: TrackPoint, start: TrackPoint, end: TrackPoint): number {
@@ -38,55 +50,72 @@ function pointToSegmentDistanceM(point: TrackPoint, start: TrackPoint, end: Trac
   return Math.hypot(p.x - dx * fraction, p.y - dy * fraction);
 }
 
-function neighbourAtDistance(points: TrackPoint[], origin: number, direction: -1 | 1, minimumM: number): number | null {
-  let distanceM = 0;
-  for (let index = origin + direction; index >= 0 && index < points.length; index += direction) {
-    distanceM += haversineM(points[index - direction], points[index]);
-    if (distanceM >= minimumM) return index;
-  }
-  return null;
-}
-
 function protectedIndices(points: TrackPoint[], uncertaintyM: number): number[] {
   const protectedSet = new Set<number>([0, points.length - 1]);
+  const adjacentDistanceM = points.slice(1).map((point, index) => displayDistanceM(points[index], point));
+  const cumulativeDistanceM = [0];
+  for (const distanceM of adjacentDistanceM) {
+    cumulativeDistanceM.push(cumulativeDistanceM[cumulativeDistanceM.length - 1] + distanceM);
+  }
+  const bearingCache = new Map<number, number>();
+  const cachedBearing = (from: number, to: number) => {
+    const key = from * points.length + to;
+    const cached = bearingCache.get(key);
+    if (cached !== undefined) return cached;
+    const computed = bearing(points[from], points[to]);
+    bearingCache.set(key, computed);
+    return computed;
+  };
+  const neighbourAtDistance = (origin: number, direction: -1 | 1, minimumM: number): number | null => {
+    if (direction < 0) {
+      for (let index = origin - 1; index >= 0; index -= 1) {
+        if (cumulativeDistanceM[origin] - cumulativeDistanceM[index] >= minimumM) return index;
+      }
+      return null;
+    }
+    for (let index = origin + 1; index < points.length; index += 1) {
+      if (cumulativeDistanceM[index] - cumulativeDistanceM[origin] >= minimumM) return index;
+    }
+    return null;
+  };
+  const signedLocalTurns = points.map((_point, index) => {
+    if (index === 0 || index >= points.length - 1) return 0;
+    return ((cachedBearing(index, index + 1) - cachedBearing(index - 1, index) + 540) % 360) - 180;
+  });
   for (let index = 1; index < points.length - 1; index += 1) {
-    const previousNear = neighbourAtDistance(points, index, -1, 6);
-    const nextNear = neighbourAtDistance(points, index, 1, 6);
-    const previousCorridor = neighbourAtDistance(points, index, -1, 30);
-    const nextCorridor = neighbourAtDistance(points, index, 1, 30);
+    const previousNear = neighbourAtDistance(index, -1, 6);
+    const nextNear = neighbourAtDistance(index, 1, 6);
+    const previousCorridor = neighbourAtDistance(index, -1, 30);
+    const nextCorridor = neighbourAtDistance(index, 1, 30);
     const nearTurn = previousNear != null && nextNear != null
-      ? angleDelta(bearing(points[previousNear], points[index]), bearing(points[index], points[nextNear]))
+      ? angleDelta(cachedBearing(previousNear, index), cachedBearing(index, nextNear))
       : 0;
     const corridorTurn = previousCorridor != null && nextCorridor != null
       ? angleDelta(
-          bearing(points[previousCorridor], points[index]),
-          bearing(points[index], points[nextCorridor]),
+          cachedBearing(previousCorridor, index),
+          cachedBearing(index, nextCorridor),
         )
       : 0;
     const localTurn = angleDelta(
-      bearing(points[index - 1], points[index]),
-      bearing(points[index], points[index + 1]),
+      cachedBearing(index - 1, index),
+      cachedBearing(index, index + 1),
     );
-    const signedLocalTurn = ((
-      bearing(points[index], points[index + 1])
-      - bearing(points[index - 1], points[index])
-      + 540
-    ) % 360) - 180;
-    const hasOpposingNearbyTurn = points.slice(
-      Math.max(1, index - 2),
-      Math.min(points.length - 1, index + 3),
-    ).some((_point, offset) => {
-      const neighbour = Math.max(1, index - 2) + offset;
-      if (neighbour === index || neighbour >= points.length - 1) return false;
-      const signed = ((
-        bearing(points[neighbour], points[neighbour + 1])
-        - bearing(points[neighbour - 1], points[neighbour])
-        + 540
-      ) % 360) - 180;
-      return Math.abs(signed) >= 55 && Math.sign(signed) !== Math.sign(signedLocalTurn);
-    });
-    const evidenceSizedLocalTurn = haversineM(points[index - 1], points[index]) >= Math.max(14, uncertaintyM)
-      && haversineM(points[index], points[index + 1]) >= Math.max(14, uncertaintyM)
+    const signedLocalTurn = signedLocalTurns[index];
+    let hasOpposingNearbyTurn = false;
+    for (
+      let neighbour = Math.max(1, index - 2);
+      neighbour < Math.min(points.length - 1, index + 3);
+      neighbour += 1
+    ) {
+      if (neighbour === index) continue;
+      const signed = signedLocalTurns[neighbour];
+      if (Math.abs(signed) >= 55 && Math.sign(signed) !== Math.sign(signedLocalTurn)) {
+        hasOpposingNearbyTurn = true;
+        break;
+      }
+    }
+    const evidenceSizedLocalTurn = adjacentDistanceM[index - 1] >= Math.max(14, uncertaintyM)
+      && adjacentDistanceM[index] >= Math.max(14, uncertaintyM)
       && localTurn >= 65;
     // A display anchor needs either evidence-sized adjacent travel or a turn
     // that survives both neighbourhood and corridor scales. This retains real
@@ -169,7 +198,7 @@ function stabilizeDisplayTail(
     // Display stabilization remains tightly evidence-bounded even when hAcc
     // metadata is pessimistic. It never feeds metrics, Memory or persistence.
     const maximumShiftM = Math.max(2.5, Math.min(5, (point.accuracy ?? 8) * 0.35));
-    const shiftM = haversineM(point, candidate);
+    const shiftM = displayDistanceM(point, candidate);
     if (shiftM <= maximumShiftM || shiftM === 0) return candidate;
     const fraction = maximumShiftM / shiftM;
     return {
@@ -191,7 +220,7 @@ function simplifyTail(
   )).sort((a, b) => a - b);
   const uncertaintyM = accuracies.length > 0 ? accuracies[Math.floor(accuracies.length / 2)] : 8;
   const stabilized = stabilizeDisplayTail(points, preserveStart, uncertaintyM);
-  const directM = haversineM(stabilized[0], stabilized[stabilized.length - 1]);
+  const directM = displayDistanceM(stabilized[0], stabilized[stabilized.length - 1]);
   // Endpoints of a noisy sample window can sit on opposite sides of the
   // corridor, so the maximum distance to their chord can approach the full
   // reported uncertainty even when every observation is only 1–5 m from the
@@ -252,7 +281,7 @@ function mutableTailStartIndex(points: TrackPoint[]): number {
     const nextStart = start - 1;
     const pointCount = points.length - nextStart;
     const ageMs = Math.max(0, newest.t - points[nextStart].t);
-    const nextDistanceM = distanceM + haversineM(points[nextStart], points[start]);
+    const nextDistanceM = distanceM + displayDistanceM(points[nextStart], points[start]);
     if (
       pointCount > LIVE_MUTABLE_TAIL_MAX_POINTS
       || ageMs > LIVE_MUTABLE_TAIL_MAX_AGE_MS
@@ -313,10 +342,97 @@ export function appendCausalLivePoint(
   return [...prefix, ...liveTail];
 }
 
+function buildExactCausalLiveRoute(points: TrackPoint[]): TrackPoint[] {
+  const frozen: TrackPoint[] = [];
+  let liveTail: TrackPoint[] = [];
+  let segmentEvidence: TrackPoint[] = [];
+  let segmentId: string | null = null;
+  for (const point of points) {
+    const nextSegmentId = point.segmentId ?? '__legacy';
+    if (segmentId !== nextSegmentId) {
+      frozen.push(...liveTail);
+      liveTail = [];
+      segmentEvidence = [];
+      segmentId = nextSegmentId;
+    }
+    segmentEvidence.push(point);
+    const mutableStart = mutableTailStartIndex(segmentEvidence);
+    const cutoffT = segmentEvidence[mutableStart]?.t ?? point.t;
+    if (liveTail.length > 0) frozen.push(...liveTail.filter(candidate => candidate.t < cutoffT));
+    const contextStart = Math.max(0, mutableStart - 2);
+    liveTail = simplifyTail(
+      segmentEvidence.slice(contextStart),
+      contextStart === 0,
+      mutableStart - contextStart,
+    ).filter(candidate => candidate.t >= cutoffT);
+  }
+  return [...frozen, ...liveTail];
+}
+
 export function buildCausalLiveRoute(points: TrackPoint[]): TrackPoint[] {
-  const history: TrackPoint[] = [];
-  return points.reduce<TrackPoint[]>((route, point) => {
-    history.push(point);
-    return appendCausalLivePoint(route, point, history);
-  }, []);
+  if (points.length === 0) return [];
+  // Ordinary live prefixes use the exact incremental publication semantics.
+  // Larger cold-recovery histories switch to the equivalent bounded-window
+  // representation below so foreground hydration cannot scale per point.
+  if (points.length <= 256) return buildExactCausalLiveRoute(points);
+  // A cold WAL replay already has the complete ordered history. Settle it in
+  // overlapping contract-sized windows: every emitted point sees no more
+  // future evidence than Live's 10-point/15-second/18-metre mutable tail, and
+  // the two-point overlap carries corner context across window boundaries.
+  // This avoids recomputing the same bounded tail once per historical point.
+  const result: TrackPoint[] = [];
+  let segmentStart = 0;
+  while (segmentStart < points.length) {
+    const segmentId = points[segmentStart].segmentId ?? '__legacy';
+    let segmentEnd = segmentStart + 1;
+    while (
+      segmentEnd < points.length
+      && (points[segmentEnd].segmentId ?? '__legacy') === segmentId
+    ) segmentEnd += 1;
+
+    const segmentResult: TrackPoint[] = [];
+    let cursor = segmentStart;
+    while (cursor < segmentEnd) {
+      let windowEnd = cursor;
+      let distanceM = 0;
+      while (windowEnd + 1 < segmentEnd) {
+        const candidateEnd = windowEnd + 1;
+        const candidateDistanceM = distanceM + displayDistanceM(points[windowEnd], points[candidateEnd]);
+        if (
+          candidateEnd - cursor + 1 > LIVE_MUTABLE_TAIL_MAX_POINTS
+          || Math.max(0, points[candidateEnd].t - points[cursor].t) > LIVE_MUTABLE_TAIL_MAX_AGE_MS
+          || candidateDistanceM > LIVE_MUTABLE_TAIL_MAX_DISTANCE_M
+        ) break;
+        windowEnd = candidateEnd;
+        distanceM = candidateDistanceM;
+      }
+      const contextStart = Math.max(segmentStart, cursor - 2);
+      const simplified = simplifyTail(
+        points.slice(contextStart, windowEnd + 1),
+        cursor === segmentStart,
+        cursor - contextStart,
+      ).filter(candidate => candidate.t >= points[cursor].t);
+      if (windowEnd === segmentEnd - 1) {
+        segmentResult.push(...simplified);
+        break;
+      }
+      const nextCursor = Math.max(cursor + 1, windowEnd);
+      const nextCutoffT = points[nextCursor].t;
+      segmentResult.push(...simplified.filter(candidate => candidate.t < nextCutoffT));
+      cursor = nextCursor;
+    }
+    const segmentPoints = points.slice(segmentStart, segmentEnd);
+    const accuracies = segmentPoints.flatMap(point => (
+      point.accuracy != null && Number.isFinite(point.accuracy) && point.accuracy > 0 ? [point.accuracy] : []
+    )).sort((left, right) => left - right);
+    const uncertaintyM = accuracies.length > 0 ? accuracies[Math.floor(accuracies.length / 2)] : 8;
+    const stabilized = stabilizeDisplayTail(segmentResult, true, uncertaintyM);
+    const requiredOriginals = new Set(protectedIndices(segmentPoints, uncertaintyM)
+      .map(index => segmentPoints[index].t));
+    const byTimestamp = new Map(stabilized.map(point => [point.t, point]));
+    for (const point of segmentPoints) if (requiredOriginals.has(point.t)) byTimestamp.set(point.t, point);
+    result.push(...[...byTimestamp.values()].sort((left, right) => left.t - right.t));
+    segmentStart = segmentEnd;
+  }
+  return result;
 }

@@ -32,6 +32,8 @@ import {
   acquirePassiveMemoryLease,
   handlePassiveMemoryBackgroundTask,
   releasePassiveMemoryLease,
+  startPassiveMemoryBackgroundUpdates,
+  stopPassiveMemoryBackgroundUpdates,
 } from '../passiveMemoryBackgroundTask';
 
 const mockRecordMemoryEvidence = require('../../features/memory/services/recordMemoryEvidence')
@@ -54,6 +56,11 @@ describe('passive Memory headless task', () => {
   beforeEach(() => {
     mockValues.clear();
     jest.clearAllMocks();
+    const Location = require('expo-location');
+    Location.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    Location.hasStartedLocationUpdatesAsync.mockResolvedValue(false);
+    Location.startLocationUpdatesAsync.mockResolvedValue(undefined);
+    Location.stopLocationUpdatesAsync.mockResolvedValue(undefined);
   });
 
   test('records coherent passive evidence with no Activity or mounted map, then fences callbacks after OFF', async () => {
@@ -78,5 +85,46 @@ describe('passive Memory headless task', () => {
       error: null,
     });
     expect(mockRecordMemoryEvidence).toHaveBeenCalledTimes(callsBeforeOff);
+  });
+
+  test('an obsolete epoch stop cannot tear down a newer native passive owner', async () => {
+    const first = await acquirePassiveMemoryLease({
+      ownerUserId: 'owner-a', epoch: 'epoch-one', acceptAfterMs: 1,
+    });
+    await acquirePassiveMemoryLease({
+      ownerUserId: 'owner-a', epoch: 'epoch-two', acceptAfterMs: 2,
+    });
+    await stopPassiveMemoryBackgroundUpdates(first.epoch);
+    const Location = require('expo-location');
+    expect(Location.stopLocationUpdatesAsync).not.toHaveBeenCalled();
+    expect(JSON.parse(mockValues.get('cairn:passive-memory:context:v1')!)).toMatchObject({ epoch: 'epoch-two' });
+  });
+
+  test('Activity preemption during delayed native start fails closed and stops the passive task', async () => {
+    const context = await acquirePassiveMemoryLease({
+      ownerUserId: 'owner-a', epoch: 'epoch-delayed', acceptAfterMs: 1,
+    });
+    const Location = require('expo-location');
+    let release!: () => void;
+    Location.startLocationUpdatesAsync.mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve; }));
+    const starting = startPassiveMemoryBackgroundUpdates(context);
+    for (let turn = 0; turn < 40 && !release; turn += 1) await Promise.resolve();
+    expect(release).toBeDefined();
+    mockValues.set('cairn_bg_hike_active', '1');
+    release();
+    await expect(starting).resolves.toBe(false);
+    expect(Location.stopLocationUpdatesAsync).toHaveBeenCalledWith('cairn-passive-memory-location-v1');
+  });
+
+  test('headless passive callback yields completely while Activity owns location', async () => {
+    await acquirePassiveMemoryLease({
+      ownerUserId: 'owner-a', epoch: 'epoch-preempted', acceptAfterMs: 1,
+    });
+    mockValues.set('cairn_bg_hike_active', '1');
+    await handlePassiveMemoryBackgroundTask({
+      data: { locations: [location(0, 1_000), location(15, 16_000), location(30, 31_000)] },
+      error: null,
+    });
+    expect(mockRecordMemoryEvidence).not.toHaveBeenCalled();
   });
 });

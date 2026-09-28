@@ -91,6 +91,53 @@ describe('real GPS physical continuity', () => {
     expect(state.pending).toBeNull();
   });
 
+  test.each([
+    ['hiking' as const, [0, 8, 16, 24]],
+    ['running' as const, [0, 20, 40, 60]],
+  ])('%s recovers coherent sparse/batched movement despite explicitly unreliable scalar speed', (mode, eastings) => {
+    let state = createRealGpsContinuityState();
+    const accepted: RealGpsObservation[] = [];
+    for (const [index, east] of eastings.entries()) {
+      const point = observation(0, east, 1_000 + index * 30_000, {
+        accuracy: 4,
+        speed: 0.05,
+        speedAccuracy: 5,
+      });
+      const decision = evaluateRealGpsObservation(state, point, mode, point.t);
+      if (decision.kind === 'ACCEPT') {
+        const promoted = decision.confirmedCandidates ?? [];
+        let next = decision.state;
+        for (const candidate of [...promoted, point]) {
+          next = acceptRealGpsObservation(next, candidate, 'segment-a').state;
+          accepted.push(candidate);
+        }
+        state = next;
+      } else {
+        state = decision.state;
+      }
+    }
+    expect(accepted.length).toBeGreaterThanOrEqual(3);
+    expect(state.lastTrusted?.lng).toBeCloseTo(metresEast(eastings[eastings.length - 1]), 7);
+  });
+
+  test('sparse observation time does not turn bounded stationary drift into traversal or bridge a true gap', () => {
+    let state = accept(createRealGpsContinuityState(), observation(0, 0, 1_000, { accuracy: 5 }));
+    const decisions = [
+      observation(2, 4, 31_000, { speed: 0.1, speedAccuracy: 4 }),
+      observation(-2, -3, 61_000, { speed: 0.1, speedAccuracy: 4 }),
+      observation(1, 2, 91_000, { speed: 0.1, speedAccuracy: 4 }),
+    ].map(point => {
+      const result = ingest(state, point);
+      state = result.state;
+      return result;
+    });
+    expect(decisions.flatMap(result => result.accepted)).toHaveLength(0);
+    const afterLongGap = observation(0, 30, 300_000, { speed: 0.1, speedAccuracy: 4 });
+    const gapDecision = evaluateRealGpsObservation(state, afterLongGap, 'hiking', afterLongGap.t);
+    expect(gapDecision.confirmedCandidates ?? []).toHaveLength(0);
+    expect(gapDecision.kind).not.toBe('ACCEPT');
+  });
+
   test('accuracy-adjusted physically impossible motion is rejected immediately', () => {
     let state = createRealGpsContinuityState();
     const first = observation(0, 0, 1_000, { accuracy: 3 });

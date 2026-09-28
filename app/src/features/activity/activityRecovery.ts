@@ -29,6 +29,11 @@ import {
   flushRecordedMemoryEvidence,
   recordMemoryEvidence,
 } from '../memory/services/recordMemoryEvidence';
+import {
+  cancelActivityMemoryProjection,
+  reconcileActivityMemoryProjection,
+  scheduleActivityMemoryProjection,
+} from './activityMemoryProjector';
 import { readPendingReadonly, removePending } from '../../services/pendingSyncStore';
 import type { ActivityLocationSource } from '../activitySimulator/types';
 import { activityFreshnessNow, activityTimestampForSource } from '../activitySimulator/simulatorTime';
@@ -61,6 +66,10 @@ interface ActivityRecoveryAuthority {
   userId: string;
   accountEpoch: number;
 }
+
+// Both Hike and Run recovery surfaces can render during navigation handoff.
+// Coalesce an exact lifecycle identity so two taps cannot execute Finish twice.
+const recoverySaveFlights = new Map<string, Promise<boolean>>();
 
 function currentAccountOwns(userId: string): boolean {
   const state = useAppStore.getState();
@@ -158,7 +167,9 @@ function toTrackPoint(point: Awaited<ReturnType<typeof readActiveHikeTail>>[numb
     accuracy: point.accuracy,
     verticalAccuracy: point.verticalAccuracy,
     speed: point.speed ?? null,
+    speedAccuracy: point.speedAccuracy ?? null,
     course: point.course,
+    courseAccuracy: point.courseAccuracy ?? null,
     t: point.t,
     segmentId: point.segmentId ?? 'legacy-0',
     ...(point.segmentStartReason ? { segmentStartReason: point.segmentStartReason } : {}),
@@ -388,26 +399,27 @@ export async function loadRecoverableActivity(activity: RecoverableActivity): Pr
     pendingSegmentStartReason: 'process-recovery',
     locationProviderSource,
   });
-  // Reconcile Activity evidence that was journaled before a prior process
-  // death but may not yet have reached the Memory store.
-  for (const point of points) {
-    if (!recoveryAuthorityCurrent(authority)) return false;
-    await recordMemoryEvidence({
-      lat: point.lat,
-      lng: point.lng,
-      atMs: point.t,
-      source: locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
+  // Re-establish durable downstream responsibility on process recovery. Real
+  // Activity Memory runs independently; Simulator remains an isolated test
+  // realm and preserves its synchronous contract.
+  if (locationProviderSource === 'real' && points.length > 0) {
+    await scheduleActivityMemoryProjection({
       ownerUserId: activity.userId,
-      durability: 'deferred',
-      sourceActivityClientId: activity.clientActivityId,
-      sourceSegmentId: point.segmentId,
-      horizontalAccuracyM: point.accuracy ?? undefined,
-      continuityState: 'accepted',
+      clientActivityId: activity.clientActivityId,
+      ownerGeneration: recoveredOwnerGeneration,
+      points,
     });
-  }
-  if (points.length > 0) {
-    if (!recoveryAuthorityCurrent(authority)) return false;
-    await flushRecordedMemoryEvidence();
+  } else {
+    for (const point of points) {
+      if (!recoveryAuthorityCurrent(authority)) return false;
+      await recordMemoryEvidence({
+        lat: point.lat, lng: point.lng, atMs: point.t, source: 'simulator_test',
+        ownerUserId: activity.userId, durability: 'deferred',
+        sourceActivityClientId: activity.clientActivityId, sourceSegmentId: point.segmentId,
+        horizontalAccuracyM: point.accuracy ?? undefined, continuityState: 'accepted',
+      });
+    }
+    if (points.length > 0) await flushRecordedMemoryEvidence();
   }
   if (!recoveryAuthorityCurrent(authority)) return false;
   appendSimulatorLog('ACTIVITY_RECOVERY', 'activity_recovery_loaded', {
@@ -437,10 +449,26 @@ export async function saveRecoverableActivity(
   activity: RecoverableActivity,
   sessionName?: string,
 ): Promise<boolean> {
-  if (!await loadRecoverableActivity(activity)) return false;
-  const authority = captureRecoveryAuthority(activity.userId);
-  if (!authority || !await registeredActivityStillCurrent(activity, authority)) return false;
-  return Boolean(await useTrackingStore.getState().stopTracking(sessionName));
+  const key = `${activity.userId}|${activity.clientActivityId}|${activity.ownerGeneration}`;
+  const existing = recoverySaveFlights.get(key);
+  if (existing) return existing;
+  const flight = (async () => {
+    if (!await loadRecoverableActivity(activity)) return false;
+    const authority = captureRecoveryAuthority(activity.userId);
+    if (!authority || !await registeredActivityStillCurrent(activity, authority)) return false;
+    const result = await useTrackingStore.getState().stopTracking(sessionName);
+    // Finish returns a discriminated result. Object truthiness would treat a
+    // recoverable local-commit failure as success and clear both recovery UIs.
+    return result?.status === 'saved-local'
+      && result.localCommit === 'committed'
+      && result.clientActivityId === activity.clientActivityId;
+  })();
+  recoverySaveFlights.set(key, flight);
+  try {
+    return await flight;
+  } finally {
+    if (recoverySaveFlights.get(key) === flight) recoverySaveFlights.delete(key);
+  }
 }
 
 export async function discardRecoverableActivity(activity: RecoverableActivity): Promise<void> {
@@ -457,10 +485,8 @@ export async function discardRecoverableActivity(activity: RecoverableActivity):
     // discarded; completed-local and tombstoned records are immutable here.
     throw new Error('activity_discard_not_unfinished');
   }
-  // The Activity journal is the crash-recoverable Memory intent. Disable the
-  // headless lease first, then reconcile every accepted real point before the
-  // journal can be tombstoned/deleted. If Memory persistence fails, Discard
-  // fails closed and the recoverable Activity remains available to retry.
+  // Disable the headless lease first, then reconcile durable Memory
+  // responsibility before the WAL can be tombstoned/deleted.
   const fenced = await persistBackgroundContext(
     null,
     false,
@@ -470,24 +496,26 @@ export async function discardRecoverableActivity(activity: RecoverableActivity):
   if (!fenced) throw new Error('activity_discard_background_fence_failed');
   const acceptedPoints = await readActiveHikeTail(activity.sessionId);
   if (!recoveryAuthorityCurrent(authority)) throw new Error('activity_discard_owner_mismatch');
-  for (const point of acceptedPoints) {
-    if (!recoveryAuthorityCurrent(authority)) throw new Error('activity_discard_owner_mismatch');
-    await recordMemoryEvidence({
-      lat: point.lat,
-      lng: point.lng,
-      atMs: point.t,
-      source: activity.locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
+  if (activity.locationProviderSource !== 'simulator' && acceptedPoints.length > 0) {
+    await scheduleActivityMemoryProjection({
       ownerUserId: activity.userId,
-      durability: 'deferred',
-      sourceActivityClientId: activity.clientActivityId,
-      sourceSegmentId: point.segmentId,
-      horizontalAccuracyM: point.accuracy ?? undefined,
-      continuityState: 'accepted',
+      clientActivityId: activity.clientActivityId,
+      ownerGeneration: activity.ownerGeneration,
+      points: acceptedPoints.map(toTrackPoint),
     });
-  }
-  if (acceptedPoints.length > 0) {
-    if (!recoveryAuthorityCurrent(authority)) throw new Error('activity_discard_owner_mismatch');
-    await flushRecordedMemoryEvidence();
+    if (!await reconcileActivityMemoryProjection(activity.userId, activity.clientActivityId)) {
+      throw new Error('activity_discard_memory_projection_incomplete');
+    }
+  } else {
+    for (const point of acceptedPoints) {
+      await recordMemoryEvidence({
+        lat: point.lat, lng: point.lng, atMs: point.t, source: 'simulator_test',
+        ownerUserId: activity.userId, durability: 'deferred',
+        sourceActivityClientId: activity.clientActivityId, sourceSegmentId: point.segmentId,
+        horizontalAccuracyM: point.accuracy ?? undefined, continuityState: 'accepted',
+      });
+    }
+    if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
   }
   if (!recoveryAuthorityCurrent(authority)) throw new Error('activity_discard_owner_mismatch');
   await tombstoneActivity({
@@ -497,6 +525,7 @@ export async function discardRecoverableActivity(activity: RecoverableActivity):
   }, { shouldCommit: () => recoveryAuthorityCurrent(authority) });
   if (recoveryAuthorityCurrent(authority)) publishRecoveredBorrowedRoute();
   await removePending(activity.clientActivityId, activity.userId);
+  await cancelActivityMemoryProjection(activity.userId, activity.clientActivityId);
   await discardActiveHike(activity.sessionId);
   // Install the server-side business tombstone even when a numeric shell is
   // known. This makes any reordered/lost start, append or finish retry a no-op.

@@ -46,8 +46,9 @@ describe('Activity RoadContext presentation boundary', () => {
 
   test('adjusts only a coherent live tail and never mutates canonical input', () => {
     const canonical = [
-      { lat: -41.00004, lng: 174, t: 1_000, segmentId: 'a' },
-      { lat: -41.00004, lng: 174.0001, t: 2_000, segmentId: 'a' },
+      { lat: -41.00004, lng: 174, t: 1_000, segmentId: 'a', accuracy: 15 },
+      { lat: -41.00004, lng: 174.00005, t: 1_500, segmentId: 'a', accuracy: 15 },
+      { lat: -41.00004, lng: 174.0001, t: 2_000, segmentId: 'a', accuracy: 15 },
     ];
     const context = buildActivityRoadContext({
       ...base,
@@ -61,7 +62,7 @@ describe('Activity RoadContext presentation boundary', () => {
     expect(presented).not.toBe(canonical);
     expect(presented[1].lat).toBeCloseTo(-41, 6);
     expect(canonical[1].lat).toBe(-41.00004);
-    expect(presented.map(point => [point.t, point.segmentId])).toEqual([[1_000, 'a'], [2_000, 'a']]);
+    expect(presented.map(point => [point.t, point.segmentId])).toEqual([[1_000, 'a'], [1_500, 'a'], [2_000, 'a']]);
   });
 
   test('no features, stale coverage, segment boundaries and app-owned lines never imply a road', () => {
@@ -84,8 +85,9 @@ describe('Activity RoadContext presentation boundary', () => {
 
   test('does not introduce a false building-crossing edge while adjusting a live tail', () => {
     const canonical = [
-      { lat: -41, lng: 174, t: 1_000, segmentId: 'a' },
-      { lat: -41, lng: 174.0001, t: 2_000, segmentId: 'a' },
+      { lat: -41, lng: 174, t: 1_000, segmentId: 'a', accuracy: 15 },
+      { lat: -41, lng: 174.00005, t: 1_500, segmentId: 'a', accuracy: 15 },
+      { lat: -41, lng: 174.0001, t: 2_000, segmentId: 'a', accuracy: 15 },
     ];
     const context = buildActivityRoadContext({
       ...base,
@@ -118,8 +120,9 @@ describe('Activity RoadContext presentation boundary', () => {
 
   test('retains explicit bridge passage evidence through a rendered footprint', () => {
     const canonical = [
-      { lat: -41, lng: 174, t: 1_000, segmentId: 'a' },
-      { lat: -41, lng: 174.0001, t: 2_000, segmentId: 'a' },
+      { lat: -41, lng: 174, t: 1_000, segmentId: 'a', accuracy: 15 },
+      { lat: -41, lng: 174.00005, t: 1_500, segmentId: 'a', accuracy: 15 },
+      { lat: -41, lng: 174.0001, t: 2_000, segmentId: 'a', accuracy: 15 },
     ];
     const context = buildActivityRoadContext({
       ...base,
@@ -138,5 +141,53 @@ describe('Activity RoadContext presentation boundary', () => {
       }] },
     });
     expect(deriveRoadAwareLiveTrack(canonical, context)).not.toBe(canonical);
+  });
+
+  test('precise parallel off-road evidence is not pulled onto a nearby rendered road', () => {
+    const canonical = [0, 10, 20].map((eastM, index) => ({
+      lat: -41.00004,
+      lng: 174 + eastM / (111_320 * Math.cos(41 * Math.PI / 180)),
+      t: 1_000 + index * 500,
+      segmentId: 'a',
+      accuracy: 2,
+    }));
+    const context = buildActivityRoadContext({
+      ...base,
+      center: canonical[2],
+      features: { features: [{
+        layer: { id: 'road-path', sourceLayer: 'transportation' },
+        properties: { class: 'footway' },
+        geometry: { type: 'LineString', coordinates: [[173.999, -41], [174.002, -41]] },
+      }] },
+    });
+    expect(deriveRoadAwareLiveTrack(canonical, context)).toBe(canonical);
+  });
+
+  test('parallel corridor ambiguity retains canonical truth, while one noisy coherent corridor is supported', () => {
+    const canonical = [0, 8, 16].map((eastM, index) => ({
+      lat: -41.000025,
+      lng: 174 + eastM / (111_320 * Math.cos(41 * Math.PI / 180)),
+      t: 1_000 + index * 500,
+      segmentId: 'a',
+      accuracy: 14,
+    }));
+    const feature = (id: string, lat: number) => ({
+      id,
+      layer: { id: 'road-path', sourceLayer: 'transportation' },
+      properties: { class: 'footway' },
+      geometry: { type: 'LineString', coordinates: [[173.999, lat], [174.002, lat]] },
+    });
+    const ambiguous = buildActivityRoadContext({
+      ...base,
+      center: canonical[2],
+      features: { features: [feature('north', -41.000015), feature('south', -41.000035)] },
+    });
+    expect(deriveRoadAwareLiveTrack(canonical, ambiguous)).toBe(canonical);
+    const supported = buildActivityRoadContext({
+      ...base,
+      center: canonical[2],
+      features: { features: [feature('only', -41)] },
+    });
+    expect(deriveRoadAwareLiveTrack(canonical, supported)).not.toBe(canonical);
   });
 });

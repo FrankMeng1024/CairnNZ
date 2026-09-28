@@ -183,7 +183,11 @@ import {
   activityFinishResultFromSession,
   type ActivityFinishResult,
 } from '../features/activity/activityFinishResult';
-import { scheduleActivityMemoryProjection } from '../features/activity/activityMemoryProjector';
+import {
+  cancelActivityMemoryProjection,
+  reconcileActivityMemoryProjection,
+  scheduleActivityMemoryProjection,
+} from '../features/activity/activityMemoryProjector';
 import {
   flushActivityRoutePrefix,
   resetActivityRouteFlush,
@@ -1457,6 +1461,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 lng: point.lng,
                 alt: point.alt ?? null,
                 acc: point.acc ?? null,
+                vAcc: point.v_acc ?? null,
+                speed: point.speed_mps ?? null,
+                speedAccuracy: point.speed_accuracy_mps ?? null,
+                course: point.course_deg ?? null,
+                courseAccuracy: point.course_accuracy_deg ?? null,
                 src: 'slc',
                 conf: 1,
                 clientActivityId: existing.clientActivityId,
@@ -4741,7 +4750,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               alt: point.alt ?? undefined,
               vAcc: point.verticalAccuracy ?? undefined,
               speed: point.speed ?? undefined,
+              speedAccuracy: point.speedAccuracy ?? undefined,
               course: point.course ?? undefined,
+              courseAccuracy: point.courseAccuracy ?? undefined,
               rawOrdinal: point.rawOrdinal,
               src: point.source === 'significant-change'
                 ? 'slc'
@@ -4891,7 +4902,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           // appendHikePoint above is the durable downstream replay source.
           // Projection begins immediately but is deliberately not awaited by
           // source health/canonical publication.
-          scheduleActivityMemoryProjection({
+          await scheduleActivityMemoryProjection({
             ownerUserId: before.ownerUserId,
             clientActivityId: before.sessionId!,
             ownerGeneration: before.liveOwnerGeneration,
@@ -5291,7 +5302,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         lng: point.lng,
         acc: point.accuracy ?? undefined,
         alt: point.alt ?? undefined,
+        vAcc: point.verticalAccuracy ?? undefined,
         speed: point.speed ?? undefined,
+        speedAccuracy: point.speedAccuracy ?? undefined,
+        course: point.course ?? undefined,
+        courseAccuracy: point.courseAccuracy ?? undefined,
         src: 'sim' as const,
         conf: 1,
         clientActivityId: activity.sessionId!,
@@ -5591,21 +5606,27 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // have not yet been projected into the live Zustand snapshot.
       const { readActiveHikeTail } = require('../services/hikeTrackWriter');
       const acceptedPoints = await readActiveHikeTail(s.sessionId);
-      for (const point of acceptedPoints) {
-        await recordMemoryEvidence({
-          lat: point.lat,
-          lng: point.lng,
-          atMs: point.t,
-          source: s.locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
+      if (s.locationProviderSource === 'real' && acceptedPoints.length > 0) {
+        await scheduleActivityMemoryProjection({
           ownerUserId,
-          durability: 'deferred',
-          sourceActivityClientId: s.sessionId ?? undefined,
-          sourceSegmentId: point.segmentId,
-          horizontalAccuracyM: point.accuracy ?? undefined,
-          continuityState: 'accepted',
+          clientActivityId: s.sessionId,
+          ownerGeneration: s.liveOwnerGeneration!,
+          points: acceptedPoints,
         });
+        if (!await reconcileActivityMemoryProjection(ownerUserId, s.sessionId)) {
+          throw new Error('activity_discard_memory_projection_incomplete');
+        }
+      } else {
+        for (const point of acceptedPoints) {
+          await recordMemoryEvidence({
+            lat: point.lat, lng: point.lng, atMs: point.t, source: 'simulator_test', ownerUserId,
+            durability: 'deferred', sourceActivityClientId: s.sessionId,
+            sourceSegmentId: point.segmentId, horizontalAccuracyM: point.accuracy ?? undefined,
+            continuityState: 'accepted',
+          });
+        }
+        if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
       }
-      if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
     }
     // Persist cancellation before attempting any network or file cleanup.
     // A crash after this point cannot let stale queued work resurrect the
@@ -5635,6 +5656,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // serialized write tail prevents an already-entered point commit from
     // recreating the discarded Activity.
     if (s.sessionId) {
+      await cancelActivityMemoryProjection(ownerUserId, s.sessionId);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { discardActiveHike } = require('../services/hikeTrackWriter');
@@ -6181,28 +6203,16 @@ async function drainCommittedBackgroundLocations(
       }
       realGpsRawOrdinal = Math.max(realGpsRawOrdinal, continuity.rawOrdinal);
       schedulePendingCandidateTimeout(useTrackingStore.getState());
-      // Current builds already persist headless Memory at callback time. Replay
-      // only points absent from the mounted raw projection so older journals are
-      // repaired without rewalking a multi-hour history on every foreground.
+      // Commit durable downstream responsibility, then let its independent
+      // projector replay outside this foreground handoff. Do not block source
+      // ownership on Memory persistence.
       if (missingRaw.length > 0) {
-        const repairMemory = async () => {
-          for (const point of missingRaw) {
-            await recordMemoryEvidence({
-              lat: point.lat,
-              lng: point.lng,
-              atMs: point.t,
-              source: 'activity_real',
-              ownerUserId: owner.ownerUserId!,
-              durability: 'deferred',
-              sourceActivityClientId: owner.sessionId!,
-              sourceSegmentId: point.segmentId,
-              horizontalAccuracyM: point.accuracy ?? undefined,
-              continuityState: 'accepted',
-            });
-          }
-          await flushRecordedMemoryEvidence();
-        };
-        await repairMemory();
+        await scheduleActivityMemoryProjection({
+          ownerUserId: owner.ownerUserId!,
+          clientActivityId: owner.sessionId!,
+          ownerGeneration: owner.liveOwnerGeneration!,
+          points: missingRaw,
+        });
       }
       appendSimulatorLog('ACTIVITY_RECOVERY', 'activity_live_journal_projected', {
         journalPointCount: ownedJournal.length,

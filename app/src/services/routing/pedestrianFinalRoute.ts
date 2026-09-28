@@ -1390,6 +1390,10 @@ async function mapMatchingWindow(
     diagnostic.result = !token ? 'no-token' : 'too-short';
     return { candidates: [], request: diagnostic };
   }
+  if (signal?.aborted) {
+    diagnostic.result = 'aborted';
+    return { candidates: [], request: diagnostic };
+  }
   const coords = chunk.map(point => `${point.lng.toFixed(6)},${point.lat.toFixed(6)}`).join(';');
   const radiuses = chunk.map(point => clamp(Math.round(point.accuracy ?? 15), 5, 50)).join(';');
   const seconds = chunk.map(point => point.t == null ? null : Math.floor(Number(point.t) / 1_000));
@@ -1419,6 +1423,12 @@ async function mapMatchingWindow(
       diagnostic.durationMs = Date.now() - startedAt;
       return { candidates: [], request: diagnostic };
     }
+  }
+  if (signal?.aborted) {
+    if (receiptId && governor) await governor.releaseUndispatched(receiptId).catch(() => undefined);
+    diagnostic.result = 'aborted';
+    diagnostic.durationMs = Date.now() - startedAt;
+    return { candidates: [], request: diagnostic };
   }
   const abort = linkedAbortController(signal, timeoutMs);
   let completionResult: 'ok' | 'http' | 'timeout' | 'aborted' | 'network-error' | 'disused' = 'network-error';
@@ -1556,13 +1566,15 @@ async function runBounded<T>(
   items: T[],
   concurrency: number,
   task: (item: T) => Promise<WindowResult>,
+  signal?: AbortSignal,
 ): Promise<WindowResult[]> {
   const results: WindowResult[] = new Array(items.length);
   let cursor = 0;
   const worker = async () => {
-    while (cursor < items.length) {
+    while (cursor < items.length && !signal?.aborted) {
       const index = cursor;
       cursor += 1;
+      if (signal?.aborted) break;
       results[index] = await task(items[index]);
     }
   };
@@ -1680,6 +1692,10 @@ async function walkingDirectionsCandidate(
     request.result = !token ? 'no-token' : 'too-short';
     return { candidate: null, request };
   }
+  if (signal?.aborted) {
+    request.result = 'aborted';
+    return { candidate: null, request };
+  }
   const start = subsection[0];
   const end = subsection[subsection.length - 1];
   const coords = `${start.lng.toFixed(6)},${start.lat.toFixed(6)};${end.lng.toFixed(6)},${end.lat.toFixed(6)}`;
@@ -1706,6 +1722,12 @@ async function walkingDirectionsCandidate(
       request.durationMs = Date.now() - startedAt;
       return { candidate: null, request };
     }
+  }
+  if (signal?.aborted) {
+    if (receiptId && governor) await governor.releaseUndispatched(receiptId).catch(() => undefined);
+    request.result = 'aborted';
+    request.durationMs = Date.now() - startedAt;
+    return { candidate: null, request };
   }
   const abort = linkedAbortController(signal, timeoutMs);
   let completionResult: 'ok' | 'http' | 'timeout' | 'aborted' | 'network-error' | 'disused' = 'network-error';
@@ -2049,14 +2071,16 @@ export async function reconstructPedestrianFinalRoute(
       options.requestPhase ?? 'final',
       options.requestReason ?? 'qualified-unresolved-window',
     ),
+    totalAbort.controller.signal,
   );
-  const matchingCandidates = matchingResults.flatMap(result => result.candidates);
+  const completedMatchingResults = matchingResults.filter((result): result is WindowResult => Boolean(result));
+  const matchingCandidates = completedMatchingResults.flatMap(result => result.candidates);
   annotateWindowAgreement(matchingCandidates);
   let selected = selectNonOverlappingCandidates(matchingCandidates);
-  const requestResults = matchingResults.map(result => result.request);
+  const requestResults = completedMatchingResults.map(result => result.request);
 
   if (options.directionsFallback !== false && options.mapboxToken && !totalAbort.controller.signal.aborted) {
-    const supportedHints = matchingResults.flatMap(result => result.directionsHints ?? [])
+    const supportedHints = completedMatchingResults.flatMap(result => result.directionsHints ?? [])
       .filter(([start, end]) => {
         const distanceM = pathLength(canonical.slice(start, end + 1));
         const alreadyOwned = selected.some(candidate => (
