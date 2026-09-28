@@ -1,0 +1,14 @@
+{
+  "qaStep": "route:Memory",
+  "diagnostic": {
+    "route": "Memory",
+    "mapPresent": false,
+    "mapConnected": false,
+    "mapLoaded": false,
+    "styleLoaded": false,
+    "bodyText": "Back\nMine\nFriends\nAll Cairns\nShare mine\nMap unavailable\nYour saved Memory is still available.\nConnect to restore Memory · Tap to retry"
+  },
+  "runtimeErrors": [],
+  "rendererWarnings": [],
+  "failedRequests": []
+}
