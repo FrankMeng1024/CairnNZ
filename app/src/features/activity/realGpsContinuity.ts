@@ -602,38 +602,56 @@ function stationaryCandidateShowsRealProgress(
   mode: ActivityMode,
 ): boolean {
   if (evidence.length < 2) return false;
-  const anchored = [base, ...evidence];
-  const anchoredFeatures = featuresFor(anchored);
-  const localFeatures = featuresFor(evidence);
-  if (!absoluteEdgesPlausible(anchored, mode)) return false;
+  // `base` is the last accepted traversal anchor. It can legitimately be hours
+  // old while recent raw observations continuously support that the user was
+  // stationary. The bridge from that old anchor is chronology/provenance, not
+  // a movement edge: only the candidate episode may earn new distance.
+  if (evidence[0].t <= base.t) return false;
+  const bridgeIsRecentTravel = evidence[0].t - base.t <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS;
+  // A stationary Candidate can carry one last supported-stop observation. Once
+  // the travel anchor is old, coherent recent suffixes are independent movement
+  // episodes; the stationary prefix neither earns distance nor vetoes them.
+  const episodes = bridgeIsRecentTravel
+    ? [[base, ...evidence]]
+    : evidence.map((_point, index) => evidence.slice(index)).filter(points => points.length >= 2);
+  return episodes.some(episode => {
+    if (!absoluteEdgesPlausible(episode, mode)) return false;
+    const episodeFeatures = featuresFor(episode);
+    const stepSpeeds = episode.slice(1).map((point, index) => (
+      haversineM(episode[index], point) / ((point.t - episode[index].t) / 1_000)
+    ));
+    const coherentStepFraction = stepSpeeds.length > 0
+      ? stepSpeeds.filter(speed => speed >= 0.2 && speed <= MODE_MAX_SPEED_MPS[mode] + 1).length
+        / stepSpeeds.length
+      : 0;
+    const speedVariation = episodeFeatures.stepSpeedMadMps
+      / Math.max(0.25, episodeFeatures.medianStepSpeedMps);
+    const commonEvidence = episodeFeatures.progressRatio >= 0.72
+      && coherentStepFraction >= 0.66
+      && episodeFeatures.medianStepSpeedMps >= 0.2
+      && episodeFeatures.medianStepSpeedMps <= MODE_MAX_SPEED_MPS[mode] + 1
+      && speedVariation <= 0.75;
+    if (!commonEvidence) return false;
 
-  const speedVariation = anchoredFeatures.stepSpeedMadMps
-    / Math.max(0.25, anchoredFeatures.medianStepSpeedMps);
-  const commonEvidence = anchoredFeatures.progressRatio >= 0.72
-    && anchoredFeatures.coherentStepFraction >= 0.66
-    && anchoredFeatures.medianStepSpeedMps >= 0.25
-    && anchoredFeatures.medianStepSpeedMps <= MODE_MAX_SPEED_MPS[mode]
-    && speedVariation <= 0.75;
-  if (!commonEvidence) return false;
-
-  // Two larger, mutually consistent fixes are enough. Metre-cadence or slow
-  // motion gets one more observation so cumulative evidence—not one giant
-  // escape step—establishes traversal.
-  const uncertaintyScaleM = Math.max(...anchored.map(point => normalizedAccuracy(point.accuracy)));
-  const strongTwoFixProgress = evidence.length >= 2
-    && anchoredFeatures.durationMs <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
-    && anchoredFeatures.netM >= Math.max(4, uncertaintyScaleM * 0.55)
-    && anchoredFeatures.progressRatio >= 0.8
-    && anchoredFeatures.directionVariabilityDeg <= 35;
-  const metreCadenceProgress = evidence.length >= 3
-    && localFeatures.durationMs >= 1_500
-    && anchoredFeatures.durationMs <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
-    && anchoredFeatures.netM >= Math.max(2.2, uncertaintyScaleM * 0.45)
-    && anchoredFeatures.directionVariabilityDeg <= 50;
-  const independentSpeedSupport = anchoredFeatures.reportedMovingFraction >= 0.34
-    && evidence.length >= 2
-    && anchoredFeatures.netM >= 1.5;
-  return strongTwoFixProgress || metreCadenceProgress || independentSpeedSupport;
+    // Two larger, mutually consistent fixes are enough. Metre-cadence or slow
+    // motion gets one more observation so cumulative evidence—not one giant
+    // escape step—establishes traversal.
+    const uncertaintyScaleM = Math.max(...episode.map(point => normalizedAccuracy(point.accuracy)));
+    const strongTwoFixProgress = episode.length >= 2
+      && episodeFeatures.durationMs <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
+      && episodeFeatures.netM >= Math.max(4, uncertaintyScaleM * 0.55)
+      && episodeFeatures.progressRatio >= 0.8
+      && episodeFeatures.directionVariabilityDeg <= 35;
+    const metreCadenceProgress = episode.length >= 3
+      && episodeFeatures.durationMs >= 1_500
+      && episodeFeatures.durationMs <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
+      && episodeFeatures.netM >= Math.max(2.2, uncertaintyScaleM * 0.45)
+      && episodeFeatures.directionVariabilityDeg <= 50;
+    const independentSpeedSupport = episodeFeatures.reportedMovingFraction >= 0.34
+      && episode.length >= 2
+      && episodeFeatures.netM >= 1.5;
+    return strongTwoFixProgress || metreCadenceProgress || independentSpeedSupport;
+  });
 }
 
 function classifyWithoutPending(

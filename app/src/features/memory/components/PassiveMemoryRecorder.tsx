@@ -51,8 +51,10 @@ export function PassiveMemoryRecorder() {
     let cancelled = false;
     let unsubscribeSimulator: (() => void) | null = null;
     let ownedBackgroundEpoch: string | null = null;
+    let activeForegroundGeneration: string | null = null;
+    let acquisitionGeneration = 0;
+    let acquisitionPhase: 'foreground' | 'background' | 'stopped' = 'stopped';
     const ownerUserId = userId == null ? '' : String(userId);
-    const foregroundGeneration = `passive:${ownerUserId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
     const ownerIsCurrent = () => {
       const auth = useAppStore.getState();
       return !cancelled
@@ -64,13 +66,38 @@ export function PassiveMemoryRecorder() {
       const status = useTrackingStore.getState().status;
       return status === 'idle' || status === 'paused';
     };
-    const stopForeground = () => {
-      void nativeRealLocationSupervisor.removeConsumer('passive-memory', foregroundGeneration);
+    const beginAcquisitionTransition = (phase: typeof acquisitionPhase) => {
+      acquisitionPhase = phase;
+      acquisitionGeneration += 1;
+      return acquisitionGeneration;
+    };
+    const transitionIsCurrent = (
+      generation: number,
+      phase: 'foreground' | 'background',
+    ) => !cancelled
+      && acquisitionGeneration === generation
+      && acquisitionPhase === phase
+      && ownerIsCurrent()
+      && passiveMayProduce()
+      && (phase === 'background'
+        ? AppState.currentState === 'background'
+        : AppState.currentState !== 'background');
+    const stopForeground = async () => {
+      const generation = activeForegroundGeneration;
+      activeForegroundGeneration = null;
       unsubscribeSimulator?.();
       unsubscribeSimulator = null;
+      if (generation) {
+        await nativeRealLocationSupervisor.removeConsumer('passive-memory', generation);
+      }
     };
-    const publishAccepted = async (observation: RealGpsObservation) => {
-      if (!ownerIsCurrent() || !passiveMayProduce()) return;
+    const publishAccepted = async (
+      observation: RealGpsObservation,
+      transitionGeneration: number,
+      foregroundGeneration: string,
+    ) => {
+      if (!transitionIsCurrent(transitionGeneration, 'foreground')
+        || activeForegroundGeneration !== foregroundGeneration) return;
       await recordMemoryEvidence({
         lat: observation.lat,
         lng: observation.lng,
@@ -81,8 +108,14 @@ export function PassiveMemoryRecorder() {
         continuityState: 'accepted',
       });
     };
-    const consumeRealObservation = async (location: Location.LocationObject, atMs: number) => {
-      if (!ownerIsCurrent() || !passiveMayProduce()) return;
+    const consumeRealObservation = async (
+      location: Location.LocationObject,
+      atMs: number,
+      transitionGeneration: number,
+      foregroundGeneration: string,
+    ) => {
+      if (!transitionIsCurrent(transitionGeneration, 'foreground')
+        || activeForegroundGeneration !== foregroundGeneration) return;
       rawOrdinalRef.current += 1;
       const observation: RealGpsObservation = {
         lat: location.coords.latitude,
@@ -114,14 +147,21 @@ export function PassiveMemoryRecorder() {
           reduced.qualifiedPosition.t,
         );
       }
-      for (const accepted of reduced.accepted) await publishAccepted(accepted);
+      for (const accepted of reduced.accepted) {
+        await publishAccepted(accepted, transitionGeneration, foregroundGeneration);
+      }
     };
-    const stopBackground = async (adoptPersisted = false) => {
+    const stopBackground = async (
+      adoptPersisted = false,
+      transition?: { generation: number; phase: 'foreground' | 'background' },
+    ) => {
+      const expectedOwnedEpoch = ownedBackgroundEpoch;
       const persisted = await readPassiveMemoryContext().catch(() => null);
-      const epoch = ownedBackgroundEpoch
+      if (transition && !transitionIsCurrent(transition.generation, transition.phase)) return;
+      const epoch = expectedOwnedEpoch
         ?? (adoptPersisted && persisted?.ownerUserId === ownerUserId ? persisted.epoch : null);
       if (!epoch) return;
-      ownedBackgroundEpoch = null;
+      if (ownedBackgroundEpoch === epoch) ownedBackgroundEpoch = null;
       if (backgroundEpochRef.current === epoch) backgroundEpochRef.current = null;
       if (persisted?.ownerUserId === ownerUserId) {
         continuityRef.current = persisted.continuityState;
@@ -143,15 +183,22 @@ export function PassiveMemoryRecorder() {
       await stopPassiveMemoryBackgroundUpdates(epoch);
     };
     const startForeground = async () => {
-      if (!ownerIsCurrent() || !passiveMayProduce() || AppState.currentState === 'background') return;
-      await stopBackground(true);
-      if (!ownerIsCurrent() || !passiveMayProduce()) return;
+      const transitionGeneration = beginAcquisitionTransition('foreground');
+      const foregroundGeneration = `passive:${ownerUserId}:${Date.now()}:${transitionGeneration}:${Math.random().toString(36).slice(2)}`;
+      activeForegroundGeneration = foregroundGeneration;
+      if (!transitionIsCurrent(transitionGeneration, 'foreground')) return;
+      await stopBackground(true, { generation: transitionGeneration, phase: 'foreground' });
+      if (!transitionIsCurrent(transitionGeneration, 'foreground')
+        || activeForegroundGeneration !== foregroundGeneration) return;
       await reconcileDurableMemoryEvidenceNow().catch(() => undefined);
+      if (!transitionIsCurrent(transitionGeneration, 'foreground')
+        || activeForegroundGeneration !== foregroundGeneration) return;
       if (selectedActivityLocationSource() === 'simulator') {
         activitySimulatorEngine.startRuntime();
         if (unsubscribeSimulator) return;
         unsubscribeSimulator = activitySimulatorEngine.subscribePassive(sample => {
-          if (!ownerIsCurrent() || !passiveMayProduce()) return;
+          if (!transitionIsCurrent(transitionGeneration, 'foreground')
+            || activeForegroundGeneration !== foregroundGeneration) return;
           if (sample.accuracy > MAX_ACCEPTABLE_HORIZONTAL_ACCURACY_M) return;
           useMemoryStore.getState().setLastWatcherFix(sample.lat, sample.lng, sample.timestamp);
           void recordMemoryEvidence({
@@ -167,7 +214,9 @@ export function PassiveMemoryRecorder() {
         return;
       }
       const permission = await Location.getForegroundPermissionsAsync();
-      if (permission.status !== Location.PermissionStatus.GRANTED || !ownerIsCurrent()) return;
+      if (permission.status !== Location.PermissionStatus.GRANTED
+        || !transitionIsCurrent(transitionGeneration, 'foreground')
+        || activeForegroundGeneration !== foregroundGeneration) return;
       await nativeRealLocationSupervisor.setConsumer({
         id: 'passive-memory',
         ownerUserId,
@@ -178,6 +227,8 @@ export function PassiveMemoryRecorder() {
         onObservation: ({ observation, observationTimestampMs }) => consumeRealObservation(
           observation,
           observationTimestampMs,
+          transitionGeneration,
+          foregroundGeneration,
         ),
         onTerminalError: error => {
           appendSimulatorLog('ERROR', 'passive_memory_foreground_source_error_v1', {
@@ -185,10 +236,18 @@ export function PassiveMemoryRecorder() {
           }, { userId: ownerUserId, coordinateSource: 'none' });
         },
       });
+      // setConsumer can await native watcher creation. A background takeover,
+      // OFF/logout, or Activity start during that await owns the next phase and
+      // must be able to remove this exact obsolete generation after it appears.
+      if (!transitionIsCurrent(transitionGeneration, 'foreground')
+        || activeForegroundGeneration !== foregroundGeneration) {
+        await nativeRealLocationSupervisor.removeConsumer('passive-memory', foregroundGeneration);
+      }
     };
     const startBackground = async () => {
-      stopForeground();
-      if (!ownerIsCurrent() || !passiveMayProduce()) return;
+      const transitionGeneration = beginAcquisitionTransition('background');
+      await stopForeground();
+      if (!transitionIsCurrent(transitionGeneration, 'background')) return;
       const consented = backgroundConsent === 'granted'
         && backgroundConsentVersion >= PASSIVE_BACKGROUND_CONSENT_VERSION;
       if (!consented || !passiveBackgroundMemoryCapability().supported) return;
@@ -202,13 +261,21 @@ export function PassiveMemoryRecorder() {
         continuityState: continuityRef.current,
         rawOrdinal: rawOrdinalRef.current,
       }).catch(() => null);
-      if (!context) return;
-      if (!ownerIsCurrent() || !passiveMayProduce() || backgroundEpochRef.current !== epoch) {
+      if (!context) {
+        if (ownedBackgroundEpoch === epoch) ownedBackgroundEpoch = null;
+        if (backgroundEpochRef.current === epoch) backgroundEpochRef.current = null;
+        return;
+      }
+      if (!transitionIsCurrent(transitionGeneration, 'background')
+        || backgroundEpochRef.current !== epoch) {
         await stopPassiveMemoryBackgroundUpdates(epoch);
         return;
       }
       const started = await startPassiveMemoryBackgroundUpdates(context).catch(() => false);
-      if (!started) await stopPassiveMemoryBackgroundUpdates(epoch);
+      if (!started || !transitionIsCurrent(transitionGeneration, 'background')
+        || backgroundEpochRef.current !== epoch) {
+        await stopPassiveMemoryBackgroundUpdates(epoch);
+      }
     };
     const appState = AppState.addEventListener('change', next => {
       if (next === 'active') void startForeground();
@@ -219,7 +286,8 @@ export function PassiveMemoryRecorder() {
       // iOS inactive is transient; keep the current owner.
     });
     if (!enabled || !isLoggedIn || !ownerUserId || !passiveMayProduce()) {
-      stopForeground();
+      beginAcquisitionTransition('stopped');
+      void stopForeground();
       void stopBackground(true);
     } else if (AppState.currentState === 'background') {
       void startBackground();
@@ -228,8 +296,9 @@ export function PassiveMemoryRecorder() {
     }
     return () => {
       cancelled = true;
+      beginAcquisitionTransition('stopped');
       appState.remove();
-      stopForeground();
+      void stopForeground();
       // Cleanup caused by OFF/logout/account/status changes must revoke the
       // durable lease. Normal process suspension does not run React cleanup.
       void stopBackground(false);

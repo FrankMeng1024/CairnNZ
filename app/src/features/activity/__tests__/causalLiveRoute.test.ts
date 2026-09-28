@@ -75,6 +75,42 @@ describe('causal Live route presentation', () => {
     });
   });
 
+  test.each([255, 256, 257, 513, 1_025])(
+    'cold replay preserves the exact incrementally frozen presentation at %i points',
+    count => {
+      const split = Math.floor(count * 0.62);
+      const points = Array.from({ length: count }, (_, index) => {
+        const localIndex = index < split ? index : index - split;
+        const segmentId = index < split ? 'out-and-back-a' : 'loop-b';
+        const phase = localIndex / 11;
+        const eastM = index < split
+          ? (localIndex % 80 < 40 ? localIndex % 40 : 40 - (localIndex % 40)) * 2.2
+          : Math.sin(phase) * 45;
+        const northM = index < split
+          ? Math.sin(phase * 1.7) * 5
+          : Math.sin(phase * 2) * 28;
+        return {
+          ...sample(eastM, northM, index, segmentId),
+          t: index < split ? index * 1_100 : 90_000 + index * 1_100,
+          accuracy: 5 + (index % 13),
+        };
+      });
+      let incremental: TrackPoint[] = [];
+      const history: TrackPoint[] = [];
+      for (const point of points) {
+        history.push(point);
+        incremental = appendCausalLivePoint(incremental, point, history);
+      }
+      const recovered = buildCausalLiveRoute(points);
+      expect(recovered).toEqual(incremental);
+      expect(recovered.map(point => point.t)).toEqual(incremental.map(point => point.t));
+      expect(recovered[0]).toBe(points[0]);
+      expect(recovered.at(-1)).toBe(points.at(-1));
+      expect(new Set(recovered.map(point => point.segmentId)))
+        .toEqual(new Set(['out-and-back-a', 'loop-b']));
+    },
+  );
+
   test('never revises display geometry outside the bounded recent tail', () => {
     const points = Array.from({ length: 36 }, (_, index) => ({
       ...sample(index * 2, Math.sin(index * 1.9) * 3.5, index),

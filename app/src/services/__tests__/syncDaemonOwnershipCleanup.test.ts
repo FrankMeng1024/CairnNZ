@@ -57,6 +57,9 @@ jest.mock('../../features/activity/activityRegistry', () => ({
 jest.mock('../../features/activity/activityFinalArtifact', () => ({
   loadActivityFinalArtifact: jest.fn(async () => mockArtifact),
 }));
+jest.mock('../../features/activity/activityMemoryProjector', () => ({
+  reconcileActivityMemoryProjection: jest.fn(async () => true),
+}));
 jest.mock('../../features/activitySimulator/simulatorLog', () => ({
   appendSimulatorLog: jest.fn(),
 }));
@@ -75,11 +78,17 @@ jest.mock('../../store/useSessionStore', () => ({
   },
 }));
 
-import { classifyPendingSyncFailure, drainPending, recoverPreparingActivityCompletion } from '../syncDaemon';
+import {
+  classifyPendingSyncFailure,
+  cleanupAcknowledgedActivityArtifacts,
+  drainPending,
+  recoverPreparingActivityCompletion,
+} from '../syncDaemon';
 const { saveHikeAtomic: mockSaveHikeAtomic } = require('../sessionService');
 const { startSessionResolved: mockStartSessionResolved } = require('../sessionService');
 const { resetForResync: mockResetForResync } = require('../pendingSyncStore');
 const { acknowledgeActivity: mockAcknowledgeActivity } = require('../../features/activity/activityRegistry');
+const { reconcileActivityMemoryProjection: mockReconcileActivityMemoryProjection } = require('../../features/activity/activityMemoryProjector');
 
 const pending = {
   contractVersion: 3,
@@ -117,6 +126,7 @@ describe('Activity ACK ownership and cleanup phases', () => {
     jest.clearAllMocks();
     mockStartSessionResolved.mockResolvedValue({ kind: 'unavailable' });
     mockResetForResync.mockResolvedValue(true);
+    mockReconcileActivityMemoryProjection.mockResolvedValue(true);
   });
 
   test('a crash after refined artifact commit rolls the Base outbox forward before upload', async () => {
@@ -216,6 +226,20 @@ describe('Activity ACK ownership and cleanup phases', () => {
       'heavy-trace-delete',
       'registry-remove',
     ]);
+  });
+
+  test('acknowledged cleanup retains the Activity WAL when projection completion cannot be proved', async () => {
+    mockRegistry = {
+      unfinished: null,
+      completed: [{
+        clientActivityId: 'activity-a', serverActivityId: 77,
+        syncState: 'synced', locationProviderSource: 'real',
+      }],
+      tombstones: [],
+    };
+    mockReconcileActivityMemoryProjection.mockResolvedValueOnce(false);
+    await expect(cleanupAcknowledgedActivityArtifacts('account-a', 'activity-a')).resolves.toBe(false);
+    expect(mockOrder).toEqual(['pending-delete']);
   });
 
   test('accelerated historical epochs replay unchanged through normal sync and reconciliation', async () => {

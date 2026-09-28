@@ -556,6 +556,113 @@ describe('real GPS physical continuity', () => {
     expect(state.lastTrusted?.t).toBeGreaterThan(stoppedAt.t);
   });
 
+  test.each([
+    ['hiking' as const, 'frequent', 2_000, 180, 1_000],
+    ['hiking' as const, 'sparse/batched', 30_000, 14, 12_000],
+    ['running' as const, 'frequent', 2_000, 180, 1_000],
+    ['running' as const, 'sparse/batched', 30_000, 14, 8_000],
+  ])('%s supported long stop with %s delivery resumes from a new episode', (
+    mode,
+    _delivery,
+    stopCadenceMs,
+    stopCount,
+    resumeCadenceMs,
+  ) => {
+    let state = createRealGpsContinuityState();
+    const canonical: Array<RealGpsObservation & { segmentId?: string }> = [];
+    const commit = (point: RealGpsObservation, receiptMs: number) => {
+      const decision = evaluateRealGpsObservation(state, point, mode, receiptMs);
+      state = decision.state;
+      if (decision.kind === 'ACCEPT') {
+        for (const accepted of [...(decision.confirmedCandidates ?? []), point]) {
+          state = acceptRealGpsObservation(state, accepted, 'supported-stop-segment').state;
+          canonical.push({ ...accepted, segmentId: 'supported-stop-segment' });
+        }
+      }
+      return decision;
+    };
+
+    for (let index = 0; index < 6; index += 1) {
+      commit(observation(0, index * 3, 1_000 + index * 2_000, {
+        speed: mode === 'running' ? 2.2 : 1.4,
+        accuracy: 5 + (index % 2),
+      }), 1_400 + index * 2_000);
+    }
+    const acceptedBeforeStop = canonical.length;
+    const stopStartedAt = 20_000;
+    for (let index = 0; index < stopCount; index += 1) {
+      const eastJitter = [0.3, -0.4, 0.1, -0.2][index % 4];
+      const northJitter = [0.2, -0.1, -0.3, 0.1][index % 4];
+      commit(observation(northJitter, 15 + eastJitter, stopStartedAt + index * stopCadenceMs, {
+        speed: index % 3 === 0 ? 0 : null,
+        speedAccuracy: index % 4 === 0 ? 3 : null,
+        accuracy: 5 + (index % 5),
+      }), stopStartedAt + index * stopCadenceMs + 700);
+    }
+    expect(canonical.length - acceptedBeforeStop).toBeLessThanOrEqual(1);
+
+    const resumeStartedAt = stopStartedAt + stopCount * stopCadenceMs;
+    const resumeDecisions: ReturnType<typeof evaluateRealGpsObservation>[] = [];
+    const acceptedAtResumeStart = canonical.length;
+    for (let index = 0; index < 6; index += 1) {
+      const point = observation(
+        index >= 3 ? (index - 2) * 1.2 : 0,
+        15 + (index + 1) * (mode === 'running' ? 5 : 3),
+        resumeStartedAt + index * resumeCadenceMs,
+        {
+          speed: index % 3 === 0 ? 0 : index % 3 === 1 ? null : 0.12,
+          speedAccuracy: index % 2 === 0 ? 4 : null,
+          accuracy: 4 + (index % 4),
+        },
+      );
+      resumeDecisions.push(commit(point, point.t + 900 + index * 50));
+    }
+
+    const acceptedResume = canonical.slice(acceptedAtResumeStart);
+    const firstAcceptedDecision = resumeDecisions.findIndex(decision => decision.kind === 'ACCEPT');
+    expect(firstAcceptedDecision).toBeGreaterThanOrEqual(0);
+    expect(firstAcceptedDecision).toBeLessThanOrEqual(3);
+    expect(acceptedResume.length).toBeGreaterThanOrEqual(3);
+    expect(state.lastTrusted?.t).toBe(resumeStartedAt + 5 * resumeCadenceMs);
+    expect(state.positionEstimate?.t).toBe(state.lastTrusted?.t);
+    expect(new Set(acceptedResume.map(point => point.segmentId))).toEqual(new Set(['supported-stop-segment']));
+    const resumeDistanceM = acceptedResume.slice(1)
+      .reduce((sum, point, index) => sum + haversineM(acceptedResume[index], point), 0);
+    expect(resumeDistanceM).toBeGreaterThan(mode === 'running' ? 12 : 7);
+    expect(resumeDistanceM).toBeLessThan(mode === 'running' ? 40 : 25);
+    expect(resumeDecisions.some(decision => decision.diagnostics.reportedSpeedContradiction)).toBe(true);
+  });
+
+  test('supported stationary presence and an actual observation loss remain distinct clocks', () => {
+    let state = createRealGpsContinuityState();
+    state = ingest(state, observation(0, 0, 1_000, { speed: 1, accuracy: 4 })).state;
+    state = ingest(state, observation(0, 4, 4_000, { speed: 1, accuracy: 4 })).state;
+    const firstStationary = observation(0.2, 4.1, 20_000, { speed: 0, accuracy: 5 });
+    const held = evaluateRealGpsObservation(state, firstStationary, 'hiking', 20_850);
+    expect(held.state.latestObservationTimestamp).toBe(20_000);
+    expect(held.state.pending?.createdAtMs).toBe(20_850);
+    state = held.state;
+    for (let index = 1; index <= 8; index += 1) {
+      state = ingest(state, observation(index % 2 ? 0.2 : -0.2, 4, 20_000 + index * 30_000, {
+        speed: 0,
+        accuracy: 5,
+      })).state;
+    }
+    const trustedBeforeLoss = state.lastTrusted?.observationId;
+    const lostFix = observation(0, 160, 600_000, { speed: null, accuracy: 5 });
+    const quarantined = evaluateRealGpsObservation(state, lostFix, 'hiking', 601_200);
+    expect(quarantined).toMatchObject({ kind: 'QUARANTINE', reason: 'possible-gap-reacquisition' });
+    const rejoined = evaluateRealGpsObservation(
+      quarantined.state,
+      observation(0, 5, 605_000, { speed: null, accuracy: 5 }),
+      'hiking',
+      606_000,
+    );
+    expect(rejoined.candidateEvent?.type).toBe('candidate_rejected');
+    expect(rejoined.confirmedCandidates ?? []).toHaveLength(0);
+    expect(state.lastTrusted?.observationId).toBe(trustedBeforeLoss);
+  });
+
   test('STATIONARY_GPS_JITTER_SPAGHETTI: dense good-accuracy orbit adds at most bounded traversal', () => {
     let state = createRealGpsContinuityState();
     const canonical: RealGpsObservation[] = [];

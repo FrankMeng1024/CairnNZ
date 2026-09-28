@@ -14,8 +14,13 @@ export interface ActivityMemoryProjectionIntent {
   state: 'pending' | 'projecting' | 'retry' | 'complete' | 'cancelled';
   requestedThroughPointId: string;
   requestedThroughTimestampMs: number;
+  /** Numeric evidence order when the native journal supplied one. Never compare
+   * the encoded point id lexicographically: segment names and ordinals are not
+   * a sortable string key. */
+  requestedThroughRawOrdinal?: number | null;
   projectedThroughPointId: string | null;
   projectedThroughTimestampMs: number | null;
+  projectedThroughRawOrdinal?: number | null;
   retryAttempt: number;
   nextRetryAtMs: number | null;
   lastError: string | null;
@@ -25,16 +30,26 @@ export interface ActivityMemoryProjectionIntent {
 interface RuntimeRequest {
   ownerUserId: string;
   clientActivityId: string;
+  ownerGeneration: string;
+  authorityGeneration: number;
   running: boolean;
   cancelled: boolean;
+  cancelGeneration: number;
   dirty: boolean;
   transientRetryAttempt: number;
   retryTimer: ReturnType<typeof setTimeout> | null;
   flight: Promise<void> | null;
 }
 
+interface OwnerProjectionAuthority {
+  generation: number;
+  purging: boolean;
+  admittedSchedulers: Set<Promise<void>>;
+}
+
 const requests = new Map<string, RuntimeRequest>();
 const storageTails = new Map<string, Promise<void>>();
+const ownerAuthorities = new Map<string, OwnerProjectionAuthority>();
 let metrics = {
   scheduledPoints: 0,
   projectedPoints: 0,
@@ -54,10 +69,28 @@ function runtimeKey(ownerUserId: string, clientActivityId: string): string {
   return `${ownerUserId}|${clientActivityId}`;
 }
 
+function ownerAuthority(ownerUserId: string): OwnerProjectionAuthority {
+  let authority = ownerAuthorities.get(ownerUserId);
+  if (!authority) {
+    authority = { generation: 0, purging: false, admittedSchedulers: new Set() };
+    ownerAuthorities.set(ownerUserId, authority);
+  }
+  return authority;
+}
+
+function ownerAdmissionIsCurrent(ownerUserId: string, generation: number): boolean {
+  const authority = ownerAuthority(ownerUserId);
+  return !authority.purging && authority.generation === generation;
+}
+
 function pointId(point: Pick<TrackPoint, 't' | 'lat' | 'lng' | 'rawOrdinal' | 'segmentId'>): string {
   return Number.isFinite(point.rawOrdinal)
     ? `${point.segmentId ?? 'legacy'}:raw:${point.rawOrdinal}`
     : `${point.segmentId ?? 'legacy'}:${Math.floor(point.t)}:${point.lat.toFixed(7)}:${point.lng.toFixed(7)}`;
+}
+
+function pointRawOrdinal(point: Pick<TrackPoint, 'rawOrdinal'>): number | null {
+  return Number.isFinite(point.rawOrdinal) ? Number(point.rawOrdinal) : null;
 }
 
 function parseIntent(raw: string | null): ActivityMemoryProjectionIntent | null {
@@ -115,17 +148,70 @@ function ownerIsCurrent(ownerUserId: string): boolean {
   return String(useAppStore.getState().user?.id ?? '') === ownerUserId;
 }
 
-function runtimeFor(ownerUserId: string, clientActivityId: string): RuntimeRequest {
+function runtimeFor(
+  ownerUserId: string,
+  clientActivityId: string,
+  ownerGeneration = 'recovered-journal',
+  authorityGeneration = ownerAuthority(ownerUserId).generation,
+): RuntimeRequest {
   const key = runtimeKey(ownerUserId, clientActivityId);
   let request = requests.get(key);
   if (!request) {
     request = {
-      ownerUserId, clientActivityId, running: false, cancelled: false, dirty: false,
+      ownerUserId, clientActivityId, ownerGeneration, authorityGeneration,
+      running: false, cancelled: false, cancelGeneration: 0, dirty: false,
       transientRetryAttempt: 0, retryTimer: null, flight: null,
     };
     requests.set(key, request);
+  } else {
+    request.ownerGeneration = ownerGeneration;
+    request.authorityGeneration = authorityGeneration;
   }
   return request;
+}
+
+function requestMayRun(request: RuntimeRequest): boolean {
+  return !request.cancelled
+    && ownerAdmissionIsCurrent(request.ownerUserId, request.authorityGeneration)
+    && ownerIsCurrent(request.ownerUserId);
+}
+
+function mergeRequestedTail(
+  current: ActivityMemoryProjectionIntent | null,
+  args: { ownerUserId: string; clientActivityId: string; ownerGeneration: string },
+  tail: TrackPoint,
+  authoritativeJournalTail = false,
+): ActivityMemoryProjectionIntent {
+  const incomingPointId = pointId(tail);
+  const incomingRawOrdinal = pointRawOrdinal(tail);
+  const currentRawOrdinal = current?.requestedThroughRawOrdinal;
+  const samePoint = current?.requestedThroughPointId === incomingPointId;
+  const provablyNewer = !current
+    || samePoint
+    || authoritativeJournalTail
+    || (incomingRawOrdinal != null
+      && currentRawOrdinal != null
+      && incomingRawOrdinal > currentRawOrdinal);
+  const keepCurrentRequest = Boolean(current && !provablyNewer);
+  return {
+    v: 2,
+    ownerUserId: args.ownerUserId,
+    clientActivityId: args.clientActivityId,
+    ownerGeneration: current?.ownerGeneration ?? args.ownerGeneration,
+    state: current?.state === 'cancelled' ? 'cancelled' : 'pending',
+    requestedThroughPointId: keepCurrentRequest ? current!.requestedThroughPointId : incomingPointId,
+    requestedThroughTimestampMs: keepCurrentRequest ? current!.requestedThroughTimestampMs : tail.t,
+    requestedThroughRawOrdinal: keepCurrentRequest
+      ? (current!.requestedThroughRawOrdinal ?? null)
+      : incomingRawOrdinal,
+    projectedThroughPointId: current?.projectedThroughPointId ?? null,
+    projectedThroughTimestampMs: current?.projectedThroughTimestampMs ?? null,
+    projectedThroughRawOrdinal: current?.projectedThroughRawOrdinal ?? null,
+    retryAttempt: current?.retryAttempt ?? 0,
+    nextRetryAtMs: null,
+    lastError: null,
+    updatedAtMs: Date.now(),
+  };
 }
 
 async function markFailure(request: RuntimeRequest, error: unknown): Promise<void> {
@@ -141,24 +227,33 @@ async function markFailure(request: RuntimeRequest, error: unknown): Promise<voi
       return { ...current, state: 'retry', retryAttempt, nextRetryAtMs: Date.now() + delay,
         lastError: String(error).slice(0, 160), updatedAtMs: Date.now() };
     });
-    if (!intent) return;
-    request.transientRetryAttempt = Math.max(request.transientRetryAttempt, intent.retryAttempt);
-    retryAtMs = intent.nextRetryAtMs ?? retryAtMs;
+    if (intent) {
+      request.transientRetryAttempt = Math.max(request.transientRetryAttempt, intent.retryAttempt);
+      retryAtMs = intent.nextRetryAtMs ?? retryAtMs;
+    }
   } catch {
     // The Activity WAL remains the durable source. Keep bounded in-process
     // responsibility even when checkpoint storage itself is temporarily down;
     // recovery/start/finish will rediscover the same WAL after a process loss.
   }
-  if (request.cancelled || !ownerIsCurrent(request.ownerUserId)) return;
+  if (!requestMayRun(request)) return;
   const delay = Math.max(0, retryAtMs - Date.now());
   if (request.retryTimer) clearTimeout(request.retryTimer);
   request.retryTimer = setTimeout(() => { request.retryTimer = null; startWorker(request); }, delay);
 }
 
 async function projectOnce(request: RuntimeRequest): Promise<void> {
-  if (request.cancelled || !ownerIsCurrent(request.ownerUserId)) return;
+  if (!requestMayRun(request)) return;
   let intent = await readIntent(request.ownerUserId, request.clientActivityId);
-  if (!intent || intent.state === 'cancelled' || intent.state === 'complete') return;
+  if (intent?.state === 'cancelled') return;
+  if (!intent) {
+    const journal = await readHikeTrackForProjection(request.clientActivityId);
+    if (journal.length === 0) return;
+    intent = await updateIntent(request.ownerUserId, request.clientActivityId, current => (
+      current?.state === 'cancelled' ? current : mergeRequestedTail(current, request, journal[journal.length - 1])
+    ));
+  }
+  if (!intent || intent.state === 'cancelled' || !requestMayRun(request)) return;
   await updateIntent(request.ownerUserId, request.clientActivityId, current => (
     !current || current.state === 'cancelled' ? current
       : { ...current, state: 'projecting', nextRetryAtMs: null, updatedAtMs: Date.now() }
@@ -166,6 +261,23 @@ async function projectOnce(request: RuntimeRequest): Promise<void> {
   metrics.replayLoads += 1;
   const journal = await readHikeTrackForProjection(request.clientActivityId);
   if (journal.length === 0) throw new Error('activity_projection_journal_empty');
+  // The WAL is the recovery truth. A delayed/older subset request can never
+  // reduce its obligation, and a point accepted between intent writes is found
+  // even if the first intent write failed before process interruption.
+  const journalTail = journal[journal.length - 1];
+  if (intent.requestedThroughPointId !== pointId(journalTail)) {
+    intent = await updateIntent(request.ownerUserId, request.clientActivityId, current => (
+      !current || current.state === 'cancelled'
+        ? current
+        : mergeRequestedTail(
+            current,
+            request,
+            journalTail,
+            journal.some(point => pointId(point) === current.requestedThroughPointId),
+          )
+    ));
+  }
+  if (!intent || intent.state === 'cancelled' || !requestMayRun(request)) return;
   const requestedIndex = journal.findIndex(point => pointId(point) === intent!.requestedThroughPointId);
   if (requestedIndex < 0) throw new Error('activity_projection_requested_point_missing');
   let startIndex = 0;
@@ -174,14 +286,15 @@ async function projectOnce(request: RuntimeRequest): Promise<void> {
     startIndex = projectedIndex >= 0 ? projectedIndex + 1 : 0;
   }
   for (let index = startIndex; index <= requestedIndex; index += 1) {
-    if (request.cancelled || !ownerIsCurrent(request.ownerUserId)) return;
+    if (!requestMayRun(request)) return;
     intent = await readIntent(request.ownerUserId, request.clientActivityId);
-    if (!intent || intent.state === 'cancelled') return;
+    if (!intent || intent.state === 'cancelled' || !requestMayRun(request)) return;
     const point = journal[index];
     // Worker-only dependency stays lazy for the same purge/load boundary as
     // ownerIsCurrent above.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { recordMemoryEvidence } = require('../memory/services/recordMemoryEvidence');
+    if (!requestMayRun(request)) return;
     const result = await recordMemoryEvidence({
       lat: point.lat, lng: point.lng, atMs: point.t, source: 'activity_real',
       ownerUserId: request.ownerUserId, durability: 'deferred',
@@ -190,11 +303,17 @@ async function projectOnce(request: RuntimeRequest): Promise<void> {
     });
     metrics.projectedPoints += 1;
     if (result.deduplicated) metrics.deduplicatedPoints += 1;
-    await updateIntent(request.ownerUserId, request.clientActivityId, current => (
-      !current || current.state === 'cancelled' ? current : { ...current,
+    await updateIntent(request.ownerUserId, request.clientActivityId, current => {
+      if (!current || current.state === 'cancelled') return current;
+      const currentProjectedIndex = current.projectedThroughPointId
+        ? journal.findIndex(candidate => pointId(candidate) === current.projectedThroughPointId)
+        : -1;
+      if (currentProjectedIndex > index) return current;
+      return { ...current,
         projectedThroughPointId: pointId(point), projectedThroughTimestampMs: point.t,
-        retryAttempt: 0, nextRetryAtMs: null, lastError: null, updatedAtMs: Date.now() }
-    ));
+        projectedThroughRawOrdinal: pointRawOrdinal(point),
+        retryAttempt: 0, nextRetryAtMs: null, lastError: null, updatedAtMs: Date.now() };
+    });
   }
   await updateIntent(request.ownerUserId, request.clientActivityId, current => {
     if (!current || current.state === 'cancelled') return current;
@@ -206,7 +325,7 @@ async function projectOnce(request: RuntimeRequest): Promise<void> {
 }
 
 function startWorker(request: RuntimeRequest): void {
-  if (request.running || request.cancelled) { request.dirty = true; return; }
+  if (request.running || !requestMayRun(request)) { request.dirty = true; return; }
   request.running = true;
   const flight = (async () => {
     do {
@@ -226,30 +345,49 @@ function startWorker(request: RuntimeRequest): void {
   request.flight = flight;
 }
 
-/** Commit downstream responsibility after the Activity WAL append. This await
- * covers only the small durable intent write; Memory work is independently
- * tracked outside the source ingestion/TaskManager ownership boundary. */
-export async function scheduleActivityMemoryProjection(args: {
+async function runAdmittedSchedule(args: {
   ownerUserId: string;
   clientActivityId: string;
   ownerGeneration: string;
   points: TrackPoint[];
-}): Promise<void> {
-  if (args.points.length === 0) return;
+}, authorityGeneration: number): Promise<void> {
   if (await strictGet(purgeKey(args.ownerUserId))) throw new Error('activity_projection_owner_purged');
-  const ordered = [...args.points].sort((a, b) => a.t - b.t || pointId(a).localeCompare(pointId(b)));
-  const tail = ordered[ordered.length - 1];
-  await updateIntent(args.ownerUserId, args.clientActivityId, current => ({
-    v: 2, ownerUserId: args.ownerUserId, clientActivityId: args.clientActivityId,
-    ownerGeneration: args.ownerGeneration, state: 'pending', requestedThroughPointId: pointId(tail),
-    requestedThroughTimestampMs: tail.t, projectedThroughPointId: current?.projectedThroughPointId ?? null,
-    projectedThroughTimestampMs: current?.projectedThroughTimestampMs ?? null,
-    retryAttempt: current?.retryAttempt ?? 0, nextRetryAtMs: null, lastError: null, updatedAtMs: Date.now(),
-  }));
+  if (!ownerAdmissionIsCurrent(args.ownerUserId, authorityGeneration)) {
+    throw new Error('activity_projection_owner_purged');
+  }
+  // Callers submit points in committed WAL order. Timestamp sorting would be
+  // lossy for batched equal-timestamp points and raw-ordinal strings are not a
+  // numeric order, so the submitted tail remains the proposed obligation.
+  const tail = args.points[args.points.length - 1];
+  const request = runtimeFor(
+    args.ownerUserId,
+    args.clientActivityId,
+    args.ownerGeneration,
+    authorityGeneration,
+  );
+  const cancelGeneration = request.cancelGeneration;
+  let intent: ActivityMemoryProjectionIntent | null = null;
+  try {
+    intent = await updateIntent(args.ownerUserId, args.clientActivityId, current => (
+      current?.state === 'cancelled' ? current : mergeRequestedTail(current, args, tail)
+    ));
+  } catch (error) {
+    // The accepted WAL remains discoverable truth. Keep a bounded runtime retry
+    // in this process; registry/WAL discovery reconstructs the intent after a
+    // process interruption without waiting for another GPS observation.
+    if (ownerAdmissionIsCurrent(args.ownerUserId, authorityGeneration)) {
+      request.dirty = true;
+      await markFailure(request, error).catch(() => undefined);
+    }
+    return;
+  }
+  if (!intent || intent.state === 'cancelled' || request.cancelled
+    || request.cancelGeneration !== cancelGeneration
+    || !ownerAdmissionIsCurrent(args.ownerUserId, authorityGeneration)) return;
   metrics.scheduledPoints += args.points.length;
   metrics.durableIntents += 1;
   metrics.maximumPendingPoints = Math.max(metrics.maximumPendingPoints, args.points.length);
-  const request = runtimeFor(args.ownerUserId, args.clientActivityId);
+  // Only the still-admitted scheduler may publish/revive runtime work.
   request.cancelled = false;
   if (request.retryTimer) clearTimeout(request.retryTimer);
   request.retryTimer = null;
@@ -257,19 +395,121 @@ export async function scheduleActivityMemoryProjection(args: {
   startWorker(request);
 }
 
+/** Commit downstream responsibility after the Activity WAL append. The whole
+ * scheduler is owner-admitted before its first await so account purge can drain
+ * an intent write that has not yet become a visible runtime worker. */
+export function scheduleActivityMemoryProjection(args: {
+  ownerUserId: string;
+  clientActivityId: string;
+  ownerGeneration: string;
+  points: TrackPoint[];
+}): Promise<void> {
+  if (args.points.length === 0) return Promise.resolve();
+  const authority = ownerAuthority(args.ownerUserId);
+  if (authority.purging) return Promise.reject(new Error('activity_projection_owner_purged'));
+  const authorityGeneration = authority.generation;
+  let flight!: Promise<void>;
+  flight = runAdmittedSchedule(args, authorityGeneration).finally(() => {
+    authority.admittedSchedulers.delete(flight);
+  });
+  authority.admittedSchedulers.add(flight);
+  return flight;
+}
+
+interface ProjectionDiscovery {
+  known: boolean;
+  eligible: boolean;
+  ownerGeneration: string;
+}
+
+async function discoverProjection(
+  ownerUserId: string,
+  clientActivityId: string,
+): Promise<ProjectionDiscovery> {
+  // Lazy load keeps the headless projector independent of registry startup.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getActivityRegistry } = require('./activityRegistry');
+  const registry = await getActivityRegistry(ownerUserId);
+  if (registry.tombstones.some((item: any) => item.clientActivityId === clientActivityId)) {
+    return { known: true, eligible: false, ownerGeneration: 'discarded' };
+  }
+  const unfinished = [registry.unfinished, ...registry.recoveryQueue]
+    .find((item: any) => item?.clientActivityId === clientActivityId);
+  if (unfinished) {
+    return {
+      known: true,
+      eligible: unfinished.locationProviderSource !== 'simulator',
+      ownerGeneration: unfinished.liveOwnerGeneration ?? 'recovered-journal',
+    };
+  }
+  const completed = registry.completed.find((item: any) => item.clientActivityId === clientActivityId);
+  if (completed) {
+    return {
+      known: true,
+      eligible: completed.locationProviderSource !== 'simulator',
+      ownerGeneration: 'completed-local',
+    };
+  }
+  return { known: false, eligible: false, ownerGeneration: 'recovered-journal' };
+}
+
+async function discoverableActivitiesForOwner(ownerUserId: string): Promise<Array<{
+  clientActivityId: string;
+  ownerGeneration: string;
+}>> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getActivityRegistry } = require('./activityRegistry');
+  const registry = await getActivityRegistry(ownerUserId);
+  const records = [registry.unfinished, ...registry.recoveryQueue, ...registry.completed].filter(Boolean);
+  const seen = new Set<string>();
+  return records.flatMap((item: any) => {
+    if (item.locationProviderSource === 'simulator' || seen.has(item.clientActivityId)) return [];
+    seen.add(item.clientActivityId);
+    return [{
+      clientActivityId: item.clientActivityId,
+      ownerGeneration: item.liveOwnerGeneration ?? 'completed-local',
+    }];
+  });
+}
+
 export async function resumeActivityMemoryProjectionsForOwner(ownerUserId: string): Promise<number> {
   if (!ownerUserId || await strictGet(purgeKey(ownerUserId))) return 0;
+  const authorityGeneration = ownerAuthority(ownerUserId).generation;
   const keys = typeof storage.getAllKeysStrict === 'function' ? await storage.getAllKeysStrict() : [];
   let resumed = 0;
+  const started = new Set<string>();
   for (const key of keys.filter(value => value.startsWith(INTENT_PREFIX))) {
     const intent = parseIntent(await strictGet(key));
-    if (!intent || intent.ownerUserId !== ownerUserId || intent.state === 'cancelled' || intent.state === 'complete') continue;
-    const request = runtimeFor(ownerUserId, intent.clientActivityId);
+    if (!intent || intent.ownerUserId !== ownerUserId || intent.state === 'cancelled') continue;
+    const request = runtimeFor(
+      ownerUserId,
+      intent.clientActivityId,
+      intent.ownerGeneration,
+      authorityGeneration,
+    );
     request.cancelled = false;
     if (request.retryTimer) clearTimeout(request.retryTimer);
     request.retryTimer = null;
     request.dirty = true;
     startWorker(request);
+    started.add(intent.clientActivityId);
+    resumed += 1;
+  }
+  // A failed first intent write leaves no key to enumerate. The Activity
+  // registry supplies owner/provenance and the strict WAL reader supplies the
+  // eligible durable tail, making responsibility discoverable on cold start.
+  for (const activity of await discoverableActivitiesForOwner(ownerUserId)) {
+    if (started.has(activity.clientActivityId)) continue;
+    let journal: TrackPoint[];
+    try {
+      journal = await readHikeTrackForProjection(activity.clientActivityId);
+    } catch (error) {
+      if (String(error).includes('activity_projection_journal_missing')) continue;
+      throw error;
+    }
+    if (journal.length === 0) continue;
+    await scheduleActivityMemoryProjection({ ownerUserId, ...activity, points: journal });
+    started.add(activity.clientActivityId);
     resumed += 1;
   }
   return resumed;
@@ -287,9 +527,40 @@ export async function activityMemoryProjectionIsComplete(ownerUserId: string, cl
 }
 
 export async function reconcileActivityMemoryProjection(ownerUserId: string, clientActivityId: string): Promise<boolean> {
-  const intent = await readIntent(ownerUserId, clientActivityId);
-  if (!intent) return true;
-  const request = runtimeFor(ownerUserId, clientActivityId);
+  let intent = await readIntent(ownerUserId, clientActivityId);
+  let discovery: ProjectionDiscovery | null = null;
+  if (!intent) {
+    discovery = await discoverProjection(ownerUserId, clientActivityId);
+    if (discovery.known && !discovery.eligible) return true;
+    let journal: TrackPoint[];
+    try {
+      journal = await readHikeTrackForProjection(clientActivityId);
+    } catch (error) {
+      if (String(error).includes('activity_projection_journal_missing')) {
+        // A known real Activity without its intent or WAL has no proof that its
+        // Memory responsibility completed. Unknown identities have no durable
+        // eligible evidence to clean up.
+        return !discovery.known;
+      }
+      return false;
+    }
+    if (journal.length === 0) return true;
+    if (!discovery.known) return false;
+    await scheduleActivityMemoryProjection({
+      ownerUserId,
+      clientActivityId,
+      ownerGeneration: discovery.ownerGeneration,
+      points: journal,
+    });
+    intent = await readIntent(ownerUserId, clientActivityId);
+    if (!intent) return false;
+  }
+  const request = runtimeFor(
+    ownerUserId,
+    clientActivityId,
+    intent.ownerGeneration,
+    ownerAuthority(ownerUserId).generation,
+  );
   request.cancelled = false;
   if (request.retryTimer) clearTimeout(request.retryTimer);
   request.retryTimer = null;
@@ -303,6 +574,7 @@ export async function cancelActivityMemoryProjection(ownerUserId: string, client
   const request = requests.get(runtimeKey(ownerUserId, clientActivityId));
   if (request) {
     request.cancelled = true;
+    request.cancelGeneration += 1;
     if (request.retryTimer) clearTimeout(request.retryTimer);
     request.retryTimer = null;
   }
@@ -312,7 +584,25 @@ export async function cancelActivityMemoryProjection(ownerUserId: string, client
 }
 
 export async function purgeActivityMemoryProjectionsForOwner(ownerUserId: string): Promise<void> {
+  const authority = ownerAuthority(ownerUserId);
+  // Synchronous admission fence: no scheduler can enter after this point, and
+  // every scheduler already past its first line is present in this exact set.
+  authority.purging = true;
+  authority.generation += 1;
   await storage.setItem(purgeKey(ownerUserId), JSON.stringify({ v: 1, deletedAtMs: Date.now() }), { strict: true });
+  for (const request of requests.values()) {
+    if (request.ownerUserId !== ownerUserId) continue;
+    request.cancelled = true;
+    request.cancelGeneration += 1;
+    if (request.retryTimer) clearTimeout(request.retryTimer);
+    request.retryTimer = null;
+  }
+  // Release barriers concurrently with purge in tests/production: admitted
+  // scheduler mutations are finite storage operations and must drain before the
+  // final owner scan. Unrelated owners are never awaited.
+  if (authority.admittedSchedulers.size > 0) {
+    await Promise.allSettled([...authority.admittedSchedulers]);
+  }
   const inFlight: Promise<void>[] = [];
   for (const request of requests.values()) {
     if (request.ownerUserId !== ownerUserId) continue;
@@ -345,6 +635,7 @@ export function resetActivityMemoryProjectionForTests(): void {
   for (const request of requests.values()) if (request.retryTimer) clearTimeout(request.retryTimer);
   requests.clear();
   storageTails.clear();
+  ownerAuthorities.clear();
   metrics = { scheduledPoints: 0, projectedPoints: 0, deduplicatedPoints: 0,
     replayLoads: 0, failures: 0, maximumPendingPoints: 0, durableIntents: 0 };
 }

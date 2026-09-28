@@ -4,6 +4,7 @@ import {
   projectActivityJournal,
 } from '../activityJournalProjection';
 import { buildBaseFinalTrackPoints } from '../activityFinalArtifact';
+import { appendCausalLivePoint } from '../causalLiveRoute';
 
 function point(
   index: number,
@@ -103,6 +104,42 @@ describe('durable Activity journal projection', () => {
     expect(committed.canonical[71]).toMatchObject({ rawOrdinal: 72 });
     expect(committed.canonical[95]).toMatchObject({ rawOrdinal: 96 });
     expect(committed.canonical.at(-1)).toMatchObject({ rawOrdinal: 97 });
+  });
+
+  test('foreground takeover restores the incrementally frozen Live prefix before publishing a concurrent fix', () => {
+    const journal = Array.from({ length: 620 }, (_, index) => point(
+      index,
+      index < 410 ? 'segment-a' : 'segment-b',
+      index < 410 ? 'foreground' : 'background',
+    ));
+    let incrementallyPublished: any[] = [];
+    const history: any[] = [];
+    for (const durablePoint of journal) {
+      history.push(durablePoint);
+      incrementallyPublished = appendCausalLivePoint(
+        incrementallyPublished,
+        durablePoint,
+        history,
+      );
+    }
+
+    const takeover = projectActivityJournal(journal.slice(0, 390), journal);
+    const presentation = (values: any[]) => values.map(item => ({
+      lat: item.lat, lng: item.lng, t: item.t,
+      rawOrdinal: item.rawOrdinal, segmentId: item.segmentId,
+    }));
+    expect(presentation(takeover.live)).toEqual(presentation(incrementallyPublished));
+
+    const concurrentFix = point(620, 'segment-b', 'foreground');
+    const expectedAfterFix = appendCausalLivePoint(
+      incrementallyPublished,
+      concurrentFix,
+      [...history, concurrentFix],
+    );
+    const publishedAfterFix = projectAcceptedActivityPoints(takeover.canonical, [concurrentFix]);
+    expect(presentation(publishedAfterFix.live)).toEqual(presentation(expectedAfterFix));
+    expect(presentation(publishedAfterFix.live.filter(item => item.t < concurrentFix.t - 15_000)))
+      .toEqual(presentation(incrementallyPublished.filter(item => item.t < concurrentFix.t - 15_000)));
   });
 
   test.each(['hiking', 'running'])('%s keeps a frozen prefix through headless writes, restore, continuation, and Finish', () => {

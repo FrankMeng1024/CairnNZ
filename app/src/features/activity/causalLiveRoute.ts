@@ -371,68 +371,9 @@ function buildExactCausalLiveRoute(points: TrackPoint[]): TrackPoint[] {
 
 export function buildCausalLiveRoute(points: TrackPoint[]): TrackPoint[] {
   if (points.length === 0) return [];
-  // Ordinary live prefixes use the exact incremental publication semantics.
-  // Larger cold-recovery histories switch to the equivalent bounded-window
-  // representation below so foreground hydration cannot scale per point.
-  if (points.length <= 256) return buildExactCausalLiveRoute(points);
-  // A cold WAL replay already has the complete ordered history. Settle it in
-  // overlapping contract-sized windows: every emitted point sees no more
-  // future evidence than Live's 10-point/15-second/18-metre mutable tail, and
-  // the two-point overlap carries corner context across window boundaries.
-  // This avoids recomputing the same bounded tail once per historical point.
-  const result: TrackPoint[] = [];
-  let segmentStart = 0;
-  while (segmentStart < points.length) {
-    const segmentId = points[segmentStart].segmentId ?? '__legacy';
-    let segmentEnd = segmentStart + 1;
-    while (
-      segmentEnd < points.length
-      && (points[segmentEnd].segmentId ?? '__legacy') === segmentId
-    ) segmentEnd += 1;
-
-    const segmentResult: TrackPoint[] = [];
-    let cursor = segmentStart;
-    while (cursor < segmentEnd) {
-      let windowEnd = cursor;
-      let distanceM = 0;
-      while (windowEnd + 1 < segmentEnd) {
-        const candidateEnd = windowEnd + 1;
-        const candidateDistanceM = distanceM + displayDistanceM(points[windowEnd], points[candidateEnd]);
-        if (
-          candidateEnd - cursor + 1 > LIVE_MUTABLE_TAIL_MAX_POINTS
-          || Math.max(0, points[candidateEnd].t - points[cursor].t) > LIVE_MUTABLE_TAIL_MAX_AGE_MS
-          || candidateDistanceM > LIVE_MUTABLE_TAIL_MAX_DISTANCE_M
-        ) break;
-        windowEnd = candidateEnd;
-        distanceM = candidateDistanceM;
-      }
-      const contextStart = Math.max(segmentStart, cursor - 2);
-      const simplified = simplifyTail(
-        points.slice(contextStart, windowEnd + 1),
-        cursor === segmentStart,
-        cursor - contextStart,
-      ).filter(candidate => candidate.t >= points[cursor].t);
-      if (windowEnd === segmentEnd - 1) {
-        segmentResult.push(...simplified);
-        break;
-      }
-      const nextCursor = Math.max(cursor + 1, windowEnd);
-      const nextCutoffT = points[nextCursor].t;
-      segmentResult.push(...simplified.filter(candidate => candidate.t < nextCutoffT));
-      cursor = nextCursor;
-    }
-    const segmentPoints = points.slice(segmentStart, segmentEnd);
-    const accuracies = segmentPoints.flatMap(point => (
-      point.accuracy != null && Number.isFinite(point.accuracy) && point.accuracy > 0 ? [point.accuracy] : []
-    )).sort((left, right) => left - right);
-    const uncertaintyM = accuracies.length > 0 ? accuracies[Math.floor(accuracies.length / 2)] : 8;
-    const stabilized = stabilizeDisplayTail(segmentResult, true, uncertaintyM);
-    const requiredOriginals = new Set(protectedIndices(segmentPoints, uncertaintyM)
-      .map(index => segmentPoints[index].t));
-    const byTimestamp = new Map(stabilized.map(point => [point.t, point]));
-    for (const point of segmentPoints) if (requiredOriginals.has(point.t)) byTimestamp.set(point.t, point);
-    result.push(...[...byTimestamp.values()].sort((left, right) => left.t - right.t));
-    segmentStart = segmentEnd;
-  }
-  return result;
+  // Recovery is the same reducer replay as incremental publication. The
+  // reducer's work is already bounded by the 10-point/15-second/18-metre tail;
+  // no whole-history stabilization pass is needed. Consequently a cold WAL
+  // replay restores byte-for-byte the prefix that Live previously froze.
+  return buildExactCausalLiveRoute(points);
 }
