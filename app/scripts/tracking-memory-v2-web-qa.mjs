@@ -50,6 +50,11 @@ const navigate = async routeName => {
 await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
 await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.useAppStore), null, { timeout: 120_000 });
 await page.waitForFunction(() => globalThis.__cairnStores.useAppStore.getState().hydrated === true, null, { timeout: 120_000 });
+await page.waitForFunction(
+  () => typeof globalThis.__cairnStores?.getCurrentRoute === 'function',
+  null,
+  { timeout: 120_000 },
+);
 await page.evaluate(() => {
   localStorage.setItem('cairn_onboarding_v1_done', 'true');
   localStorage.setItem('cairn_onboarding_v1_done_tracking-memory-v2-qa', 'true');

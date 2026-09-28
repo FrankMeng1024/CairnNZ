@@ -44,4 +44,81 @@ describe('activity-wide Mapbox request governor', () => {
     await expect(governor.authorize({ phase, kind: 'map-matching', fingerprint: phase, reason: 'none' }))
       .resolves.toMatchObject({ allowed: false, reason: 'phase-zero-network' });
   });
+
+  test('separate Final segments and reopened instances share one Activity-wide ceiling', async () => {
+    const args = {
+      ownerUserId: 'owner-segments', clientActivityId: 'activity-segments', startedAtMs: 0,
+      recordedDurationMs: 3_600_000,
+    };
+    for (let index = 0; index < 20; index += 1) {
+      const governor = createActivityMapboxRequestGovernor(args);
+      const permit = await governor.authorize({
+        phase: 'final',
+        kind: 'map-matching',
+        fingerprint: `segment-${index % 3}:window-${index}`,
+        reason: 'segment-final-window',
+      });
+      expect(permit.allowed).toBe(true);
+      await governor.complete({ receiptId: permit.receiptId!, result: 'ok', durationMs: 4 });
+    }
+    const reopened = createActivityMapboxRequestGovernor(args);
+    await expect(reopened.authorize({
+      phase: 'final', kind: 'map-matching', fingerprint: 'segment-new:window-extra', reason: 'reopen',
+    })).resolves.toMatchObject({ allowed: false, reason: 'budget' });
+    await expect(reopened.snapshot()).resolves.toMatchObject({
+      finalMatchingInvocations: 20,
+      finalMatchingLimit: 20,
+      matchingLimit: 30,
+    });
+  });
+
+  test('retry loops consume the persisted Final ceiling rather than bypassing it', async () => {
+    let now = 10_000;
+    const args = {
+      ownerUserId: 'owner-retry-cap', clientActivityId: 'activity-retry-cap', startedAtMs: 0,
+      recordedDurationMs: 3_600_000, now: () => now,
+    };
+    for (let index = 0; index < 20; index += 1) {
+      const governor = createActivityMapboxRequestGovernor(args);
+      const permit = await governor.authorize({
+        phase: 'final', kind: 'map-matching', fingerprint: 'same-window', reason: 'bounded-retry',
+      });
+      expect(permit.allowed).toBe(true);
+      await governor.complete({ receiptId: permit.receiptId!, result: 'http', httpStatus: 500, durationMs: 5 });
+      now += 60_001;
+    }
+    const reopened = createActivityMapboxRequestGovernor(args);
+    await expect(reopened.authorize({
+      phase: 'final', kind: 'map-matching', fingerprint: 'same-window', reason: 'retry-over-cap',
+    })).resolves.toMatchObject({ allowed: false, reason: 'budget' });
+    await expect(reopened.snapshot()).resolves.toMatchObject({
+      finalMatchingInvocations: 20,
+      failedInvocations: 20,
+      retriedInvocations: 19,
+    });
+  });
+
+  test('permits at most two concurrent requests and two Directions fallbacks per Activity', async () => {
+    const args = {
+      ownerUserId: 'owner-concurrency', clientActivityId: 'activity-concurrency', startedAtMs: 0,
+      recordedDurationMs: 3_600_000,
+    };
+    const governor = createActivityMapboxRequestGovernor(args);
+    const first = await governor.authorize({
+      phase: 'final', kind: 'walking-directions', fingerprint: 'directions-a', reason: 'fallback-a',
+    });
+    const second = await governor.authorize({
+      phase: 'final', kind: 'walking-directions', fingerprint: 'directions-b', reason: 'fallback-b',
+    });
+    expect(first.allowed).toBe(true);
+    expect(second.allowed).toBe(true);
+    await expect(governor.authorize({
+      phase: 'final', kind: 'map-matching', fingerprint: 'while-two-active', reason: 'concurrency-check',
+    })).resolves.toMatchObject({ allowed: false, reason: 'concurrency' });
+    await governor.complete({ receiptId: first.receiptId!, result: 'ok', durationMs: 4 });
+    await governor.complete({ receiptId: second.receiptId!, result: 'ok', durationMs: 4 });
+    await expect(createActivityMapboxRequestGovernor(args).authorize({
+      phase: 'final', kind: 'walking-directions', fingerprint: 'directions-c', reason: 'fallback-over-cap',
+    })).resolves.toMatchObject({ allowed: false, reason: 'budget' });
+  });
 });
