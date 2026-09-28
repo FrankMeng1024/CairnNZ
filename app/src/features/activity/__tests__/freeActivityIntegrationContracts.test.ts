@@ -211,11 +211,12 @@ describe('Free Activity integration contracts', () => {
     );
     expect(source).not.toContain('drainInterval');
     const foregroundActivation = handoff.indexOf('await activateForegroundSource(expectedIntentEpoch)');
-    const deferredDrain = handoff.indexOf('void drainCommittedBackgroundLocations(false).then');
+    const deferredDrain = handoff.indexOf("void drainCommittedBackgroundLocations('foreground').then");
     expect(foregroundActivation).toBeGreaterThan(0);
     expect(deferredDrain).toBeGreaterThan(foregroundActivation);
     expect(handoff).toContain('providerActivatedFirst: true');
-    expect(source).toContain('await drainCommittedBackgroundLocations(true)');
+    expect(source).toContain("await drainCommittedBackgroundLocations('pause-fence')");
+    expect(source).toContain("await drainCommittedBackgroundLocations('finish-fence')");
     expect(source).toContain('A queued raw receipt may refresh source-health immediately');
     expect(source).toContain('latestSourceCoordinate: presentationTail ?');
     expect(source).not.toContain('lat: retained.latitude');

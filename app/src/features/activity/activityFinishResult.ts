@@ -20,7 +20,7 @@ export interface ActivityFinishRecoverableFailureResult {
   status: 'recoverable-failure';
   localCommit: 'not-committed';
   clientActivityId: string;
-  reason: 'eligibility-changed' | 'local-commit-failed';
+  reason: 'eligibility-changed' | 'evidence-reconciliation-failed' | 'local-commit-failed';
 }
 
 export type ActivityFinishResult = ActivityFinishSavedResult | ActivityFinishRecoverableFailureResult;

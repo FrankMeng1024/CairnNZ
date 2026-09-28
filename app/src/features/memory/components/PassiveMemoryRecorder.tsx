@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import { useMemorySettingsStore, PASSIVE_BACKGROUND_CONSENT_VERSION } from '../store/useMemorySettingsStore';
 import { useAppStore } from '../../../store/useAppStore';
 import { useTrackingStore } from '../../../store/useTrackingStore';
+import { useSettingsStore } from '../../../store/useSettingsStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { recordMemoryEvidence } from '../services/recordMemoryEvidence';
 import { flushMemoryNow, reconcileDurableMemoryEvidenceNow } from '../services/memoryPersistence';
@@ -53,6 +54,7 @@ export function PassiveMemoryRecorder() {
   const userId = useAppStore(state => state.user?.id ?? null);
   const trackingStatus = useTrackingStore(state => state.status);
   const simulatorEnabled = useActivitySimulatorStore(state => state.enabled);
+  const debugMode = useSettingsStore(state => state.debugMode);
   const continuityAuthorityRef = useRef<PassiveContinuityAuthority | null>(null);
 
   useEffect(() => {
@@ -102,7 +104,8 @@ export function PassiveMemoryRecorder() {
         && authorityIsCurrent()
         && auth.isLoggedIn === true
         && String(auth.user?.id ?? '') === ownerUserId
-        && useMemorySettingsStore.getState().passiveExplorationEnabled;
+        && useMemorySettingsStore.getState().passiveExplorationEnabled
+        && selectedActivityLocationSource() === acquisitionSource;
     };
     const passiveMayProduce = () => {
       const status = useTrackingStore.getState().status;
@@ -207,7 +210,11 @@ export function PassiveMemoryRecorder() {
       const persisted = await readPassiveMemoryContext().catch(() => null);
       if (transition && !transitionIsCurrent(transition.generation, transition.phase)) return;
       const epoch = expectedOwnedEpoch
-        ?? (adoptPersisted && persisted?.ownerUserId === ownerUserId ? persisted.epoch : null);
+        // A newly authenticated owner or simulator selection must retire an
+        // exact stale native lease even when the durable context belongs to
+        // the previous owner. Ownership gates evidence adoption below; it
+        // must not preserve somebody else's physical acquisition runtime.
+        ?? (adoptPersisted ? persisted?.epoch ?? null : null);
       if (!epoch) return;
       if (ownedBackgroundEpoch === epoch) ownedBackgroundEpoch = null;
       if (continuityAuthority.backgroundEpoch === epoch) continuityAuthority.backgroundEpoch = null;
@@ -296,6 +303,17 @@ export function PassiveMemoryRecorder() {
       const transitionGeneration = beginAcquisitionTransition('background');
       await stopForeground();
       if (!transitionIsCurrent(transitionGeneration, 'background')) return;
+      if (acquisitionSource === 'simulator') {
+        // Simulator passive exploration is a foreground QA facility. It has no
+        // headless runtime, so backgrounding suspends it and revokes any old
+        // real-source lease instead of silently falling back to physical GPS.
+        await stopBackground(true, { generation: transitionGeneration, phase: 'background' });
+        appendSimulatorLog('PROVIDER', 'passive_memory_simulator_background_suspended_v1', {
+          ownerSuffix: ownerUserId.slice(-8),
+          physicalFallbackStarted: false,
+        }, { userId: ownerUserId, coordinateSource: 'none' });
+        return;
+      }
       const consented = backgroundConsent === 'granted'
         && backgroundConsentVersion >= PASSIVE_BACKGROUND_CONSENT_VERSION;
       if (!consented || !passiveBackgroundMemoryCapability().supported) return;
@@ -305,6 +323,7 @@ export function PassiveMemoryRecorder() {
       const context = await acquirePassiveMemoryLease({
         ownerUserId,
         epoch,
+        source: 'real',
         acceptAfterMs: Date.now(),
         continuityState: continuityAuthority.continuityState,
         rawOrdinal: continuityAuthority.rawOrdinal,
@@ -355,6 +374,7 @@ export function PassiveMemoryRecorder() {
     backgroundConsent,
     backgroundConsentVersion,
     enabled,
+    debugMode,
     isLoggedIn,
     simulatorEnabled,
     trackingStatus,

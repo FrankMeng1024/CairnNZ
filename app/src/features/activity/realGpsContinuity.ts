@@ -577,12 +577,19 @@ function hasMeasuredReliableReportedSpeed(point: RealGpsObservation): boolean {
     && point.speedAccuracy <= 0.8;
 }
 
+function isExactZeroWithUnknownUncertainty(point: RealGpsObservation): boolean {
+  return point.speed === 0
+    && (point.speedAccuracy == null || !Number.isFinite(point.speedAccuracy));
+}
+
 function reportedStationary(point: RealGpsObservation): boolean {
-  return hasReliableReportedSpeed(point) && Number(point.speed) < REPORTED_STATIONARY_SPEED_MPS;
+  return hasReliableReportedSpeed(point)
+    && Number(point.speed) < REPORTED_STATIONARY_SPEED_MPS;
 }
 
 function explicitlyNearZeroSpeed(point: RealGpsObservation): boolean {
-  return hasReliableReportedSpeed(point) && Number(point.speed) < 0.2;
+  return hasReliableReportedSpeed(point)
+    && Number(point.speed) < 0.2;
 }
 
 function absoluteEdgesPlausible(
@@ -651,34 +658,41 @@ function stationaryCandidateProgressStartIndex(
     return strongTwoFixProgress || metreCadenceProgress || independentSpeedSupport;
   };
 
+  const firstRawSpeedIsNearZero = evidence[0].speed != null
+    && Number.isFinite(evidence[0].speed)
+    && Number(evidence[0].speed) >= 0
+    && Number(evidence[0].speed) < 0.2;
+  const stationaryPrefix = firstRawSpeedIsNearZero
+    && evidence[0].t - base.t > 15_000
+    && haversineM(base, evidence[0]) <= Math.max(
+      2.5,
+      normalizedAccuracy(evidence[0].accuracy) * 0.55,
+    );
   const bridgeIsRecentTravel = evidence[0].t - base.t <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS;
   if (bridgeIsRecentTravel) {
     // Coordinate progress with absent/negative or explicitly low-confidence
     // scalar speed can establish a fresh departure independently of the recent
     // accepted travel anchor. Requiring three suffix fixes keeps a single
     // accuracy-sized escape edge and low-speed drift quarantined.
-    const firstRawSpeedIsNearZero = evidence[0].speed != null
-      && Number.isFinite(evidence[0].speed)
-      && Number(evidence[0].speed) >= 0
-      && Number(evidence[0].speed) < 0.2;
-    const stationaryPrefix = firstRawSpeedIsNearZero
-      && evidence[0].t - base.t > 15_000
-      && haversineM(base, evidence[0]) <= Math.max(
-        2.5,
-        normalizedAccuracy(evidence[0].accuracy) * 0.55,
-      );
     for (let startIndex = evidence.length - 3; startIndex >= 0; startIndex -= 1) {
       if (stationaryPrefix && startIndex === 0) continue;
       const suffix = evidence.slice(startIndex);
+      // Position/time coherence is evidence in its own right. This deliberately
+      // also covers a measured zero that is contradicted by three mutually
+      // consistent traversal fixes; drift/orbits still fail episodeShowsProgress.
       const unreliableScalarCount = suffix.filter(point => (
         point.speed == null
         || !Number.isFinite(point.speed)
         || point.speed < 0
+        || isExactZeroWithUnknownUncertainty(point)
         || (point.speedAccuracy != null
           && Number.isFinite(point.speedAccuracy)
           && point.speedAccuracy > 0.8)
       )).length;
-      if (unreliableScalarCount >= 2 && episodeShowsProgress(suffix)) return startIndex;
+      const allZeroPositionContradiction = suffix.length >= 3
+        && suffix.every(point => point.speed === 0);
+      if ((unreliableScalarCount >= 2 || allZeroPositionContradiction)
+        && episodeShowsProgress(suffix)) return startIndex;
     }
     const current = evidence[evidence.length - 1];
     const currentHasIndependentMovingSpeed = hasReliableReportedSpeed(current)
@@ -686,7 +700,8 @@ function stationaryCandidateProgressStartIndex(
     if (stationaryPrefix && !currentHasIndependentMovingSpeed) return null;
     return episodeShowsProgress([base, ...evidence]) ? 0 : null;
   }
-  for (let startIndex = 0; startIndex < evidence.length - 1; startIndex += 1) {
+  for (let startIndex = Math.max(0, evidence.length - 3); startIndex < evidence.length - 1; startIndex += 1) {
+    if (stationaryPrefix && startIndex === 0) continue;
     if (episodeShowsProgress(evidence.slice(startIndex))) return startIndex;
   }
   return null;
@@ -774,7 +789,40 @@ function classifyWithoutPending(
   }
 
   const speedSaysStationary = reportedStationary(current);
+  const currentEdgeSupportsMotion = (diagnostics.dtFromTrustedMs ?? 0) > 0
+    && (diagnostics.dtFromTrustedMs ?? 0) <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
+    && (diagnostics.displacementFromTrustedM ?? 0) >= 0.55
+    && (diagnostics.impliedSpeedMps ?? 0) >= 0.2
+    && (diagnostics.impliedSpeedMps ?? 0) <= MODE_MAX_SPEED_MPS[mode] + 1;
+  let acceptedStepSupportsCurrentMotion = false;
+  if (state.previousTrusted && state.lastTrusted
+    && state.lastTrusted.t > state.previousTrusted.t
+    && state.lastTrusted.t - state.previousTrusted.t <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS) {
+    const acceptedStepSpeedMps = haversineM(state.previousTrusted, state.lastTrusted)
+      / ((state.lastTrusted.t - state.previousTrusted.t) / 1_000);
+    const currentStepSpeedMps = diagnostics.impliedSpeedMps ?? 0;
+    acceptedStepSupportsCurrentMotion = acceptedStepSpeedMps >= 0.2
+      && currentStepSpeedMps >= acceptedStepSpeedMps * 0.45
+      && currentStepSpeedMps <= acceptedStepSpeedMps * 2.25
+      && angleDeltaDegrees(
+        bearingDegrees(state.previousTrusted, state.lastTrusted),
+        bearingDegrees(state.lastTrusted, current),
+      ) <= 55;
+  }
+  const establishedStationaryScalarContradictedByPosition = state.motionState === 'moving'
+    && currentEdgeSupportsMotion
+    && (
+      acceptedStepSupportsCurrentMotion
+      || (
+        showsCumulativeProgress(windowFeatures)
+        && windowFeatures.medianStepSpeedMps >= 0.2
+        && windowFeatures.coherentStepFraction >= 0.66
+        && windowFeatures.progressRatio >= 0.7
+        && windowFeatures.reportedMovingFraction <= 0.5
+      )
+    );
   const lowSpeedAmbiguousEdge = speedSaysStationary
+    && !establishedStationaryScalarContradictedByPosition
     && (diagnostics.dtFromTrustedMs ?? 0) > 0
     && (
       (diagnostics.impliedSpeedMps ?? 0) < 0.45
@@ -795,11 +843,6 @@ function classifyWithoutPending(
     return createPending(state, current, 'possible-stationary-jitter', nowMs);
   }
 
-  const currentEdgeSupportsMotion = (diagnostics.dtFromTrustedMs ?? 0) > 0
-    && (diagnostics.dtFromTrustedMs ?? 0) <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
-    && (diagnostics.displacementFromTrustedM ?? 0) >= 0.55
-    && (diagnostics.impliedSpeedMps ?? 0) >= 0.2
-    && (diagnostics.impliedSpeedMps ?? 0) <= MODE_MAX_SPEED_MPS[mode] + 1;
   if (state.motionState === 'moving' && currentEdgeSupportsMotion) {
     return {
       kind: 'ACCEPT', reason: acceptedReason,

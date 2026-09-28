@@ -112,12 +112,16 @@ export function recordMemoryEvidence(args: {
           AsyncStorage.getItem('cairn:passive-memory:active:v1'),
           AsyncStorage.getItem('cairn:passive-memory:context:v1'),
         ]);
-        let passiveContext: { ownerUserId?: string; epoch?: string } | null = null;
+        let passiveContext: { ownerUserId?: string; epoch?: string; source?: 'real' } | null = null;
         try { passiveContext = passiveRaw ? JSON.parse(passiveRaw) : null; } catch {}
         if (activityActive === '1'
           || passiveActive !== '1'
           || passiveContext?.ownerUserId !== ownerUserId
-          || passiveContext?.epoch !== args.ownerAuthorityEpoch) {
+          || passiveContext?.epoch !== args.ownerAuthorityEpoch
+          // Legacy v1 leases without this field were also exclusively real.
+          // New leases persist it explicitly so simulator can never acquire
+          // physical writer authority through an app-phase transition.
+          || (passiveContext?.source ?? 'real') !== 'real') {
           throw new Error('memory_passive_authority_changed');
         }
       }

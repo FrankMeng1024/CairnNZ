@@ -67,6 +67,7 @@ describe('passive Memory headless task', () => {
     await acquirePassiveMemoryLease({
       ownerUserId: 'owner-a',
       epoch: 'passive-epoch-a',
+      source: 'real',
       acceptAfterMs: 1_000,
     });
     await handlePassiveMemoryBackgroundTask({
@@ -89,10 +90,10 @@ describe('passive Memory headless task', () => {
 
   test('an obsolete epoch stop cannot tear down a newer native passive owner', async () => {
     const first = await acquirePassiveMemoryLease({
-      ownerUserId: 'owner-a', epoch: 'epoch-one', acceptAfterMs: 1,
+      ownerUserId: 'owner-a', epoch: 'epoch-one', source: 'real', acceptAfterMs: 1,
     });
     await acquirePassiveMemoryLease({
-      ownerUserId: 'owner-a', epoch: 'epoch-two', acceptAfterMs: 2,
+      ownerUserId: 'owner-a', epoch: 'epoch-two', source: 'real', acceptAfterMs: 2,
     });
     await stopPassiveMemoryBackgroundUpdates(first.epoch);
     const Location = require('expo-location');
@@ -102,7 +103,7 @@ describe('passive Memory headless task', () => {
 
   test('Activity preemption during delayed native start fails closed and stops the passive task', async () => {
     const context = await acquirePassiveMemoryLease({
-      ownerUserId: 'owner-a', epoch: 'epoch-delayed', acceptAfterMs: 1,
+      ownerUserId: 'owner-a', epoch: 'epoch-delayed', source: 'real', acceptAfterMs: 1,
     });
     const Location = require('expo-location');
     let release!: () => void;
@@ -118,11 +119,57 @@ describe('passive Memory headless task', () => {
 
   test('headless passive callback yields completely while Activity owns location', async () => {
     await acquirePassiveMemoryLease({
-      ownerUserId: 'owner-a', epoch: 'epoch-preempted', acceptAfterMs: 1,
+      ownerUserId: 'owner-a', epoch: 'epoch-preempted', source: 'real', acceptAfterMs: 1,
     });
     mockValues.set('cairn_bg_hike_active', '1');
     await handlePassiveMemoryBackgroundTask({
       data: { locations: [location(0, 1_000), location(15, 16_000), location(30, 31_000)] },
+      error: null,
+    });
+    expect(mockRecordMemoryEvidence).not.toHaveBeenCalled();
+  });
+
+  test('physical headless task rejects a simulator-provenance lease at the writer boundary', async () => {
+    mockValues.set('cairn:passive-memory:active:v1', '1');
+    mockValues.set('cairn:passive-memory:context:v1', JSON.stringify({
+      v: 1,
+      ownerUserId: 'owner-a',
+      epoch: 'simulator-must-not-own-native',
+      source: 'simulator',
+      consentVersion: 1,
+      acceptAfterMs: 1,
+      latestObservationTimestampMs: null,
+      rawOrdinal: 0,
+      continuityState: null,
+    }));
+    await handlePassiveMemoryBackgroundTask({
+      data: { locations: [location(0, 1_000), location(15, 16_000), location(30, 31_000)] },
+      error: null,
+    });
+    expect(mockRecordMemoryEvidence).not.toHaveBeenCalled();
+  });
+
+  test('source revocation queued behind native start fences every later callback', async () => {
+    const context = await acquirePassiveMemoryLease({
+      ownerUserId: 'owner-a', epoch: 'epoch-source-change', source: 'real', acceptAfterMs: 1,
+    });
+    const Location = require('expo-location');
+    let releaseStart!: () => void;
+    Location.startLocationUpdatesAsync.mockImplementationOnce(() => new Promise<void>(resolve => {
+      releaseStart = resolve;
+    }));
+    const starting = startPassiveMemoryBackgroundUpdates(context);
+    for (let turn = 0; turn < 40 && !releaseStart; turn += 1) await Promise.resolve();
+    expect(releaseStart).toBeDefined();
+    const revoking = stopPassiveMemoryBackgroundUpdates(context.epoch);
+    Location.hasStartedLocationUpdatesAsync.mockResolvedValue(true);
+    releaseStart();
+    await Promise.all([starting, revoking]);
+    expect(Location.stopLocationUpdatesAsync).toHaveBeenCalledWith('cairn-passive-memory-location-v1');
+
+    mockRecordMemoryEvidence.mockClear();
+    await handlePassiveMemoryBackgroundTask({
+      data: { locations: [location(0, 40_000), location(15, 55_000), location(30, 70_000)] },
       error: null,
     });
     expect(mockRecordMemoryEvidence).not.toHaveBeenCalled();

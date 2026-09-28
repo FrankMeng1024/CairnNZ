@@ -22,6 +22,9 @@ export interface DurablePassiveMemoryContext {
   v: 1;
   ownerUserId: string;
   epoch: string;
+  /** Native TaskManager is a physical provider. Simulator has no headless
+   * runtime and therefore never receives a durable background lease. */
+  source: 'real';
   consentVersion: 1;
   acceptAfterMs: number;
   latestObservationTimestampMs: number | null;
@@ -45,6 +48,7 @@ async function withOwnership<T>(operation: () => Promise<T>): Promise<T> {
 export async function acquirePassiveMemoryLease(args: {
   ownerUserId: string;
   epoch: string;
+  source: 'real';
   acceptAfterMs: number;
   continuityState?: RealGpsContinuityState;
   rawOrdinal?: number;
@@ -59,6 +63,7 @@ export async function acquirePassiveMemoryLease(args: {
       v: 1,
       ownerUserId: args.ownerUserId,
       epoch: args.epoch,
+      source: args.source,
       consentVersion: 1,
       acceptAfterMs: args.acceptAfterMs,
       latestObservationTimestampMs: args.continuityState?.latestObservationTimestamp ?? null,
@@ -90,9 +95,15 @@ async function currentContext(): Promise<DurablePassiveMemoryContext | null> {
     if ((await AsyncStorage.getItem(PASSIVE_MEMORY_ACTIVE_KEY)) !== '1') return null;
     const raw = await AsyncStorage.getItem(PASSIVE_MEMORY_CONTEXT_KEY);
     if (!raw) return null;
-    const context = JSON.parse(raw) as DurablePassiveMemoryContext;
+    const parsed = JSON.parse(raw) as DurablePassiveMemoryContext & { source?: 'real' };
+    const context = parsed?.source == null
+      // v1 contexts predating explicit provenance were created only by the
+      // physical Expo provider. Normalize them truthfully during migration.
+      ? { ...parsed, source: 'real' as const }
+      : parsed;
     return context?.v === 1
       && context.consentVersion === 1
+      && context.source === 'real'
       && typeof context.ownerUserId === 'string'
       && typeof context.epoch === 'string'
       ? context
@@ -113,7 +124,9 @@ export async function startPassiveMemoryBackgroundUpdates(
     const authorityCurrent = async () => {
       const current = await currentContext();
       return current?.epoch === context.epoch
-        && current.ownerUserId === context.ownerUserId;
+        && current.ownerUserId === context.ownerUserId
+        && current.source === 'real'
+        && context.source === 'real';
     };
     if (!passiveBackgroundMemoryCapability().supported || !await authorityCurrent()) return false;
     const permission = await Location.getBackgroundPermissionsAsync();
@@ -174,7 +187,7 @@ export async function stopPassiveMemoryBackgroundUpdates(expectedEpoch?: string)
 export async function handlePassiveMemoryBackgroundTask({ data, error }: { data: any; error: any }): Promise<void> {
   await withOwnership(async () => {
     const context = await currentContext();
-    if (!context || !passiveBackgroundMemoryCapability().supported) return;
+    if (!context || context.source !== 'real' || !passiveBackgroundMemoryCapability().supported) return;
     const locations = Array.isArray(data?.locations) ? data.locations : [];
     if (error) {
       appendSimulatorLog('ERROR', 'passive_memory_background_source_error_v1', {

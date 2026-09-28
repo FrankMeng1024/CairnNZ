@@ -16,6 +16,7 @@ const mockTracking = { status: 'idle' };
 const mockMemory = { setLastWatcherFix: jest.fn() };
 let mockSelectedSource: 'real' | 'simulator' = 'real';
 let mockSimulatorEnabled = false;
+let mockDebugMode = true;
 
 jest.mock('react-native', () => ({
   AppState: {
@@ -48,6 +49,12 @@ jest.mock('../../../store/useTrackingStore', () => ({
   useTrackingStore: Object.assign(
     jest.fn((selector: any) => selector(mockTracking)),
     { getState: () => mockTracking },
+  ),
+}));
+jest.mock('../../../store/useSettingsStore', () => ({
+  useSettingsStore: Object.assign(
+    jest.fn((selector: any) => selector({ debugMode: mockDebugMode })),
+    { getState: () => ({ debugMode: mockDebugMode }) },
   ),
 }));
 jest.mock('../store/useMemoryStore', () => ({
@@ -127,6 +134,7 @@ describe('PassiveMemoryRecorder acquisition transition ownership', () => {
     mockTracking.status = 'idle';
     mockSelectedSource = 'real';
     mockSimulatorEnabled = false;
+    mockDebugMode = true;
     Location.getForegroundPermissionsAsync.mockResolvedValue({ status: 'granted' });
     supervisor.setConsumer.mockResolvedValue(true);
     supervisor.removeConsumer.mockResolvedValue(undefined);
@@ -392,6 +400,115 @@ describe('PassiveMemoryRecorder acquisition transition ownership', () => {
     expect(mockRecordMemoryEvidence).toHaveBeenCalledWith(expect.objectContaining({
       ownerUserId: 'owner-a', atMs: 20_000, source: 'simulator_test',
     }));
+    view.unmount();
+  });
+
+  test('simulator suspends in background without acquiring physical GPS and resumes QA evidence in foreground', async () => {
+    mockSelectedSource = 'simulator';
+    mockSimulatorEnabled = true;
+    const simulatorConsumers: Array<(sample: any) => void> = [];
+    const unsubscribes: jest.Mock[] = [];
+    const engine = require('../../activitySimulator/activitySimulatorEngine').activitySimulatorEngine;
+    engine.subscribePassive.mockImplementation((consumer: (sample: any) => void) => {
+      simulatorConsumers.push(consumer);
+      const unsubscribe = jest.fn();
+      unsubscribes.push(unsubscribe);
+      return unsubscribe;
+    });
+    const view = render(<PassiveMemoryRecorder />);
+    await act(async () => { await flushMicrotasks(); });
+    expect(simulatorConsumers).toHaveLength(1);
+    expect(supervisor.setConsumer).not.toHaveBeenCalled();
+
+    await emitAppState('background');
+    expect(unsubscribes[0]).toHaveBeenCalledTimes(1);
+    expect(background.acquirePassiveMemoryLease).not.toHaveBeenCalled();
+    expect(background.startPassiveMemoryBackgroundUpdates).not.toHaveBeenCalled();
+
+    await emitAppState('active');
+    expect(simulatorConsumers).toHaveLength(2);
+    simulatorConsumers[1]({ lat: -41, lng: 174.001, timestamp: 30_000, accuracy: 5 });
+    await act(async () => { await flushMicrotasks(); });
+    expect(mockRecordMemoryEvidence).toHaveBeenLastCalledWith(expect.objectContaining({
+      ownerUserId: 'owner-a', source: 'simulator_test', atMs: 30_000,
+    }));
+    expect(background.startPassiveMemoryBackgroundUpdates).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  test('simulator selection retires an exact persisted physical lease from the previous owner', async () => {
+    mockAppState.currentState = 'background';
+    mockSelectedSource = 'simulator';
+    mockSimulatorEnabled = true;
+    background.readPassiveMemoryContext.mockResolvedValue({
+      v: 1,
+      ownerUserId: 'owner-before-login',
+      epoch: 'stale-real-epoch',
+      source: 'real',
+      consentVersion: 1,
+      acceptAfterMs: 1,
+      continuityState: {},
+      rawOrdinal: 8,
+    });
+
+    const view = render(<PassiveMemoryRecorder />);
+    await act(async () => { await flushMicrotasks(); });
+
+    expect(background.stopPassiveMemoryBackgroundUpdates)
+      .toHaveBeenCalledWith('stale-real-epoch');
+    expect(background.acquirePassiveMemoryLease).not.toHaveBeenCalled();
+    expect(background.startPassiveMemoryBackgroundUpdates).not.toHaveBeenCalled();
+    expect(mockMemory.setLastWatcherFix).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  test('real to simulator while a background native start is pending revokes the real epoch without fallback', async () => {
+    mockAppState.currentState = 'background';
+    let persistedContext: any = null;
+    background.acquirePassiveMemoryLease.mockImplementation(async (args: any) => {
+      persistedContext = { v: 1, consentVersion: 1, ...args };
+      return persistedContext;
+    });
+    background.readPassiveMemoryContext.mockImplementation(async () => persistedContext);
+    const nativeStart = deferred<boolean>();
+    background.startPassiveMemoryBackgroundUpdates.mockReturnValueOnce(nativeStart.promise);
+    const view = render(<PassiveMemoryRecorder />);
+    for (let turn = 0; turn < 100 && background.startPassiveMemoryBackgroundUpdates.mock.calls.length === 0; turn += 1) {
+      await act(async () => { await Promise.resolve(); });
+    }
+    expect(background.acquirePassiveMemoryLease).toHaveBeenCalledWith(expect.objectContaining({ source: 'real' }));
+
+    mockSelectedSource = 'simulator';
+    mockSimulatorEnabled = true;
+    view.rerender(<PassiveMemoryRecorder />);
+    await act(async () => { await flushMicrotasks(); });
+    nativeStart.resolve(true);
+    await act(async () => { await flushMicrotasks(); });
+
+    expect(background.startPassiveMemoryBackgroundUpdates).toHaveBeenCalledTimes(1);
+    expect(background.stopPassiveMemoryBackgroundUpdates)
+      .toHaveBeenCalledWith(persistedContext.epoch);
+    expect(supervisor.setConsumer).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  test('explicit simulator to real selection while backgrounded acquires only a real-provenance lease', async () => {
+    mockAppState.currentState = 'background';
+    mockSelectedSource = 'simulator';
+    mockSimulatorEnabled = true;
+    const view = render(<PassiveMemoryRecorder />);
+    await act(async () => { await flushMicrotasks(); });
+    expect(background.acquirePassiveMemoryLease).not.toHaveBeenCalled();
+
+    mockSelectedSource = 'real';
+    mockSimulatorEnabled = false;
+    view.rerender(<PassiveMemoryRecorder />);
+    await act(async () => { await flushMicrotasks(); });
+    expect(background.acquirePassiveMemoryLease).toHaveBeenCalledTimes(1);
+    expect(background.acquirePassiveMemoryLease).toHaveBeenCalledWith(expect.objectContaining({
+      ownerUserId: 'owner-a', source: 'real',
+    }));
+    expect(background.startPassiveMemoryBackgroundUpdates).toHaveBeenCalledTimes(1);
     view.unmount();
   });
 

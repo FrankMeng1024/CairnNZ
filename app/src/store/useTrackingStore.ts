@@ -2133,15 +2133,60 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         coordinateSource: 'none',
       });
     }
-    const drainedBeforeFinish = stopEntry.locationProviderSource === 'real'
-      ? await drainCommittedBackgroundLocations(true)
-      : 0;
-    // Include every foreground fix whose acceptance pipeline began before
-    // Finish froze new ingestion. Each such fix reaches disk and store state
-    // before the completion snapshot below is calculated. This reconciliation
-    // is intentionally unbounded: timing out a durable WAL append and then
-    // deleting its journal would truncate the route's historical tail.
-    await pointIngestTail;
+    let drainedBeforeFinish = 0;
+    try {
+      drainedBeforeFinish = stopEntry.locationProviderSource === 'real'
+        ? await drainCommittedBackgroundLocations('finish-fence')
+        : 0;
+      // Include every foreground fix whose acceptance pipeline began before
+      // Finish froze new ingestion. Each such fix reaches disk and store state
+      // before the completion snapshot below is calculated. This reconciliation
+      // is intentionally unbounded: timing out a durable WAL append and then
+      // deleting its journal would truncate the route's historical tail.
+      await pointIngestTail;
+    } catch (reconciliationError) {
+      // The terminal WAL snapshot is Save authority. Never continue with the
+      // already-eligible mounted prefix when its newer durable tail could not
+      // be read/projected or assigned downstream Memory responsibility.
+      let released = false;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { releaseHikeTrackFinishSeal } = require('../services/hikeTrackWriter');
+        released = await releaseHikeTrackFinishSeal(
+          stopEntry.sessionId,
+          stopEntry.liveOwnerGeneration ?? undefined,
+        );
+      } catch { /* the sealed journal remains recovery authority */ }
+      acceptanceFenceCutoffMs = null;
+      finishAcceptanceSnapshotClosed = false;
+      set({
+        status: 'paused',
+        transitionState: 'idle',
+        isFinishing: false,
+        lastStopReason: null,
+        savingHikeStep: null,
+        locationAvailable: false,
+      });
+      await updateUnfinishedActivity(finishOwnerUserId, stopEntry.sessionId, {
+        activeDurationMs: get().activeDurationAccumulatedMs,
+        activeSinceMs: null,
+      }).catch(() => false);
+      crashLogger.breadcrumb(
+        `activity:finish_reconciliation_failed released=${released} ${String(reconciliationError).slice(0, 80)}`,
+      );
+      Alert.alert(
+        'Activity not saved',
+        released
+          ? 'CairnNZ could not read the complete recording journal. Your Activity remains paused so you can try Finish again.'
+          : 'CairnNZ preserved the recording, but could not reopen its journal safely. Close and reopen CairnNZ before choosing Resume or Save.',
+      );
+      return {
+        status: 'recoverable-failure',
+        localCommit: 'not-committed',
+        clientActivityId: stopEntry.sessionId,
+        reason: 'evidence-reconciliation-failed',
+      };
+    }
     finishAcceptanceSnapshotClosed = true;
     acceptanceFenceCutoffMs = null;
     recordSavePhase('finish_reconciliation', saveTimelineStartedAt, {
@@ -3683,7 +3728,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // Every headless sample that crossed the durable lease before Pause is
       // journal authority. Project that fenced tail into the paused snapshot
       // once; there is no 1 s polling timer and no point is silently dropped.
-      await drainCommittedBackgroundLocations(true);
+      await drainCommittedBackgroundLocations('pause-fence');
     } else {
       deactivateBackgroundSource();
       drainBackgroundLocations();
@@ -6114,8 +6159,10 @@ async function markRecordingContinuityUnavailable(reason: string): Promise<void>
   });
 }
 
+type JournalProjectionAuthority = 'foreground' | 'pause-fence' | 'finish-fence';
+
 async function drainCommittedBackgroundLocations(
-  committedBeforeFence = false,
+  projectionAuthority: JournalProjectionAuthority = 'foreground',
 ): Promise<number> {
   await settleBackgroundLocationWrites();
   const durableContext = await readDurableActivityContext();
@@ -6154,10 +6201,22 @@ async function drainCommittedBackgroundLocations(
     if (ownedJournal.length > 0) {
       const projectionAuthorityIsCurrent = () => {
         const state = useTrackingStore.getState();
-        return state.sessionId === owner.sessionId
+        const sameOwner = state.sessionId === owner.sessionId
           && state.ownerUserId === owner.ownerUserId
-          && state.liveOwnerGeneration === owner.liveOwnerGeneration
-          && !state.isFinishing
+          && state.liveOwnerGeneration === owner.liveOwnerGeneration;
+        if (!sameOwner) return false;
+        if (projectionAuthority === 'finish-fence') {
+          return state.isFinishing
+            && !finishAcceptanceSnapshotClosed
+            && acceptanceFenceCutoffMs !== null
+            && (state.status === 'tracking' || state.status === 'paused');
+        }
+        if (projectionAuthority === 'pause-fence') {
+          return !state.isFinishing
+            && acceptanceFenceCutoffMs !== null
+            && state.status === 'paused';
+        }
+        return !state.isFinishing
           && (state.status === 'tracking' || state.status === 'paused');
       };
       // Replay outside Zustand's synchronous updater and yield between bounded
@@ -6289,7 +6348,8 @@ async function drainCommittedBackgroundLocations(
         continuityHandoffSource: continuity.source,
         rawOrdinalHighWatermark: realGpsRawOrdinal,
         queueHintCount: drained.length,
-        committedBeforeFence,
+        committedBeforeFence: projectionAuthority !== 'foreground',
+        projectionAuthority,
       }, {
         userId: owner.ownerUserId,
         clientActivityId: owner.sessionId,
@@ -6410,7 +6470,7 @@ async function transitionToForegroundSource(expectedIntentEpoch?: number): Promi
   // Activity. The foreground provider is already active, so this work cannot
   // create a stop-to-start capture gap. Identity checks inside the drain keep
   // a late result from crossing Pause, Finish, logout, or another Activity.
-  void drainCommittedBackgroundLocations(false).then((drainedCount) => {
+  void drainCommittedBackgroundLocations('foreground').then((drainedCount) => {
     appendSimulatorLog('PROVIDER', 'real_activity_background_drain', {
       reason: 'foreground-takeover',
       drainedCount,

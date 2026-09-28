@@ -303,6 +303,52 @@ describe('durable Activity → Memory downstream responsibility', () => {
     },
   );
 
+  test('same-owner logout/login starts a fresh automatic discovery generation after the cancelled scan settles', async () => {
+    mockRegistry = {
+      unfinished: {
+        clientActivityId: 'activity-generation-relogin', userId: 'owner-a',
+        liveOwnerGeneration: 'activity-owner-generation', locationProviderSource: 'real',
+      },
+      recoveryQueue: [], completed: [], tombstones: [],
+    };
+    mockJournal = [point(125, 1), point(135, 2)];
+    mockRecordMemoryEvidence.mockResolvedValue({ committed: true, deduplicated: false });
+    let releaseOldKeyScan!: () => void;
+    mockGetAllKeysStrict
+      .mockImplementationOnce(() => new Promise<string[]>(resolve => {
+        releaseOldKeyScan = () => resolve([]);
+      }))
+      .mockImplementation(async () => [...mockValues.keys()]);
+
+    const oldLoginScan = resumeActivityMemoryProjectionsForOwner('owner-a');
+    for (let turn = 0; turn < 100 && !releaseOldKeyScan; turn += 1) await Promise.resolve();
+    expect(releaseOldKeyScan).toBeDefined();
+
+    // Mirrors App's auth-effect cleanup and immediate same-account reattach.
+    mockCurrentOwnerUserId = '';
+    cancelActivityMemoryProjectionDiscoveryForOwner('owner-a');
+    mockCurrentOwnerUserId = 'owner-a';
+    const currentLoginScan = resumeActivityMemoryProjectionsForOwner('owner-a');
+    expect(getActivityMemoryProjectionDiscoveryState('owner-a').running).toBe(true);
+
+    releaseOldKeyScan();
+    await expect(oldLoginScan).resolves.toBe(0);
+    await expect(currentLoginScan).resolves.toBe(1);
+    await waitForActivityMemoryProjection('activity-generation-relogin');
+    expect(mockRecordMemoryEvidence.mock.calls.map(call => call[0].atMs)).toEqual([125, 135]);
+    await expect(activityMemoryProjectionIsComplete('owner-a', 'activity-generation-relogin'))
+      .resolves.toBe(true);
+    expect(getActivityMemoryProjectionDiscoveryState('owner-a')).toMatchObject({
+      running: false, retryAttempt: 0, nextRetryAtMs: null, lastError: null,
+    });
+
+    // A permanently signed-out generation cannot schedule or revive work.
+    mockCurrentOwnerUserId = '';
+    cancelActivityMemoryProjectionDiscoveryForOwner('owner-a');
+    await expect(resumeActivityMemoryProjectionsForOwner('owner-a')).resolves.toBe(0);
+    expect(mockRecordMemoryEvidence).toHaveBeenCalledTimes(2);
+  });
+
   test('one broken Activity does not suppress another and owner cancellation stops discovery retry', async () => {
     jest.useFakeTimers();
     try {

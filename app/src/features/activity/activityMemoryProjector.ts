@@ -48,6 +48,7 @@ interface OwnerProjectionAuthority {
   purging: boolean;
   admittedSchedulers: Set<Promise<void>>;
   discoveryFlight: Promise<number> | null;
+  discoveryFlightGeneration: number | null;
   discoveryTimer: ReturnType<typeof setTimeout> | null;
   discoveryRetryAttempt: number;
   discoveryNextRetryAtMs: number | null;
@@ -88,6 +89,7 @@ function ownerAuthority(ownerUserId: string): OwnerProjectionAuthority {
       purging: false,
       admittedSchedulers: new Set(),
       discoveryFlight: null,
+      discoveryFlightGeneration: null,
       discoveryTimer: null,
       discoveryRetryAttempt: 0,
       discoveryNextRetryAtMs: null,
@@ -616,9 +618,9 @@ function scheduleDiscoveryRetry(
   authorityGeneration: number,
   error: unknown,
 ): void {
+  if (!ownerAdmissionIsCurrent(ownerUserId, authorityGeneration) || !ownerIsCurrent(ownerUserId)) return;
   authority.discoveryLastError = String(error).slice(0, 400);
   metrics.discoveryFailures += 1;
-  if (!ownerAdmissionIsCurrent(ownerUserId, authorityGeneration) || !ownerIsCurrent(ownerUserId)) return;
   const delay = RETRY_MS[Math.min(authority.discoveryRetryAttempt, RETRY_MS.length - 1)];
   authority.discoveryRetryAttempt += 1;
   authority.discoveryNextRetryAtMs = Date.now() + delay;
@@ -639,10 +641,19 @@ export function resumeActivityMemoryProjectionsForOwner(ownerUserId: string): Pr
   if (!ownerUserId) return Promise.resolve(0);
   const authority = ownerAuthority(ownerUserId);
   if (authority.purging) return Promise.resolve(0);
-  if (authority.discoveryFlight) return authority.discoveryFlight;
   const authorityGeneration = authority.generation;
+  if (authority.discoveryFlight
+    && authority.discoveryFlightGeneration === authorityGeneration) return authority.discoveryFlight;
+  // A cancelled generation may still be blocked inside a storage await. The
+  // new login owns a distinct scan, serialized after that entered mutation;
+  // it never joins the stale flight or overlaps it with uncontrolled reads.
+  const supersededFlight = authority.discoveryFlight;
+  const serializationBoundary = supersededFlight
+    ? supersededFlight.catch(() => 0).then(() => undefined)
+    : Promise.resolve();
   let flight!: Promise<number>;
-  flight = scanActivityMemoryProjectionsForOwner(ownerUserId, authorityGeneration)
+  flight = serializationBoundary
+    .then(() => scanActivityMemoryProjectionsForOwner(ownerUserId, authorityGeneration))
     .then(resumed => {
       if (ownerAdmissionIsCurrent(ownerUserId, authorityGeneration)) {
         authority.discoveryRetryAttempt = 0;
@@ -658,9 +669,13 @@ export function resumeActivityMemoryProjectionsForOwner(ownerUserId: string): Pr
       throw error;
     })
     .finally(() => {
-      if (authority.discoveryFlight === flight) authority.discoveryFlight = null;
+      if (authority.discoveryFlight === flight) {
+        authority.discoveryFlight = null;
+        authority.discoveryFlightGeneration = null;
+      }
     });
   authority.discoveryFlight = flight;
+  authority.discoveryFlightGeneration = authorityGeneration;
   return flight;
 }
 
@@ -672,7 +687,8 @@ export function getActivityMemoryProjectionDiscoveryState(ownerUserId: string): 
 } {
   const authority = ownerAuthority(ownerUserId);
   return {
-    running: authority.discoveryFlight !== null,
+    running: authority.discoveryFlight !== null
+      && authority.discoveryFlightGeneration === authority.generation,
     retryAttempt: authority.discoveryRetryAttempt,
     nextRetryAtMs: authority.discoveryNextRetryAtMs,
     lastError: authority.discoveryLastError,
