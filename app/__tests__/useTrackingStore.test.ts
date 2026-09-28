@@ -106,6 +106,15 @@ jest.mock('../src/services/hikeTrackWriter', () => ({
   renameToCompleted: jest.fn(async () => {}),
   discardActiveHike: jest.fn(async () => {}),
   readActiveHikeTail: jest.fn(async () => []),
+  readActiveHikeTerminalSnapshot: jest.fn(async (_sessionId: string, options?: {
+    expectedOwnerGeneration?: string; expectedCutoffAt?: number;
+  }) => ({
+    status: 'complete',
+    source: 'active',
+    points: [...mockHikeJournalPoints],
+    ownerGeneration: options?.expectedOwnerGeneration,
+    cutoffAt: options?.expectedCutoffAt ?? Date.now(),
+  })),
   truncateActiveHikeTrack: jest.fn(async () => {}),
   readHikeTrackForProjection: jest.fn(async () => [...mockHikeJournalPoints]),
 }));

@@ -252,6 +252,55 @@ describe('durable Activity journal projection', () => {
     expect(rebased!.canonical.at(-1)).toMatchObject({ rawOrdinal: 514 });
   });
 
+  test.each(['hiking', 'running'])('%s preserves one Activity through three foreground/background cycles and a yielded-recovery fix', async () => {
+    const cycleSize = 48;
+    const sources: CanonicalJournalPoint['source'][] = [
+      'foreground', 'background', 'foreground',
+      'background', 'foreground', 'background', 'foreground',
+    ];
+    const journal = sources.flatMap((source, cycleIndex) => Array.from(
+      { length: cycleSize },
+      (_, offset) => point(cycleIndex * cycleSize + offset, 'segment-a', source),
+    ));
+    const concurrent = point(journal.length, 'segment-a', 'foreground');
+    let mounted = journal.slice(0, cycleSize / 2) as CanonicalJournalPoint[];
+    let injected = false;
+
+    const prepared = await projectActivityJournalCooperatively(mounted, journal, {
+      maxPointsPerSlice: 12,
+      yieldToHost: async () => {
+        if (!injected) {
+          injected = true;
+          mounted = [...mounted, concurrent];
+        }
+        await Promise.resolve();
+      },
+    });
+    expect(prepared).not.toBeNull();
+    const rebased = rebaseActivityJournalProjection(prepared!.projection, mounted);
+    expect(rebased).not.toBeNull();
+    const expected = projectActivityJournal(mounted, journal);
+    expect(rebased).toEqual(expected);
+    expect(rebased!.canonical).toHaveLength(journal.length + 1);
+    expect(journal.every(item => (
+      item.clientActivityId === 'activity-a' && item.ownerGeneration === 'generation-a'
+    ))).toBe(true);
+    expect(rebased!.canonical.every(item => item.segmentId === 'segment-a')).toBe(true);
+    expect(rebased!.canonical[0]).toMatchObject({ rawOrdinal: 1 });
+    expect(rebased!.canonical.at(-1)).toMatchObject({ rawOrdinal: journal.length + 1 });
+    const evidenceIds = rebased!.canonical.map(item => `${item.segmentId}:${item.rawOrdinal}`);
+    expect(new Set(evidenceIds).size).toBe(evidenceIds.length);
+    const sourceTransitions = journal.slice(1).filter((item, index) => (
+      item.source !== journal[index].source
+    ));
+    expect(sourceTransitions).toHaveLength(6);
+    const liveEvidenceIds = rebased!.live.map(item => `${item.segmentId}:${item.rawOrdinal}`);
+    expect(new Set(liveEvidenceIds).size).toBe(liveEvidenceIds.length);
+    expect(rebased!.live[0]).toMatchObject({ rawOrdinal: 1 });
+    expect(rebased!.live.at(-1)).toMatchObject({ rawOrdinal: journal.length + 1 });
+    expect(prepared!.metrics.yieldCount).toBeGreaterThan(0);
+  });
+
   test('foreground recovery yields to queued actions under a fixed 1k/5k/20k protocol', async () => {
     // Fixed before execution for this production helper path: one repetition,
     // 16 points/slice, exact geometry, <=120 ms uninterrupted JS work, <=250

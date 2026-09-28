@@ -23,6 +23,7 @@ import { passiveBackgroundMemoryCapability } from '../services/passiveMemoryCapa
 import {
   acquirePassiveMemoryLease,
   readPassiveMemoryContext,
+  revokePassiveMemoryEvidenceAdmission,
   startPassiveMemoryBackgroundUpdates,
   stopPassiveMemoryBackgroundUpdates,
 } from '../../../services/passiveMemoryBackgroundTask';
@@ -207,6 +208,12 @@ export function PassiveMemoryRecorder() {
       transition?: { generation: number; phase: 'foreground' | 'background' },
     ) => {
       const expectedOwnedEpoch = ownedBackgroundEpoch;
+      if (expectedOwnedEpoch) {
+        // Evidence admission closes before any persisted-context read or slow
+        // native stop. The physical task may remain alive briefly, but its
+        // real fixes no longer own production Memory authority.
+        await revokePassiveMemoryEvidenceAdmission(expectedOwnedEpoch);
+      }
       const persisted = await readPassiveMemoryContext().catch(() => null);
       if (transition && !transitionIsCurrent(transition.generation, transition.phase)) return;
       const epoch = expectedOwnedEpoch
@@ -216,6 +223,7 @@ export function PassiveMemoryRecorder() {
         // must not preserve somebody else's physical acquisition runtime.
         ?? (adoptPersisted ? persisted?.epoch ?? null : null);
       if (!epoch) return;
+      if (epoch !== expectedOwnedEpoch) await revokePassiveMemoryEvidenceAdmission(epoch);
       if (ownedBackgroundEpoch === epoch) ownedBackgroundEpoch = null;
       if (continuityAuthority.backgroundEpoch === epoch) continuityAuthority.backgroundEpoch = null;
       if (persisted?.ownerUserId === ownerUserId && authorityIsCurrent() && !cancelled) {

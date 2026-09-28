@@ -31,7 +31,9 @@ jest.mock('../../features/activitySimulator/simulatorLog', () => ({
 import {
   acquirePassiveMemoryLease,
   handlePassiveMemoryBackgroundTask,
+  readPassiveMemoryContext,
   releasePassiveMemoryLease,
+  revokePassiveMemoryEvidenceAdmission,
   startPassiveMemoryBackgroundUpdates,
   stopPassiveMemoryBackgroundUpdates,
 } from '../passiveMemoryBackgroundTask';
@@ -162,6 +164,16 @@ describe('passive Memory headless task', () => {
     for (let turn = 0; turn < 40 && !releaseStart; turn += 1) await Promise.resolve();
     expect(releaseStart).toBeDefined();
     const revoking = stopPassiveMemoryBackgroundUpdates(context.epoch);
+    for (let turn = 0; turn < 40
+      && mockValues.get(require('../../features/memory/services/passiveMemoryAuthority')
+        .passiveMemoryRevocationKey(context.epoch)) !== context.epoch; turn += 1) {
+      await Promise.resolve();
+    }
+    expect(mockValues.get(require('../../features/memory/services/passiveMemoryAuthority')
+      .passiveMemoryRevocationKey(context.epoch))).toBe(context.epoch);
+    // Logical writer authority is gone while the physical native start is
+    // still deliberately unresolved.
+    await expect(readPassiveMemoryContext()).resolves.toBeNull();
     Location.hasStartedLocationUpdatesAsync.mockResolvedValue(true);
     releaseStart();
     await Promise.all([starting, revoking]);
@@ -173,5 +185,18 @@ describe('passive Memory headless task', () => {
       error: null,
     });
     expect(mockRecordMemoryEvidence).not.toHaveBeenCalled();
+  });
+
+  test('an epoch revocation is immediate and does not revoke a newer real epoch', async () => {
+    await acquirePassiveMemoryLease({
+      ownerUserId: 'owner-a', epoch: 'epoch-old', source: 'real', acceptAfterMs: 1,
+    });
+    await revokePassiveMemoryEvidenceAdmission('epoch-old');
+    await expect(readPassiveMemoryContext()).resolves.toBeNull();
+
+    await acquirePassiveMemoryLease({
+      ownerUserId: 'owner-a', epoch: 'epoch-new', source: 'real', acceptAfterMs: 2,
+    });
+    await expect(readPassiveMemoryContext()).resolves.toMatchObject({ epoch: 'epoch-new', source: 'real' });
   });
 });

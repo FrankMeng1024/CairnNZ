@@ -93,6 +93,57 @@ describe('Memory durable ownership boundary', () => {
     expect(attachMemorySync).not.toHaveBeenCalled();
   });
 
+  test('passive real evidence commits for the current consented epoch then stops at immediate source revocation', async () => {
+    const values = new Map<string, string>([
+      ['cairn:passive-memory:active:v1', '1'],
+      ['cairn:passive-memory:context:v1', JSON.stringify({
+        v: 1,
+        ownerUserId: 'account-a',
+        epoch: 'passive-real-epoch',
+        source: 'real',
+        consentVersion: 1,
+      })],
+    ]);
+    jest.doMock('@react-native-async-storage/async-storage', () => ({
+      __esModule: true,
+      default: { getItem: jest.fn(async (key: string) => values.get(key) ?? null) },
+    }));
+    jest.doMock('../store/useMemoryStore', () => ({
+      useMemoryStore: { getState: () => ({ points: [], testPoints: [], recordPoint: jest.fn() }) },
+    }));
+    jest.doMock('../services/memoryPersistence', () => ({
+      ensureMemoryPersistenceForUser: jest.fn(async () => undefined),
+      flushMemoryNow: jest.fn(async () => undefined),
+      flushSyntheticMemoryNow: jest.fn(async () => undefined),
+      getMemoryOwnerWriteEpoch: jest.fn(() => 0),
+    }));
+    jest.doMock('../../../services/memorySync', () => ({ attachMemorySync: jest.fn() }));
+    jest.doMock('../../../store/useAppStore', () => ({
+      useAppStore: { getState: () => ({ user: null, isLoggedIn: false }) },
+    }));
+
+    const { passiveMemoryRevocationKey } = require('../services/passiveMemoryAuthority');
+    const { recordMemoryEvidence } = require('../services/recordMemoryEvidence');
+    const appendDurableMemoryEvidence = require('../services/memoryEvidenceJournal')
+      .appendDurableMemoryEvidence as jest.Mock;
+    const evidence = {
+      lat: -41,
+      lng: 174,
+      source: 'passive_real',
+      ownerUserId: 'account-a',
+      ownerAuthority: 'durable_passive_lease',
+      ownerAuthorityEpoch: 'passive-real-epoch',
+      continuityState: 'accepted',
+    } as const;
+
+    await expect(recordMemoryEvidence({ ...evidence, atMs: 2_000 }))
+      .resolves.toMatchObject({ committed: true });
+    values.set(passiveMemoryRevocationKey('passive-real-epoch'), 'passive-real-epoch');
+    await expect(recordMemoryEvidence({ ...evidence, atMs: 3_000 }))
+      .rejects.toThrow('memory_passive_authority_changed');
+    expect(appendDurableMemoryEvidence).toHaveBeenCalledTimes(1);
+  });
+
   test('an Account A journal commit finishing after Account B takes over never enters B memory', async () => {
     let currentUserId = 'account-a';
     let releaseAppend: () => void = () => undefined;

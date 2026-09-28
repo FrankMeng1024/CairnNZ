@@ -7,6 +7,7 @@ import {
 } from './memoryPersistence';
 import { attachMemorySync } from '../../../services/memorySync';
 import { appendDurableMemoryEvidence } from './memoryEvidenceJournal';
+import { passiveMemoryRevocationKey } from './passiveMemoryAuthority';
 
 let commitTail: Promise<void> = Promise.resolve();
 let evidenceMetrics = {
@@ -112,12 +113,19 @@ export function recordMemoryEvidence(args: {
           AsyncStorage.getItem('cairn:passive-memory:active:v1'),
           AsyncStorage.getItem('cairn:passive-memory:context:v1'),
         ]);
-        let passiveContext: { ownerUserId?: string; epoch?: string; source?: 'real' } | null = null;
+        let passiveContext: {
+          ownerUserId?: string; epoch?: string; source?: 'real'; consentVersion?: number;
+        } | null = null;
         try { passiveContext = passiveRaw ? JSON.parse(passiveRaw) : null; } catch {}
+        const revokedEpoch = passiveContext?.epoch
+          ? await AsyncStorage.getItem(passiveMemoryRevocationKey(passiveContext.epoch))
+          : null;
         if (activityActive === '1'
           || passiveActive !== '1'
           || passiveContext?.ownerUserId !== ownerUserId
           || passiveContext?.epoch !== args.ownerAuthorityEpoch
+          || passiveContext?.consentVersion !== 1
+          || revokedEpoch === passiveContext?.epoch
           // Legacy v1 leases without this field were also exclusively real.
           // New leases persist it explicitly so simulator can never acquire
           // physical writer authority through an app-phase transition.

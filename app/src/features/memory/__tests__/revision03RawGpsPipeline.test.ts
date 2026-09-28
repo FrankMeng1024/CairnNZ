@@ -101,6 +101,10 @@ jest.mock('../../../services/hikeTrackWriter', () => ({
   updateHikeMeta: jest.fn(async () => undefined), updateHikeMetaStrict: jest.fn(async () => undefined), flushNow: jest.fn(async () => undefined),
   renameToCompleted: jest.fn(async () => undefined), discardActiveHike: jest.fn(async () => undefined),
   readActiveHikeTail: jest.fn(async () => mockCanonicalHikeJournal()),
+  readActiveHikeTerminalSnapshot: jest.fn(async (_sessionId: string, options?: { expectedCutoffAt?: number; expectedOwnerGeneration?: string }) => ({
+    status: 'complete', source: 'active', points: mockCanonicalHikeJournal(),
+    cutoffAt: options?.expectedCutoffAt ?? Date.now(), ownerGeneration: options?.expectedOwnerGeneration,
+  })),
   readHikeTrackForProjection: jest.fn(async () => mockCanonicalHikeJournal()),
   truncateActiveHikeTrack: jest.fn(async () => undefined),
   sealHikeTrackForFinish: jest.fn(async () => true), releaseHikeTrackFinishSeal: jest.fn(async () => true),
@@ -517,6 +521,25 @@ describe('revision-03 realistic Raw GPS -> live isolated Memory pipeline', () =>
       projectedThroughRawOrdinal: journal.length,
       state: 'complete',
     });
+    process.stderr.write(`R6_FINAL_OWNER_JOURNEY ${JSON.stringify({
+      mode,
+      funnel: {
+        raw: journal.length,
+        qualified: journal.length,
+        acceptedCanonical: journal.length,
+        wal: prepared.payload.route_points_canonical.length,
+        live: journal.length,
+        memoryResponsibilityThrough: responsibility.projectedThroughRawOrdinal,
+        terminalCanonical: prepared.payload.route_points_canonical.length,
+        baseFinal: result.trackPoints.length,
+        committedFinal: restartedArtifact!.points.length,
+      },
+      segmentCount: new Set(journal.map(point => point.segmentId)).size,
+      firstStableEvidenceId: `${journal[0].segmentId}:raw-${journal[0].rawOrdinal}`,
+      lastStableEvidenceId: `${journal.at(-1)!.segmentId}:raw-${journal.at(-1)!.rawOrdinal}`,
+      finalRevision: result.finalGeometryRevision,
+      finalFingerprint: result.finalGeometryFingerprint,
+    })}\n`);
   });
 
   test('Finish awaits a foreground append admitted before its fence and snapshots its published point', async () => {
@@ -588,7 +611,7 @@ describe('revision-03 realistic Raw GPS -> live isolated Memory pipeline', () =>
       .toEqual([...prefix.map(point => point.t), tailTimestamp]);
   });
 
-  test('terminal WAL read failure reopens the exact sealed Activity without creating Final or sync payload', async () => {
+  test('uncertain terminal WAL snapshot reopens the exact sealed Activity without creating Final or sync payload', async () => {
     await seedTracking('qa-r5-storage-fault', 'r5storage', 'hiking', 'real', EPOCH);
     const current = useTrackingStore.getState();
     const clientActivityId = String(current.sessionId);
@@ -609,7 +632,9 @@ describe('revision-03 realistic Raw GPS -> live isolated Memory pipeline', () =>
       lastFixTimestamp: prefix[1].t,
     });
     const writer = require('../../../services/hikeTrackWriter');
-    writer.readActiveHikeTail.mockRejectedValueOnce(new Error('recoverable-wal-read-failure'));
+    writer.readActiveHikeTerminalSnapshot.mockResolvedValueOnce({
+      status: 'uncertain', reason: 'journal-read-failed', recoverablePoints: prefix,
+    });
     writer.releaseHikeTrackFinishSeal.mockClear();
     const pendingSync = require('../../../services/pendingSyncStore');
     pendingSync.savePending.mockClear();

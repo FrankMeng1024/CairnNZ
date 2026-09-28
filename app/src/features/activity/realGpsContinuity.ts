@@ -423,13 +423,22 @@ function showsCumulativeProgress(features: WindowFeatures): boolean {
 
 function showsStationaryCluster(features: WindowFeatures): boolean {
   const uncertaintyRadiusM = Math.min(8, Math.max(3.5, features.medianAccuracyM * 0.85));
+  const uncertaintyConfinedOrbit = features.clusterRadiusM <= Math.max(4, features.medianAccuracyM * 1.05)
+    && features.robustDispersionM <= Math.max(2.5, features.medianAccuracyM * 0.75)
+    && features.progressRatio <= 0.5
+    && features.directionVariabilityDeg >= 55;
+  const ordinaryStationaryCluster = features.netM <= Math.max(2.5, features.medianAccuracyM * 0.55)
+    && features.progressRatio <= 0.42
+    && features.clusterRadiusM <= uncertaintyRadiusM
+    && features.turnSignConsistency < 0.75;
   return features.count >= 5
     && features.durationMs >= 3_000
     && features.cumulativeM >= 2
-    && features.netM <= Math.max(2.5, features.medianAccuracyM * 0.55)
-    && features.progressRatio <= 0.42
-    && features.clusterRadiusM <= uncertaintyRadiusM
-    && features.turnSignConsistency < 0.75
+    // A rotating GPS cloud can have perfectly consistent turn signs and its
+    // endpoints can land on opposite sides of the centre. If the whole orbit
+    // remains inside reported uncertainty, it is still a stop—not repeatedly
+    // traversed canonical travel.
+    && (ordinaryStationaryCluster || uncertaintyConfinedOrbit)
     && (features.lowReportedSpeedFraction >= 0.4 || features.directionVariabilityDeg >= 55);
 }
 
@@ -603,6 +612,34 @@ function absoluteEdgesPlausible(
   });
 }
 
+function showsCoherentEgressFromAnchor(
+  base: RealGpsObservation,
+  points: RealGpsObservation[],
+  mode: ActivityMode,
+): boolean {
+  if (points.length < 3 || !absoluteEdgesPlausible(points, mode)) return false;
+  const distancesM = points.map(point => haversineM(base, point));
+  const lastDistanceM = distancesM[distancesM.length - 1];
+  const uncertaintyScaleM = Math.max(...points.map(point => normalizedAccuracy(point.accuracy)));
+  if (lastDistanceM < Math.max(2.2, uncertaintyScaleM * 0.3)) return false;
+
+  const finalBearing = bearingDegrees(base, points[points.length - 1]);
+  const radialBearings = points
+    .filter((_, index) => distancesM[index] >= 0.75)
+    .map(point => bearingDegrees(base, point));
+  if (radialBearings.length < 2
+    || radialBearings.some(bearing => angleDeltaDegrees(bearing, finalBearing) > 50)) return false;
+
+  let outwardSteps = 0;
+  let inwardSteps = 0;
+  for (let index = 1; index < distancesM.length; index += 1) {
+    const deltaM = distancesM[index] - distancesM[index - 1];
+    if (deltaM >= 0.35) outwardSteps += 1;
+    if (deltaM <= -0.75) inwardSteps += 1;
+  }
+  return outwardSteps >= 2 && inwardSteps === 0;
+}
+
 /** Return the first candidate-evidence index belonging to a supported movement
  * episode. The accepted travel anchor remains useful evidence when it agrees,
  * but neither a recent nor an old stationary bridge is allowed to veto a
@@ -650,7 +687,11 @@ function stationaryCandidateProgressStartIndex(
     const metreCadenceProgress = points.length >= 3
       && episodeFeatures.durationMs >= 1_500
       && episodeFeatures.durationMs <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
-      && episodeFeatures.netM >= Math.max(2.2, uncertaintyScaleM * 0.45)
+      // Three directionally coherent metre-cadence fixes are independent
+      // positional evidence even when each fix reports 8 m uncertainty. The
+      // former 0.45 scale required more than a normal 1 Hz walking episode
+      // could accumulate before the bounded candidate rolled over forever.
+      && episodeFeatures.netM >= Math.max(2.2, uncertaintyScaleM * 0.3)
       && episodeFeatures.directionVariabilityDeg <= 50;
     const independentSpeedSupport = episodeFeatures.reportedMovingFraction >= 0.34
       && points.length >= 2
@@ -689,10 +730,29 @@ function stationaryCandidateProgressStartIndex(
           && Number.isFinite(point.speedAccuracy)
           && point.speedAccuracy > 0.8)
       )).length;
+      const noScalarMovingSupport = suffix.length >= 3
+        && suffix.every(point => (
+          point.speed == null
+          || !Number.isFinite(point.speed)
+          || point.speed < REPORTED_STATIONARY_SPEED_MPS
+        ));
       const allZeroPositionContradiction = suffix.length >= 3
         && suffix.every(point => point.speed === 0);
-      if ((unreliableScalarCount >= 2 || allZeroPositionContradiction)
-        && episodeShowsProgress(suffix)) return startIndex;
+      // A provider can alternate measured zero, missing, and a small measured
+      // non-zero value while its positions show one coherent walking episode.
+      // Scalar speed remains supporting metadata; it cannot become the sole
+      // veto once three independent positional fixes pass the drift controls.
+      // The wider mixed-low rule is restricted to a proven supported-stop
+      // departure. At initial acquisition, the same low-speed fast innovation
+      // remains quarantined by the existing ALMOST negative control.
+      const supportedStopScalarContradiction = stationaryPrefix && noScalarMovingSupport;
+      if ((unreliableScalarCount >= 2
+          || allZeroPositionContradiction
+          || supportedStopScalarContradiction)
+        && episodeShowsProgress(suffix)
+        && (!noScalarMovingSupport || showsCoherentEgressFromAnchor(base, suffix, mode))) {
+        return startIndex;
+      }
     }
     const current = evidence[evidence.length - 1];
     const currentHasIndependentMovingSpeed = hasReliableReportedSpeed(current)
@@ -702,7 +762,14 @@ function stationaryCandidateProgressStartIndex(
   }
   for (let startIndex = Math.max(0, evidence.length - 3); startIndex < evidence.length - 1; startIndex += 1) {
     if (stationaryPrefix && startIndex === 0) continue;
-    if (episodeShowsProgress(evidence.slice(startIndex))) return startIndex;
+    const suffix = evidence.slice(startIndex);
+    const hasScalarMovingSupport = suffix.some(point => (
+      hasReliableReportedSpeed(point) && Number(point.speed) >= REPORTED_STATIONARY_SPEED_MPS
+    ));
+    if (episodeShowsProgress(suffix)
+      && (hasScalarMovingSupport || showsCoherentEgressFromAnchor(base, suffix, mode))) {
+      return startIndex;
+    }
   }
   return null;
 }
@@ -867,7 +934,7 @@ function classifyWithoutPending(
     && windowFeatures.stepSpeedMadMps / Math.max(0.25, windowFeatures.medianStepSpeedMps) <= 0.75;
   if (
     (reportedMoving || positionEdgeClearlyMoving || (
-      !stationaryTimeoutGuard && cumulativeWindowSupportsMotion
+      !stationaryTimeoutGuard && cumulativeWindowSupportsMotion && currentEdgeSupportsMotion
     ))
     && (diagnostics.displacementFromTrustedM ?? 0) >= 0.75
     && (diagnostics.impliedSpeedMps ?? 0) <= MODE_MAX_SPEED_MPS[mode] + 1
@@ -1019,12 +1086,18 @@ export function evaluateRealGpsObservation(
   const stationaryProgressStartIndex = pending.reason === 'possible-stationary-jitter'
     ? stationaryCandidateProgressStartIndex(base, evidence, mode)
     : null;
+  const recentRawStillSupportsStationary = pending.reason === 'possible-stationary-jitter'
+    && showsStationaryCluster(featuresFor(observedState.recentEligibleRaw));
+  const coherentStationaryEgress = stationaryProgressStartIndex !== null
+    && showsCoherentEgressFromAnchor(base, evidence.slice(stationaryProgressStartIndex), mode);
   const candidateProgressConfirmed = pending.reason === 'possible-stationary-jitter'
     // One long-interval near-zero fix followed by unavailable scalar speed is
     // a stop transition, not enough support to turn drift into a last edge.
     // Short-cadence coherent slow walking/backtracks still use positional
     // evidence, and two explicit moving fixes still resume promptly.
-    ? !guardedStopTransition && stationaryProgressStartIndex !== null
+    ? !guardedStopTransition
+      && stationaryProgressStartIndex !== null
+      && (!recentRawStillSupportsStationary || coherentStationaryEgress)
     : pending.reason === 'large-lateral-innovation'
       ? showsCumulativeProgress(sequenceFeatures)
         && sequenceFeatures.progressRatio >= 0.68
@@ -1047,6 +1120,7 @@ export function evaluateRealGpsObservation(
     const confirmedCandidates = pending.reason === 'possible-stationary-jitter'
       && stationaryProgressStartIndex === 0
       && (!candidateBeganPromptly || currentExplicitlyMoving)
+      && (currentExplicitlyMoving || !coherentStationaryEgress)
       ? supportedPendingObservations.filter(candidate => (
           !explicitlyNearZeroSpeed(candidate)
           && !(pendingContainsNearZeroSpeed && (

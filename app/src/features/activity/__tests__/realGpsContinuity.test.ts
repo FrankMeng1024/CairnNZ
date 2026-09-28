@@ -60,9 +60,11 @@ function ingest(
 
 describe('real GPS physical continuity', () => {
   const r5SupportedStopRecoveryProfile: Array<Record<string, unknown>> = [];
+  const r6SupportedStopRecoveryProfile: Array<Record<string, unknown>> = [];
 
   afterAll(() => {
     process.stderr.write(`R5_SUPPORTED_STOP_RECOVERY_PROFILE ${JSON.stringify(r5SupportedStopRecoveryProfile)}\n`);
+    process.stderr.write(`R6_SUPPORTED_STOP_RECOVERY_PROFILE ${JSON.stringify(r6SupportedStopRecoveryProfile)}\n`);
   });
 
   test('normal coherent walking is accepted immediately without a confirmation queue', () => {
@@ -803,6 +805,197 @@ describe('real GPS physical continuity', () => {
       candidateDelayMs: decisions[firstAcceptedIndex].candidateEvent?.delayMs ?? 0,
       acceptedSuffixCount: resumed.length,
     });
+  });
+
+  const r6CommonJourneyCases = (['hiking', 'running'] as const).flatMap(mode => [
+    ...([1_000, 5_000, 8_000, 15_000] as const).flatMap(resumeCadenceMs => ([
+      [mode, 60_000, resumeCadenceMs, 'zero', [0, 0, 0, 0, 0, 0]],
+      [mode, 60_000, resumeCadenceMs, 'missing', [null, null, null, null, null, null]],
+      [mode, 60_000, resumeCadenceMs, 'inconsistent', [0, null, 0.2, 0, null, 0.1]],
+    ] as const)),
+    ...([180_000, 600_000] as const).flatMap(stopDurationMs => (
+      [1_000, 5_000, 8_000] as const
+    ).flatMap(resumeCadenceMs => ([
+      [mode, stopDurationMs, resumeCadenceMs, 'zero', [0, 0, 0, 0, 0, 0]],
+      [mode, stopDurationMs, resumeCadenceMs, 'missing', [null, null, null, null, null, null]],
+    ] as const))),
+  ]);
+
+  test.each(r6CommonJourneyCases)(
+    'R6 %s resumes after a %ims supported stop at %ims cadence with scalar %s', (
+    mode,
+    stopDurationMs,
+    resumeCadenceMs,
+    scalarCase,
+    resumedSpeeds,
+  ) => {
+    let state = createRealGpsContinuityState();
+    const canonical: RealGpsObservation[] = [];
+    const commit = (point: RealGpsObservation) => {
+      const decision = evaluateRealGpsObservation(state, point, mode, point.t + 350);
+      state = decision.state;
+      if (decision.kind === 'ACCEPT') {
+        for (const accepted of [...(decision.confirmedCandidates ?? []), point]) {
+          state = acceptRealGpsObservation(state, accepted, 'r6-dense-stop').state;
+          canonical.push(accepted);
+        }
+      }
+      return decision;
+    };
+    for (let index = 0; index < 6; index += 1) {
+      commit(observation(0, index * 5, 1_000 + index * 4_000, {
+        accuracy: 6,
+        speed: mode === 'running' ? 2.4 : 1.25,
+        speedAccuracy: 0.3,
+      }));
+    }
+    const stopEastM = 25;
+    const stopStartedAt = 30_000;
+    const canonicalBeforeStop = canonical.length;
+    for (let elapsed = 0, index = 0; elapsed <= stopDurationMs; elapsed += 2_000, index += 1) {
+      commit(observation(
+        [0.2, -0.25, 0.15, -0.1][index % 4],
+        stopEastM + [0.15, -0.2, 0.1, -0.15][index % 4],
+        stopStartedAt + elapsed,
+        { accuracy: 8, speed: 0, speedAccuracy: 0.25 },
+      ));
+    }
+    expect(canonical).toHaveLength(canonicalBeforeStop);
+
+    const resumeStartedAt = stopStartedAt + stopDurationMs + resumeCadenceMs;
+    const canonicalBeforeResume = canonical.length;
+    const decisions = Array.from({ length: 6 }, (_, index) => commit(observation(
+      0,
+      stopEastM + (index + 1) * 1.25 * (resumeCadenceMs / 1_000),
+      resumeStartedAt + index * resumeCadenceMs,
+      {
+        accuracy: 8,
+        speed: resumedSpeeds[index],
+        speedAccuracy: scalarCase === 'inconsistent' && index % 2 === 0 ? 0.2 : null,
+      },
+    )));
+    const firstAcceptedIndex = decisions.findIndex(decision => decision.kind === 'ACCEPT');
+    expect(firstAcceptedIndex).toBeGreaterThanOrEqual(0);
+    expect(firstAcceptedIndex + 1).toBeLessThanOrEqual(4);
+    const resumedCanonical = canonical.slice(canonicalBeforeResume);
+    expect(resumedCanonical).not.toHaveLength(0);
+    expect(resumedCanonical.every(point => point.t >= resumeStartedAt)).toBe(true);
+    expect(state.positionEstimate?.t).toBe(state.lastTrusted?.t);
+    r6SupportedStopRecoveryProfile.push({
+      mode,
+      stopDurationMs,
+      cadenceMs: resumeCadenceMs,
+      scalarCase,
+      acceptedObservationCount: firstAcceptedIndex + 1,
+      acceptedObservationDelayMs: firstAcceptedIndex * resumeCadenceMs,
+      acceptedSuffixCount: resumedCanonical.length,
+    });
+  });
+
+  test.each((['hiking', 'running'] as const).flatMap(mode => (
+    [1_000, 2_000, 5_000, 8_000] as const
+  ).flatMap(cadenceMs => (['zero', 'missing', 'mixed'] as const).map(scalarCase => (
+    [mode, cadenceMs, scalarCase] as const
+  )))))(
+    'R6 A5 %s rejects a fixed-centre 1-8m stationary cloud at %ims with scalar %s', (
+      mode,
+      cadenceMs,
+      scalarCase,
+    ) => {
+      let state = createRealGpsContinuityState();
+      const canonical: RealGpsObservation[] = [];
+      const commit = (point: RealGpsObservation) => {
+        const decision = evaluateRealGpsObservation(state, point, mode, point.t);
+        state = decision.state;
+        if (decision.kind === 'ACCEPT') {
+          for (const accepted of [...(decision.confirmedCandidates ?? []), point]) {
+            state = acceptRealGpsObservation(state, accepted, 'r6-a5-stationary').state;
+            canonical.push(accepted);
+          }
+        }
+      };
+      for (let index = 0; index < 6; index += 1) {
+        commit(observation(0, index * 5, 1_000 + index * 4_000, {
+          accuracy: 6,
+          speed: mode === 'running' ? 2.4 : 1.25,
+          speedAccuracy: 0.3,
+        }));
+      }
+      const acceptedBeforeStop = canonical.length;
+      for (let index = 0; index < Math.ceil(180_000 / cadenceMs); index += 1) {
+        const angle = index * Math.PI / 2;
+        const radiusM = [1, 4, 8, 3, 6][index % 5];
+        const speed = scalarCase === 'zero'
+          ? 0
+          : scalarCase === 'missing'
+            ? null
+            : index % 3 === 0 ? 0 : index % 3 === 1 ? null : 0.15;
+        commit(observation(
+          Math.sin(angle) * radiusM,
+          25 + Math.cos(angle) * radiusM,
+          30_000 + index * cadenceMs,
+          { accuracy: 8, speed, speedAccuracy: index % 2 ? 0.3 : null },
+        ));
+      }
+
+      expect(canonical.slice(acceptedBeforeStop)).toEqual([]);
+      expect(state.traversalAnchor).toMatchObject({
+        lat: metresNorth(0),
+        lng: metresEast(25),
+      });
+    },
+  );
+
+  test.each([
+    ['hiking' as const, 15_000],
+    ['hiking' as const, 30_000],
+    ['running' as const, 15_000],
+    ['running' as const, 30_000],
+  ])('R6 %s evaluates a %ims callback batch by observation chronology', (mode, deliveryDelayMs) => {
+    let state = createRealGpsContinuityState();
+    const canonical: RealGpsObservation[] = [];
+    const commit = (point: RealGpsObservation, deliveredAtMs: number) => {
+      const decision = evaluateRealGpsObservation(state, point, mode, deliveredAtMs);
+      state = decision.state;
+      if (decision.kind === 'ACCEPT') {
+        for (const accepted of [...(decision.confirmedCandidates ?? []), point]) {
+          state = acceptRealGpsObservation(state, accepted, 'r6-batched-resume').state;
+          canonical.push(accepted);
+        }
+      }
+      return decision;
+    };
+    for (let index = 0; index < 6; index += 1) {
+      const point = observation(0, index * 4, 1_000 + index * 4_000, {
+        accuracy: 6, speed: mode === 'running' ? 2.4 : 1.25,
+      });
+      commit(point, point.t + 250);
+    }
+    const stopStart = 30_000;
+    for (let elapsed = 0, index = 0; elapsed <= 180_000; elapsed += 5_000, index += 1) {
+      const point = observation(
+        [0.2, -0.2, 0.1, -0.1][index % 4],
+        20 + [0.15, -0.15, 0.1, -0.1][index % 4],
+        stopStart + elapsed,
+        { accuracy: 8, speed: index % 2 === 0 ? 0 : null },
+      );
+      commit(point, point.t + 500);
+    }
+    const acceptedBeforeResume = canonical.length;
+    const resumeStart = stopStart + 185_000;
+    const batch = Array.from({ length: 4 }, (_, index) => observation(
+      0,
+      20 + (index + 1) * (mode === 'running' ? 6 : 4),
+      resumeStart + index * 5_000,
+      { accuracy: 7, speed: index % 2 === 0 ? 0 : null },
+    ));
+    const deliveredAtMs = batch.at(-1)!.t + deliveryDelayMs;
+    const decisions = batch.map(point => commit(point, deliveredAtMs));
+    const firstAcceptedIndex = decisions.findIndex(decision => decision.kind === 'ACCEPT');
+    expect(firstAcceptedIndex).toBeGreaterThanOrEqual(0);
+    expect(firstAcceptedIndex + 1).toBeLessThanOrEqual(4);
+    expect(canonical.slice(acceptedBeforeResume).every(point => point.t >= resumeStart)).toBe(true);
+    expect(state.lastTrusted?.t).toBe(batch.at(-1)!.t);
   });
 
   test('supported stationary presence and an actual observation loss remain distinct clocks', () => {

@@ -8,6 +8,7 @@ import {
 } from '../features/memory/services/passiveMemoryContinuity';
 import { passiveBackgroundMemoryCapability } from '../features/memory/services/passiveMemoryCapability';
 import { recordMemoryEvidence } from '../features/memory/services/recordMemoryEvidence';
+import { passiveMemoryRevocationKey } from '../features/memory/services/passiveMemoryAuthority';
 import type { RealGpsContinuityState, RealGpsObservation } from '../features/activity/realGpsContinuity';
 
 export const PASSIVE_MEMORY_BACKGROUND_TASK = 'cairn-passive-memory-location-v1';
@@ -59,6 +60,9 @@ export async function acquirePassiveMemoryLease(args: {
       await AsyncStorage.removeItem(PASSIVE_MEMORY_CONTEXT_KEY);
       throw new Error('passive_memory_preempted_by_activity');
     }
+    if ((await AsyncStorage.getItem(passiveMemoryRevocationKey(args.epoch))) === args.epoch) {
+      throw new Error('passive_memory_epoch_revoked');
+    }
     const context: DurablePassiveMemoryContext = {
       v: 1,
       ownerUserId: args.ownerUserId,
@@ -71,13 +75,26 @@ export async function acquirePassiveMemoryLease(args: {
       continuityState: args.continuityState ?? createPassiveMemoryContinuityState(),
     };
     await AsyncStorage.setItem(PASSIVE_MEMORY_CONTEXT_KEY, JSON.stringify(context));
+    if ((await AsyncStorage.getItem(passiveMemoryRevocationKey(args.epoch))) === args.epoch) {
+      await AsyncStorage.removeItem(PASSIVE_MEMORY_CONTEXT_KEY);
+      throw new Error('passive_memory_epoch_revoked');
+    }
     // Enable last so a headless callback cannot observe partial owner state.
     await AsyncStorage.setItem(PASSIVE_MEMORY_ACTIVE_KEY, '1');
     return context;
   });
 }
 
+/** Close logical evidence admission without waiting for the serialized native
+ * start/stop lifecycle. The tombstone is per epoch, so stale cleanup cannot
+ * affect a newer real-source owner. */
+export async function revokePassiveMemoryEvidenceAdmission(expectedEpoch: string): Promise<void> {
+  if (!expectedEpoch) return;
+  await AsyncStorage.setItem(passiveMemoryRevocationKey(expectedEpoch), expectedEpoch);
+}
+
 export async function releasePassiveMemoryLease(expectedEpoch?: string): Promise<boolean> {
+  if (expectedEpoch) await revokePassiveMemoryEvidenceAdmission(expectedEpoch);
   return withOwnership(async () => {
     const raw = await AsyncStorage.getItem(PASSIVE_MEMORY_CONTEXT_KEY);
     const context = raw ? JSON.parse(raw) as DurablePassiveMemoryContext : null;
@@ -101,13 +118,14 @@ async function currentContext(): Promise<DurablePassiveMemoryContext | null> {
       // physical Expo provider. Normalize them truthfully during migration.
       ? { ...parsed, source: 'real' as const }
       : parsed;
-    return context?.v === 1
+    const structurallyValid = context?.v === 1
       && context.consentVersion === 1
       && context.source === 'real'
       && typeof context.ownerUserId === 'string'
-      && typeof context.epoch === 'string'
-      ? context
-      : null;
+      && typeof context.epoch === 'string';
+    if (!structurallyValid) return null;
+    if ((await AsyncStorage.getItem(passiveMemoryRevocationKey(context.epoch))) === context.epoch) return null;
+    return context;
   } catch {
     return null;
   }
@@ -167,6 +185,7 @@ export async function startPassiveMemoryBackgroundUpdates(
 }
 
 export async function stopPassiveMemoryBackgroundUpdates(expectedEpoch?: string): Promise<void> {
+  if (expectedEpoch) await revokePassiveMemoryEvidenceAdmission(expectedEpoch);
   await withOwnership(async () => {
     const raw = await AsyncStorage.getItem(PASSIVE_MEMORY_CONTEXT_KEY).catch(() => null);
     let current: DurablePassiveMemoryContext | null = null;

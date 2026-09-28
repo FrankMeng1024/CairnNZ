@@ -86,6 +86,7 @@ jest.mock('../services/passiveMemoryCapability', () => ({
 jest.mock('../../../services/passiveMemoryBackgroundTask', () => ({
   acquirePassiveMemoryLease: jest.fn(async (args: any) => ({ v: 1, consentVersion: 1, ...args })),
   readPassiveMemoryContext: jest.fn(async () => null),
+  revokePassiveMemoryEvidenceAdmission: jest.fn(async () => undefined),
   startPassiveMemoryBackgroundUpdates: jest.fn(async () => true),
   stopPassiveMemoryBackgroundUpdates: jest.fn(async () => undefined),
 }));
@@ -142,6 +143,7 @@ describe('PassiveMemoryRecorder acquisition transition ownership', () => {
       v: 1, consentVersion: 1, ...args,
     }));
     background.readPassiveMemoryContext.mockResolvedValue(null);
+    background.revokePassiveMemoryEvidenceAdmission.mockResolvedValue(undefined);
     background.startPassiveMemoryBackgroundUpdates.mockResolvedValue(true);
     background.stopPassiveMemoryBackgroundUpdates.mockResolvedValue(undefined);
   });
@@ -486,6 +488,8 @@ describe('PassiveMemoryRecorder acquisition transition ownership', () => {
     await act(async () => { await flushMicrotasks(); });
 
     expect(background.startPassiveMemoryBackgroundUpdates).toHaveBeenCalledTimes(1);
+    expect(background.revokePassiveMemoryEvidenceAdmission)
+      .toHaveBeenCalledWith(persistedContext.epoch);
     expect(background.stopPassiveMemoryBackgroundUpdates)
       .toHaveBeenCalledWith(persistedContext.epoch);
     expect(supervisor.setConsumer).not.toHaveBeenCalled();

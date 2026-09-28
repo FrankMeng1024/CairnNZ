@@ -6188,8 +6188,20 @@ async function drainCommittedBackgroundLocations(
     // The queue is only an in-process latency hint. A headless JS runtime can
     // disappear before foreground takeover, so rebuild from the complete WAL
     // instead of replaying only this module instance's mutable tail.
-    const { readActiveHikeTail } = require('../services/hikeTrackWriter');
-    const journal = await readActiveHikeTail(owner.sessionId);
+    const writer = require('../services/hikeTrackWriter');
+    let journal: any[];
+    if (projectionAuthority === 'finish-fence') {
+      const terminalSnapshot = await writer.readActiveHikeTerminalSnapshot(owner.sessionId, {
+        expectedOwnerGeneration: owner.liveOwnerGeneration,
+        expectedCutoffAt: acceptanceFenceCutoffMs ?? undefined,
+      });
+      if (terminalSnapshot.status !== 'complete') {
+        throw new Error(`activity_terminal_snapshot_uncertain:${terminalSnapshot.reason}`);
+      }
+      journal = terminalSnapshot.points;
+    } else {
+      journal = await writer.readActiveHikeTail(owner.sessionId);
+    }
     const projectionOwner = useTrackingStore.getState();
     if (projectionOwner.sessionId !== owner.sessionId
       || projectionOwner.ownerUserId !== owner.ownerUserId
