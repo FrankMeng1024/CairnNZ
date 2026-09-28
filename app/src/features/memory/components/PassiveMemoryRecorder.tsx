@@ -32,6 +32,16 @@ const OPTIONS: Location.LocationOptions = {
   distanceInterval: 10,
 };
 
+interface PassiveContinuityAuthority {
+  ownerUserId: string;
+  source: 'real' | 'simulator';
+  eligible: boolean;
+  effectGeneration: number;
+  continuityState: RealGpsContinuityState;
+  rawOrdinal: number;
+  backgroundEpoch: string | null;
+}
+
 /** App-scoped optional exploration. Activity capture has higher priority and
  * supplies its own Memory evidence, so there is never a second native watcher
  * or duplicate passive write while Hike/Run is actively recording. */
@@ -43,9 +53,7 @@ export function PassiveMemoryRecorder() {
   const userId = useAppStore(state => state.user?.id ?? null);
   const trackingStatus = useTrackingStore(state => state.status);
   const simulatorEnabled = useActivitySimulatorStore(state => state.enabled);
-  const continuityRef = useRef<RealGpsContinuityState>(createPassiveMemoryContinuityState());
-  const rawOrdinalRef = useRef(0);
-  const backgroundEpochRef = useRef<string | null>(null);
+  const continuityAuthorityRef = useRef<PassiveContinuityAuthority | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,9 +63,43 @@ export function PassiveMemoryRecorder() {
     let acquisitionGeneration = 0;
     let acquisitionPhase: 'foreground' | 'background' | 'stopped' = 'stopped';
     const ownerUserId = userId == null ? '' : String(userId);
+    const acquisitionSource = selectedActivityLocationSource();
+    const eligible = enabled
+      && isLoggedIn
+      && Boolean(ownerUserId)
+      && (trackingStatus === 'idle' || trackingStatus === 'paused');
+    const priorAuthority = continuityAuthorityRef.current;
+    const mayRetainContinuity = eligible
+      && priorAuthority?.eligible === true
+      && priorAuthority.ownerUserId === ownerUserId
+      && priorAuthority.source === acquisitionSource;
+    const continuityAuthority: PassiveContinuityAuthority = mayRetainContinuity
+      ? priorAuthority
+      : {
+          ownerUserId,
+          source: acquisitionSource,
+          eligible,
+          effectGeneration: 0,
+          continuityState: createPassiveMemoryContinuityState(),
+          rawOrdinal: 0,
+          backgroundEpoch: null,
+        };
+    continuityAuthority.effectGeneration += 1;
+    const effectGeneration = continuityAuthority.effectGeneration;
+    continuityAuthorityRef.current = continuityAuthority;
+    if (priorAuthority && priorAuthority !== continuityAuthority
+      && typeof useMemoryStore.setState === 'function') {
+      // Qualified passive position is ephemeral source evidence. Account,
+      // consent/OFF, Activity-priority, and real/simulator boundaries must not
+      // let the next authority inherit its freshness.
+      useMemoryStore.setState({ lastWatcherFix: null });
+    }
+    const authorityIsCurrent = () => continuityAuthorityRef.current === continuityAuthority
+      && continuityAuthority.effectGeneration === effectGeneration;
     const ownerIsCurrent = () => {
       const auth = useAppStore.getState();
       return !cancelled
+        && authorityIsCurrent()
         && auth.isLoggedIn === true
         && String(auth.user?.id ?? '') === ownerUserId
         && useMemorySettingsStore.getState().passiveExplorationEnabled;
@@ -116,7 +158,7 @@ export function PassiveMemoryRecorder() {
     ) => {
       if (!transitionIsCurrent(transitionGeneration, 'foreground')
         || activeForegroundGeneration !== foregroundGeneration) return;
-      rawOrdinalRef.current += 1;
+      continuityAuthority.rawOrdinal += 1;
       const observation: RealGpsObservation = {
         lat: location.coords.latitude,
         lng: location.coords.longitude,
@@ -127,19 +169,25 @@ export function PassiveMemoryRecorder() {
         speed: location.coords.speed ?? null,
         course: location.coords.heading ?? null,
         source: 'foreground',
-        observationId: `${foregroundGeneration.slice(-8)}:${rawOrdinalRef.current}`,
-        rawOrdinal: rawOrdinalRef.current,
+        observationId: `${foregroundGeneration.slice(-8)}:${continuityAuthority.rawOrdinal}`,
+        rawOrdinal: continuityAuthority.rawOrdinal,
       };
       appendSimulatorLog('LOCATION', 'passive_memory_observation_received_v1', {
-        rawOrdinal: rawOrdinalRef.current,
+        rawOrdinal: continuityAuthority.rawOrdinal,
         sampleTimestamp: atMs,
         callbackReceiptMs: Date.now(),
         callbackDelayMs: Math.max(0, Date.now() - atMs),
         horizontalAccuracyM: observation.accuracy,
         sampleSource: 'foreground',
       }, { userId: ownerUserId, coordinateSource: 'none' });
-      const reduced = reducePassiveMemoryObservation(continuityRef.current, observation, Date.now());
-      continuityRef.current = reduced.state;
+      const reduced = reducePassiveMemoryObservation(
+        continuityAuthority.continuityState,
+        observation,
+        Date.now(),
+      );
+      if (!transitionIsCurrent(transitionGeneration, 'foreground')
+        || activeForegroundGeneration !== foregroundGeneration) return;
+      continuityAuthority.continuityState = reduced.state;
       if (reduced.qualifiedPosition) {
         useMemoryStore.getState().setLastWatcherFix(
           reduced.qualifiedPosition.lat,
@@ -162,10 +210,10 @@ export function PassiveMemoryRecorder() {
         ?? (adoptPersisted && persisted?.ownerUserId === ownerUserId ? persisted.epoch : null);
       if (!epoch) return;
       if (ownedBackgroundEpoch === epoch) ownedBackgroundEpoch = null;
-      if (backgroundEpochRef.current === epoch) backgroundEpochRef.current = null;
-      if (persisted?.ownerUserId === ownerUserId) {
-        continuityRef.current = persisted.continuityState;
-        rawOrdinalRef.current = persisted.rawOrdinal;
+      if (continuityAuthority.backgroundEpoch === epoch) continuityAuthority.backgroundEpoch = null;
+      if (persisted?.ownerUserId === ownerUserId && authorityIsCurrent() && !cancelled) {
+        continuityAuthority.continuityState = persisted.continuityState;
+        continuityAuthority.rawOrdinal = persisted.rawOrdinal;
         const qualified = persisted.continuityState.positionEstimate
           ?? (persisted.continuityState.liveCoordinate
             ? {
@@ -193,7 +241,7 @@ export function PassiveMemoryRecorder() {
       await reconcileDurableMemoryEvidenceNow().catch(() => undefined);
       if (!transitionIsCurrent(transitionGeneration, 'foreground')
         || activeForegroundGeneration !== foregroundGeneration) return;
-      if (selectedActivityLocationSource() === 'simulator') {
+      if (acquisitionSource === 'simulator') {
         activitySimulatorEngine.startRuntime();
         if (unsubscribeSimulator) return;
         unsubscribeSimulator = activitySimulatorEngine.subscribePassive(sample => {
@@ -253,27 +301,27 @@ export function PassiveMemoryRecorder() {
       if (!consented || !passiveBackgroundMemoryCapability().supported) return;
       const epoch = `passive-bg:${ownerUserId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
       ownedBackgroundEpoch = epoch;
-      backgroundEpochRef.current = epoch;
+      continuityAuthority.backgroundEpoch = epoch;
       const context = await acquirePassiveMemoryLease({
         ownerUserId,
         epoch,
         acceptAfterMs: Date.now(),
-        continuityState: continuityRef.current,
-        rawOrdinal: rawOrdinalRef.current,
+        continuityState: continuityAuthority.continuityState,
+        rawOrdinal: continuityAuthority.rawOrdinal,
       }).catch(() => null);
       if (!context) {
         if (ownedBackgroundEpoch === epoch) ownedBackgroundEpoch = null;
-        if (backgroundEpochRef.current === epoch) backgroundEpochRef.current = null;
+        if (continuityAuthority.backgroundEpoch === epoch) continuityAuthority.backgroundEpoch = null;
         return;
       }
       if (!transitionIsCurrent(transitionGeneration, 'background')
-        || backgroundEpochRef.current !== epoch) {
+        || continuityAuthority.backgroundEpoch !== epoch) {
         await stopPassiveMemoryBackgroundUpdates(epoch);
         return;
       }
       const started = await startPassiveMemoryBackgroundUpdates(context).catch(() => false);
       if (!started || !transitionIsCurrent(transitionGeneration, 'background')
-        || backgroundEpochRef.current !== epoch) {
+        || continuityAuthority.backgroundEpoch !== epoch) {
         await stopPassiveMemoryBackgroundUpdates(epoch);
       }
     };

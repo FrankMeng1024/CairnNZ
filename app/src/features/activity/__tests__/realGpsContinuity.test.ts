@@ -633,6 +633,90 @@ describe('real GPS physical continuity', () => {
     expect(resumeDecisions.some(decision => decision.diagnostics.reportedSpeedContradiction)).toBe(true);
   });
 
+  test.each([
+    ['hiking' as const, 45_000, 1_000, [-1, null, 0, null]],
+    ['hiking' as const, 105_000, 15_000, [null, -1, null, 0]],
+    ['running' as const, 45_000, 2_000, [0, null, -1, null]],
+    ['running' as const, 300_000, 30_000, [-1, null, 0, null]],
+  ])('%s stop=%ims resumes within four usable observations at %ims cadence', (
+    mode,
+    stopDurationMs,
+    resumeCadenceMs,
+    speeds,
+  ) => {
+    let state = createRealGpsContinuityState();
+    const canonical: RealGpsObservation[] = [];
+    const decisions: ReturnType<typeof evaluateRealGpsObservation>[] = [];
+    const commit = (point: RealGpsObservation, receiptMs: number) => {
+      const decision = evaluateRealGpsObservation(state, point, mode, receiptMs);
+      state = decision.state;
+      if (decision.kind === 'ACCEPT') {
+        for (const accepted of [...(decision.confirmedCandidates ?? []), point]) {
+          state = acceptRealGpsObservation(state, accepted, 'bounded-resume-segment').state;
+          canonical.push(accepted);
+        }
+      }
+      return decision;
+    };
+    for (let index = 0; index < 5; index += 1) {
+      commit(observation(0, index * 3, 1_000 + index * 2_000, {
+        speed: mode === 'running' ? 2.4 : 1.2,
+        accuracy: 4 + index % 3,
+      }), 1_350 + index * 2_000);
+    }
+    const stopStart = 12_000;
+    for (let t = stopStart; t <= stopStart + stopDurationMs; t += 10_000) {
+      const index = Math.floor((t - stopStart) / 10_000);
+      commit(observation(
+        [0.2, -0.3, 0.1][index % 3],
+        12 + [0.2, -0.25, 0.1][index % 3],
+        t,
+        { speed: index % 2 === 0 ? 0 : null, speedAccuracy: 3, accuracy: 5 + index % 4 },
+      ), t + 600);
+    }
+    const acceptedBeforeResume = canonical.length;
+    const resumeStart = stopStart + stopDurationMs + resumeCadenceMs;
+    const stepM = mode === 'running' ? 7 : 3.5;
+    for (let index = 0; index < 4; index += 1) {
+      const point = observation(
+        0,
+        15 + index * stepM,
+        resumeStart + index * resumeCadenceMs,
+        { speed: speeds[index], speedAccuracy: 4, accuracy: 4 + index % 3 },
+      );
+      decisions.push(commit(point, point.t + 700 + index * 40));
+    }
+    const firstAccepted = decisions.findIndex(decision => decision.kind === 'ACCEPT');
+    expect(firstAccepted).toBeGreaterThanOrEqual(0);
+    expect(firstAccepted).toBeLessThanOrEqual(3);
+    expect(state.lastTrusted?.t).toBe(resumeStart + 3 * resumeCadenceMs);
+    expect(state.positionEstimate?.t).toBe(state.lastTrusted?.t);
+    const resumed = canonical.slice(acceptedBeforeResume);
+    expect(resumed.length).toBeGreaterThanOrEqual(2);
+    expect(resumed.every(point => point.t >= resumeStart)).toBe(true);
+    const resumedDistanceM = resumed.slice(1)
+      .reduce((sum, point, index) => sum + haversineM(resumed[index], point), 0);
+    expect(resumedDistanceM).toBeGreaterThan(mode === 'running' ? 10 : 4);
+    expect(resumedDistanceM).toBeLessThan(mode === 'running' ? 35 : 18);
+
+    // Once the new episode is established, an honest reversal remains normal
+    // canonical movement rather than being erased as the old stationary V.
+    const backtrack = observation(0, 15 + 2 * stepM, state.lastTrusted!.t + resumeCadenceMs, {
+      speed: stepM / (resumeCadenceMs / 1_000),
+      accuracy: 5,
+    });
+    const reversalStarted = commit(backtrack, backtrack.t + 800);
+    const backtrackConfirmed = observation(0, 15 + stepM, backtrack.t + resumeCadenceMs, {
+      speed: stepM / (resumeCadenceMs / 1_000),
+      accuracy: 5,
+    });
+    const reversed = reversalStarted.kind === 'ACCEPT'
+      ? reversalStarted
+      : commit(backtrackConfirmed, backtrackConfirmed.t + 800);
+    expect(reversed.kind).toBe('ACCEPT');
+    expect(state.lastTrusted?.t).toBeGreaterThanOrEqual(backtrack.t);
+  });
+
   test('supported stationary presence and an actual observation loss remain distinct clocks', () => {
     let state = createRealGpsContinuityState();
     state = ingest(state, observation(0, 0, 1_000, { speed: 1, accuracy: 4 })).state;

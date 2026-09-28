@@ -596,29 +596,27 @@ function absoluteEdgesPlausible(
   });
 }
 
-function stationaryCandidateShowsRealProgress(
+/** Return the first candidate-evidence index belonging to a supported movement
+ * episode. The accepted travel anchor remains useful evidence when it agrees,
+ * but neither a recent nor an old stationary bridge is allowed to veto a
+ * coherent suffix. Points before the returned index remain stationary/raw
+ * evidence and must not be promoted into distance, route, or Memory truth. */
+function stationaryCandidateProgressStartIndex(
   base: RealGpsObservation,
   evidence: RealGpsObservation[],
   mode: ActivityMode,
-): boolean {
-  if (evidence.length < 2) return false;
+): number | null {
+  if (evidence.length < 2) return null;
   // `base` is the last accepted traversal anchor. It can legitimately be hours
   // old while recent raw observations continuously support that the user was
   // stationary. The bridge from that old anchor is chronology/provenance, not
   // a movement edge: only the candidate episode may earn new distance.
-  if (evidence[0].t <= base.t) return false;
-  const bridgeIsRecentTravel = evidence[0].t - base.t <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS;
-  // A stationary Candidate can carry one last supported-stop observation. Once
-  // the travel anchor is old, coherent recent suffixes are independent movement
-  // episodes; the stationary prefix neither earns distance nor vetoes them.
-  const episodes = bridgeIsRecentTravel
-    ? [[base, ...evidence]]
-    : evidence.map((_point, index) => evidence.slice(index)).filter(points => points.length >= 2);
-  return episodes.some(episode => {
-    if (!absoluteEdgesPlausible(episode, mode)) return false;
-    const episodeFeatures = featuresFor(episode);
-    const stepSpeeds = episode.slice(1).map((point, index) => (
-      haversineM(episode[index], point) / ((point.t - episode[index].t) / 1_000)
+  if (evidence[0].t <= base.t) return null;
+  const episodeShowsProgress = (points: RealGpsObservation[]): boolean => {
+    if (!absoluteEdgesPlausible(points, mode)) return false;
+    const episodeFeatures = featuresFor(points);
+    const stepSpeeds = points.slice(1).map((point, index) => (
+      haversineM(points[index], point) / ((point.t - points[index].t) / 1_000)
     ));
     const coherentStepFraction = stepSpeeds.length > 0
       ? stepSpeeds.filter(speed => speed >= 0.2 && speed <= MODE_MAX_SPEED_MPS[mode] + 1).length
@@ -636,22 +634,62 @@ function stationaryCandidateShowsRealProgress(
     // Two larger, mutually consistent fixes are enough. Metre-cadence or slow
     // motion gets one more observation so cumulative evidence—not one giant
     // escape step—establishes traversal.
-    const uncertaintyScaleM = Math.max(...episode.map(point => normalizedAccuracy(point.accuracy)));
-    const strongTwoFixProgress = episode.length >= 2
+    const uncertaintyScaleM = Math.max(...points.map(point => normalizedAccuracy(point.accuracy)));
+    const strongTwoFixProgress = points.length >= 2
       && episodeFeatures.durationMs <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
       && episodeFeatures.netM >= Math.max(4, uncertaintyScaleM * 0.55)
       && episodeFeatures.progressRatio >= 0.8
       && episodeFeatures.directionVariabilityDeg <= 35;
-    const metreCadenceProgress = episode.length >= 3
+    const metreCadenceProgress = points.length >= 3
       && episodeFeatures.durationMs >= 1_500
       && episodeFeatures.durationMs <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS
       && episodeFeatures.netM >= Math.max(2.2, uncertaintyScaleM * 0.45)
       && episodeFeatures.directionVariabilityDeg <= 50;
     const independentSpeedSupport = episodeFeatures.reportedMovingFraction >= 0.34
-      && episode.length >= 2
+      && points.length >= 2
       && episodeFeatures.netM >= 1.5;
     return strongTwoFixProgress || metreCadenceProgress || independentSpeedSupport;
-  });
+  };
+
+  const bridgeIsRecentTravel = evidence[0].t - base.t <= MAX_CREDITABLE_CONTINUOUS_INTERVAL_MS;
+  if (bridgeIsRecentTravel) {
+    // Coordinate progress with absent/negative or explicitly low-confidence
+    // scalar speed can establish a fresh departure independently of the recent
+    // accepted travel anchor. Requiring three suffix fixes keeps a single
+    // accuracy-sized escape edge and low-speed drift quarantined.
+    const firstRawSpeedIsNearZero = evidence[0].speed != null
+      && Number.isFinite(evidence[0].speed)
+      && Number(evidence[0].speed) >= 0
+      && Number(evidence[0].speed) < 0.2;
+    const stationaryPrefix = firstRawSpeedIsNearZero
+      && evidence[0].t - base.t > 15_000
+      && haversineM(base, evidence[0]) <= Math.max(
+        2.5,
+        normalizedAccuracy(evidence[0].accuracy) * 0.55,
+      );
+    for (let startIndex = evidence.length - 3; startIndex >= 0; startIndex -= 1) {
+      if (stationaryPrefix && startIndex === 0) continue;
+      const suffix = evidence.slice(startIndex);
+      const unreliableScalarCount = suffix.filter(point => (
+        point.speed == null
+        || !Number.isFinite(point.speed)
+        || point.speed < 0
+        || (point.speedAccuracy != null
+          && Number.isFinite(point.speedAccuracy)
+          && point.speedAccuracy > 0.8)
+      )).length;
+      if (unreliableScalarCount >= 2 && episodeShowsProgress(suffix)) return startIndex;
+    }
+    const current = evidence[evidence.length - 1];
+    const currentHasIndependentMovingSpeed = hasReliableReportedSpeed(current)
+      && Number(current.speed) >= REPORTED_STATIONARY_SPEED_MPS;
+    if (stationaryPrefix && !currentHasIndependentMovingSpeed) return null;
+    return episodeShowsProgress([base, ...evidence]) ? 0 : null;
+  }
+  for (let startIndex = 0; startIndex < evidence.length - 1; startIndex += 1) {
+    if (episodeShowsProgress(evidence.slice(startIndex))) return startIndex;
+  }
+  return null;
 }
 
 function classifyWithoutPending(
@@ -935,12 +973,15 @@ export function evaluateRealGpsObservation(
       (explicitlyNearZeroSpeed(current) && (diagnosticsFor(observedState, current).dtFromTrustedMs ?? 0) >= 5_000)
       || (priorCandidateHasNearZeroSpeed && currentSpeedUnavailable)
     );
+  const stationaryProgressStartIndex = pending.reason === 'possible-stationary-jitter'
+    ? stationaryCandidateProgressStartIndex(base, evidence, mode)
+    : null;
   const candidateProgressConfirmed = pending.reason === 'possible-stationary-jitter'
     // One long-interval near-zero fix followed by unavailable scalar speed is
     // a stop transition, not enough support to turn drift into a last edge.
     // Short-cadence coherent slow walking/backtracks still use positional
     // evidence, and two explicit moving fixes still resume promptly.
-    ? !guardedStopTransition && stationaryCandidateShowsRealProgress(base, evidence, mode)
+    ? !guardedStopTransition && stationaryProgressStartIndex !== null
     : pending.reason === 'large-lateral-innovation'
       ? showsCumulativeProgress(sequenceFeatures)
         && sequenceFeatures.progressRatio >= 0.68
@@ -957,9 +998,13 @@ export function evaluateRealGpsObservation(
     const currentExplicitlyMoving = hasReliableReportedSpeed(current)
       && Number(current.speed) >= REPORTED_STATIONARY_SPEED_MPS;
     const pendingContainsNearZeroSpeed = pending.observations.some(explicitlyNearZeroSpeed);
+    const supportedPendingObservations = pending.reason === 'possible-stationary-jitter'
+      ? evidence.slice(stationaryProgressStartIndex ?? 0, -1)
+      : pending.observations;
     const confirmedCandidates = pending.reason === 'possible-stationary-jitter'
+      && stationaryProgressStartIndex === 0
       && (!candidateBeganPromptly || currentExplicitlyMoving)
-      ? pending.observations.filter(candidate => (
+      ? supportedPendingObservations.filter(candidate => (
           !explicitlyNearZeroSpeed(candidate)
           && !(pendingContainsNearZeroSpeed && (
             candidate.speed == null
@@ -967,7 +1012,7 @@ export function evaluateRealGpsObservation(
             || candidate.speed < 0
           ))
         ))
-      : pending.observations;
+      : supportedPendingObservations;
     const cleared = { ...observedState, pending: null, motionState: 'moving' as const };
     return {
       kind: 'ACCEPT',

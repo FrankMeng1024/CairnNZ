@@ -176,8 +176,10 @@ import {
 import type { ActivityTransitionState } from '../features/activity/activityOperationalState';
 import { appendCausalLivePoint } from '../features/activity/causalLiveRoute';
 import {
-  projectAcceptedActivityPoints,
-  projectActivityJournal,
+  mergeActivityCanonicalPoints,
+  projectAcceptedActivityPointsFromCheckpoint,
+  projectActivityJournalCooperatively,
+  rebaseActivityJournalProjection,
 } from '../features/activity/activityJournalProjection';
 import {
   activityFinishResultFromSession,
@@ -4795,7 +4797,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         set((state) => {
           const canonicalStateChanged = state.trackPoints !== acceptance.baseTrackPoints;
           const rebased = canonicalStateChanged
-            ? projectAcceptedActivityPoints(state.trackPoints, acceptedPoints)
+            ? projectAcceptedActivityPointsFromCheckpoint(
+                state.trackPoints,
+                state.trackPointsSmoothed,
+                state.distanceAccumulator,
+                Math.max(state.elevationGainM, acceptedTransition.elevationGainM ?? 0),
+                acceptedPoints,
+              )
             : null;
           const rebasedTail = rebased?.canonical[rebased.canonical.length - 1];
           const next = canonicalStateChanged && rebased
@@ -4804,10 +4812,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 ...acceptedTransition,
                 trackPoints: rebased.canonical,
                 trackPointsSmoothed: rebased.live,
-                trackPointsRaw: projectAcceptedActivityPoints(
+                trackPointsRaw: mergeActivityCanonicalPoints(
                   state.trackPointsRaw,
                   acceptedTransition.trackPointsRaw ?? [],
-                ).canonical,
+                ),
                 distanceM: rebased.distanceM,
                 distanceAccumulator: rebased.distanceAccumulator,
                 elevationGainM: Math.max(
@@ -6144,21 +6152,64 @@ async function drainCommittedBackgroundLocations(
       && point.ownerGeneration === owner.liveOwnerGeneration
     ));
     if (ownedJournal.length > 0) {
-      // Foreground capture may already be live while a long WAL read settles.
-      // Rebase *inside* the synchronous state transaction. A foreground fix can
-      // commit after the WAL read (and even after the identity fence above); a
-      // projection calculated outside this updater would replace that new tail
-      // with the older snapshot it observed.
-      let projection = projectActivityJournal(projectionOwner.trackPoints, ownedJournal);
+      const projectionAuthorityIsCurrent = () => {
+        const state = useTrackingStore.getState();
+        return state.sessionId === owner.sessionId
+          && state.ownerUserId === owner.ownerUserId
+          && state.liveOwnerGeneration === owner.liveOwnerGeneration
+          && !state.isFinishing
+          && (state.status === 'tracking' || state.status === 'paused');
+      };
+      // Replay outside Zustand's synchronous updater and yield between bounded
+      // slices. The mounted Live prefix is an exact reducer checkpoint whenever
+      // its stable WAL frontier matches; style/AppState returns with no new WAL
+      // therefore perform zero full rebuilds.
+      let prepared = await projectActivityJournalCooperatively(
+        projectionOwner.trackPoints,
+        ownedJournal,
+        {
+          currentLive: projectionOwner.trackPointsSmoothed,
+          currentDistanceAccumulator: projectionOwner.distanceAccumulator,
+          currentElevationGainM: projectionOwner.elevationGainM,
+          shouldContinue: projectionAuthorityIsCurrent,
+        },
+      );
+      if (!prepared || !projectionAuthorityIsCurrent()) return drained.length;
+      let projection = prepared.projection;
+      let projectionMetrics = prepared.metrics;
       let missingRaw: TrackPoint[] = [];
-      useTrackingStore.setState(state => {
-        if (state.sessionId !== owner.sessionId
-          || state.ownerUserId !== owner.ownerUserId
-          || state.liveOwnerGeneration !== owner.liveOwnerGeneration) return state;
-        projection = projectActivityJournal(state.trackPoints, ownedJournal);
-        const tail = projection.canonical[projection.canonical.length - 1] as SegmentedTrackPoint | undefined;
-        const presentationTail = projection.live[projection.live.length - 1] as SegmentedTrackPoint | undefined;
-        const existingRawKeys = new Set(state.trackPointsRaw.map(point => (
+      // A foreground fix may commit while the cooperative replay yields. Rebase
+      // its already-WAL-committed suffix onto the prepared checkpoint, then use
+      // a reference compare-and-swap with no await between read and publish.
+      for (;;) {
+        const stateAtCommit = useTrackingStore.getState();
+        if (!projectionAuthorityIsCurrent()) return drained.length;
+        const rebased = rebaseActivityJournalProjection(
+          projection,
+          stateAtCommit.trackPoints,
+          stateAtCommit.elevationGainM,
+        );
+        if (!rebased) {
+          prepared = await projectActivityJournalCooperatively(
+            stateAtCommit.trackPoints,
+            ownedJournal,
+            {
+              currentLive: stateAtCommit.trackPointsSmoothed,
+              currentDistanceAccumulator: stateAtCommit.distanceAccumulator,
+              currentElevationGainM: stateAtCommit.elevationGainM,
+              shouldContinue: projectionAuthorityIsCurrent,
+            },
+          );
+          if (!prepared) return drained.length;
+          projection = prepared.projection;
+          projectionMetrics = {
+            ...prepared.metrics,
+            fullLiveRebuilds: projectionMetrics.fullLiveRebuilds + prepared.metrics.fullLiveRebuilds,
+          };
+          continue;
+        }
+        projection = rebased;
+        const existingRawKeys = new Set(stateAtCommit.trackPointsRaw.map(point => (
           point.rawOrdinal != null
             ? `${point.segmentId ?? 'legacy'}:${point.rawOrdinal}`
             : `${point.segmentId ?? 'legacy'}:${point.t}:${point.lat}:${point.lng}`
@@ -6168,23 +6219,34 @@ async function drainCommittedBackgroundLocations(
             ? `${point.segmentId ?? 'legacy'}:${point.rawOrdinal}`
             : `${point.segmentId ?? 'legacy'}:${point.t}:${point.lat}:${point.lng}`,
         ));
-        return {
-          trackPoints: projection.canonical,
-          trackPointsSmoothed: projection.live,
-          trackPointsRaw: [...state.trackPointsRaw, ...missingRaw],
-          distanceM: projection.distanceM,
-          distanceAccumulator: projection.distanceAccumulator,
-          elevationGainM: projection.elevationGainM,
-          lastCoordinate: tail ?? state.lastCoordinate,
-          lastCoordinateTime: tail?.t ?? state.lastCoordinateTime,
-          lastFixTimestamp: tail?.t ?? state.lastFixTimestamp,
-          latestSourceCoordinate: presentationTail ? {
-            ...presentationTail,
-            t: presentationTail.t,
-          } : state.latestSourceCoordinate,
-          currentSegmentId: tail?.segmentId ?? state.currentSegmentId,
-        };
-      });
+        let published = false;
+        useTrackingStore.setState(state => {
+          if (state.trackPoints !== stateAtCommit.trackPoints
+            || state.sessionId !== owner.sessionId
+            || state.ownerUserId !== owner.ownerUserId
+            || state.liveOwnerGeneration !== owner.liveOwnerGeneration) return state;
+          published = true;
+          const tail = projection.canonical[projection.canonical.length - 1] as SegmentedTrackPoint | undefined;
+          const presentationTail = projection.live[projection.live.length - 1] as SegmentedTrackPoint | undefined;
+          return {
+            trackPoints: projection.canonical,
+            trackPointsSmoothed: projection.live,
+            trackPointsRaw: [...state.trackPointsRaw, ...missingRaw],
+            distanceM: projection.distanceM,
+            distanceAccumulator: projection.distanceAccumulator,
+            elevationGainM: projection.elevationGainM,
+            lastCoordinate: tail ?? state.lastCoordinate,
+            lastCoordinateTime: tail?.t ?? state.lastCoordinateTime,
+            lastFixTimestamp: tail?.t ?? state.lastFixTimestamp,
+            latestSourceCoordinate: presentationTail ? {
+              ...presentationTail,
+              t: presentationTail.t,
+            } : state.latestSourceCoordinate,
+            currentSegmentId: tail?.segmentId ?? state.currentSegmentId,
+          };
+        });
+        if (published) break;
+      }
       const continuity = reconcileActivityContinuityAfterJournal({
         clientActivityId: owner.sessionId,
         ownerGeneration: owner.liveOwnerGeneration,
@@ -6219,6 +6281,11 @@ async function drainCommittedBackgroundLocations(
         projectedPointCount: projection.canonical.length,
         displayedPointCount: projection.live.length,
         appendedFromJournal: projection.appendedFromJournal,
+        reconstructionTotalMs: projectionMetrics.totalMs,
+        reconstructionMaxSynchronousSliceMs: projectionMetrics.maxSynchronousSliceMs,
+        reconstructionYieldCount: projectionMetrics.yieldCount,
+        reconstructionFullLiveRebuilds: projectionMetrics.fullLiveRebuilds,
+        reconstructionReusedLiveCheckpoint: projectionMetrics.reusedLiveCheckpoint,
         continuityHandoffSource: continuity.source,
         rawOrdinalHighWatermark: realGpsRawOrdinal,
         queueHintCount: drained.length,

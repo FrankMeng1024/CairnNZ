@@ -211,6 +211,7 @@ function AppRoot() {
     if (!isLoggedIn || !simulatorOwnerUserId) return;
     const userId = String(simulatorOwnerUserId);
     let cancelled = false;
+    let cancelProjectionDiscovery: ((ownerUserId: string) => void) | null = null;
     void (async () => {
       try {
         const { hydrateMemoryForUser } = await import('./src/features/memory/services/memoryPersistence');
@@ -220,7 +221,15 @@ function AppRoot() {
         const current = useAppStore.getState();
         if (!current.isLoggedIn || String(current.user?.id ?? '') !== userId) return;
         attachMemorySync(userId);
-        const { resumeActivityMemoryProjectionsForOwner } = await import('./src/features/activity/activityMemoryProjector');
+        const {
+          cancelActivityMemoryProjectionDiscoveryForOwner,
+          resumeActivityMemoryProjectionsForOwner,
+        } = await import('./src/features/activity/activityMemoryProjector');
+        cancelProjectionDiscovery = cancelActivityMemoryProjectionDiscoveryForOwner;
+        if (cancelled) {
+          cancelProjectionDiscovery(userId);
+          return;
+        }
         await resumeActivityMemoryProjectionsForOwner(userId);
         crashLogger.breadcrumb(`o41:mem_authority_attached user_id=${userId}`);
         void pullMemoryFromServer(userId, { reconcile: true });
@@ -231,6 +240,7 @@ function AppRoot() {
     })();
     return () => {
       cancelled = true;
+      cancelProjectionDiscovery?.(userId);
     };
   }, [isLoggedIn, simulatorOwnerUserId]);
 

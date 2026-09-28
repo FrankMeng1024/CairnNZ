@@ -44,7 +44,10 @@ import {
 import { deleteAcknowledgedHikeTrackArtifacts } from './hikeTrackWriter';
 import networkMonitor from './networkMonitor';
 import { toServerPoint } from '../features/activity/activityContracts';
-import { reconcileActivityMemoryProjection } from '../features/activity/activityMemoryProjector';
+import {
+  reconcileActivityMemoryProjection,
+  retireActivityMemoryProjection,
+} from '../features/activity/activityMemoryProjector';
 
 let isDraining = false;
 let pendingSignal = false;
@@ -436,6 +439,13 @@ export async function cleanupAcknowledgedActivityArtifacts(
     // responsibility first; a transient Memory failure keeps cleanup retryable.
     if (!await reconcileActivityMemoryProjection(userId, clientActivityId)) {
       throw new Error('activity_memory_projection_incomplete');
+    }
+    // Persist the completed projection frontier before deleting the only raw
+    // replay source. A crash after this boundary resumes cleanup quiescently;
+    // a failure before it leaves both WAL and synced registry record retryable.
+    if (!simulatorActivity
+      && !await retireActivityMemoryProjection(userId, clientActivityId)) {
+      throw new Error('activity_memory_projection_retirement_incomplete');
     }
     // Retain compact Final display points after ACK. Explicit Activity/account
     // deletion owns their removal; only raw recovery material is cleaned here.

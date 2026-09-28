@@ -59,6 +59,7 @@ jest.mock('../../features/activity/activityFinalArtifact', () => ({
 }));
 jest.mock('../../features/activity/activityMemoryProjector', () => ({
   reconcileActivityMemoryProjection: jest.fn(async () => true),
+  retireActivityMemoryProjection: jest.fn(async () => { mockOrder.push('projection-retire'); return true; }),
 }));
 jest.mock('../../features/activitySimulator/simulatorLog', () => ({
   appendSimulatorLog: jest.fn(),
@@ -89,6 +90,7 @@ const { startSessionResolved: mockStartSessionResolved } = require('../sessionSe
 const { resetForResync: mockResetForResync } = require('../pendingSyncStore');
 const { acknowledgeActivity: mockAcknowledgeActivity } = require('../../features/activity/activityRegistry');
 const { reconcileActivityMemoryProjection: mockReconcileActivityMemoryProjection } = require('../../features/activity/activityMemoryProjector');
+const { retireActivityMemoryProjection: mockRetireActivityMemoryProjection } = require('../../features/activity/activityMemoryProjector');
 
 const pending = {
   contractVersion: 3,
@@ -127,6 +129,10 @@ describe('Activity ACK ownership and cleanup phases', () => {
     mockStartSessionResolved.mockResolvedValue({ kind: 'unavailable' });
     mockResetForResync.mockResolvedValue(true);
     mockReconcileActivityMemoryProjection.mockResolvedValue(true);
+    mockRetireActivityMemoryProjection.mockImplementation(async () => {
+      mockOrder.push('projection-retire');
+      return true;
+    });
   });
 
   test('a crash after refined artifact commit rolls the Base outbox forward before upload', async () => {
@@ -205,6 +211,7 @@ describe('Activity ACK ownership and cleanup phases', () => {
     expect(mockOrder).toEqual([
       'pending-delete',
       'pending-delete',
+      'projection-retire',
       'heavy-trace-delete',
       'registry-remove',
     ]);
@@ -223,6 +230,7 @@ describe('Activity ACK ownership and cleanup phases', () => {
       'summary-ack',
       'registry-ack',
       'pending-delete',
+      'projection-retire',
       'heavy-trace-delete',
       'registry-remove',
     ]);
@@ -240,6 +248,23 @@ describe('Activity ACK ownership and cleanup phases', () => {
     mockReconcileActivityMemoryProjection.mockResolvedValueOnce(false);
     await expect(cleanupAcknowledgedActivityArtifacts('account-a', 'activity-a')).resolves.toBe(false);
     expect(mockOrder).toEqual(['pending-delete']);
+  });
+
+  test('acknowledged cleanup retains WAL and registry when terminal retirement is not durable', async () => {
+    mockRegistry = {
+      unfinished: null,
+      completed: [{
+        clientActivityId: 'activity-a', serverActivityId: 77,
+        syncState: 'synced', locationProviderSource: 'real',
+      }],
+      tombstones: [],
+    };
+    mockRetireActivityMemoryProjection.mockImplementationOnce(async () => {
+      mockOrder.push('projection-retire');
+      return false;
+    });
+    await expect(cleanupAcknowledgedActivityArtifacts('account-a', 'activity-a')).resolves.toBe(false);
+    expect(mockOrder).toEqual(['pending-delete', 'projection-retire']);
   });
 
   test('accelerated historical epochs replay unchanged through normal sync and reconciliation', async () => {

@@ -28,11 +28,14 @@ jest.mock('../activityRegistry', () => ({
 
 import {
   activityMemoryProjectionIsComplete,
+  cancelActivityMemoryProjectionDiscoveryForOwner,
   cancelActivityMemoryProjection,
+  getActivityMemoryProjectionDiscoveryState,
   getActivityMemoryProjectionMetrics,
   purgeActivityMemoryProjectionsForOwner,
   reconcileActivityMemoryProjection,
   resetActivityMemoryProjectionForTests,
+  retireActivityMemoryProjection,
   resumeActivityMemoryProjectionsForOwner,
   scheduleActivityMemoryProjection,
   waitForActivityMemoryProjection,
@@ -47,6 +50,8 @@ import {
 const mockRecordMemoryEvidence = require('../../memory/services/recordMemoryEvidence').recordMemoryEvidence as jest.Mock;
 const mockReadHikeTrackForProjection = require('../../../services/hikeTrackWriter').readHikeTrackForProjection as jest.Mock;
 const mockSetItem = require('../../../store/storage').storage.setItem as jest.Mock;
+const mockGetAllKeysStrict = require('../../../store/storage').storage.getAllKeysStrict as jest.Mock;
+const mockGetActivityRegistry = require('../activityRegistry').getActivityRegistry as jest.Mock;
 const point = (t: number, rawOrdinal = t, segmentId = 'segment-a') => ({
   lat: -41 + rawOrdinal / 1e7, lng: 174 + rawOrdinal / 1e7,
   t, rawOrdinal, segmentId, accuracy: 5,
@@ -61,6 +66,8 @@ describe('durable Activity → Memory downstream responsibility', () => {
     mockRegistry = { unfinished: null, recoveryQueue: [], completed: [], tombstones: [] };
     jest.clearAllMocks();
     mockSetItem.mockImplementation(async (key: string, value: string) => { mockValues.set(key, value); });
+    mockGetAllKeysStrict.mockImplementation(async () => [...mockValues.keys()]);
+    mockGetActivityRegistry.mockImplementation(async () => mockRegistry);
     mockReadHikeTrackForProjection.mockImplementation(async () => mockJournal);
   });
 
@@ -128,16 +135,22 @@ describe('durable Activity → Memory downstream responsibility', () => {
       }
       expect(canonical.length - beforeStop).toBeLessThanOrEqual(1);
       const resumeStart = 170_000;
-      for (let index = 0; index < 5; index += 1) {
+      const resumeDecisions: string[] = [];
+      for (let index = 0; index < 4; index += 1) {
+        const beforeResumeCount = canonical.length;
         ingest(observation(
           15 + index * (mode === 'running' ? 5 : 3),
           resumeStart + index * 2_000,
           index % 2 ? null : 0,
           5,
         ));
+        resumeDecisions.push(canonical.length > beforeResumeCount ? 'ACCEPT' : 'HELD');
       }
-      expect(continuity.lastTrusted?.t).toBe(resumeStart + 8_000);
-      expect(canonical.at(-1)).toMatchObject({ segmentId: 'segment-stop-resume', t: resumeStart + 8_000 });
+      const firstAcceptedResume = resumeDecisions.findIndex(decision => decision === 'ACCEPT');
+      expect(firstAcceptedResume).toBeGreaterThanOrEqual(0);
+      expect(firstAcceptedResume).toBeLessThanOrEqual(3);
+      expect(continuity.lastTrusted?.t).toBe(resumeStart + 6_000);
+      expect(canonical.at(-1)).toMatchObject({ segmentId: 'segment-stop-resume', t: resumeStart + 6_000 });
 
       mockJournal = canonical;
       mockRecordMemoryEvidence.mockResolvedValue({ committed: true, deduplicated: false });
@@ -151,7 +164,7 @@ describe('durable Activity → Memory downstream responsibility', () => {
         source: 'activity_real',
         sourceActivityClientId: `activity-${mode}`,
         sourceSegmentId: 'segment-stop-resume',
-        atMs: resumeStart + 8_000,
+        atMs: resumeStart + 6_000,
       }));
       await expect(activityMemoryProjectionIsComplete('owner-a', `activity-${mode}`)).resolves.toBe(true);
     },
@@ -186,6 +199,173 @@ describe('durable Activity → Memory downstream responsibility', () => {
     await expect(resumeActivityMemoryProjectionsForOwner('owner-a')).resolves.toBe(1);
     await waitForActivityMemoryProjection('activity-c');
     await expect(activityMemoryProjectionIsComplete('owner-a', 'activity-c')).resolves.toBe(true);
+  });
+
+  test('durable retirement stays quiescent after WAL/registry cleanup and rejects late revival', async () => {
+    mockJournal = [point(101, 1), point(102, 2)];
+    mockRecordMemoryEvidence.mockResolvedValue({ committed: true, deduplicated: false });
+    await scheduleActivityMemoryProjection({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-retired',
+      ownerGeneration: 'gen-retired', points: mockJournal,
+    });
+    await waitForActivityMemoryProjection('activity-retired');
+    await expect(retireActivityMemoryProjection('owner-a', 'activity-retired')).resolves.toBe(true);
+    const retired = [...mockValues.values()].map(raw => JSON.parse(raw))
+      .find(value => value.clientActivityId === 'activity-retired');
+    expect(retired).toMatchObject({ state: 'retired', projectedThroughPointId: 'segment-a:raw:2' });
+
+    mockRegistry = { unfinished: null, recoveryQueue: [], completed: [], tombstones: [] };
+    mockReadHikeTrackForProjection.mockRejectedValue(new Error('activity_projection_journal_missing'));
+    resetActivityMemoryProjectionForTests();
+    mockRecordMemoryEvidence.mockClear();
+    await expect(resumeActivityMemoryProjectionsForOwner('owner-a')).resolves.toBe(0);
+    await scheduleActivityMemoryProjection({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-retired',
+      ownerGeneration: 'gen-retired', points: [point(103, 3)],
+    });
+    await waitForActivityMemoryProjection('activity-retired');
+    expect(mockRecordMemoryEvidence).not.toHaveBeenCalled();
+    await expect(activityMemoryProjectionIsComplete('owner-a', 'activity-retired')).resolves.toBe(true);
+  });
+
+  test('retirement storage failure leaves complete responsibility retryable until the seal persists', async () => {
+    mockJournal = [point(105, 1)];
+    mockRecordMemoryEvidence.mockResolvedValue({ committed: true, deduplicated: false });
+    await scheduleActivityMemoryProjection({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-retire-fault',
+      ownerGeneration: 'gen-retire-fault', points: mockJournal,
+    });
+    await waitForActivityMemoryProjection('activity-retire-fault');
+    mockSetItem.mockRejectedValueOnce(new Error('retirement-storage-failure'));
+    await expect(retireActivityMemoryProjection('owner-a', 'activity-retire-fault'))
+      .rejects.toThrow('retirement-storage-failure');
+    const retained = [...mockValues.values()].map(raw => JSON.parse(raw))
+      .find(value => value.clientActivityId === 'activity-retire-fault');
+    expect(retained.state).toBe('complete');
+    await expect(retireActivityMemoryProjection('owner-a', 'activity-retire-fault')).resolves.toBe(true);
+  });
+
+  test('a complete active prefix discovers and projects a newer unscheduled WAL tail after restart', async () => {
+    const prefix = point(107, 1);
+    const tail = point(108, 2);
+    mockJournal = [prefix];
+    mockRecordMemoryEvidence.mockResolvedValue({ committed: true, deduplicated: false });
+    await scheduleActivityMemoryProjection({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-active-complete',
+      ownerGeneration: 'gen-active', points: [prefix],
+    });
+    await waitForActivityMemoryProjection('activity-active-complete');
+    resetActivityMemoryProjectionForTests();
+    mockJournal = [prefix, tail];
+    mockRecordMemoryEvidence.mockClear();
+    await expect(resumeActivityMemoryProjectionsForOwner('owner-a')).resolves.toBe(1);
+    await waitForActivityMemoryProjection('activity-active-complete');
+    expect(mockRecordMemoryEvidence).toHaveBeenCalledTimes(1);
+    expect(mockRecordMemoryEvidence).toHaveBeenCalledWith(expect.objectContaining({ atMs: 108 }));
+    await expect(activityMemoryProjectionIsComplete('owner-a', 'activity-active-complete')).resolves.toBe(true);
+  });
+
+  test.each(['keys', 'registry', 'wal', 'intent'] as const)(
+    'pre-intent %s discovery fault records failure and automatically recovers without another fix',
+    async boundary => {
+      jest.useFakeTimers();
+      try {
+        const activityId = `activity-discovery-${boundary}`;
+        mockRegistry = {
+          unfinished: {
+            clientActivityId: activityId, userId: 'owner-a',
+            liveOwnerGeneration: 'gen-discovery', locationProviderSource: 'real',
+          },
+          recoveryQueue: [], completed: [], tombstones: [],
+        };
+        mockJournal = [point(120, 1)];
+        mockRecordMemoryEvidence.mockResolvedValue({ committed: true, deduplicated: false });
+        if (boundary === 'keys') mockGetAllKeysStrict.mockRejectedValueOnce(new Error('keys-temporary'));
+        if (boundary === 'registry') mockGetActivityRegistry.mockRejectedValueOnce(new Error('registry-temporary'));
+        if (boundary === 'wal') mockReadHikeTrackForProjection.mockRejectedValueOnce(new Error('wal-temporary'));
+        if (boundary === 'intent') mockSetItem.mockRejectedValueOnce(new Error('intent-temporary'));
+
+        await expect(resumeActivityMemoryProjectionsForOwner('owner-a'))
+          .rejects.toThrow('activity_projection_discovery_failed');
+        expect(getActivityMemoryProjectionDiscoveryState('owner-a')).toMatchObject({
+          retryAttempt: 1,
+          lastError: expect.stringContaining('activity_projection_discovery_failed'),
+        });
+        await jest.advanceTimersByTimeAsync(1_000);
+        await waitForActivityMemoryProjection(activityId);
+        await expect(activityMemoryProjectionIsComplete('owner-a', activityId)).resolves.toBe(true);
+        expect(getActivityMemoryProjectionDiscoveryState('owner-a')).toMatchObject({
+          retryAttempt: 0, nextRetryAtMs: null, lastError: null,
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    },
+  );
+
+  test('one broken Activity does not suppress another and owner cancellation stops discovery retry', async () => {
+    jest.useFakeTimers();
+    try {
+      mockRegistry = {
+        unfinished: null,
+        recoveryQueue: [],
+        completed: [
+          { clientActivityId: 'activity-bad', locationProviderSource: 'real' },
+          { clientActivityId: 'activity-good', locationProviderSource: 'real' },
+        ],
+        tombstones: [],
+      };
+      const journals: Record<string, any[]> = {
+        'activity-bad': [point(130, 1)],
+        'activity-good': [point(140, 1)],
+      };
+      mockReadHikeTrackForProjection.mockImplementation(async (activityId: string) => {
+        if (activityId === 'activity-bad') throw new Error('bad-wal-sustained');
+        return journals[activityId] ?? [];
+      });
+      mockRecordMemoryEvidence.mockResolvedValue({ committed: true, deduplicated: false });
+      await expect(resumeActivityMemoryProjectionsForOwner('owner-a')).rejects.toThrow('bad-wal-sustained');
+      await waitForActivityMemoryProjection('activity-good');
+      expect(mockRecordMemoryEvidence).toHaveBeenCalledWith(expect.objectContaining({ atMs: 140 }));
+
+      await jest.advanceTimersByTimeAsync(1_000);
+      expect(getActivityMemoryProjectionDiscoveryState('owner-a').retryAttempt).toBe(2);
+      cancelActivityMemoryProjectionDiscoveryForOwner('owner-a');
+      mockReadHikeTrackForProjection.mockImplementation(async (activityId: string) => journals[activityId] ?? []);
+      await jest.advanceTimersByTimeAsync(60_000);
+      expect(mockRecordMemoryEvidence).not.toHaveBeenCalledWith(expect.objectContaining({ atMs: 130 }));
+      expect(getActivityMemoryProjectionDiscoveryState('owner-a')).toMatchObject({
+        retryAttempt: 0, nextRetryAtMs: null,
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('owner purge cancels a faulted pre-intent discovery timer before final owner scan', async () => {
+    jest.useFakeTimers();
+    try {
+      mockRegistry = {
+        unfinished: {
+          clientActivityId: 'activity-purge-discovery', userId: 'owner-a',
+          liveOwnerGeneration: 'gen-purge', locationProviderSource: 'real',
+        },
+        recoveryQueue: [], completed: [], tombstones: [],
+      };
+      mockJournal = [point(145, 1)];
+      mockGetActivityRegistry.mockRejectedValue(new Error('registry-down-through-purge'));
+      await expect(resumeActivityMemoryProjectionsForOwner('owner-a'))
+        .rejects.toThrow('registry-down-through-purge');
+      const attemptsBeforePurge = getActivityMemoryProjectionMetrics().discoveryAttempts;
+      await purgeActivityMemoryProjectionsForOwner('owner-a');
+      mockGetActivityRegistry.mockImplementation(async () => mockRegistry);
+      await jest.advanceTimersByTimeAsync(60_000);
+      expect(getActivityMemoryProjectionMetrics().discoveryAttempts).toBe(attemptsBeforePurge);
+      expect(mockRecordMemoryEvidence).not.toHaveBeenCalled();
+      expect([...mockValues.values()].some(raw => raw.includes('activity-purge-discovery'))).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('accepted WAL survives its first intent-write failure and registry discovery projects it after restart', async () => {

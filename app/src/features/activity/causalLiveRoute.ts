@@ -304,69 +304,161 @@ export function appendCausalLivePoint(
   point: TrackPoint,
   canonicalHistory?: TrackPoint[],
 ): TrackPoint[] {
-  if (existing.length === 0) return [point];
-  const prior = existing[existing.length - 1];
-  if ((prior.segmentId ?? '__legacy') !== (point.segmentId ?? '__legacy')) return [...existing, point];
-
-  // The accepted canonical tail lets a real corner be reinstated once enough
-  // later evidence confirms it. Keeping only the simplified display would
-  // irreversibly discard a corner observed before its outgoing arm.
   const history = canonicalHistory?.length ? canonicalHistory : [...existing, point];
-  let segmentStart = history.length - 1;
-  while (
-    segmentStart > 0
-    && (history[segmentStart - 1].segmentId ?? '__legacy') === (point.segmentId ?? '__legacy')
-  ) segmentStart -= 1;
-  const evidence = history.slice(segmentStart);
-  const currentSegment = point.segmentId ?? '__legacy';
-  const mutableStart = mutableTailStartIndex(evidence);
-  const cutoffT = evidence[mutableStart]?.t ?? point.t;
-  const prefix = existing.filter(existingPoint => (
-    (existingPoint.segmentId ?? '__legacy') !== currentSegment
-    || existingPoint.t < cutoffT
-  ));
-  // Two immutable canonical context points let the boundary settle against
-  // both sides before it freezes; they are never republished or revised.
+  const priorHistory = history.slice(0, -1);
+  const checkpoint = createCausalLiveReplayCheckpoint(priorHistory, existing);
+  appendCausalLiveReplayPoint(checkpoint, point);
+  return causalLiveReplayResult(checkpoint);
+}
+
+export interface CausalLiveReplayCheckpoint {
+  frozen: TrackPoint[];
+  liveTail: TrackPoint[];
+  segmentEvidence: TrackPoint[];
+  segmentId: string | null;
+  segmentHasPriorEvidence: boolean;
+}
+
+export function createCausalLiveReplayCheckpoint(
+  canonical: ReadonlyArray<TrackPoint> = [],
+  live: ReadonlyArray<TrackPoint> = [],
+): CausalLiveReplayCheckpoint {
+  if (canonical.length === 0) {
+    return {
+      frozen: [], liveTail: [], segmentEvidence: [], segmentId: null,
+      segmentHasPriorEvidence: false,
+    };
+  }
+  const segmentId = canonical[canonical.length - 1].segmentId ?? '__legacy';
+  // Mutable decisions use at most ten points plus two immutable boundary
+  // witnesses. Everything older is already represented by the frozen Live
+  // prefix and need not be replayed on foreground return or the next GPS fix.
+  let boundedStart = canonical.length - 1;
+  const maximumEvidence = LIVE_MUTABLE_TAIL_MAX_POINTS + 2;
+  while (boundedStart > 0
+    && canonical.length - boundedStart < maximumEvidence
+    && (canonical[boundedStart - 1].segmentId ?? '__legacy') === segmentId) boundedStart -= 1;
+  const hasEarlierSegmentEvidence = boundedStart > 0
+    && (canonical[boundedStart - 1].segmentId ?? '__legacy') === segmentId;
+  const boundedEvidence = canonical.slice(boundedStart);
+  const mutableStart = mutableTailStartIndex(boundedEvidence);
   const contextStart = Math.max(0, mutableStart - 2);
-  // The oldest mutable point is the handoff between frozen prefix and recent
-  // tail. It must survive simplification so that, when the window advances,
-  // a settled boundary becomes durable history. Previously both context
-  // points could be simplified away and then filtered out, leaving only the
-  // Activity start plus the newest point on broad curves/self-crossings.
-  const liveTail = simplifyTail(
-    evidence.slice(contextStart),
-    contextStart === 0,
-    mutableStart - contextStart,
-  )
-    .filter(candidate => candidate.t >= cutoffT);
-  return [...prefix, ...liveTail];
+  const cutoffT = boundedEvidence[mutableStart]?.t ?? canonical[canonical.length - 1].t;
+  let liveTailStart = live.length;
+  while (liveTailStart > 0) {
+    const candidate = live[liveTailStart - 1];
+    if ((candidate.segmentId ?? '__legacy') !== segmentId || candidate.t < cutoffT) break;
+    liveTailStart -= 1;
+  }
+  return {
+    frozen: live.slice(0, liveTailStart),
+    liveTail: live.slice(liveTailStart),
+    segmentEvidence: boundedEvidence.slice(contextStart),
+    segmentId,
+    segmentHasPriorEvidence: hasEarlierSegmentEvidence || contextStart > 0,
+  };
+}
+
+export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, point: TrackPoint): void {
+    const nextSegmentId = point.segmentId ?? '__legacy';
+    if (state.segmentId !== nextSegmentId) {
+      state.frozen.push(...state.liveTail);
+      state.liveTail = [];
+      state.segmentEvidence = [];
+      state.segmentId = nextSegmentId;
+      state.segmentHasPriorEvidence = false;
+    }
+    state.segmentEvidence.push(point);
+    const mutableStart = mutableTailStartIndex(state.segmentEvidence);
+    const cutoffT = state.segmentEvidence[mutableStart]?.t ?? point.t;
+    if (state.liveTail.length > 0) {
+      state.frozen.push(...state.liveTail.filter(candidate => candidate.t < cutoffT));
+    }
+    const contextStart = Math.max(0, mutableStart - 2);
+    state.liveTail = simplifyTail(
+      state.segmentEvidence.slice(contextStart),
+      !state.segmentHasPriorEvidence && contextStart === 0,
+      mutableStart - contextStart,
+    ).filter(candidate => candidate.t >= cutoffT);
+    if (contextStart > 0) {
+      state.segmentEvidence = state.segmentEvidence.slice(contextStart);
+      state.segmentHasPriorEvidence = true;
+    }
+}
+
+export function causalLiveReplayResult(state: CausalLiveReplayCheckpoint): TrackPoint[] {
+  return [...state.frozen, ...state.liveTail];
 }
 
 function buildExactCausalLiveRoute(points: TrackPoint[]): TrackPoint[] {
-  const frozen: TrackPoint[] = [];
-  let liveTail: TrackPoint[] = [];
-  let segmentEvidence: TrackPoint[] = [];
-  let segmentId: string | null = null;
+  const state = createCausalLiveReplayCheckpoint();
   for (const point of points) {
-    const nextSegmentId = point.segmentId ?? '__legacy';
-    if (segmentId !== nextSegmentId) {
-      frozen.push(...liveTail);
-      liveTail = [];
-      segmentEvidence = [];
-      segmentId = nextSegmentId;
-    }
-    segmentEvidence.push(point);
-    const mutableStart = mutableTailStartIndex(segmentEvidence);
-    const cutoffT = segmentEvidence[mutableStart]?.t ?? point.t;
-    if (liveTail.length > 0) frozen.push(...liveTail.filter(candidate => candidate.t < cutoffT));
-    const contextStart = Math.max(0, mutableStart - 2);
-    liveTail = simplifyTail(
-      segmentEvidence.slice(contextStart),
-      contextStart === 0,
-      mutableStart - contextStart,
-    ).filter(candidate => candidate.t >= cutoffT);
+    appendCausalLiveReplayPoint(state, point);
   }
-  return [...frozen, ...liveTail];
+  return causalLiveReplayResult(state);
+}
+
+export interface CausalLiveCooperativeReplayMetrics {
+  processedPointCount: number;
+  sliceCount: number;
+  yieldCount: number;
+  totalMs: number;
+  maxSynchronousSliceMs: number;
+}
+
+export interface CausalLiveCooperativeReplayResult {
+  route: TrackPoint[];
+  metrics: CausalLiveCooperativeReplayMetrics;
+}
+
+export interface CausalLiveCooperativeReplayOptions {
+  /** Fixed point cap makes work bounded even when host clocks are coarse. */
+  maxPointsPerSlice?: number;
+  yieldToHost?: () => Promise<void>;
+  shouldContinue?: () => boolean;
+}
+
+const monotonicNow = () => globalThis.performance?.now?.() ?? Date.now();
+const defaultYieldToHost = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
+/** Exact R3 reducer replay with cooperative host yields. No partial route is
+ * published; callers generation-fence the final snapshot. */
+export async function buildCausalLiveRouteCooperatively(
+  points: ReadonlyArray<TrackPoint>,
+  options: CausalLiveCooperativeReplayOptions = {},
+): Promise<CausalLiveCooperativeReplayResult | null> {
+  const state = createCausalLiveReplayCheckpoint();
+  const maxPointsPerSlice = Math.max(1, Math.floor(options.maxPointsPerSlice ?? 16));
+  const yieldToHost = options.yieldToHost ?? defaultYieldToHost;
+  const startedAt = monotonicNow();
+  let maxSynchronousSliceMs = 0;
+  let sliceCount = 0;
+  let yieldCount = 0;
+  for (let offset = 0; offset < points.length; offset += maxPointsPerSlice) {
+    if (options.shouldContinue && !options.shouldContinue()) return null;
+    const sliceStartedAt = monotonicNow();
+    const end = Math.min(points.length, offset + maxPointsPerSlice);
+    for (let index = offset; index < end; index += 1) {
+      appendCausalLiveReplayPoint(state, points[index]);
+    }
+    maxSynchronousSliceMs = Math.max(maxSynchronousSliceMs, monotonicNow() - sliceStartedAt);
+    sliceCount += 1;
+    if (end < points.length) {
+      yieldCount += 1;
+      await yieldToHost();
+    }
+  }
+  if (options.shouldContinue && !options.shouldContinue()) return null;
+  return {
+    route: causalLiveReplayResult(state),
+    metrics: {
+      processedPointCount: points.length,
+      sliceCount,
+      yieldCount,
+      totalMs: monotonicNow() - startedAt,
+      maxSynchronousSliceMs,
+    },
+  };
 }
 
 export function buildCausalLiveRoute(points: TrackPoint[]): TrackPoint[] {

@@ -136,7 +136,7 @@ jest.mock('../src/services/apiService', () => ({
   authenticatedFetch: jest.fn(async () => ({ ok: false })),
 }));
 jest.mock('../src/store/useAppStore', () => ({
-  useAppStore: { getState: jest.fn(() => ({ user: { id: 'tracking-test-user' } })) },
+  useAppStore: { getState: jest.fn(() => ({ isLoggedIn: true, user: { id: 'tracking-test-user' } })) },
 }));
 jest.mock('../src/services/sessionService', () => ({
   startSession: jest.fn(async () => null),
@@ -542,7 +542,10 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
     mockHikeJournalPoints.length = 0;
     mockAppStateChangeListener = null;
     require('react-native').AppState.currentState = 'active';
-    require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({ user: { id: 'tracking-test-user' } });
+    require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({
+      isLoggedIn: true,
+      user: { id: 'tracking-test-user' },
+    });
     seedSimulatorActivity();
   });
 
@@ -880,7 +883,10 @@ describe('useTrackingStore — P0 operation guards', () => {
     mockSecureStore.getItemAsync.mockResolvedValue(null);
     require('../src/services/batteryMonitor').batteryMonitor.getCurrentLevel.mockReturnValue(null);
     require('../src/services/batteryMonitor').batteryMonitor.getIsCharging.mockReturnValue(false);
-    require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({ user: { id: 'tracking-test-user' } });
+    require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({
+      isLoggedIn: true,
+      user: { id: 'tracking-test-user' },
+    });
     useTrackingStore.setState(useTrackingStore.getInitialState(), true);
   });
 
@@ -1238,7 +1244,7 @@ describe('useTrackingStore — P0 operation guards', () => {
       currentSegmentId: 'account-a-segment',
     });
     await useTrackingStore.getState().suspendForUserSwitch();
-    appStore.getState.mockReturnValue({ user: { id: 'account-b' } });
+    appStore.getState.mockReturnValue({ isLoggedIn: true, user: { id: 'account-b' } });
     await useTrackingStore.getState().addTrackPoint({
       lat: -41,
       lng: 174,
