@@ -13,7 +13,10 @@ const reviewReceipts: Array<Record<string, unknown>> = [];
 jest.mock('../../../store/storage', () => ({
   storage: {
     getItem: jest.fn(async (key: string) => mockValues.get(key) ?? null),
+    getItemStrict: jest.fn(async (key: string) => mockValues.get(key) ?? null),
     setItem: jest.fn(async (key: string, value: string) => { mockValues.set(key, value); }),
+    getAllKeysStrict: jest.fn(async () => [...mockValues.keys()]),
+    removeItemsStrict: jest.fn(async (keys: string[]) => keys.forEach(key => mockValues.delete(key))),
   },
 }));
 jest.mock('../../../config/mapbox', () => ({
@@ -57,6 +60,7 @@ import {
   readActivityFinalRefinementJob,
   resumeActivityFinalRefinement,
 } from '../activityFinalRefinementQueue';
+import { exportLatestActivityStageLedger, flushActivityStageLedger } from '../activityStageLedger';
 
 const pendingMocks = jest.requireMock('../../../services/pendingSyncStore') as {
   savePending: jest.Mock;
@@ -106,6 +110,12 @@ function requestResult(overrides: Record<string, unknown> = {}) {
     responseBytes: 120,
     ...overrides,
   };
+}
+
+async function waitForNetworkDispatch(): Promise<void> {
+  for (let turn = 0; turn < 80 && mockReconstruct.mock.calls.length === 0; turn += 1) {
+    await Promise.resolve();
+  }
 }
 
 describe('durable Activity Final refinement queue', () => {
@@ -195,28 +205,95 @@ describe('durable Activity Final refinement queue', () => {
     reviewReceipts.push({ scenario: 'token authority unavailable', ...job });
     expect(job).toMatchObject({
       status: 'complete', outcome: 'base-retained', completedRevision: 1,
+      technicalOutcome: 'authority-unavailable', authoritySource: 'none',
+      requestHttpCategory: 'not-attempted', roadEnhancementState: 'terminal-local',
     });
   });
 
-  test('offline selection publishes the stable local route without dispatching a paid request', async () => {
+  test('structured authority and thrown-error outcomes survive queue to owner export without raw secrets', async () => {
+    mockToken = 'never-persist-this-token';
+    mockNetworkState = 'online';
+    mockReconstruct.mockRejectedValue(new Error('raw-provider-secret-must-not-survive'));
+    await enqueueActivityFinalRefinement({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
+    });
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    await flushActivityStageLedger('owner-a');
+    const exported = await exportLatestActivityStageLedger('owner-a');
+    const selected = exported.events.find(event => event.stage === 'final-selected');
+    expect(selected?.details).toMatchObject({
+      authoritySource: 'runtime',
+      technicalOutcome: 'execution-error',
+      selectionErrorCategory: 'execution-error',
+      requestHttpCategory: 'not-attempted',
+      candidateDecision: 'stable-local-execution-error',
+      roadEnhancementState: 'terminal-local',
+    });
+    const serialized = JSON.stringify(exported);
+    expect(serialized).not.toContain('never-persist-this-token');
+    expect(serialized).not.toContain('raw-provider-secret-must-not-survive');
+    if (process.env.CAIRN_FIELD03_FALLBACK_LEDGER_OUTPUT) {
+      require('node:fs').writeFileSync(
+        process.env.CAIRN_FIELD03_FALLBACK_LEDGER_OUTPUT,
+        `${JSON.stringify(exported, null, 2)}\n`,
+      );
+    }
+    const job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+    reviewReceipts.push({ scenario: 'execution error', ...job });
+  });
+
+  test('offline stable route remains durable, then reconnect performs exactly one accepted upgrade', async () => {
     mockToken = 'token-that-must-not-be-used';
     mockNetworkState = 'offline';
     await enqueueActivityFinalRefinement({
       ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
     });
-    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('pending-network');
     expect(mockReconstruct).not.toHaveBeenCalled();
-    const job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
-    reviewReceipts.push({ scenario: 'offline', ...job });
-    expect(job).toMatchObject({
-      status: 'complete',
+    const offlineJob = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+    reviewReceipts.push({ scenario: 'offline-pending', ...offlineJob });
+    expect(offlineJob).toMatchObject({
+      status: 'queued',
       technicalOutcome: 'offline',
-      tokenAuthorityLabel: 'runtime',
+      authoritySource: 'runtime',
       matchingAttempted: false,
       candidateDecision: 'stable-local-selected',
       selectedSource: 'base',
-      completedRevision: 1,
+      completedRevision: null,
+      roadEnhancementState: 'pending-network',
+      requestHttpCategory: 'not-attempted',
     });
+    expect(pendingMocks.markPendingUploadReady).not.toHaveBeenCalled();
+    expect(mockAddSession).toHaveBeenLastCalledWith(expect.objectContaining({
+      finalGeometryState: 'base_ready',
+      roadRefinementPending: true,
+    }), 'owner-a');
+
+    mockNetworkState = 'online';
+    mockReconstruct.mockResolvedValue({
+      ok: true,
+      points: baseArtifact().points.map((point, index) => index === 1 ? { ...point, lng: point.lng + 0.000004 } : point),
+      stats: {
+        requestResults: [requestResult({ acceptedCandidateCount: 1 })],
+        acceptedMatchedDistanceM: 100,
+        canonicalDerivedSectionCount: 0,
+        displayRefined: true,
+        wholeRouteValidation: { accepted: true },
+      },
+    });
+    const refined = { ...baseArtifact(), revision: 2, source: 'matched', displayFingerprint: 'reconnected-refined' };
+    mockCommitArtifact.mockResolvedValue({ committed: true, artifact: refined });
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    expect(mockReconstruct).toHaveBeenCalledTimes(1);
+    expect(pendingMocks.markPendingUploadReady).toHaveBeenCalledTimes(1);
+    expect(await readActivityFinalRefinementJob('owner-a', 'activity-a')).toMatchObject({
+      status: 'complete',
+      roadEnhancementState: 'accepted',
+      completedRevision: 2,
+      networkAttemptCount: 1,
+    });
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    expect(mockReconstruct).toHaveBeenCalledTimes(1);
   });
 
   test('owner deletion cancellation is durable and prevents a queued job from running', async () => {
@@ -259,7 +336,7 @@ describe('durable Activity Final refinement queue', () => {
       ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
     });
     const running = resumeActivityFinalRefinement('owner-a', 'activity-a');
-    for (let turn = 0; turn < 20 && mockReconstruct.mock.calls.length === 0; turn += 1) await Promise.resolve();
+    await waitForNetworkDispatch();
     expect(mockReconstruct).toHaveBeenCalledTimes(1);
     await cancelActivityFinalRefinement('owner-a', 'activity-a');
     await expect(running).resolves.toBe('cancelled');
@@ -277,7 +354,7 @@ describe('durable Activity Final refinement queue', () => {
       ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
     });
     const running = resumeActivityFinalRefinement('owner-a', 'activity-a');
-    for (let turn = 0; turn < 20 && mockReconstruct.mock.calls.length === 0; turn += 1) await Promise.resolve();
+    await waitForNetworkDispatch();
     let purgeFenceSettled = false;
     const purgeFence = cancelAllActivityFinalRefinementsForOwner('owner-a')
       .then(() => { purgeFenceSettled = true; });
@@ -335,7 +412,7 @@ describe('durable Activity Final refinement queue', () => {
     await enqueueActivityFinalRefinement({
       ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
     });
-    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('pending-retry');
     expect(mockReconstruct).toHaveBeenCalled();
     const options = mockReconstruct.mock.calls[0][1];
     expect(options.totalTimeoutMs).toBeGreaterThan(0);
@@ -344,17 +421,65 @@ describe('durable Activity Final refinement queue', () => {
     expect(mockCommitArtifact).not.toHaveBeenCalled();
   });
 
+  test('transient network refinement retries are persisted and terminal after the bounded budget', async () => {
+    let now = 10_000;
+    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      mockToken = 'token';
+      mockNetworkState = 'online';
+      mockReconstruct.mockResolvedValue({
+        ok: false,
+        reason: 'network-error',
+        stats: { requestResults: [requestResult({ result: 'network-error', httpStatus: null, responseCode: null })] },
+      });
+      await enqueueActivityFinalRefinement({
+        ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
+      });
+      await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('pending-retry');
+      let job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+      expect(job).toMatchObject({ networkAttemptCount: 1, nextRetryAt: 15_000, status: 'queued' });
+      await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('pending-retry');
+      expect(mockReconstruct).toHaveBeenCalledTimes(1);
+
+      now = 15_001;
+      await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('pending-retry');
+      job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+      expect(job).toMatchObject({ networkAttemptCount: 2, nextRetryAt: 45_001, status: 'queued' });
+
+      now = 45_002;
+      await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+      job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+      expect(job).toMatchObject({
+        networkAttemptCount: 3,
+        nextRetryAt: null,
+        status: 'complete',
+        roadEnhancementState: 'terminal-local',
+        technicalOutcome: 'network-failure',
+      });
+      expect(mockReconstruct).toHaveBeenCalledTimes(3);
+      expect(pendingMocks.markPendingUploadReady).toHaveBeenCalledTimes(1);
+      reviewReceipts.push({ scenario: 'bounded network retry exhaustion', ...job });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   test.each([
-    ['NoMatch', requestResult({ responseCode: 'NoMatch', result: 'response-no-match' }), 'no-match', 'stable-local-no-match'],
-    ['authorization rejection', requestResult({ httpStatus: 401, responseCode: 'Unauthorized', result: 'http-401' }), 'auth', 'stable-local-auth-rejected'],
-    ['local request budget', requestResult({ invoked: false, governorReason: 'budget', httpStatus: null, responseCode: null, result: 'governor-denied' }), 'budget', 'stable-local-governor-denied'],
-    ['unsafe returned candidate', requestResult({ acceptedCandidateCount: 0, rejectedCandidateCount: 1 }), 'unsafe-candidate', 'candidate-rejected'],
-    ['bounded deadline', requestResult({ result: 'timeout-or-abort', httpStatus: null, responseCode: null }), 'deadline', 'stable-local-deadline'],
+    ['NoMatch', requestResult({ responseCode: 'NoMatch', result: 'response-no-match' }), 'no-match', 'stable-local-no-match', 'complete', 'terminal-local', 'no-match'],
+    ['authorization rejection', requestResult({ httpStatus: 401, responseCode: 'Unauthorized', result: 'http-401' }), 'auth', 'stable-local-auth-rejected', 'complete', 'terminal-local', 'auth'],
+    ['local request budget', requestResult({ invoked: false, governorReason: 'budget', httpStatus: null, responseCode: null, result: 'governor-denied' }), 'budget', 'stable-local-governor-denied', 'complete', 'terminal-local', 'not-attempted'],
+    ['unsafe returned candidate', requestResult({ acceptedCandidateCount: 0, rejectedCandidateCount: 1 }), 'unsafe-candidate', 'candidate-rejected', 'complete', 'terminal-local', 'success'],
+    ['permanent client error', requestResult({ httpStatus: 422, responseCode: 'InvalidInput', result: 'http-error' }), 'client-error', 'stable-local-client-error', 'complete', 'terminal-local', 'client-error'],
+    ['transient server error', requestResult({ httpStatus: 503, responseCode: 'Unavailable', result: 'http-error' }), 'server-error', 'stable-local-server-error', 'pending-retry', 'pending-retry', 'server-error'],
+    ['bounded deadline', requestResult({ result: 'timeout-or-abort', httpStatus: null, responseCode: null }), 'deadline', 'stable-local-deadline', 'pending-retry', 'pending-retry', 'timeout'],
   ])('records a precise %s receipt while retaining the stable local route', async (
     _label,
     request,
     technicalOutcome,
     candidateDecision,
+    runResult,
+    roadEnhancementState,
+    httpCategory,
   ) => {
     mockToken = 'token';
     mockNetworkState = 'online';
@@ -372,16 +497,18 @@ describe('durable Activity Final refinement queue', () => {
     await enqueueActivityFinalRefinement({
       ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
     });
-    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe(runResult);
     expect(mockCommitArtifact).not.toHaveBeenCalled();
     const job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
     reviewReceipts.push({ scenario: _label, ...job });
     expect(job).toMatchObject({
-      status: 'complete',
+      status: runResult === 'complete' ? 'complete' : 'queued',
       technicalOutcome,
       candidateDecision,
       selectedSource: 'base',
       selectedFingerprint: 'display-a',
+      roadEnhancementState,
+      requestHttpCategory: httpCategory,
     });
   });
 
@@ -431,7 +558,7 @@ describe('durable Activity Final refinement queue', () => {
     expect(job).toMatchObject({
       status: 'complete',
       technicalOutcome: 'matched-success',
-      tokenAuthorityLabel: 'runtime',
+      authoritySource: 'runtime',
       matchingAttempted: true,
       governorAuthorized: true,
       candidateDecision: 'accepted',
@@ -439,6 +566,31 @@ describe('durable Activity Final refinement queue', () => {
       selectedFingerprint: 'hybrid-two-segments',
       completedRevision: 2,
     });
+  });
+
+  test('a canonical/Base segment mismatch retains local geometry with an exportable reason', async () => {
+    mockToken = 'token';
+    mockNetworkState = 'online';
+    mockPending.payload.route_points_canonical = [
+      { lat: -41, lng: 174, t: 1_000, segment_id: 'one' },
+      { lat: -41.001, lng: 174, t: 2_000, segment_id: 'one' },
+      { lat: -41.01, lng: 174.01, t: 3_000, segment_id: 'two' },
+      { lat: -41.011, lng: 174.01, t: 4_000, segment_id: 'two' },
+    ];
+    await enqueueActivityFinalRefinement({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
+    });
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    expect(mockReconstruct).not.toHaveBeenCalled();
+    const job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+    expect(job).toMatchObject({
+      status: 'complete',
+      technicalOutcome: 'segment-structure-mismatch',
+      candidateDecision: 'stable-local-segment-mismatch',
+      requestHttpCategory: 'not-attempted',
+      roadEnhancementState: 'terminal-local',
+    });
+    reviewReceipts.push({ scenario: 'segment structure mismatch', ...job });
   });
 
   test('an account switch during a network request defers the durable job and publishes nothing stale', async () => {
@@ -449,7 +601,7 @@ describe('durable Activity Final refinement queue', () => {
       ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
     });
     const running = resumeActivityFinalRefinement('owner-a', 'activity-a');
-    for (let turn = 0; turn < 20 && mockReconstruct.mock.calls.length === 0; turn += 1) await Promise.resolve();
+    await waitForNetworkDispatch();
     expect(mockReconstruct).toHaveBeenCalledTimes(1);
     mockOwnerId = 'owner-b';
     release({

@@ -3,6 +3,9 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 
 const mockStorageValues = new Map<string, string>();
+let mockHoldDiagnosticWrite = false;
+let mockDiagnosticWriteBlocked = false;
+let releaseMockDiagnosticWrite: (() => void) | null = null;
 let mockCurrentUserId = 'raw-gps-qa';
 const mockHikeJournalPoints: any[] = [];
 const mockAddSession = jest.fn(async () => undefined);
@@ -49,8 +52,17 @@ jest.mock('../../../store/storage', () => ({
   storage: {
     getItem: jest.fn(async (key: string) => mockStorageValues.get(key) ?? null),
     getItemStrict: jest.fn(async (key: string) => mockStorageValues.get(key) ?? null),
-    setItem: jest.fn(async (key: string, value: string) => { mockStorageValues.set(key, value); }),
+    setItem: jest.fn(async (key: string, value: string) => {
+      if (mockHoldDiagnosticWrite && key.startsWith('@cairn:activity-stage-ledger:')) {
+        mockHoldDiagnosticWrite = false;
+        mockDiagnosticWriteBlocked = true;
+        await new Promise<void>(resolve => { releaseMockDiagnosticWrite = resolve; });
+      }
+      mockStorageValues.set(key, value);
+    }),
     removeItem: jest.fn(async (key: string) => { mockStorageValues.delete(key); }),
+    getAllKeysStrict: jest.fn(async () => [...mockStorageValues.keys()]),
+    removeItemsStrict: jest.fn(async (keys: string[]) => keys.forEach(key => mockStorageValues.delete(key))),
   },
 }));
 jest.mock('../store/useH3VisitedStore', () => ({
@@ -540,6 +552,59 @@ describe('revision-03 realistic Raw GPS -> live isolated Memory pipeline', () =>
       finalRevision: result.finalGeometryRevision,
       finalFingerprint: result.finalGeometryFingerprint,
     })}\n`);
+  });
+
+  test('Finish completes while actual diagnostic persistence is held', async () => {
+    const account = 'qa-finish-ledger-io';
+    const scenarioId = 'finishledger';
+    await seedTracking(account, scenarioId, 'hiking', 'real', EPOCH);
+    const state = useTrackingStore.getState();
+    const clientActivityId = String(state.sessionId);
+    const ownerGeneration = String(state.liveOwnerGeneration);
+    const segmentId = `segment-${scenarioId}`;
+    const points = [0, 18, 36].map((eastM, index) => ({
+      lat: ORIGIN.lat,
+      lng: ORIGIN.lng + eastM / (111_320 * Math.cos(ORIGIN.lat * Math.PI / 180)),
+      t: EPOCH + index * 12_000,
+      rawOrdinal: index + 1,
+      segmentId,
+      ...(index === 0 ? { segmentStartReason: 'start' as const } : {}),
+      accuracy: 5,
+      speed: 1.5,
+      source: 'foreground' as const,
+      clientActivityId,
+      ownerGeneration,
+    }));
+    mockHikeJournalPoints.push(...points);
+    const stats = calculateActivityStats(points);
+    useTrackingStore.setState({
+      trackPoints: points,
+      trackPointsSmoothed: points,
+      trackPointsRaw: points,
+      distanceM: stats.distanceM,
+      distanceAccumulator: buildActivityDistanceAccumulator(points),
+      lastCoordinate: points.at(-1),
+      lastCoordinateTime: points.at(-1)!.t,
+      lastFixTimestamp: points.at(-1)!.t,
+      currentSegmentId: segmentId,
+    });
+    const ledger = require('../../activity/activityStageLedger');
+    await ledger.flushActivityStageLedger();
+    mockDiagnosticWriteBlocked = false;
+    releaseMockDiagnosticWrite = null;
+    mockHoldDiagnosticWrite = true;
+    const finishing = useTrackingStore.getState().stopTracking('Slow diagnostic storage');
+    const result = await Promise.race([
+      finishing,
+      new Promise<never>((_, reject) => setTimeout(
+        () => reject(new Error('Finish inherited diagnostic storage latency')),
+        2_000,
+      )),
+    ]);
+    expect(result).toMatchObject({ status: 'saved-local', clientActivityId });
+    expect(mockDiagnosticWriteBlocked).toBe(true);
+    releaseMockDiagnosticWrite?.();
+    await ledger.flushActivityStageLedger(account);
   });
 
   test('Finish awaits a foreground append admitted before its fence and snapshots its published point', async () => {

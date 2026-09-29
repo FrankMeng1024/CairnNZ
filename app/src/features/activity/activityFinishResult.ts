@@ -14,6 +14,7 @@ export interface ActivityFinishSavedResult {
   finalGeometryState: NonNullable<TrackingSession['finalGeometryState']>;
   finalGeometryRevision: number;
   finalGeometryFingerprint: string;
+  roadRefinementPending: boolean;
 }
 
 export interface ActivityFinishRecoverableFailureResult {
@@ -49,5 +50,6 @@ export function activityFinishResultFromSession(
     finalGeometryState: session.finalGeometryState ?? 'base_ready',
     finalGeometryRevision,
     finalGeometryFingerprint,
+    roadRefinementPending: session.roadRefinementPending === true,
   };
 }

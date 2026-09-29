@@ -46,14 +46,22 @@ export interface ActivityFinalRefinementJob {
   technicalOutcome?: string | null;
   selectedSource?: ActivityFinalArtifact['source'] | null;
   selectedFingerprint?: string | null;
-  tokenAuthorityLabel?: string | null;
+  /** Safe authority provenance label only; the credential is never persisted. */
+  authoritySource?: string | null;
   matchingAttempted?: boolean;
   governorAuthorized?: boolean | null;
   candidateDecision?: string | null;
+  requestHttpCategory?: 'not-attempted' | 'success' | 'no-match' | 'auth' | 'timeout' | 'network' | 'client-error' | 'server-error' | 'mixed' | null;
+  selectionErrorCategory?: 'execution-error' | 'canonical-mismatch' | 'revision-contaminated' | null;
+  roadEnhancementState?: 'pending-network' | 'pending-retry' | 'running' | 'terminal-local' | 'accepted';
+  networkAttemptCount?: number;
+  nextRetryAt?: number | null;
 }
 
 export type ActivityFinalRefinementRunResult =
   | 'complete'
+  | 'pending-network'
+  | 'pending-retry'
   | 'cancelled'
   | 'deferred-owner'
   | 'absent';
@@ -63,6 +71,8 @@ const INDEX = '@cairn:activity_final_refinement:index:v1:';
 const flights = new Map<string, Promise<ActivityFinalRefinementRunResult>>();
 const controllers = new Map<string, AbortController>();
 const jobWriteTails = new Map<string, Promise<void>>();
+const MAX_NETWORK_ATTEMPTS = 3;
+const RETRY_DELAYS_MS = [5_000, 30_000] as const;
 
 const jobKey = (ownerUserId: string, clientActivityId: string) => `${ROOT}${ownerUserId}:${clientActivityId}`;
 const indexKey = (ownerUserId: string) => `${INDEX}${ownerUserId}`;
@@ -169,7 +179,7 @@ function fromPendingPoint(point: any): TrackPoint {
 }
 
 function stateForArtifact(artifact: ActivityFinalArtifact): 'base_ready' | 'enhanced' | 'limited_evidence' {
-  if (artifact.source === 'matched') return 'enhanced';
+  if (artifact.source === 'matched' || artifact.source === 'hybrid') return 'enhanced';
   if (artifact.source === 'base') return 'base_ready';
   return 'limited_evidence';
 }
@@ -199,8 +209,13 @@ function classifyRetainedLocalRoute(input: {
     || normalizedReasons.some(reason => reason.includes('no_match') || reason.includes('no-match'))) {
     return { technicalOutcome: 'no-match', candidateDecision: 'stable-local-no-match' };
   }
-  if (results.some(request => request.result === 'network-error'
-    || (request.httpStatus != null && request.httpStatus >= 400))) {
+  if (results.some(request => request.httpStatus != null && request.httpStatus >= 500)) {
+    return { technicalOutcome: 'server-error', candidateDecision: 'stable-local-server-error' };
+  }
+  if (results.some(request => request.httpStatus != null && request.httpStatus >= 400)) {
+    return { technicalOutcome: 'client-error', candidateDecision: 'stable-local-client-error' };
+  }
+  if (results.some(request => request.result === 'network-error')) {
     return { technicalOutcome: 'network-failure', candidateDecision: 'stable-local-network-failure' };
   }
   if (results.some(request => request.rejectedCandidateCount > 0)) {
@@ -213,6 +228,129 @@ function classifyRetainedLocalRoute(input: {
     return { technicalOutcome: 'no-meaningful-improvement', candidateDecision: 'stable-local-no-improvement' };
   }
   return { technicalOutcome: 'no-match', candidateDecision: 'stable-local-no-match' };
+}
+
+function requestHttpCategory(results: PedestrianFinalRequestResult[], technicalOutcome: string): NonNullable<
+ActivityFinalRefinementJob['requestHttpCategory']> {
+  if (technicalOutcome === 'deadline') return 'timeout';
+  if (results.length === 0 || !results.some(result => result.invoked)) {
+    if (technicalOutcome === 'deadline') return 'timeout';
+    if (technicalOutcome === 'network-failure') return 'network';
+    if (technicalOutcome === 'no-match') return 'no-match';
+    if (technicalOutcome === 'auth') return 'auth';
+    return 'not-attempted';
+  }
+  const categories = new Set(results.filter(result => result.invoked).map(result => {
+    if (result.httpStatus === 401 || result.httpStatus === 403) return 'auth';
+    if (result.result.includes('timeout')) return 'timeout';
+    if (result.responseCode === 'NoMatch' || result.result.includes('no-match')) return 'no-match';
+    if (result.httpStatus != null && result.httpStatus >= 500) return 'server-error';
+    if (result.httpStatus != null && result.httpStatus >= 400) return 'client-error';
+    if (result.result === 'network-error') return 'network';
+    return 'success';
+  }));
+  if (categories.size === 1) return [...categories][0] as NonNullable<ActivityFinalRefinementJob['requestHttpCategory']>;
+  return 'mixed';
+}
+
+function isTransientRoadOutcome(technicalOutcome: string): boolean {
+  return technicalOutcome === 'deadline'
+    || technicalOutcome === 'network-failure'
+    || technicalOutcome === 'server-error';
+}
+
+async function publishStableLocalPending(
+  job: ActivityFinalRefinementJob,
+  artifact: ActivityFinalArtifact,
+  roadState: 'pending-network' | 'pending-retry',
+  nextRetryAt: number | null,
+  signal: AbortSignal,
+): Promise<ActivityFinalRefinementRunResult> {
+  const stopped = await stoppedRunResult(job, signal);
+  if (stopped) return stopped;
+  const pending = await readPendingReadonly(job.clientActivityId);
+  const currentJob = await readJob(job.ownerUserId, job.clientActivityId);
+  if (!pending || pending.userId !== job.ownerUserId || !currentJob || currentJob.status === 'cancelled') {
+    finishPendingPreparation(job.clientActivityId);
+    return 'cancelled';
+  }
+  await savePending({
+    ...pending,
+    uploadState: 'preparing',
+    roadRefinementState: roadState,
+    roadRefinementNextRetryAt: nextRetryAt,
+    payload: {
+      ...pending.payload,
+      route_points: artifact.points.map(point => toServerPoint(point)),
+    },
+    finalArtifact: {
+      revision: artifact.revision,
+      displayFingerprint: artifact.displayFingerprint,
+      canonicalFingerprint: artifact.canonicalFingerprint,
+      source: artifact.source,
+      algorithmVersion: artifact.algorithmVersion,
+    },
+  });
+  if (pending.summary) {
+    const existing = useSessionStore.getState().sessions.find(session => (
+      session.clientActivityId === job.clientActivityId || session.id === job.clientActivityId
+    ));
+    await useSessionStore.getState().addSession({
+      id: job.clientActivityId,
+      clientActivityId: job.clientActivityId,
+      remoteId: pending.remoteId ?? undefined,
+      serverActivityId: pending.remoteId ?? undefined,
+      activityMode: pending.activityMode,
+      regionCode: existing?.regionCode ?? 'nz',
+      startedAt: pending.summary.startedAt,
+      endedAt: pending.summary.endedAt,
+      durationS: pending.summary.durationS,
+      distanceM: pending.summary.distanceM,
+      elevationGainM: pending.summary.elevationGainM,
+      trackPoints: artifact.points,
+      markerIds: pending.summary.markerIds,
+      name: pending.summary.name,
+      memoryNewCells: existing?.memoryNewCells ?? 0,
+      syncState: 'pending',
+      finalGeometryState: stateForArtifact(artifact),
+      finalGeometryVersion: artifact.algorithmVersion,
+      finalGeometryRevision: artifact.revision,
+      finalGeometryFingerprint: artifact.displayFingerprint,
+      roadRefinementPending: true,
+    }, job.ownerUserId);
+  }
+  await writeJob({
+    ...currentJob,
+    status: 'queued',
+    outcome: 'pending',
+    completedRevision: null,
+    selectedSource: artifact.source,
+    selectedFingerprint: artifact.displayFingerprint,
+    roadEnhancementState: roadState,
+    nextRetryAt,
+    updatedAt: Date.now(),
+  });
+  void recordActivityStageEvent({
+    ownerUserId: job.ownerUserId,
+    clientActivityId: job.clientActivityId,
+    stage: 'final-selected',
+    details: {
+      outcome: 'pending',
+      roadEnhancementState: roadState,
+      technicalOutcome: currentJob.technicalOutcome ?? null,
+      authoritySource: currentJob.authoritySource ?? null,
+      matchingAttempted: currentJob.matchingAttempted ?? false,
+      governorAuthorized: currentJob.governorAuthorized ?? null,
+      requestHttpCategory: currentJob.requestHttpCategory ?? 'not-attempted',
+      candidateDecision: currentJob.candidateDecision ?? null,
+      selectedSource: artifact.source,
+      selectedRevision: artifact.revision,
+      selectedFingerprint: artifact.displayFingerprint,
+      nextRetryAt,
+    },
+  });
+  finishPendingPreparation(job.clientActivityId);
+  return roadState;
 }
 
 async function publishArtifactAndRelease(
@@ -249,6 +387,8 @@ async function publishArtifactAndRelease(
   await savePending({
     ...pending,
     uploadState: 'preparing',
+    roadRefinementState: currentJob.candidateDecision === 'accepted' ? 'accepted' : 'terminal-local',
+    roadRefinementNextRetryAt: null,
     payload,
     finalArtifact: {
       revision: artifact.revision,
@@ -287,6 +427,7 @@ async function publishArtifactAndRelease(
       finalGeometryVersion: artifact.algorithmVersion,
       finalGeometryRevision: artifact.revision,
       finalGeometryFingerprint: artifact.displayFingerprint,
+      roadRefinementPending: false,
     }, job.ownerUserId);
   }
   if (signal) {
@@ -305,8 +446,10 @@ async function publishArtifactAndRelease(
     completedRevision: artifact.revision,
     selectedSource: artifact.source,
     selectedFingerprint: artifact.displayFingerprint,
+    roadEnhancementState: currentJob.candidateDecision === 'accepted' ? 'accepted' : 'terminal-local',
+    nextRetryAt: null,
     updatedAt: Date.now(),
-    lastError: null,
+    lastError: currentJob.lastError ?? null,
   });
   void recordActivityStageEvent({
     ownerUserId: job.ownerUserId,
@@ -315,10 +458,13 @@ async function publishArtifactAndRelease(
     details: {
       outcome,
       technicalOutcome: currentJob.technicalOutcome ?? null,
-      tokenAuthorityLabel: currentJob.tokenAuthorityLabel ?? null,
+      authoritySource: currentJob.authoritySource ?? null,
       matchingAttempted: currentJob.matchingAttempted ?? false,
       governorAuthorized: currentJob.governorAuthorized ?? null,
+      requestHttpCategory: currentJob.requestHttpCategory ?? 'not-attempted',
       candidateDecision: currentJob.candidateDecision ?? null,
+      selectionErrorCategory: currentJob.selectionErrorCategory ?? null,
+      roadEnhancementState: currentJob.candidateDecision === 'accepted' ? 'accepted' : 'terminal-local',
       selectedSource: artifact.source,
       selectedRevision: artifact.revision,
       selectedFingerprint: artifact.displayFingerprint,
@@ -359,10 +505,15 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
     technicalOutcome: null,
     selectedSource: null,
     selectedFingerprint: null,
-    tokenAuthorityLabel: null,
+    authoritySource: null,
     matchingAttempted: false,
     governorAuthorized: null,
     candidateDecision: null,
+    requestHttpCategory: 'not-attempted',
+    selectionErrorCategory: null,
+    roadEnhancementState: 'running',
+    networkAttemptCount: job.networkAttemptCount ?? 0,
+    nextRetryAt: null,
   };
   await writeJob(running);
   const stoppedBeforeRead = await stoppedRunResult(running, signal);
@@ -384,8 +535,12 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
     throw new Error('activity_refinement_canonical_mismatch');
   }
   if (baseArtifact.revision > job.expectedBaseRevision && baseArtifact.source !== 'base') {
+    running.technicalOutcome = 'recovered-accepted-artifact';
+    running.candidateDecision = 'accepted';
+    running.roadEnhancementState = 'accepted';
+    await writeJob(running);
     return publishArtifactAndRelease(running, baseArtifact,
-      baseArtifact.source === 'matched' ? 'enhanced' : 'limited', signal);
+      baseArtifact.source === 'matched' || baseArtifact.source === 'hybrid' ? 'enhanced' : 'limited', signal);
   }
 
   const canonical = pending.payload.route_points_canonical.map(fromPendingPoint);
@@ -398,17 +553,31 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   const canonicalSegments = segmentTrace(canonical).segments;
   const baseSegments = segmentTrace(baseArtifact.points).segments.map(segment => segment.slice());
   if (baseSegments.length !== canonicalSegments.length) {
+    running.technicalOutcome = 'segment-structure-mismatch';
+    running.candidateDecision = 'stable-local-segment-mismatch';
+    running.requestHttpCategory = 'not-attempted';
+    running.roadEnhancementState = 'terminal-local';
+    await writeJob(running);
     return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
   }
   const networkState = networkMonitor.getState?.()?.state ?? 'unknown';
   const authority = await resolveMapboxPublicTokenAuthority();
-  running.tokenAuthorityLabel = authority.source;
-  if (networkState === 'offline' || !authority.token) {
-    running.technicalOutcome = networkState === 'offline' ? 'offline' : 'authority-unavailable';
+  running.authoritySource = authority.source;
+  if (networkState === 'offline') {
+    running.technicalOutcome = 'offline';
     running.candidateDecision = 'stable-local-selected';
+    await writeJob(running);
+    return publishStableLocalPending(running, baseArtifact, 'pending-network', null, signal);
+  }
+  if (!authority.token) {
+    running.technicalOutcome = 'authority-unavailable';
+    running.candidateDecision = 'stable-local-authority-unavailable';
+    running.roadEnhancementState = 'terminal-local';
     await writeJob(running);
     return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
   }
+  running.networkAttemptCount = (running.networkAttemptCount ?? 0) + 1;
+  await writeJob(running);
 
   const governor = createActivityMapboxRequestGovernor({
     ownerUserId: job.ownerUserId,
@@ -447,14 +616,12 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
       signal,
     });
     resultReasons.push('reason' in result ? result.reason : 'ok');
+    const requests = result.stats.requestResults ?? [];
     running.matchingAttempted = running.matchingAttempted
-      || (result.ok && (result.stats.requestResults ?? []).some(request => request.invoked));
-    if (result.ok) {
-      const requests = result.stats.requestResults ?? [];
-      requestResults.push(...requests);
-      if (requests.some(request => request.invoked)) running.governorAuthorized = true;
-      else if (requests.some(request => request.governorReason != null)) running.governorAuthorized = false;
-    }
+      || requests.some(request => request.invoked);
+    requestResults.push(...requests);
+    if (requests.some(request => request.invoked)) running.governorAuthorized = true;
+    else if (requests.some(request => request.governorReason != null)) running.governorAuthorized = false;
     const stoppedAfterDispatch = await stoppedRunResult(running, signal);
     if (stoppedAfterDispatch) return stoppedAfterDispatch;
     if (!result.ok || result.points.length < 2) continue;
@@ -497,7 +664,22 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
     });
     running.technicalOutcome = retained.technicalOutcome;
     running.candidateDecision = retained.candidateDecision;
+    running.requestHttpCategory = requestHttpCategory(requestResults, retained.technicalOutcome);
     await writeJob(running);
+    if (isTransientRoadOutcome(retained.technicalOutcome)
+      && (running.networkAttemptCount ?? 0) < MAX_NETWORK_ATTEMPTS) {
+      const delayIndex = Math.max(0, Math.min(
+        RETRY_DELAYS_MS.length - 1,
+        (running.networkAttemptCount ?? 1) - 1,
+      ));
+      return publishStableLocalPending(
+        running,
+        baseArtifact,
+        'pending-retry',
+        Date.now() + RETRY_DELAYS_MS[delayIndex],
+        signal,
+      );
+    }
     return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
   }
 
@@ -532,6 +714,7 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   const acceptedArtifact = committed.artifact;
   running.technicalOutcome = matchedSegments > 0 ? 'matched-success' : 'local-improvement';
   running.candidateDecision = 'accepted';
+  running.requestHttpCategory = requestHttpCategory(requestResults, running.technicalOutcome);
   await writeJob(running);
   const stoppedAfterCommit = await stoppedRunResult(running, signal);
   if (stoppedAfterCommit) return stoppedAfterCommit;
@@ -539,7 +722,7 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
     throw new Error('activity_refinement_revision_contaminated');
   }
   return publishArtifactAndRelease(running, acceptedArtifact,
-    acceptedArtifact.source === 'matched' ? 'enhanced' : 'limited', signal);
+    acceptedArtifact.source === 'matched' || acceptedArtifact.source === 'hybrid' ? 'enhanced' : 'limited', signal);
 }
 
 export async function enqueueActivityFinalRefinement(input: {
@@ -568,10 +751,15 @@ export async function enqueueActivityFinalRefinement(input: {
     technicalOutcome: null,
     selectedSource: null,
     selectedFingerprint: null,
-    tokenAuthorityLabel: null,
+    authoritySource: null,
     matchingAttempted: false,
     governorAuthorized: null,
     candidateDecision: null,
+    requestHttpCategory: 'not-attempted',
+    selectionErrorCategory: null,
+    roadEnhancementState: 'pending-network',
+    networkAttemptCount: 0,
+    nextRetryAt: null,
   };
   await writeJob(job);
   await addToIndex(input.ownerUserId, input.clientActivityId);
@@ -592,6 +780,9 @@ export async function resumeActivityFinalRefinement(
     if (!job) return 'absent' as const;
     if (job.status === 'cancelled') return 'cancelled' as const;
     if (job.status === 'complete') return 'complete' as const;
+    if (job.roadEnhancementState === 'pending-retry'
+      && job.nextRetryAt != null
+      && job.nextRetryAt > Date.now()) return 'pending-retry' as const;
     try {
       return await executeJob(job, controller.signal);
     } catch (error) {
@@ -602,9 +793,21 @@ export async function resumeActivityFinalRefinement(
       const artifact = await loadActivityFinalArtifact(ownerUserId, clientActivityId);
       const latest = await readJob(ownerUserId, clientActivityId);
       if (artifact && latest && latest.status !== 'cancelled') {
+        const message = error instanceof Error ? error.message : String(error);
+        const selectionErrorCategory = message.includes('canonical_mismatch')
+          ? 'canonical-mismatch' as const
+          : message.includes('revision_contaminated')
+            ? 'revision-contaminated' as const
+            : 'execution-error' as const;
         await writeJob({
           ...latest,
-          lastError: String(error).slice(0, 180),
+          lastError: selectionErrorCategory,
+          technicalOutcome: 'execution-error',
+          candidateDecision: 'stable-local-execution-error',
+          selectionErrorCategory,
+          requestHttpCategory: latest.requestHttpCategory ?? 'not-attempted',
+          roadEnhancementState: 'terminal-local',
+          nextRetryAt: null,
           updatedAt: Date.now(),
         });
         // Refinement is optional. A durable exception retains the validated

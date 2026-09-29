@@ -75,8 +75,9 @@ describe('three-concept Finish progress rail', () => {
         summary={summary}
         committed
         syncState="pending"
+        roadRefinementPending
         finishProgress={{
-          hike: 'saved', route: 'ready', sync: 'waiting', roadRefinementPending: false,
+          hike: 'saved', route: 'ready', sync: 'waiting', roadRefinementPending: true,
         }}
         onCancel={jest.fn()}
         onConfirm={jest.fn()}
@@ -86,7 +87,26 @@ describe('three-concept Finish progress rail', () => {
     expect(screen.getByText('Hike saved')).toBeTruthy();
     expect(screen.getAllByText('Route ready').length).toBeGreaterThan(0);
     expect(screen.getByText('Sync · Waiting for connection')).toBeTruthy();
+    expect(screen.getByText('Road refinement will continue when online')).toBeTruthy();
     expect(screen.queryByText(/failed/i)).toBeNull();
+  });
+
+  test('durable session completion clears stale process-local road-pending copy', () => {
+    const props = {
+      summary,
+      committed: true,
+      syncState: 'pending' as const,
+      finishProgress: {
+        hike: 'saved' as const, route: 'ready' as const, sync: 'pending' as const,
+        roadRefinementPending: true,
+      },
+      onCancel: jest.fn(),
+      onConfirm: jest.fn(),
+    };
+    const rendered = render(<StopSummarySheet {...props} roadRefinementPending />);
+    expect(screen.getByText('Road refinement will continue when online')).toBeTruthy();
+    rendered.rerender(<StopSummarySheet {...props} roadRefinementPending={false} />);
+    expect(screen.queryByText('Road refinement will continue when online')).toBeNull();
   });
 
   test('route-selected online completion is complete while Sync continues', () => {
@@ -104,6 +124,21 @@ describe('three-concept Finish progress rail', () => {
     );
     expect(screen.getByText('Hike complete')).toBeTruthy();
     expect(screen.getByText('Syncing')).toBeTruthy();
+  });
+
+  test('a single accepted upgrade is described without internal refinement terminology', () => {
+    render(
+      <StopSummarySheet
+        summary={summary}
+        committed
+        syncState="syncing"
+        routeRefined
+        onCancel={jest.fn()}
+        onConfirm={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('Route refined')).toBeTruthy();
+    expect(screen.queryByText(/revision|map matching|candidate/i)).toBeNull();
   });
 
   test('sync errors are not mislabeled as offline waiting', () => {

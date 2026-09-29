@@ -48,9 +48,9 @@ export async function reconcileCompletedActivityIntent(
     syncFailureKind: intent.failureKind,
     syncFailureStatus: intent.failureStatus,
     syncFailureCode: intent.failureCode,
-    finalGeometryState: intent.finalArtifact?.source === 'matched'
+    finalGeometryState: intent.finalArtifact?.source === 'matched' || intent.finalArtifact?.source === 'hybrid'
       ? 'enhanced'
-      : intent.finalArtifact?.source === 'hybrid' || intent.finalArtifact?.source === 'limited'
+      : intent.finalArtifact?.source === 'limited'
         ? 'limited_evidence'
         : 'base_ready',
     finalGeometryVersion: intent.finalArtifact?.algorithmVersion,

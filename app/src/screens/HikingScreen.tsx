@@ -1438,6 +1438,8 @@ export function HikingScreen() {
           }}
           committed={Boolean(committedActivityId)}
           refining={committedActivity?.finalGeometryState === 'refining'}
+          roadRefinementPending={committedActivity?.roadRefinementPending === true}
+          routeRefined={committedActivity?.finalGeometryState === 'enhanced'}
           onViewActivity={() => {
             if (committedActivityId) openActivityDetail(committedActivityId);
           }}

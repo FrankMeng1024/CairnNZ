@@ -201,10 +201,7 @@ import {
   type TrackingTokenRefreshSnapshot,
 } from '../services/trackingTokenRefreshAuthority';
 import { maybeVerifyPublicWalkingDiscovery } from '../features/public/services/publicWalkingDiscovery';
-import {
-  flushActivityStageLedger,
-  recordActivityStageEvent,
-} from '../features/activity/activityStageLedger';
+import { recordActivityStageEvent } from '../features/activity/activityStageLedger';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
@@ -2529,6 +2526,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           finalGeometryVersion: 'pedestrian-final-v2-base',
           finalGeometryRevision: finalArtifact.revision,
           finalGeometryFingerprint: finalArtifact.displayFingerprint,
+          roadRefinementPending: false,
         }, ownerUserId);
         await pendingSyncStore.markPendingPreparationPhase(s.sessionId, 'session_committed');
         await completeActivity({
@@ -2604,6 +2602,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           finalGeometryVersion: finalArtifact.algorithmVersion,
           finalGeometryRevision: finalArtifact.revision,
           finalGeometryFingerprint: finalArtifact.displayFingerprint,
+          roadRefinementPending: false,
         });
         asynchronousRefinementOwnsFinal = true;
         try {
@@ -2612,18 +2611,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             clientActivityId: s.sessionId,
             baseArtifact: finalArtifact,
           });
-          await resumeActivityFinalRefinement(ownerUserId, s.sessionId);
+          const refinementResult = await resumeActivityFinalRefinement(ownerUserId, s.sessionId);
           const selectedSession = useSessionStore.getState().sessions.find(item => (
             item.clientActivityId === s.sessionId || item.id === s.sessionId
           ));
           if (selectedSession) finishResult = activityFinishResultFromSession(selectedSession);
           const networkState = networkMonitor.getState?.()?.state;
+          const roadRefinementPending = selectedSession?.roadRefinementPending === true
+            || refinementResult === 'pending-network'
+            || refinementResult === 'pending-retry';
           set({
             finishProgress: {
               hike: 'saved',
               route: 'ready',
-              sync: networkState === 'offline' ? 'waiting' : 'syncing',
-              roadRefinementPending: false,
+              sync: networkState === 'offline' ? 'waiting' : roadRefinementPending ? 'pending' : 'syncing',
+              roadRefinementPending,
             },
           });
           notifyLocalCommit(s.sessionId);
@@ -2653,6 +2655,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             finalGeometryVersion: finalArtifact.algorithmVersion,
             finalGeometryRevision: finalArtifact.revision,
             finalGeometryFingerprint: finalArtifact.displayFingerprint,
+            roadRefinementPending: false,
           }, ownerUserId);
           if (finishResult) finishResult = { ...finishResult, finalGeometryState: 'base_ready' };
           set({
@@ -2993,12 +2996,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           // ever presented or measured as walked geometry.
           hikeSource = snappedSegments.flat();
           if (matchedSegmentCount > 0) snappedTrackPoints = hikeSource;
-          const eligibleSegmentCount = sourceSegments.filter(segment => segment.length >= 2).length;
-          finalGeometryState = matchedSegmentCount === 0
-            ? 'base_ready'
-            : matchedSegmentCount === eligibleSegmentCount && !hybridSnapUsed
-              ? 'enhanced'
-              : 'limited_evidence';
+          finalGeometryState = matchedSegmentCount === 0 ? 'base_ready' : 'enhanced';
           const governedUsage = await mapboxRequestGovernor.snapshot();
           appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_mapbox_governor_snapshot', {
             ...governedUsage,
@@ -3100,9 +3098,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         finalArtifact = refined.artifact;
       }
       const finalDisplayTrackPoints = finalArtifact.points;
-      finalGeometryState = finalArtifact.source === 'matched'
+      finalGeometryState = finalArtifact.source === 'matched' || finalArtifact.source === 'hybrid'
         ? 'enhanced'
-        : finalArtifact.source === 'hybrid' || finalArtifact.source === 'limited'
+        : finalArtifact.source === 'limited'
           ? 'limited_evidence'
           : 'base_ready';
       appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_final_geometry_v2', {
@@ -3769,7 +3767,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       if (committedSession) finishResult = activityFinishResultFromSession(committedSession);
     }
     if (s.sessionId && finishResult?.status === 'saved-local') {
-      await recordActivityStageEvent({
+      void recordActivityStageEvent({
         ownerUserId,
         clientActivityId: s.sessionId,
         stage: 'completion-presented',
@@ -3780,9 +3778,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           syncState: serverSaveAcknowledged ? 'synced' : 'pending',
         },
       });
-      // Diagnostic durability is not optional route work and is deliberately
-      // outside the road-refinement deadline.
-      await flushActivityStageLedger(ownerUserId);
     }
     set((prev) => ({
       ...initialState,

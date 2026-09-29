@@ -1077,6 +1077,7 @@ function MapHistoryObjectScreen() {
         finalGeometryVersion: liveSelectedSession?.finalGeometryVersion ?? retainedSelectedSession.finalGeometryVersion,
         finalGeometryRevision: liveSelectedSession?.finalGeometryRevision ?? retainedSelectedSession.finalGeometryRevision,
         finalGeometryFingerprint: liveSelectedSession?.finalGeometryFingerprint ?? retainedSelectedSession.finalGeometryFingerprint,
+        roadRefinementPending: liveSelectedSession?.roadRefinementPending ?? retainedSelectedSession.roadRefinementPending,
       }
     : liveSelectedSession;
   const selectedMarker = markers.find(m => m.id === selectedMarkerId) ?? null;

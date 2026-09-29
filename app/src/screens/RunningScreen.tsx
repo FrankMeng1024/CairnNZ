@@ -1149,6 +1149,8 @@ export function RunningScreen() {
           syncState={committedRunActivity?.syncState}
           committed={Boolean(committedRunActivityId)}
           refining={committedRunActivity?.finalGeometryState === 'refining'}
+          roadRefinementPending={committedRunActivity?.roadRefinementPending === true}
+          routeRefined={committedRunActivity?.finalGeometryState === 'enhanced'}
           onCancel={() => {
             if (committedRunActivityId) {
               closeSaveSheet();

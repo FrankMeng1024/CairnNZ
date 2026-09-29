@@ -70,6 +70,8 @@ export interface TrackingSession {
   finalGeometryVersion?: 'pedestrian-final-v2-base';
   finalGeometryRevision?: number;
   finalGeometryFingerprint?: string;
+  /** Stable local route is usable while one optional online refinement is queued. */
+  roadRefinementPending?: boolean;
   /** Retained evidence of an impossible UUID↔numeric mapping collision. */
   identityConflict?: {
     kind: 'server_mapping';

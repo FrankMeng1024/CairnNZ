@@ -49,6 +49,8 @@ type Props = {
   committed?: boolean;
   /** The selected route remains usable while optional online work is pending. */
   refining?: boolean;
+  roadRefinementPending?: boolean;
+  routeRefined?: boolean;
   onViewActivity?: () => void;
 };
 
@@ -160,6 +162,8 @@ export function StopSummarySheet({
   syncState = 'pending',
   committed = false,
   refining = false,
+  roadRefinementPending,
+  routeRefined = false,
   onViewActivity,
 }: Props) {
   // _onDiscard is intentionally unused in the H4 redesign — see prop docs.
@@ -255,6 +259,9 @@ export function StopSummarySheet({
           roadRefinementPending: false,
           }),
           sync: committedSync,
+          roadRefinementPending: roadRefinementPending
+            ?? finishProgress?.roadRefinementPending
+            ?? false,
         }
       : null;
   const progressRows = visibleProgress ? [
@@ -391,7 +398,7 @@ export function StopSummarySheet({
             </>
           ) : (
             <Text style={[stopSheetStyles.finalRouteNote, { color: mutedInk }]}>
-              {refining ? 'Route ready' : 'Route saved on this device'}
+              {routeRefined ? 'Route refined' : refining ? 'Route ready' : 'Route saved on this device'}
             </Text>
           )}
 

@@ -16,10 +16,11 @@ export interface ActivityRouteState {
   manualAction: ActivityManualAction;
   realSegmentCount: number;
   gapCount: number;
+  roadRefinementPending: boolean;
 }
 
 export function deriveActivityRouteState(args: {
-  session: Pick<TrackingSession, 'syncState' | 'syncFailureKind' | 'finalGeometryState'>;
+  session: Pick<TrackingSession, 'syncState' | 'syncFailureKind' | 'finalGeometryState' | 'roadRefinementPending'>;
   trackPoints: ReadonlyArray<TrackPoint> | null;
 }): ActivityRouteState {
   const { session, trackPoints } = args;
@@ -71,6 +72,7 @@ export function deriveActivityRouteState(args: {
     manualAction,
     realSegmentCount: realSegments.length,
     gapCount: trace.gaps.length,
+    roadRefinementPending: session.roadRefinementPending === true,
   };
 }
 

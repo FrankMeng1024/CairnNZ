@@ -75,6 +75,27 @@ describe('Activity Detail presentation contract', () => {
     });
     expect(activityDetailNotices(success)).toEqual([]);
 
+    const pendingRoad = deriveActivityRouteState({
+      session: {
+        syncState: 'pending', finalGeometryState: 'base_ready', roadRefinementPending: true,
+      },
+      trackPoints: points,
+    });
+    expect(activityDetailNotices(pendingRoad)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'route-refinement', title: 'Route ready',
+        detail: 'Road refinement will continue when online.',
+      }),
+    ]));
+
+    const refined = deriveActivityRouteState({
+      session: { syncState: 'synced', finalGeometryState: 'enhanced', roadRefinementPending: false },
+      trackPoints: points,
+    });
+    expect(activityDetailNotices(refined)).toEqual([
+      expect.objectContaining({ kind: 'route-refinement', title: 'Route refined' }),
+    ]);
+
     const exception = deriveActivityRouteState({
       session: { syncState: 'sync_error', finalGeometryState: 'enhanced' },
       trackPoints: [...points, { lat: -44.002, lng: 168, t: 3, segmentId: 'b' }],

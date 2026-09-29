@@ -135,19 +135,27 @@ const installJourney = async mode => page.evaluate(nextMode => {
     stopTracking: async (_name, onLocalCommitted) => {
       tracking.setState({
         isFinishing: true,
-        finishProgress: { hike: 'saved', route: 'refining', sync: 'pending', roadRefinementPending: false },
+        finishProgress: { hike: 'saving', route: 'pending', sync: 'pending', roadRefinementPending: false },
       });
       return new Promise(resolve => {
-        globalThis.__field03CompleteFinish = syncState => {
+        globalThis.__field03AdvanceRefining = () => tracking.setState({
+          finishProgress: { hike: 'saved', route: 'refining', sync: 'pending', roadRefinementPending: false },
+        });
+        globalThis.__field03CompleteFinish = options => {
+          const syncState = options.syncState;
+          const roadRefinementPending = options.roadRefinementPending === true;
+          const routeRefined = options.routeRefined === true;
           const session = {
             id: activityId, clientActivityId: activityId, activityMode, regionCode: 'nz',
             startedAt: now - 2_715_000, endedAt: now, durationS: 2_715,
             distanceM: nextMode === 'hike' ? 5_240 : 8_120,
             elevationGainM: nextMode === 'hike' ? 286 : 74,
             trackPoints: points, markerIds: [], name: `Field03 ${nextMode}`,
-            memoryNewCells: 0, syncState,
-            finalGeometryState: 'base_ready', finalGeometryVersion: 'pedestrian-final-v2-base',
-            finalGeometryRevision: 1, finalGeometryFingerprint: `field03-${nextMode}-local`,
+            memoryNewCells: 0, syncState, roadRefinementPending,
+            finalGeometryState: routeRefined ? 'enhanced' : 'base_ready',
+            finalGeometryVersion: 'pedestrian-final-v2-base',
+            finalGeometryRevision: routeRefined ? 2 : 1,
+            finalGeometryFingerprint: `field03-${nextMode}-${routeRefined ? 'refined' : 'local'}`,
           };
           stores.useSessionStore.setState({ currentUserId: 'field03-ui-qa', sessions: [session] });
           tracking.setState({
@@ -155,9 +163,28 @@ const installJourney = async mode => page.evaluate(nextMode => {
             finishProgress: {
               hike: 'saved', route: 'ready',
               sync: syncState === 'pending' ? 'waiting' : syncState === 'sync_error' ? 'attention' : syncState === 'synced' ? 'synced' : 'syncing',
-              roadRefinementPending: false,
+              roadRefinementPending,
             },
           });
+          globalThis.__field03SetCompletedState = next => {
+            const current = stores.useSessionStore.getState().sessions[0];
+            const nextSession = {
+              ...current,
+              syncState: next.syncState,
+              roadRefinementPending: next.roadRefinementPending === true,
+              finalGeometryState: next.routeRefined ? 'enhanced' : 'base_ready',
+              finalGeometryRevision: next.routeRefined ? 2 : 1,
+              finalGeometryFingerprint: `field03-${nextMode}-${next.routeRefined ? 'refined' : 'local'}`,
+            };
+            stores.useSessionStore.setState({ sessions: [nextSession] });
+            tracking.setState({
+              finishProgress: {
+                hike: 'saved', route: 'ready',
+                sync: next.syncState === 'pending' ? 'waiting' : next.syncState === 'sync_error' ? 'attention' : next.syncState === 'synced' ? 'synced' : 'syncing',
+                roadRefinementPending: next.roadRefinementPending === true,
+              },
+            });
+          };
           onLocalCommitted?.(activityId);
           resolve({
             status: 'saved-local', localCommit: 'committed', clientActivityId: activityId,
@@ -165,6 +192,7 @@ const installJourney = async mode => page.evaluate(nextMode => {
             distanceM: session.distanceM, elevationGainM: session.elevationGainM,
             trackPoints: points, syncState, finalGeometryState: 'base_ready',
             finalGeometryRevision: 1, finalGeometryFingerprint: session.finalGeometryFingerprint,
+            roadRefinementPending,
           });
         };
       });
@@ -172,56 +200,76 @@ const installJourney = async mode => page.evaluate(nextMode => {
   });
 }, mode);
 
-await navigate('Hiking');
-await installJourney('hike');
-await dismissTransientDialog();
-await page.getByRole('button', { name: 'Finish hike' }).click({ force: true });
-await page.getByRole('button', { name: 'Finish hike and view activity' }).click();
-await page.getByText('Refining route', { exact: true }).waitFor();
-await page.screenshot({ path: path.join(outputDir, '01-hike-online-route-refining-390x844.png') });
-await page.evaluate(() => globalThis.__field03CompleteFinish('syncing'));
-await page.getByText('Syncing', { exact: true }).waitFor();
-await page.getByText('Route ready', { exact: true }).first().waitFor();
-await page.screenshot({ path: path.join(outputDir, '02-hike-online-route-ready-syncing-390x844.png') });
-await page.evaluate(() => {
-  const stores = globalThis.__cairnStores;
-  stores.useSessionStore.setState({ sessions: stores.useSessionStore.getState().sessions.map(session => ({
-    ...session, syncState: 'synced',
-  })) });
-  stores.useTrackingStore.setState({
-    finishProgress: { hike: 'saved', route: 'ready', sync: 'synced', roadRefinementPending: false },
-  });
-});
-await page.getByText('Synced', { exact: true }).waitFor();
-await page.screenshot({ path: path.join(outputDir, '03-hike-online-all-complete-390x844.png') });
-await page.getByText('Synced', { exact: true }).waitFor({ state: 'hidden', timeout: 5_000 });
-await page.getByText('Hike complete', { exact: true }).waitFor({ timeout: 5_000 });
-await page.screenshot({ path: path.join(outputDir, '04-hike-online-collapsed-390x844.png') });
+const themes = ['day', 'sunset', 'night'];
+const captured = [];
+for (const theme of themes) {
+  await page.evaluate(nextTheme => {
+    const stores = globalThis.__cairnStores;
+    stores.useSettingsStore.getState().saveAll({ appearance: nextTheme });
+    stores.useWeatherStore.getState().setTimeOfDayOverride(nextTheme);
+  }, theme);
+  await navigate('Running');
+  await installJourney('run');
+  await dismissTransientDialog();
+  await page.getByRole('button', { name: 'Finish run' }).click({ force: true });
+  await page.getByRole('button', { name: 'Finish run and view activity' }).click();
 
-await navigate('Running');
-await installJourney('run');
-await dismissTransientDialog();
-await page.getByRole('button', { name: 'Finish run' }).click({ force: true });
-await page.getByRole('button', { name: 'Finish run and view activity' }).click();
-await page.getByText('Refining route', { exact: true }).waitFor();
-await page.evaluate(() => globalThis.__field03CompleteFinish('pending'));
-await page.getByText('Run complete', { exact: true }).waitFor();
-await page.getByText('Sync · Waiting for connection', { exact: true }).waitFor();
-await page.screenshot({ path: path.join(outputDir, '05-run-offline-route-ready-390x844.png') });
+  await page.getByText('Saving run', { exact: true }).waitFor();
+  const savingPath = `${theme}-01-saving-390x844.png`;
+  await page.screenshot({ path: path.join(outputDir, savingPath) });
+  captured.push(savingPath);
+
+  await page.evaluate(() => globalThis.__field03AdvanceRefining());
+  await page.getByText('Refining route', { exact: true }).waitFor();
+  const refiningPath = `${theme}-02-refining-390x844.png`;
+  await page.screenshot({ path: path.join(outputDir, refiningPath) });
+  captured.push(refiningPath);
+
+  await page.evaluate(() => globalThis.__field03CompleteFinish({
+    syncState: 'syncing', roadRefinementPending: false, routeRefined: false,
+  }));
+  await page.getByText('Syncing', { exact: true }).waitFor();
+  const syncingPath = `${theme}-03-ready-syncing-390x844.png`;
+  await page.screenshot({ path: path.join(outputDir, syncingPath) });
+  captured.push(syncingPath);
+
+  await page.evaluate(() => globalThis.__field03SetCompletedState({
+    syncState: 'pending', roadRefinementPending: true, routeRefined: false,
+  }));
+  await page.getByText('Road refinement will continue when online', { exact: true }).waitFor();
+  const offlinePath = `${theme}-04-offline-road-pending-390x844.png`;
+  await page.screenshot({ path: path.join(outputDir, offlinePath) });
+  captured.push(offlinePath);
+
+  await page.evaluate(() => globalThis.__field03SetCompletedState({
+    syncState: 'syncing', roadRefinementPending: false, routeRefined: true,
+  }));
+  await page.getByText('Route refined', { exact: true }).waitFor();
+  const refinedPath = `${theme}-05-refined-once-390x844.png`;
+  await page.screenshot({ path: path.join(outputDir, refinedPath) });
+  captured.push(refinedPath);
+
+  await page.evaluate(() => globalThis.__field03SetCompletedState({
+    syncState: 'sync_error', roadRefinementPending: false, routeRefined: true,
+  }));
+  await page.getByText('Sync · Needs attention', { exact: true }).waitFor();
+  const attentionPath = `${theme}-06-attention-390x844.png`;
+  await page.screenshot({ path: path.join(outputDir, attentionPath) });
+  captured.push(attentionPath);
+}
 
 const forbiddenCopy = ['Base Final', 'Refined Final', 'canonical', 'WAL', 'Map Matching', 'candidate validation'];
 const visibleText = await page.locator('body').innerText();
 const forbiddenVisible = forbiddenCopy.filter(value => visibleText.includes(value));
 const assertions = {
-  onlineRefiningCaptured: fs.existsSync(path.join(outputDir, '01-hike-online-route-refining-390x844.png')),
-  onlineReadyCaptured: fs.existsSync(path.join(outputDir, '02-hike-online-route-ready-syncing-390x844.png')),
-  onlineCollapsedCaptured: fs.existsSync(path.join(outputDir, '04-hike-online-collapsed-390x844.png')),
-  offlineReadyCaptured: fs.existsSync(path.join(outputDir, '05-run-offline-route-ready-390x844.png')),
+  daySunsetNightMatrixComplete: captured.length === 18
+    && captured.every(file => fs.existsSync(path.join(outputDir, file))),
   forbiddenVisible,
 };
 await browser.close();
 fs.writeFileSync(path.join(outputDir, 'results.json'), `${JSON.stringify({
   viewport: { width: 390, height: 844 }, assertions, runtimeErrors: [...new Set(runtimeErrors)],
+  captured, captureKind: 'synthetic storybook state transitions in actual Expo Web UI',
   mapboxRequestsAllowed: false, coordinateClass: 'synthetic-QA-only',
 }, null, 2)}\n`);
 console.log(JSON.stringify({ outputDir, assertions, runtimeErrors: [...new Set(runtimeErrors)] }, null, 2));

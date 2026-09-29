@@ -121,6 +121,20 @@ describe('verified pending Activity snapshots', () => {
     expect((await listPending())[0].uploadState).toBe('ready');
   });
 
+  test('a durable optional-road fence cannot be promoted by generic crash recovery', async () => {
+    const item = pending('activity-road-pending');
+    item.uploadState = 'preparing';
+    item.preparationPhase = 'registry_committed';
+    item.roadRefinementState = 'pending-network';
+    item.roadRefinementNextRetryAt = null;
+    await savePending(item);
+    await expect(ensurePendingUploadReady(item)).resolves.toBe(false);
+    expect((await listPending())[0]).toMatchObject({
+      uploadState: 'preparing',
+      roadRefinementState: 'pending-network',
+    });
+  });
+
   test('process death during a metadata update recovers the newest verified generation', async () => {
     await savePending(pending());
     mockFailMoveOnce = true;

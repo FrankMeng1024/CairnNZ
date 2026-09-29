@@ -92,6 +92,7 @@ export function mergeHydratedSessionLists(
       // older metadata with newer local Final points (or vice versa).
       finalGeometryRevision: local.finalGeometryRevision ?? remote.finalGeometryRevision,
       finalGeometryFingerprint: local.finalGeometryFingerprint ?? remote.finalGeometryFingerprint,
+      roadRefinementPending: local.roadRefinementPending ?? remote.roadRefinementPending,
       ...(conflictingServerMapping ? {
         identityConflict: {
           kind: 'server_mapping' as const,

@@ -42,6 +42,10 @@ export interface PendingHike {
    * Legacy rows have no preparation owner and are therefore treated as ready.
    */
   uploadState?: 'preparing' | 'ready';
+  /** Optional road-aware work owns the exact upload revision while pending.
+   * The stable local Activity remains usable throughout this state. */
+  roadRefinementState?: 'pending-network' | 'pending-retry' | 'terminal-local' | 'accepted';
+  roadRefinementNextRetryAt?: number | null;
   /** Crash-recovery checkpoint for the local Finish transaction. Upload is
    * permitted only after the Activity list and lifecycle registry exist. */
   preparationPhase?: 'payload_committed' | 'session_committed' | 'registry_committed';
@@ -385,6 +389,10 @@ export async function savePending(hike: PendingHike): Promise<void> {
       startedAt: hike.startedAt ?? prior.hike.startedAt,
       summary: hike.summary ?? prior.hike.summary,
       finalArtifact: hike.finalArtifact ?? prior.hike.finalArtifact,
+      roadRefinementState: hike.roadRefinementState ?? prior.hike.roadRefinementState,
+      roadRefinementNextRetryAt: hike.roadRefinementNextRetryAt === undefined
+        ? prior.hike.roadRefinementNextRetryAt
+        : hike.roadRefinementNextRetryAt,
       lastAttemptAt: hike.lastAttemptAt ?? prior.hike.lastAttemptAt,
       attemptCount: Math.max(hike.attemptCount ?? 0, prior.hike.attemptCount ?? 0),
     } : hike;
@@ -401,6 +409,8 @@ export async function savePending(hike: PendingHike): Promise<void> {
  */
 export async function ensurePendingUploadReady(hike: PendingHike): Promise<boolean> {
   if (hike.uploadState !== 'preparing') return true;
+  if (hike.roadRefinementState === 'pending-network'
+    || hike.roadRefinementState === 'pending-retry') return false;
   if (isPendingPreparationActive(hike.localId)) return false;
   if (hike.preparationPhase !== 'registry_committed') return false;
   await mutatePending(hike.localId, (pending) => {

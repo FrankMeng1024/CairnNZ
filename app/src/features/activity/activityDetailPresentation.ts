@@ -2,7 +2,7 @@ import type { Marker } from '../../store/useMarkerStore';
 import type { TrackingSession } from '../../store/useSessionStore';
 import type { ActivityRouteState } from './activityRouteState';
 
-export type ActivityDetailNoticeKind = 'local' | 'sync' | 'gap' | 'route-review';
+export type ActivityDetailNoticeKind = 'local' | 'sync' | 'gap' | 'route-review' | 'route-refinement';
 
 export interface ActivityDetailNotice {
   kind: ActivityDetailNoticeKind;
@@ -121,6 +121,20 @@ export function activityDetailNotices(state: ActivityRouteState): ActivityDetail
       kind: 'sync',
       title: 'Activity saved · another Activity is unresolved',
       detail: 'Resolve the other unfinished Activity before retrying this upload. Neither record was merged or removed.',
+    });
+  }
+
+  if (state.localReadiness === 'ready' && state.roadRefinementPending) {
+    notices.push({
+      kind: 'route-refinement',
+      title: 'Route ready',
+      detail: 'Road refinement will continue when online.',
+    });
+  } else if (state.localReadiness === 'ready' && state.finalEnhancement === 'enhanced') {
+    notices.push({
+      kind: 'route-refinement',
+      title: 'Route refined',
+      detail: 'Cairn selected the improved route for this Activity.',
     });
   }
 

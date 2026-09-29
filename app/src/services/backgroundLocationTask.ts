@@ -34,7 +34,6 @@ import {
 } from '../features/activity/realGpsContinuity';
 import {
   activityStageMonotonicNow,
-  flushActivityStageLedger,
   recordActivityStageEvent,
 } from '../features/activity/activityStageLedger';
 
@@ -1007,8 +1006,10 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
       });
     }
     crashLogger.breadcrumb(`k10:path_b_write n=${accepted.length}`);
-    await flushSimulatorLogs(context.userId);
-    await flushActivityStageLedger(context.userId);
+    // QA diagnostics must never extend the Activity ownership boundary. The
+    // logger owns its bounded/write-serialized best effort independently;
+    // canonical WAL and the foreground handoff are already durable here.
+    void flushSimulatorLogs(context.userId).catch(() => undefined);
   } catch (e: any) {
     crashLogger.breadcrumb(`k10:path_b_err ${String(e?.message || e).slice(0, 60)}`);
   }

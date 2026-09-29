@@ -70,13 +70,18 @@ function schedulePendingRetry(pending: PendingHike[]): void {
     return;
   }
   const nextDueAt = pending
-    .filter(hike => isCurrentActivityOwner(hike.userId)
-      && hike.lastAttemptAt
-      && (!hike.failureKind || hike.failureKind === 'retryable' || hike.failureKind === 'dependency'))
-    .reduce((earliest, hike) => Math.min(
-      earliest,
-      Number(hike.lastAttemptAt) + retryBackoffMs(hike.attemptCount),
-    ), Number.POSITIVE_INFINITY);
+    .filter(hike => isCurrentActivityOwner(hike.userId))
+    .reduce((earliest, hike) => {
+      const uploadDueAt = hike.lastAttemptAt
+        && (!hike.failureKind || hike.failureKind === 'retryable' || hike.failureKind === 'dependency')
+        ? Number(hike.lastAttemptAt) + retryBackoffMs(hike.attemptCount)
+        : Number.POSITIVE_INFINITY;
+      const roadDueAt = hike.roadRefinementState === 'pending-retry'
+        && Number.isFinite(Number(hike.roadRefinementNextRetryAt))
+        ? Number(hike.roadRefinementNextRetryAt)
+        : Number.POSITIVE_INFINITY;
+      return Math.min(earliest, uploadDueAt, roadDueAt);
+    }, Number.POSITIVE_INFINITY);
   if (!Number.isFinite(nextDueAt)) {
     clearRetryTimer();
     return;
@@ -190,12 +195,14 @@ export async function recoverPreparingActivityCompletion(hike: PendingHike): Pro
       markerIds: hike.summary.markerIds,
       name: hike.summary.name,
       syncState: 'pending',
-      finalGeometryState: artifact.source === 'matched'
+      finalGeometryState: artifact.source === 'matched' || artifact.source === 'hybrid'
         ? 'enhanced'
         : artifact.source === 'base' ? 'base_ready' : 'limited_evidence',
       finalGeometryVersion: artifact.algorithmVersion,
       finalGeometryRevision: artifact.revision,
       finalGeometryFingerprint: artifact.displayFingerprint,
+      roadRefinementPending: hike.roadRefinementState === 'pending-network'
+        || hike.roadRefinementState === 'pending-retry',
     }, hike.userId);
     await markPendingPreparationPhase(hike.localId, 'session_committed');
     const registry = await getActivityRegistry(hike.userId);
