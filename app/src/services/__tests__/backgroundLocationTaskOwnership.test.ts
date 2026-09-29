@@ -7,6 +7,7 @@ describe('backgroundLocationTask durable ownership fencing', () => {
   let readActiveHikeTail: jest.Mock;
   let recordMemoryEvidence: jest.Mock;
   let flushRecordedMemoryEvidence: jest.Mock;
+  let scheduleActivityMemoryProjection: jest.Mock;
   let breadcrumb: jest.Mock;
 
   beforeEach(() => {
@@ -17,6 +18,7 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     readActiveHikeTail = jest.fn(async () => []);
     recordMemoryEvidence = jest.fn(async () => ({ committed: true, deduplicated: false }));
     flushRecordedMemoryEvidence = jest.fn(async () => undefined);
+    scheduleActivityMemoryProjection = jest.fn(async () => undefined);
     breadcrumb = jest.fn();
 
     jest.doMock('react-native', () => ({ Platform: { OS: 'ios' } }));
@@ -51,6 +53,9 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     jest.doMock('../../features/memory/services/recordMemoryEvidence', () => ({
       recordMemoryEvidence,
       flushRecordedMemoryEvidence,
+    }));
+    jest.doMock('../../features/activity/activityMemoryProjector', () => ({
+      scheduleActivityMemoryProjection,
     }));
   });
 
@@ -203,7 +208,7 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       .toEqual([1_000, 5_000, 9_000, 13_000, 17_000]);
   });
 
-  it('commits headless accepted evidence to Memory without a mounted React screen', async () => {
+  it('commits durable Memory responsibility after WAL without a mounted React screen', async () => {
     const task = require('../backgroundLocationTask');
     await task.persistBackgroundContext('activity-a', true, {
       clientActivityId: 'activity-a',
@@ -216,18 +221,14 @@ describe('backgroundLocationTask durable ownership fencing', () => {
 
     await handler({ data: { locations: [point(1_000), point(5_000, -40.99995)] }, error: null });
 
-    expect(recordMemoryEvidence).toHaveBeenCalledTimes(2);
-    expect(recordMemoryEvidence).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    expect(scheduleActivityMemoryProjection).toHaveBeenCalledTimes(1);
+    expect(scheduleActivityMemoryProjection).toHaveBeenCalledWith(expect.objectContaining({
       ownerUserId: 'user-a',
-      ownerAuthority: 'durable_activity_lease',
-      source: 'activity_real',
-      sourceActivityClientId: 'activity-a',
-      sourceSegmentId: 'segment-1',
-      continuityState: 'accepted',
+      ownerGeneration: 'generation-1',
+      clientActivityId: 'activity-a',
+      points: expect.arrayContaining([expect.objectContaining({ t: 1_000, segmentId: 'segment-1' })]),
     }));
-    // A headless runtime owns only the durable evidence journal. The mounted
-    // foreground runtime replays that journal into its account-scoped
-    // snapshots, avoiding cross-runtime snapshot clobbering.
+    expect(recordMemoryEvidence).not.toHaveBeenCalled();
     expect(flushRecordedMemoryEvidence).not.toHaveBeenCalled();
   });
 });

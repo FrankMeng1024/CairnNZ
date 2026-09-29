@@ -7,6 +7,10 @@
 
 // Mock AsyncStorage in-memory
 const mockStore: Record<string, string> = {};
+const mockAppStateListeners: Array<(state: string) => void> = [];
+const mockNetworkListeners: Array<(state: { state: string }) => void> = [];
+const mockAppStateRemove = jest.fn();
+const mockNetworkRemove = jest.fn();
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(async (k: string) => mockStore[k] ?? null),
   setItem: jest.fn(async (k: string, v: string) => { mockStore[k] = v; }),
@@ -15,7 +19,10 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 
 jest.mock('react-native', () => ({
   AppState: {
-    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+    addEventListener: jest.fn((_event: string, listener: (state: string) => void) => {
+      mockAppStateListeners.push(listener);
+      return { remove: mockAppStateRemove };
+    }),
     currentState: 'active',
   },
 }));
@@ -33,10 +40,16 @@ jest.mock('../src/store/useAppStore', () => ({
 
 jest.mock('../src/services/networkMonitor', () => ({
   __esModule: true,
-  default: { onChange: jest.fn(() => () => {}), isOnline: () => true },
+  default: {
+    onChange: jest.fn((listener: (state: { state: string }) => void) => {
+      mockNetworkListeners.push(listener);
+      return mockNetworkRemove;
+    }),
+    isOnline: () => true,
+  },
 }));
 
-const { makeOp, enqueue, drain } = require('../src/services/offlineQueue');
+const { makeOp, enqueue, drain, subscribeOfflineQueueDrains } = require('../src/services/offlineQueue');
 const { authenticatedFetch } = require('../src/services/apiService');
 const QUEUE_KEY = '@cairn:offline_queue:v1';
 type QueueSnapshotItem = {
@@ -54,6 +67,25 @@ describe('v409 offlineQueue', () => {
   beforeEach(async () => {
     Object.keys(mockStore).forEach(k => delete mockStore[k]);
     (authenticatedFetch as jest.Mock).mockReset();
+    mockAppStateListeners.length = 0;
+    mockNetworkListeners.length = 0;
+    mockAppStateRemove.mockClear();
+    mockNetworkRemove.mockClear();
+  });
+
+  it('installs and disposes owner-scoped foreground/network drain wakes', async () => {
+    (authenticatedFetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
+    await enqueue(makeOp('marker_create', '/api/markers', 'POST', {}, 'wake-a', authority));
+    const unsubscribe = subscribeOfflineQueueDrains();
+    for (let tick = 0; tick < 20 && (await readQueueSnapshot()).length > 0; tick += 1) {
+      await Promise.resolve();
+    }
+    expect(await readQueueSnapshot()).toEqual([]);
+    expect(mockAppStateListeners).toHaveLength(1);
+    expect(mockNetworkListeners).toHaveLength(1);
+    unsubscribe();
+    expect(mockAppStateRemove).toHaveBeenCalledTimes(1);
+    expect(mockNetworkRemove).toHaveBeenCalledTimes(1);
   });
 
   describe('backoff exponential (v409 fix #7)', () => {

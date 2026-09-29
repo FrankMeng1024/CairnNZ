@@ -53,6 +53,7 @@ import {
   markAttempt,
   removePending,
   renamePendingActivity,
+  resetForResync,
   savePending,
   updateRemoteId,
   type PendingHike,
@@ -178,5 +179,29 @@ describe('verified pending Activity snapshots', () => {
       }),
     ]);
     await expect(renamePendingActivity('activity-one', 'account-b', 'Wrong owner')).resolves.toBe(false);
+  });
+
+  test('404 resync rotates identity and leaves a bounded retryable wake', async () => {
+    const item = pending('activity-resync');
+    item.remoteId = 88;
+    item.attemptCount = 7;
+    item.lastAttemptAt = 123;
+    item.failureKind = 'dependency';
+    item.failureStatus = 409;
+    item.failureCode = 'OTHER_ACTIVITY_UNFINISHED';
+    await savePending(item);
+    const priorKey = item.idempotencyKey;
+
+    await expect(resetForResync(item.localId)).resolves.toBe(true);
+    const [reset] = await listPending();
+    expect(reset).toMatchObject({
+      remoteId: null,
+      attemptCount: 0,
+      failureKind: 'retryable',
+      failureStatus: null,
+      failureCode: 'RESYNC_READY',
+    });
+    expect(reset.lastAttemptAt).toBeGreaterThan(123);
+    expect(reset.idempotencyKey).not.toBe(priorKey);
   });
 });

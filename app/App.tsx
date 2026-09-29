@@ -17,6 +17,7 @@ import { useTrackingStore } from './src/store/useTrackingStore';
 import { initMapbox } from './src/config/mapbox';
 import { debugLogger } from './src/services/debugLogger';
 import { registerBackgroundTask } from './src/services/backgroundLocationTask';
+import { registerPassiveMemoryBackgroundTask } from './src/services/passiveMemoryBackgroundTask';
 import { telemetryUploader } from './src/services/telemetryUploader';
 import { networkMonitor } from './src/services/networkMonitor';
 import { isPlaywrightBypass } from './src/utils/devFlags';
@@ -69,6 +70,7 @@ try {
 markBootPhase('before_register_bg_task');
 try {
   registerBackgroundTask().catch(() => {});
+  registerPassiveMemoryBackgroundTask().catch(() => {});
   markBootPhase('after_register_bg_task');
 } catch (e: any) {
   markBootPhase('register_bg_task_threw', { msg: String(e?.message ?? e).slice(0, 200) });
@@ -209,6 +211,7 @@ function AppRoot() {
     if (!isLoggedIn || !simulatorOwnerUserId) return;
     const userId = String(simulatorOwnerUserId);
     let cancelled = false;
+    let cancelProjectionDiscovery: ((ownerUserId: string) => void) | null = null;
     void (async () => {
       try {
         const { hydrateMemoryForUser } = await import('./src/features/memory/services/memoryPersistence');
@@ -218,6 +221,16 @@ function AppRoot() {
         const current = useAppStore.getState();
         if (!current.isLoggedIn || String(current.user?.id ?? '') !== userId) return;
         attachMemorySync(userId);
+        const {
+          cancelActivityMemoryProjectionDiscoveryForOwner,
+          resumeActivityMemoryProjectionsForOwner,
+        } = await import('./src/features/activity/activityMemoryProjector');
+        cancelProjectionDiscovery = cancelActivityMemoryProjectionDiscoveryForOwner;
+        if (cancelled) {
+          cancelProjectionDiscovery(userId);
+          return;
+        }
+        await resumeActivityMemoryProjectionsForOwner(userId);
         crashLogger.breadcrumb(`o41:mem_authority_attached user_id=${userId}`);
         void pullMemoryFromServer(userId, { reconcile: true });
         crashLogger.breadcrumb(`o41:mem_reconcile_started user_id=${userId}`);
@@ -227,6 +240,7 @@ function AppRoot() {
     })();
     return () => {
       cancelled = true;
+      cancelProjectionDiscovery?.(userId);
     };
   }, [isLoggedIn, simulatorOwnerUserId]);
 
@@ -636,11 +650,8 @@ function AppRoot() {
     let unsubOfflineQueue: (() => void) | null = null;
     try {
       markBootPhase('ue_main_before_offline_queue');
-      const { subscribeOfflineQueueDrains, drain } = require('./src/services/offlineQueue');
+      const { subscribeOfflineQueueDrains } = require('./src/services/offlineQueue');
       unsubOfflineQueue = subscribeOfflineQueueDrains();
-      // Also do an initial drain on app boot in case the previous
-      // session was killed mid-flight with a non-empty queue.
-      drain().catch(() => {});
       markBootPhase('ue_main_after_offline_queue');
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -798,6 +809,7 @@ function AppRoot() {
     return () => {
       sub.remove();
       unsubscribeNetworkRecovery?.();
+      unsubOfflineQueue?.();
     };
   }, []);
 

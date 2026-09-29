@@ -48,9 +48,12 @@ type Props = {
    *  a mystery spinner. */
   savingStep?: string | null;
   /** Once true, summary.trackPoints is the verified Final artifact that is
-   * also used by Detail/reload/Save as Route. The intent sheet deliberately
-   * does not preview a provisional route. */
+   * also used by Detail/reload/Save as Route. Before commit it is the bounded
+   * Base preview derived from the walked canonical route. */
   committed?: boolean;
+  /** The committed local Final is usable while an optional, bounded road
+   * context revision runs. This never disables Detail navigation. */
+  refining?: boolean;
   onViewActivity?: () => void;
 };
 
@@ -159,6 +162,7 @@ export function StopSummarySheet({
   saving = false,
   savingStep = null,
   committed = false,
+  refining = false,
   onViewActivity,
 }: Props) {
   // _onDiscard is intentionally unused in the H4 redesign — see prop docs.
@@ -284,7 +288,7 @@ export function StopSummarySheet({
               不知道是啥"): only render when there are enough trackPoints to
               draw a polyline — an empty card just below the stats looked
               like a mystery blank div when the hike had 0 points. */}
-          {committed && summary.trackPoints.length >= 2 && (
+          {summary.trackPoints.length >= 2 && (
             <View
               style={[stopSheetStyles.miniMapCard, completeIsDark ? { backgroundColor: 'rgba(240,238,230,0.06)', borderColor: 'rgba(220,230,240,0.14)' } : null]}
               onLayout={(e) => setMiniMapWidth(e.nativeEvent.layout.width)}
@@ -297,6 +301,9 @@ export function StopSummarySheet({
                   height={120}
                 />
               )}
+              <Text style={[stopSheetStyles.routePreviewLabel, { color: mutedInk }]}>
+                {committed ? 'Validated final route' : 'Walked route preview'}
+              </Text>
             </View>
           )}
 
@@ -318,7 +325,9 @@ export function StopSummarySheet({
               />
             </>
           ) : (
-            <Text style={[stopSheetStyles.finalRouteNote, { color: mutedInk }]}>Final route saved on this device</Text>
+            <Text style={[stopSheetStyles.finalRouteNote, { color: mutedInk }]}>
+              {refining ? 'Local final saved · Refining road context…' : 'Validated final route saved on this device'}
+            </Text>
           )}
 
           {/* Primary CTA — "View Activity" saves the hike and jumps to
@@ -417,6 +426,13 @@ const stopSheetStyles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#EFEAE0',
     overflow: 'hidden',
+  },
+  routePreviewLabel: {
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   title: {
     fontSize: 24,

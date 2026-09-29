@@ -28,8 +28,22 @@ describe('Activity P0 source contract', () => {
 
   it('guards start and finish at the shared store boundary', () => {
     expect(store).toContain("if (beforeStart.status !== 'idle' || beforeStart.isFinishing) return false;");
-    expect(store).toContain("if (stopEntry.status === 'idle' || stopEntry.isFinishing) return false;");
+    expect(store).toContain("if (stopEntry.status === 'idle' || stopEntry.isFinishing) return null;");
     expect(store).toContain('set({ ...(frozenLifecycle ?? {}), isFinishing: true });');
+  });
+
+  it('returns a durable Finish result instead of making screens rediscover it after reset', () => {
+    expect(store).toContain('ActivityFinishResult');
+    expect(store).toMatch(/stopTracking:[\s\S]{0,220}Promise<ActivityFinishResult \| null>/);
+    expect(hiking).toContain('finishResult = await stopTracking(name, clientActivityId =>');
+    expect(running).toContain('finishResult = await stopTracking(trimmed, clientActivityId =>');
+    expect(hiking).not.toContain('sessions.find(item => (');
+    expect(running).not.toContain('sessions.find(item => (');
+  });
+
+  it('keeps the committed summary mounted after the tracking store returns to idle', () => {
+    expect(hiking).toContain('if (!activitySessionVisible && !stopSummary)');
+    expect(running).toContain('if (!isActivitySessionVisible(operationalState) && !showSaveSheet)');
   });
 
   it('keeps built-in Mapbox attribution and logo enabled on active activity maps', () => {
@@ -58,5 +72,7 @@ describe('Activity P0 source contract', () => {
     expect(history).toContain('activityFinalPointsMatchExpected(normalised, expectedFinalFingerprint)');
     expect(history).toMatch(/id=\{`track-line-layer-[\s\S]{0,180}slot="top"/);
     expect(history).toContain('cameraRef.current?.fitBounds');
+    expect(history).toContain('loadActivityTrackPoints(session)');
+    expect(history).toContain('liveSelectedSession?.finalGeometryFingerprint');
   });
 });

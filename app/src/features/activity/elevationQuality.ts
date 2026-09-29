@@ -224,6 +224,12 @@ export function reduceElevationObservation(
 export function calculateQualityElevationGain(points: ReadonlyArray<ElevationObservation>): number {
   let state = createElevationQualityState();
   for (const point of points) state = reduceElevationObservation(state, point).state;
+  return elevationQualityGain(state);
+}
+
+/** Finalize a cooperatively reduced elevation checkpoint without replaying its
+ * observations synchronously on the foreground path. */
+export function elevationQualityGain(state: ElevationQualityState): number {
   // Finish may arrive while a genuinely sustained final climb is one sample
   // short of the live confirmation threshold. Credit only a two-sample tail;
   // a lone positive spike remains excluded.

@@ -8,6 +8,7 @@ import {
   getJournalEfficiencyMetrics,
   listActiveHikes,
   readActiveHikeTail,
+  readActiveHikeTerminalSnapshot,
   releaseHikeTrackFinishSeal,
   resumeHikeTrack,
   sealHikeTrackForFinish,
@@ -23,9 +24,13 @@ const owner = 'owner-generation-a';
 const mockWebStorage = new Map<string, string>();
 let blockedRemoval: string | null = null;
 let blockedWrite: string | null = null;
+let blockedRead: string | null = null;
 let afterSetItem: ((key: string, value: string) => void) | null = null;
 const localStorageMock = {
-  getItem: (key: string) => mockWebStorage.get(key) ?? null,
+  getItem: (key: string) => {
+    if (key === blockedRead) throw new Error('simulated-read-interruption');
+    return mockWebStorage.get(key) ?? null;
+  },
   setItem: (key: string, value: string) => {
     if (key === blockedWrite) throw new Error('simulated-write-interruption');
     mockWebStorage.set(key, value);
@@ -41,6 +46,7 @@ describe('crash-safe Activity journal', () => {
     localStorageMock.clear();
     blockedRemoval = null;
     blockedWrite = null;
+    blockedRead = null;
     afterSetItem = null;
     resetJournalEfficiencyMetrics();
     await discardActiveHike(activityId);
@@ -97,6 +103,10 @@ describe('crash-safe Activity journal', () => {
       lat: -41,
       lng: 174,
       acc: 5,
+      speed: 1.25,
+      speedAccuracy: 0.35,
+      course: 87,
+      courseAccuracy: 4.5,
       src: 'fg',
       clientActivityId: activityId,
       ownerGeneration: owner,
@@ -107,6 +117,10 @@ describe('crash-safe Activity journal', () => {
       expect.objectContaining({
         t: 2_000,
         accuracy: 5,
+        speed: 1.25,
+        speedAccuracy: 0.35,
+        course: 87,
+        courseAccuracy: 4.5,
         clientActivityId: activityId,
         ownerGeneration: owner,
         segmentId: 'segment-a',
@@ -360,6 +374,113 @@ describe('crash-safe Activity journal', () => {
       segmentStartReason: 'resume',
     });
     expect((await readActiveHikeTail(activityId)).map(point => point.t)).toEqual([3_000]);
+  });
+
+  test('terminal snapshot proves a readable legitimate zero-point Activity', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'hiking',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    await sealHikeTrackForFinish(activityId, owner, 2_500);
+
+    await expect(readActiveHikeTerminalSnapshot(activityId, {
+      expectedOwnerGeneration: owner,
+      expectedCutoffAt: 2_500,
+    })).resolves.toEqual({
+      status: 'complete', points: [], source: 'active', cutoffAt: 2_500, ownerGeneration: owner,
+    });
+  });
+
+  test('terminal snapshot reports a lower filesystem stat/read failure instead of an empty Activity', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'hiking',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    await appendHikePoint({
+      t: 2_000, lat: -41, lng: 174, src: 'fg', clientActivityId: activityId,
+      ownerGeneration: owner, segmentId: 'segment-a',
+    });
+    await sealHikeTrackForFinish(activityId, owner, 2_500);
+    blockedRead = `cairn-fs://cairn-hike-tracks/active/${activityId}.jsonl`;
+
+    await expect(readActiveHikeTerminalSnapshot(activityId, {
+      expectedOwnerGeneration: owner,
+    })).resolves.toEqual({
+      status: 'uncertain', reason: 'journal-stat-failed', recoverablePoints: [],
+    });
+  });
+
+  test('terminal snapshot exposes but never blesses a valid prefix followed by corrupt evidence', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'running',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    await appendHikePoint({
+      t: 2_000, lat: -41, lng: 174, src: 'bg', clientActivityId: activityId,
+      ownerGeneration: owner, segmentId: 'segment-a',
+    });
+    const active = `cairn-fs://cairn-hike-tracks/active/${activityId}.jsonl`;
+    localStorageMock.setItem(active, `${localStorageMock.getItem(active)}{"v":2,"p":{"t":2300,"lat":-41,"lng":174},"c":"bad00000"}\n`);
+    await sealHikeTrackForFinish(activityId, owner, 2_500);
+
+    const snapshot = await readActiveHikeTerminalSnapshot(activityId, { expectedOwnerGeneration: owner });
+    expect(snapshot).toMatchObject({
+      status: 'uncertain', reason: 'journal-corrupt-or-partial',
+      recoverablePoints: [expect.objectContaining({ t: 2_000 })],
+    });
+  });
+
+  test('terminal snapshot does not mistake an older backup for completeness without a committed prefix cap', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'running',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    await appendHikePoint({
+      t: 2_000, lat: -41, lng: 174, src: 'fg', clientActivityId: activityId,
+      ownerGeneration: owner, segmentId: 'segment-a',
+    });
+    const active = `cairn-fs://cairn-hike-tracks/active/${activityId}.jsonl`;
+    localStorageMock.setItem(`${active}.bak`, String(localStorageMock.getItem(active)));
+    localStorageMock.removeItem(active);
+    await sealHikeTrackForFinish(activityId, owner, 2_500);
+
+    await expect(readActiveHikeTerminalSnapshot(activityId, {
+      expectedOwnerGeneration: owner,
+    })).resolves.toEqual({ status: 'uncertain', reason: 'journal-missing', recoverablePoints: [] });
+  });
+
+  test('terminal snapshot accepts an exact backup only when a committed truncation cap bounds it', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'running',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    await appendHikePoint({
+      t: 2_000, lat: -41, lng: 174, src: 'fg', clientActivityId: activityId,
+      ownerGeneration: owner, segmentId: 'segment-a',
+    });
+    const active = `cairn-fs://cairn-hike-tracks/active/${activityId}.jsonl`;
+    localStorageMock.setItem(`${active}.bak`, String(localStorageMock.getItem(active)));
+    localStorageMock.setItem(`${active}.truncate.json`, JSON.stringify({ maximumLines: 1 }));
+    localStorageMock.removeItem(active);
+    await sealHikeTrackForFinish(activityId, owner, 2_500);
+
+    await expect(readActiveHikeTerminalSnapshot(activityId, {
+      expectedOwnerGeneration: owner,
+      expectedCutoffAt: 2_500,
+    })).resolves.toMatchObject({
+      status: 'complete', source: 'bounded-recovery', cutoffAt: 2_500,
+      points: [expect.objectContaining({ t: 2_000 })],
+    });
   });
 
   test('rollback truncates the durable accepted tail and subsequent evidence appends there', async () => {

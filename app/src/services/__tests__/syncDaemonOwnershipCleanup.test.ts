@@ -57,6 +57,10 @@ jest.mock('../../features/activity/activityRegistry', () => ({
 jest.mock('../../features/activity/activityFinalArtifact', () => ({
   loadActivityFinalArtifact: jest.fn(async () => mockArtifact),
 }));
+jest.mock('../../features/activity/activityMemoryProjector', () => ({
+  reconcileActivityMemoryProjection: jest.fn(async () => true),
+  retireActivityMemoryProjection: jest.fn(async () => { mockOrder.push('projection-retire'); return true; }),
+}));
 jest.mock('../../features/activitySimulator/simulatorLog', () => ({
   appendSimulatorLog: jest.fn(),
 }));
@@ -75,9 +79,18 @@ jest.mock('../../store/useSessionStore', () => ({
   },
 }));
 
-import { classifyPendingSyncFailure, drainPending, recoverPreparingActivityCompletion } from '../syncDaemon';
+import {
+  classifyPendingSyncFailure,
+  cleanupAcknowledgedActivityArtifacts,
+  drainPending,
+  recoverPreparingActivityCompletion,
+} from '../syncDaemon';
 const { saveHikeAtomic: mockSaveHikeAtomic } = require('../sessionService');
+const { startSessionResolved: mockStartSessionResolved } = require('../sessionService');
+const { resetForResync: mockResetForResync } = require('../pendingSyncStore');
 const { acknowledgeActivity: mockAcknowledgeActivity } = require('../../features/activity/activityRegistry');
+const { reconcileActivityMemoryProjection: mockReconcileActivityMemoryProjection } = require('../../features/activity/activityMemoryProjector');
+const { retireActivityMemoryProjection: mockRetireActivityMemoryProjection } = require('../../features/activity/activityMemoryProjector');
 
 const pending = {
   contractVersion: 3,
@@ -113,6 +126,13 @@ describe('Activity ACK ownership and cleanup phases', () => {
     mockAddedSessions.length = 0;
     mockArtifact = null;
     jest.clearAllMocks();
+    mockStartSessionResolved.mockResolvedValue({ kind: 'unavailable' });
+    mockResetForResync.mockResolvedValue(true);
+    mockReconcileActivityMemoryProjection.mockResolvedValue(true);
+    mockRetireActivityMemoryProjection.mockImplementation(async () => {
+      mockOrder.push('projection-retire');
+      return true;
+    });
   });
 
   test('a crash after refined artifact commit rolls the Base outbox forward before upload', async () => {
@@ -191,6 +211,7 @@ describe('Activity ACK ownership and cleanup phases', () => {
     expect(mockOrder).toEqual([
       'pending-delete',
       'pending-delete',
+      'projection-retire',
       'heavy-trace-delete',
       'registry-remove',
     ]);
@@ -209,9 +230,41 @@ describe('Activity ACK ownership and cleanup phases', () => {
       'summary-ack',
       'registry-ack',
       'pending-delete',
+      'projection-retire',
       'heavy-trace-delete',
       'registry-remove',
     ]);
+  });
+
+  test('acknowledged cleanup retains the Activity WAL when projection completion cannot be proved', async () => {
+    mockRegistry = {
+      unfinished: null,
+      completed: [{
+        clientActivityId: 'activity-a', serverActivityId: 77,
+        syncState: 'synced', locationProviderSource: 'real',
+      }],
+      tombstones: [],
+    };
+    mockReconcileActivityMemoryProjection.mockResolvedValueOnce(false);
+    await expect(cleanupAcknowledgedActivityArtifacts('account-a', 'activity-a')).resolves.toBe(false);
+    expect(mockOrder).toEqual(['pending-delete']);
+  });
+
+  test('acknowledged cleanup retains WAL and registry when terminal retirement is not durable', async () => {
+    mockRegistry = {
+      unfinished: null,
+      completed: [{
+        clientActivityId: 'activity-a', serverActivityId: 77,
+        syncState: 'synced', locationProviderSource: 'real',
+      }],
+      tombstones: [],
+    };
+    mockRetireActivityMemoryProjection.mockImplementationOnce(async () => {
+      mockOrder.push('projection-retire');
+      return false;
+    });
+    await expect(cleanupAcknowledgedActivityArtifacts('account-a', 'activity-a')).resolves.toBe(false);
+    expect(mockOrder).toEqual(['pending-delete', 'projection-retire']);
   });
 
   test('accelerated historical epochs replay unchanged through normal sync and reconciliation', async () => {
@@ -322,5 +375,47 @@ describe('Activity ACK ownership and cleanup phases', () => {
       attempted: 1,
       succeeded: 1,
     });
+  });
+
+  test('a dependency conflict receives a bounded scheduled liveness retry after the other Activity resolves', async () => {
+    mockPendingRows = [{ ...pending, remoteId: null }];
+    mockStartSessionResolved.mockResolvedValueOnce({
+      kind: 'conflict',
+      code: 'OTHER_ACTIVITY_UNFINISHED',
+      existing: { clientActivityId: 'activity-other' },
+    });
+    await expect(drainPending({ wakeReason: 'manual', force: true })).resolves.toMatchObject({
+      attempted: 1,
+      failed: 1,
+    });
+    expect(mockPendingRows[0]).toMatchObject({ failureKind: 'dependency' });
+
+    mockPendingRows[0].lastAttemptAt = Date.now() - 60_000;
+    mockStartSessionResolved.mockResolvedValueOnce({ kind: 'started', serverActivityId: 91 });
+    await expect(drainPending({ wakeReason: 'scheduled_retry' })).resolves.toMatchObject({
+      attempted: 1,
+      succeeded: 1,
+    });
+    expect(mockSaveHikeAtomic).toHaveBeenCalledWith(
+      91,
+      expect.any(Object),
+      pending.idempotencyKey,
+      pending.localId,
+      pending.userId,
+    );
+  });
+
+  test('a structured 404 resets the dead server identity instead of becoming a permanent action error', async () => {
+    mockSaveHikeAtomic.mockRejectedValueOnce(Object.assign(new Error('missing'), {
+      status: 404,
+      body: { code: 'SESSION_NOT_FOUND_RESYNC' },
+    }));
+    await expect(drainPending({ wakeReason: 'manual', force: true })).resolves.toMatchObject({
+      attempted: 1,
+      skipped: 1,
+      failed: 0,
+    });
+    expect(mockResetForResync).toHaveBeenCalledWith(pending.localId);
+    expect(mockFailures).toEqual([]);
   });
 });

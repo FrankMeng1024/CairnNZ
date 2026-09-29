@@ -30,6 +30,10 @@ import {
   type TopologyQuality,
   type WholeRouteValidation,
 } from './snapTrack';
+import type {
+  ActivityMapboxPhase,
+  ActivityMapboxRequestGovernor,
+} from './activityRequestGovernor';
 
 export type FinalRouteState =
   | 'NETWORK_CONFIDENT'
@@ -120,6 +124,10 @@ export interface PedestrianFinalRequestResult {
   rejectedCandidateCount: number;
   profile: 'walking';
   matcherTidy: false | null;
+  /** True only once fetch is invoked; governor denials are diagnostic only. */
+  invoked: boolean;
+  governorReason: string | null;
+  responseBytes: number;
 }
 
 export interface PedestrianFinalStats {
@@ -185,6 +193,9 @@ export interface PedestrianFinalOptions {
   signal?: AbortSignal;
   directionsFallback?: boolean;
   maxDirectionsRequests?: number;
+  requestGovernor?: ActivityMapboxRequestGovernor;
+  requestPhase?: Extract<ActivityMapboxPhase, 'live' | 'final'>;
+  requestReason?: string;
 }
 
 export type PedestrianFinalResult =
@@ -241,11 +252,11 @@ const LONG_ACTIVITY_THRESHOLD = 240;
 const MAX_MATCHING_REQUESTS = 33;
 const DEFAULT_TOTAL_TIMEOUT_MS = 10_000;
 const DEFAULT_PER_CALL_TIMEOUT_MS = 2_600;
-const DEFAULT_CONCURRENCY = 4;
+const DEFAULT_CONCURRENCY = 2;
 const MIN_NETWORK_SUPPORT = 3;
 const MIN_NETWORK_DISTANCE_M = 10;
 const MAX_SEAM_TRIM = 3;
-const MAX_DIRECTIONS_REQUESTS = 3;
+const MAX_DIRECTIONS_REQUESTS = 2;
 const MAX_DIRECTIONS_SPAN_M = 260;
 const MIN_DIRECTIONS_SPAN_M = 28;
 const ROAD_OFFSET_MIN_M = 2;
@@ -294,6 +305,25 @@ function signedAngleDeltaDegrees(left: number, right: number): number {
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
+}
+
+function requestFingerprint(kind: string, evidence: string): string {
+  let value = 0x811c9dc5;
+  const input = `${kind}:${evidence}`;
+  for (let index = 0; index < input.length; index += 1) {
+    value ^= input.charCodeAt(index);
+    value = Math.imul(value, 0x01000193) >>> 0;
+  }
+  return `${kind}:${value.toString(16).padStart(8, '0')}`;
+}
+
+function retryAfterMs(response: Response): number | null {
+  const raw = response.headers?.get?.('retry-after');
+  if (!raw) return null;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
+  const timestamp = Date.parse(raw);
+  return Number.isFinite(timestamp) ? Math.max(0, timestamp - Date.now()) : null;
 }
 
 function percentile(values: number[], ratio: number): number {
@@ -536,23 +566,50 @@ function finalGeometryStructuralTurnIndices(points: RawPoint[]): number[] {
 }
 
 export function finalGeometryCriticalIndices(points: RawPoint[]): number[] {
-  const critical = new Set<number>(finalGeometryStructuralTurnIndices(points));
-  for (let index = 1; index < points.length - 1; index += 1) {
-    const incomingDt = points[index].t != null && points[index - 1].t != null
-      ? Number(points[index].t) - Number(points[index - 1].t)
-      : 0;
-    const outgoingDt = points[index + 1].t != null && points[index].t != null
-      ? Number(points[index + 1].t) - Number(points[index].t)
-      : 0;
-    if (incomingDt >= 8_000 || outgoingDt >= 8_000) {
-      critical.add(index);
+  // True Pause/recovery/gap boundaries are represented by segment identity
+  // before Final is invoked. Delivery cadence alone (8/15/21 seconds) is not
+  // evidence that the user paused and must not freeze every sparse sample.
+  const critical = new Set(finalGeometryStructuralTurnIndices(points));
+  if (isCoherentClosedTraversal(points)) {
+    for (let index = 1; index < points.length - 1; index += 1) {
+      const turn = angleDeltaDegrees(
+        bearingDegrees(points[index - 1], points[index]),
+        bearingDegrees(points[index], points[index + 1]),
+      );
+      if (turn >= 30) critical.add(index);
     }
   }
-  return Array.from(critical).sort((a, b) => a - b);
+  return [...critical].sort((left, right) => left - right);
+}
+
+function isCoherentClosedTraversal(points: RawPoint[]): boolean {
+  if (points.length < 5) return false;
+  const coherentTurns = points.slice(1, -1).flatMap((_point, offset) => {
+    const index = offset + 1;
+    if (hav(points[index - 1], points[index]) < 1 || hav(points[index], points[index + 1]) < 1) return [];
+    const turn = signedAngleDeltaDegrees(
+      bearingDegrees(points[index - 1], points[index]),
+      bearingDegrees(points[index], points[index + 1]),
+    );
+    return Math.abs(turn) >= 12 ? [turn] : [];
+  });
+  const positive = coherentTurns.filter(turn => turn > 0).length;
+  const negative = coherentTurns.filter(turn => turn < 0).length;
+  const sameDirectionFraction = coherentTurns.length > 0
+    ? Math.max(positive, negative) / coherentTurns.length
+    : 0;
+  return coherentTurns.length >= 3
+    && sameDirectionFraction >= 0.75
+    && coherentTurns.reduce((sum, turn) => sum + Math.abs(turn), 0) >= 220;
 }
 
 function isStationaryCloud(points: RawPoint[], uncertaintyM: number): boolean {
   if (points.length < 5) return false;
+  const credibleMovingSamples = points.filter(point => (
+    typeof point.speed === 'number' && Number.isFinite(point.speed) && point.speed >= 0.65
+  )).length;
+  if (credibleMovingSamples >= Math.max(2, Math.ceil(points.length * 0.2))) return false;
+  if (isCoherentClosedTraversal(points)) return false;
   const origin = points[0];
   const radiusM = Math.max(...points.map(point => hav(origin, point)));
   const directM = hav(points[0], points[points.length - 1]);
@@ -616,12 +673,6 @@ function collapseSameCorridorMicroExcursions(
       const excursion = points.slice(start, end + 1);
       const maximumDepth = Math.max(...excursion.map(point => hav(points[start], point)));
       if (maximumDepth < 2.5 || maximumDepth > maximumDepthM) continue;
-      const hasSourcePause = excursion.slice(1).some((point, index) => (
-        point.t != null
-        && excursion[index].t != null
-        && Number(point.t) - Number(excursion[index].t) >= 8_000
-      ));
-      if (hasSourcePause) continue;
       // Rejoining the same corridor after travelling several times the
       // endpoint displacement is the narrow, generic micro-spur signature.
       // Long backtracks and real route branches exceed the depth/length fuse.
@@ -661,7 +712,6 @@ function collapseTransientLateralSpikes(
   // Stage 3 must still repair a short accepted burst when accuracy degrades.
   // The temporal/rejoin/opposing-turn/support gates below bound this; a larger
   // uncertainty envelope alone never authorizes straightening a path.
-  const maximumDepthM = clamp(uncertaintyM * 0.78, 4.5, 16);
   const removed = new Set<number>();
   let removedCount = 0;
   let maximumRemovedDepthM = 0;
@@ -670,17 +720,6 @@ function collapseTransientLateralSpikes(
     let best: { end: number; depthM: number; score: number } | null = null;
     for (let end = start + 4; end < Math.min(points.length, start + 12); end += 1) {
       const window = points.slice(start, end + 1);
-      const durationMs = window[0].t != null && window[window.length - 1].t != null
-        ? Number(window[window.length - 1].t) - Number(window[0].t)
-        : 0;
-      if (durationMs > 22_000) break;
-      const hasTrueGap = window.slice(1).some((point, index) => (
-        point.t != null
-        && window[index].t != null
-        && Number(point.t) - Number(window[index].t) > 12_500
-      ));
-      if (hasTrueGap) continue;
-
       const directM = hav(window[0], window[window.length - 1]);
       if (directM < 8) continue;
       const travelledM = pathLength(window);
@@ -691,7 +730,16 @@ function collapseTransientLateralSpikes(
         projectPointToPath(point, [window[0], window[window.length - 1]]).distanceM
       ));
       const depthM = Math.max(...depths);
-      if (depthM < 3.25 || depthM > maximumDepthM) continue;
+      const localAccuracyM = Math.max(
+        uncertaintyM,
+        ...window.map(point => (
+          typeof point.accuracy === 'number' && Number.isFinite(point.accuracy)
+            ? point.accuracy
+            : 0
+        )),
+      );
+      const localMaximumDepthM = clamp(localAccuracyM * 0.78, 4.5, 16);
+      if (depthM < 3.25 || depthM > localMaximumDepthM) continue;
       // A sustained second corridor/branch has broad support. A transient GPS
       // spike peaks briefly and then converges back to the evidence chord.
       const materialSupportCount = depths.filter(value => value >= Math.max(2.5, depthM * 0.58)).length;
@@ -1251,15 +1299,27 @@ function nearestGeometryIndex(
   return bestIndex;
 }
 
-function cropGeometryToTracepoints(
+export function cropGeometryToTracepoints(
   geometry: SnappedPoint[],
-  head: [number, number] | undefined,
-  tail: [number, number] | undefined,
+  observations: Array<[number, number]>,
 ): SnappedPoint[] | null {
-  if (geometry.length < 2 || !head || !tail) return null;
-  const start = nearestGeometryIndex(geometry, head);
-  const end = nearestGeometryIndex(geometry, tail, start);
-  if (end < start) return null;
+  if (geometry.length < 2 || observations.length < 2) return null;
+  // Mapbox waypoint_index indexes submitted observations, not geometry
+  // vertices. Follow the complete tracepoint sequence monotonically through
+  // the response geometry so a loop whose tail is spatially near its head
+  // cannot collapse to the first matching vertex.
+  const geometryIndices: number[] = [];
+  let minimumIndex = 0;
+  for (const observation of observations) {
+    const index = nearestGeometryIndex(geometry, observation, minimumIndex);
+    geometryIndices.push(index);
+    minimumIndex = index;
+  }
+  const start = geometryIndices[0];
+  const end = geometryIndices[geometryIndices.length - 1];
+  if (end <= start) return null;
+  const head = observations[0];
+  const tail = observations[observations.length - 1];
   const result: SnappedPoint[] = [
     { lng: head[0], lat: head[1] },
     ...geometry.slice(start, end + 1),
@@ -1300,6 +1360,9 @@ async function mapMatchingWindow(
   token: string,
   timeoutMs: number,
   signal?: AbortSignal,
+  governor?: ActivityMapboxRequestGovernor,
+  phase: Extract<ActivityMapboxPhase, 'live' | 'final'> = 'final',
+  reason = 'qualified-unresolved-window',
 ): Promise<WindowResult> {
   const startedAt = Date.now();
   const diagnostic: PedestrianFinalRequestResult = {
@@ -1319,9 +1382,16 @@ async function mapMatchingWindow(
     rejectedCandidateCount: 0,
     profile: 'walking',
     matcherTidy: false,
+    invoked: false,
+    governorReason: null,
+    responseBytes: 0,
   };
   if (chunk.length < 2 || !token) {
     diagnostic.result = !token ? 'no-token' : 'too-short';
+    return { candidates: [], request: diagnostic };
+  }
+  if (signal?.aborted) {
+    diagnostic.result = 'aborted';
     return { candidates: [], request: diagnostic };
   }
   const coords = chunk.map(point => `${point.lng.toFixed(6)},${point.lat.toFixed(6)}`).join(';');
@@ -1331,12 +1401,48 @@ async function mapMatchingWindow(
     && seconds.every((value, index) => index === 0 || value > Number(seconds[index - 1]));
   const timestampQuery = validTimes ? `&timestamps=${seconds.join(';')}` : '';
   const url = `${MAPBOX_MATCHING_ENDPOINT}/${coords}?geometries=geojson&overview=full&steps=true&tidy=false&radiuses=${radiuses}${timestampQuery}&access_token=${encodeURIComponent(token)}`;
+  let receiptId: string | null = null;
+  if (governor) {
+    try {
+      const permit = await governor.authorize({
+        phase,
+        kind: 'map-matching',
+        fingerprint: requestFingerprint('matching', `${coords}|${radiuses}|${seconds.join(';')}`),
+        reason,
+      });
+      diagnostic.governorReason = permit.reason;
+      if (!permit.allowed || !permit.receiptId) {
+        diagnostic.result = `governor-${permit.reason}`;
+        diagnostic.durationMs = Date.now() - startedAt;
+        return { candidates: [], request: diagnostic };
+      }
+      receiptId = permit.receiptId;
+    } catch {
+      diagnostic.governorReason = 'persistence-error';
+      diagnostic.result = 'governor-persistence-error';
+      diagnostic.durationMs = Date.now() - startedAt;
+      return { candidates: [], request: diagnostic };
+    }
+  }
+  if (signal?.aborted) {
+    if (receiptId && governor) await governor.releaseUndispatched(receiptId).catch(() => undefined);
+    diagnostic.result = 'aborted';
+    diagnostic.durationMs = Date.now() - startedAt;
+    return { candidates: [], request: diagnostic };
+  }
   const abort = linkedAbortController(signal, timeoutMs);
+  let completionResult: 'ok' | 'http' | 'timeout' | 'aborted' | 'network-error' | 'disused' = 'network-error';
+  let completionRetryAfterMs: number | null = null;
   try {
+    diagnostic.invoked = true;
     const response = await fetch(url, { signal: abort.controller.signal });
     diagnostic.httpStatus = response.status;
+    completionRetryAfterMs = retryAfterMs(response);
+    const headerBytes = Number(response.headers?.get?.('content-length'));
+    if (Number.isFinite(headerBytes)) diagnostic.responseBytes = Math.max(0, headerBytes);
     if (!response.ok) {
       diagnostic.result = `http-${response.status}`;
+      completionResult = 'http';
       return { candidates: [], request: diagnostic };
     }
     const body = await response.json() as {
@@ -1347,12 +1453,16 @@ async function mapMatchingWindow(
         geometry?: { coordinates?: Array<[number, number]> };
       }>;
     };
+    if (diagnostic.responseBytes === 0) {
+      try { diagnostic.responseBytes = new TextEncoder().encode(JSON.stringify(body)).length; } catch { /* diagnostic only */ }
+    }
     diagnostic.responseCode = body.code ?? 'missing-code';
     diagnostic.matchingCount = body.matchings?.length ?? 0;
     diagnostic.tracepointCount = body.tracepoints?.length ?? 0;
     diagnostic.nullTracepointCount = body.tracepoints?.filter(point => point == null).length ?? 0;
     if (body.code !== 'Ok' || !body.matchings?.length || body.tracepoints?.length !== chunk.length) {
       diagnostic.result = body.code ?? 'unusable-response';
+      completionResult = 'disused';
       return { candidates: [], request: diagnostic };
     }
     const candidates: NetworkCandidate[] = [];
@@ -1384,8 +1494,7 @@ async function mapMatchingWindow(
         const tracepoints = indices.map(index => body.tracepoints?.[index]).filter(Boolean) as MapboxTracepoint[];
         const cropped = cropGeometryToTracepoints(
           fullGeometry,
-          body.tracepoints[headIndex]?.location,
-          body.tracepoints[tailIndex]?.location,
+          tracepoints.flatMap(tracepoint => tracepoint.location ? [tracepoint.location] : []),
         );
         if (!cropped) {
           diagnostic.rejectedCandidateCount += 1;
@@ -1402,7 +1511,9 @@ async function mapMatchingWindow(
           alternatives: tracepoints.map(point => point.alternatives_count ?? null),
           names: tracepoints.map(point => point.name ?? null),
           source: 'map-matching',
-          routeAlternativeCount: body.matchings.length - 1,
+          // Matchings are disjoint sub-traces, not route alternatives. Real
+          // ambiguity is reported per tracepoint by alternatives_count.
+          routeAlternativeCount: Math.max(0, ...tracepoints.map(point => point.alternatives_count ?? 0)),
         });
         if (candidate) {
           candidates.push(candidate);
@@ -1413,13 +1524,27 @@ async function mapMatchingWindow(
       }
     }
     diagnostic.result = candidates.length > 0 ? 'accepted-candidate' : 'no-safe-candidate';
+    completionResult = candidates.length > 0 ? 'ok' : 'disused';
     return { candidates, request: diagnostic, directionsHints };
   } catch (error: any) {
     diagnostic.result = error?.name === 'AbortError' ? 'timeout-or-abort' : 'network-error';
+    completionResult = error?.name === 'AbortError'
+      ? signal?.aborted ? 'aborted' : 'timeout'
+      : 'network-error';
     return { candidates: [], request: diagnostic };
   } finally {
     diagnostic.durationMs = Date.now() - startedAt;
     abort.dispose();
+    if (receiptId && governor) {
+      await governor.complete({
+        receiptId,
+        result: completionResult,
+        httpStatus: diagnostic.httpStatus,
+        bytes: diagnostic.responseBytes,
+        durationMs: diagnostic.durationMs,
+        retryAfterMs: completionRetryAfterMs,
+      }).catch(() => undefined);
+    }
   }
 }
 
@@ -1441,13 +1566,15 @@ async function runBounded<T>(
   items: T[],
   concurrency: number,
   task: (item: T) => Promise<WindowResult>,
+  signal?: AbortSignal,
 ): Promise<WindowResult[]> {
   const results: WindowResult[] = new Array(items.length);
   let cursor = 0;
   const worker = async () => {
-    while (cursor < items.length) {
+    while (cursor < items.length && !signal?.aborted) {
       const index = cursor;
       cursor += 1;
+      if (signal?.aborted) break;
       results[index] = await task(items[index]);
     }
   };
@@ -1534,6 +1661,9 @@ async function walkingDirectionsCandidate(
   token: string,
   timeoutMs: number,
   signal?: AbortSignal,
+  governor?: ActivityMapboxRequestGovernor,
+  phase: Extract<ActivityMapboxPhase, 'live' | 'final'> = 'final',
+  reason = 'qualified-unresolved-directions-span',
 ): Promise<DirectionsResult> {
   const startedAt = Date.now();
   const subsection = canonical.slice(sourceStart, sourceEnd + 1);
@@ -1554,21 +1684,64 @@ async function walkingDirectionsCandidate(
     rejectedCandidateCount: 0,
     profile: 'walking',
     matcherTidy: null,
+    invoked: false,
+    governorReason: null,
+    responseBytes: 0,
   };
   if (!token || subsection.length < 2) {
     request.result = !token ? 'no-token' : 'too-short';
+    return { candidate: null, request };
+  }
+  if (signal?.aborted) {
+    request.result = 'aborted';
     return { candidate: null, request };
   }
   const start = subsection[0];
   const end = subsection[subsection.length - 1];
   const coords = `${start.lng.toFixed(6)},${start.lat.toFixed(6)};${end.lng.toFixed(6)},${end.lat.toFixed(6)}`;
   const url = `${MAPBOX_DIRECTIONS_ENDPOINT}/${coords}?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=${encodeURIComponent(token)}`;
+  let receiptId: string | null = null;
+  if (governor) {
+    try {
+      const permit = await governor.authorize({
+        phase,
+        kind: 'walking-directions',
+        fingerprint: requestFingerprint('directions', `${sourceStart}:${sourceEnd}:${coords}`),
+        reason,
+      });
+      request.governorReason = permit.reason;
+      if (!permit.allowed || !permit.receiptId) {
+        request.result = `governor-${permit.reason}`;
+        request.durationMs = Date.now() - startedAt;
+        return { candidate: null, request };
+      }
+      receiptId = permit.receiptId;
+    } catch {
+      request.governorReason = 'persistence-error';
+      request.result = 'governor-persistence-error';
+      request.durationMs = Date.now() - startedAt;
+      return { candidate: null, request };
+    }
+  }
+  if (signal?.aborted) {
+    if (receiptId && governor) await governor.releaseUndispatched(receiptId).catch(() => undefined);
+    request.result = 'aborted';
+    request.durationMs = Date.now() - startedAt;
+    return { candidate: null, request };
+  }
   const abort = linkedAbortController(signal, timeoutMs);
+  let completionResult: 'ok' | 'http' | 'timeout' | 'aborted' | 'network-error' | 'disused' = 'network-error';
+  let completionRetryAfterMs: number | null = null;
   try {
+    request.invoked = true;
     const response = await fetch(url, { signal: abort.controller.signal });
     request.httpStatus = response.status;
+    completionRetryAfterMs = retryAfterMs(response);
+    const headerBytes = Number(response.headers?.get?.('content-length'));
+    if (Number.isFinite(headerBytes)) request.responseBytes = Math.max(0, headerBytes);
     if (!response.ok) {
       request.result = `http-${response.status}`;
+      completionResult = 'http';
       return { candidate: null, request };
     }
     const body = await response.json() as {
@@ -1578,10 +1751,14 @@ async function walkingDirectionsCandidate(
         legs?: Array<{ steps?: Array<{ name?: string }> }>;
       }>;
     };
+    if (request.responseBytes === 0) {
+      try { request.responseBytes = new TextEncoder().encode(JSON.stringify(body)).length; } catch { /* diagnostic only */ }
+    }
     request.responseCode = body.code ?? 'missing-code';
     request.matchingCount = body.routes?.length ?? 0;
     if (body.code !== 'Ok' || !body.routes?.length) {
       request.result = body.code ?? 'no-route';
+      completionResult = 'disused';
       return { candidate: null, request };
     }
     const candidates: NetworkCandidate[] = [];
@@ -1618,13 +1795,27 @@ async function walkingDirectionsCandidate(
     request.acceptedCandidateCount = candidate ? 1 : 0;
     request.rejectedCandidateCount = Math.max(0, body.routes.length - (candidate ? 1 : 0));
     request.result = candidate ? 'accepted-candidate' : 'no-safe-candidate';
+    completionResult = candidate ? 'ok' : 'disused';
     return { candidate, request };
   } catch (error: any) {
     request.result = error?.name === 'AbortError' ? 'timeout-or-abort' : 'network-error';
+    completionResult = error?.name === 'AbortError'
+      ? signal?.aborted ? 'aborted' : 'timeout'
+      : 'network-error';
     return { candidate: null, request };
   } finally {
     request.durationMs = Date.now() - startedAt;
     abort.dispose();
+    if (receiptId && governor) {
+      await governor.complete({
+        receiptId,
+        result: completionResult,
+        httpStatus: request.httpStatus,
+        bytes: request.responseBytes,
+        durationMs: request.durationMs,
+        retryAfterMs: completionRetryAfterMs,
+      }).catch(() => undefined);
+    }
   }
 }
 
@@ -1876,15 +2067,20 @@ export async function reconstructPedestrianFinalRoute(
       options.mapboxToken,
       options.perCallTimeoutMs ?? DEFAULT_PER_CALL_TIMEOUT_MS,
       totalAbort.controller.signal,
+      options.requestGovernor,
+      options.requestPhase ?? 'final',
+      options.requestReason ?? 'qualified-unresolved-window',
     ),
+    totalAbort.controller.signal,
   );
-  const matchingCandidates = matchingResults.flatMap(result => result.candidates);
+  const completedMatchingResults = matchingResults.filter((result): result is WindowResult => Boolean(result));
+  const matchingCandidates = completedMatchingResults.flatMap(result => result.candidates);
   annotateWindowAgreement(matchingCandidates);
   let selected = selectNonOverlappingCandidates(matchingCandidates);
-  const requestResults = matchingResults.map(result => result.request);
+  const requestResults = completedMatchingResults.map(result => result.request);
 
   if (options.directionsFallback !== false && options.mapboxToken && !totalAbort.controller.signal.aborted) {
-    const supportedHints = matchingResults.flatMap(result => result.directionsHints ?? [])
+    const supportedHints = completedMatchingResults.flatMap(result => result.directionsHints ?? [])
       .filter(([start, end]) => {
         const distanceM = pathLength(canonical.slice(start, end + 1));
         const alreadyOwned = selected.some(candidate => (
@@ -1919,6 +2115,9 @@ export async function reconstructPedestrianFinalRoute(
         options.mapboxToken,
         options.perCallTimeoutMs ?? DEFAULT_PER_CALL_TIMEOUT_MS,
         totalAbort.controller.signal,
+        options.requestGovernor,
+        options.requestPhase ?? 'final',
+        options.requestReason ?? 'qualified-unresolved-directions-span',
       );
       requestResults.push(direction.request);
       if (direction.candidate) {
@@ -1952,8 +2151,8 @@ export async function reconstructPedestrianFinalRoute(
     };
     wholeRouteValidation = evaluateWholeRouteQuality(canonical, assembled.points);
   }
-  const mapRequests = requestResults.filter(result => result.kind === 'map-matching');
-  const directionRequests = requestResults.filter(result => result.kind === 'walking-directions');
+  const mapRequests = requestResults.filter(result => result.kind === 'map-matching' && result.invoked);
+  const directionRequests = requestResults.filter(result => result.kind === 'walking-directions' && result.invoked);
   const canonicalFallbackDistanceM = assembled.sections
     .filter(section => section.decision === 'canonical-derived')
     .reduce((sum, section) => sum + section.canonicalDistanceM, 0);

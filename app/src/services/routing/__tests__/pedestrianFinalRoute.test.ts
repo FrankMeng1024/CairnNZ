@@ -1,6 +1,7 @@
 import {
   buildBaseFinalGeometry,
   cleanCanonicalGeometry,
+  cropGeometryToTracepoints,
   evaluateCorridorEvidence,
   evaluateLateralOffsetEvidence,
   finalGeometryCriticalIndices,
@@ -333,6 +334,42 @@ describe('O50 free/off-network cleanup product contracts', () => {
     )))).toBeLessThan(1);
   });
 
+  test('a poor isolated burst uses local uncertainty instead of a good segment-wide p65', () => {
+    const canonical = Array.from({ length: 81 }, (_unused, index) => (
+      point(index * 3, index === 40 ? 12 : 0, index, index === 40 ? 25 : 5)
+    ));
+    const base = buildBaseFinalGeometry(canonical);
+    expect(base.diagnostics.effectiveUncertaintyM).toBe(5);
+    expect(base.diagnostics.removedTransientSpikeCount).toBeGreaterThan(0);
+    expect(Math.max(...base.points.map(sample => (
+      Math.abs((sample.lat - BASE_LAT) * METRES_PER_DEGREE)
+    )))).toBeLessThan(8);
+  });
+
+  test.each([8_000, 15_000, 21_000])('%d ms delivery cadence is not inferred as user Pause', cadenceMs => {
+    const canonical = Array.from({ length: 30 }, (_unused, index) => ({
+      ...point(index * 3, index === 15 ? 12 : 0, index, 5),
+      t: 1_700_000_000_000 + index * cadenceMs,
+    }));
+    const base = buildBaseFinalGeometry(canonical);
+    const dense = buildBaseFinalGeometry(canonical.map((sample, index) => ({
+      ...sample,
+      t: 1_700_000_000_000 + index * 4_000,
+    })));
+    expect(base.diagnostics.pauseBoundaryCount).toBe(0);
+    expect(base.points).toEqual(dense.points);
+  });
+
+  test('a coherent closed loop inside the accuracy radius is not collapsed as a stationary cloud', () => {
+    const coordinates = [
+      [0, 0], [3, 0], [6, 0], [6, 3], [6, 6], [3, 6], [0, 6], [0, 3], [0, 0],
+    ];
+    const loop = coordinates.map(([east, north], index) => point(east, north, index, 14));
+    const base = buildBaseFinalGeometry(loop);
+    expect(base.diagnostics.stationaryCloudCollapsed).toBe(false);
+    expect(geometryLength(base.points)).toBeGreaterThan(18);
+  });
+
   test('Base Final removes a short multi-fix spike but preserves supported path intent', () => {
     const burst = [
       point(0, 0, 0, 14), point(8, 0, 1, 14), point(12, 7, 2, 14),
@@ -353,7 +390,7 @@ describe('O50 free/off-network cleanup product contracts', () => {
     )))).toBeGreaterThan(6);
   });
 
-  test('transient-spike repair does not cross a true source gap', () => {
+  test('timestamp spacing inside one declared segment does not invent a Pause boundary', () => {
     const canonical = [
       point(0, 0, 0, 14), point(10, 0, 1, 14), point(15, 8, 2, 14),
       point(20, 0, 3, 14), point(30, 0, 4, 14),
@@ -362,9 +399,9 @@ describe('O50 free/off-network cleanup product contracts', () => {
     canonical[3].t = canonical[2].t! + 4_000;
     canonical[4].t = canonical[3].t! + 4_000;
     const base = buildBaseFinalGeometry(canonical);
-    expect(base.diagnostics.removedTransientSpikeCount).toBe(0);
-    expect(base.points.some(sample => (
-      (sample.lat - BASE_LAT) * METRES_PER_DEGREE > 6
+    expect(base.diagnostics.removedTransientSpikeCount).toBe(1);
+    expect(base.points.every(sample => (
+      (sample.lat - BASE_LAT) * METRES_PER_DEGREE < 6
     ))).toBe(true);
   });
 
@@ -429,11 +466,11 @@ describe('O50 free/off-network cleanup product contracts', () => {
     expect(cleaned[cleaned.length - 1].lng).toBeCloseTo(canonical[canonical.length - 1].lng, 7);
   });
 
-  test('stop boundary survives cleanup', () => {
+  test('a long callback interval alone is not promoted to a stop boundary', () => {
     const canonical = line(0, 50, 0, 8);
     canonical[4].t = canonical[3].t! + 25_000;
     for (let index = 5; index < canonical.length; index += 1) canonical[index].t = canonical[index - 1].t! + 4_000;
-    expect(finalGeometryCriticalIndices(canonical)).toEqual(expect.arrayContaining([3, 4]));
+    expect(finalGeometryCriticalIndices(canonical)).not.toEqual(expect.arrayContaining([3, 4]));
   });
 
   test('Gap remains two independently reconstructed segments and is never bridged', async () => {
@@ -463,6 +500,19 @@ describe('O50 free/off-network cleanup product contracts', () => {
     const shifted = offsetNetworkGeometry(network, 11.3);
     const evidence = evaluateLateralOffsetEvidence(line(0, 100, 11.3, 12), shifted);
     expect(evidence.absoluteMedianM).toBeLessThan(0.2);
+  });
+});
+
+describe('temporal Map Matching crop correspondence', () => {
+  test('closed loop follows tracepoint order instead of cropping tail back to the spatially-nearest head', () => {
+    const geometry = [
+      point(0, 0), point(10, 0), point(10, 10), point(0, 10), point(0, 0),
+    ].map(({ lat, lng }) => ({ lat, lng }));
+    const observations = geometry.map(sample => [sample.lng, sample.lat] as [number, number]);
+    const cropped = cropGeometryToTracepoints(geometry, observations);
+    expect(cropped).not.toBeNull();
+    expect(cropped!.length).toBeGreaterThanOrEqual(5);
+    expect(geometryLength(cropped!)).toBeGreaterThan(35);
   });
 });
 
@@ -496,5 +546,40 @@ describe('bounded Directions fallback contract', () => {
     expect(requestCount).toBe(2);
     expect(result.stats.directionsRequestCount).toBe(1);
     expect(result.stats.sections.some(section => section.networkSource === 'walking-directions')).toBe(true);
+  });
+});
+
+describe('durable cancellation dispatch boundary', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => { global.fetch = originalFetch; });
+
+  test('abort stops every active request and bounded workers dispatch no later window', async () => {
+    const canonical = line(0, 2_000, 0, 260);
+    let invocations = 0;
+    global.fetch = jest.fn((_url: string, init?: RequestInit) => {
+      invocations += 1;
+      return new Promise((_resolve, reject) => {
+        const fail = () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        };
+        if (init?.signal?.aborted) fail();
+        else init?.signal?.addEventListener('abort', fail, { once: true });
+      });
+    }) as any;
+    const controller = new AbortController();
+    const running = reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: 'pk.test',
+      concurrency: 2,
+      directionsFallback: false,
+      signal: controller.signal,
+    });
+    for (let turn = 0; turn < 20 && invocations < 2; turn += 1) await Promise.resolve();
+    expect(invocations).toBe(2);
+    controller.abort();
+    await running;
+    await Promise.resolve();
+    expect(invocations).toBe(2);
   });
 });

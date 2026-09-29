@@ -37,7 +37,11 @@ import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useScenicTimeState } from '../hooks/useScenicTimeState';
 import { useAppStore } from '../store/useAppStore';
 import { useSettingsStore, type AppearancePref, type UnitsPref } from '../store/useSettingsStore';
-import { useMemorySettingsStore } from '../features/memory/store/useMemorySettingsStore';
+import {
+  PASSIVE_BACKGROUND_CONSENT_VERSION,
+  useMemorySettingsStore,
+} from '../features/memory/store/useMemorySettingsStore';
+import { passiveBackgroundMemoryCapability } from '../features/memory/services/passiveMemoryCapability';
 import { useWeatherStore } from '../store/useWeatherStore';
 import {
   changePassword,
@@ -235,11 +239,17 @@ export function SettingsScreen() {
   const appearance = useSettingsStore((state) => state.appearance);
   const hapticFeedback = useSettingsStore((state) => state.hapticFeedback);
   const updateSetting = useSettingsStore((state) => state.updateSetting);
-  const exploreEnabled = useMemorySettingsStore((state) => state.foregroundAutoUnlockEnabled);
+  const exploreEnabled = useMemorySettingsStore((state) => state.passiveExplorationEnabled);
+  const passiveBackgroundConsent = useMemorySettingsStore((state) => state.passiveBackgroundConsent);
+  const passiveBackgroundEducationDismissed = useMemorySettingsStore(
+    (state) => state.passiveBackgroundEducationDismissed,
+  );
   const setMemorySetting = useMemorySettingsStore((state) => state.set);
+  const passiveBackgroundCapability = passiveBackgroundMemoryCapability();
 
   const [page, setPage] = useState<Page>('root');
   const [permissionStatus, setPermissionStatus] = useState<string>('unknown');
+  const [backgroundPermissionStatus, setBackgroundPermissionStatus] = useState<string>('unknown');
   const [permissionCanAskAgain, setPermissionCanAskAgain] = useState(true);
   const [permissionLoading, setPermissionLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -364,11 +374,16 @@ export function SettingsScreen() {
 
   const refreshPermission = useCallback(async () => {
     try {
-      const result = await Location.getForegroundPermissionsAsync();
+      const [result, backgroundResult] = await Promise.all([
+        Location.getForegroundPermissionsAsync(),
+        Location.getBackgroundPermissionsAsync(),
+      ]);
       setPermissionStatus(result.status);
+      setBackgroundPermissionStatus(backgroundResult.status);
       setPermissionCanAskAgain(result.canAskAgain !== false);
     } catch {
       setPermissionStatus('unavailable');
+      setBackgroundPermissionStatus('unavailable');
       setPermissionCanAskAgain(false);
     }
   }, []);
@@ -439,7 +454,7 @@ export function SettingsScreen() {
 
   const handleExploreChange = async (next: boolean) => {
     if (!next) {
-      setMemorySetting('foregroundAutoUnlockEnabled', false);
+      setMemorySetting('passiveExplorationEnabled', false);
       return;
     }
     setPermissionLoading(true);
@@ -451,13 +466,46 @@ export function SettingsScreen() {
       setPermissionStatus(result.status);
       setPermissionCanAskAgain(result.canAskAgain !== false);
       if (result.status === Location.PermissionStatus.GRANTED) {
-        setMemorySetting('foregroundAutoUnlockEnabled', true);
+        setMemorySetting('passiveExplorationEnabled', true);
         haptic.selection();
+        if (passiveBackgroundCapability.supported
+          && passiveBackgroundConsent !== 'granted'
+          && !passiveBackgroundEducationDismissed) {
+          Alert.alert(
+            'Continue Memory while you walk?',
+            'If you choose Continue, Cairn can add explored places during ordinary walks when the screen is locked or you use another app. It uses a lower-frequency walking location service. Hike and Run recording remains separate.',
+            [
+              { text: 'Not now', style: 'cancel' },
+              {
+                text: "Don't show again",
+                onPress: () => {
+                  setMemorySetting('passiveBackgroundConsent', 'declined');
+                  setMemorySetting('passiveBackgroundEducationDismissed', true);
+                },
+              },
+              {
+                text: 'Continue',
+                onPress: () => {
+                  void (async () => {
+                    const background = await Location.requestBackgroundPermissionsAsync();
+                    setBackgroundPermissionStatus(background.status);
+                    if (background.status === Location.PermissionStatus.GRANTED) {
+                      setMemorySetting('passiveBackgroundConsent', 'granted');
+                      setMemorySetting('passiveBackgroundConsentVersion', PASSIVE_BACKGROUND_CONSENT_VERSION);
+                    } else {
+                      setMemorySetting('passiveBackgroundConsent', 'declined');
+                    }
+                  })();
+                },
+              },
+            ],
+          );
+        }
       } else {
-        setMemorySetting('foregroundAutoUnlockEnabled', false);
+        setMemorySetting('passiveExplorationEnabled', false);
         Alert.alert(
           'Location permission is off',
-          'Cairn can only update exploration while it is open when iOS location permission is allowed. Hike and Run permissions are handled separately when you record.',
+          'Cairn needs location permission to update Memory outside an Activity. Hike and Run permissions are handled separately when you record.',
           [
             { text: 'Not now', style: 'cancel' },
             ...(!result.canAskAgain ? [{ text: 'Open Settings', onPress: () => void Linking.openSettings() }] : []),
@@ -572,9 +620,15 @@ export function SettingsScreen() {
           <Divider color={background.settingsCardBorderColor} />
           <ToggleRow
             icon="Compass"
-            title="Explore while Cairn is open"
+            title="Explore beyond Activities"
             detail={permissionStatus === 'granted'
-              ? 'Updates exploration outside an Activity while the app is on screen'
+              ? passiveBackgroundCapability.supported
+                && passiveBackgroundConsent === 'granted'
+                && backgroundPermissionStatus === 'granted'
+                ? 'Updates Memory during ordinary walks, including normal lock and background use'
+                : passiveBackgroundCapability.supported
+                  ? 'Updates while Cairn is open; background access is optional'
+                  : 'Updates while Cairn is open on this installed build'
               : 'Needs foreground location permission; Activities are separate'}
             value={exploreEnabled}
             disabled={permissionLoading}
@@ -759,9 +813,15 @@ export function SettingsScreen() {
           <Divider color={background.settingsCardBorderColor} />
           <Row
             icon="Compass"
-            title="Explore while Cairn is open"
+            title="Explore beyond Activities"
             detail={exploreEnabled && permissionStatus === 'granted'
-              ? 'On · updates exploration only while the app is foregrounded and no Activity is recording'
+              ? passiveBackgroundCapability.supported
+                && passiveBackgroundConsent === 'granted'
+                && backgroundPermissionStatus === 'granted'
+                ? 'On · ordinary walks continue through normal background and screen lock; active Activities supply their own Memory evidence'
+                : passiveBackgroundCapability.supported
+                  ? 'On in foreground · background permission was not granted'
+                  : `On in foreground · background Memory requires a newer native build than ${passiveBackgroundCapability.nativeBuild ?? 'this build'}`
               : exploreEnabled
                 ? 'On in Cairn · unavailable until foreground location is allowed in iOS'
                 : 'Off · Hike and Run recording is separate'}
@@ -841,7 +901,7 @@ export function SettingsScreen() {
           <Row
             icon="Info"
             title="How Cairn uses data"
-            detail="Activities use location while recording. Optional foreground exploration uses location only while Cairn is open. Limited operational diagnostics support reliability; internal QA telemetry is separately gated."
+            detail="Activities use location while recording. Optional exploration can use lower-frequency walking location in foreground and, only after separate consent, during normal background or screen lock. Limited operational diagnostics support reliability; internal QA telemetry is separately gated."
           />
           <Divider color={background.settingsCardBorderColor} />
           <Row icon="Shield" title="Privacy Policy" detail="Read the full current policy" external onPress={() => void Linking.openURL(PRIVACY_URL)} testID="settings-privacy-policy" />
@@ -1149,7 +1209,7 @@ export function SettingsScreen() {
       <ModalCard visible={signOutOpen} onDismiss={() => setSignOutOpen(false)} testID="settings-signout-modal">
         <ModalCardHeader
           title="Sign out?"
-          body="Your saved and recoverable Cairn data stays with this account. Explore while Cairn is open will return to Off on this device."
+          body="Your saved and recoverable Cairn data stays with this account. Explore beyond Activities will return to Off on this device."
           onClose={() => setSignOutOpen(false)}
         />
         <View style={styles.stackSmall}>

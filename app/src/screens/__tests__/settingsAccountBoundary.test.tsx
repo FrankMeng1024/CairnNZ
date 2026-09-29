@@ -44,7 +44,9 @@ jest.mock('expo-crypto', () => ({
 jest.mock('expo-location', () => ({
   PermissionStatus: { GRANTED: 'granted' },
   getForegroundPermissionsAsync: jest.fn(async () => ({ status: 'granted', canAskAgain: true })),
+  getBackgroundPermissionsAsync: jest.fn(async () => ({ status: 'denied', canAskAgain: true })),
   requestForegroundPermissionsAsync: jest.fn(async () => ({ status: 'granted', canAskAgain: true })),
+  requestBackgroundPermissionsAsync: jest.fn(async () => ({ status: 'denied', canAskAgain: true })),
 }));
 jest.mock('react-native-safe-area-context', () => {
   const ReactModule = require('react');
@@ -176,7 +178,11 @@ jest.mock('../../store/useSettingsStore', () => ({
 }));
 jest.mock('../../features/memory/store/useMemorySettingsStore', () => ({
   useMemorySettingsStore: (selector: (state: any) => unknown) => selector({
-    foregroundAutoUnlockEnabled: false, set: jest.fn(),
+    passiveExplorationEnabled: false,
+    passiveBackgroundConsent: 'not-asked',
+    passiveBackgroundConsentVersion: 0,
+    passiveBackgroundEducationDismissed: false,
+    set: jest.fn(),
   }),
 }));
 jest.mock('../../store/useWeatherStore', () => ({

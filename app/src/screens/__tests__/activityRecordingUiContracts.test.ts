@@ -101,4 +101,10 @@ describe('shared Hike and Run recording UI contracts', () => {
     expect(run).toContain('committed={Boolean(committedRunActivityId)}');
     expect(run).toContain('onViewActivity={() =>');
   });
+
+  test('shows the walked route before Save and the validated Final afterward', () => {
+    expect(hikeFinish).toContain('{summary.trackPoints.length >= 2 && (');
+    expect(hikeFinish).not.toContain('{committed && summary.trackPoints.length >= 2 && (');
+    expect(hikeFinish).toContain("committed ? 'Validated final route' : 'Walked route preview'");
+  });
 });

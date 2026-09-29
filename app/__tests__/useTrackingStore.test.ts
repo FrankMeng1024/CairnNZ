@@ -23,6 +23,8 @@ const mockSecureStore = {
   setItemAsync: jest.fn(async () => undefined),
 };
 let mockAppStateChangeListener: ((state: string) => void) | null = null;
+const mockAsyncStorageValues = new Map<string, string>();
+const mockHikeJournalPoints: any[] = [];
 
 jest.mock('expo-location', () => ({ __esModule: true, ...mockLocation, default: mockLocation }));
 jest.mock('expo-secure-store', () => ({ __esModule: true, ...mockSecureStore, default: mockSecureStore }));
@@ -43,9 +45,11 @@ jest.mock('react-native', () => ({
   },
 }));
 jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => {}),
-  removeItem: jest.fn(async () => {}),
+  getItem: jest.fn(async (key: string) => mockAsyncStorageValues.get(key) ?? null),
+  setItem: jest.fn(async (key: string, value: string) => { mockAsyncStorageValues.set(key, value); }),
+  removeItem: jest.fn(async (key: string) => { mockAsyncStorageValues.delete(key); }),
+  getAllKeys: jest.fn(async () => [...mockAsyncStorageValues.keys()]),
+  multiRemove: jest.fn(async (keys: string[]) => { keys.forEach(key => mockAsyncStorageValues.delete(key)); }),
 }));
 jest.mock('../src/services/debugLogger', () => ({
   debugLogger: {
@@ -92,7 +96,7 @@ jest.mock('../src/services/backgroundLocationTask', () => ({
   persistBackgroundContext: jest.fn(async () => true),
 }));
 jest.mock('../src/services/hikeTrackWriter', () => ({
-  appendHikePoint: jest.fn(async () => {}),
+  appendHikePoint: jest.fn(async (point: any) => { mockHikeJournalPoints.push(point); }),
   startHikeTrack: jest.fn(async () => {}),
   updateHikeMeta: jest.fn(async () => {}),
   updateHikeMetaStrict: jest.fn(async () => {}),
@@ -102,7 +106,17 @@ jest.mock('../src/services/hikeTrackWriter', () => ({
   renameToCompleted: jest.fn(async () => {}),
   discardActiveHike: jest.fn(async () => {}),
   readActiveHikeTail: jest.fn(async () => []),
+  readActiveHikeTerminalSnapshot: jest.fn(async (_sessionId: string, options?: {
+    expectedOwnerGeneration?: string; expectedCutoffAt?: number;
+  }) => ({
+    status: 'complete',
+    source: 'active',
+    points: [...mockHikeJournalPoints],
+    ownerGeneration: options?.expectedOwnerGeneration,
+    cutoffAt: options?.expectedCutoffAt ?? Date.now(),
+  })),
   truncateActiveHikeTrack: jest.fn(async () => {}),
+  readHikeTrackForProjection: jest.fn(async () => [...mockHikeJournalPoints]),
 }));
 jest.mock('../src/services/pendingSyncStore', () => ({
   beginPendingPreparation: jest.fn(),
@@ -131,7 +145,7 @@ jest.mock('../src/services/apiService', () => ({
   authenticatedFetch: jest.fn(async () => ({ ok: false })),
 }));
 jest.mock('../src/store/useAppStore', () => ({
-  useAppStore: { getState: jest.fn(() => ({ user: { id: 'tracking-test-user' } })) },
+  useAppStore: { getState: jest.fn(() => ({ isLoggedIn: true, user: { id: 'tracking-test-user' } })) },
 }));
 jest.mock('../src/services/sessionService', () => ({
   startSession: jest.fn(async () => null),
@@ -147,9 +161,17 @@ jest.mock('../src/services/autoPauseMonitor', () => ({
 }));
 
 const { useTrackingStore } = require('../src/store/useTrackingStore');
+const {
+  resetActivityMemoryProjectionForTests,
+  waitForAllActivityMemoryProjections,
+} = require('../src/features/activity/activityMemoryProjector');
 
 describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await waitForAllActivityMemoryProjections();
+    resetActivityMemoryProjectionForTests();
+    mockAsyncStorageValues.clear();
+    mockHikeJournalPoints.length = 0;
     useTrackingStore.setState(useTrackingStore.getInitialState(), true);
     useTrackingStore.setState({
       status: 'tracking',
@@ -200,11 +222,12 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
       ownerGeneration: 'test-owner-generation',
     }, 1_000);
 
-    expect(decision).toMatchObject({ accepted: true, memoryCommitted: true });
+    expect(decision).toMatchObject({ accepted: true, memoryProjectionPending: true });
     expect(useTrackingStore.getState()).toMatchObject({
       status: 'tracking',
       remoteSessionId: null,
     });
+    await waitForAllActivityMemoryProjections();
     expect(recordMemoryEvidence.mock.calls.length).toBe(callsBefore + 1);
     expect(recordMemoryEvidence).toHaveBeenLastCalledWith(expect.objectContaining({
       source: 'activity_real',
@@ -287,10 +310,12 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
 
   it('reacquires from the last accepted anchor even after a recent rejected fix', async () => {
     await useTrackingStore.getState().addTrackPoint({ lat: -41, lng: 174, accuracy: 5 }, 1_000);
+    const qualifiedBeforeOutlier = useTrackingStore.getState().latestSourceCoordinate;
     const rejected = await useTrackingStore.getState().addTrackPoint(
       { lat: -41, lng: 174, accuracy: 60 },
       590_000,
     );
+    expect(useTrackingStore.getState().latestSourceCoordinate).toEqual(qualifiedBeforeOutlier);
     const pending = await useTrackingStore.getState().addTrackPoint(
       { lat: -41.01, lng: 174, accuracy: 5 },
       601_000,
@@ -338,6 +363,7 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
     expect(new Set(state.trackPoints.map((item: any) => item.segmentId))).toHaveProperty('size', 3);
     expect(state.distanceM).toBeGreaterThan(30);
     expect(state.distanceM).toBeLessThan(40);
+    await waitForAllActivityMemoryProjections();
     const memoryCalls = require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence.mock.calls
       .map((call: any[]) => call[0])
       .filter((item: any) => item.source === 'activity_real');
@@ -378,6 +404,7 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
     expect(state.distanceM).toBeGreaterThan(9);
     expect(state.distanceM).toBeLessThan(11);
     expect(decisions.slice(3).every(decision => decision.accepted === false)).toBe(true);
+    await waitForAllActivityMemoryProjections();
     expect(memory.mock.calls.length - memoryCallsBefore).toBe(3);
   });
 
@@ -520,9 +547,14 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAsyncStorageValues.clear();
+    mockHikeJournalPoints.length = 0;
     mockAppStateChangeListener = null;
     require('react-native').AppState.currentState = 'active';
-    require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({ user: { id: 'tracking-test-user' } });
+    require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({
+      isLoggedIn: true,
+      user: { id: 'tracking-test-user' },
+    });
     seedSimulatorActivity();
   });
 
@@ -860,7 +892,10 @@ describe('useTrackingStore — P0 operation guards', () => {
     mockSecureStore.getItemAsync.mockResolvedValue(null);
     require('../src/services/batteryMonitor').batteryMonitor.getCurrentLevel.mockReturnValue(null);
     require('../src/services/batteryMonitor').batteryMonitor.getIsCharging.mockReturnValue(false);
-    require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({ user: { id: 'tracking-test-user' } });
+    require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({
+      isLoggedIn: true,
+      user: { id: 'tracking-test-user' },
+    });
     useTrackingStore.setState(useTrackingStore.getInitialState(), true);
   });
 
@@ -1042,8 +1077,8 @@ describe('useTrackingStore — P0 operation guards', () => {
     const first = useTrackingStore.getState().stopTracking();
     const second = useTrackingStore.getState().stopTracking();
 
-    await expect(second).resolves.toBe(false);
-    await expect(first).resolves.toBe(false);
+    await expect(second).resolves.toBeNull();
+    await expect(first).resolves.toBeNull();
     const { deleteRemoteSession } = require('../src/services/sessionService');
     // Opening Finish on an ineligible Activity preserves the same unfinished
     // Activity and its server mapping until the user explicitly discards it.
@@ -1103,7 +1138,12 @@ describe('useTrackingStore — P0 operation guards', () => {
     } finally {
       releaseFence?.(true);
     }
-    await expect(finishing).resolves.toBe(false);
+    await expect(finishing).resolves.toMatchObject({
+      status: 'recoverable-failure',
+      localCommit: 'not-committed',
+      clientActivityId: 'finish-fence-activity',
+      reason: 'local-commit-failed',
+    });
   });
 
   it('failed Resume acquisition leaves the Activity paused and clears durable native ownership', async () => {
@@ -1213,7 +1253,7 @@ describe('useTrackingStore — P0 operation guards', () => {
       currentSegmentId: 'account-a-segment',
     });
     await useTrackingStore.getState().suspendForUserSwitch();
-    appStore.getState.mockReturnValue({ user: { id: 'account-b' } });
+    appStore.getState.mockReturnValue({ isLoggedIn: true, user: { id: 'account-b' } });
     await useTrackingStore.getState().addTrackPoint({
       lat: -41,
       lng: 174,

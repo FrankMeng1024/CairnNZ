@@ -6,6 +6,8 @@ import {
 } from '../causalLiveRoute';
 import { haversineM } from '../../../utils/geo';
 import type { TrackPoint } from '../../../store/useSessionStore';
+import { performance } from 'node:perf_hooks';
+import os from 'node:os';
 
 const LAT = -41.28;
 const sample = (eastM: number, northM: number, index: number, segmentId = 'a') => ({
@@ -73,6 +75,42 @@ describe('causal Live route presentation', () => {
     });
   });
 
+  test.each([255, 256, 257, 513, 1_025])(
+    'cold replay preserves the exact incrementally frozen presentation at %i points',
+    count => {
+      const split = Math.floor(count * 0.62);
+      const points = Array.from({ length: count }, (_, index) => {
+        const localIndex = index < split ? index : index - split;
+        const segmentId = index < split ? 'out-and-back-a' : 'loop-b';
+        const phase = localIndex / 11;
+        const eastM = index < split
+          ? (localIndex % 80 < 40 ? localIndex % 40 : 40 - (localIndex % 40)) * 2.2
+          : Math.sin(phase) * 45;
+        const northM = index < split
+          ? Math.sin(phase * 1.7) * 5
+          : Math.sin(phase * 2) * 28;
+        return {
+          ...sample(eastM, northM, index, segmentId),
+          t: index < split ? index * 1_100 : 90_000 + index * 1_100,
+          accuracy: 5 + (index % 13),
+        };
+      });
+      let incremental: TrackPoint[] = [];
+      const history: TrackPoint[] = [];
+      for (const point of points) {
+        history.push(point);
+        incremental = appendCausalLivePoint(incremental, point, history);
+      }
+      const recovered = buildCausalLiveRoute(points);
+      expect(recovered).toEqual(incremental);
+      expect(recovered.map(point => point.t)).toEqual(incremental.map(point => point.t));
+      expect(recovered[0]).toBe(points[0]);
+      expect(recovered.at(-1)).toBe(points.at(-1));
+      expect(new Set(recovered.map(point => point.segmentId)))
+        .toEqual(new Set(['out-and-back-a', 'loop-b']));
+    },
+  );
+
   test('never revises display geometry outside the bounded recent tail', () => {
     const points = Array.from({ length: 36 }, (_, index) => ({
       ...sample(index * 2, Math.sin(index * 1.9) * 3.5, index),
@@ -96,5 +134,29 @@ describe('causal Live route presentation', () => {
         expect(travelled).toBeLessThanOrEqual(LIVE_MUTABLE_TAIL_MAX_DISTANCE_M + 0.01);
       }
     }
+  });
+
+  test('replays a 20,000-point recovery history with bounded-tail scaling', () => {
+    const elapsed: Record<number, number> = {};
+    for (const count of [1_000, 5_000, 20_000]) {
+      const history = Array.from({ length: count }, (_, index) => sample(
+        index * 1.1,
+        Math.sin(index / 31) * 2.5,
+        index,
+      ));
+      const startedAt = performance.now();
+      const live = buildCausalLiveRoute(history);
+      elapsed[count] = performance.now() - startedAt;
+      expect(live[0].t).toBe(history[0].t);
+      expect(live.at(-1)?.t).toBe(history.at(-1)?.t);
+    }
+    // A generous ratio catches the former repeated full-route copy/filter
+    // shape without turning normal shared-runner jitter into a false failure.
+    expect(elapsed[20_000]).toBeLessThan(Math.max(2_000, elapsed[5_000] * 8));
+    process.stderr.write(`causal-live-recovery-profile=${JSON.stringify({
+      machine: `${os.platform()} ${os.arch()} ${os.cpus()[0]?.model ?? 'unknown CPU'}`,
+      node: process.version,
+      elapsedMs: elapsed,
+    })}\n`);
   });
 });

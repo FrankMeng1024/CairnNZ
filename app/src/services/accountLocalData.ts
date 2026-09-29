@@ -268,6 +268,21 @@ export async function resumeScheduledDeletedAccountLocalPurge(
 export async function purgeDeletedAccountLocalData(userId: string): Promise<void> {
   const owner = exactOwner(userId);
 
+  // Fence Activity→Memory workers before deleting either repository. The
+  // durable purge marker prevents a late headless intent from resurrecting A.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const memoryProjection = require('../features/activity/activityMemoryProjector');
+  await memoryProjection.purgeActivityMemoryProjectionsForOwner(owner);
+
+  // Fence and await optional Final work before removing its pending payload,
+  // artifact and owner ledger. A late refinement must not recreate deleted
+  // account data after this purge returns.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const refinement = require('../features/activity/activityFinalRefinementQueue');
+    await refinement.cancelAllActivityFinalRefinementsForOwner(owner);
+  } catch { /* a pre-refinement installation has no queue to fence */ }
+
   const routeCacheKey = `@cairn:routes:v1:${owner}`;
   const routeIds: string[] = [];
   const activityIds = new Set<string>();
@@ -332,6 +347,7 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
     `@cairn:offline_routes:v1:${owner}`,
     `@cairn:marker_tombstones:v1:${owner}`,
     `@cairn:activity_registry:v1:${owner}`,
+    `@cairn:activity_final_refinement:index:v1:${owner}`,
     `@cairn:activity_simulator:v1:${owner}`,
     `cairn:memory:tiles:v5:${owner}`,
     `cairn:memory:tiles:recovery-v1:${owner}`,
@@ -354,6 +370,8 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
   const prefixes = [
     `cairn_trackpoints_${owner}_`,
     `@cairn:activity_final:v1:${owner}:`,
+    `@cairn:activity_final_refinement:v1:${owner}:`,
+    `cairn:activity-mapbox-governor:v1:${encodeURIComponent(owner)}:`,
     `@cairn:activity_simulator_logs:v1:${owner}:`,
     `@cairn:activity_simulator_upload:v1:${owner}:`,
     `cairn:memory:fog-display:v3:${owner}:chunk:`,

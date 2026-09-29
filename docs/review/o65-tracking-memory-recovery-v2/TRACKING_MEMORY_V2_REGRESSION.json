@@ -1,0 +1,295 @@
+{
+  "schemaVersion": 1,
+  "status": "NATIVE_BUILD_REQUIRED",
+  "source": {
+    "baseCommit": "44d21258e0bee89e8a3c22c001d58cee816f9f00",
+    "baseAppTree": "c37b40947fcbc4972bb73724b2970d61372ccf92",
+    "immutableBaseTag": "o65-tracking-memory-v2-base",
+    "branch": "codex/o65-tracking-memory-v2",
+    "implementationCommit": "6454988048bad09987f18034f97912dae525b1eb",
+    "marker": "O65",
+    "installedOwnerBuild": 62,
+    "runtime": "0.2.6-o61"
+  },
+  "gates": {
+    "targetedFunctional": "PASS",
+    "expoWebMobile": "PASS",
+    "backendLocal": "PASS",
+    "changedVerifier": "FAIL_ONE_DIAGNOSED_TIMING_ASSERTION",
+    "wholeProjectTypeScript": "FAIL_PRE_EXISTING_REPOSITORY_ERRORS",
+    "nativeDevice": "DEVICE_PENDING",
+    "batteryPhysical": "DEVICE_PENDING",
+    "ownerAcceptance": "NOT_RUN"
+  },
+  "runs": [
+    {
+      "name": "qualified-position-journal-store-continuity",
+      "outcome": "PASS",
+      "suites": [
+        "__tests__/useTrackingStore.test.ts",
+        "src/features/activity/__tests__/activityJournalProjection.test.ts",
+        "src/features/activity/__tests__/freeActivityIntegrationContracts.test.ts",
+        "src/features/activity/__tests__/realGpsContinuity.test.ts"
+      ],
+      "testsPassed": 122,
+      "testsFailed": 0,
+      "notes": "Includes the final sibling-path foreground takeover regression: retained raw queued fixes may update receipt health but cannot move the qualified current coordinate."
+    },
+    {
+      "name": "road-context-refinement-purge-governor",
+      "outcome": "PASS",
+      "testsPassed": 17,
+      "testsFailed": 0,
+      "notes": "Covers local rendered context boundaries, revision queue ownership, account purge, activity-wide limits, retry counting, zero-network phases, and concurrency."
+    },
+    {
+      "name": "final-route-regressions",
+      "outcome": "PASS",
+      "testsPassed": 49,
+      "testsFailed": 0,
+      "notes": "Covers local bad burst, sparse cadence, closed loops, gaps, temporal tracepoint mapping, alternatives, fallback, offline, timeout, NoMatch, rate limit, and obstacle validation."
+    },
+    {
+      "name": "engine-distance-settings",
+      "outcome": "PASS",
+      "testsPassed": 51,
+      "testsFailed": 0,
+      "notes": "Covers distance substitution gates, passive consent/capability, and Activity/Memory settings boundaries."
+    },
+    {
+      "name": "contracts-distance-journal-store",
+      "outcome": "PASS",
+      "testsPassed": 83,
+      "testsFailed": 0,
+      "notes": "Overlaps other targeted runs; totals are deliberately not summed."
+    },
+    {
+      "name": "real-gps-and-raw-pipeline",
+      "outcome": "PASS",
+      "testsPassed": 47,
+      "testsFailed": 0,
+      "notes": "Covers sparse recovery, raw provenance, qualified source, stationary state, and Memory isolation."
+    },
+    {
+      "name": "full-verify-changed",
+      "command": "cd app && npm run verify:changed",
+      "outcome": "FAIL",
+      "testSuitesTotal": 167,
+      "testSuitesPassed": 166,
+      "testSuitesFailed": 1,
+      "testsTotal": 1556,
+      "testsPassed": 1552,
+      "testsFailed": 1,
+      "testsSkipped": 3,
+      "failure": {
+        "suite": "revision03MemoryScale.test.ts",
+        "assertion": "maximum event-loop delay must remain below 150 ms",
+        "observedMs": 156.198726,
+        "instrumentedGeometrySliceMs": 31,
+        "instrumentedSelectSliceMs": 19,
+        "tenThousandTotalMs": 42411.1,
+        "twoThousandOneColdMs": 8784.9,
+        "twoThousandOneIncrementalMs": 204.6
+      },
+      "diagnosis": "Full-suite scheduling/garbage-collection jitter exceeded a six-millisecond frozen margin; all functional suites passed. This failed gate was not retried to green."
+    },
+    {
+      "name": "memory-scale-controlled-isolation",
+      "outcome": "PASS_DIAGNOSTIC_ONLY",
+      "testsPassed": 6,
+      "testsFailed": 0,
+      "parameters": {
+        "logHeapUsage": true,
+        "heapMb": 257
+      },
+      "metrics": {
+        "maximumEventLoopDelayMs": 100.734,
+        "tenThousandTotalMs": 49008.2,
+        "twoThousandOneColdMs": 9968.1,
+        "twoThousandOneIncrementalMs": 226.1,
+        "instrumentedGeometrySliceMs": 72,
+        "instrumentedSelectSliceMs": 23
+      },
+      "notes": "Supports the scheduling-jitter diagnosis; does not replace the failed full-run result."
+    },
+    {
+      "name": "backend-local-regression",
+      "command": "cd backend && node --test src/**/__tests__/*.test.js",
+      "outcome": "PASS",
+      "testsPassed": 109,
+      "testsFailed": 0,
+      "notes": "Used the already-installed dependency tree from the preserved original checkout; temporary linkage was removed. No backend file changed and no deployment occurred."
+    },
+    {
+      "name": "expo-web-mobile-qa",
+      "command": "node app/scripts/tracking-memory-v2-web-qa.mjs",
+      "outcome": "PASS",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "assertions": {
+        "walkedRouteVisibleBeforeSave": true,
+        "localFinalStateCaptured": true,
+        "validatedFinalStateCaptured": true,
+        "nativeBoundaryCaptured": true
+      },
+      "runtimeErrors": [],
+      "evidence": "/tmp/cairnnz-tracking-memory-v2-web/results.json"
+    }
+  ],
+  "mandatoryDefects": [
+    {
+      "id": 1,
+      "name": "finish-result-survives-idle",
+      "outcome": "PASS",
+      "proof": "Hike and Run use ActivityFinishResult; preview, Base, and validated Final remain in the render tree after idle."
+    },
+    {
+      "id": 2,
+      "name": "wal-replay-new-point-both-orders",
+      "outcome": "PASS",
+      "proof": "Monotonic observation identity and post-await rebase cover replay-over-new and new-over-replay interleavings."
+    },
+    {
+      "id": 3,
+      "name": "terminal-stream-start-races-permission-generation",
+      "outcome": "PASS",
+      "proof": "Generation-fenced supervisor tests cover terminal handle invalidation, delayed starts, permission denial, and stale callbacks."
+    },
+    {
+      "id": 4,
+      "name": "sparse-recovery-no-five-second-starvation",
+      "outcome": "PASS",
+      "parameters": {
+        "candidateMaxAgeMs": 20000,
+        "reacquisitionMaxAgeMs": 45000,
+        "recentEvidenceMs": 45000,
+        "cadenceSeconds": [1, 2.5, 5, 8, 15, 21]
+      },
+      "proof": "Credible candidates retain support across sparse cadence and commit on bounded usable evidence."
+    },
+    {
+      "id": 5,
+      "name": "raw-fix-cannot-drive-qualified-puck",
+      "outcome": "PASS",
+      "proof": "Store takeover assertions prove rejected/retained raw receipts cannot replace latestSourceCoordinate."
+    },
+    {
+      "id": 6,
+      "name": "slow-failed-memory-does-not-stall-activity",
+      "outcome": "PASS",
+      "proof": "WAL-first Activity commit and asynchronous durable Memory projection are independently recoverable."
+    },
+    {
+      "id": 7,
+      "name": "passive-background-lifecycle",
+      "outcome": "PASS_CODE_LEVEL_DEVICE_PENDING",
+      "proof": "Duplicate/late start, background/OFF/logout, Activity priority, owner epoch, and top-level task tests pass; native execution needs Build 63+."
+    },
+    {
+      "id": 8,
+      "name": "final-p65-cadence-loop-fallback-crop",
+      "outcome": "PASS",
+      "proof": "Final unit and harness fixtures cover each failure and preserve local Base on missing/unsafe network candidates."
+    },
+    {
+      "id": 9,
+      "name": "too-short-reassessment-no-implicit-discard",
+      "outcome": "PASS",
+      "proof": "Later reassessment returns a recoverable result and does not delete a valid preflight Activity."
+    },
+    {
+      "id": 10,
+      "name": "detail-cache-and-metadata-invalidation",
+      "outcome": "PASS",
+      "proof": "Stable Activity identity plus revision metadata invalidates empty/stale Detail projections."
+    },
+    {
+      "id": 11,
+      "name": "dependency-404-offline-sync-liveness",
+      "outcome": "PASS",
+      "proof": "Pending dependencies, 404 resync, unknown outcome, 401 renewal, and nonexistent legacy subscription export are covered."
+    },
+    {
+      "id": 12,
+      "name": "live-source-animation-seam-lifecycle",
+      "outcome": "PASS_CODE_LEVEL_DEVICE_PENDING",
+      "proof": "Source replacement, style generation, animation cancellation, shared chunk endpoint, and zero duplicate edge tests pass; native layer cleanup remains device-pending."
+    }
+  ],
+  "deterministicMatrices": {
+    "evidenceRoot": "/tmp/cairn_tracking_v2_current",
+    "metadataCaveat": "The rerun harness preserves a static O65 sourceIdentity string. Its puckAndHealth field models an obsolete non-store dependency and is not used as repaired proof.",
+    "statefulJourneys": 26,
+    "stage1Scenarios": 38,
+    "finalLocalFixtures": 44,
+    "mapboxMocks": 8,
+    "finalInteractions": 5,
+    "distanceSeeds": {
+      "calibration": 11,
+      "heldOut": [29, 47],
+      "threshold": "metric error < 3%"
+    },
+    "selectedMetrics": [
+      {
+        "scenario": "correlated_1_5m_wobble",
+        "mode": "hiking",
+        "rawOrCanonicalErrorPct": 16.9,
+        "metricErrorPct": 0.11
+      },
+      {
+        "scenario": "correlated_1_5m_wobble",
+        "mode": "running",
+        "rawOrCanonicalErrorPct": 3.44,
+        "metricErrorPct": 0.11
+      },
+      {
+        "scenario": "temporary_15_25m_drift",
+        "mode": "hiking",
+        "rawOrCanonicalErrorPct": 17.95,
+        "metricErrorPct": 0.11
+      },
+      {
+        "scenario": "temporary_15_25m_drift",
+        "mode": "running",
+        "rawOrCanonicalErrorPct": 4.65,
+        "metricErrorPct": 0.11
+      },
+      {
+        "scenario": "stop_start",
+        "mode": "hiking",
+        "canonicalAndMetricErrorPct": 12.1,
+        "maximumCanonicalLagMs": 16000,
+        "disposition": "DISCLOSED_AMBIGUOUS_LIMIT_NOT_HIDDEN_BY_SUBSTITUTION"
+      },
+      {
+        "scenario": "slow_walk",
+        "mode": "hiking_and_running",
+        "canonicalAndMetricErrorPct": 4.4,
+        "acceptedCanonicalCount": 49,
+        "maximumCanonicalLagMs": 10000,
+        "disposition": "DISCLOSED_AMBIGUOUS_LIMIT"
+      }
+    ],
+    "finalSelectedMetrics": {
+      "isolatedPoorBurst": {
+        "inputPoints": 81,
+        "outputPoints": 16,
+        "spikeRetained": false,
+        "removedTransientSpikes": 1,
+        "maximumRemovedDepthM": 12
+      },
+      "cadenceSecondsExercised": [5, 8, 15, 21],
+      "mockCasesKeepingValidFinal": 8,
+      "syntheticMatchingCallsPerMockTrace": 2,
+      "syntheticDirectionsCallsPerMockTrace": 0
+    }
+  },
+  "artifacts": {
+    "webScreenshots": "/tmp/cairnnz-tracking-memory-v2-web",
+    "gpsMatrix": "/tmp/cairn_tracking_v2_current/GPS_SIMULATION_MATRIX.json",
+    "finalMatrix": "/tmp/cairn_tracking_v2_current/FINAL_SNAP_SIMULATION_MATRIX.json",
+    "committedQaPolicy": "Text and JSON authority are committed; generated screenshots and matrices remain local ignored outputs."
+  }
+}

@@ -34,7 +34,9 @@ describe('Free Activity integration contracts', () => {
     const source = read(`src/screens/${file}`);
     expect(source).toContain('<StopSummarySheet');
     expect(source).toContain('onViewActivity');
-    expect(source).toContain('useSessionStore.getState().sessions.find');
+    expect(source).toMatch(/finishResult(?:\?\.|\.)status (?:===|!==) 'saved-local'/);
+    expect(source).toContain('finishResult.clientActivityId');
+    expect(source).not.toContain('useSessionStore.getState().sessions.find');
     expect(source).toContain('CommonActions.reset');
     expect(source).toContain("{ name: 'Routes', params: { initialTab: 'activities' } }");
     expect(source).toContain("{ name: 'MapHistory', params: { sessionId:");
@@ -81,7 +83,8 @@ describe('Free Activity integration contracts', () => {
     );
     expect(failure).toContain("'Activity not saved'");
     expect(failure).toContain("status: 'paused'");
-    expect(failure).toContain('return false');
+    expect(failure).toContain("status: 'recoverable-failure'");
+    expect(failure).toContain("reason: 'local-commit-failed'");
   });
 
   test('Run Finish confirmation preserves lifecycle instead of pausing and guessing on Cancel', () => {
@@ -208,11 +211,15 @@ describe('Free Activity integration contracts', () => {
     );
     expect(source).not.toContain('drainInterval');
     const foregroundActivation = handoff.indexOf('await activateForegroundSource(expectedIntentEpoch)');
-    const deferredDrain = handoff.indexOf('void drainCommittedBackgroundLocations(false).then');
+    const deferredDrain = handoff.indexOf("void drainCommittedBackgroundLocations('foreground').then");
     expect(foregroundActivation).toBeGreaterThan(0);
     expect(deferredDrain).toBeGreaterThan(foregroundActivation);
     expect(handoff).toContain('providerActivatedFirst: true');
-    expect(source).toContain('await drainCommittedBackgroundLocations(true)');
+    expect(source).toContain("await drainCommittedBackgroundLocations('pause-fence')");
+    expect(source).toContain("await drainCommittedBackgroundLocations('finish-fence')");
+    expect(source).toContain('A queued raw receipt may refresh source-health immediately');
+    expect(source).toContain('latestSourceCoordinate: presentationTail ?');
+    expect(source).not.toContain('lat: retained.latitude');
   });
 
   test('real background ownership refreshes native authorization and never trusts a hardcoded grant', () => {
@@ -269,7 +276,7 @@ describe('Free Activity integration contracts', () => {
       source.indexOf('async function transitionToForegroundSource'),
     );
     expect(foreground.indexOf('await stopRealBackgroundSourceForHandoff()')).toBeLessThan(
-      foreground.indexOf('Location.watchPositionAsync'),
+      foreground.indexOf('nativeRealLocationSupervisor.setConsumer'),
     );
     expect(handoff).toContain('Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)');
     expect(handoff).toContain('await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)');
@@ -294,7 +301,10 @@ describe('Free Activity integration contracts', () => {
     expect(source).toContain('finalGeometryRevision: finalArtifact.revision');
     expect(source).toContain('displayFingerprint: finalArtifact.displayFingerprint');
     expect(source).toContain("algorithmVersion: 'pedestrian-final-v2-base'");
-    expect(source).toContain('!snapRes.stats.displayRefined');
+    // A safe validated local/canonical result may replace Base even when no
+    // network candidate refined the display; displayRefined is descriptive,
+    // not a veto on the chosen fallback.
+    expect(source).not.toContain('!snapRes.stats.displayRefined');
     expect(source).toContain('snapRes.stats.canonicalFallbackDistanceM');
     expect(source).toContain("endpointDecision: 'atomic-canonical-boundary'");
     expect(source).not.toContain('snappedTrackPoints ?? (s.trackPointsSmoothed');
@@ -438,18 +448,18 @@ describe('Free Activity integration contracts', () => {
     const passive = read('src/features/memory/components/PassiveMemoryRecorder.tsx');
     for (const source of [tracking, passive]) expect(source).toContain('recordMemoryEvidence');
     expect(cairns).not.toContain('recordMemoryEvidence');
-    expect(passive).toContain("status !== 'idle'");
+    expect(passive).toContain("status === 'idle' || status === 'paused'");
   });
 
   test('passive exploration defaults off and is independent from Activity capture', () => {
     const settings = read('src/features/memory/store/useMemorySettingsStore.ts');
     const ui = read('src/screens/SettingsScreen.tsx');
-    expect(settings).toMatch(/foregroundAutoUnlockEnabled:\s*false/);
-    expect(settings).toContain('passiveExplorationContractVersion: 3');
+    expect(settings).toMatch(/passiveExplorationEnabled:\s*false/);
+    expect(settings).toContain('passiveExplorationContractVersion: 4');
     expect(settings).not.toContain('recordMode:');
     expect(settings).not.toContain('showFriendOverlay:');
     expect(settings).not.toContain('useH3Fog:');
-    expect(ui).toContain('Explore while Cairn is open');
+    expect(ui).toContain('Explore beyond Activities');
   });
 
   test('background task publishes activation last, clears it first, and requires exact owner identity', () => {
@@ -568,7 +578,8 @@ describe('Free Activity integration contracts', () => {
     );
     expect(loader).toContain('detailTrackSnapshots.current.set(selectedSessionId');
     expect(loader).toContain('detailTrackSnapshots.current.get(selectedSessionId) ?? []');
-    expect(loader).toContain('}, [selectedSessionId, liveSelectedSession?.finalGeometryRevision]);');
+    expect(loader).toContain('liveSelectedSession?.finalGeometryRevision,');
+    expect(loader).toContain('liveSelectedSession?.finalGeometryFingerprint,');
     expect(loader).not.toMatch(/}, \[[^\]]*sessions[^\]]*\]\);/);
   });
 

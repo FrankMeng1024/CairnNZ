@@ -50,7 +50,7 @@ export function ForegroundUnlockManager({ managePassiveGps = false }: { managePa
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('../../../services/bootDiagnostics').markBootPhase('fgum_render_enter');
   } catch {/* ignore */}
-  const enabled = useMemorySettingsStore((s) => s.foregroundAutoUnlockEnabled);
+  const enabled = useMemorySettingsStore((s) => s.passiveExplorationEnabled);
   const userId = useAppStore((s) => s.user?.id ?? null);
   // Require isLoggedIn=true so a cached user object from an expired session
   // cannot hydrate account-scoped screen data under stale auth.

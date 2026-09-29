@@ -156,7 +156,7 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(tracking).toContain("'simulator_test' : 'activity_real'");
     expect(passive).toContain("source: 'simulator_test'");
     expect(passive).toContain("source: 'passive_real'");
-    expect(passive).toContain("status !== 'idle'");
+    expect(passive).toContain("status === 'idle' || status === 'paused'");
     expect(passive).toContain('MAX_ACCEPTABLE_HORIZONTAL_ACCURACY_M');
   });
 

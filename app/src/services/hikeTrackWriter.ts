@@ -50,8 +50,10 @@ export interface HikePoint {
   acc?: number | null;
   alt?: number | null;
   speed?: number | null;
+  speedAccuracy?: number | null;
   vAcc?: number | null;
   course?: number | null;
+  courseAccuracy?: number | null;
   rawOrdinal?: number;
   src?: 'fg' | 'bg' | 'slc' | 'sim';
   conf?: number; // 1=high (GPS), 0.5=low (cell/WiFi), 0=gap fill only
@@ -73,7 +75,9 @@ export interface CanonicalJournalPoint {
   accuracy: number | null;
   verticalAccuracy: number | null;
   speed: number | null;
+  speedAccuracy: number | null;
   course: number | null;
+  courseAccuracy: number | null;
   rawOrdinal?: number;
   source: 'foreground' | 'background' | 'significant-change' | 'simulator';
   clientActivityId: string;
@@ -81,6 +85,44 @@ export interface CanonicalJournalPoint {
   segmentId: string;
   segmentStartReason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
 }
+
+export type HikeTerminalSnapshotUncertainReason =
+  | 'storage-unavailable'
+  | 'terminal-marker-stat-failed'
+  | 'terminal-marker-missing'
+  | 'terminal-marker-read-failed'
+  | 'terminal-marker-invalid'
+  | 'terminal-owner-mismatch'
+  | 'terminal-cutoff-mismatch'
+  | 'truncation-marker-stat-failed'
+  | 'truncation-marker-read-failed'
+  | 'truncation-marker-invalid'
+  | 'journal-stat-failed'
+  | 'journal-missing'
+  | 'journal-read-failed'
+  | 'journal-corrupt-or-partial'
+  | 'journal-session-mismatch'
+  | 'journal-after-terminal-cutoff'
+  | 'bounded-recovery-incomplete';
+
+/**
+ * A Finish caller must never confuse a recoverable prefix with a complete
+ * Activity. `readActiveHikeTail` remains deliberately permissive for the
+ * unfinished-session UI; this result is the fail-closed terminal authority.
+ */
+export type HikeTerminalSnapshot =
+  | {
+    status: 'complete';
+    points: CanonicalJournalPoint[];
+    source: 'active' | 'bounded-recovery';
+    cutoffAt: number;
+    ownerGeneration?: string;
+  }
+  | {
+    status: 'uncertain';
+    recoverablePoints: CanonicalJournalPoint[];
+    reason: HikeTerminalSnapshotUncertainReason;
+  };
 
 export interface JournalEfficiencyMetrics {
   /** Checksummed point records committed, including records in native batches. */
@@ -445,8 +487,10 @@ function toStoredPoint(point: HikePoint | CanonicalJournalPoint): HikePoint {
       acc: canonical.accuracy,
       alt: canonical.alt,
       speed: canonical.speed,
+      speedAccuracy: canonical.speedAccuracy,
       vAcc: canonical.verticalAccuracy,
       course: canonical.course,
+      courseAccuracy: canonical.courseAccuracy,
       rawOrdinal: canonical.rawOrdinal,
       src: canonical.source === 'simulator'
         ? 'sim'
@@ -473,7 +517,9 @@ export function toCanonicalJournalPoint(point: HikePoint, sessionId: string): Ca
     accuracy: point.acc ?? null,
     verticalAccuracy: point.vAcc ?? null,
     speed: point.speed ?? null,
+    speedAccuracy: point.speedAccuracy ?? null,
     course: point.course ?? null,
+    courseAccuracy: point.courseAccuracy ?? null,
     rawOrdinal: point.rawOrdinal,
     source: point.src === 'sim'
       ? 'simulator'
@@ -1012,6 +1058,55 @@ export async function readActiveHikeTail(
   }
 }
 
+/** Strict projection reader spanning the unfinished and completed WAL
+ * locations. Unlike the UI recovery adapter, storage failure is not converted
+ * to an empty Activity: the durable Memory projector must retry rather than
+ * silently declare responsibility complete. */
+export async function readHikeTrackForProjection(
+  sessionId: string,
+): Promise<CanonicalJournalPoint[]> {
+  const fs = await getFs();
+  if (!fs) throw new Error('activity_projection_journal_unavailable');
+  await durableWriteTail.catch(() => {});
+  const paths = [
+    fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl',
+    fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl',
+  ];
+  for (const basePath of paths) {
+    let artifactExists = false;
+    let readable = false;
+    let best = '';
+    let bestCount = -1;
+    for (const path of activeCandidates(basePath)) {
+      let info: any;
+      try { info = await fs.getInfoAsync(path); } catch {
+        throw new Error('activity_projection_journal_stat_failed');
+      }
+      if (!info.exists) continue;
+      artifactExists = true;
+      try {
+        const value = await fs.readAsStringAsync(path);
+        readable = true;
+        const valid: string[] = [];
+        for (const line of value.split('\n')) {
+          if (!line.trim()) continue;
+          const decoded = decodeJournalLine(line);
+          if (!decoded) break;
+          valid.push(line);
+        }
+        if (valid.length > bestCount) {
+          bestCount = valid.length;
+          best = valid.join('\n');
+        }
+      } catch { /* another crash-recovery candidate may remain readable */ }
+    }
+    if (!artifactExists) continue;
+    if (!readable) throw new Error('activity_projection_journal_read_failed');
+    return parseCanonicalJournalLines(best ? best.split('\n') : [], sessionId, true);
+  }
+  throw new Error('activity_projection_journal_missing');
+}
+
 function parseCanonicalJournalLines(
   lines: string[],
   sessionId: string,
@@ -1028,6 +1123,174 @@ function parseCanonicalJournalLines(
       : canonical);
   }
   return points;
+}
+
+type StrictJournalCandidate = {
+  complete: boolean;
+  points: CanonicalJournalPoint[];
+  reason?: Extract<
+    HikeTerminalSnapshotUncertainReason,
+    'journal-corrupt-or-partial' | 'journal-session-mismatch' | 'journal-after-terminal-cutoff'
+  >;
+};
+
+function parseStrictJournalCandidate(
+  content: string,
+  sessionId: string,
+  cutoffAt: number,
+  maximumLines: number | null,
+): StrictJournalCandidate {
+  const rawLines = content.split('\n');
+  const nonEmptyLines = rawLines.filter(line => line.trim().length > 0);
+  const requiredLines = maximumLines === null ? nonEmptyLines.length : maximumLines;
+  const points: CanonicalJournalPoint[] = [];
+  for (let index = 0; index < requiredLines; index += 1) {
+    const line = nonEmptyLines[index];
+    if (line === undefined) {
+      return { complete: false, points, reason: 'journal-corrupt-or-partial' };
+    }
+    const stored = decodeJournalLine(line);
+    if (!stored) return { complete: false, points, reason: 'journal-corrupt-or-partial' };
+    if (typeof stored.clientActivityId === 'string' && stored.clientActivityId !== sessionId) {
+      return { complete: false, points, reason: 'journal-session-mismatch' };
+    }
+    const canonical = toCanonicalJournalPoint(stored, sessionId);
+    if (canonical.t > cutoffAt) {
+      return { complete: false, points, reason: 'journal-after-terminal-cutoff' };
+    }
+    points.push(points.length === 0 && !canonical.segmentStartReason
+      ? { ...canonical, segmentStartReason: 'legacy' }
+      : canonical);
+  }
+  if (maximumLines === null) {
+    // Every append commit ends in a newline. A checksum-valid but unterminated
+    // last row can still be a torn write and is not terminal completeness.
+    if (content.length > 0 && !content.endsWith('\n')) {
+      return { complete: false, points: points.slice(0, -1), reason: 'journal-corrupt-or-partial' };
+    }
+    // Blank lines can only be the one trailing delimiter. Ignoring an interior
+    // blank would make a malformed file look like a complete contiguous WAL.
+    if (rawLines.slice(0, -1).some(line => !line.trim())) {
+      return { complete: false, points, reason: 'journal-corrupt-or-partial' };
+    }
+  }
+  return { complete: true, points };
+}
+
+/**
+ * Read the immutable WAL snapshot owned by a committed Finish fence.
+ *
+ * Unlike unfinished-session recovery this never treats a missing/unreadable
+ * file, a corrupt suffix, or an older `.bak` as an empty/complete Activity.
+ * A crash-safe truncation marker is the only authority that can bound an
+ * auxiliary candidate to a known-complete prefix.
+ */
+export async function readActiveHikeTerminalSnapshot(
+  sessionId: string,
+  options: { expectedOwnerGeneration?: string; expectedCutoffAt?: number } = {},
+): Promise<HikeTerminalSnapshot> {
+  const uncertain = (
+    reason: HikeTerminalSnapshotUncertainReason,
+    recoverablePoints: CanonicalJournalPoint[] = [],
+  ): HikeTerminalSnapshot => ({ status: 'uncertain', reason, recoverablePoints });
+  const fs = await getFs();
+  if (!fs) return uncertain('storage-unavailable');
+  await durableWriteTail.catch(() => {});
+
+  const terminalPath = terminalPathFor(fs, sessionId);
+  let terminalInfo: any;
+  try { terminalInfo = await fs.getInfoAsync(terminalPath); } catch {
+    return uncertain('terminal-marker-stat-failed');
+  }
+  if (!terminalInfo.exists) return uncertain('terminal-marker-missing');
+  let terminalRaw: string;
+  try { terminalRaw = await fs.readAsStringAsync(terminalPath); } catch {
+    return uncertain('terminal-marker-read-failed');
+  }
+  let marker: HikeTerminalMarker;
+  try {
+    const parsed = JSON.parse(terminalRaw);
+    if (parsed?.v !== 1 || parsed.session_id !== sessionId || !Number.isFinite(parsed.cutoff_at)) {
+      return uncertain('terminal-marker-invalid');
+    }
+    marker = parsed as HikeTerminalMarker;
+  } catch {
+    return uncertain('terminal-marker-invalid');
+  }
+  if (options.expectedOwnerGeneration !== undefined
+    && marker.owner_generation !== options.expectedOwnerGeneration) {
+    return uncertain('terminal-owner-mismatch');
+  }
+  if (options.expectedCutoffAt !== undefined && marker.cutoff_at !== options.expectedCutoffAt) {
+    return uncertain('terminal-cutoff-mismatch');
+  }
+
+  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  const truncatePath = truncationPath(activePath);
+  let truncateInfo: any;
+  try { truncateInfo = await fs.getInfoAsync(truncatePath); } catch {
+    return uncertain('truncation-marker-stat-failed');
+  }
+  let maximumLines: number | null = null;
+  if (truncateInfo.exists) {
+    let truncateRaw: string;
+    try { truncateRaw = await fs.readAsStringAsync(truncatePath); } catch {
+      return uncertain('truncation-marker-read-failed');
+    }
+    try {
+      const value = Number(JSON.parse(truncateRaw)?.maximumLines);
+      if (!Number.isInteger(value) || value < 0) return uncertain('truncation-marker-invalid');
+      maximumLines = value;
+    } catch {
+      return uncertain('truncation-marker-invalid');
+    }
+  }
+
+  const paths = maximumLines === null ? [activePath] : activeCandidates(activePath);
+  let anyArtifact = false;
+  let anyReadable = false;
+  let sawStatFailure = false;
+  let bestRecoverable: CanonicalJournalPoint[] = [];
+  let lastReason: StrictJournalCandidate['reason'];
+  for (const path of paths) {
+    let info: any;
+    try { info = await fs.getInfoAsync(path); } catch {
+      sawStatFailure = true;
+      continue;
+    }
+    if (!info.exists) continue;
+    anyArtifact = true;
+    let content: string;
+    try { content = await fs.readAsStringAsync(path); } catch { continue; }
+    anyReadable = true;
+    const parsed = parseStrictJournalCandidate(content, sessionId, marker.cutoff_at, maximumLines);
+    if (parsed.points.length > bestRecoverable.length) bestRecoverable = parsed.points;
+    if (parsed.complete) {
+      return {
+        status: 'complete',
+        points: parsed.points,
+        source: path === activePath ? 'active' : 'bounded-recovery',
+        cutoffAt: marker.cutoff_at,
+        ownerGeneration: marker.owner_generation,
+      };
+    }
+    lastReason = parsed.reason;
+  }
+  if (sawStatFailure) return uncertain('journal-stat-failed', bestRecoverable);
+  if (!anyArtifact) {
+    // A committed zero-line truncation cap is complete even if the snapshot
+    // swap died before creating a replacement file.
+    if (maximumLines === 0) {
+      return {
+        status: 'complete', points: [], source: 'bounded-recovery',
+        cutoffAt: marker.cutoff_at, ownerGeneration: marker.owner_generation,
+      };
+    }
+    return uncertain('journal-missing');
+  }
+  if (!anyReadable) return uncertain('journal-read-failed');
+  if (lastReason) return uncertain(lastReason, bestRecoverable);
+  return uncertain(maximumLines === null ? 'journal-corrupt-or-partial' : 'bounded-recovery-incomplete', bestRecoverable);
 }
 
 /**

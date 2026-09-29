@@ -31,6 +31,177 @@ export interface ActivityStats {
   activeDurationS: number;
 }
 
+export type ActivityDistanceMethod = 'geometry' | 'reported-speed-corroborated';
+
+export interface ActivityDistanceSegmentAccumulator {
+  segmentId: string;
+  first: Pick<TrackPoint, 'lat' | 'lng' | 't'>;
+  previous: Pick<TrackPoint, 'lat' | 'lng' | 't' | 'speed' | 'speedAccuracy'>;
+  geometryDistanceM: number;
+  reportedSpeedDistanceM: number;
+  edgeCount: number;
+  reportedSpeedEdgeCount: number;
+}
+
+export interface ActivityDistanceAccumulator {
+  completedDistanceM: number;
+  active: ActivityDistanceSegmentAccumulator | null;
+}
+
+export interface ActivityDistanceEstimate {
+  distanceM: number;
+  method: ActivityDistanceMethod;
+  geometryDistanceM: number;
+  reportedSpeedDistanceM: number;
+  reportedSpeedCoverage: number;
+  segmentNetProgressM: number;
+}
+
+// Declared before the O65 recovery tuning run. A scalar-speed estimate is
+// allowed to correct positional path inflation only after a useful local
+// sequence supports it. Missing/zero/contradictory speed therefore never
+// vetoes coordinate movement. These are metric semantics only: canonical GPS,
+// Memory, Live and Final geometry stay independent and map-free.
+export const DISTANCE_SPEED_MIN_EDGES = 4;
+export const DISTANCE_SPEED_MIN_COVERAGE = 0.8;
+export const DISTANCE_SPEED_MIN_GEOMETRY_RATIO = 0.8;
+// Do not substitute scalar speed for already-stable geometry. A correction is
+// justified only when it removes at least ~2% of cumulative positional excess.
+export const DISTANCE_SPEED_MAX_GEOMETRY_RATIO = 0.98;
+export const DISTANCE_SPEED_MIN_NET_PROGRESS_RATIO = 0.97;
+const DISTANCE_SPEED_MAX_MPS = 15;
+
+export function createActivityDistanceAccumulator(): ActivityDistanceAccumulator {
+  return { completedDistanceM: 0, active: null };
+}
+
+function chooseSegmentDistance(
+  segment: ActivityDistanceSegmentAccumulator,
+): ActivityDistanceEstimate {
+  const reportedSpeedCoverage = segment.edgeCount > 0
+    ? segment.reportedSpeedEdgeCount / segment.edgeCount
+    : 0;
+  const segmentNetProgressM = haversineM(segment.first, segment.previous);
+  const geometryRatio = segment.geometryDistanceM > 0
+    ? segment.reportedSpeedDistanceM / segment.geometryDistanceM
+    : 0;
+  const speedIsCorroborated = segment.edgeCount >= DISTANCE_SPEED_MIN_EDGES
+    && reportedSpeedCoverage >= DISTANCE_SPEED_MIN_COVERAGE
+    && geometryRatio >= DISTANCE_SPEED_MIN_GEOMETRY_RATIO
+    && geometryRatio <= DISTANCE_SPEED_MAX_GEOMETRY_RATIO
+    && segment.reportedSpeedDistanceM
+      >= segmentNetProgressM * DISTANCE_SPEED_MIN_NET_PROGRESS_RATIO;
+  return {
+    distanceM: speedIsCorroborated
+      ? Math.min(segment.geometryDistanceM, segment.reportedSpeedDistanceM)
+      : segment.geometryDistanceM,
+    method: speedIsCorroborated ? 'reported-speed-corroborated' : 'geometry',
+    geometryDistanceM: segment.geometryDistanceM,
+    reportedSpeedDistanceM: segment.reportedSpeedDistanceM,
+    reportedSpeedCoverage,
+    segmentNetProgressM,
+  };
+}
+
+export function activityDistanceEstimate(
+  accumulator: ActivityDistanceAccumulator,
+): ActivityDistanceEstimate {
+  if (!accumulator.active) {
+    return {
+      distanceM: accumulator.completedDistanceM,
+      method: 'geometry',
+      geometryDistanceM: accumulator.completedDistanceM,
+      reportedSpeedDistanceM: 0,
+      reportedSpeedCoverage: 0,
+      segmentNetProgressM: 0,
+    };
+  }
+  const active = chooseSegmentDistance(accumulator.active);
+  return { ...active, distanceM: accumulator.completedDistanceM + active.distanceM };
+}
+
+function speedEdgeDistanceM(
+  previous: Pick<TrackPoint, 't' | 'speed' | 'speedAccuracy'>,
+  next: Pick<TrackPoint, 't' | 'speed' | 'speedAccuracy'>,
+): number | null {
+  const dtS = (next.t - previous.t) / 1_000;
+  if (dtS <= 0 || dtS > MAX_CREDITABLE_ACTIVE_INTERVAL_MS / 1_000) return null;
+  const speeds = [previous.speed, next.speed];
+  if (!speeds.every(value => (
+    value != null
+    && Number.isFinite(value)
+    && value >= 0
+    && value <= DISTANCE_SPEED_MAX_MPS
+  ))) return null;
+  // When the provider exposes scalar uncertainty, a clearly weak value does
+  // not enter the metric. Absence remains usable only through repeated
+  // geometry/progress corroboration in chooseSegmentDistance.
+  const speedAccuracies = [previous.speedAccuracy, next.speedAccuracy]
+    .filter((value): value is number => value != null && Number.isFinite(value));
+  if (speedAccuracies.some(value => value > 1.5)) return null;
+  return ((Number(speeds[0]) + Number(speeds[1])) / 2) * dtS;
+}
+
+export function appendActivityDistancePoint(
+  accumulator: ActivityDistanceAccumulator,
+  rawPoint: TrackPoint,
+): ActivityDistanceAccumulator {
+  const point = rawPoint as SegmentedTrackPoint;
+  const segmentId = point.segmentId || 'legacy-0';
+  const previousSegment = accumulator.active;
+  if (!previousSegment || previousSegment.segmentId !== segmentId) {
+    const completedDistanceM = previousSegment
+      ? accumulator.completedDistanceM + chooseSegmentDistance(previousSegment).distanceM
+      : accumulator.completedDistanceM;
+    return {
+      completedDistanceM,
+      active: {
+        segmentId,
+        first: { lat: point.lat, lng: point.lng, t: point.t },
+        previous: {
+          lat: point.lat,
+          lng: point.lng,
+          t: point.t,
+          speed: point.speed,
+          speedAccuracy: point.speedAccuracy,
+        },
+        geometryDistanceM: 0,
+        reportedSpeedDistanceM: 0,
+        edgeCount: 0,
+        reportedSpeedEdgeCount: 0,
+      },
+    };
+  }
+  if (point.t <= previousSegment.previous.t) return accumulator;
+  const speedDistanceM = speedEdgeDistanceM(previousSegment.previous, point);
+  return {
+    completedDistanceM: accumulator.completedDistanceM,
+    active: {
+      ...previousSegment,
+      previous: {
+        lat: point.lat,
+        lng: point.lng,
+        t: point.t,
+        speed: point.speed,
+        speedAccuracy: point.speedAccuracy,
+      },
+      geometryDistanceM: previousSegment.geometryDistanceM
+        + haversineM(previousSegment.previous, point),
+      reportedSpeedDistanceM: previousSegment.reportedSpeedDistanceM
+        + (speedDistanceM ?? 0),
+      edgeCount: previousSegment.edgeCount + 1,
+      reportedSpeedEdgeCount: previousSegment.reportedSpeedEdgeCount
+        + (speedDistanceM === null ? 0 : 1),
+    },
+  };
+}
+
+export function buildActivityDistanceAccumulator(
+  points: ReadonlyArray<TrackPoint>,
+): ActivityDistanceAccumulator {
+  return points.reduce(appendActivityDistancePoint, createActivityDistanceAccumulator());
+}
+
 /**
  * Activity time belongs to the lifecycle, not to GPS geometry. The accumulated
  * portion is frozen at Pause; while Tracking, the provider clock contributes
@@ -279,7 +450,8 @@ export function segmentTrace(points: ReadonlyArray<TrackPoint>): SegmentedTrace 
 }
 
 export function calculateActivityStats(points: ReadonlyArray<TrackPoint>): ActivityStats {
-  let distanceM = 0;
+  const distanceAccumulator = buildActivityDistanceAccumulator(points);
+  const distanceM = activityDistanceEstimate(distanceAccumulator).distanceM;
   let legacyElevationGainM = 0;
   let activeDurationMs = 0;
   const normalized = points.map((point) => ({
@@ -293,7 +465,6 @@ export function calculateActivityStats(points: ReadonlyArray<TrackPoint>): Activ
     if (previous.segmentId !== next.segmentId) continue;
     const dtMs = next.t - previous.t;
     if (dtMs <= 0) continue;
-    distanceM += haversineM(previous, next);
     // Segment assignment is the continuity authority. Once two points are in
     // the same real segment, their full interval is active time; time alone
     // must not silently subtract duration. Untrusted intervals are represented

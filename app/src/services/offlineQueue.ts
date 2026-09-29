@@ -28,8 +28,10 @@
  *     times (impossible by UI), the first wins. Fine.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState, type AppStateStatus } from 'react-native';
 import { authenticatedFetch } from './apiService';
 import { crashLogger } from './crashLogger';
+import networkMonitor from './networkMonitor';
 
 const STORAGE_KEY = '@cairn:offline_queue:v1';
 type OfflineOpKind =
@@ -402,6 +404,45 @@ export async function drain(expectedOwnerUserId: string): Promise<void> {
       void drain(nextOwner);
     }
   }
+}
+
+function currentOfflineQueueOwner(): string {
+  try {
+    // Lazy ownership lookup avoids binding a persisted queue to whichever
+    // account happened to be active when the root listener was installed.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return String(require('../store/useAppStore').useAppStore.getState().user?.id ?? '');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Install the legacy incremental-queue liveness wakes used by App root.
+ * Every wake resolves the current account afresh; an account switch can never
+ * replay A's operation with B's authorization. The returned disposer owns both
+ * subscriptions and makes StrictMode/remount cleanup explicit.
+ */
+export function subscribeOfflineQueueDrains(): () => void {
+  let disposed = false;
+  const wake = () => {
+    if (disposed) return;
+    const ownerUserId = currentOfflineQueueOwner();
+    if (ownerUserId && ownerUserId !== 'guest') void drain(ownerUserId).catch(() => {});
+  };
+  const unsubscribeNetwork = networkMonitor.onChange(state => {
+    if (state.state === 'online') wake();
+  });
+  const appStateSubscription = AppState.addEventListener('change', (next: AppStateStatus) => {
+    if (next === 'active') wake();
+  });
+  wake();
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    unsubscribeNetwork();
+    appStateSubscription.remove();
+  };
 }
 
 /** Remove obsolete incremental chunks only after the full atomic Save ACKs. */

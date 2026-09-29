@@ -55,12 +55,17 @@ import {
 import {
   reconstructPedestrianFinalRoute,
 } from '../services/routing/pedestrianFinalRoute';
+import { createActivityMapboxRequestGovernor } from '../services/routing/activityRequestGovernor';
 import {
   activityGeometryFingerprint,
   buildBaseFinalTrackPoints,
   commitActivityFinalArtifact,
   type ActivityFinalArtifact,
 } from '../features/activity/activityFinalArtifact';
+import {
+  enqueueActivityFinalRefinement,
+  resumeActivityFinalRefinement,
+} from '../features/activity/activityFinalRefinementQueue';
 import {
   BACKGROUND_LOCATION_TASK,
   registerBackgroundTask,
@@ -71,8 +76,12 @@ import {
 } from '../services/backgroundLocationTask';
 import { reconcileActivityContinuityAfterJournal } from '../features/activity/activityContinuityReconciliation';
 import {
+  activityDistanceEstimate,
+  appendActivityDistancePoint,
+  buildActivityDistanceAccumulator,
   calculateLifecycleDurationMs,
   calculateActivityStats,
+  createActivityDistanceAccumulator,
   isCredibleMotionSample,
   MAX_ACCEPTABLE_HORIZONTAL_ACCURACY_M,
   MAX_CREDITABLE_ACTIVE_INTERVAL_MS,
@@ -84,6 +93,7 @@ import {
   toServerPoint,
   type SegmentedTrackPoint,
   type SegmentStartReason,
+  type ActivityDistanceAccumulator,
 } from '../features/activity/activityContracts';
 import {
   refreshBackgroundAuthorization,
@@ -158,13 +168,28 @@ import {
 import {
   planRealLocationLifecycleTransition,
 } from '../features/activity/activityLocationLifecycle';
+import { nativeRealLocationSupervisor } from '../features/activity/nativeRealLocationSupervisor';
 import {
   ACTIVITY_FOREGROUND_RECOVERY_GRACE_MS,
   deriveActivityLocationHealth,
 } from '../features/activity/activityLocationHealth';
 import type { ActivityTransitionState } from '../features/activity/activityOperationalState';
 import { appendCausalLivePoint } from '../features/activity/causalLiveRoute';
-import { projectActivityJournal } from '../features/activity/activityJournalProjection';
+import {
+  mergeActivityCanonicalPoints,
+  projectAcceptedActivityPointsFromCheckpoint,
+  projectActivityJournalCooperatively,
+  rebaseActivityJournalProjection,
+} from '../features/activity/activityJournalProjection';
+import {
+  activityFinishResultFromSession,
+  type ActivityFinishResult,
+} from '../features/activity/activityFinishResult';
+import {
+  cancelActivityMemoryProjection,
+  reconcileActivityMemoryProjection,
+  scheduleActivityMemoryProjection,
+} from '../features/activity/activityMemoryProjector';
 import {
   flushActivityRoutePrefix,
   resetActivityRouteFlush,
@@ -832,6 +857,9 @@ export interface ActivityLocationAcceptance {
   segmentId?: string | null;
   memoryCommitted?: boolean;
   memoryDeduplicated?: boolean;
+  /** Accepted Activity WAL is durable; Memory projection continues on its
+   * independent bounded replay worker and cannot stall source ingestion. */
+  memoryProjectionPending?: boolean;
 }
 
 export interface ActivityCoordinate extends Coordinate {
@@ -884,6 +912,9 @@ interface TrackingState {
   /** Provider-clock start of the open tracking interval; null while paused. */
   activeDurationStartedAtMs: number | null;
   distanceM: number;
+  /** Map-independent metric accumulator. Canonical evidence remains intact;
+   * this only prevents corroborated lateral GPS wobble inflating distance. */
+  distanceAccumulator: ActivityDistanceAccumulator;
   elevationGainM: number;
   trackPoints: TrackPoint[];
   /** Causal accepted display geometry. Real GPS stays within a small envelope
@@ -979,7 +1010,7 @@ interface TrackingState {
   stopTracking: (
     sessionName?: string,
     onLocalCommitted?: (clientActivityId: string) => void,
-  ) => Promise<boolean>;
+  ) => Promise<ActivityFinishResult | null>;
   pauseTracking: () => Promise<void>;
   resumeTracking: () => Promise<boolean>;
   addTrackPoint: (coord: ActivityCoordinate, timestamp?: number) => Promise<ActivityLocationAcceptance>;
@@ -1034,6 +1065,7 @@ const initialState = {
   activeDurationAccumulatedMs: 0,
   activeDurationStartedAtMs: null,
   distanceM: 0,
+  distanceAccumulator: createActivityDistanceAccumulator(),
   elevationGainM: 0,
   trackPoints: [],
   trackPointsSmoothed: [],
@@ -1204,6 +1236,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       trackPointsSmoothed: [],
       trackPointsRaw: [],
       distanceM: 0,
+      distanceAccumulator: createActivityDistanceAccumulator(),
       durationS: 0,
       activeDurationAccumulatedMs: 0,
       activeDurationStartedAtMs: null,
@@ -1430,6 +1463,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 lng: point.lng,
                 alt: point.alt ?? null,
                 acc: point.acc ?? null,
+                vAcc: point.v_acc ?? null,
+                speed: point.speed_mps ?? null,
+                speedAccuracy: point.speed_accuracy_mps ?? null,
+                course: point.course_deg ?? null,
+                courseAccuracy: point.course_accuracy_deg ?? null,
                 src: 'slc',
                 conf: 1,
                 clientActivityId: existing.clientActivityId,
@@ -1918,10 +1956,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
   stopTracking: async (sessionName?: string, onLocalCommitted?: (clientActivityId: string) => void) => {
     let stopEntry = get();
-    if (stopEntry.status === 'idle' || stopEntry.isFinishing) return false;
+    if (stopEntry.status === 'idle' || stopEntry.isFinishing) return null;
     const finishOwnerUserId = String(stopEntry.ownerUserId ?? '');
     if (!finishOwnerUserId || String(useAppStore.getState().user?.id ?? '') !== finishOwnerUserId) {
-      return false;
+      return null;
     }
     // Decide whether Finish is eligible before changing any lifecycle intent,
     // timer, app-state subscription, native location source, or durable lease.
@@ -1958,7 +1996,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     if (tooShort) {
       crashLogger.breadcrumb(`session:stop:too-short pts=${finishCandidate.trackPoints.length} dist=${finishCandidate.distanceM.toFixed(1)}m — recording remains live`);
       set({ lastStopReason: 'too-short' });
-      return false;
+      return null;
     }
     // The preflight can await an in-flight Pause/Resume and a durable journal
     // projection. Rebind every subsequent fence to the now-current owner
@@ -1967,7 +2005,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     stopEntry = get();
     if (stopEntry.status === 'idle' || stopEntry.isFinishing || !stopEntry.sessionId
       || stopEntry.sessionId !== finishCandidate.sessionId
-      || String(stopEntry.ownerUserId ?? '') !== finishOwnerUserId) return false;
+      || String(stopEntry.ownerUserId ?? '') !== finishOwnerUserId) return null;
     // Finish supersedes a pending Pause/Resume. Those tasks must not publish a
     // late lifecycle result after this point.
     activityLifecycleTransitionEpoch += 1;
@@ -2031,7 +2069,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         'Activity not saved',
         'CairnNZ could not safely close the recording journal. Your Activity is still available; please try Finish again.',
       );
-      return false;
+      return null;
     }
     if (frozenLifecycle && stopEntry.sessionId) {
       // Finish is already an acceptance fence. Persist the frozen lifecycle
@@ -2095,15 +2133,60 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         coordinateSource: 'none',
       });
     }
-    const drainedBeforeFinish = stopEntry.locationProviderSource === 'real'
-      ? await drainCommittedBackgroundLocations(true)
-      : 0;
-    // Include every foreground fix whose acceptance pipeline began before
-    // Finish froze new ingestion. Each such fix reaches disk and store state
-    // before the completion snapshot below is calculated. This reconciliation
-    // is intentionally unbounded: timing out a durable WAL append and then
-    // deleting its journal would truncate the route's historical tail.
-    await pointIngestTail;
+    let drainedBeforeFinish = 0;
+    try {
+      drainedBeforeFinish = stopEntry.locationProviderSource === 'real'
+        ? await drainCommittedBackgroundLocations('finish-fence')
+        : 0;
+      // Include every foreground fix whose acceptance pipeline began before
+      // Finish froze new ingestion. Each such fix reaches disk and store state
+      // before the completion snapshot below is calculated. This reconciliation
+      // is intentionally unbounded: timing out a durable WAL append and then
+      // deleting its journal would truncate the route's historical tail.
+      await pointIngestTail;
+    } catch (reconciliationError) {
+      // The terminal WAL snapshot is Save authority. Never continue with the
+      // already-eligible mounted prefix when its newer durable tail could not
+      // be read/projected or assigned downstream Memory responsibility.
+      let released = false;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { releaseHikeTrackFinishSeal } = require('../services/hikeTrackWriter');
+        released = await releaseHikeTrackFinishSeal(
+          stopEntry.sessionId,
+          stopEntry.liveOwnerGeneration ?? undefined,
+        );
+      } catch { /* the sealed journal remains recovery authority */ }
+      acceptanceFenceCutoffMs = null;
+      finishAcceptanceSnapshotClosed = false;
+      set({
+        status: 'paused',
+        transitionState: 'idle',
+        isFinishing: false,
+        lastStopReason: null,
+        savingHikeStep: null,
+        locationAvailable: false,
+      });
+      await updateUnfinishedActivity(finishOwnerUserId, stopEntry.sessionId, {
+        activeDurationMs: get().activeDurationAccumulatedMs,
+        activeSinceMs: null,
+      }).catch(() => false);
+      crashLogger.breadcrumb(
+        `activity:finish_reconciliation_failed released=${released} ${String(reconciliationError).slice(0, 80)}`,
+      );
+      Alert.alert(
+        'Activity not saved',
+        released
+          ? 'CairnNZ could not read the complete recording journal. Your Activity remains paused so you can try Finish again.'
+          : 'CairnNZ preserved the recording, but could not reopen its journal safely. Close and reopen CairnNZ before choosing Resume or Save.',
+      );
+      return {
+        status: 'recoverable-failure',
+        localCommit: 'not-committed',
+        clientActivityId: stopEntry.sessionId,
+        reason: 'evidence-reconciliation-failed',
+      };
+    }
     finishAcceptanceSnapshotClosed = true;
     acceptanceFenceCutoffMs = null;
     recordSavePhase('finish_reconciliation', saveTimelineStartedAt, {
@@ -2153,6 +2236,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     let cleanupAfterRename = false;
     let durableSaveCommitted = false;
     let serverSaveAcknowledged = false;
+    let finishResult: ActivityFinishResult | null = null;
     let localCommitNotified = false;
     let stopReason: 'saved' | 'saved_pending' | 'too-short' | null = null;
     const notifyLocalCommit = (clientActivityId: string) => {
@@ -2252,21 +2336,37 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         s.trackPoints,
         s.distanceM,
       ).eligible) {
-        const remoteId = s.remoteSessionId;
-        if (remoteId) {
-          // v449: inspect boolean return (deleteRemoteSession never throws)
-          const ok = await deleteRemoteSession(remoteId);
-          if (!ok) {
-            try {
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              const { log } = require('../services/appLog');
-              log('v449.stop.shell_delete_failed_post', { remoteId });
-            } catch { /* ignore */ }
-          }
-        }
-        crashLogger.breadcrumb(`session:stop:too-short pts=${s.trackPoints.length} dist=${s.distanceM.toFixed(1)}m — discarded`);
-        stopReason = 'too-short';
-        // Fall through to reset() below; do NOT call addSession.
+        // Eligibility was already proven before the terminal fence. A later
+        // in-memory projection must never turn that valid recording into an
+        // implicit discard. Reopen the exact sealed WAL as a paused,
+        // recoverable Activity and require an explicit retry.
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { releaseHikeTrackFinishSeal } = require('../services/hikeTrackWriter');
+          await releaseHikeTrackFinishSeal(s.sessionId, s.liveOwnerGeneration ?? undefined);
+        } catch { /* paused recovery still retains the sealed evidence */ }
+        finishAcceptanceSnapshotClosed = false;
+        set({
+          status: 'paused',
+          transitionState: 'idle',
+          isFinishing: false,
+          lastStopReason: null,
+          savingHikeStep: null,
+        });
+        await updateUnfinishedActivity(ownerUserId, s.sessionId, {
+          activeDurationMs: s.activeDurationAccumulatedMs,
+          activeSinceMs: null,
+        }).catch(() => false);
+        Alert.alert(
+          'Activity needs review',
+          'The saved evidence changed while CairnNZ was closing the recording. Your Activity is preserved and paused; try Finish again.',
+        );
+        return {
+          status: 'recoverable-failure',
+          localCommit: 'not-committed',
+          clientActivityId: s.sessionId,
+          reason: 'eligibility-changed',
+        };
       } else {
       const remoteId = s.remoteSessionId;
       const endedAt = activityTimestampForSource(
@@ -2299,6 +2399,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         crashLogger.breadcrumb(`activity:finish_uuid_fallback ${String(uuidError).slice(0, 60)}`);
       }
       let finalArtifact: ActivityFinalArtifact | null = null;
+      let asynchronousRefinementOwnsFinal = false;
 
       // Hold the outbox before the Base snapshot exists. The same
       // idempotency key must never escape with two different payloads.
@@ -2379,7 +2480,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           name: finalName,
           memoryNewCells: 0,
           syncState: 'pending',
-          finalGeometryState: 'base_ready',
+          finalGeometryState: 'refining',
           finalGeometryVersion: 'pedestrian-final-v2-base',
           finalGeometryRevision: finalArtifact.revision,
           finalGeometryFingerprint: finalArtifact.displayFingerprint,
@@ -2414,11 +2515,103 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           qaSessionId: realActivityQaSessionId,
           coordinateSource: 'none',
         });
+        // This is the locally saved outcome. Optional Mapbox work now owns a
+        // separate durable revision job; Finish UI can render this validated
+        // Base immediately while the outbox remains fenced on one payload.
+        durableSaveCommitted = true;
+        finishResult = activityFinishResultFromSession({
+          id: s.sessionId,
+          clientActivityId: s.sessionId,
+          remoteId: remoteId ?? undefined,
+          serverActivityId: remoteId ?? undefined,
+          activityMode: s.activityMode,
+          regionCode: region.code,
+          startedAt: s.startedAt,
+          endedAt,
+          durationS: finalDurationS,
+          distanceM: finalStats.distanceM,
+          elevationGainM: finalStats.elevationGainM,
+          trackPoints: finalArtifact.points,
+          markerIds: s.markerIds,
+          name: finalName,
+          memoryNewCells: 0,
+          syncState: 'pending',
+          finalGeometryState: 'refining',
+          finalGeometryVersion: finalArtifact.algorithmVersion,
+          finalGeometryRevision: finalArtifact.revision,
+          finalGeometryFingerprint: finalArtifact.displayFingerprint,
+        });
+        notifyLocalCommit(s.sessionId);
+        asynchronousRefinementOwnsFinal = true;
+        try {
+          await enqueueActivityFinalRefinement({
+            ownerUserId,
+            clientActivityId: s.sessionId,
+            baseArtifact: finalArtifact,
+          });
+          void resumeActivityFinalRefinement(ownerUserId, s.sessionId).catch(error => {
+            crashLogger.breadcrumb(`activity:final_refinement_async_failed ${String(error).slice(0, 80)}`);
+          });
+        } catch (queueError) {
+          // Queue durability failed, but the Base Activity is already safe.
+          // Release exactly that payload and make the limitation explicit.
+          await pendingSyncStore.markPendingUploadReady(s.sessionId);
+          pendingSyncStore.finishPendingPreparation(s.sessionId);
+          await useSessionStore.getState().addSession({
+            id: s.sessionId,
+            clientActivityId: s.sessionId,
+            remoteId: remoteId ?? undefined,
+            serverActivityId: remoteId ?? undefined,
+            activityMode: s.activityMode,
+            regionCode: region.code,
+            startedAt: s.startedAt,
+            endedAt,
+            durationS: finalDurationS,
+            distanceM: finalStats.distanceM,
+            elevationGainM: finalStats.elevationGainM,
+            trackPoints: finalArtifact.points,
+            markerIds: s.markerIds,
+            name: finalName,
+            memoryNewCells: 0,
+            syncState: 'pending',
+            finalGeometryState: 'base_ready',
+            finalGeometryVersion: finalArtifact.algorithmVersion,
+            finalGeometryRevision: finalArtifact.revision,
+            finalGeometryFingerprint: finalArtifact.displayFingerprint,
+          }, ownerUserId);
+          if (finishResult) finishResult = { ...finishResult, finalGeometryState: 'base_ready' };
+          crashLogger.breadcrumb(`activity:final_refinement_queue_unavailable ${String(queueError).slice(0, 80)}`);
+        }
       } catch (baseCommitError) {
         crashLogger.breadcrumb(`activity:base_local_commit_failed ${String(baseCommitError).slice(0, 80)}`);
         const recovery = await resolveFailedLocalFinish();
         if (recovery === 'committed') {
           crashLogger.breadcrumb('activity:base_local_commit_rolled_forward');
+          const recoveredSession = useSessionStore.getState().sessions.find(item => (
+            item.clientActivityId === s.sessionId || item.id === s.sessionId
+          ));
+          finishResult = activityFinishResultFromSession(recoveredSession ?? {
+            id: s.sessionId,
+            clientActivityId: s.sessionId,
+            remoteId: remoteId ?? undefined,
+            serverActivityId: remoteId ?? undefined,
+            activityMode: s.activityMode,
+            regionCode: region.code,
+            startedAt: s.startedAt,
+            endedAt,
+            durationS: finalDurationS,
+            distanceM: finalStats.distanceM,
+            elevationGainM: finalStats.elevationGainM,
+            trackPoints: baseFinalTrackPoints,
+            markerIds: s.markerIds,
+            name: finalName,
+            syncState: 'pending',
+            finalGeometryState: 'base_ready',
+            finalGeometryVersion: 'pedestrian-final-v2-base',
+            finalGeometryRevision: 1,
+            finalGeometryFingerprint: activityGeometryFingerprint(baseFinalTrackPoints),
+          });
+          asynchronousRefinementOwnsFinal = true;
         } else {
           Alert.alert(
             'Activity not saved',
@@ -2434,9 +2627,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             lastStopReason: null,
             savingHikeStep: null,
           });
-          return false;
+          return {
+            status: 'recoverable-failure',
+            localCommit: 'not-committed',
+            clientActivityId: s.sessionId,
+            reason: 'local-commit-failed',
+          };
         }
       }
+      if (asynchronousRefinementOwnsFinal) {
+        stopReason = 'saved_pending';
+        recordSavePhase('async_final_scheduled', baseCommitStartedAt, {
+          baseRevision: finalArtifact?.revision ?? null,
+          outboxState: 'preparing',
+        });
+      } else {
       // v404: final-flush 提前跑（还是 fire-and-forget，只推增量 tail）。
       // 不含 finalize —— finalize 挪到 snap 完成之后，才能带上 snapped
       // route_points。
@@ -2472,6 +2677,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       try {
         const mapboxAuthority = await resolveMapboxPublicTokenAuthority();
         const mapboxToken = mapboxAuthority.token;
+        const mapboxRequestGovernor = createActivityMapboxRequestGovernor({
+          ownerUserId,
+          clientActivityId: s.sessionId,
+          startedAtMs: s.startedAt,
+          recordedDurationMs: finalDurationS * 1_000,
+        });
         let hikeSource: TrackPoint[] = s.trackPoints;
         const sourceSegments = canonicalSegments;
         // Matching is a bounded presentation refinement. A slightly larger
@@ -2544,11 +2755,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 mapboxToken,
                 totalTimeoutMs: remainingBudgetMs,
                 perCallTimeoutMs: Math.min(2_600, remainingBudgetMs),
+                concurrency: 2,
+                maxDirectionsRequests: 2,
+                requestGovernor: mapboxRequestGovernor,
+                requestPhase: 'final',
+                requestReason: 'finish-qualified-unresolved-corridor',
               });
-              if (!snapRes.ok || snapRes.points.length < 2 || !snapRes.stats.displayRefined) {
+              if (!snapRes.ok || snapRes.points.length < 2) {
                 const fallbackReason = 'reason' in snapRes
                   ? snapRes.reason
-                  : (snapRes.points.length < 2 ? 'too-few-result-points' : 'no-derived-islands');
+                  : 'too-few-result-points';
                 appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_map_matching_raw_fallback', {
                   segmentIndex,
                   rawPointCount: segment.length,
@@ -2699,6 +2915,20 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             : matchedSegmentCount === eligibleSegmentCount && !hybridSnapUsed
               ? 'enhanced'
               : 'limited_evidence';
+          const governedUsage = await mapboxRequestGovernor.snapshot();
+          appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_mapbox_governor_snapshot', {
+            ...governedUsage,
+            liveNetworkPolicy: 'zero-current-implementation',
+            passiveNetworkRequests: governedUsage.passiveInvocations,
+            previewNetworkRequests: governedUsage.previewInvocations,
+            reloadNetworkRequests: governedUsage.reloadInvocations,
+            maximumConcurrentRequests: 2,
+          }, {
+            userId: ownerUserId,
+            clientActivityId: s.sessionId,
+            qaSessionId: realActivityQaSessionId,
+            coordinateSource: 'none',
+          });
         } else if (!mapboxToken) {
           appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_map_matching_unavailable', {
             reason: 'public-token-unavailable',
@@ -2937,6 +3167,28 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         await pendingSyncStore.markPendingUploadReady(s.sessionId);
         pendingSyncStore.finishPendingPreparation(s.sessionId);
         durableSaveCommitted = true;
+        finishResult = activityFinishResultFromSession({
+          id: s.sessionId,
+          clientActivityId: s.sessionId,
+          remoteId: remoteId ?? undefined,
+          serverActivityId: remoteId ?? undefined,
+          activityMode: s.activityMode,
+          regionCode: region.code,
+          startedAt: s.startedAt,
+          endedAt,
+          durationS: finalDurationS,
+          distanceM: finalStats.distanceM,
+          elevationGainM: finalStats.elevationGainM,
+          trackPoints: finalDisplayTrackPoints,
+          markerIds: s.markerIds,
+          name: finalName,
+          memoryNewCells,
+          syncState: 'pending',
+          finalGeometryState,
+          finalGeometryVersion: 'pedestrian-final-v2-base',
+          finalGeometryRevision: finalArtifact.revision,
+          finalGeometryFingerprint: finalArtifact.displayFingerprint,
+        });
         recordSavePhase('local_durable_completion', durableCommitStartedAt, {
           syncState: 'pending',
         });
@@ -2966,7 +3218,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           lastStopReason: null,
           savingHikeStep: null,
         });
-        return false;
+        return {
+          status: 'recoverable-failure',
+          localCommit: 'not-committed',
+          clientActivityId: s.sessionId,
+          reason: 'local-commit-failed',
+        };
         }
       }
 
@@ -3035,6 +3292,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           );
           if (!sessionMarked || !registryMarked) throw new Error('activity_ack_persistence_failed');
           serverSaveAcknowledged = true;
+          if (finishResult) finishResult = { ...finishResult, syncState: 'synced' };
           recordSavePhase('server_ack_persistence', serverAckPersistenceStartedAt, {
             acknowledged: true,
           });
@@ -3224,6 +3482,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           stopReason,
         });
       } catch { /* log unavailable */ }
+      }
       } // end too-short guard
       } catch (outerErr) {
         // A broad failure before the durable product commit must never be
@@ -3262,7 +3521,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               lastStopReason: null,
               savingHikeStep: null,
             });
-            return false;
+            return {
+              status: 'recoverable-failure',
+              localCommit: 'not-committed',
+              clientActivityId: s.sessionId,
+              reason: 'local-commit-failed',
+            };
           }
         }
         stopReason = serverSaveAcknowledged ? 'saved' : 'saved_pending';
@@ -3414,13 +3678,19 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
     finishAcceptanceSnapshotClosed = false;
     await clearActivityRouteReferenceAfterTerminal('finished');
+    if (!finishResult && durableSaveCommitted && s.sessionId) {
+      const committedSession = useSessionStore.getState().sessions.find(item => (
+        item.clientActivityId === s.sessionId || item.id === s.sessionId
+      ));
+      if (committedSession) finishResult = activityFinishResultFromSession(committedSession);
+    }
     set((prev) => ({
       ...initialState,
       lastStopReason: stopReason,
       saveLostSessionId: prev.saveLostSessionId,
       saveLostPayload: prev.saveLostPayload,
     }));
-    return true;
+    return finishResult;
   },
 
   pauseTracking: () => {
@@ -3458,7 +3728,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // Every headless sample that crossed the durable lease before Pause is
       // journal authority. Project that fenced tail into the paused snapshot
       // once; there is no 1 s polling timer and no point is silently dropped.
-      await drainCommittedBackgroundLocations(true);
+      await drainCommittedBackgroundLocations('pause-fence');
     } else {
       deactivateBackgroundSource();
       drainBackgroundLocations();
@@ -3925,9 +4195,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         return reject('non-monotonic-timestamp');
       }
       if (!isSimulatorSample || isRawGpsSimulatorSample) {
-        // Puck/camera presentation consumes the owned raw Expo stream without
-        // waiting for reducer + WAL latency. Canonical route truth is still
-        // published only after the journal commit below.
+        // Receipt freshness is source health, not position authority. The
+        // qualified puck feed is updated only after continuity evaluation
+        // below, so a fresh broad-accuracy/implausible raw fix cannot teleport
+        // the map while still being rejected from canonical truth.
         set(state => state.sessionId === before.sessionId
           && state.liveOwnerGeneration === before.liveOwnerGeneration
           ? {
@@ -3939,7 +4210,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 || owned.source === 'significant-change'
                 ? state.foregroundRecoveryUntilMs
                 : null,
-              latestSourceCoordinate: { ...coord, t: sampleTimestamp },
             }
           : state);
       }
@@ -3988,6 +4258,17 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             && state.liveOwnerGeneration === before.liveOwnerGeneration
               ? {
                   trackPointsRaw: [...state.trackPointsRaw, auditPoint],
+                  ...(owned.canonicalDecision === 'REFINE'
+                    && owned.continuityStateAfter?.positionEstimate
+                    ? {
+                        latestSourceCoordinate: {
+                          ...coord,
+                          lat: owned.continuityStateAfter.positionEstimate.lat,
+                          lng: owned.continuityStateAfter.positionEstimate.lng,
+                          t: owned.continuityStateAfter.positionEstimate.t,
+                        },
+                      }
+                    : {}),
                   realMotionState: owned.continuityStateAfter?.motionState ?? state.realMotionState,
                   realCandidatePending: Boolean(owned.continuityStateAfter?.pending),
                   realCanonicalDecisionReason: owned.decisionReason ?? 'background-preclassified-rejection',
@@ -4095,6 +4376,17 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             && state.liveOwnerGeneration === before.liveOwnerGeneration
               ? {
                   trackPointsRaw: [...state.trackPointsRaw, auditPoint],
+                  ...(realMotionDecision?.kind === 'REFINE'
+                    && realMotionDecision.state.positionEstimate
+                    ? {
+                        latestSourceCoordinate: {
+                          ...coord,
+                          lat: realMotionDecision.state.positionEstimate.lat,
+                          lng: realMotionDecision.state.positionEstimate.lng,
+                          t: realMotionDecision.state.positionEstimate.t,
+                        },
+                      }
+                    : {}),
                   realMotionState: realMotionDecision?.state.motionState ?? state.realMotionState,
                   realCandidatePending: Boolean(realMotionDecision?.state.pending),
                   realCanonicalDecisionReason: realMotionDecision?.reason ?? state.realCanonicalDecisionReason,
@@ -4113,6 +4405,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         point?: SegmentedTrackPoint;
         points?: SegmentedTrackPoint[];
         transition?: Partial<TrackingState>;
+        baseTrackPoints?: TrackPoint[];
         reason?: string;
         continuityState?: RealGpsContinuityState;
         elevationDecision?: ElevationDecision;
@@ -4401,17 +4694,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         };
         smoothedPoints.push(smoothedPoint);
 
-        let addedDistance = 0;
-        let distanceTail: Coordinate | null = s.lastCoordinate;
-        let distanceTailSegmentId = tail?.segmentId ?? null;
-        for (const point of canonicalPoints) {
-          if (distanceTail && distanceTailSegmentId === point.segmentId) {
-            const edgeM = haversineM(distanceTail, point);
-            if (edgeM <= 200) addedDistance += edgeM;
-          }
-          distanceTail = point;
-          distanceTailSegmentId = point.segmentId;
-        }
+        const nextDistanceAccumulator = canonicalPoints.reduce(
+          appendActivityDistancePoint,
+          s.distanceAccumulator,
+        );
         const legacyElevationGainM = (() => {
           if (acceptedCoord.alt == null) return s.elevationGainM;
           const prevAlt = tail && tail.segmentId === segmentId ? tail.alt : null;
@@ -4444,6 +4730,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 return appendCausalLivePoint(route, point, canonicalHistory);
               }, s.trackPointsSmoothed);
             })();
+        acceptance.baseTrackPoints = s.trackPoints;
         acceptance.transition = {
           trackPoints: [...s.trackPoints, ...canonicalPoints],
           trackPointsSmoothed: nextLivePresentation,
@@ -4453,7 +4740,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           lastCoordinate: acceptedCoord,
           lastCoordinateTime: t,
           lastFixTimestamp: t,
-          distanceM: s.distanceM + addedDistance,
+          latestSourceCoordinate: {
+            ...acceptedCoord,
+            lat: smoothedLat,
+            lng: smoothedLng,
+            t,
+          },
+          distanceM: activityDistanceEstimate(nextDistanceAccumulator).distanceM,
+          distanceAccumulator: nextDistanceAccumulator,
           elevationGainM,
           currentSegmentId: segmentId,
           pendingSegmentStartReason: null,
@@ -4503,7 +4797,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               alt: point.alt ?? undefined,
               vAcc: point.verticalAccuracy ?? undefined,
               speed: point.speed ?? undefined,
+              speedAccuracy: point.speedAccuracy ?? undefined,
               course: point.course ?? undefined,
+              courseAccuracy: point.courseAccuracy ?? undefined,
               rawOrdinal: point.rawOrdinal,
               src: point.source === 'significant-change'
                 ? 'slc'
@@ -4544,7 +4840,40 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         ) return reject('ownership-changed-during-commit');
 
         set((state) => {
-          const next = { ...state, ...acceptedTransition };
+          const canonicalStateChanged = state.trackPoints !== acceptance.baseTrackPoints;
+          const rebased = canonicalStateChanged
+            ? projectAcceptedActivityPointsFromCheckpoint(
+                state.trackPoints,
+                state.trackPointsSmoothed,
+                state.distanceAccumulator,
+                Math.max(state.elevationGainM, acceptedTransition.elevationGainM ?? 0),
+                acceptedPoints,
+              )
+            : null;
+          const rebasedTail = rebased?.canonical[rebased.canonical.length - 1];
+          const next = canonicalStateChanged && rebased
+            ? {
+                ...state,
+                ...acceptedTransition,
+                trackPoints: rebased.canonical,
+                trackPointsSmoothed: rebased.live,
+                trackPointsRaw: mergeActivityCanonicalPoints(
+                  state.trackPointsRaw,
+                  acceptedTransition.trackPointsRaw ?? [],
+                ),
+                distanceM: rebased.distanceM,
+                distanceAccumulator: rebased.distanceAccumulator,
+                elevationGainM: Math.max(
+                  state.elevationGainM,
+                  acceptedTransition.elevationGainM ?? 0,
+                  rebased.elevationGainM,
+                ),
+                lastCoordinate: rebasedTail ?? acceptedTransition.lastCoordinate,
+                lastCoordinateTime: rebasedTail?.t ?? acceptedTransition.lastCoordinateTime,
+                lastFixTimestamp: rebasedTail?.t ?? acceptedTransition.lastFixTimestamp,
+                currentSegmentId: rebasedTail?.segmentId ?? acceptedTransition.currentSegmentId,
+              }
+            : { ...state, ...acceptedTransition };
           if (state.status === 'paused') {
             return {
               ...next,
@@ -4601,22 +4930,38 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         // snapshots are refreshed at lifecycle transitions, not rewritten for
         // every 1 m foreground observation.
         let memoryResult = { committed: false, deduplicated: true };
-        for (const point of acceptedPoints) {
-          const pointMemoryResult = await recordMemoryEvidence({
-            lat: point.lat,
-            lng: point.lng,
-            atMs: point.t,
-            source: isSimulatorSample ? 'simulator_test' : 'activity_real',
+        let memoryProjectionPending = false;
+        if (isSimulatorSample) {
+          // The isolated simulator realm is test-only and has no Activity-WAL
+          // recovery projector, so preserve its synchronous evidence contract.
+          for (const point of acceptedPoints) {
+            const pointMemoryResult = await recordMemoryEvidence({
+              lat: point.lat,
+              lng: point.lng,
+              atMs: point.t,
+              source: 'simulator_test',
+              ownerUserId: before.ownerUserId,
+              sourceActivityClientId: before.sessionId ?? undefined,
+              sourceSegmentId: point.segmentId,
+              horizontalAccuracyM: point.accuracy ?? undefined,
+              continuityState: 'accepted',
+            });
+            memoryResult = {
+              committed: memoryResult.committed || pointMemoryResult.committed,
+              deduplicated: memoryResult.deduplicated && pointMemoryResult.deduplicated,
+            };
+          }
+        } else {
+          // appendHikePoint above is the durable downstream replay source.
+          // Projection begins immediately but is deliberately not awaited by
+          // source health/canonical publication.
+          await scheduleActivityMemoryProjection({
             ownerUserId: before.ownerUserId,
-            sourceActivityClientId: before.sessionId ?? undefined,
-            sourceSegmentId: point.segmentId,
-            horizontalAccuracyM: point.accuracy ?? undefined,
-            continuityState: 'accepted',
+            clientActivityId: before.sessionId!,
+            ownerGeneration: before.liveOwnerGeneration,
+            points: acceptedPoints,
           });
-          memoryResult = {
-            committed: memoryResult.committed || pointMemoryResult.committed,
-            deduplicated: memoryResult.deduplicated && pointMemoryResult.deduplicated,
-          };
+          memoryProjectionPending = true;
         }
         const latest = get();
         if (
@@ -4736,6 +5081,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           pointCount: get().trackPoints.length,
           memoryCommitted: memoryResult.committed,
           memoryDeduplicated: memoryResult.deduplicated,
+          memoryProjectionPending,
           sequenceTimestamp: accepted.t,
           sampleTimestamp: accepted.t,
           sampleAgeAtPublicationMs: Math.max(0, storePublishedAt - accepted.t),
@@ -4756,6 +5102,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           segmentId: accepted.segmentId,
           memoryCommitted: memoryResult.committed,
           memoryDeduplicated: memoryResult.deduplicated,
+          memoryProjectionPending,
         };
       } catch (err: unknown) {
         const reason = String(err instanceof Error ? err.message : err).slice(0, 120);
@@ -5008,7 +5355,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         lng: point.lng,
         acc: point.accuracy ?? undefined,
         alt: point.alt ?? undefined,
+        vAcc: point.verticalAccuracy ?? undefined,
         speed: point.speed ?? undefined,
+        speedAccuracy: point.speedAccuracy ?? undefined,
+        course: point.course ?? undefined,
+        courseAccuracy: point.courseAccuracy ?? undefined,
         src: 'sim' as const,
         conf: 1,
         clientActivityId: activity.sessionId!,
@@ -5051,6 +5402,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         trackPointsSmoothed: frozen.trackPointsSmoothed.slice(0, retained.length),
         trackPointsRaw: raw,
         distanceM: stats.distanceM,
+        distanceAccumulator: buildActivityDistanceAccumulator(retained),
         elevationGainM: stats.elevationGainM,
         lastCoordinate: tail,
         lastCoordinateTime: tail.t,
@@ -5307,21 +5659,27 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // have not yet been projected into the live Zustand snapshot.
       const { readActiveHikeTail } = require('../services/hikeTrackWriter');
       const acceptedPoints = await readActiveHikeTail(s.sessionId);
-      for (const point of acceptedPoints) {
-        await recordMemoryEvidence({
-          lat: point.lat,
-          lng: point.lng,
-          atMs: point.t,
-          source: s.locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
+      if (s.locationProviderSource === 'real' && acceptedPoints.length > 0) {
+        await scheduleActivityMemoryProjection({
           ownerUserId,
-          durability: 'deferred',
-          sourceActivityClientId: s.sessionId ?? undefined,
-          sourceSegmentId: point.segmentId,
-          horizontalAccuracyM: point.accuracy ?? undefined,
-          continuityState: 'accepted',
+          clientActivityId: s.sessionId,
+          ownerGeneration: s.liveOwnerGeneration!,
+          points: acceptedPoints,
         });
+        if (!await reconcileActivityMemoryProjection(ownerUserId, s.sessionId)) {
+          throw new Error('activity_discard_memory_projection_incomplete');
+        }
+      } else {
+        for (const point of acceptedPoints) {
+          await recordMemoryEvidence({
+            lat: point.lat, lng: point.lng, atMs: point.t, source: 'simulator_test', ownerUserId,
+            durability: 'deferred', sourceActivityClientId: s.sessionId,
+            sourceSegmentId: point.segmentId, horizontalAccuracyM: point.accuracy ?? undefined,
+            continuityState: 'accepted',
+          });
+        }
+        if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
       }
-      if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
     }
     // Persist cancellation before attempting any network or file cleanup.
     // A crash after this point cannot let stale queued work resurrect the
@@ -5351,6 +5709,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // serialized write tail prevents an already-entered point commit from
     // recreating the discarded Activity.
     if (s.sessionId) {
+      await cancelActivityMemoryProjection(ownerUserId, s.sessionId);
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { discardActiveHike } = require('../services/hikeTrackWriter');
@@ -5577,8 +5936,12 @@ async function activateForegroundSource(expectedIntentEpoch?: number): Promise<v
   deactivateRealForegroundSource();
 
   try {
-    const nextSubscription = await Location.watchPositionAsync(
-      {
+    const active = await nativeRealLocationSupervisor.setConsumer({
+      id: 'activity',
+      ownerUserId: String(ownerAtActivation.ownerUserId ?? ''),
+      generation: ownerAtActivation.liveOwnerGeneration,
+      priority: 100,
+      options: {
         accuracy: Location.Accuracy.BestForNavigation,
         // Expo's timeInterval is Android-only. The iOS-effective production
         // candidate is the measured 1 m distance filter; Internal Debug may
@@ -5586,8 +5949,8 @@ async function activateForegroundSource(expectedIntentEpoch?: number): Promise<v
         timeInterval: ACTIVITY_LOCATION_TIME_INTERVAL_MS,
         distanceInterval: realForegroundCadenceExperiment.distanceFilterM,
       },
-      (position) => {
-        const ts = position.timestamp || Date.now();
+      optionsKey: `activity:${ACTIVITY_LOCATION_TIME_INTERVAL_MS}:${realForegroundCadenceExperiment.distanceFilterM}`,
+      onObservation: ({ observation: position, observationTimestampMs: ts }) => {
         const nativeCoords = position.coords as typeof position.coords & {
           speedAccuracy?: number | null;
           courseAccuracy?: number | null;
@@ -5625,7 +5988,7 @@ async function activateForegroundSource(expectedIntentEpoch?: number): Promise<v
         const ownerSessionId = ownerAtActivation.sessionId;
         const ownerGeneration = ownerAtActivation.liveOwnerGeneration;
         if (!ownerSessionId || !ownerGeneration) return;
-        useTrackingStore.getState().addTrackPoint(
+        return useTrackingStore.getState().addTrackPoint(
           {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
@@ -5644,7 +6007,14 @@ async function activateForegroundSource(expectedIntentEpoch?: number): Promise<v
           ts,
         );
       },
-      (error) => {
+      onTerminalError: (error) => {
+        locationSubscription = null;
+        markRealProviderStopped('foreground');
+        const live = useTrackingStore.getState();
+        if (live.sessionId === ownerAtActivation.sessionId
+          && live.liveOwnerGeneration === ownerAtActivation.liveOwnerGeneration) {
+          useTrackingStore.setState({ locationAvailable: false });
+        }
         debugLogger.logError(error, 'watchPositionAsync:foreground');
         appendSimulatorLog('ERROR', 'real_activity_location_source_error', {
           sampleSource: 'foreground',
@@ -5655,13 +6025,36 @@ async function activateForegroundSource(expectedIntentEpoch?: number): Promise<v
           coordinateSource: 'real',
         });
       },
-    );
+      onState: snapshot => {
+        if (snapshot.effectiveConsumer !== 'activity') return;
+        if (!snapshot.streamActive) {
+          locationSubscription = null;
+          return;
+        }
+        if (!locationSubscription) {
+          locationSubscription = {
+            remove: () => {
+              void nativeRealLocationSupervisor.removeConsumer('activity', ownerAtActivation.liveOwnerGeneration!);
+            },
+          };
+          markRealProviderStarted('foreground');
+          useTrackingStore.setState({ locationAvailable: true });
+        }
+      },
+    });
     if (!intentIsCurrent()) {
-      try { nextSubscription.remove(); } catch { /* obsolete activation */ }
+      await nativeRealLocationSupervisor.removeConsumer('activity', ownerAtActivation.liveOwnerGeneration);
       return;
     }
-    locationSubscription = nextSubscription;
-    markRealProviderStarted('foreground');
+    if (!active) return;
+    if (!locationSubscription) {
+      locationSubscription = {
+        remove: () => {
+          void nativeRealLocationSupervisor.removeConsumer('activity', ownerAtActivation.liveOwnerGeneration!);
+        },
+      };
+      markRealProviderStarted('foreground');
+    }
     appendSimulatorLog('PROVIDER', 'real_activity_location_source_activated', {
       sampleSource: 'foreground',
       androidTimeIntervalMs: ACTIVITY_LOCATION_TIME_INTERVAL_MS,
@@ -5691,7 +6084,7 @@ function deactivateForegroundSource(): void {
 }
 
 function deactivateRealForegroundSource(): void {
-  try { locationSubscription?.remove(); } catch { /* no-op */ }
+  void nativeRealLocationSupervisor.removeConsumer('activity');
   if (locationSubscription) markRealProviderStopped('foreground');
   locationSubscription = null;
 }
@@ -5766,15 +6159,18 @@ async function markRecordingContinuityUnavailable(reason: string): Promise<void>
   });
 }
 
+type JournalProjectionAuthority = 'foreground' | 'pause-fence' | 'finish-fence';
+
 async function drainCommittedBackgroundLocations(
-  committedBeforeFence = false,
+  projectionAuthority: JournalProjectionAuthority = 'foreground',
 ): Promise<number> {
   await settleBackgroundLocationWrites();
   const durableContext = await readDurableActivityContext();
   const drained = drainBackgroundLocations().sort((a, b) => a.timestamp - b.timestamp);
-  // Foreground presentation may recover immediately from the newest
-  // Activity-owned background observation. It must not wait for a brand-new
-  // foreground callback, and it remains separate from canonical acceptance.
+  // A queued raw receipt may refresh source-health immediately, but it must
+  // never move the puck before continuity projection qualifies the position.
+  // The projected live tail below restores presentation without waiting for a
+  // brand-new foreground callback.
   const retained = drained[drained.length - 1];
   const retainedOwner = useTrackingStore.getState();
   if (
@@ -5785,15 +6181,6 @@ async function drainCommittedBackgroundLocations(
     useTrackingStore.setState({
       latestSourceLocationTime: retained.timestamp,
       latestSourceKind: 'background',
-      latestSourceCoordinate: {
-        lat: retained.latitude,
-        lng: retained.longitude,
-        alt: retained.altitude,
-        accuracy: retained.accuracy,
-        speed: retained.speed,
-        course: retained.heading,
-        t: retained.timestamp,
-      },
     });
   }
   const owner = useTrackingStore.getState();
@@ -5801,8 +6188,20 @@ async function drainCommittedBackgroundLocations(
     // The queue is only an in-process latency hint. A headless JS runtime can
     // disappear before foreground takeover, so rebuild from the complete WAL
     // instead of replaying only this module instance's mutable tail.
-    const { readActiveHikeTail } = require('../services/hikeTrackWriter');
-    const journal = await readActiveHikeTail(owner.sessionId);
+    const writer = require('../services/hikeTrackWriter');
+    let journal: any[];
+    if (projectionAuthority === 'finish-fence') {
+      const terminalSnapshot = await writer.readActiveHikeTerminalSnapshot(owner.sessionId, {
+        expectedOwnerGeneration: owner.liveOwnerGeneration,
+        expectedCutoffAt: acceptanceFenceCutoffMs ?? undefined,
+      });
+      if (terminalSnapshot.status !== 'complete') {
+        throw new Error(`activity_terminal_snapshot_uncertain:${terminalSnapshot.reason}`);
+      }
+      journal = terminalSnapshot.points;
+    } else {
+      journal = await writer.readActiveHikeTail(owner.sessionId);
+    }
     const projectionOwner = useTrackingStore.getState();
     if (projectionOwner.sessionId !== owner.sessionId
       || projectionOwner.ownerUserId !== owner.ownerUserId
@@ -5812,20 +6211,76 @@ async function drainCommittedBackgroundLocations(
       && point.ownerGeneration === owner.liveOwnerGeneration
     ));
     if (ownedJournal.length > 0) {
-      // Foreground capture may already be live while a long WAL read settles.
-      // Rebase *inside* the synchronous state transaction. A foreground fix can
-      // commit after the WAL read (and even after the identity fence above); a
-      // projection calculated outside this updater would replace that new tail
-      // with the older snapshot it observed.
-      let projection = projectActivityJournal(projectionOwner.trackPoints, ownedJournal);
+      const projectionAuthorityIsCurrent = () => {
+        const state = useTrackingStore.getState();
+        const sameOwner = state.sessionId === owner.sessionId
+          && state.ownerUserId === owner.ownerUserId
+          && state.liveOwnerGeneration === owner.liveOwnerGeneration;
+        if (!sameOwner) return false;
+        if (projectionAuthority === 'finish-fence') {
+          return state.isFinishing
+            && !finishAcceptanceSnapshotClosed
+            && acceptanceFenceCutoffMs !== null
+            && (state.status === 'tracking' || state.status === 'paused');
+        }
+        if (projectionAuthority === 'pause-fence') {
+          return !state.isFinishing
+            && acceptanceFenceCutoffMs !== null
+            && state.status === 'paused';
+        }
+        return !state.isFinishing
+          && (state.status === 'tracking' || state.status === 'paused');
+      };
+      // Replay outside Zustand's synchronous updater and yield between bounded
+      // slices. The mounted Live prefix is an exact reducer checkpoint whenever
+      // its stable WAL frontier matches; style/AppState returns with no new WAL
+      // therefore perform zero full rebuilds.
+      let prepared = await projectActivityJournalCooperatively(
+        projectionOwner.trackPoints,
+        ownedJournal,
+        {
+          currentLive: projectionOwner.trackPointsSmoothed,
+          currentDistanceAccumulator: projectionOwner.distanceAccumulator,
+          currentElevationGainM: projectionOwner.elevationGainM,
+          shouldContinue: projectionAuthorityIsCurrent,
+        },
+      );
+      if (!prepared || !projectionAuthorityIsCurrent()) return drained.length;
+      let projection = prepared.projection;
+      let projectionMetrics = prepared.metrics;
       let missingRaw: TrackPoint[] = [];
-      useTrackingStore.setState(state => {
-        if (state.sessionId !== owner.sessionId
-          || state.ownerUserId !== owner.ownerUserId
-          || state.liveOwnerGeneration !== owner.liveOwnerGeneration) return state;
-        projection = projectActivityJournal(state.trackPoints, ownedJournal);
-        const tail = projection.canonical[projection.canonical.length - 1] as SegmentedTrackPoint | undefined;
-        const existingRawKeys = new Set(state.trackPointsRaw.map(point => (
+      // A foreground fix may commit while the cooperative replay yields. Rebase
+      // its already-WAL-committed suffix onto the prepared checkpoint, then use
+      // a reference compare-and-swap with no await between read and publish.
+      for (;;) {
+        const stateAtCommit = useTrackingStore.getState();
+        if (!projectionAuthorityIsCurrent()) return drained.length;
+        const rebased = rebaseActivityJournalProjection(
+          projection,
+          stateAtCommit.trackPoints,
+          stateAtCommit.elevationGainM,
+        );
+        if (!rebased) {
+          prepared = await projectActivityJournalCooperatively(
+            stateAtCommit.trackPoints,
+            ownedJournal,
+            {
+              currentLive: stateAtCommit.trackPointsSmoothed,
+              currentDistanceAccumulator: stateAtCommit.distanceAccumulator,
+              currentElevationGainM: stateAtCommit.elevationGainM,
+              shouldContinue: projectionAuthorityIsCurrent,
+            },
+          );
+          if (!prepared) return drained.length;
+          projection = prepared.projection;
+          projectionMetrics = {
+            ...prepared.metrics,
+            fullLiveRebuilds: projectionMetrics.fullLiveRebuilds + prepared.metrics.fullLiveRebuilds,
+          };
+          continue;
+        }
+        projection = rebased;
+        const existingRawKeys = new Set(stateAtCommit.trackPointsRaw.map(point => (
           point.rawOrdinal != null
             ? `${point.segmentId ?? 'legacy'}:${point.rawOrdinal}`
             : `${point.segmentId ?? 'legacy'}:${point.t}:${point.lat}:${point.lng}`
@@ -5835,18 +6290,34 @@ async function drainCommittedBackgroundLocations(
             ? `${point.segmentId ?? 'legacy'}:${point.rawOrdinal}`
             : `${point.segmentId ?? 'legacy'}:${point.t}:${point.lat}:${point.lng}`,
         ));
-        return {
-          trackPoints: projection.canonical,
-          trackPointsSmoothed: projection.live,
-          trackPointsRaw: [...state.trackPointsRaw, ...missingRaw],
-          distanceM: projection.distanceM,
-          elevationGainM: projection.elevationGainM,
-          lastCoordinate: tail ?? state.lastCoordinate,
-          lastCoordinateTime: tail?.t ?? state.lastCoordinateTime,
-          lastFixTimestamp: tail?.t ?? state.lastFixTimestamp,
-          currentSegmentId: tail?.segmentId ?? state.currentSegmentId,
-        };
-      });
+        let published = false;
+        useTrackingStore.setState(state => {
+          if (state.trackPoints !== stateAtCommit.trackPoints
+            || state.sessionId !== owner.sessionId
+            || state.ownerUserId !== owner.ownerUserId
+            || state.liveOwnerGeneration !== owner.liveOwnerGeneration) return state;
+          published = true;
+          const tail = projection.canonical[projection.canonical.length - 1] as SegmentedTrackPoint | undefined;
+          const presentationTail = projection.live[projection.live.length - 1] as SegmentedTrackPoint | undefined;
+          return {
+            trackPoints: projection.canonical,
+            trackPointsSmoothed: projection.live,
+            trackPointsRaw: [...state.trackPointsRaw, ...missingRaw],
+            distanceM: projection.distanceM,
+            distanceAccumulator: projection.distanceAccumulator,
+            elevationGainM: projection.elevationGainM,
+            lastCoordinate: tail ?? state.lastCoordinate,
+            lastCoordinateTime: tail?.t ?? state.lastCoordinateTime,
+            lastFixTimestamp: tail?.t ?? state.lastFixTimestamp,
+            latestSourceCoordinate: presentationTail ? {
+              ...presentationTail,
+              t: presentationTail.t,
+            } : state.latestSourceCoordinate,
+            currentSegmentId: tail?.segmentId ?? state.currentSegmentId,
+          };
+        });
+        if (published) break;
+      }
       const continuity = reconcileActivityContinuityAfterJournal({
         clientActivityId: owner.sessionId,
         ownerGeneration: owner.liveOwnerGeneration,
@@ -5865,38 +6336,32 @@ async function drainCommittedBackgroundLocations(
       }
       realGpsRawOrdinal = Math.max(realGpsRawOrdinal, continuity.rawOrdinal);
       schedulePendingCandidateTimeout(useTrackingStore.getState());
-      // Current builds already persist headless Memory at callback time. Replay
-      // only points absent from the mounted raw projection so older journals are
-      // repaired without rewalking a multi-hour history on every foreground.
+      // Commit durable downstream responsibility, then let its independent
+      // projector replay outside this foreground handoff. Do not block source
+      // ownership on Memory persistence.
       if (missingRaw.length > 0) {
-        const repairMemory = async () => {
-          for (const point of missingRaw) {
-            await recordMemoryEvidence({
-              lat: point.lat,
-              lng: point.lng,
-              atMs: point.t,
-              source: 'activity_real',
-              ownerUserId: owner.ownerUserId!,
-              durability: 'deferred',
-              sourceActivityClientId: owner.sessionId!,
-              sourceSegmentId: point.segmentId,
-              horizontalAccuracyM: point.accuracy ?? undefined,
-              continuityState: 'accepted',
-            });
-          }
-          await flushRecordedMemoryEvidence();
-        };
-        await repairMemory();
+        await scheduleActivityMemoryProjection({
+          ownerUserId: owner.ownerUserId!,
+          clientActivityId: owner.sessionId!,
+          ownerGeneration: owner.liveOwnerGeneration!,
+          points: missingRaw,
+        });
       }
       appendSimulatorLog('ACTIVITY_RECOVERY', 'activity_live_journal_projected', {
         journalPointCount: ownedJournal.length,
         projectedPointCount: projection.canonical.length,
         displayedPointCount: projection.live.length,
         appendedFromJournal: projection.appendedFromJournal,
+        reconstructionTotalMs: projectionMetrics.totalMs,
+        reconstructionMaxSynchronousSliceMs: projectionMetrics.maxSynchronousSliceMs,
+        reconstructionYieldCount: projectionMetrics.yieldCount,
+        reconstructionFullLiveRebuilds: projectionMetrics.fullLiveRebuilds,
+        reconstructionReusedLiveCheckpoint: projectionMetrics.reusedLiveCheckpoint,
         continuityHandoffSource: continuity.source,
         rawOrdinalHighWatermark: realGpsRawOrdinal,
         queueHintCount: drained.length,
-        committedBeforeFence,
+        committedBeforeFence: projectionAuthority !== 'foreground',
+        projectionAuthority,
       }, {
         userId: owner.ownerUserId,
         clientActivityId: owner.sessionId,
@@ -6017,7 +6482,7 @@ async function transitionToForegroundSource(expectedIntentEpoch?: number): Promi
   // Activity. The foreground provider is already active, so this work cannot
   // create a stop-to-start capture gap. Identity checks inside the drain keep
   // a late result from crossing Pause, Finish, logout, or another Activity.
-  void drainCommittedBackgroundLocations(false).then((drainedCount) => {
+  void drainCommittedBackgroundLocations('foreground').then((drainedCount) => {
     appendSimulatorLog('PROVIDER', 'real_activity_background_drain', {
       reason: 'foreground-takeover',
       drainedCount,

@@ -4,6 +4,18 @@ import { performance } from 'node:perf_hooks';
 
 const mockStorageValues = new Map<string, string>();
 let mockCurrentUserId = 'raw-gps-qa';
+const mockHikeJournalPoints: any[] = [];
+const mockAddSession = jest.fn(async () => undefined);
+const mockMarkSynced = jest.fn(async () => true);
+const mockCanonicalHikeJournal = () => mockHikeJournalPoints.map(point => ({
+  ...point,
+  accuracy: point.accuracy ?? point.acc ?? null,
+  verticalAccuracy: point.verticalAccuracy ?? point.vAcc ?? null,
+  altitude: point.altitude ?? point.alt ?? null,
+  source: point.source ?? (point.src === 'bg'
+    ? 'background'
+    : point.src === 'slc' ? 'significant-change' : 'foreground'),
+}));
 
 jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
@@ -57,15 +69,16 @@ jest.mock('../lib/memoryHydrateGate', () => ({
 jest.mock('../../../services/bootDiagnostics', () => ({ markBootPhase: jest.fn() }));
 jest.mock('../../../services/memorySync', () => ({ attachMemorySync: jest.fn() }));
 jest.mock('../../../store/useAppStore', () => ({
-  useAppStore: { getState: () => ({ user: { id: mockCurrentUserId } }) },
+  useAppStore: { getState: () => ({ isLoggedIn: true, user: { id: mockCurrentUserId } }) },
 }));
 jest.mock('../../../store/useSettingsStore', () => ({
   useSettingsStore: { getState: () => ({ debugMode: true, activityGpsDistanceFilterM: 5 }) },
 }));
 jest.mock('../../../store/useSessionStore', () => ({
   useSessionStore: { getState: () => ({
-    addSession: jest.fn(async () => undefined),
-    markSynced: jest.fn(async () => true),
+    addSession: mockAddSession,
+    markSynced: mockMarkSynced,
+    sessions: [],
   }) },
 }));
 jest.mock('../../../services/debugLogger', () => ({
@@ -81,12 +94,19 @@ jest.mock('../../../services/backgroundLocationTask', () => ({
   BACKGROUND_LOCATION_TASK: 'qa-bg', registerBackgroundTask: jest.fn(async () => true),
   drainBackgroundLocations: jest.fn(() => []), settleBackgroundLocationWrites: jest.fn(async () => undefined),
   persistBackgroundContext: jest.fn(async () => true),
+  readDurableActivityContext: jest.fn(async () => null),
 }));
 jest.mock('../../../services/hikeTrackWriter', () => ({
-  appendHikePoint: jest.fn(async () => undefined), startHikeTrack: jest.fn(async () => undefined),
+  appendHikePoint: jest.fn(async (point: any) => { mockHikeJournalPoints.push(point); }), startHikeTrack: jest.fn(async () => undefined),
   updateHikeMeta: jest.fn(async () => undefined), updateHikeMetaStrict: jest.fn(async () => undefined), flushNow: jest.fn(async () => undefined),
   renameToCompleted: jest.fn(async () => undefined), discardActiveHike: jest.fn(async () => undefined),
-  readActiveHikeTail: jest.fn(async () => []), truncateActiveHikeTrack: jest.fn(async () => undefined),
+  readActiveHikeTail: jest.fn(async () => mockCanonicalHikeJournal()),
+  readActiveHikeTerminalSnapshot: jest.fn(async (_sessionId: string, options?: { expectedCutoffAt?: number; expectedOwnerGeneration?: string }) => ({
+    status: 'complete', source: 'active', points: mockCanonicalHikeJournal(),
+    cutoffAt: options?.expectedCutoffAt ?? Date.now(), ownerGeneration: options?.expectedOwnerGeneration,
+  })),
+  readHikeTrackForProjection: jest.fn(async () => mockCanonicalHikeJournal()),
+  truncateActiveHikeTrack: jest.fn(async () => undefined),
   sealHikeTrackForFinish: jest.fn(async () => true), releaseHikeTrackFinishSeal: jest.fn(async () => true),
 }));
 jest.mock('../../../services/pendingSyncStore', () => ({
@@ -137,7 +157,13 @@ const memoryPersistence = require('../services/memoryPersistence');
 const { advanceRawGpsModel, createRawGpsModelState, REALISTIC_GPS_PROFILE } = require('../../activitySimulator/rawGpsObservationModel');
 const { destinationPoint } = require('../../activitySimulator/geodesy');
 const { deriveLivePace } = require('../../activity/livePace');
+const {
+  buildActivityDistanceAccumulator,
+  calculateActivityStats,
+} = require('../../activity/activityContracts');
+const { loadActivityFinalArtifact } = require('../../activity/activityFinalArtifact');
 const { correlateLivePipelineTrace } = require('../../../../scripts/lib/revision03-live-pipeline-correlation.cjs');
+const { waitForAllActivityMemoryProjections } = require('../../activity/activityMemoryProjector');
 
 type Truth = {
   t: number;
@@ -343,7 +369,9 @@ async function seedTracking(
   provider: 'simulator' | 'real' = 'simulator',
   startedAt = EPOCH,
 ) {
+  await waitForAllActivityMemoryProjections();
   mockCurrentUserId = account;
+  mockHikeJournalPoints.length = 0;
   await memoryPersistence.detachMemoryPersistence();
   await memoryPersistence.hydrateMemoryForUser(account);
   useTrackingStore.setState(useTrackingStore.getInitialState(), true);
@@ -375,6 +403,257 @@ describe('revision-03 realistic Raw GPS -> live isolated Memory pipeline', () =>
 
   beforeAll(() => {
     mockStorageValues.clear();
+  });
+
+  test.each([
+    ['hiking' as const, false],
+    ['running' as const, true],
+  ])('R5 terminal %s reconciliation commits an accepted empty-queue WAL tail with exact gap semantics', async (mode, declaredGap) => {
+    const scenarioId = mode === 'hiking' ? 'r5finishhike' : 'r5finishrun';
+    const account = `qa-${scenarioId}`;
+    await seedTracking(account, scenarioId, mode, 'real', EPOCH);
+    const state = useTrackingStore.getState();
+    const clientActivityId = String(state.sessionId);
+    const ownerGeneration = String(state.liveOwnerGeneration);
+    const firstSegment = `segment-${scenarioId}-a`;
+    const secondSegment = declaredGap ? `segment-${scenarioId}-b` : firstSegment;
+    const coordinate = (eastM: number, t: number, rawOrdinal: number, segmentId: string, start = false) => ({
+      lat: ORIGIN.lat,
+      lng: ORIGIN.lng + eastM / (111_320 * Math.cos(ORIGIN.lat * Math.PI / 180)),
+      t,
+      rawOrdinal,
+      segmentId,
+      ...(start ? { segmentStartReason: rawOrdinal === 1 ? 'start' : 'gps-reacquired' } : {}),
+      accuracy: 5,
+      speed: mode === 'running' ? 2.8 : 1.4,
+      source: rawOrdinal <= 2 ? 'foreground' : 'background',
+      clientActivityId,
+      ownerGeneration,
+    });
+    const prefix = [
+      coordinate(0, EPOCH + 1_000, 1, firstSegment, true),
+      coordinate(30, EPOCH + 21_000, 2, firstSegment),
+    ];
+    // Eighteen tail points cross the projectors' cooperative 16-point yield
+    // boundary. Finish must retain its exact owner authority across that yield
+    // instead of cancelling the recovery merely because isFinishing is true.
+    const tail = Array.from({ length: 18 }, (_, index) => coordinate(
+      (declaredGap ? 300 : 32) + index * 2,
+      EPOCH + (declaredGap ? 241_000 : 31_000) + index * 1_000,
+      index + 3,
+      secondSegment,
+      declaredGap && index === 0,
+    ));
+    const journal = [...prefix, ...tail];
+    mockHikeJournalPoints.push(...journal);
+    const prefixStats = calculateActivityStats(prefix);
+    useTrackingStore.setState({
+      trackPoints: prefix,
+      trackPointsSmoothed: prefix,
+      trackPointsRaw: prefix,
+      distanceM: prefixStats.distanceM,
+      distanceAccumulator: buildActivityDistanceAccumulator(prefix),
+      lastCoordinate: prefix.at(-1),
+      lastCoordinateTime: prefix.at(-1)!.t,
+      lastFixTimestamp: prefix.at(-1)!.t,
+      currentSegmentId: firstSegment,
+    });
+    const backgroundTask = require('../../../services/backgroundLocationTask');
+    backgroundTask.drainBackgroundLocations.mockReturnValueOnce([]);
+    const pendingSync = require('../../../services/pendingSyncStore');
+    pendingSync.savePending.mockClear();
+    mockAddSession.mockClear();
+
+    const result = await useTrackingStore.getState().stopTracking(`R5 ${mode}`);
+    expect(result).toMatchObject({
+      status: 'saved-local',
+      clientActivityId,
+      activityMode: mode,
+      syncState: 'pending',
+    });
+    if (!result || result.status !== 'saved-local') throw new Error('expected saved terminal snapshot');
+    const expectedStats = calculateActivityStats(journal);
+    expect(result.distanceM).toBeCloseTo(expectedStats.distanceM, 6);
+    expect(result.distanceM).toBeLessThan(75);
+    expect(result.trackPoints[0].t).toBe(journal[0].t);
+    expect(result.trackPoints.at(-1)?.t).toBe(journal.at(-1)?.t);
+    expect(new Set(result.trackPoints.map((point: any) => point.segmentId)))
+      .toEqual(new Set(journal.map(point => point.segmentId)));
+
+    const prepared = pendingSync.savePending.mock.calls
+      .map((call: any[]) => call[0])
+      .find((entry: any) => entry.localId === clientActivityId && entry.payload?.route_points_canonical);
+    expect(prepared).toBeDefined();
+    expect(prepared.payload.route_points_canonical.map((point: any) => point.t))
+      .toEqual(journal.map(point => point.t));
+    expect(new Set(prepared.payload.route_points_canonical.map((point: any) => point.t)).size)
+      .toBe(journal.length);
+    expect(prepared.summary.distanceM).toBeCloseTo(expectedStats.distanceM, 6);
+    expect(prepared.finalArtifact).toMatchObject({
+      revision: result.finalGeometryRevision,
+      displayFingerprint: result.finalGeometryFingerprint,
+    });
+
+    const restartedArtifact = await loadActivityFinalArtifact(account, clientActivityId);
+    expect(restartedArtifact).toMatchObject({
+      revision: result.finalGeometryRevision,
+      displayFingerprint: result.finalGeometryFingerprint,
+      canonicalFingerprint: prepared.finalArtifact.canonicalFingerprint,
+    });
+    expect(restartedArtifact!.points).toEqual(result.trackPoints);
+    const savedSession = mockAddSession.mock.calls
+      .map((call: any[]) => call[0])
+      .find((session: any) => session.clientActivityId === clientActivityId);
+    expect(savedSession).toMatchObject({
+      trackPoints: result.trackPoints,
+      finalGeometryRevision: result.finalGeometryRevision,
+      finalGeometryFingerprint: result.finalGeometryFingerprint,
+    });
+
+    await waitForAllActivityMemoryProjections();
+    const responsibility = [...mockStorageValues.values()]
+      .map(raw => { try { return JSON.parse(raw); } catch { return null; } })
+      .find(value => value?.clientActivityId === clientActivityId
+        && value?.requestedThroughRawOrdinal === journal.length);
+    expect(responsibility).toMatchObject({
+      ownerUserId: account,
+      requestedThroughRawOrdinal: journal.length,
+      projectedThroughRawOrdinal: journal.length,
+      state: 'complete',
+    });
+    process.stderr.write(`R6_FINAL_OWNER_JOURNEY ${JSON.stringify({
+      mode,
+      funnel: {
+        raw: journal.length,
+        qualified: journal.length,
+        acceptedCanonical: journal.length,
+        wal: prepared.payload.route_points_canonical.length,
+        live: journal.length,
+        memoryResponsibilityThrough: responsibility.projectedThroughRawOrdinal,
+        terminalCanonical: prepared.payload.route_points_canonical.length,
+        baseFinal: result.trackPoints.length,
+        committedFinal: restartedArtifact!.points.length,
+      },
+      segmentCount: new Set(journal.map(point => point.segmentId)).size,
+      firstStableEvidenceId: `${journal[0].segmentId}:raw-${journal[0].rawOrdinal}`,
+      lastStableEvidenceId: `${journal.at(-1)!.segmentId}:raw-${journal.at(-1)!.rawOrdinal}`,
+      finalRevision: result.finalGeometryRevision,
+      finalFingerprint: result.finalGeometryFingerprint,
+    })}\n`);
+  });
+
+  test('Finish awaits a foreground append admitted before its fence and snapshots its published point', async () => {
+    await seedTracking('qa-r5-pre-fence', 'r5prefence', 'hiking', 'real', EPOCH);
+    const current = useTrackingStore.getState();
+    const clientActivityId = String(current.sessionId);
+    const segmentId = String(current.currentSegmentId);
+    const eastLng = (eastM: number) => ORIGIN.lng
+      + eastM / (111_320 * Math.cos(ORIGIN.lat * Math.PI / 180));
+    const prefix = [
+      { lat: ORIGIN.lat, lng: eastLng(0), t: EPOCH + 1_000, rawOrdinal: 1, segmentId, accuracy: 5, speed: 1.5, source: 'foreground' },
+      { lat: ORIGIN.lat, lng: eastLng(30), t: EPOCH + 21_000, rawOrdinal: 2, segmentId, accuracy: 5, speed: 1.5, source: 'foreground' },
+    ];
+    mockHikeJournalPoints.push(...prefix);
+    const prefixStats = calculateActivityStats(prefix);
+    useTrackingStore.setState({
+      trackPoints: prefix,
+      trackPointsSmoothed: prefix,
+      trackPointsRaw: prefix,
+      distanceM: prefixStats.distanceM,
+      distanceAccumulator: buildActivityDistanceAccumulator(prefix),
+      lastCoordinate: prefix[1],
+      lastCoordinateTime: prefix[1].t,
+      lastFixTimestamp: prefix[1].t,
+    });
+
+    const writer = require('../../../services/hikeTrackWriter');
+    let notifyAppendEntered: () => void = () => {};
+    let releaseAppend: () => void = () => {};
+    const appendEntered = new Promise<void>(resolve => { notifyAppendEntered = resolve; });
+    const appendGate = new Promise<void>(resolve => { releaseAppend = resolve; });
+    writer.appendHikePoint.mockImplementationOnce(async (point: any) => {
+      notifyAppendEntered();
+      await appendGate;
+      mockHikeJournalPoints.push(point);
+    });
+    const tailTimestamp = EPOCH + 31_000;
+    const adding = useTrackingStore.getState().addTrackPoint({
+      lat: ORIGIN.lat,
+      lng: eastLng(45),
+      accuracy: 5,
+      speed: 1.5,
+      source: 'foreground',
+      continuityPreclassified: true,
+      canonicalDecision: 'ACCEPT',
+      rawOrdinal: 3,
+      segmentId,
+      clientActivityId,
+      ownerGeneration: current.liveOwnerGeneration ?? undefined,
+    }, tailTimestamp);
+    await appendEntered;
+
+    const finishing = useTrackingStore.getState().stopTracking('R5 pre-fence append');
+    expect(useTrackingStore.getState().isFinishing).toBe(true);
+    releaseAppend();
+    await expect(adding).resolves.toMatchObject({ accepted: true });
+    const result = await finishing;
+    expect(result).toMatchObject({ status: 'saved-local', clientActivityId });
+    if (!result || result.status !== 'saved-local') throw new Error('expected saved pre-fence terminal snapshot');
+    const presentationTimes = result.trackPoints.map((point: any) => point.t);
+    expect(presentationTimes[0]).toBe(prefix[0].t);
+    expect(presentationTimes.at(-1)).toBe(tailTimestamp);
+    expect(prefix.every(point => presentationTimes.includes(point.t))).toBe(true);
+    const pendingSync = require('../../../services/pendingSyncStore');
+    const prepared = pendingSync.savePending.mock.calls
+      .map((call: any[]) => call[0])
+      .find((entry: any) => entry.localId === clientActivityId && entry.payload?.route_points_canonical);
+    expect(prepared.payload.route_points_canonical.map((point: any) => point.t))
+      .toEqual([...prefix.map(point => point.t), tailTimestamp]);
+  });
+
+  test('uncertain terminal WAL snapshot reopens the exact sealed Activity without creating Final or sync payload', async () => {
+    await seedTracking('qa-r5-storage-fault', 'r5storage', 'hiking', 'real', EPOCH);
+    const current = useTrackingStore.getState();
+    const clientActivityId = String(current.sessionId);
+    const segmentId = String(current.currentSegmentId);
+    const prefix = [
+      { lat: ORIGIN.lat, lng: ORIGIN.lng, t: EPOCH + 1_000, rawOrdinal: 1, segmentId, accuracy: 5 },
+      { lat: ORIGIN.lat, lng: ORIGIN.lng + 35 / (111_320 * Math.cos(ORIGIN.lat * Math.PI / 180)), t: EPOCH + 21_000, rawOrdinal: 2, segmentId, accuracy: 5 },
+    ];
+    const stats = calculateActivityStats(prefix);
+    useTrackingStore.setState({
+      trackPoints: prefix,
+      trackPointsSmoothed: prefix,
+      trackPointsRaw: prefix,
+      distanceM: stats.distanceM,
+      distanceAccumulator: buildActivityDistanceAccumulator(prefix),
+      lastCoordinate: prefix[1],
+      lastCoordinateTime: prefix[1].t,
+      lastFixTimestamp: prefix[1].t,
+    });
+    const writer = require('../../../services/hikeTrackWriter');
+    writer.readActiveHikeTerminalSnapshot.mockResolvedValueOnce({
+      status: 'uncertain', reason: 'journal-read-failed', recoverablePoints: prefix,
+    });
+    writer.releaseHikeTrackFinishSeal.mockClear();
+    const pendingSync = require('../../../services/pendingSyncStore');
+    pendingSync.savePending.mockClear();
+
+    await expect(useTrackingStore.getState().stopTracking('R5 storage fault')).resolves.toMatchObject({
+      status: 'recoverable-failure',
+      localCommit: 'not-committed',
+      clientActivityId,
+      reason: 'evidence-reconciliation-failed',
+    });
+    expect(writer.releaseHikeTrackFinishSeal).toHaveBeenCalledWith(
+      clientActivityId,
+      current.liveOwnerGeneration,
+    );
+    expect(useTrackingStore.getState()).toMatchObject({
+      status: 'paused', isFinishing: false, sessionId: clientActivityId,
+    });
+    expect(pendingSync.savePending).not.toHaveBeenCalled();
+    expect(await loadActivityFinalArtifact('qa-r5-storage-fault', clientActivityId)).toBeNull();
   });
 
   afterAll(async () => {
@@ -470,9 +749,14 @@ describe('revision-03 realistic Raw GPS -> live isolated Memory pipeline', () =>
     expect(stationaryStage.coverageCount - stationaryStartStage.coverageCount).toBeLessThan(3);
 
     const finishStarted = performance.now();
+    const activityId = useTrackingStore.getState().sessionId;
     const finished = await useTrackingStore.getState().stopTracking(`R-GPS-01 ${seed}`);
     const finishMs = performance.now() - finishStarted;
-    expect(finished).toBe(true);
+    expect(finished).toMatchObject({
+      status: 'saved-local',
+      clientActivityId: activityId,
+      localCommit: 'committed',
+    });
     const afterFinish = trackingSnapshot('after-finish-handler');
     stages.push(afterFinish);
     expect(afterFinish.status).toBe('idle');
@@ -775,17 +1059,23 @@ describe('revision-03 realistic Raw GPS -> live isolated Memory pipeline', () =>
         presenceCount: useMemoryStore.getState().presenceWitnesses.length,
       };
       expect(decisions.some(decision => decision.accepted)).toBe(true);
-      expect(await useTrackingStore.getState().stopTracking(`R-GPS-07 ${scenarioId}`)).toBe(true);
+      const activityId = useTrackingStore.getState().sessionId;
+      await expect(useTrackingStore.getState().stopTracking(`R-GPS-07 ${scenarioId}`)).resolves.toMatchObject({
+        status: 'saved-local',
+        clientActivityId: activityId,
+      });
       return { raw, decisions, beforeFinish };
     };
 
     const first = await feedRealActivity('707100000001', 0);
+    await waitForAllActivityMemoryProjections();
     const firstCoverage = useMemoryStore.getState().points.length;
     const firstPresence = useMemoryStore.getState().presenceWitnesses.length;
     expect(firstCoverage).toBeGreaterThan(0);
     expect(firstPresence).toBeGreaterThan(0);
 
     const returned = await feedRealActivity('707100000002', 3_600_000);
+    await waitForAllActivityMemoryProjections();
     const afterReturn = useMemoryStore.getState();
     expect(afterReturn.points).toHaveLength(firstCoverage);
     expect(afterReturn.presenceWitnesses.length).toBeGreaterThan(firstPresence);

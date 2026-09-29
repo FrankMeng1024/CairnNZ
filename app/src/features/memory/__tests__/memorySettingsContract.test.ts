@@ -21,16 +21,18 @@ describe('passive exploration settings migration', () => {
     const { useMemorySettingsStore } = require('../store/useMemorySettingsStore');
     await useMemorySettingsStore.getState().hydrate();
     expect(useMemorySettingsStore.getState()).toMatchObject({
-      foregroundAutoUnlockEnabled: false,
+      passiveExplorationEnabled: false,
+      passiveBackgroundConsent: 'not-asked',
     });
     expect(useMemorySettingsStore.getState()).not.toHaveProperty('recordMode');
     expect(useMemorySettingsStore.getState()).not.toHaveProperty('showFriendOverlay');
 
-    useMemorySettingsStore.getState().set('foregroundAutoUnlockEnabled', true);
+    useMemorySettingsStore.getState().set('passiveExplorationEnabled', true);
     await Promise.resolve();
     expect(JSON.parse(raw)).toMatchObject({
-      foregroundAutoUnlockEnabled: true,
-      passiveExplorationContractVersion: 3,
+      passiveExplorationEnabled: true,
+      passiveExplorationContractVersion: 4,
+      passiveBackgroundConsentVersion: 0,
     });
   });
 
@@ -48,7 +50,8 @@ describe('passive exploration settings migration', () => {
 
     const { useMemorySettingsStore } = require('../store/useMemorySettingsStore');
     await useMemorySettingsStore.getState().hydrate();
-    expect(useMemorySettingsStore.getState().foregroundAutoUnlockEnabled).toBe(true);
+    expect(useMemorySettingsStore.getState().passiveExplorationEnabled).toBe(true);
+    expect(useMemorySettingsStore.getState().passiveBackgroundConsent).toBe('not-asked');
     expect(useMemorySettingsStore.getState()).not.toHaveProperty('recordMode');
     expect(useMemorySettingsStore.getState()).not.toHaveProperty('showFriendOverlay');
     expect(useMemorySettingsStore.getState()).not.toHaveProperty('useH3Fog');

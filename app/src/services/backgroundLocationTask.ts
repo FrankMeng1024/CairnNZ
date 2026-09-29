@@ -362,7 +362,9 @@ async function appendDirectlyToHikeTrack(
             verticalAccuracy: point.verticalAccuracy,
             altitude: point.alt ?? null,
             speed: point.speed ?? null,
+            speedAccuracy: point.speedAccuracy ?? null,
             course: point.course ?? null,
+            courseAccuracy: point.courseAccuracy ?? null,
             source: point.source,
             observationId: 'headless-restored-' + index + '-' + point.t,
             rawOrdinal: point.rawOrdinal,
@@ -572,32 +574,27 @@ async function appendDirectlyToHikeTrack(
         coordinateSource: 'none',
         force: true,
       });
-      // A TaskManager wake may run with no React tree or Zustand store mounted.
-      // Commit personal Memory from the same accepted real evidence immediately
-      // after the Activity WAL. If this secondary repository is unavailable,
-      // the canonical journal remains a replayable repair source.
+      // Persist downstream responsibility immediately after the Activity WAL.
+      // The projector owns Memory work independently, so this TaskManager
+      // ingestion mutex is never held across Memory I/O.
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const memory = require('../features/memory/services/recordMemoryEvidence');
-        for (const point of accepted) {
-          await memory.recordMemoryEvidence({
-            lat: point.lat,
-            lng: point.lng,
-            atMs: point.t,
-            source: 'activity_real',
-            ownerUserId: context.userId,
-            ownerAuthority: 'durable_activity_lease',
-            durability: 'deferred',
-            sourceActivityClientId: context.clientActivityId,
-            sourceSegmentId: point.segmentId,
-            horizontalAccuracyM: point.acc ?? undefined,
-            continuityState: 'accepted',
-          });
-        }
+        const projector = require('../features/activity/activityMemoryProjector');
+        await projector.scheduleActivityMemoryProjection({
+          ownerUserId: context.userId,
+          clientActivityId: context.clientActivityId,
+          ownerGeneration: context.ownerGeneration,
+          points: accepted.map(point => ({
+            ...point,
+            accuracy: point.acc ?? null,
+            verticalAccuracy: point.vAcc ?? null,
+          })),
+        });
         appendSimulatorLog('MEMORY_EVIDENCE', 'activity_background_memory_commit', {
           acceptedCount: accepted.length,
           nativeBatchSequence,
           committed: true,
+          responsibility: 'durable-projection-intent',
         }, {
           userId: context.userId,
           clientActivityId: context.clientActivityId,
