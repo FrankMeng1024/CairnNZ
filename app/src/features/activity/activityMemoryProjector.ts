@@ -1,6 +1,7 @@
 import type { TrackPoint } from '../../store/useSessionStore';
 import { storage } from '../../store/storage';
 import { readHikeTrackForProjection } from '../../services/hikeTrackWriter';
+import { recordActivityStageEvent } from './activityStageLedger';
 
 const INTENT_PREFIX = 'cairn:activity-memory-projection:v2:';
 const PURGE_PREFIX = 'cairn:activity-memory-projection-purged:v1:';
@@ -113,6 +114,18 @@ function pointId(point: Pick<TrackPoint, 't' | 'lat' | 'lng' | 'rawOrdinal' | 's
 
 function pointRawOrdinal(point: Pick<TrackPoint, 'rawOrdinal'>): number | null {
   return Number.isFinite(point.rawOrdinal) ? Number(point.rawOrdinal) : null;
+}
+
+/** Export-safe correlation identity. Legacy checkpoint IDs include coordinates
+ * so they can distinguish same-timestamp WAL records; that storage-only key
+ * must never cross into the owner-exportable timing ledger. */
+function ledgerEvidenceId(
+  point: Pick<TrackPoint, 'rawOrdinal' | 'segmentId'>,
+  journalIndex: number,
+): string {
+  return Number.isFinite(point.rawOrdinal)
+    ? `${point.segmentId ?? 'legacy'}:raw:${point.rawOrdinal}`
+    : `${point.segmentId ?? 'legacy'}:legacy-index:${journalIndex}`;
 }
 
 function parseIntent(raw: string | null): ActivityMemoryProjectionIntent | null {
@@ -368,6 +381,19 @@ async function projectOnce(request: RuntimeRequest): Promise<void> {
         projectedThroughPointId: pointId(point), projectedThroughTimestampMs: point.t,
         projectedThroughRawOrdinal: pointRawOrdinal(point),
         retryAttempt: 0, nextRetryAtMs: null, lastError: null, updatedAtMs: Date.now() };
+    });
+    void recordActivityStageEvent({
+      ownerUserId: request.ownerUserId,
+      clientActivityId: request.clientActivityId,
+      stage: 'memory-local-commit',
+      evidenceId: ledgerEvidenceId(point, index),
+      details: {
+        observationTimeMs: point.t,
+        rawOrdinal: pointRawOrdinal(point),
+        committed: result.committed,
+        deduplicated: result.deduplicated,
+        projectedCheckpointDurableAtMs: Date.now(),
+      },
     });
   }
   await updateIntent(request.ownerUserId, request.clientActivityId, current => {
@@ -885,7 +911,20 @@ export async function purgeActivityMemoryProjectionsForOwner(ownerUserId: string
 }
 
 export async function waitForAllActivityMemoryProjections(): Promise<void> {
-  for (const request of requests.values()) if (request.flight) await request.flight;
+  // A foreground publisher deliberately does not await scheduler durability.
+  // Tests and explicit lifecycle drains must therefore include schedulers
+  // that were admitted but have not created their worker flight yet.
+  for (;;) {
+    const admitted = [...ownerAuthorities.values()]
+      .flatMap(authority => [...authority.admittedSchedulers]);
+    if (admitted.length > 0) await Promise.allSettled(admitted);
+    const workers = [...requests.values()].flatMap(request => request.flight ? [request.flight] : []);
+    if (workers.length > 0) await Promise.allSettled(workers);
+    const remainingSchedulers = [...ownerAuthorities.values()]
+      .some(authority => authority.admittedSchedulers.size > 0);
+    const remainingWorkers = [...requests.values()].some(request => request.flight != null);
+    if (!remainingSchedulers && !remainingWorkers) return;
+  }
 }
 
 export function getActivityMemoryProjectionMetrics(): typeof metrics { return { ...metrics }; }

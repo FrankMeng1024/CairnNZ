@@ -8,6 +8,7 @@ describe('backgroundLocationTask durable ownership fencing', () => {
   let recordMemoryEvidence: jest.Mock;
   let flushRecordedMemoryEvidence: jest.Mock;
   let scheduleActivityMemoryProjection: jest.Mock;
+  let recordActivityStageEvent: jest.Mock;
   let breadcrumb: jest.Mock;
 
   beforeEach(() => {
@@ -19,6 +20,7 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     recordMemoryEvidence = jest.fn(async () => ({ committed: true, deduplicated: false }));
     flushRecordedMemoryEvidence = jest.fn(async () => undefined);
     scheduleActivityMemoryProjection = jest.fn(async () => undefined);
+    recordActivityStageEvent = jest.fn(async () => undefined);
     breadcrumb = jest.fn();
 
     jest.doMock('react-native', () => ({ Platform: { OS: 'ios' } }));
@@ -56,6 +58,11 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     }));
     jest.doMock('../../features/activity/activityMemoryProjector', () => ({
       scheduleActivityMemoryProjection,
+    }));
+    jest.doMock('../../features/activity/activityStageLedger', () => ({
+      activityStageMonotonicNow: jest.fn(() => 42.5),
+      recordActivityStageEvent,
+      flushActivityStageLedger: jest.fn(async () => undefined),
     }));
   });
 
@@ -119,6 +126,54 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     expect(task.drainBackgroundLocations()).toEqual([
       expect.objectContaining({ timestamp: 3_000, clientActivityId: 'activity-a', ownerGeneration: 'generation-2' }),
     ]);
+    const decisions = recordActivityStageEvent.mock.calls
+      .map(call => call[0])
+      .filter(event => event.stage === 'observation-decision');
+    expect(decisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        evidenceId: expect.stringContaining('1500'),
+        details: expect.objectContaining({
+          decision: 'REJECT', prefilterDecision: 'REJECT', reason: 'before-owner-generation', rawOrdinal: null,
+        }),
+      }),
+      expect.objectContaining({
+        evidenceId: expect.stringContaining('2400'),
+        details: expect.objectContaining({
+          decision: 'REJECT', prefilterDecision: 'REJECT', reason: 'stale-or-equal-observation', rawOrdinal: null,
+        }),
+      }),
+      expect.objectContaining({
+        details: expect.objectContaining({
+          prefilterDecision: 'PASS', rawOrdinal: 1,
+        }),
+      }),
+    ]));
+  });
+
+  it('records an explicit prefilter disposition for malformed native observations', async () => {
+    const task = require('../backgroundLocationTask');
+    await task.persistBackgroundContext('activity-invalid', true, {
+      clientActivityId: 'activity-invalid',
+      userId: 'user-a',
+      ownerGeneration: 'generation-invalid',
+      segmentId: 'segment-invalid',
+      activityMode: 'hiking',
+      acceptAfterMs: 1,
+    });
+    await handler({
+      data: { locations: [pointAt(3_000, Number.NaN, 174)] },
+      error: null,
+    });
+    expect(appendBackgroundHikePoints).not.toHaveBeenCalled();
+    expect(recordActivityStageEvent).toHaveBeenCalledWith(expect.objectContaining({
+      stage: 'observation-decision',
+      details: expect.objectContaining({
+        decision: 'REJECT',
+        prefilterDecision: 'REJECT',
+        reason: 'invalid-coordinate-or-timestamp',
+        rawOrdinal: null,
+      }),
+    }));
   });
 
   it('does not publish until the Activity journal commit completes, then rejects callbacks after the durable Finish fence', async () => {

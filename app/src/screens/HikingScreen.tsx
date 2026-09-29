@@ -247,6 +247,7 @@ export function HikingScreen() {
   // R114/O22 STORY-73017 (K9): live save-progress step from the tracking
   // store. Rendered on the StopSummarySheet during long uploads.
   const savingHikeStep = useTrackingStore(s => s.savingHikeStep);
+  const finishProgress = useTrackingStore(s => s.finishProgress);
 
   // Real marker store
   const deleteMarker = useMarkerStore(s => s.deleteMarker);
@@ -1404,6 +1405,8 @@ export function HikingScreen() {
           summary={stopSummaryPresentation ?? stopSummary}
           saving={savingHike}
           savingStep={savingHikeStep}
+          finishProgress={finishProgress}
+          syncState={committedActivity?.syncState}
           onCancel={() => {
             if (committedActivityId) {
               setCommittedActivityId(null);

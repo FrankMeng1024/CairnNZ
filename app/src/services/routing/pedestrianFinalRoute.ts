@@ -185,6 +185,16 @@ export interface BaseFinalDiagnostics {
   maximumRemovedTransientSpikeDepthM: number;
 }
 
+export interface LocalFinalDiagnostics extends BaseFinalDiagnostics {
+  baselinePointCount: number;
+  localCandidatePointCount: number;
+  localToleranceM: number;
+  maximumCanonicalDisplacementM: number;
+  pathLengthRatio: number;
+  accepted: boolean;
+  rejectionReason: string | null;
+}
+
 export interface PedestrianFinalOptions {
   mapboxToken: string;
   totalTimeoutMs?: number;
@@ -932,6 +942,116 @@ export function buildBaseFinalGeometry(points: RawPoint[]): {
 }
 
 /**
+ * Strong, network-free completion geometry. Unlike Base, this pass does not
+ * promote every short alternating heading into a permanent turn. RDP's
+ * deviation evidence decides which movement survives, while a strict
+ * uncertainty corridor, topology gate, endpoint anchors and path-length gate
+ * prevent a global-tolerance shortcut through corners, loops or backtracks.
+ * Canonical evidence is never mutated or used for Activity metrics/Memory.
+ */
+export function buildEvidenceSupportedLocalFinalGeometry(points: RawPoint[]): {
+  points: SnappedPoint[];
+  diagnostics: LocalFinalDiagnostics;
+} {
+  const baseline = buildBaseFinalGeometry(points);
+  const effectiveUncertaintyM = baseline.diagnostics.effectiveUncertaintyM;
+  const rejected = (reason: string, candidatePointCount = baseline.points.length,
+    maximumCanonicalDisplacementM = 0, pathLengthRatio = 1) => ({
+    points: baseline.points,
+    diagnostics: {
+      ...baseline.diagnostics,
+      baselinePointCount: baseline.points.length,
+      localCandidatePointCount: candidatePointCount,
+      localToleranceM: 0,
+      maximumCanonicalDisplacementM,
+      pathLengthRatio,
+      accepted: false,
+      rejectionReason: reason,
+    },
+  });
+  if (points.length < 3 || baseline.diagnostics.stationaryCloudCollapsed) {
+    return rejected(points.length < 3 ? 'insufficient-evidence' : 'stationary-cloud');
+  }
+
+  const despiked = collapseTransientLateralSpikes(points, effectiveUncertaintyM);
+  const collapsed = collapseSameCorridorMicroExcursions(despiked.points, effectiveUncertaintyM);
+  if (collapsed.points.length < 3) return rejected('insufficient-collapsed-evidence');
+  const localToleranceM = clamp(effectiveUncertaintyM * 0.30, 3.5, 5);
+  const simplified = rdpIndices(collapsed.points, localToleranceM)
+    .map(index => canonicalPoint(collapsed.points[index]));
+  const postRdpSpikes = collapseTransientLateralSpikes(simplified, localToleranceM);
+  const postRdpExcursions = collapseSameCorridorMicroExcursions(
+    postRdpSpikes.points,
+    localToleranceM,
+  );
+  const candidate = densifyGeometry(postRdpExcursions.points, 16);
+  if (candidate.length < 2) return rejected('empty-candidate');
+
+  const topology = evaluateTopologyQuality(points, candidate);
+  const wholeRoute = evaluateWholeRouteQuality(points, candidate);
+  const maximumCanonicalDisplacementM = Math.max(...collapsed.points.map(point => (
+    projectPointToPath(point, candidate).distanceM
+  )));
+  const canonicalLengthM = pathLength(points);
+  const candidateLengthM = pathLength(candidate);
+  const pathLengthRatio = canonicalLengthM > 0 ? candidateLengthM / canonicalLengthM : 1;
+  const corridorLimitM = clamp(effectiveUncertaintyM * 0.55, 4, 7);
+  const baselineFingerprint = geometryFingerprint(baseline.points);
+  const candidateFingerprint = geometryFingerprint(candidate);
+  const significantTurnCount = (geometry: Array<{ lat: number; lng: number }>) => {
+    const headings: number[] = [];
+    let anchor = 0;
+    for (let index = 1; index < geometry.length; index += 1) {
+      if (hav(geometry[anchor], geometry[index]) < 3) continue;
+      headings.push(bearingDegrees(geometry[anchor], geometry[index]));
+      anchor = index;
+    }
+    return headings.slice(1).filter((value, index) => (
+      angleDeltaDegrees(headings[index], value) >= 28
+    )).length;
+  };
+  const baselineTurnCount = significantTurnCount(baseline.points);
+  const candidateTurnCount = significantTurnCount(candidate);
+  let rejectionReason: string | null = null;
+  if (topology.reason === 'lost_reversal' || topology.reason === 'bearing_disagreement') {
+    rejectionReason = `topology:${topology.reason}`;
+  }
+  else if (candidateTurnCount > baselineTurnCount) rejectionReason = 'unsupported-turn-increase';
+  else if (!wholeRoute.accepted) rejectionReason = `whole-route:${wholeRoute.reason}`;
+  else if (maximumCanonicalDisplacementM > corridorLimitM) rejectionReason = 'uncertainty-corridor';
+  // A local Final may remove uncertainty-sized zig-zag distance, but not a
+  // material excursion/backtrack. RDP retains deviations larger than the
+  // local tolerance; this independent ratio catches pathological shortcuts.
+  else if (pathLengthRatio < 0.84 || pathLengthRatio > 1.03) rejectionReason = 'path-length-sanity';
+  else if (candidateFingerprint === baselineFingerprint) rejectionReason = 'no-meaningful-change';
+  else if (candidate.length >= baseline.points.length) rejectionReason = 'no-complexity-improvement';
+  if (rejectionReason) {
+    const fallback = rejected(
+      rejectionReason,
+      candidate.length,
+      maximumCanonicalDisplacementM,
+      pathLengthRatio,
+    );
+    fallback.diagnostics.localToleranceM = localToleranceM;
+    return fallback;
+  }
+  return {
+    points: attachDisplayMetadata(candidate, points),
+    diagnostics: {
+      ...baseline.diagnostics,
+      outputPointCount: candidate.length,
+      baselinePointCount: baseline.points.length,
+      localCandidatePointCount: candidate.length,
+      localToleranceM,
+      maximumCanonicalDisplacementM,
+      pathLengthRatio,
+      accepted: true,
+      rejectionReason: null,
+    },
+  };
+}
+
+/**
  * Chronological, bounded Final-only cleanup. RDP is applied independently
  * between multi-scale turns/reversals and stop boundaries, so measurement
  * wobble disappears without flattening a U-turn, Z, switchback or pause.
@@ -1578,7 +1698,18 @@ async function runBounded<T>(
       results[index] = await task(items[index]);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, worker));
+  const workers = Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, worker));
+  if (signal) {
+    await Promise.race([
+      workers,
+      new Promise<void>(resolve => {
+        if (signal.aborted) resolve();
+        else signal.addEventListener('abort', () => resolve(), { once: true } as any);
+      }),
+    ]);
+  } else {
+    await workers;
+  }
   return results;
 }
 
@@ -2108,7 +2239,7 @@ export async function reconstructPedestrianFinalRoute(
       .slice(0, options.maxDirectionsRequests ?? MAX_DIRECTIONS_REQUESTS);
     for (const [sourceStart, sourceEnd] of directionSpans) {
       if (totalAbort.controller.signal.aborted) break;
-      const direction = await walkingDirectionsCandidate(
+      const directionPromise = walkingDirectionsCandidate(
         canonical,
         sourceStart,
         sourceEnd,
@@ -2119,6 +2250,14 @@ export async function reconstructPedestrianFinalRoute(
         options.requestPhase ?? 'final',
         options.requestReason ?? 'qualified-unresolved-directions-span',
       );
+      const direction = await Promise.race([
+        directionPromise,
+        new Promise<DirectionsResult | null>(resolve => {
+          if (totalAbort.controller.signal.aborted) resolve(null);
+          else totalAbort.controller.signal.addEventListener('abort', () => resolve(null), { once: true } as any);
+        }),
+      ]);
+      if (!direction) break;
       requestResults.push(direction.request);
       if (direction.candidate) {
         selected = selectNonOverlappingCandidates([...selected, direction.candidate]);

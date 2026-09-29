@@ -7,12 +7,12 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 describe('OTA candidate marker', () => {
-  it('exports O66 and renders the exact truthful initial inline status once', () => {
-    expect(OTA_VERSION).toBe('O66');
+  it('exports O67 and renders the exact truthful initial inline status once', () => {
+    expect(OTA_VERSION).toBe('O67');
 
     const screen = render(<OtaBadge inline />);
 
-    expect(screen.getAllByText('O66 · Checking for update')).toHaveLength(1);
+    expect(screen.getAllByText('O67 · Checking for update')).toHaveLength(1);
     expect(screen.queryByText(/O62/)).toBeNull();
     screen.unmount();
   });

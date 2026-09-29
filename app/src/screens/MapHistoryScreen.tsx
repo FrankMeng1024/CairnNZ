@@ -46,6 +46,7 @@ import {
   commitActivityFinalArtifact,
   loadActivityFinalArtifact,
 } from '../features/activity/activityFinalArtifact';
+import { recordActivityStageEvent } from '../features/activity/activityStageLedger';
 import { ContentSurface } from '../components/ContentSurface';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SyncBadge } from '../components/SyncBadge';
@@ -1247,6 +1248,17 @@ function MapHistoryObjectScreen() {
         detailTrackSnapshots.current.set(selectedSessionId, snapshot);
         detailTrackRevisions.current.set(selectedSessionId, artifact.revision);
         setLoadedTrackPoints(snapshot);
+        void recordActivityStageEvent({
+          ownerUserId,
+          clientActivityId,
+          stage: 'detail-selected',
+          details: {
+            consumer: 'activity-detail',
+            artifactSource: artifact.source,
+            artifactRevision: artifact.revision,
+            artifactFingerprint: artifact.displayFingerprint,
+          },
+        });
         return;
       }
       const remoteId = session?.remoteId;
@@ -1365,6 +1377,20 @@ function MapHistoryObjectScreen() {
     const openSegment = (segment: typeof realSegments[number], reconnectsGap = false) => {
       if (routeDraftOpening) return;
       setRouteDraftOpening(true);
+      const ownerUserId = useSessionStore.getState().currentUserId;
+      const clientActivityId = selectedSession.clientActivityId ?? selectedSession.id;
+      void recordActivityStageEvent({
+        ownerUserId,
+        clientActivityId,
+        stage: 'detail-selected',
+        details: {
+          consumer: 'save-as-route',
+          artifactRevision: selectedSession.finalGeometryRevision ?? null,
+          artifactFingerprint: selectedSession.finalGeometryFingerprint
+            ?? activityGeometryFingerprint(loadedTrackPoints ?? []),
+          reconnectsGap,
+        },
+      });
       crashLogger.breadcrumb(`saveroute:nav-to-editor session=${selectedSession.id} segment=${segment[0]?.segmentId ?? 'legacy'}`);
       (nav as any).navigate('RouteEditor', {
         fromSessionId: selectedSession.id,

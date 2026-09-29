@@ -7,8 +7,12 @@ import {
   evaluateMatchedGeometryQuality,
   preserveTrustedRouteEndpoints,
 } from '../../services/routing/snapTrack';
-import { reconstructPedestrianFinalRoute } from '../../services/routing/pedestrianFinalRoute';
+import {
+  reconstructPedestrianFinalRoute,
+  type PedestrianFinalRequestResult,
+} from '../../services/routing/pedestrianFinalRoute';
 import { createActivityMapboxRequestGovernor } from '../../services/routing/activityRequestGovernor';
+import { networkMonitor } from '../../services/networkMonitor';
 import {
   finishPendingPreparation,
   markPendingUploadReady,
@@ -23,6 +27,7 @@ import {
   loadActivityFinalArtifact,
   type ActivityFinalArtifact,
 } from './activityFinalArtifact';
+import { recordActivityStageEvent } from './activityStageLedger';
 
 export interface ActivityFinalRefinementJob {
   format: 'cairn-activity-final-refinement';
@@ -38,6 +43,13 @@ export interface ActivityFinalRefinementJob {
   updatedAt: number;
   completedRevision: number | null;
   lastError: string | null;
+  technicalOutcome?: string | null;
+  selectedSource?: ActivityFinalArtifact['source'] | null;
+  selectedFingerprint?: string | null;
+  tokenAuthorityLabel?: string | null;
+  matchingAttempted?: boolean;
+  governorAuthorized?: boolean | null;
+  candidateDecision?: string | null;
 }
 
 export type ActivityFinalRefinementRunResult =
@@ -162,6 +174,47 @@ function stateForArtifact(artifact: ActivityFinalArtifact): 'base_ready' | 'enha
   return 'limited_evidence';
 }
 
+function classifyRetainedLocalRoute(input: {
+  deadlineReached: boolean;
+  requestResults: PedestrianFinalRequestResult[];
+  resultReasons: string[];
+  governorAuthorized: boolean | null | undefined;
+}): { technicalOutcome: string; candidateDecision: string } {
+  const results = input.requestResults;
+  const normalizedReasons = input.resultReasons.map(reason => reason.toLowerCase());
+  if (input.deadlineReached
+    || results.some(request => request.result.includes('timeout'))
+    || normalizedReasons.some(reason => reason.includes('timeout') || reason.includes('abort'))) {
+    return { technicalOutcome: 'deadline', candidateDecision: 'stable-local-deadline' };
+  }
+  if (results.some(request => request.httpStatus === 401 || request.httpStatus === 403
+    || request.responseCode?.toLowerCase().includes('unauthor'))) {
+    return { technicalOutcome: 'auth', candidateDecision: 'stable-local-auth-rejected' };
+  }
+  if (results.some(request => request.governorReason === 'budget')) {
+    return { technicalOutcome: 'budget', candidateDecision: 'stable-local-governor-denied' };
+  }
+  if (results.some(request => request.responseCode === 'NoMatch'
+    || request.result.toLowerCase().includes('no-match'))
+    || normalizedReasons.some(reason => reason.includes('no_match') || reason.includes('no-match'))) {
+    return { technicalOutcome: 'no-match', candidateDecision: 'stable-local-no-match' };
+  }
+  if (results.some(request => request.result === 'network-error'
+    || (request.httpStatus != null && request.httpStatus >= 400))) {
+    return { technicalOutcome: 'network-failure', candidateDecision: 'stable-local-network-failure' };
+  }
+  if (results.some(request => request.rejectedCandidateCount > 0)) {
+    return { technicalOutcome: 'unsafe-candidate', candidateDecision: 'candidate-rejected' };
+  }
+  if (input.governorAuthorized === false) {
+    return { technicalOutcome: 'governor-denied', candidateDecision: 'stable-local-governor-denied' };
+  }
+  if (results.some(request => request.invoked)) {
+    return { technicalOutcome: 'no-meaningful-improvement', candidateDecision: 'stable-local-no-improvement' };
+  }
+  return { technicalOutcome: 'no-match', candidateDecision: 'stable-local-no-match' };
+}
+
 async function publishArtifactAndRelease(
   job: ActivityFinalRefinementJob,
   artifact: ActivityFinalArtifact,
@@ -250,8 +303,26 @@ async function publishArtifactAndRelease(
     status: 'complete',
     outcome,
     completedRevision: artifact.revision,
+    selectedSource: artifact.source,
+    selectedFingerprint: artifact.displayFingerprint,
     updatedAt: Date.now(),
     lastError: null,
+  });
+  void recordActivityStageEvent({
+    ownerUserId: job.ownerUserId,
+    clientActivityId: job.clientActivityId,
+    stage: 'final-selected',
+    details: {
+      outcome,
+      technicalOutcome: currentJob.technicalOutcome ?? null,
+      tokenAuthorityLabel: currentJob.tokenAuthorityLabel ?? null,
+      matchingAttempted: currentJob.matchingAttempted ?? false,
+      governorAuthorized: currentJob.governorAuthorized ?? null,
+      candidateDecision: currentJob.candidateDecision ?? null,
+      selectedSource: artifact.source,
+      selectedRevision: artifact.revision,
+      selectedFingerprint: artifact.displayFingerprint,
+    },
   });
   finishPendingPreparation(job.clientActivityId);
   appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_final_refinement_completed', {
@@ -285,6 +356,13 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
     attemptCount: job.attemptCount + 1,
     updatedAt: Date.now(),
     lastError: null,
+    technicalOutcome: null,
+    selectedSource: null,
+    selectedFingerprint: null,
+    tokenAuthorityLabel: null,
+    matchingAttempted: false,
+    governorAuthorized: null,
+    candidateDecision: null,
   };
   await writeJob(running);
   const stoppedBeforeRead = await stoppedRunResult(running, signal);
@@ -311,14 +389,26 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   }
 
   const canonical = pending.payload.route_points_canonical.map(fromPendingPoint);
-  if (canonical.length < 2) return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
+  if (canonical.length < 2) {
+    running.technicalOutcome = 'insufficient-evidence';
+    running.candidateDecision = 'local-retained';
+    await writeJob(running);
+    return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
+  }
   const canonicalSegments = segmentTrace(canonical).segments;
   const baseSegments = segmentTrace(baseArtifact.points).segments.map(segment => segment.slice());
   if (baseSegments.length !== canonicalSegments.length) {
     return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
   }
+  const networkState = networkMonitor.getState?.()?.state ?? 'unknown';
   const authority = await resolveMapboxPublicTokenAuthority();
-  if (!authority.token) return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
+  running.tokenAuthorityLabel = authority.source;
+  if (networkState === 'offline' || !authority.token) {
+    running.technicalOutcome = networkState === 'offline' ? 'offline' : 'authority-unavailable';
+    running.candidateDecision = 'stable-local-selected';
+    await writeJob(running);
+    return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
+  }
 
   const governor = createActivityMapboxRequestGovernor({
     ownerUserId: job.ownerUserId,
@@ -326,10 +416,14 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
     startedAtMs: pending.summary?.startedAt ?? pending.startedAt ?? pending.createdAt,
     recordedDurationMs: (pending.summary?.durationS ?? pending.payload.duration_s) * 1_000,
   });
-  const deadlineMs = Date.now() + 10_000;
+  // The optional road-aware budget begins only after local safety, authority,
+  // and governor setup. Mandatory WAL/artifact writes are never truncated.
+  const deadlineMs = Date.now() + 4_500;
   let matchedSegments = 0;
   let locallyImprovedSegments = 0;
   let hybrid = false;
+  const requestResults: PedestrianFinalRequestResult[] = [];
+  const resultReasons: string[] = [];
   const priority = canonicalSegments
     .map((segment, segmentIndex) => ({ segment, segmentIndex }))
     .filter(item => item.segment.length >= 2)
@@ -352,6 +446,15 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
       requestReason: 'durable-final-qualified-unresolved-corridor',
       signal,
     });
+    resultReasons.push('reason' in result ? result.reason : 'ok');
+    running.matchingAttempted = running.matchingAttempted
+      || (result.ok && (result.stats.requestResults ?? []).some(request => request.invoked));
+    if (result.ok) {
+      const requests = result.stats.requestResults ?? [];
+      requestResults.push(...requests);
+      if (requests.some(request => request.invoked)) running.governorAuthorized = true;
+      else if (requests.some(request => request.governorReason != null)) running.governorAuthorized = false;
+    }
     const stoppedAfterDispatch = await stoppedRunResult(running, signal);
     if (stoppedAfterDispatch) return stoppedAfterDispatch;
     if (!result.ok || result.points.length < 2) continue;
@@ -384,6 +487,17 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   const stoppedAfterSegments = await stoppedRunResult(running, signal);
   if (stoppedAfterSegments) return stoppedAfterSegments;
   if (matchedSegments === 0 && locallyImprovedSegments === 0) {
+    const deadlineReached = Date.now() >= deadlineMs;
+    const snapshot = await governor.snapshot().catch(() => null);
+    const retained = classifyRetainedLocalRoute({
+      deadlineReached: deadlineReached || (snapshot?.timeoutInvocations ?? 0) > 0,
+      requestResults,
+      resultReasons,
+      governorAuthorized: running.governorAuthorized,
+    });
+    running.technicalOutcome = retained.technicalOutcome;
+    running.candidateDecision = retained.candidateDecision;
+    await writeJob(running);
     return publishArtifactAndRelease(running, baseArtifact, 'base-retained', signal);
   }
 
@@ -416,6 +530,9 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
     return stopped ?? 'cancelled';
   }
   const acceptedArtifact = committed.artifact;
+  running.technicalOutcome = matchedSegments > 0 ? 'matched-success' : 'local-improvement';
+  running.candidateDecision = 'accepted';
+  await writeJob(running);
   const stoppedAfterCommit = await stoppedRunResult(running, signal);
   if (stoppedAfterCommit) return stoppedAfterCommit;
   if (acceptedArtifact.canonicalFingerprint !== job.canonicalFingerprint) {
@@ -448,6 +565,13 @@ export async function enqueueActivityFinalRefinement(input: {
     updatedAt: now,
     completedRevision: null,
     lastError: null,
+    technicalOutcome: null,
+    selectedSource: null,
+    selectedFingerprint: null,
+    tokenAuthorityLabel: null,
+    matchingAttempted: false,
+    governorAuthorized: null,
+    candidateDecision: null,
   };
   await writeJob(job);
   await addToIndex(input.ownerUserId, input.clientActivityId);

@@ -9,6 +9,7 @@ describe('shared Hike and Run recording UI contracts', () => {
   const hike = read('src/screens/HikingScreen.tsx');
   const run = read('src/screens/RunningScreen.tsx');
   const hikeFinish = read('src/screens/StopSummarySheet.tsx');
+  const settings = read('src/screens/SettingsScreen.tsx');
 
   test.each([
     ['Hike', hike, 'hike'],
@@ -91,6 +92,7 @@ describe('shared Hike and Run recording UI contracts', () => {
   });
 
   test('finish intent stays honest, calm, and above live controls', () => {
+    expect(hikeFinish).toContain("? (isRun ? 'Finishing run' : 'Finishing hike')");
     expect(hikeFinish).toContain("? (isRun ? 'Run complete' : 'Hike complete')");
     expect(hikeFinish).toContain(": (isRun ? 'Finish run' : 'Finish hike')");
     expect(hikeFinish).toContain("{committed ? 'View activity' : `Finish ${label.toLowerCase()}`}");
@@ -99,12 +101,36 @@ describe('shared Hike and Run recording UI contracts', () => {
     expect(run).toContain('<StopSummarySheet');
     expect(run).toContain('summary={runStopSummaryPresentation}');
     expect(run).toContain('committed={Boolean(committedRunActivityId)}');
+    expect(run).toContain('finishProgress={finishProgress}');
     expect(run).toContain('onViewActivity={() =>');
   });
 
-  test('shows the walked route before Save and the validated Final afterward', () => {
+  test('shows the walked route before Save and the selected Route afterward', () => {
     expect(hikeFinish).toContain('{summary.trackPoints.length >= 2 && (');
     expect(hikeFinish).not.toContain('{committed && summary.trackPoints.length >= 2 && (');
-    expect(hikeFinish).toContain("committed ? 'Validated final route' : 'Walked route preview'");
+    expect(hikeFinish).toContain("committed ? 'Route ready' : 'Walked route preview'");
+  });
+
+  test('Finish exposes exactly Hike saved, Route and Sync concepts', () => {
+    expect(hikeFinish).toContain('activity-finish-progress-rail');
+    expect(hikeFinish).toContain('`${label} saved`');
+    expect(hikeFinish).toContain('`Saving ${label.toLowerCase()}`');
+    expect(hikeFinish).toContain("'Route ready'");
+    expect(hikeFinish).toContain("'Refining route'");
+    expect(hikeFinish).toContain("'Sync · Waiting for connection'");
+    expect(hikeFinish).toContain("'Synced'");
+    expect(hikeFinish).toContain("'Sync · Needs attention'");
+    expect(hikeFinish).not.toContain('Step 2 of 3');
+    expect(hikeFinish).not.toContain("'Base Final'");
+    expect(hikeFinish).not.toContain("'Refined Final'");
+    expect(hikeFinish).not.toContain("'Map Matching'");
+  });
+
+  test('Settings exposes one privacy-safe owner action for the follow-up field ledger', () => {
+    expect(settings).toContain('title="Copy Activity diagnostics"');
+    expect(settings).toContain('testID="settings-copy-activity-diagnostics"');
+    expect(settings).toContain('exportLatestActivityStageLedger(ownerId)');
+    expect(settings).toContain('currentOwnerId() !== ownerId');
+    expect(settings).toContain('contains no coordinates or Mapbox token');
   });
 });

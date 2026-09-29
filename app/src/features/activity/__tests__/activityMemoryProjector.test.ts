@@ -41,6 +41,10 @@ import {
   waitForActivityMemoryProjection,
 } from '../activityMemoryProjector';
 import {
+  exportLatestActivityStageLedger,
+  flushActivityStageLedger,
+} from '../activityStageLedger';
+import {
   acceptRealGpsObservation,
   createRealGpsContinuityState,
   evaluateRealGpsObservation,
@@ -602,10 +606,40 @@ describe('durable Activity → Memory downstream responsibility', () => {
     expect(purged).toBe(false);
     release();
     await purge;
-    expect([...mockValues.values()].some(raw => raw.includes('activity-d'))).toBe(false);
+    expect([...mockValues.entries()].some(([key, raw]) => (
+      key.startsWith('cairn:activity-memory-projection:v2:') && raw.includes('activity-d')
+    ))).toBe(false);
     await expect(scheduleActivityMemoryProjection({
       ownerUserId: 'owner-a', clientActivityId: 'activity-d', ownerGeneration: 'gen-a', points: mockJournal,
     })).rejects.toThrow('activity_projection_owner_purged');
+  });
+
+  test('legacy no-ordinal Memory projection exports a coordinate-free evidence identity', async () => {
+    mockRecordMemoryEvidence.mockResolvedValue({ committed: true, deduplicated: false });
+    mockJournal = [{
+      lat: -41.1234567,
+      lng: 174.7654321,
+      t: 12_345,
+      segmentId: 'legacy-segment',
+      accuracy: 8,
+    }];
+    await scheduleActivityMemoryProjection({
+      ownerUserId: 'owner-a',
+      clientActivityId: 'activity-legacy-ledger',
+      ownerGeneration: 'legacy-generation',
+      points: mockJournal,
+    });
+    await waitForActivityMemoryProjection('activity-legacy-ledger');
+    await flushActivityStageLedger('owner-a');
+    const exported = await exportLatestActivityStageLedger('owner-a');
+    expect(exported.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        stage: 'memory-local-commit',
+        evidenceId: 'legacy-segment:legacy-index:0',
+      }),
+    ]));
+    expect(JSON.stringify(exported)).not.toContain('-41.1234567');
+    expect(JSON.stringify(exported)).not.toContain('174.7654321');
   });
 
   test('purge drains a scheduler blocked in its first intent write before final owner scan', async () => {

@@ -1,7 +1,10 @@
 import { storage } from '../../store/storage';
 import type { TrackPoint } from '../../store/useSessionStore';
 import { segmentTrace } from './activityContracts';
-import { buildBaseFinalGeometry } from '../../services/routing/pedestrianFinalRoute';
+import {
+  buildBaseFinalGeometry,
+  buildEvidenceSupportedLocalFinalGeometry,
+} from '../../services/routing/pedestrianFinalRoute';
 
 export type ActivityFinalSource = 'base' | 'matched' | 'hybrid' | 'limited' | 'server-restored';
 
@@ -73,6 +76,33 @@ export function buildBaseFinalTrackPoints(points: TrackPoint[]): TrackPoint[] {
       alt: point.alt,
       t: point.t ?? first.t + Math.round(
         ((last.t - first.t) * index) / Math.max(1, base.points.length - 1),
+      ),
+      segmentId: first.segmentId,
+      ...(index === 0 && first.segmentStartReason
+        ? { segmentStartReason: first.segmentStartReason }
+        : {}),
+    }));
+  });
+}
+
+/** Stable offline-capable Final selected before optional road-aware work. */
+export function buildLocalFinalTrackPoints(points: TrackPoint[]): TrackPoint[] {
+  return segmentTrace(points).segments.flatMap(segment => {
+    const first = segment[0];
+    const last = segment[segment.length - 1];
+    const local = buildEvidenceSupportedLocalFinalGeometry(segment.map(point => ({
+      lat: point.lat,
+      lng: point.lng,
+      alt: point.alt,
+      t: point.t,
+      accuracy: point.accuracy,
+    })));
+    return local.points.map((point, index) => ({
+      lat: point.lat,
+      lng: point.lng,
+      alt: point.alt,
+      t: point.t ?? first.t + Math.round(
+        ((last.t - first.t) * index) / Math.max(1, local.points.length - 1),
       ),
       segmentId: first.segmentId,
       ...(index === 0 && first.segmentStartReason

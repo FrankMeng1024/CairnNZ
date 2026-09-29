@@ -60,6 +60,7 @@ import { PRIVACY_URL } from '../config/api';
 import { getHomeBackground, getRegisteredBackgroundLayout, getWeatherReviewBackground } from '../utils/homeBackground';
 import { PASSWORD_RULES, passwordPolicyError, passwordRuleState } from '../utils/passwordPolicy';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
+import { exportLatestActivityStageLedger } from '../features/activity/activityStageLedger';
 
 type Page = 'root' | 'account' | 'privacy' | 'help';
 type FeedbackKind = 'feedback' | 'bug';
@@ -283,6 +284,7 @@ export function SettingsScreen() {
   const [memoryDeleting, setMemoryDeleting] = useState(false);
   const [memoryDeleteOpen, setMemoryDeleteOpen] = useState(false);
   const [memoryDeleteResult, setMemoryDeleteResult] = useState('');
+  const [activityDiagnosticsCopying, setActivityDiagnosticsCopying] = useState(false);
 
   const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>('feedback');
   const [feedbackText, setFeedbackText] = useState('');
@@ -514,6 +516,31 @@ export function SettingsScreen() {
       }
     } finally {
       setPermissionLoading(false);
+    }
+  };
+
+  const copyActivityDiagnostics = async () => {
+    const ownerId = currentOwnerId();
+    if (!ownerId || activityDiagnosticsCopying) return;
+    setActivityDiagnosticsCopying(true);
+    try {
+      const ledger = await exportLatestActivityStageLedger(ownerId);
+      if (currentOwnerId() !== ownerId) return;
+      const Clipboard = await import('expo-clipboard');
+      await Clipboard.setStringAsync(JSON.stringify(ledger, null, 2));
+      if (currentOwnerId() !== ownerId) return;
+      Alert.alert(
+        'Activity diagnostics copied',
+        ledger.clientActivityId
+          ? 'The latest local timing ledger is on your clipboard. It contains no coordinates or Mapbox token.'
+          : 'No Activity timing events are stored on this device yet.',
+      );
+    } catch {
+      if (currentOwnerId() === ownerId) {
+        Alert.alert('Could not copy diagnostics', 'Try again after reopening CairnNZ.');
+      }
+    } finally {
+      if (currentOwnerId() === ownerId) setActivityDiagnosticsCopying(false);
     }
   };
 
@@ -883,6 +910,16 @@ export function SettingsScreen() {
         </ContentSurface>
 
         <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <Row
+            icon="FileText"
+            title="Copy Activity diagnostics"
+            detail="Copies the latest local timing ledger without coordinates or access tokens"
+            onPress={() => void copyActivityDiagnostics()}
+            disabled={activityDiagnosticsCopying}
+            busy={activityDiagnosticsCopying}
+            testID="settings-copy-activity-diagnostics"
+          />
+          <Divider color={background.settingsCardBorderColor} />
           <Row
             icon="Trash2"
             title="Delete exploration history"

@@ -28,6 +28,13 @@ const mockHikeJournalPoints: any[] = [];
 
 jest.mock('expo-location', () => ({ __esModule: true, ...mockLocation, default: mockLocation }));
 jest.mock('expo-secure-store', () => ({ __esModule: true, ...mockSecureStore, default: mockSecureStore }));
+jest.mock('expo-application', () => ({
+  nativeApplicationVersion: '0.2.6', nativeBuildVersion: '63', applicationId: 'test.cairn',
+}));
+jest.mock('expo-updates', () => ({
+  updateId: 'test-update', runtimeVersion: '0.2.6-o66', channel: 'test',
+  isEmbeddedLaunch: false, isEmergencyLaunch: false, manifest: null,
+}));
 
 jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
@@ -165,10 +172,15 @@ const {
   resetActivityMemoryProjectionForTests,
   waitForAllActivityMemoryProjections,
 } = require('../src/features/activity/activityMemoryProjector');
+const {
+  exportLatestActivityStageLedger,
+  flushActivityStageLedger,
+} = require('../src/features/activity/activityStageLedger');
 
 describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
   beforeEach(async () => {
     await waitForAllActivityMemoryProjections();
+    await flushActivityStageLedger('tracking-test-user');
     resetActivityMemoryProjectionForTests();
     mockAsyncStorageValues.clear();
     mockHikeJournalPoints.length = 0;
@@ -236,6 +248,98 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
       atMs: 1_000,
       continuityState: 'accepted',
     }));
+  });
+
+  it('exports receipt → decision → WAL → publication → Memory wall-time stages without coordinates', async () => {
+    const receiptWallTimeMs = Date.now();
+    await useTrackingStore.getState().addTrackPoint({
+      lat: -45.0312,
+      lng: 168.6626,
+      accuracy: 6,
+      speed: 1.2,
+      speedAccuracy: 0.4,
+      source: 'foreground',
+      clientActivityId: '11111111-1111-4111-8111-111111111111',
+      ownerGeneration: 'test-owner-generation',
+      receiptWallTimeMs,
+      receiptMonotonicTimeMs: 42.5,
+      callbackIdentity: 'test-native-callback',
+      appStateAtReceipt: 'active',
+    }, 1_000);
+    await waitForAllActivityMemoryProjections();
+    await flushActivityStageLedger('tracking-test-user');
+    const exported = await exportLatestActivityStageLedger('tracking-test-user');
+    const stages = exported.events.map((event: any) => event.stage);
+    expect(stages).toEqual(expect.arrayContaining([
+      'observation-received',
+      'observation-decision',
+      'canonical-accepted',
+      'wal-committed',
+      'store-published',
+      'memory-responsibility',
+      'memory-local-commit',
+    ]));
+    const receipt = exported.events.find((event: any) => event.stage === 'observation-received');
+    expect(receipt).toMatchObject({
+      wallTimeMs: receiptWallTimeMs,
+      monotonicTimeMs: 42.5,
+      details: {
+        observationTimeMs: 1_000,
+        callbackIdentity: 'test-native-callback',
+        horizontalAccuracyM: 6,
+        speedMps: 1.2,
+        speedAccuracyMps: 0.4,
+      },
+    });
+    const decision = exported.events.find((event: any) => event.stage === 'observation-decision');
+    expect(decision.details).toMatchObject({
+      prefilterDecision: 'PASS', decision: 'ACCEPT', rawOrdinal: 1,
+    });
+    expect(JSON.stringify(exported)).not.toMatch(/-45\.0312|168\.6626|token/i);
+    expect(exported.presentationMeasurement).toBe('NOT_MEASURED');
+  });
+
+  it('publishes an accepted Live point without waiting for delayed Memory-intent storage', async () => {
+    const AsyncStorage = require('@react-native-async-storage/async-storage');
+    let releaseIntentWrite: () => void = () => {};
+    let delayNextIntentWrite = true;
+    let intentWriteBlocked = false;
+    AsyncStorage.setItem.mockImplementation((key: string, value: string) => {
+      if (delayNextIntentWrite && key.startsWith('cairn:activity-memory-projection:v2:')) {
+        delayNextIntentWrite = false;
+        intentWriteBlocked = true;
+        return new Promise<void>(resolve => {
+          releaseIntentWrite = () => {
+            mockAsyncStorageValues.set(key, value);
+            resolve();
+          };
+        });
+      }
+      mockAsyncStorageValues.set(key, value);
+      return Promise.resolve();
+    });
+    try {
+      const accepted = await useTrackingStore.getState().addTrackPoint({
+        lat: -45.0312,
+        lng: 168.6626,
+        accuracy: 6,
+        speed: 1.2,
+        source: 'foreground',
+        clientActivityId: '11111111-1111-4111-8111-111111111111',
+        ownerGeneration: 'test-owner-generation',
+      }, 1_000);
+      expect(accepted).toMatchObject({ accepted: true, memoryProjectionPending: true });
+      expect(useTrackingStore.getState().trackPoints).toHaveLength(1);
+      for (let turn = 0; turn < 50 && !intentWriteBlocked; turn += 1) await Promise.resolve();
+      expect(intentWriteBlocked).toBe(true);
+      releaseIntentWrite();
+      await waitForAllActivityMemoryProjections();
+    } finally {
+      releaseIntentWrite();
+      AsyncStorage.setItem.mockImplementation(async (key: string, value: string) => {
+        mockAsyncStorageValues.set(key, value);
+      });
+    }
   });
 
   it('skips a duplicate fix with same timestamp at same coords (the 3× bug)', async () => {
@@ -368,6 +472,19 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
       .map((call: any[]) => call[0])
       .filter((item: any) => item.source === 'activity_real');
     expect(memoryCalls.slice(-fixes.length).map((item: any) => item.lat)).toEqual(fixes.map(item => item.lat));
+    await flushActivityStageLedger('tracking-test-user');
+    const exported = await exportLatestActivityStageLedger('tracking-test-user');
+    const promotions = exported.events.filter((event: any) => (
+      event.stage === 'canonical-accepted' && event.details.promotedCandidate === true
+    ));
+    expect(promotions).toHaveLength(2);
+    for (const promotion of promotions) {
+      expect(promotion.details.promotedByEvidenceId).toEqual(expect.any(String));
+      expect(promotion.details.decisionWallTimeMs).toBe(promotion.wallTimeMs);
+      expect(promotion.details.decisionWallTimeMs).toBeGreaterThan(promotion.details.observationTimeMs);
+      expect(Number(promotion.details.promotedByEvidenceId.split(':').pop()))
+        .toBeGreaterThan(promotion.details.rawOrdinal);
+    }
   });
 
   it('STATIONARY_GPS_JITTER_SPAGHETTI: raw jitter stays out of canonical route, distance, display and Memory', async () => {
@@ -1038,6 +1155,24 @@ describe('useTrackingStore — P0 operation guards', () => {
       await new Promise(resolve => setTimeout(resolve, 0));
     }
     expect(useTrackingStore.getState().trackPoints.map((point: any) => point.t)).toEqual([1_000, 2_000]);
+    await flushActivityStageLedger('tracking-test-user');
+    const exported = await exportLatestActivityStageLedger('tracking-test-user');
+    expect(exported.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        stage: 'store-published',
+        evidenceId: `${segmentId}:journal-tail`,
+        details: expect.objectContaining({
+          source: 'background-wal-replay',
+          canonicalStorePublished: true,
+          qualifiedPuckPublished: true,
+          liveRoutePublished: true,
+          visibleRenderTime: 'NOT_MEASURED',
+          projectionAuthority: 'foreground',
+          journalPointCount: 2,
+          appendedFromJournal: 1,
+        }),
+      }),
+    ]));
   });
 
   it('locks synchronously during a real start and rolls back a failed location dependency', async () => {

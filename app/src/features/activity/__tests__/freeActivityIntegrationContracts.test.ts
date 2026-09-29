@@ -128,6 +128,21 @@ describe('Free Activity integration contracts', () => {
     expect(publish).toBeGreaterThan(durable);
   });
 
+  test('native receipt is captured before the ingest queue and Memory cannot delay the next accepted fix', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    const ingest = source.slice(
+      source.indexOf('addTrackPoint: async'),
+      source.indexOf('linkMarker:', source.indexOf('addTrackPoint: async')),
+    );
+    expect(ingest.indexOf('const receiptWallTimeMs')).toBeGreaterThanOrEqual(0);
+    expect(ingest.indexOf('await previousIngest')).toBeGreaterThan(ingest.indexOf('const receiptWallTimeMs'));
+    expect(ingest).toContain('const responsibility = scheduleActivityMemoryProjection({');
+    expect(ingest).not.toContain('await scheduleActivityMemoryProjection({');
+    expect(ingest.indexOf("stage: 'store-published'"))
+      .toBeLessThan(ingest.indexOf('const responsibility = scheduleActivityMemoryProjection({'));
+    expect(ingest).toContain("status: 'wal-discovery-required'");
+  });
+
   test('Activity duration is lifecycle-clocked and accepted GPS points do not own timer progress', () => {
     const source = read('src/store/useTrackingStore.ts');
     const ingest = source.slice(source.indexOf('addTrackPoint: async'), source.indexOf('linkMarker:', source.indexOf('addTrackPoint: async')));

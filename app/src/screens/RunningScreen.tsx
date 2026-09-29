@@ -275,6 +275,7 @@ export function RunningScreen() {
   const elevationGainM = useTrackingStore(s => s.elevationGainM);
   const startedAt = useTrackingStore(s => s.startedAt);
   const savingHikeStep = useTrackingStore(s => s.savingHikeStep);
+  const finishProgress = useTrackingStore(s => s.finishProgress);
   const locationAvailable = useTrackingStore(s => s.locationAvailable);
   const lastCoordinate = useTrackingStore(s => s.lastCoordinate);
   const latestSourceLocationTime = useTrackingStore(s => s.latestSourceLocationTime);
@@ -1144,6 +1145,8 @@ export function RunningScreen() {
           summary={runStopSummaryPresentation}
           saving={savingRun}
           savingStep={savingHikeStep}
+          finishProgress={finishProgress}
+          syncState={committedRunActivity?.syncState}
           committed={Boolean(committedRunActivityId)}
           refining={committedRunActivity?.finalGeometryState === 'refining'}
           onCancel={() => {

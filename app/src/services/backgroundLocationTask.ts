@@ -32,6 +32,11 @@ import {
   type RealGpsContinuityState,
   type RealGpsObservation,
 } from '../features/activity/realGpsContinuity';
+import {
+  activityStageMonotonicNow,
+  flushActivityStageLedger,
+  recordActivityStageEvent,
+} from '../features/activity/activityStageLedger';
 
 export const BACKGROUND_LOCATION_TASK = 'cairn-background-location';
 
@@ -167,6 +172,12 @@ export type LocationCoords = {
   canonicalDecision?: 'ACCEPT' | 'REJECT' | 'QUARANTINE' | 'REFINE';
   decisionReason?: string;
   continuityStateAfter?: RealGpsContinuityState;
+  receiptWallTimeMs?: number;
+  receiptMonotonicTimeMs?: number | null;
+  callbackIdentity?: string;
+  nativeBatchSequence?: number;
+  nativeBatchIndex?: number;
+  appStateAtReceipt?: string;
 };
 
 const pendingBackgroundLocations: LocationCoords[] = [];
@@ -379,11 +390,44 @@ async function appendDirectlyToHikeTrack(
     const classified: any[] = [];
     const observedOrdinals: number[] = [];
     for (const event of [...events].sort((a, b) => a.t - b.t)) {
-      if (!Number.isFinite(event.lat) || !Number.isFinite(event.lng) || !Number.isFinite(event.t)) continue;
+      const receiptEvidenceId = event.receiptEvidenceId
+        ?? `background:${Number.isFinite(event.t) ? Math.floor(event.t) : 'invalid'}:${nativeBatchSequence}:${event.nativeBatchIndex ?? 'unknown'}`;
+      const recordPrefilterRejection = (reason: string, ordinalSemantics: string) => {
+        void recordActivityStageEvent({
+          ownerUserId: context.userId,
+          clientActivityId: context.clientActivityId,
+          stage: 'observation-decision',
+          evidenceId: receiptEvidenceId,
+          details: {
+            observationTimeMs: Number.isFinite(event.t) ? Math.floor(event.t) : null,
+            receiptEvidenceId,
+            prefilterDecision: 'REJECT',
+            prefilterReason: reason,
+            decision: 'REJECT',
+            reason,
+            decisionWallTimeMs: Date.now(),
+            rawOrdinal: null,
+            ordinalSemantics,
+            nativeBatchSequence,
+            nativeBatchIndex: event.nativeBatchIndex ?? null,
+          },
+        });
+      };
+      if (!Number.isFinite(event.lat) || !Number.isFinite(event.lng) || !Number.isFinite(event.t)) {
+        recordPrefilterRejection('invalid-coordinate-or-timestamp', 'not-allocated-invalid-prefilter');
+        continue;
+      }
       // Native providers may deliver an old queued batch after Resume.  A
       // generation timestamp is necessary but not sufficient: within one
       // generation samples must also be strictly chronological.
-      if (event.t < context.acceptAfterMs || event.t <= latestObservedTimestamp) continue;
+      if (event.t < context.acceptAfterMs) {
+        recordPrefilterRejection('before-owner-generation', 'not-allocated-before-owner-prefilter');
+        continue;
+      }
+      if (event.t <= latestObservedTimestamp) {
+        recordPrefilterRejection('stale-or-equal-observation', 'not-allocated-stale-prefilter');
+        continue;
+      }
       latestObservedTimestamp = event.t;
       rawOrdinal += 1;
       observedOrdinals.push(rawOrdinal);
@@ -443,6 +487,24 @@ async function appendDirectlyToHikeTrack(
       const decision = evaluateRealGpsObservation(continuity, observation, context.activityMode, Date.now());
       continuity = decision.state;
       emitHeadlessMotionDecision(context, observation, decision, rawOrdinal, activeSegmentId);
+      void recordActivityStageEvent({
+        ownerUserId: context.userId,
+        clientActivityId: context.clientActivityId,
+        stage: 'observation-decision',
+        evidenceId: observation.observationId,
+        details: {
+          observationTimeMs: observation.t,
+          receiptEvidenceId: event.receiptEvidenceId ?? null,
+          prefilterDecision: 'PASS',
+          decision: decision.kind,
+          reason: decision.reason,
+          prefilterReason: null,
+          decisionWallTimeMs: Date.now(),
+          rawOrdinal,
+          ordinalSemantics: 'allocated-in-headless-qualified-loop',
+          nativeBatchSequence,
+        },
+      });
       if (decision.kind !== 'ACCEPT') {
         classified.push({
           ...event,
@@ -465,6 +527,24 @@ async function appendDirectlyToHikeTrack(
         if (existingPending >= 0) classified.splice(existingPending, 1);
       }
       for (const canonicalObservation of canonicalObservations) {
+        const promoted = canonicalObservation !== observation;
+        void recordActivityStageEvent({
+          ownerUserId: context.userId,
+          clientActivityId: context.clientActivityId,
+          stage: 'canonical-accepted',
+          evidenceId: canonicalObservation.observationId,
+          details: {
+            observationTimeMs: canonicalObservation.t,
+            decision: 'ACCEPT',
+            reason: decision.reason,
+            decisionWallTimeMs: Date.now(),
+            rawOrdinal: canonicalObservation.rawOrdinal,
+            ordinalSemantics: 'allocated-in-headless-qualified-loop',
+            promotedCandidate: promoted,
+            promotedByEvidenceId: promoted ? observation.observationId : null,
+            nativeBatchSequence,
+          },
+        });
         const sourceEvent = canonicalObservation === observation
           ? event
           : {
@@ -559,6 +639,19 @@ async function appendDirectlyToHikeTrack(
         force: true,
       });
       await appendBackgroundHikePoints(accepted, context.userId);
+      void recordActivityStageEvent({
+        ownerUserId: context.userId,
+        clientActivityId: context.clientActivityId,
+        stage: 'wal-committed',
+        evidenceId: accepted[accepted.length - 1]?.observationId ?? null,
+        details: {
+          firstRawOrdinal: accepted[0]?.rawOrdinal ?? null,
+          lastRawOrdinal: accepted[accepted.length - 1]?.rawOrdinal ?? null,
+          acceptedCount: accepted.length,
+          nativeBatchSequence,
+          commitWallTimeMs: Date.now(),
+        },
+      });
       appendSimulatorLog('ACTIVITY_POINT', 'activity_journal_commit_v2', {
         phase: 'result',
         ledgerKind: 'canonical-background',
@@ -589,6 +682,18 @@ async function appendDirectlyToHikeTrack(
             accuracy: point.acc ?? null,
             verticalAccuracy: point.vAcc ?? null,
           })),
+        });
+        void recordActivityStageEvent({
+          ownerUserId: context.userId,
+          clientActivityId: context.clientActivityId,
+          stage: 'memory-responsibility',
+          evidenceId: accepted[accepted.length - 1]?.observationId ?? null,
+          details: {
+            status: 'durable-intent',
+            acceptedCount: accepted.length,
+            nativeBatchSequence,
+            responsibilityDurableAtMs: Date.now(),
+          },
         });
         appendSimulatorLog('MEMORY_EVIDENCE', 'activity_background_memory_commit', {
           acceptedCount: accepted.length,
@@ -698,7 +803,11 @@ let backgroundNativeBatchSequence = 0;
 // an async function created a microtask-gap window where headless wakes
 // could arrive before registration completed. We now use a synchronous
 // `require()` guarded by Platform check.
-const handleBackgroundLocationTask = async ({ data, error }: { data: any; error: any }) => withOwnershipBoundary(async () => {
+const handleBackgroundLocationTask = async ({ data, error }: { data: any; error: any }) => {
+  const batchReceiptWallTimeMs = Date.now();
+  const batchReceiptMonotonicTimeMs = activityStageMonotonicNow();
+  const nativeBatchSequence = ++backgroundNativeBatchSequence;
+  return withOwnershipBoundary(async () => {
   crashLogger.breadcrumb(
     `k10:task_fire loc_count=${data?.locations?.length ?? 0} err=${error ? String(error).slice(0, 40) : 'none'} elapsed_ms=${Date.now() - moduleLoadTs}`
   );
@@ -746,11 +855,50 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
   // authority after Finish or Logout has disabled the live lease.
   if (!hikeActive) return;
   if (activeSid !== context.clientActivityId) return;
-  const nativeBatchSequence = ++backgroundNativeBatchSequence;
   const events: any[] = [];
   for (const [nativeBatchIndex, loc] of locations.entries()) {
     const sampleTimestamp = loc.timestamp || Date.now();
+    const receiptEvidenceId = `background:${Math.floor(sampleTimestamp)}:${nativeBatchSequence}:${nativeBatchIndex}`;
+    void recordActivityStageEvent({
+      ownerUserId: context.userId,
+      clientActivityId: context.clientActivityId,
+      stage: 'observation-received',
+      evidenceId: receiptEvidenceId,
+      wallTimeMs: batchReceiptWallTimeMs,
+      monotonicTimeMs: batchReceiptMonotonicTimeMs,
+      details: {
+        observationTimeMs: Math.floor(sampleTimestamp),
+        source: 'background',
+        callbackIdentity: 'task-manager-batch',
+        nativeBatchSize: locations.length,
+        nativeBatchSequence,
+        nativeBatchIndex,
+        appState: (AppState as any)?.currentState ?? 'unknown',
+        ownerGenerationSuffix: context.ownerGeneration.slice(-8),
+        horizontalAccuracyM: loc.coords.accuracy ?? null,
+        speedMps: loc.coords.speed ?? null,
+        speedAccuracyMps: loc.coords.speedAccuracy ?? null,
+        qualifiedPuckPublication: 'HEADLESS_DEFERRED',
+        visibleRenderTime: 'NOT_MEASURED',
+      },
+    });
     if (sampleTimestamp < (context.acceptAfterMs || 0)) {
+      void recordActivityStageEvent({
+        ownerUserId: context.userId,
+        clientActivityId: context.clientActivityId,
+        stage: 'observation-decision',
+        evidenceId: receiptEvidenceId,
+        details: {
+          observationTimeMs: Math.floor(sampleTimestamp),
+          decision: 'REJECT',
+          reason: 'before-owner-generation',
+          prefilterDecision: 'REJECT',
+          prefilterReason: 'before-owner-generation',
+          decisionWallTimeMs: Date.now(),
+          rawOrdinal: null,
+          ordinalSemantics: 'not-allocated-before-owner-prefilter',
+        },
+      });
       crashLogger.breadcrumb(`activity:bg_stale_sample_rejected t=${sampleTimestamp}`);
       continue;
     }
@@ -794,6 +942,11 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
       courseAccuracy: coords.courseAccuracy ?? null,
       src: 'bg',
       conf: 1,
+      receiptEvidenceId,
+      receiptWallTimeMs: batchReceiptWallTimeMs,
+      receiptMonotonicTimeMs: batchReceiptMonotonicTimeMs,
+      nativeBatchSequence,
+      nativeBatchIndex,
     });
   }
   if (events.length === 0) return;
@@ -845,14 +998,22 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
         canonicalDecision: point.canonicalDecision,
         decisionReason: point.decisionReason,
         continuityStateAfter: point.continuityStateAfter,
+        receiptWallTimeMs: point.receiptWallTimeMs ?? batchReceiptWallTimeMs,
+        receiptMonotonicTimeMs: point.receiptMonotonicTimeMs ?? batchReceiptMonotonicTimeMs,
+        callbackIdentity: 'task-manager-batch',
+        nativeBatchSequence,
+        nativeBatchIndex: point.nativeBatchIndex,
+        appStateAtReceipt: 'background',
       });
     }
     crashLogger.breadcrumb(`k10:path_b_write n=${accepted.length}`);
     await flushSimulatorLogs(context.userId);
+    await flushActivityStageLedger(context.userId);
   } catch (e: any) {
     crashLogger.breadcrumb(`k10:path_b_err ${String(e?.message || e).slice(0, 60)}`);
   }
-});
+  });
+};
 
 // Synchronous top-level registration. Guarded by Platform + try/catch so
 // web / Expo Go without dev client don't crash on import.

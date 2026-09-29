@@ -249,6 +249,28 @@ describe('O50 pedestrian geometry modes', () => {
     expect(result.stats.requestResults[0].result).toBe('timeout-or-abort');
     expect(result.stats.sections[0].state).toBe('OFF_NETWORK_PATH');
   });
+
+  test('the completion budget returns even when a transport ignores AbortSignal', async () => {
+    jest.useFakeTimers();
+    try {
+      const canonical = line(0, 100, 0, 12);
+      global.fetch = jest.fn(() => new Promise<Response>(() => undefined)) as any;
+      const completing = reconstructPedestrianFinalRoute(canonical, {
+        mapboxToken: 'pk.test',
+        directionsFallback: false,
+        totalTimeoutMs: 40,
+        perCallTimeoutMs: 20,
+      });
+      await jest.advanceTimersByTimeAsync(45);
+      const result = await completing;
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.stats.acceptedMatchedDistanceM).toBe(0);
+      expect(result.stats.wholeRouteValidation.accepted).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('O50 free/off-network cleanup product contracts', () => {

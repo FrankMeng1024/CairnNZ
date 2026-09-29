@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDistance } from '../utils/distanceFormat';
 import { formatDate } from '../utils/dateFormat';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import type { ActivityFinishProgress } from '../store/useTrackingStore';
 
 export type StopSummary = {
   distanceM: number;
@@ -38,21 +39,15 @@ type Props = {
    *  be dropped in a follow-up once all downstream call sites are
    *  migrated. */
   onDiscard?: () => void;
-  /** O14 Bug 4: when true, disable buttons + swap Save-button label to
-   *  a spinner so the user sees "Saving…" while stopTracking runs its
-   *  async flush → rename chain (up to 15s). */
+  /** Finish is still reconciling or selecting the stable route. */
   saving?: boolean;
-  /** R114/O22 STORY-73017 (K9): detailed step from the tracking store
-   *  (e.g. "Uploading your hike… (8s)"). Renders in place of the generic
-   *  "Saving…" so users on long uploads get progress signal instead of
-   *  a mystery spinner. */
+  /** Retained only for source compatibility; internal step copy is never rendered. */
   savingStep?: string | null;
-  /** Once true, summary.trackPoints is the verified Final artifact that is
-   * also used by Detail/reload/Save as Route. Before commit it is the bounded
-   * Base preview derived from the walked canonical route. */
+  finishProgress?: ActivityFinishProgress | null;
+  syncState?: 'synced' | 'pending' | 'syncing' | 'sync_error';
+  /** Once true, summary.trackPoints is the selected route used by Detail/reload/Save as Route. */
   committed?: boolean;
-  /** The committed local Final is usable while an optional, bounded road
-   * context revision runs. This never disables Detail navigation. */
+  /** The selected route remains usable while optional online work is pending. */
   refining?: boolean;
   onViewActivity?: () => void;
 };
@@ -161,6 +156,8 @@ export function StopSummarySheet({
   onDiscard: _onDiscard,
   saving = false,
   savingStep = null,
+  finishProgress = null,
+  syncState = 'pending',
   committed = false,
   refining = false,
   onViewActivity,
@@ -170,6 +167,7 @@ export function StopSummarySheet({
   // Sleep-run 2026-08-16: mini-map card width is measured at layout so the
   // SVG polyline fills the card responsively (SE 375pt → Pro Max 430pt).
   const [miniMapWidth, setMiniMapWidth] = useState(0);
+  const [showCompletedRail, setShowCompletedRail] = useState(false);
   const insets = useSafeAreaInsets();
   const slideY = useRef(new Animated.Value(500)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -183,6 +181,16 @@ export function StopSummarySheet({
       Animated.timing(opacity, { toValue: 1, duration: 220, easing: Easing.out(Easing.ease), useNativeDriver: true }),
     ]).start();
   }, []);
+
+  useEffect(() => {
+    if (!committed || syncState !== 'synced') {
+      setShowCompletedRail(false);
+      return undefined;
+    }
+    setShowCompletedRail(true);
+    const timer = setTimeout(() => setShowCompletedRail(false), 650);
+    return () => clearTimeout(timer);
+  }, [committed, syncState]);
 
   // v407 fix #6: dismiss guard — prevents a double-dismiss race where
   // the scrim tap during the 220ms exit animation would fire onCancel
@@ -199,9 +207,19 @@ export function StopSummarySheet({
   };
 
   const isRun = summary.activityMode === 'running';
-  const heading = committed
+  const completionSync = syncState === 'sync_error'
+    ? 'attention' as const
+    : syncState === 'syncing'
+      ? 'syncing' as const
+      : syncState === 'synced'
+        ? 'synced' as const
+        : finishProgress?.sync ?? 'pending';
+  const routeReady = committed && (finishProgress?.route ?? 'ready') === 'ready';
+  const heading = routeReady
     ? (isRun ? 'Run complete' : 'Hike complete')
-    : (isRun ? 'Finish run' : 'Finish hike');
+    : saving
+      ? (isRun ? 'Finishing run' : 'Finishing hike')
+      : (isRun ? 'Finish run' : 'Finish hike');
   const label = isRun ? 'Run' : 'Hike';
   // O18 HIST-09: default name uses user-preferred date format.
   const defaultName = `${label} — ${formatDate(summary.startedAt)}`;
@@ -223,6 +241,27 @@ export function StopSummarySheet({
   const sheetBg = completeIsDark ? completeTheme.surfaceElevated : PAPER_BG;
   const titleInk = completeIsDark ? completeTheme.foreground : TITLE_INK;
   const mutedInk = completeIsDark ? completeTheme.foregroundSecondary : MUTED_INK;
+  const committedSync = completionSync;
+  const visibleProgress: ActivityFinishProgress | null = saving
+    ? finishProgress ?? {
+        hike: 'saving', route: 'pending', sync: 'pending', roadRefinementPending: false,
+      }
+    : committed && (syncState !== 'synced' || showCompletedRail)
+      ? {
+          ...(finishProgress ?? {
+          hike: 'saved',
+          route: 'ready',
+          sync: committedSync,
+          roadRefinementPending: false,
+          }),
+          sync: committedSync,
+        }
+      : null;
+  const progressRows = visibleProgress ? [
+    { key: 'hike', label: visibleProgress.hike === 'saved' ? `${label} saved` : `Saving ${label.toLowerCase()}`, state: visibleProgress.hike === 'saved' ? 'complete' : 'current' },
+    { key: 'route', label: visibleProgress.route === 'ready' ? 'Route ready' : 'Refining route', state: visibleProgress.route === 'ready' ? 'complete' : visibleProgress.route === 'refining' ? 'current' : 'pending' },
+    { key: 'sync', label: visibleProgress.sync === 'synced' ? 'Synced' : visibleProgress.sync === 'waiting' ? 'Sync · Waiting for connection' : visibleProgress.sync === 'attention' ? 'Sync · Needs attention' : visibleProgress.sync === 'syncing' ? 'Syncing' : 'Sync', state: visibleProgress.sync === 'synced' ? 'complete' : visibleProgress.sync === 'waiting' ? 'waiting' : visibleProgress.sync === 'attention' ? 'attention' : visibleProgress.sync === 'syncing' ? 'current' : 'pending' },
+  ] as const : [];
 
   return (
     <Animated.View style={[stopSheetStyles.scrim, { opacity }]} pointerEvents="auto">
@@ -265,6 +304,32 @@ export function StopSummarySheet({
             </View>
           </View>
 
+          {visibleProgress ? (
+            <View style={stopSheetStyles.progressRail} testID="activity-finish-progress-rail">
+              {progressRows.map(row => (
+                <View key={row.key} style={stopSheetStyles.progressRow} testID={`activity-finish-${row.key}`}>
+                  <View style={stopSheetStyles.progressIndicator}>
+                    {row.state === 'current' ? (
+                      <ActivityIndicator size="small" color={CTA_GREEN} />
+                    ) : (
+                      <Text style={[
+                        stopSheetStyles.progressGlyph,
+                        { color: row.state === 'complete' ? CTA_GREEN : mutedInk },
+                      ]}>{row.state === 'complete' ? '✓' : row.state === 'waiting' ? '☁' : row.state === 'attention' ? '!' : '○'}</Text>
+                    )}
+                  </View>
+                  <Text style={[
+                    stopSheetStyles.progressLabel,
+                    { color: row.state === 'pending' ? mutedInk : titleInk },
+                  ]}>{row.label}</Text>
+                </View>
+              ))}
+              {visibleProgress.roadRefinementPending ? (
+                <Text style={[stopSheetStyles.progressNote, { color: mutedInk }]}>Road refinement will continue when online</Text>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* Three-stat row: value on top (30pt weight 900), label beneath
               (12pt muted). Distance uses user's unit preference; time
               formats to h:mm:ss when >= 1h else m:ss; elevation rounds to
@@ -302,7 +367,7 @@ export function StopSummarySheet({
                 />
               )}
               <Text style={[stopSheetStyles.routePreviewLabel, { color: mutedInk }]}>
-                {committed ? 'Validated final route' : 'Walked route preview'}
+                {committed ? 'Route ready' : 'Walked route preview'}
               </Text>
             </View>
           )}
@@ -326,7 +391,7 @@ export function StopSummarySheet({
             </>
           ) : (
             <Text style={[stopSheetStyles.finalRouteNote, { color: mutedInk }]}>
-              {refining ? 'Local final saved · Refining road context…' : 'Validated final route saved on this device'}
+              {refining ? 'Route ready' : 'Route saved on this device'}
             </Text>
           )}
 
@@ -357,7 +422,7 @@ export function StopSummarySheet({
               <>
                 <ActivityIndicator size="small" color={PAPER_BG} />
                 <Text style={stopSheetStyles.saveText} numberOfLines={1}>
-                  {savingStep || 'Saving…'}
+                  Finishing…
                 </Text>
               </>
             ) : (
@@ -409,6 +474,38 @@ const stopSheetStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  progressRail: {
+    alignSelf: 'stretch',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 7,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 22,
+  },
+  progressIndicator: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressGlyph: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '700',
+  },
+  progressLabel: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
+  progressNote: {
+    marginLeft: 38,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '500',
   },
   closeHit: {
     padding: 6,

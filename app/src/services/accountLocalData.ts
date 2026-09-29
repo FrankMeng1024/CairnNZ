@@ -18,6 +18,7 @@ import {
   isAccountTransitionCurrent,
   type AccountTransitionAuthority,
 } from './accountTransitionAuthority';
+import { purgeActivityStageLedgerForOwner } from '../features/activity/activityStageLedger';
 
 const SCHEDULED_PURGE_KEY = '@cairn:account-deletion-local-purge:v1';
 const SECURE_SCHEDULED_PURGE_KEY = 'cairn_account_deletion_local_purge_v1';
@@ -330,6 +331,7 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
   )));
   await Promise.all(routeIds.map((routeId) => deleteExtras(routeId)));
   await clearSimulatorLogs(owner).catch(() => undefined);
+  await purgeActivityStageLedgerForOwner(owner);
   await purgeDurableMemoryEvidence(owner);
   // Fence deferred/chunked precise-geometry writes before the broad key sweep;
   // otherwise an in-flight cache write could recreate data after deletion.
@@ -371,6 +373,7 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
     `cairn_trackpoints_${owner}_`,
     `@cairn:activity_final:v1:${owner}:`,
     `@cairn:activity_final_refinement:v1:${owner}:`,
+    `@cairn:activity-stage-ledger:v1:${encodeURIComponent(owner)}:`,
     `cairn:activity-mapbox-governor:v1:${encodeURIComponent(owner)}:`,
     `@cairn:activity_simulator_logs:v1:${owner}:`,
     `@cairn:activity_simulator_upload:v1:${owner}:`,

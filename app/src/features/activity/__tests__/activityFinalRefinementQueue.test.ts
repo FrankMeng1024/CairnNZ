@@ -5,8 +5,10 @@ let mockArtifact: any = null;
 let mockToken: string | null = null;
 let mockOwnerId = 'owner-a';
 let mockLoggedIn = true;
+let mockNetworkState: 'online' | 'offline' | null = null;
 const mockReconstruct = jest.fn();
 const mockCommitArtifact = jest.fn();
+const reviewReceipts: Array<Record<string, unknown>> = [];
 
 jest.mock('../../../store/storage', () => ({
   storage: {
@@ -16,6 +18,9 @@ jest.mock('../../../store/storage', () => ({
 }));
 jest.mock('../../../config/mapbox', () => ({
   resolveMapboxPublicTokenAuthority: jest.fn(async () => ({ token: mockToken, source: mockToken ? 'runtime' : 'none' })),
+}));
+jest.mock('../../../services/networkMonitor', () => ({
+  networkMonitor: { getState: () => mockNetworkState ? { state: mockNetworkState } : null },
 }));
 jest.mock('../../../store/useAppStore', () => ({
   useAppStore: { getState: () => ({ isLoggedIn: mockLoggedIn, user: { id: mockOwnerId } }) },
@@ -78,7 +83,44 @@ function baseArtifact() {
   };
 }
 
+function requestResult(overrides: Record<string, unknown> = {}) {
+  return {
+    kind: 'map-matching',
+    sourceStart: 0,
+    sourceEnd: 1,
+    inputPointCount: 2,
+    sourceIndexMap: [0, 1],
+    durationMs: 10,
+    result: 'ok',
+    httpStatus: 200,
+    responseCode: 'Ok',
+    matchingCount: 1,
+    tracepointCount: 2,
+    nullTracepointCount: 0,
+    acceptedCandidateCount: 0,
+    rejectedCandidateCount: 0,
+    profile: 'walking',
+    matcherTidy: false,
+    invoked: true,
+    governorReason: null,
+    responseBytes: 120,
+    ...overrides,
+  };
+}
+
 describe('durable Activity Final refinement queue', () => {
+  afterAll(() => {
+    if (!process.env.CAIRN_FIELD03_ROAD_RECEIPTS_OUTPUT) return;
+    require('node:fs').writeFileSync(
+      process.env.CAIRN_FIELD03_ROAD_RECEIPTS_OUTPUT,
+      `${JSON.stringify({
+        schema: 'cairn-field03-mocked-road-aware-receipts',
+        note: 'Synthetic coordinates only; no network request was issued.',
+        receipts: reviewReceipts,
+      }, null, 2)}\n`,
+    );
+  });
+
   beforeEach(() => {
     mockValues.clear();
     jest.clearAllMocks();
@@ -86,6 +128,7 @@ describe('durable Activity Final refinement queue', () => {
     mockToken = null;
     mockOwnerId = 'owner-a';
     mockLoggedIn = true;
+    mockNetworkState = null;
     mockReconstruct.mockReset();
     mockCommitArtifact.mockReset();
     mockPending = {
@@ -148,8 +191,31 @@ describe('durable Activity Final refinement queue', () => {
       finalGeometryState: 'base_ready',
       finalGeometryRevision: 1,
     }), 'owner-a');
-    expect(await readActivityFinalRefinementJob('owner-a', 'activity-a')).toMatchObject({
+    const job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+    reviewReceipts.push({ scenario: 'token authority unavailable', ...job });
+    expect(job).toMatchObject({
       status: 'complete', outcome: 'base-retained', completedRevision: 1,
+    });
+  });
+
+  test('offline selection publishes the stable local route without dispatching a paid request', async () => {
+    mockToken = 'token-that-must-not-be-used';
+    mockNetworkState = 'offline';
+    await enqueueActivityFinalRefinement({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
+    });
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    expect(mockReconstruct).not.toHaveBeenCalled();
+    const job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+    reviewReceipts.push({ scenario: 'offline', ...job });
+    expect(job).toMatchObject({
+      status: 'complete',
+      technicalOutcome: 'offline',
+      tokenAuthorityLabel: 'runtime',
+      matchingAttempted: false,
+      candidateDecision: 'stable-local-selected',
+      selectedSource: 'base',
+      completedRevision: 1,
     });
   });
 
@@ -160,7 +226,9 @@ describe('durable Activity Final refinement queue', () => {
     await cancelActivityFinalRefinement('owner-a', 'activity-a');
     await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('cancelled');
     expect(pendingMocks.savePending).not.toHaveBeenCalled();
-    expect(await readActivityFinalRefinementJob('owner-a', 'activity-a')).toMatchObject({
+    const job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+    reviewReceipts.push({ scenario: 'owner deletion cancellation', ...job });
+    expect(job).toMatchObject({
       status: 'cancelled', outcome: 'deleted',
     });
   });
@@ -256,6 +324,67 @@ describe('durable Activity Final refinement queue', () => {
     }));
   });
 
+  test('passes only the bounded user-flow budget to optional road-aware work', async () => {
+    mockToken = 'token';
+    mockNetworkState = 'online';
+    mockReconstruct.mockResolvedValue({
+      ok: false,
+      reason: 'aborted',
+      stats: { requestResults: [] },
+    });
+    await enqueueActivityFinalRefinement({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
+    });
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    expect(mockReconstruct).toHaveBeenCalled();
+    const options = mockReconstruct.mock.calls[0][1];
+    expect(options.totalTimeoutMs).toBeGreaterThan(0);
+    expect(options.totalTimeoutMs).toBeLessThanOrEqual(4_500);
+    expect(options.perCallTimeoutMs).toBeLessThanOrEqual(2_600);
+    expect(mockCommitArtifact).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['NoMatch', requestResult({ responseCode: 'NoMatch', result: 'response-no-match' }), 'no-match', 'stable-local-no-match'],
+    ['authorization rejection', requestResult({ httpStatus: 401, responseCode: 'Unauthorized', result: 'http-401' }), 'auth', 'stable-local-auth-rejected'],
+    ['local request budget', requestResult({ invoked: false, governorReason: 'budget', httpStatus: null, responseCode: null, result: 'governor-denied' }), 'budget', 'stable-local-governor-denied'],
+    ['unsafe returned candidate', requestResult({ acceptedCandidateCount: 0, rejectedCandidateCount: 1 }), 'unsafe-candidate', 'candidate-rejected'],
+    ['bounded deadline', requestResult({ result: 'timeout-or-abort', httpStatus: null, responseCode: null }), 'deadline', 'stable-local-deadline'],
+  ])('records a precise %s receipt while retaining the stable local route', async (
+    _label,
+    request,
+    technicalOutcome,
+    candidateDecision,
+  ) => {
+    mockToken = 'token';
+    mockNetworkState = 'online';
+    mockReconstruct.mockResolvedValue({
+      ok: true,
+      points: baseArtifact().points,
+      stats: {
+        requestResults: [request],
+        acceptedMatchedDistanceM: 0,
+        canonicalDerivedSectionCount: 1,
+        displayRefined: false,
+        wholeRouteValidation: { accepted: true },
+      },
+    });
+    await enqueueActivityFinalRefinement({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
+    });
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    expect(mockCommitArtifact).not.toHaveBeenCalled();
+    const job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+    reviewReceipts.push({ scenario: _label, ...job });
+    expect(job).toMatchObject({
+      status: 'complete',
+      technicalOutcome,
+      candidateDecision,
+      selectedSource: 'base',
+      selectedFingerprint: 'display-a',
+    });
+  });
+
   test('multiple declared segments publish one hybrid revision after matched success plus bounded fallback', async () => {
     mockToken = 'token';
     const canonical = [
@@ -274,6 +403,7 @@ describe('durable Activity Final refinement queue', () => {
         ok: true,
         points: canonical.slice(0, 2),
         stats: {
+          requestResults: [requestResult({ acceptedCandidateCount: 1 })],
           acceptedMatchedDistanceM: 100,
           canonicalDerivedSectionCount: 0,
           displayRefined: true,
@@ -296,6 +426,19 @@ describe('durable Activity Final refinement queue', () => {
     expect(pendingMocks.savePending).toHaveBeenCalledWith(expect.objectContaining({
       finalArtifact: expect.objectContaining({ source: 'hybrid', revision: 2 }),
     }));
+    const job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+    reviewReceipts.push({ scenario: 'matched hybrid success', ...job });
+    expect(job).toMatchObject({
+      status: 'complete',
+      technicalOutcome: 'matched-success',
+      tokenAuthorityLabel: 'runtime',
+      matchingAttempted: true,
+      governorAuthorized: true,
+      candidateDecision: 'accepted',
+      selectedSource: 'hybrid',
+      selectedFingerprint: 'hybrid-two-segments',
+      completedRevision: 2,
+    });
   });
 
   test('an account switch during a network request defers the durable job and publishes nothing stale', async () => {

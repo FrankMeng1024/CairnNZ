@@ -59,6 +59,7 @@ import { createActivityMapboxRequestGovernor } from '../services/routing/activit
 import {
   activityGeometryFingerprint,
   buildBaseFinalTrackPoints,
+  buildLocalFinalTrackPoints,
   commitActivityFinalArtifact,
   type ActivityFinalArtifact,
 } from '../features/activity/activityFinalArtifact';
@@ -200,6 +201,10 @@ import {
   type TrackingTokenRefreshSnapshot,
 } from '../services/trackingTokenRefreshAuthority';
 import { maybeVerifyPublicWalkingDiscovery } from '../features/public/services/publicWalkingDiscovery';
+import {
+  flushActivityStageLedger,
+  recordActivityStageEvent,
+} from '../features/activity/activityStageLedger';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
@@ -862,6 +867,13 @@ export interface ActivityLocationAcceptance {
   memoryProjectionPending?: boolean;
 }
 
+export interface ActivityFinishProgress {
+  hike: 'saving' | 'saved';
+  route: 'pending' | 'refining' | 'ready';
+  sync: 'pending' | 'syncing' | 'waiting' | 'attention' | 'synced';
+  roadRefinementPending: boolean;
+}
+
 export interface ActivityCoordinate extends Coordinate {
   clientActivityId?: string;
   ownerGeneration?: string;
@@ -878,6 +890,14 @@ export interface ActivityCoordinate extends Coordinate {
   canonicalDecision?: 'ACCEPT' | 'REJECT' | 'QUARANTINE' | 'REFINE';
   decisionReason?: string;
   continuityStateAfter?: RealGpsContinuityState;
+  /** Native callback receipt facts. They are diagnostic timing only and never
+   * participate in qualification or canonical ordering. */
+  receiptWallTimeMs?: number;
+  receiptMonotonicTimeMs?: number | null;
+  callbackIdentity?: string;
+  nativeBatchSequence?: number;
+  nativeBatchIndex?: number;
+  appStateAtReceipt?: string;
 }
 
 interface TrackingState {
@@ -974,6 +994,8 @@ interface TrackingState {
    * null = not saving; string = current sub-step description.
    */
   savingHikeStep: string | null;
+  /** Three user-facing concepts only: local safety, selected route, sync. */
+  finishProgress: ActivityFinishProgress | null;
 
   /**
    * O18 SAF-01: when both saveHikeAtomic AND its pendingSyncStore fallback
@@ -1091,6 +1113,7 @@ const initialState = {
   overSpeedActive: false,
   // R114/O22 STORY-73017 (K9): default null (not saving).
   savingHikeStep: null as string | null,
+  finishProgress: null as ActivityFinishProgress | null,
   saveLostSessionId: null as string | null,
   saveLostPayload: null as null | {
     localId: string;
@@ -1700,6 +1723,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         providerSource: locationProviderSource,
         currentSegmentId: initialSegmentId,
       }, { userId, clientActivityId: localSessionId, coordinateSource: 'none' });
+      void recordActivityStageEvent({
+        ownerUserId: userId,
+        clientActivityId: localSessionId,
+        stage: 'activity-start',
+        details: {
+          activityMode: mode,
+          providerSource: locationProviderSource,
+          ownerGenerationSuffix: ownerGeneration.slice(-8),
+          appState: AppState.currentState,
+          backgroundCapability: get().backgroundLocationPermission,
+        },
+      });
       startRealTelemetryHealthTimer();
 
       // Subscribe AppState ONCE to flip sources foreground ↔ background.
@@ -2031,7 +2066,17 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     acceptanceFenceCutoffMs = Date.now();
     finishAcceptanceSnapshotClosed = false;
     stopActivityLifecycleTimer();
-    set({ ...(frozenLifecycle ?? {}), isFinishing: true, transitionState: 'finishing' });
+    set({
+      ...(frozenLifecycle ?? {}),
+      isFinishing: true,
+      transitionState: 'finishing',
+      finishProgress: {
+        hike: 'saving',
+        route: 'pending',
+        sync: 'pending',
+        roadRefinementPending: false,
+      },
+    });
     try {
       // A TaskManager callback may be executing in a separate JS runtime. Its
       // module-level queue cannot observe ours, so install a verified durable
@@ -2375,7 +2420,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         s.trackPoints[s.trackPoints.length - 1]?.t ?? s.startedAt,
       );
       const canonicalSegments = segmentTrace(s.trackPoints).segments;
-      const baseFinalTrackPoints = buildBaseFinalTrackPoints(s.trackPoints);
+      const baseFinalTrackPoints = buildLocalFinalTrackPoints(s.trackPoints);
       const rawRoutePayload = (s.trackPointsRaw.length > 0 ? s.trackPointsRaw : s.trackPoints)
         .map(point => toServerPoint(point));
       const baseMemoryUnsynced = useMemoryStore.getState().points
@@ -2498,6 +2543,25 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           locationProviderSource: s.locationProviderSource,
         });
         await pendingSyncStore.markPendingPreparationPhase(s.sessionId, 'registry_committed');
+        set({
+          finishProgress: {
+            hike: 'saved',
+            route: 'refining',
+            sync: 'pending',
+            roadRefinementPending: false,
+          },
+        });
+        void recordActivityStageEvent({
+          ownerUserId,
+          clientActivityId: s.sessionId,
+          stage: 'final-job',
+          details: {
+            phase: 'local-artifact-durable',
+            selectedSource: finalArtifact.source,
+            selectedRevision: finalArtifact.revision,
+            selectedFingerprint: finalArtifact.displayFingerprint,
+          },
+        });
         recordSavePhase('base_final_local_commit', baseCommitStartedAt, {
           canonicalPointCount: s.trackPoints.length,
           baseDisplayPointCount: finalArtifact.points.length,
@@ -2515,9 +2579,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           qaSessionId: realActivityQaSessionId,
           coordinateSource: 'none',
         });
-        // This is the locally saved outcome. Optional Mapbox work now owns a
-        // separate durable revision job; Finish UI can render this validated
-        // Base immediately while the outbox remains fenced on one payload.
+        // Local Activity safety is now durable. Keep the completion sheet in
+        // its three-row finishing state until one bounded route selection has
+        // published the exact artifact used by Detail/reload/Save as Route.
         durableSaveCommitted = true;
         finishResult = activityFinishResultFromSession({
           id: s.sessionId,
@@ -2541,7 +2605,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           finalGeometryRevision: finalArtifact.revision,
           finalGeometryFingerprint: finalArtifact.displayFingerprint,
         });
-        notifyLocalCommit(s.sessionId);
         asynchronousRefinementOwnsFinal = true;
         try {
           await enqueueActivityFinalRefinement({
@@ -2549,9 +2612,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             clientActivityId: s.sessionId,
             baseArtifact: finalArtifact,
           });
-          void resumeActivityFinalRefinement(ownerUserId, s.sessionId).catch(error => {
-            crashLogger.breadcrumb(`activity:final_refinement_async_failed ${String(error).slice(0, 80)}`);
+          await resumeActivityFinalRefinement(ownerUserId, s.sessionId);
+          const selectedSession = useSessionStore.getState().sessions.find(item => (
+            item.clientActivityId === s.sessionId || item.id === s.sessionId
+          ));
+          if (selectedSession) finishResult = activityFinishResultFromSession(selectedSession);
+          const networkState = networkMonitor.getState?.()?.state;
+          set({
+            finishProgress: {
+              hike: 'saved',
+              route: 'ready',
+              sync: networkState === 'offline' ? 'waiting' : 'syncing',
+              roadRefinementPending: false,
+            },
           });
+          notifyLocalCommit(s.sessionId);
         } catch (queueError) {
           // Queue durability failed, but the Base Activity is already safe.
           // Release exactly that payload and make the limitation explicit.
@@ -2580,6 +2655,15 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             finalGeometryFingerprint: finalArtifact.displayFingerprint,
           }, ownerUserId);
           if (finishResult) finishResult = { ...finishResult, finalGeometryState: 'base_ready' };
+          set({
+            finishProgress: {
+              hike: 'saved',
+              route: 'ready',
+              sync: networkMonitor.getState?.()?.state === 'offline' ? 'waiting' : 'syncing',
+              roadRefinementPending: false,
+            },
+          });
+          notifyLocalCommit(s.sessionId);
           crashLogger.breadcrumb(`activity:final_refinement_queue_unavailable ${String(queueError).slice(0, 80)}`);
         }
       } catch (baseCommitError) {
@@ -3684,11 +3768,28 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       ));
       if (committedSession) finishResult = activityFinishResultFromSession(committedSession);
     }
+    if (s.sessionId && finishResult?.status === 'saved-local') {
+      await recordActivityStageEvent({
+        ownerUserId,
+        clientActivityId: s.sessionId,
+        stage: 'completion-presented',
+        details: {
+          artifactRevision: finishResult.finalGeometryRevision,
+          artifactFingerprint: finishResult.finalGeometryFingerprint,
+          routeState: finishResult.finalGeometryState,
+          syncState: serverSaveAcknowledged ? 'synced' : 'pending',
+        },
+      });
+      // Diagnostic durability is not optional route work and is deliberately
+      // outside the road-refinement deadline.
+      await flushActivityStageLedger(ownerUserId);
+    }
     set((prev) => ({
       ...initialState,
       lastStopReason: stopReason,
       saveLostSessionId: prev.saveLostSessionId,
       saveLostPayload: prev.saveLostPayload,
+      finishProgress: prev.finishProgress,
     }));
     return finishResult;
   },
@@ -4102,6 +4203,39 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   },
 
   addTrackPoint: async (coord, timestamp) => {
+    const receiptWallTimeMs = coord.receiptWallTimeMs ?? Date.now();
+    const receiptMonotonicTimeMs = coord.receiptMonotonicTimeMs ?? (
+      typeof globalThis.performance?.now === 'function' ? globalThis.performance.now() : null
+    );
+    const receiptSnapshot = get();
+    const receiptActivityId = coord.clientActivityId ?? receiptSnapshot.sessionId;
+    const receiptOwnerId = receiptSnapshot.ownerUserId;
+    const receiptEvidenceId = `${coord.source ?? 'foreground'}:${Math.floor(timestamp ?? receiptWallTimeMs)}`;
+    if (coord.source !== 'simulator' && receiptOwnerId && receiptActivityId) {
+      void recordActivityStageEvent({
+        ownerUserId: receiptOwnerId,
+        clientActivityId: receiptActivityId,
+        stage: 'observation-received',
+        evidenceId: receiptEvidenceId,
+        wallTimeMs: receiptWallTimeMs,
+        monotonicTimeMs: receiptMonotonicTimeMs,
+        details: {
+          observationTimeMs: Math.floor(timestamp ?? receiptWallTimeMs),
+          source: coord.source ?? 'foreground',
+          callbackIdentity: coord.callbackIdentity ?? 'foreground-watch',
+          nativeBatchSequence: coord.nativeBatchSequence ?? null,
+          nativeBatchIndex: coord.nativeBatchIndex ?? null,
+          appState: coord.appStateAtReceipt ?? AppState.currentState,
+          ownerGenerationSuffix: coord.ownerGeneration?.slice(-8)
+            ?? receiptSnapshot.liveOwnerGeneration?.slice(-8) ?? null,
+          horizontalAccuracyM: coord.accuracy ?? null,
+          speedMps: coord.speed ?? null,
+          speedAccuracyMps: coord.speedAccuracy ?? null,
+          qualifiedPuckPublication: 'NOT_YET_DECIDED',
+          visibleRenderTime: 'NOT_MEASURED',
+        },
+      });
+    }
     // Serialize validate → durable journal → publish. Every provider receives
     // the same explicit decision; no provider may mutate derived state itself.
     const previousIngest = pointIngestTail;
@@ -4129,7 +4263,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const inactiveForNormalIngest =
         before.status !== 'tracking'
         || before.isFinishing;
-      const reject = (reason: string): ActivityLocationAcceptance => {
+      const reject = (reason: string, stage1?: {
+        decision: 'ACCEPT' | 'REJECT' | 'QUARANTINE' | 'REFINE';
+        decisionReason: string;
+        candidateId?: string | null;
+        candidateRawOrdinal?: number | null;
+        promotedByRawOrdinal?: number | null;
+      }): ActivityLocationAcceptance => {
         if (coordinateSource === 'real') latestRealCanonicalDecisionReason = reason;
         appendSimulatorLog('LOCATION', 'location_sample_rejected', {
           sampleSource: owned.source ?? 'foreground',
@@ -4145,6 +4285,30 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           clientActivityId: before.sessionId,
           coordinateSource,
         });
+        if (coordinateSource === 'real' && before.ownerUserId && before.sessionId) {
+          void recordActivityStageEvent({
+            ownerUserId: before.ownerUserId,
+            clientActivityId: before.sessionId,
+            stage: 'observation-decision',
+            evidenceId: receiptEvidenceId,
+            details: {
+              observationTimeMs: sampleTimestamp,
+              prefilterDecision: stage1 ? 'PASS' : 'REJECT',
+              prefilterReason: stage1 ? null : reason,
+              decision: stage1?.decision ?? owned.canonicalDecision ?? 'REJECT',
+              reason: stage1?.decisionReason ?? reason,
+              candidateId: stage1?.candidateId ?? null,
+              candidateRawOrdinal: stage1?.candidateRawOrdinal ?? null,
+              promotedByRawOrdinal: stage1?.promotedByRawOrdinal ?? null,
+              decisionWallTimeMs: Date.now(),
+              ingestQueueLatencyMs: Math.max(0, ingestStartedAt - receiptWallTimeMs),
+              rawOrdinal: owned.rawOrdinal ?? null,
+              ordinalSemantics: owned.rawOrdinal == null
+                ? 'allocated-after-owner-prefilter'
+                : 'allocated-in-headless-qualified-loop',
+            },
+          });
+        }
         return {
           accepted: false,
           reason,
@@ -4275,7 +4439,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 }
               : state
           ));
-          return reject(owned.decisionReason ?? 'background-preclassified-rejection');
+          return reject(owned.decisionReason ?? 'background-preclassified-rejection', {
+            decision: owned.canonicalDecision ?? 'REJECT',
+            decisionReason: owned.decisionReason ?? 'background-preclassified-rejection',
+            candidateId: owned.continuityStateAfter?.pending?.id ?? null,
+            candidateRawOrdinal: owned.continuityStateAfter?.pending?.observation.rawOrdinal ?? null,
+          });
         }
       } else if (!isSimulatorSample || isRawGpsSimulatorSample) {
         const continuity = ensureRealGpsContinuityState(before);
@@ -4359,6 +4528,29 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           rawOrdinal,
           isRawGpsSimulatorSample ? 'simulator' : 'real',
         );
+        if (realMotionDecision.kind === 'ACCEPT' && before.ownerUserId && before.sessionId) {
+          const candidateEvent = realMotionDecision.candidateEvent;
+          void recordActivityStageEvent({
+            ownerUserId: before.ownerUserId,
+            clientActivityId: before.sessionId,
+            stage: 'observation-decision',
+            evidenceId: `${before.sessionId.slice(-8)}:${rawOrdinal}`,
+            details: {
+              observationTimeMs: sampleTimestamp,
+              prefilterDecision: 'PASS',
+              prefilterReason: null,
+              decision: 'ACCEPT',
+              reason: realMotionDecision.reason,
+              candidateId: candidateEvent?.candidateId ?? null,
+              candidateRawOrdinal: candidateEvent?.candidateRawOrdinal ?? null,
+              promotedByRawOrdinal: candidateEvent?.type === 'candidate_confirmed' ? rawOrdinal : null,
+              decisionWallTimeMs: Date.now(),
+              ingestQueueLatencyMs: Math.max(0, ingestStartedAt - receiptWallTimeMs),
+              rawOrdinal,
+              ordinalSemantics: 'allocated-on-qualified-loop',
+            },
+          });
+        }
         schedulePendingCandidateTimeout(before);
         if (realMotionDecision.kind !== 'ACCEPT') {
           // Raw observations are audit evidence, not automatically Activity
@@ -4397,6 +4589,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             realMotionDecision.kind === 'QUARANTINE'
               ? 'physical-continuity-quarantine'
               : realMotionDecision.reason,
+            {
+              decision: realMotionDecision.kind,
+              decisionReason: realMotionDecision.reason,
+              candidateId: realMotionDecision.candidateEvent?.candidateId
+                ?? realMotionDecision.state.pending?.id ?? null,
+              candidateRawOrdinal: realMotionDecision.candidateEvent?.candidateRawOrdinal
+                ?? realMotionDecision.state.pending?.observation.rawOrdinal ?? null,
+              promotedByRawOrdinal: realMotionDecision.candidateEvent?.type === 'candidate_confirmed'
+                ? rawOrdinal : null,
+            },
           );
         }
       }
@@ -4771,6 +4973,29 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const acceptedTransition = acceptance.transition;
       try {
         const journalStartedAt = Date.now();
+        if (!isSimulatorSample) {
+          for (const point of acceptedPoints) {
+            const promoted = point.t !== sampleTimestamp || point.rawOrdinal !== rawOrdinal;
+            void recordActivityStageEvent({
+              ownerUserId: before.ownerUserId,
+              clientActivityId: before.sessionId!,
+              stage: 'canonical-accepted',
+              evidenceId: point.rawOrdinal == null ? receiptEvidenceId : `${before.sessionId!.slice(-8)}:${point.rawOrdinal}`,
+              details: {
+                observationTimeMs: point.t,
+                decision: 'ACCEPT',
+                reason: acceptance.reason ?? realMotionDecision?.reason ?? owned.decisionReason ?? 'accepted',
+                decisionWallTimeMs: journalStartedAt,
+                rawOrdinal: point.rawOrdinal ?? null,
+                ordinalSemantics: 'allocated-on-qualified-loop',
+                promotedCandidate: promoted,
+                promotedByEvidenceId: promoted && rawOrdinal != null
+                  ? `${before.sessionId!.slice(-8)}:${rawOrdinal}`
+                  : null,
+              },
+            });
+          }
+        }
         if (!isSimulatorSample || isRawGpsSimulatorSample) {
           appendSimulatorLog('ACTIVITY_POINT', 'activity_journal_commit_v2', {
             phase: 'attempt',
@@ -4813,6 +5038,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           }
         }
         const journalCommittedAt = Date.now();
+        if (!isSimulatorSample) {
+          void recordActivityStageEvent({
+            ownerUserId: before.ownerUserId,
+            clientActivityId: before.sessionId!,
+            stage: 'wal-committed',
+            evidenceId: accepted.rawOrdinal == null ? receiptEvidenceId : `${before.sessionId!.slice(-8)}:${accepted.rawOrdinal}`,
+            wallTimeMs: journalCommittedAt,
+            details: {
+              firstRawOrdinal: acceptedPoints[0]?.rawOrdinal ?? null,
+              lastRawOrdinal: accepted.rawOrdinal ?? null,
+              acceptedCount: acceptedPoints.length,
+              journalCommitLatencyMs: Math.max(0, journalCommittedAt - journalStartedAt),
+            },
+          });
+        }
         if (!isSimulatorSample) {
           appendSimulatorLog('ACTIVITY_POINT', 'activity_journal_commit_v2', {
             phase: 'result',
@@ -4886,6 +5126,24 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         });
         const storePublishedAt = Date.now();
         if (!isSimulatorSample) {
+          void recordActivityStageEvent({
+            ownerUserId: before.ownerUserId,
+            clientActivityId: before.sessionId!,
+            stage: 'store-published',
+            evidenceId: accepted.rawOrdinal == null ? receiptEvidenceId : `${before.sessionId!.slice(-8)}:${accepted.rawOrdinal}`,
+            wallTimeMs: storePublishedAt,
+            details: {
+              firstRawOrdinal: acceptedPoints[0]?.rawOrdinal ?? null,
+              lastRawOrdinal: accepted.rawOrdinal ?? null,
+              canonicalStorePublished: true,
+              qualifiedPuckPublished: true,
+              liveRoutePublished: true,
+              walToStoreLatencyMs: Math.max(0, storePublishedAt - journalCommittedAt),
+              visibleRenderTime: 'NOT_MEASURED',
+            },
+          });
+        }
+        if (!isSimulatorSample) {
           appendSimulatorLog('ACTIVITY_POINT', 'activity_store_publish_v2', {
             firstRawOrdinal: acceptedPoints[0]?.rawOrdinal ?? null,
             lastRawOrdinal: accepted.rawOrdinal ?? null,
@@ -4955,12 +5213,35 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           // appendHikePoint above is the durable downstream replay source.
           // Projection begins immediately but is deliberately not awaited by
           // source health/canonical publication.
-          await scheduleActivityMemoryProjection({
-            ownerUserId: before.ownerUserId,
+          const memoryScheduleStartedAt = Date.now();
+          const memoryOwnerUserId = before.ownerUserId;
+          const responsibility = scheduleActivityMemoryProjection({
+            ownerUserId: memoryOwnerUserId,
             clientActivityId: before.sessionId!,
             ownerGeneration: before.liveOwnerGeneration,
             points: acceptedPoints,
           });
+          void responsibility.then(() => recordActivityStageEvent({
+            ownerUserId: memoryOwnerUserId,
+            clientActivityId: before.sessionId!,
+            stage: 'memory-responsibility',
+            evidenceId: accepted.rawOrdinal == null ? receiptEvidenceId : `${before.sessionId!.slice(-8)}:${accepted.rawOrdinal}`,
+            details: {
+              status: 'durable-intent',
+              scheduledAtMs: memoryScheduleStartedAt,
+              responsibilityDurableAtMs: Date.now(),
+              acceptedCount: acceptedPoints.length,
+            },
+          })).catch(() => recordActivityStageEvent({
+            ownerUserId: memoryOwnerUserId,
+            clientActivityId: before.sessionId!,
+            stage: 'memory-responsibility',
+            evidenceId: accepted.rawOrdinal == null ? receiptEvidenceId : `${before.sessionId!.slice(-8)}:${accepted.rawOrdinal}`,
+            details: {
+              status: 'wal-discovery-required',
+              scheduledAtMs: memoryScheduleStartedAt,
+            },
+          }));
           memoryProjectionPending = true;
         }
         const latest = get();
@@ -5934,6 +6215,7 @@ async function activateForegroundSource(expectedIntentEpoch?: number): Promise<v
   if (!intentIsCurrent()) return;
   // Tear down any existing foreground sub first.
   deactivateRealForegroundSource();
+  let lastProviderLedgerSignature: string | null = null;
 
   try {
     const active = await nativeRealLocationSupervisor.setConsumer({
@@ -5951,6 +6233,10 @@ async function activateForegroundSource(expectedIntentEpoch?: number): Promise<v
       },
       optionsKey: `activity:${ACTIVITY_LOCATION_TIME_INTERVAL_MS}:${realForegroundCadenceExperiment.distanceFilterM}`,
       onObservation: ({ observation: position, observationTimestampMs: ts }) => {
+        const callbackWallTimeMs = Date.now();
+        const callbackMonotonicTimeMs = typeof globalThis.performance?.now === 'function'
+          ? globalThis.performance.now()
+          : null;
         const nativeCoords = position.coords as typeof position.coords & {
           speedAccuracy?: number | null;
           courseAccuracy?: number | null;
@@ -5958,7 +6244,7 @@ async function activateForegroundSource(expectedIntentEpoch?: number): Promise<v
         appendSimulatorLog('LOCATION', 'real_activity_location_callback', {
           sampleSource: 'foreground',
           sequenceTimestamp: Math.floor(ts),
-          callbackWallTimestamp: Date.now(),
+          callbackWallTimestamp: callbackWallTimeMs,
           accuracyM: position.coords.accuracy ?? null,
           verticalAccuracyM: position.coords.altitudeAccuracy ?? null,
           speedMps: position.coords.speed ?? null,
@@ -6003,6 +6289,10 @@ async function activateForegroundSource(expectedIntentEpoch?: number): Promise<v
             ownerGeneration,
             segmentId: ownerAtActivation.currentSegmentId ?? undefined,
             source: 'foreground',
+            receiptWallTimeMs: callbackWallTimeMs,
+            receiptMonotonicTimeMs: callbackMonotonicTimeMs,
+            callbackIdentity: 'native-supervisor:activity',
+            appStateAtReceipt: AppState.currentState,
           },
           ts,
         );
@@ -6024,9 +6314,61 @@ async function activateForegroundSource(expectedIntentEpoch?: number): Promise<v
           clientActivityId: ownerAtActivation.sessionId,
           coordinateSource: 'real',
         });
+        if (ownerAtActivation.ownerUserId && ownerAtActivation.sessionId) {
+          void recordActivityStageEvent({
+            ownerUserId: ownerAtActivation.ownerUserId,
+            clientActivityId: ownerAtActivation.sessionId,
+            stage: 'provider-state',
+            details: {
+              source: 'foreground',
+              event: 'terminal-error',
+              errorClass: error instanceof Error ? error.name : typeof error,
+              ownerGenerationSuffix: ownerAtActivation.liveOwnerGeneration?.slice(-8) ?? null,
+              appState: AppState.currentState,
+            },
+          });
+        }
       },
       onState: snapshot => {
         if (snapshot.effectiveConsumer !== 'activity') return;
+        const providerLedgerSignature = [
+          snapshot.providerGeneration,
+          snapshot.startInFlight,
+          snapshot.streamActive,
+          snapshot.recoverableError,
+          snapshot.terminalError,
+          snapshot.retryAttempt,
+          snapshot.retryScheduledAtMs,
+        ].join('|');
+        if (providerLedgerSignature !== lastProviderLedgerSignature
+          && ownerAtActivation.ownerUserId && ownerAtActivation.sessionId) {
+          lastProviderLedgerSignature = providerLedgerSignature;
+          const event = snapshot.terminalError
+            ? (snapshot.retryScheduledAtMs == null ? 'terminal-error' : 'retry-scheduled')
+            : snapshot.recoverableError
+              ? 'recoverable-error'
+              : snapshot.startInFlight
+                ? 'start-in-flight'
+                : snapshot.streamActive ? 'stream-active' : 'inactive';
+          void recordActivityStageEvent({
+            ownerUserId: ownerAtActivation.ownerUserId,
+            clientActivityId: ownerAtActivation.sessionId,
+            stage: 'provider-state',
+            details: {
+              source: 'foreground',
+              event,
+              providerGeneration: snapshot.providerGeneration,
+              retryAttempt: snapshot.retryAttempt,
+              retryScheduledAtMs: snapshot.retryScheduledAtMs,
+              watchdogScheduledAtMs: snapshot.watchdogScheduledAtMs,
+              lastCallbackReceiptMs: snapshot.lastCallbackReceiptMs,
+              lastFreshObservationReceiptMs: snapshot.lastFreshObservationReceiptMs,
+              lastProcessingCompletedMs: snapshot.lastProcessingCompletedMs,
+              ownerGenerationSuffix: ownerAtActivation.liveOwnerGeneration?.slice(-8) ?? null,
+              appState: AppState.currentState,
+            },
+          });
+        }
         if (!snapshot.streamActive) {
           locationSubscription = null;
           return;
@@ -6316,7 +6658,35 @@ async function drainCommittedBackgroundLocations(
             currentSegmentId: tail?.segmentId ?? state.currentSegmentId,
           };
         });
-        if (published) break;
+        if (published) {
+          const publishedAtMs = Date.now();
+          const first = projection.canonical[0] as SegmentedTrackPoint | undefined;
+          const last = projection.canonical[projection.canonical.length - 1] as SegmentedTrackPoint | undefined;
+          void recordActivityStageEvent({
+            ownerUserId: owner.ownerUserId!,
+            clientActivityId: owner.sessionId!,
+            stage: 'store-published',
+            evidenceId: last?.rawOrdinal != null
+              ? `${last.segmentId ?? 'legacy'}:raw:${last.rawOrdinal}`
+              : `${last?.segmentId ?? 'legacy'}:journal-tail`,
+            wallTimeMs: publishedAtMs,
+            details: {
+              source: 'background-wal-replay',
+              firstRawOrdinal: first?.rawOrdinal ?? null,
+              lastRawOrdinal: last?.rawOrdinal ?? null,
+              canonicalStorePublished: true,
+              qualifiedPuckPublished: true,
+              liveRoutePublished: true,
+              visibleRenderTime: 'NOT_MEASURED',
+              projectionAuthority,
+              journalPointCount: ownedJournal.length,
+              appendedFromJournal: projection.appendedFromJournal,
+              queueHintCount: drained.length,
+              publicationWallTimeMs: publishedAtMs,
+            },
+          });
+          break;
+        }
       }
       const continuity = reconcileActivityContinuityAfterJournal({
         clientActivityId: owner.sessionId,
