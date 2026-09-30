@@ -170,9 +170,62 @@ describe('three-concept Finish progress rail', () => {
     expect(screen.getByText('Hike complete')).toBeTruthy();
     expect(screen.getByText('Synced')).toBeTruthy();
     expect(screen.getByTestId('activity-finish-progress-rail')).toBeTruthy();
-    act(() => { jest.advanceTimersByTime(651); });
+    act(() => { jest.advanceTimersByTime(1_201); });
     expect(screen.getByText('Hike complete')).toBeTruthy();
     expect(screen.queryByTestId('activity-finish-progress-rail')).toBeNull();
     expect(screen.getByText('View activity')).toBeTruthy();
+  });
+
+  test('collapses when Finish truth is synced before the persisted session sync field catches up', () => {
+    jest.useFakeTimers();
+    render(
+      <StopSummarySheet
+        summary={summary}
+        committed
+        syncState="pending"
+        finishProgress={{
+          hike: 'saved', route: 'ready', sync: 'synced', roadRefinementPending: false,
+        }}
+        onCancel={jest.fn()}
+        onConfirm={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('Synced')).toBeTruthy();
+    act(() => { jest.advanceTimersByTime(1_201); });
+    expect(screen.queryByTestId('activity-finish-progress-rail')).toBeNull();
+    expect(screen.getByText('Hike complete')).toBeTruthy();
+  });
+
+  test('does not collapse the completed rail until the save handler has settled', () => {
+    jest.useFakeTimers();
+    const progress = {
+      hike: 'saved' as const, route: 'ready' as const, sync: 'synced' as const,
+      roadRefinementPending: false,
+    };
+    const rendered = render(
+      <StopSummarySheet
+        summary={summary}
+        committed
+        saving
+        syncState="pending"
+        finishProgress={progress}
+        onCancel={jest.fn()}
+        onConfirm={jest.fn()}
+      />,
+    );
+    act(() => { jest.advanceTimersByTime(2_000); });
+    expect(screen.getByTestId('activity-finish-progress-rail')).toBeTruthy();
+    rendered.rerender(
+      <StopSummarySheet
+        summary={summary}
+        committed
+        syncState="pending"
+        finishProgress={progress}
+        onCancel={jest.fn()}
+        onConfirm={jest.fn()}
+      />,
+    );
+    act(() => { jest.advanceTimersByTime(1_201); });
+    expect(screen.queryByTestId('activity-finish-progress-rail')).toBeNull();
   });
 });

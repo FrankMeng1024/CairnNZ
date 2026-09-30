@@ -187,6 +187,32 @@ const capture = async (runDir, name) => {
   }
   return target;
 };
+const requireInViewport = async (locator, label) => {
+  const box = await locator.boundingBox();
+  const viewport = page.viewportSize();
+  if (!box || !viewport || box.x + box.width <= 0 || box.y + box.height <= 0
+      || box.x >= viewport.width || box.y >= viewport.height) {
+    const ancestry = await locator.evaluate(element => {
+      const result = [];
+      let node = element;
+      while (node && result.length < 8) {
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        result.push({
+          tag: node.tagName,
+          testId: node.getAttribute('data-testid'),
+          rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+          position: style.position,
+          transform: style.transform,
+          overflow: style.overflow,
+        });
+        node = node.parentElement;
+      }
+      return result;
+    });
+    throw new Error(`${label} exists in the document but is outside the captured viewport: ${JSON.stringify({ box, viewport, ancestry })}`);
+  }
+};
 const openDetail = async (activityId, activityName) => {
   await page.evaluate(id => {
     globalThis.__cairnStores.navigationRef.reset({
@@ -311,22 +337,50 @@ async function runJourney(fixture) {
 
   mark(`${fixture.caseId}/${mode}:finish-confirmation`);
   await page.getByRole('button', { name: `Finish ${noun}` }).dispatchEvent('click');
-  await page.getByText(`Name this ${noun} (optional)`, { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
+  const namePrompt = page.getByText(`Name this ${noun} (optional)`, { exact: true });
+  await namePrompt.waitFor({ state: 'visible', timeout: 10_000 });
+  await page.waitForTimeout(350);
+  await requireInViewport(namePrompt, `${fixture.caseId}/${mode} Finish confirmation`);
   await capture(runDir, '02-finish-confirmation');
   await page.getByRole('textbox').fill(activityName);
 
   mark(`${fixture.caseId}/${mode}:finish`);
   await page.getByRole('button', { name: `Finish ${noun} and view activity` }).dispatchEvent('click');
-  const finishingCapture = page.getByTestId('activity-finish-progress-rail').waitFor({ state: 'visible', timeout: 12_000 })
-    .then(() => capture(runDir, '04-finishing'))
-    .catch(() => null);
-  await retryWalFinishIfNeeded(fixture, noun, activityName, runDir);
+  const progressRail = page.getByTestId('activity-finish-progress-rail');
+  const finishingCapture = progressRail.waitFor({ state: 'visible', timeout: 12_000 })
+    .then(async () => {
+      await requireInViewport(progressRail, `${fixture.caseId}/${mode} Finish progress rail`);
+      return capture(runDir, '04-finishing');
+    })
+    .catch(error => {
+      if (fixture.lifecycle.walReadFaultOnce) return null;
+      throw error;
+    });
+  const retriedWalFinish = await retryWalFinishIfNeeded(fixture, noun, activityName, runDir);
+  if (retriedWalFinish) {
+    await progressRail.waitFor({ state: 'visible', timeout: 12_000 });
+    await requireInViewport(progressRail, `${fixture.caseId}/${mode} retried Finish progress rail`);
+    await capture(runDir, '04-finishing');
+  }
   await page.getByText(isRun ? 'Run complete' : 'Hike complete', { exact: true })
     .waitFor({ state: 'visible', timeout: 45_000 });
   await finishingCapture;
+  await page.getByText(
+    fixture.lifecycle.offlineAtFinish ? 'Sync · Waiting for connection' : 'Synced',
+    { exact: true },
+  ).waitFor({ state: 'visible', timeout: 10_000 });
+  await page.getByText('View activity', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
+  await requireInViewport(progressRail, `${fixture.caseId}/${mode} completed progress rail`);
   await capture(runDir, '05-complete');
   if (fixture.lifecycle.offlineAtFinish) {
     await page.getByText('Sync · Waiting for connection', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
+  } else {
+    await progressRail.waitFor({ state: 'hidden', timeout: 4_000 });
+    await requireInViewport(
+      page.getByText(isRun ? 'Run complete' : 'Hike complete', { exact: true }),
+      `${fixture.caseId}/${mode} collapsed completion`,
+    );
+    await capture(runDir, '05b-complete-collapsed');
   }
 
   await page.getByText('View activity', { exact: true }).click();

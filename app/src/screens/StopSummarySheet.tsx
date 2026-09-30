@@ -173,8 +173,11 @@ export function StopSummarySheet({
   const [miniMapWidth, setMiniMapWidth] = useState(0);
   const [showCompletedRail, setShowCompletedRail] = useState(false);
   const insets = useSafeAreaInsets();
-  const slideY = useRef(new Animated.Value(500)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  // RN Web can leave the native-driver entrance value stranded when the QA
+  // replay has just released its deterministic clock. Start Web at its final
+  // accessible position; native retains the light 280 ms sheet entrance.
+  const slideY = useRef(new Animated.Value(Platform.OS === 'web' ? 0 : 500)).current;
+  const opacity = useRef(new Animated.Value(Platform.OS === 'web' ? 1 : 0)).current;
   // O12 Round-3 R3-C1 + R3-M8: settings-aware units. Users deserve
   // consistent units across distance + elevation.
   const dist = useDistance();
@@ -187,14 +190,16 @@ export function StopSummarySheet({
   }, []);
 
   useEffect(() => {
-    if (!committed || syncState !== 'synced') {
+    const completionSynced = syncState === 'synced' || finishProgress?.sync === 'synced';
+    if (!committed || !completionSynced) {
       setShowCompletedRail(false);
       return undefined;
     }
     setShowCompletedRail(true);
-    const timer = setTimeout(() => setShowCompletedRail(false), 650);
+    if (saving) return undefined;
+    const timer = setTimeout(() => setShowCompletedRail(false), 1_200);
     return () => clearTimeout(timer);
-  }, [committed, syncState]);
+  }, [committed, finishProgress?.sync, saving, syncState]);
 
   // v407 fix #6: dismiss guard — prevents a double-dismiss race where
   // the scrim tap during the 220ms exit animation would fire onCancel
@@ -250,7 +255,7 @@ export function StopSummarySheet({
     ? finishProgress ?? {
         hike: 'saving', route: 'pending', sync: 'pending', roadRefinementPending: false,
       }
-    : committed && (syncState !== 'synced' || showCompletedRail)
+    : committed && (committedSync !== 'synced' || showCompletedRail)
       ? {
           ...(finishProgress ?? {
           hike: 'saved',

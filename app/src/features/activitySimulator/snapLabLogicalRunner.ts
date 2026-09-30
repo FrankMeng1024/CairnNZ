@@ -612,6 +612,11 @@ export async function replaySnapLabUiJourney(
   }
   await flushSyntheticMemoryNow();
   const state = useTrackingStore.getState();
+  // Raw observations need an exact, independently-controlled receipt clock.
+  // Once replay is complete, restore the real wall clock before normal user
+  // UI resumes: React Native animations and bounded Finish timers must not be
+  // stranded at the last fixture-delivery instant.
+  endUiReplayClock();
   return {
     delivered: fixture.rawEvents.length,
     accepted,
