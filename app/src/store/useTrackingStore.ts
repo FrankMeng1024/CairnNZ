@@ -163,6 +163,12 @@ import type { ActivityLocationSource } from '../features/activitySimulator/types
 import { planSimulatorRollback } from '../features/activitySimulator/simulatorActivityCorrection';
 import { validateCoordinate } from '../features/activitySimulator/geodesy';
 import {
+  currentSnapLabRunContext,
+  deleteSnapLabActivityForOwner,
+  runSnapLabFinal,
+  saveSnapLabActivity,
+} from '../features/activitySimulator/snapLabActivityStore';
+import {
   resolveLocationCadenceExperiment,
   type LocationCadenceExperiment,
 } from '../features/activity/locationCadenceExperiment';
@@ -201,7 +207,11 @@ import {
   type TrackingTokenRefreshSnapshot,
 } from '../services/trackingTokenRefreshAuthority';
 import { maybeVerifyPublicWalkingDiscovery } from '../features/public/services/publicWalkingDiscovery';
-import { recordActivityStageEvent } from '../features/activity/activityStageLedger';
+import {
+  exportLatestActivityStageLedger,
+  flushActivityStageLedger,
+  recordActivityStageEvent,
+} from '../features/activity/activityStageLedger';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
@@ -1224,7 +1234,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           startWallClockTimestamp,
         )
       : startWallClockTimestamp;
-    const localSessionId = requestedClientActivityId ?? uuidv4();
+    const requestedOrGeneratedId = requestedClientActivityId ?? uuidv4();
+    const localSessionId = locationProviderSource === 'simulator'
+      ? requestedOrGeneratedId.startsWith('qa-snap-')
+        ? requestedOrGeneratedId
+        : `qa-snap-${requestedOrGeneratedId}`
+      : requestedOrGeneratedId;
     const ownerGeneration = uuidv4();
     const initialSegmentId = newSegmentId(localSessionId, startedAt);
     resetRealGpsDiagnosticState(locationProviderSource === 'real' ? localSessionId : null);
@@ -1312,7 +1327,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
 
     try {
-      const existing = await getUnfinishedActivity(userId);
+      const existing = await getUnfinishedActivity(
+        userId,
+        locationProviderSource === 'simulator' ? 'snap-lab' : 'production',
+      );
       if (existing && existing.clientActivityId !== localSessionId) {
         set({ ...initialState, activityMode: mode, startError: 'unfinished-exists' });
         return false;
@@ -1338,16 +1356,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       return false;
     }
 
-    // Reserve the authoritative server singleton while online before any live
-    // GPS source is acquired. A five-second timeout remains offline-first: a
-    // lost response is safe because this exact business ID reconciles later.
-    const startResolution = await startSessionResolved(
+    // Only real Activities reserve the production singleton. Snap Lab uses a
+    // separate registry/WAL/shelf and is forbidden from crossing this network
+    // boundary even when the device is online.
+    const startResolution = locationProviderSource === 'real' ? await startSessionResolved(
       mode,
       new Date(startedAt).toISOString(),
       localSessionId,
       userId,
-    );
-    if (startResolution.kind === 'started') {
+    ) : null;
+    if (startResolution?.kind === 'started') {
       await mapActivityServerId(userId, localSessionId, startResolution.serverActivityId);
       if (!startAuthorityIsCurrent()) {
         crashLogger.breadcrumb(`session:start:stale_owner_response localId=${localSessionId.slice(0, 8)}`);
@@ -1355,7 +1373,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       }
       set({ remoteSessionId: startResolution.serverActivityId });
       crashLogger.breadcrumb(`session:start:server-id=${startResolution.serverActivityId}`);
-    } else if (startResolution.kind === 'conflict') {
+    } else if (startResolution?.kind === 'conflict') {
       if (!startAuthorityIsCurrent()) {
         crashLogger.breadcrumb(`session:start:stale_owner_conflict localId=${localSessionId.slice(0, 8)}`);
         return false;
@@ -1503,7 +1521,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       }
       set({ ...initialState, activityMode: mode, startError: 'unfinished-exists' });
       return false;
-    } else {
+    } else if (locationProviderSource === 'real') {
       if (!startAuthorityIsCurrent()) return false;
       crashLogger.breadcrumb('session:start:server-unavailable');
     }
@@ -1511,8 +1529,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     if (!startAuthorityIsCurrent()) return false;
 
     // Start debug logger session (no-op if disabled)
-    const dbgSessionId = debugLogger.startSession({ activity_mode: get().activityMode });
-    sessionRecorder.start();
+    if (locationProviderSource === 'real') {
+      debugLogger.startSession({ activity_mode: get().activityMode });
+      sessionRecorder.start();
+    }
 
     // v409 fix #2: 语义换了 —— hikeActive=true 表示 "hike 在跑",不依赖
     // debug mode。这样 iOS jetsam 后 Path B 无条件写盘,修复 194 session
@@ -1532,7 +1552,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         });
     if (!contextPersisted) {
       await tombstoneActivity({ userId, clientActivityId: localSessionId });
-      void deleteRemoteSessionByClientId(localSessionId);
+      if (locationProviderSource === 'real') void deleteRemoteSessionByClientId(localSessionId);
       set({ ...initialState, activityMode: mode, startError: 'initialization-failed' });
       return false;
     }
@@ -1561,13 +1581,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       crashLogger.breadcrumb(`v409:hikeTrackWriter:startHikeTrack failed ${String(e).slice(0, 80)}`);
       await tombstoneActivity({ userId, clientActivityId: localSessionId });
       await persistBackgroundContext(null, false);
-      void deleteRemoteSessionByClientId(localSessionId);
+      if (locationProviderSource === 'real') void deleteRemoteSessionByClientId(localSessionId);
       set({ ...initialState, activityMode: mode, startError: 'initialization-failed' });
       return false;
     }
 
     // Start battery + network monitors (non-blocking)
-    batteryMonitor.start().catch(() => {});
+    if (locationProviderSource === 'real') batteryMonitor.start().catch(() => {});
     networkMonitor.start().catch(() => {});
 
     // Defensive: clear any stale intervals before starting new ones.
@@ -1886,7 +1906,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       };
       // Initial state — pick based on current AppState.
       const initialAs = AppState.currentState;
-      startFlushInterval(initialAs === 'background' ? FLUSH_BG_MS : FLUSH_FG_MS);
+      if (locationProviderSource === 'real') {
+        startFlushInterval(initialAs === 'background' ? FLUSH_BG_MS : FLUSH_FG_MS);
+      }
       // Expose an internal restart hook the AppState listener can call.
       (globalThis as unknown as { __cairnRestartFlush?: (ms: number) => void }).__cairnRestartFlush = startFlushInterval;
 
@@ -1907,7 +1929,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // minutes while actively tracking, silently POST /api/auth/refresh
       // so an 8-hour hike never crosses a token boundary. Failure NEVER
       // clears the token (iron rule); we just breadcrumb and keep hiking.
-      try {
+      if (locationProviderSource === 'real') try {
         const HIKING_REFRESH_MS = 30 * 60_000;
         stopOwnedTokenRefreshTimer();
         const refreshEpoch = tokenRefreshEpoch;
@@ -1956,9 +1978,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       stopRealTelemetryHealthTimer();
       // Connectivity monitoring is app-owned. Activity teardown must never
       // disable recovery for Cairns or already-saved Activities.
-      sessionRecorder.stop();
-      void batteryMonitor.stop().catch(() => {});
-      void debugLogger.endSession().catch(() => {});
+      if (locationProviderSource === 'real') {
+        sessionRecorder.stop();
+        void batteryMonitor.stop().catch(() => {});
+        void debugLogger.endSession().catch(() => {});
+      }
       await persistBackgroundContext(null, false).catch(() => {});
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1967,12 +1991,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       } catch { /* writer unavailable */ }
       const remoteId = get().sessionId === localSessionId ? get().remoteSessionId : null;
       await tombstoneActivity({ userId, clientActivityId: localSessionId, serverActivityId: remoteId });
-      void deleteRemoteSessionByClientId(localSessionId)
-        .then((cancelled) => {
-          if (!cancelled && remoteId) return deleteRemoteSession(remoteId);
-          return true;
-        })
-        .catch(() => {});
+      if (locationProviderSource === 'real') {
+        void deleteRemoteSessionByClientId(localSessionId)
+          .then((cancelled) => {
+            if (!cancelled && remoteId) return deleteRemoteSession(remoteId);
+            return true;
+          })
+          .catch(() => {});
+      }
       if (locationProviderSource === 'simulator') {
         await endSimulatorProvider('start-failed').catch(() => {});
         simulatorSourceActive = false;
@@ -2061,6 +2087,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       ? lifecycleDurationPatch(stopEntry)
       : null;
     acceptanceFenceCutoffMs = Date.now();
+    const finishFenceCutoffAt = acceptanceFenceCutoffMs;
     finishAcceptanceSnapshotClosed = false;
     stopActivityLifecycleTimer();
     set({
@@ -2083,7 +2110,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       await sealHikeTrackForFinish(
         stopEntry.sessionId,
         stopEntry.liveOwnerGeneration ?? undefined,
-        acceptanceFenceCutoffMs,
+        finishFenceCutoffAt,
       );
     } catch (terminalError) {
       try {
@@ -2186,6 +2213,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // is intentionally unbounded: timing out a durable WAL append and then
       // deleting its journal would truncate the route's historical tail.
       await pointIngestTail;
+      if (stopEntry.locationProviderSource === 'simulator') {
+        drainedBeforeFinish = await reconcileSnapLabTerminalJournalAtFinish();
+      }
     } catch (reconciliationError) {
       // The terminal WAL snapshot is Save authority. Never continue with the
       // already-eligible mounted prefix when its newer durable tail could not
@@ -2259,17 +2289,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // completed-Activity outboxes keep recovering after this recording ends.
     // batteryMonitor's final session_end sample must be logged before
     // debugLogger.endSession flushes, otherwise it's lost.
-    sessionRecorder.stop();
-    // Chain battery stop → debugLogger end → upload
-    batteryMonitor.stop()
-      .catch(() => {})
-      .finally(() => {
-        debugLogger.endSession().then((endedId) => {
-          if (endedId) {
-            telemetryUploader.upload(endedId).catch(() => {});
-          }
-        }).catch(() => {});
-      });
+    if (stopEntry.locationProviderSource === 'real') {
+      sessionRecorder.stop();
+      // Chain battery stop → debugLogger end → upload for production evidence
+      // only. Snap Lab diagnostics remain local/exportable by construction.
+      batteryMonitor.stop()
+        .catch(() => {})
+        .finally(() => {
+          debugLogger.endSession().then((endedId) => {
+            if (endedId) telemetryUploader.upload(endedId).catch(() => {});
+          }).catch(() => {});
+        });
+    }
 
     const s = get();
     const finalStats = calculateActivityStats(s.trackPoints);
@@ -2442,6 +2473,226 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       }
       let finalArtifact: ActivityFinalArtifact | null = null;
       let asynchronousRefinementOwnsFinal = false;
+
+      if (s.locationProviderSource === 'simulator') {
+        const qaCommitStartedAt = Date.now();
+        let qaRecordPrepared = false;
+        let qaWalTerminalized = false;
+        try {
+          // QA Memory is already populated incrementally from accepted
+          // canonical evidence. Finish only drains that isolated writer; it
+          // never reads or mutates Personal Memory.
+          await flushRecordedMemoryEvidence();
+          set({
+            finishProgress: {
+              hike: 'saved',
+              route: 'refining',
+              sync: 'pending',
+              roadRefinementPending: false,
+            },
+          });
+          const qaContext = currentSnapLabRunContext();
+          const snap = await runSnapLabFinal(s.trackPoints);
+          const roadRefinementPending = qaContext.transportMode === 'offline';
+          const selectedFingerprint = activityGeometryFingerprint(snap.selectedFinal);
+          const finalGeometryState: NonNullable<TrackingSession['finalGeometryState']> =
+            snap.selectedSource === 'local' ? 'base_ready' : 'enhanced';
+          const qaSession: TrackingSession = {
+            id: s.sessionId,
+            clientActivityId: s.sessionId,
+            activityMode: s.activityMode,
+            regionCode: region.code,
+            startedAt: s.startedAt,
+            endedAt,
+            durationS: finalDurationS,
+            distanceM: finalStats.distanceM,
+            elevationGainM: finalStats.elevationGainM,
+            trackPoints: snap.selectedFinal,
+            markerIds: s.markerIds,
+            name: finalName,
+            memoryNewCells: useMemoryStore.getState().testPoints.filter(point => (
+              point.sourceActivityClientId === s.sessionId
+            )).length,
+            syncState: 'synced',
+            finalGeometryState,
+            finalGeometryVersion: 'pedestrian-final-v2-base',
+            finalGeometryRevision: 1,
+            finalGeometryFingerprint: selectedFingerprint,
+            roadRefinementPending,
+            qaProvenance: 'snap_lab',
+          };
+          void recordActivityStageEvent({
+            ownerUserId,
+            clientActivityId: s.sessionId,
+            stage: 'final-selected',
+            details: {
+              realm: 'snap-lab',
+              selectedSource: snap.selectedSource,
+              artifactRevision: 1,
+              artifactFingerprint: selectedFingerprint,
+              matchingRequestCount: snap.requestCount,
+              directionsRequestCount: snap.directionsRequestCount,
+            },
+          });
+          const baseRecord = {
+            format: 'cairn-snap-lab-activity' as const,
+            version: 1 as const,
+            realm: 'snap-lab' as const,
+            ownerUserId,
+            activityId: s.sessionId,
+            createdAt: Date.now(),
+            context: qaContext,
+            session: qaSession,
+            rawPoints: s.trackPointsRaw.map(point => ({ ...point })),
+            canonicalPoints: s.trackPoints.map(point => ({ ...point })),
+            liveBeforeFinish: (s.trackPointsSmoothed.length > 0
+              ? s.trackPointsSmoothed
+              : s.trackPoints).map(point => ({ ...point })),
+            localFinal: snap.localFinal.map(point => ({ ...point })),
+            selectedFinal: snap.selectedFinal.map(point => ({ ...point })),
+            selectedSource: snap.selectedSource,
+            segmentStats: snap.segmentStats,
+            requestCount: snap.requestCount,
+            directionsRequestCount: snap.directionsRequestCount,
+            acceptedIslandCount: snap.acceptedIslandCount,
+            transportReceipts: snap.transportReceipts,
+            qaMemoryPointCount: qaSession.memoryNewCells ?? 0,
+            stageTimestamps: {
+              finishRequestedAt: saveTimelineStartedAt,
+              qaCommitStartedAt,
+              qaActivityDurableAt: Date.now(),
+              completionPresentedAt: null,
+            },
+            stageLedger: null,
+            routeSnapshots: [],
+            roadUpgrade: null,
+          };
+          await saveSnapLabActivity(baseRecord);
+          qaRecordPrepared = true;
+          // The strict terminal move verifies that the completed QA WAL is
+          // byte-equivalent to the immutable snapshot used above. A failed or
+          // corrupt terminal read must never produce a green saved Activity.
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { completeSnapLabHikeTrack } = require('../services/hikeTrackWriter');
+          await completeSnapLabHikeTrack(
+            s.sessionId,
+            ownerUserId,
+            s.liveOwnerGeneration ?? undefined,
+            finishFenceCutoffAt,
+            endedAt,
+          );
+          qaWalTerminalized = true;
+          const qaActivityDurableAt = Date.now();
+          await completeActivity({
+            clientActivityId: s.sessionId,
+            serverActivityId: null,
+            userId: ownerUserId,
+            activityMode: s.activityMode,
+            startedAt: s.startedAt,
+            endedAt,
+            lifecycle: 'completed_local',
+            syncState: 'synced',
+            locationProviderSource: 'simulator',
+          });
+          durableSaveCommitted = true;
+          serverSaveAcknowledged = true;
+          stopReason = 'saved';
+          finishResult = activityFinishResultFromSession(qaSession);
+          notifyLocalCommit(s.sessionId);
+          set({
+            finishProgress: {
+              hike: 'saved',
+              route: 'ready',
+              sync: roadRefinementPending ? 'waiting' : 'synced',
+              roadRefinementPending,
+            },
+          });
+          void recordActivityStageEvent({
+            ownerUserId,
+            clientActivityId: s.sessionId,
+            stage: 'completion-presented',
+            details: {
+              realm: 'snap-lab',
+              artifactRevision: 1,
+              artifactFingerprint: selectedFingerprint,
+              routeState: finalGeometryState,
+              syncState: roadRefinementPending ? 'qa-offline-waiting' : 'qa-local-only',
+            },
+          });
+          await flushActivityStageLedger(ownerUserId);
+          const stageLedger = await exportLatestActivityStageLedger(ownerUserId, 'snap-lab');
+          await saveSnapLabActivity({
+            ...baseRecord,
+            stageLedger,
+            stageTimestamps: {
+              ...baseRecord.stageTimestamps,
+              qaActivityDurableAt,
+              completionPresentedAt: Date.now(),
+            },
+          });
+          recordSavePhase('snap_lab_local_completion', qaCommitStartedAt, {
+            selectedSource: snap.selectedSource,
+            mapMatchingRequestCount: snap.requestCount,
+            directionsRequestCount: snap.directionsRequestCount,
+            productionUploadCount: 0,
+          });
+          appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_completion_finished', {
+            realm: 'snap-lab',
+            selectedSource: snap.selectedSource,
+            rawPointCount: s.trackPointsRaw.length,
+            canonicalPointCount: s.trackPoints.length,
+            selectedPointCount: snap.selectedFinal.length,
+            matchingRequestCount: snap.requestCount,
+            directionsRequestCount: snap.directionsRequestCount,
+            productionUploadCount: 0,
+          }, { userId: ownerUserId, clientActivityId: s.sessionId, coordinateSource: 'none' });
+          await flushSimulatorLogs(ownerUserId);
+          await endSimulatorProvider('completed');
+          simulatorSourceActive = false;
+          finishAcceptanceSnapshotClosed = false;
+          await clearActivityRouteReferenceAfterTerminal('finished');
+          set(prev => ({
+            ...initialState,
+            lastStopReason: stopReason,
+            saveLostSessionId: prev.saveLostSessionId,
+            saveLostPayload: prev.saveLostPayload,
+            finishProgress: prev.finishProgress,
+          }));
+          return finishResult;
+        } catch (qaCommitError) {
+          crashLogger.breadcrumb(`snap_lab:local_commit_failed ${String(qaCommitError).slice(0, 120)}`);
+          if (!qaWalTerminalized) {
+            if (qaRecordPrepared) {
+              await deleteSnapLabActivityForOwner(ownerUserId, s.sessionId).catch(() => undefined);
+            }
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { releaseHikeTrackFinishSeal } = require('../services/hikeTrackWriter');
+              await releaseHikeTrackFinishSeal(s.sessionId, s.liveOwnerGeneration ?? undefined);
+            } catch { /* active WAL remains explicit recovery authority */ }
+          }
+          finishAcceptanceSnapshotClosed = false;
+          set({
+            status: 'paused',
+            transitionState: 'idle',
+            isFinishing: false,
+            lastStopReason: null,
+            savingHikeStep: null,
+          });
+          Alert.alert(
+            'QA Activity not saved',
+            qaWalTerminalized
+              ? 'Snap Lab preserved a terminal WAL and local record, but could not verify every completion index. Reopen the QA shelf before running another case.'
+              : 'Snap Lab could not verify its isolated Activity record and terminal WAL. The recording remains paused so Finish can be retried.',
+          );
+          return {
+            status: 'recoverable-failure',
+            localCommit: 'not-committed',
+            clientActivityId: s.sessionId,
+            reason: 'local-commit-failed',
+          };
+        }
+      }
 
       // Hold the outbox before the Base snapshot exists. The same
       // idempotency key must never escape with two different payloads.
@@ -3034,7 +3285,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             lat: point.lat,
             lng: point.lng,
             atMs: point.t,
-            source: s.locationProviderSource === 'simulator' ? 'simulator_test' : 'activity_real',
+            // Simulator activities return through the isolated Snap Lab finish
+            // path above. Reaching production reconciliation proves real-source
+            // authority, which TypeScript also keeps narrowed here.
+            source: 'activity_real',
             ownerUserId,
             durability: 'deferred',
             sourceActivityClientId: s.sessionId ?? undefined,
@@ -4206,7 +4460,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     const receiptActivityId = coord.clientActivityId ?? receiptSnapshot.sessionId;
     const receiptOwnerId = receiptSnapshot.ownerUserId;
     const receiptEvidenceId = `${coord.source ?? 'foreground'}:${Math.floor(timestamp ?? receiptWallTimeMs)}`;
-    if (coord.source !== 'simulator' && receiptOwnerId && receiptActivityId) {
+    if ((coord.source !== 'simulator' || coord.simulatorObservationMode === 'raw-gps')
+      && receiptOwnerId && receiptActivityId) {
       void recordActivityStageEvent({
         ownerUserId: receiptOwnerId,
         clientActivityId: receiptActivityId,
@@ -4228,6 +4483,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           speedAccuracyMps: coord.speedAccuracy ?? null,
           qualifiedPuckPublication: 'NOT_YET_DECIDED',
           visibleRenderTime: 'NOT_MEASURED',
+          realm: coord.source === 'simulator' ? 'snap-lab' : 'production',
         },
       });
     }
@@ -4903,7 +5159,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           return s.elevationGainM + (delta > 0 ? delta : 0);
         })();
         let elevationGainM = legacyElevationGainM;
-        if (!isSimulatorSample) {
+        if (!isSimulatorSample || isRawGpsSimulatorSample) {
           let elevationState = realElevationState;
           const elevationDecisions = canonicalPoints.map(point => {
             const decision = reduceElevationObservation(elevationState, { ...point, segmentId });
@@ -4968,7 +5224,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       const acceptedTransition = acceptance.transition;
       try {
         const journalStartedAt = Date.now();
-        if (!isSimulatorSample) {
+        if (!isSimulatorSample || isRawGpsSimulatorSample) {
           for (const point of acceptedPoints) {
             const promoted = point.t !== sampleTimestamp || point.rawOrdinal !== rawOrdinal;
             void recordActivityStageEvent({
@@ -5033,7 +5289,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           }
         }
         const journalCommittedAt = Date.now();
-        if (!isSimulatorSample) {
+        if (!isSimulatorSample || isRawGpsSimulatorSample) {
           void recordActivityStageEvent({
             ownerUserId: before.ownerUserId,
             clientActivityId: before.sessionId!,
@@ -5120,7 +5376,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           return next;
         });
         const storePublishedAt = Date.now();
-        if (!isSimulatorSample) {
+        if (!isSimulatorSample || isRawGpsSimulatorSample) {
           void recordActivityStageEvent({
             ownerUserId: before.ownerUserId,
             clientActivityId: before.sessionId!,
@@ -5188,6 +5444,22 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           // The isolated simulator realm is test-only and has no Activity-WAL
           // recovery projector, so preserve its synchronous evidence contract.
           for (const point of acceptedPoints) {
+            const memoryScheduledAtMs = Date.now();
+            void recordActivityStageEvent({
+              ownerUserId: before.ownerUserId,
+              clientActivityId: before.sessionId!,
+              stage: 'memory-responsibility',
+              evidenceId: point.rawOrdinal == null
+                ? receiptEvidenceId
+                : `${before.sessionId!.slice(-8)}:${point.rawOrdinal}`,
+              wallTimeMs: memoryScheduledAtMs,
+              details: {
+                realm: 'snap-lab',
+                status: 'synchronous-local-intent',
+                observationTimeMs: point.t,
+                rawOrdinal: point.rawOrdinal ?? null,
+              },
+            });
             const pointMemoryResult = await recordMemoryEvidence({
               lat: point.lat,
               lng: point.lng,
@@ -5203,6 +5475,22 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               committed: memoryResult.committed || pointMemoryResult.committed,
               deduplicated: memoryResult.deduplicated && pointMemoryResult.deduplicated,
             };
+            void recordActivityStageEvent({
+              ownerUserId: before.ownerUserId,
+              clientActivityId: before.sessionId!,
+              stage: 'memory-local-commit',
+              evidenceId: point.rawOrdinal == null
+                ? receiptEvidenceId
+                : `${before.sessionId!.slice(-8)}:${point.rawOrdinal}`,
+              details: {
+                realm: 'snap-lab',
+                observationTimeMs: point.t,
+                rawOrdinal: point.rawOrdinal ?? null,
+                committed: pointMemoryResult.committed,
+                deduplicated: pointMemoryResult.deduplicated,
+                responsibilityToCommitLatencyMs: Math.max(0, Date.now() - memoryScheduledAtMs),
+              },
+            });
           }
         } else {
           // appendHikePoint above is the durable downstream replay source.
@@ -5921,7 +6209,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     } catch { /* monitor unavailable */ }
 
     // Connectivity monitoring is app-owned and survives Activity discard.
-    sessionRecorder.stop();
+    if (discardEntry.locationProviderSource === 'real') sessionRecorder.stop();
     const s = get();
     const ownerUserId = String(s.ownerUserId ?? '');
     if (!ownerUserId || String(useAppStore.getState().user?.id ?? '') !== ownerUserId) {
@@ -5966,14 +6254,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         clientActivityId: s.sessionId,
         serverActivityId: s.remoteSessionId,
       });
-      try {
+      if (s.locationProviderSource === 'real') try {
         const { removePending } = require('../services/pendingSyncStore');
         await removePending(s.sessionId, ownerUserId);
       } catch { /* pending queue may not be initialized */ }
     }
-    await batteryMonitor.stop().catch(() => {});
-    await debugLogger.endSession().catch(() => {});
-    if (s.sessionId) {
+    if (s.locationProviderSource === 'real') {
+      await batteryMonitor.stop().catch(() => {});
+      await debugLogger.endSession().catch(() => {});
+    }
+    if (s.sessionId && s.locationProviderSource === 'real') {
       // Client-id cancellation is idempotent and also installs the server
       // tombstone. Numeric deletion remains a compatibility fallback.
       const cancelled = await deleteRemoteSessionByClientId(s.sessionId).catch(() => false);
@@ -6497,6 +6787,142 @@ async function markRecordingContinuityUnavailable(reason: string): Promise<void>
 }
 
 type JournalProjectionAuthority = 'foreground' | 'pause-fence' | 'finish-fence';
+
+/** Snap Lab Finish uses the same fail-closed terminal WAL authority as a real
+ * Activity. The mounted store is replaced from that immutable snapshot, not
+ * merely trusted because simulator callbacks usually run in one JS runtime. */
+async function reconcileSnapLabTerminalJournalAtFinish(): Promise<number> {
+  const owner = useTrackingStore.getState();
+  const cutoffAt = acceptanceFenceCutoffMs;
+  if (owner.locationProviderSource !== 'simulator'
+    || !owner.sessionId
+    || !owner.ownerUserId
+    || !owner.liveOwnerGeneration
+    || cutoffAt === null) throw new Error('snap_lab_terminal_owner_unavailable');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const writer = require('../services/hikeTrackWriter');
+  const terminal = await writer.readActiveHikeTerminalSnapshot(owner.sessionId, {
+    expectedOwnerGeneration: owner.liveOwnerGeneration,
+    expectedCutoffAt: cutoffAt,
+  });
+  if (terminal.status !== 'complete') {
+    throw new Error(`snap_lab_terminal_snapshot_uncertain:${terminal.reason}`);
+  }
+  // One Activity legitimately spans multiple owner generations across
+  // Pause/Resume and process recovery. The terminal marker proves the current
+  // writer generation; every historical row must retain the immutable client
+  // Activity id, but must not be rewritten to the latest generation.
+  if (terminal.points.some((point: any) => point.clientActivityId !== owner.sessionId)) {
+    throw new Error('snap_lab_terminal_snapshot_activity_mismatch');
+  }
+  const mountedEvidenceKeys = new Set(owner.trackPoints.map(point => (
+    point.rawOrdinal == null
+      ? `${point.segmentId ?? 'legacy'}:${point.t}:${point.lat}:${point.lng}`
+      : `${point.segmentId ?? 'legacy'}:raw:${point.rawOrdinal}`
+  )));
+  const terminalMemorySuffix = terminal.points.filter((point: any) => !mountedEvidenceKeys.has(
+    point.rawOrdinal == null
+      ? `${point.segmentId ?? 'legacy'}:${point.t}:${point.lat}:${point.lng}`
+      : `${point.segmentId ?? 'legacy'}:raw:${point.rawOrdinal}`,
+  ));
+  const stillOwnsFinish = () => {
+    const current = useTrackingStore.getState();
+    return current.isFinishing
+      && !finishAcceptanceSnapshotClosed
+      && acceptanceFenceCutoffMs === cutoffAt
+      && current.sessionId === owner.sessionId
+      && current.ownerUserId === owner.ownerUserId
+      && current.liveOwnerGeneration === owner.liveOwnerGeneration;
+  };
+  const prepared = await projectActivityJournalCooperatively([], terminal.points, {
+    shouldContinue: stillOwnsFinish,
+  });
+  if (!prepared || !stillOwnsFinish()) throw new Error('snap_lab_terminal_projection_cancelled');
+  const projection = prepared.projection;
+  useTrackingStore.setState(state => {
+    if (!stillOwnsFinish()) return state;
+    const tail = projection.canonical[projection.canonical.length - 1] as SegmentedTrackPoint | undefined;
+    const presentationTail = projection.live[projection.live.length - 1] as SegmentedTrackPoint | undefined;
+    return {
+      trackPoints: projection.canonical,
+      trackPointsSmoothed: projection.live,
+      trackPointsRaw: mergeActivityCanonicalPoints(state.trackPointsRaw, projection.canonical),
+      distanceM: projection.distanceM,
+      distanceAccumulator: projection.distanceAccumulator,
+      elevationGainM: projection.elevationGainM,
+      lastCoordinate: tail ?? state.lastCoordinate,
+      lastCoordinateTime: tail?.t ?? state.lastCoordinateTime,
+      lastFixTimestamp: tail?.t ?? state.lastFixTimestamp,
+      latestSourceCoordinate: presentationTail ?? state.latestSourceCoordinate,
+      currentSegmentId: tail?.segmentId ?? state.currentSegmentId,
+    };
+  });
+  const publicationWallTimeMs = Date.now();
+  const tail = projection.canonical[projection.canonical.length - 1];
+  void recordActivityStageEvent({
+    ownerUserId: owner.ownerUserId,
+    clientActivityId: owner.sessionId,
+    stage: 'store-published',
+    evidenceId: tail?.rawOrdinal == null ? 'terminal-wal' : `${owner.sessionId.slice(-8)}:${tail.rawOrdinal}`,
+    wallTimeMs: publicationWallTimeMs,
+    details: {
+      realm: 'snap-lab',
+      source: 'terminal-wal-replay',
+      terminalPointCount: projection.canonical.length,
+      canonicalStorePublished: true,
+      qualifiedPuckPublished: true,
+      liveRoutePublished: true,
+      visibleRenderTime: 'NOT_MEASURED',
+      fullLiveRebuilds: prepared.metrics.fullLiveRebuilds,
+    },
+  });
+  // `pointIngestTail` already proved Memory commitment for the mounted prefix.
+  // Re-assert only a WAL suffix that was absent from that projection; replaying
+  // hundreds of already-proven points here would turn durable Finish into an
+  // avoidable O(n) storage delay.
+  for (const [index, point] of terminalMemorySuffix.entries()) {
+    if (!stillOwnsFinish()) throw new Error('snap_lab_terminal_memory_owner_changed');
+    const evidenceId = point.rawOrdinal == null
+      ? `${owner.sessionId.slice(-8)}:terminal:${index}`
+      : `${owner.sessionId.slice(-8)}:${point.rawOrdinal}`;
+    const scheduledAtMs = Date.now();
+    void recordActivityStageEvent({
+      ownerUserId: owner.ownerUserId,
+      clientActivityId: owner.sessionId,
+      stage: 'memory-responsibility',
+      evidenceId,
+      wallTimeMs: scheduledAtMs,
+      details: { realm: 'snap-lab', source: 'terminal-wal-replay', observationTimeMs: point.t },
+    });
+    const result = await recordMemoryEvidence({
+      lat: point.lat,
+      lng: point.lng,
+      atMs: point.t,
+      source: 'simulator_test',
+      ownerUserId: owner.ownerUserId,
+      sourceActivityClientId: owner.sessionId,
+      sourceSegmentId: point.segmentId,
+      horizontalAccuracyM: point.accuracy ?? undefined,
+      continuityState: 'accepted',
+    });
+    void recordActivityStageEvent({
+      ownerUserId: owner.ownerUserId,
+      clientActivityId: owner.sessionId,
+      stage: 'memory-local-commit',
+      evidenceId,
+      details: {
+        realm: 'snap-lab',
+        source: 'terminal-wal-replay',
+        observationTimeMs: point.t,
+        committed: result.committed,
+        deduplicated: result.deduplicated,
+        responsibilityToCommitLatencyMs: Math.max(0, Date.now() - scheduledAtMs),
+      },
+    });
+  }
+  await flushRecordedMemoryEvidence();
+  return terminal.points.length;
+}
 
 async function drainCommittedBackgroundLocations(
   projectionAuthority: JournalProjectionAuthority = 'foreground',

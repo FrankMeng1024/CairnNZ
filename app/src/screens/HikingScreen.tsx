@@ -1271,7 +1271,7 @@ export function HikingScreen() {
             </Animated.View>
           </Animated.View>
         )}
-        {showSimulator ? <ActivitySimulatorPanel /> : null}
+        {showSimulator && !stopSummary ? <ActivitySimulatorPanel /> : null}
         {/* v412 4-eye fix (Critical #3): recoveryModalNode 已提到最外层 Fragment, 见函数结尾. */}
       </View>
       {recoveryModalNode}
@@ -1471,7 +1471,7 @@ export function HikingScreen() {
         featureName="Hiking"
         onDismiss={() => setPermissionDeniedVisible(false)}
       />
-      {showSimulator ? <ActivitySimulatorPanel /> : null}
+      {showSimulator && !stopSummary ? <ActivitySimulatorPanel /> : null}
       {/* v412: 未完成 hike 恢复弹窗 — 挂在 Fragment 顶层, 见下方 */}
     </View>
     {recoveryModalNode}

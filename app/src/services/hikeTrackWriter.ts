@@ -1,3 +1,5 @@
+import { consumeSnapLabTerminalWalReadFault } from '../features/activitySimulator/snapLabFaultInjection';
+
 /**
  * hikeTrackWriter — v409 独立 hike 磁盘落盘服务
  *
@@ -32,12 +34,28 @@
  */
 
 const HIKE_DIR = 'cairn-hike-tracks/';
-const ACTIVE_DIR = HIKE_DIR + 'active/';
-const COMPLETED_DIR = HIKE_DIR + 'completed/';
-const META_DIR = HIKE_DIR + 'meta/';
+const QA_HIKE_DIR = 'cairn-snap-lab/hike-tracks/';
+
+/** Snap Lab identities are deliberately routed to a different filesystem
+ * namespace. They can exercise the real WAL implementation without becoming
+ * discoverable by ordinary unfinished-Activity recovery or cleanup. */
+export function isSnapLabActivityId(sessionId: string): boolean {
+  return sessionId.startsWith('qa-snap-');
+}
+
+const hikeDirFor = (sessionId: string) => isSnapLabActivityId(sessionId) ? QA_HIKE_DIR : HIKE_DIR;
+const activeDirFor = (sessionId: string) => hikeDirFor(sessionId) + 'active/';
+const completedDirFor = (sessionId: string) => hikeDirFor(sessionId) + 'completed/';
+const metaDirFor = (sessionId: string) => hikeDirFor(sessionId) + 'meta/';
+const activePathFor = (fs: any, sessionId: string) => (
+  fs.documentDirectory + activeDirFor(sessionId) + sessionId + '.jsonl'
+);
+const completedPathFor = (fs: any, sessionId: string) => (
+  fs.documentDirectory + completedDirFor(sessionId) + sessionId + '.jsonl'
+);
 
 const terminalPathFor = (fs: any, sessionId: string) => (
-  fs.documentDirectory + META_DIR + sessionId + '.terminal.json'
+  fs.documentDirectory + metaDirFor(sessionId) + sessionId + '.terminal.json'
 );
 
 // Commit policy: flush every accepted point. The former timer/count buffer
@@ -186,7 +204,7 @@ export interface HikeMeta {
 }
 
 const metaPathFor = (fs: any, sessionId: string) => (
-  fs.documentDirectory + META_DIR + sessionId + '.json'
+  fs.documentDirectory + metaDirFor(sessionId) + sessionId + '.json'
 );
 
 const metaCandidates = (fs: any, sessionId: string): string[] => {
@@ -251,7 +269,7 @@ export async function sealHikeTrackForFinish(
 ): Promise<void> {
   const fs = await getFs();
   if (!fs) return;
-  await ensureDirs(fs);
+  await ensureDirs(fs, sessionId);
   const marker: HikeTerminalMarker = {
     v: 1,
     session_id: sessionId,
@@ -284,7 +302,7 @@ export async function releaseHikeTrackFinishSeal(
   const fs = await getFs();
   if (options.shouldContinue && !options.shouldContinue()) return false;
   if (!fs) return true;
-  await ensureDirs(fs);
+  await ensureDirs(fs, sessionId);
   await flushChainTail.catch(() => {});
   await durableWriteTail.catch(() => {});
   if (options.shouldContinue && !options.shouldContinue()) return false;
@@ -304,7 +322,7 @@ export async function releaseHikeTrackFinishSeal(
     return false;
   }
   try {
-    if ((await fs.getInfoAsync(fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl')).exists) {
+    if ((await fs.getInfoAsync(completedPathFor(fs, sessionId))).exists) {
       return false;
     }
   } catch { return false; }
@@ -349,6 +367,27 @@ async function getFs(): Promise<any | null> {
   if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
     const PREFIX = 'cairn-fs://';
     const docDir = PREFIX;
+    const appendCountKey = (path: string) => `${path}::__append_count__`;
+    const appendChunkKey = (path: string, index: number) => `${path}::__append__:${index}`;
+    const appendCount = (path: string) => Number(window.localStorage.getItem(appendCountKey(path)) ?? '0') || 0;
+    const clearAppendChunks = (path: string) => {
+      const count = appendCount(path);
+      for (let index = 0; index < count; index += 1) {
+        window.localStorage.removeItem(appendChunkKey(path, index));
+      }
+      window.localStorage.removeItem(appendCountKey(path));
+    };
+    const trackParentFile = (path: string) => {
+      const parent = path.substring(0, path.lastIndexOf('/') + 1);
+      const listKey = parent + '__files__';
+      const raw = window.localStorage.getItem(listKey);
+      const list: string[] = raw ? JSON.parse(raw) : [];
+      const filename = path.substring(parent.length);
+      if (!list.includes(filename)) {
+        list.push(filename);
+        window.localStorage.setItem(listKey, JSON.stringify(list));
+      }
+    };
     const shim = {
       documentDirectory: docDir,
       async getInfoAsync(path: string) {
@@ -358,32 +397,69 @@ async function getFs(): Promise<any | null> {
           const dirEntry = window.localStorage.getItem(path + '__dir__');
           return { exists: !!dirEntry, isDirectory: true, uri: path };
         }
-        return { exists: raw !== null, isDirectory: false, uri: path, size: raw ? raw.length : 0 };
+        const count = appendCount(path);
+        let size = raw?.length ?? 0;
+        for (let index = 0; index < count; index += 1) {
+          size += window.localStorage.getItem(appendChunkKey(path, index))?.length ?? 0;
+        }
+        return { exists: raw !== null || count > 0, isDirectory: false, uri: path, size };
       },
       async makeDirectoryAsync(path: string, _opts?: { intermediates?: boolean }) {
         if (!path.endsWith('/')) path = path + '/';
         window.localStorage.setItem(path + '__dir__', '1');
       },
       async writeAsStringAsync(path: string, content: string) {
+        clearAppendChunks(path);
         window.localStorage.setItem(path, content);
-        // Track parent directory listing so readDirectoryAsync works
-        const parent = path.substring(0, path.lastIndexOf('/') + 1);
-        const listKey = parent + '__files__';
-        const raw = window.localStorage.getItem(listKey);
-        const list: string[] = raw ? JSON.parse(raw) : [];
-        const filename = path.substring(parent.length);
-        if (!list.includes(filename)) {
-          list.push(filename);
-          window.localStorage.setItem(listKey, JSON.stringify(list));
-        }
+        // Track parent directory listing so readDirectoryAsync works.
+        trackParentFile(path);
       },
       async appendAsStringAsync(path: string, content: string) {
-        await this.writeAsStringAsync(path, (window.localStorage.getItem(path) ?? '') + content);
+        // localStorage has no native append. Keeping one immutable chunk per
+        // QA commit preserves append-only semantics without rewriting the
+        // entire journey on every point (which made long Web acceptance runs
+        // quadratic). Native continues to use FileHandle EOF writes.
+        const snapLabJournal = path.includes(QA_HIKE_DIR);
+        const count = appendCount(path);
+        const base = window.localStorage.getItem(path);
+        // Retain a small directly inspectable prefix. Besides making short QA
+        // journals simple to debug, this preserves the web crash/race probes
+        // that intercept the ordinary file key. Once bounded, all subsequent
+        // commits are immutable O(new-record) chunks.
+        // Snap Lab deliberately measures callback work. Its sealed namespace
+        // starts immutable chunks at the first point so the Web shim models
+        // native EOF append rather than repeatedly rewriting a growing JSONL
+        // prefix. Ordinary web crash/race probes retain the inspectable prefix
+        // behavior below; native storage is unaffected.
+        if (!snapLabJournal && count === 0 && (base?.length ?? 0) + content.length <= 32 * 1024) {
+          window.localStorage.setItem(path, (base ?? '') + content);
+          trackParentFile(path);
+          return;
+        }
+        window.localStorage.setItem(appendChunkKey(path, count), content);
+        window.localStorage.setItem(appendCountKey(path), String(count + 1));
+        trackParentFile(path);
       },
       async readAsStringAsync(path: string): Promise<string> {
         const raw = window.localStorage.getItem(path);
-        if (raw === null) throw new Error('File not found: ' + path);
-        return raw;
+        const count = appendCount(path);
+        if (raw === null && count === 0) throw new Error('File not found: ' + path);
+        let value = raw ?? '';
+        for (let index = 0; index < count; index += 1) {
+          value += window.localStorage.getItem(appendChunkKey(path, index)) ?? '';
+        }
+        return value;
+      },
+      async readSuffixAsStringAsync(path: string, maximumBytes: number): Promise<string> {
+        const count = appendCount(path);
+        let value = '';
+        for (let index = count - 1; index >= 0 && value.length < maximumBytes; index -= 1) {
+          value = (window.localStorage.getItem(appendChunkKey(path, index)) ?? '') + value;
+        }
+        if (value.length < maximumBytes) {
+          value = (window.localStorage.getItem(path) ?? '') + value;
+        }
+        return value.slice(-maximumBytes);
       },
       async readDirectoryAsync(path: string): Promise<string[]> {
         if (!path.endsWith('/')) path = path + '/';
@@ -391,6 +467,7 @@ async function getFs(): Promise<any | null> {
         return raw ? JSON.parse(raw) : [];
       },
       async deleteAsync(path: string, _opts?: { idempotent?: boolean }) {
+        clearAppendChunks(path);
         window.localStorage.removeItem(path);
         // Remove from parent listing
         const parent = path.substring(0, path.lastIndexOf('/') + 1);
@@ -407,8 +484,8 @@ async function getFs(): Promise<any | null> {
         }
       },
       async moveAsync(opts: { from: string; to: string }) {
-        const raw = window.localStorage.getItem(opts.from);
-        if (raw === null) return;
+        let raw: string;
+        try { raw = await this.readAsStringAsync(opts.from); } catch { return; }
         await this.writeAsStringAsync(opts.to, raw);
         await this.deleteAsync(opts.from);
       },
@@ -418,8 +495,9 @@ async function getFs(): Promise<any | null> {
   return null;
 }
 
-async function ensureDirs(fs: any): Promise<void> {
-  for (const d of [HIKE_DIR, ACTIVE_DIR, COMPLETED_DIR, META_DIR]) {
+async function ensureDirs(fs: any, sessionId = ''): Promise<void> {
+  const root = sessionId ? hikeDirFor(sessionId) : HIKE_DIR;
+  for (const d of [root, root + 'active/', root + 'completed/', root + 'meta/']) {
     const path = fs.documentDirectory + d;
     try {
       const info = await fs.getInfoAsync(path);
@@ -615,6 +693,14 @@ async function readJournalSuffix(
   basePath: string,
   maximumBytes: number,
 ): Promise<{ value: string; beginsMidFile: boolean }> {
+  if (typeof fs.readSuffixAsStringAsync === 'function') {
+    try {
+      const value = await fs.readSuffixAsStringAsync(basePath, maximumBytes);
+      return { value, beginsMidFile: value.length >= maximumBytes };
+    } catch {
+      return { value: '', beginsMidFile: false };
+    }
+  }
   if (typeof fs.appendAsStringAsync === 'function') {
     try {
       const value = await fs.readAsStringAsync(basePath);
@@ -753,10 +839,10 @@ export async function startHikeTrack(
     state = { sessionId, buffer: [], totalPoints: 0, lastFlushError: 'web-no-fs' };
     return;
   }
-  await ensureDirs(fs);
+  await ensureDirs(fs, sessionId);
   if (options.shouldContinue && !options.shouldContinue()) throw new Error('activity_owner_changed');
   // Truncate every crash-recovery snapshot with the same immutable id.
-  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  const activePath = activePathFor(fs, sessionId);
   for (const path of activeCandidates(activePath)) {
     try {
       const info = await fs.getInfoAsync(path);
@@ -862,12 +948,12 @@ async function flushBuffer(): Promise<void> {
     s.buffer = [];
     const fs = await getFs();
     if (!fs) return;
-    const activePath = fs.documentDirectory + ACTIVE_DIR + s.sessionId + '.jsonl';
+    const activePath = activePathFor(fs, s.sessionId);
     const lines = toWrite.map(encodeJournalPoint).join('\n') + '\n';
     try {
       await appendSnapshot(fs, activePath, lines);
       // Update meta
-      const metaPath = fs.documentDirectory + META_DIR + s.sessionId + '.json';
+      const metaPath = metaPathFor(fs, s.sessionId);
       try {
         const metaRaw = await fs.readAsStringAsync(metaPath);
         const meta: HikeMeta = JSON.parse(metaRaw);
@@ -897,9 +983,9 @@ export async function renameToCompleted(sessionId: string, endedAt: number, remo
   await flushBuffer();
   const fs = await getFs();
   if (!fs) { state = null; return; }
-  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
-  const completedPath = fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl';
-  const metaPath = fs.documentDirectory + META_DIR + sessionId + '.json';
+  const activePath = activePathFor(fs, sessionId);
+  const completedPath = completedPathFor(fs, sessionId);
+  const metaPath = metaPathFor(fs, sessionId);
   // Legacy/direct callers may not have installed the early Finish fence. Do
   // so before any move, using the current durable generation.
   if (!await readTerminalMarker(fs, sessionId)) {
@@ -949,6 +1035,62 @@ export async function renameToCompleted(sessionId: string, endedAt: number, remo
   state = null;
 }
 
+/** Snap Lab Finish variant with a strict pre-move terminal read and a
+ * post-move byte-level evidence check. Product completion keeps its existing
+ * compatibility behavior; synthetic QA must fail closed so a green journey
+ * can never be based on an uncertain or unretired WAL. */
+export async function completeSnapLabHikeTrack(
+  sessionId: string,
+  expectedUserId: string,
+  expectedOwnerGeneration: string | undefined,
+  expectedCutoffAt: number,
+  endedAt: number,
+): Promise<CanonicalJournalPoint[]> {
+  if (!isSnapLabActivityId(sessionId)) throw new Error('snap_lab_wal_identity_required');
+  const before = await readActiveHikeTerminalSnapshot(sessionId, {
+    expectedOwnerGeneration,
+    expectedCutoffAt,
+  });
+  if (before.status !== 'complete') {
+    throw new Error(`snap_lab_terminal_snapshot_uncertain:${before.reason}`);
+  }
+  const fs = await getFs();
+  if (!fs) throw new Error('snap_lab_wal_storage_unavailable');
+  const metaBefore = await readHikeMeta(fs, sessionId);
+  if (String(metaBefore.user_id ?? '') !== String(expectedUserId)) {
+    throw new Error('snap_lab_wal_owner_mismatch');
+  }
+  await renameToCompleted(sessionId, endedAt);
+  const active = await Promise.all(activeCandidates(activePathFor(fs, sessionId)).map(path => fs.getInfoAsync(path)));
+  if (active.some(info => info.exists)) throw new Error('snap_lab_wal_active_not_retired');
+  if (!(await fs.getInfoAsync(completedPathFor(fs, sessionId))).exists) {
+    throw new Error('snap_lab_wal_completed_missing');
+  }
+  const metaAfter = await readHikeMeta(fs, sessionId);
+  if (String(metaAfter.user_id ?? '') !== String(expectedUserId)
+    || metaAfter.ended_at !== endedAt) {
+    throw new Error('snap_lab_wal_terminal_meta_mismatch');
+  }
+  const marker = await readTerminalMarker(fs, sessionId);
+  if (!marker
+    || marker.cutoff_at !== expectedCutoffAt
+    || marker.owner_generation !== expectedOwnerGeneration) {
+    throw new Error('snap_lab_wal_terminal_marker_mismatch');
+  }
+  const after = await readHikeTrackForProjection(sessionId);
+  const same = after.length === before.points.length && after.every((point, index) => {
+    const expected = before.points[index];
+    return point.t === expected.t
+      && point.lat === expected.lat
+      && point.lng === expected.lng
+      && point.rawOrdinal === expected.rawOrdinal
+      && point.segmentId === expected.segmentId
+      && point.ownerGeneration === expected.ownerGeneration;
+  });
+  if (!same) throw new Error('snap_lab_wal_terminal_evidence_mismatch');
+  return after;
+}
+
 /**
  * List all in-progress (active) hikes. Used at hydrate to detect
  * pendingSessionResume. Each entry is a HikeMeta.
@@ -956,7 +1098,7 @@ export async function renameToCompleted(sessionId: string, endedAt: number, remo
 export async function listActiveHikes(): Promise<HikeMeta[]> {
   const fs = await getFs();
   if (!fs) return [];
-  const activeDir = fs.documentDirectory + ACTIVE_DIR;
+  const activeDir = fs.documentDirectory + HIKE_DIR + 'active/';
   try {
     const info = await fs.getInfoAsync(activeDir);
     if (!info.exists) return [];
@@ -991,7 +1133,7 @@ export async function readActiveHikeTail(
 ): Promise<CanonicalJournalPoint[]> {
   const fs = await getFs();
   if (!fs) return [];
-  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  const activePath = activePathFor(fs, sessionId);
   try {
     await durableWriteTail.catch(() => {});
     const boundedLimit = limit == null ? null : Math.max(0, Math.floor(limit));
@@ -1069,8 +1211,8 @@ export async function readHikeTrackForProjection(
   if (!fs) throw new Error('activity_projection_journal_unavailable');
   await durableWriteTail.catch(() => {});
   const paths = [
-    fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl',
-    fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl',
+    activePathFor(fs, sessionId),
+    completedPathFor(fs, sessionId),
   ];
   for (const basePath of paths) {
     let artifactExists = false;
@@ -1193,6 +1335,12 @@ export async function readActiveHikeTerminalSnapshot(
     reason: HikeTerminalSnapshotUncertainReason,
     recoverablePoints: CanonicalJournalPoint[] = [],
   ): HikeTerminalSnapshot => ({ status: 'uncertain', reason, recoverablePoints });
+  if (isSnapLabActivityId(sessionId)) {
+    // This is deliberately below the real terminal reader API. SL22 therefore
+    // exercises the same fail-closed Finish branch as an actual unreadable WAL
+    // instead of mocking stopTracking's result.
+    if (consumeSnapLabTerminalWalReadFault(sessionId)) return uncertain('journal-read-failed');
+  }
   const fs = await getFs();
   if (!fs) return uncertain('storage-unavailable');
   await durableWriteTail.catch(() => {});
@@ -1225,7 +1373,7 @@ export async function readActiveHikeTerminalSnapshot(
     return uncertain('terminal-cutoff-mismatch');
   }
 
-  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  const activePath = activePathFor(fs, sessionId);
   const truncatePath = truncationPath(activePath);
   let truncateInfo: any;
   try { truncateInfo = await fs.getInfoAsync(truncatePath); } catch {
@@ -1315,7 +1463,7 @@ export async function discardActiveHike(sessionId: string): Promise<void> {
   try { await flushChainTail; } catch { /* swallow — chain rejects handled elsewhere */ }
   const fs = await getFs();
   if (!fs) return;
-  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  const activePath = activePathFor(fs, sessionId);
   await durableWriteTail.catch(() => {});
   for (const candidate of activeCandidates(activePath)) {
     await deleteAndVerifyAbsent(fs, candidate);
@@ -1353,7 +1501,7 @@ export async function truncateActiveHikeTrack(
     state.buffer = [];
     return;
   }
-  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  const activePath = activePathFor(fs, sessionId);
   const replacement = points.length > 0
     ? `${points.map(point => encodeJournalPoint(toStoredPoint(point))).join('\n')}\n`
     : '';
@@ -1380,7 +1528,7 @@ export async function updateHikeMeta(
 ): Promise<void> {
   const fs = await getFs();
   if (!fs) return;
-  const path = fs.documentDirectory + META_DIR + sessionId + '.json';
+  const path = metaPathFor(fs, sessionId);
   try {
     const raw = await fs.readAsStringAsync(path);
     await fs.writeAsStringAsync(path, JSON.stringify({ ...JSON.parse(raw), ...patch }));
@@ -1429,13 +1577,91 @@ export async function deleteCompletedHikeTrack(sessionId: string): Promise<void>
   const fs = await getFs();
   if (!fs) return;
   await flushChainTail.catch(() => {});
-  await deleteAndVerifyAbsent(fs, fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl');
+  await deleteAndVerifyAbsent(fs, completedPathFor(fs, sessionId));
   const terminalPath = terminalPathFor(fs, sessionId);
   await deleteAndVerifyAbsent(fs, terminalPath);
   await deleteAndVerifyAbsent(fs, `${terminalPath}.next`);
   for (const candidate of metaCandidates(fs, sessionId)) {
     await deleteAndVerifyAbsent(fs, candidate);
   }
+}
+
+function snapLabArtifactPaths(fs: any, sessionId: string): string[] {
+  const activePath = activePathFor(fs, sessionId);
+  const terminalPath = terminalPathFor(fs, sessionId);
+  return [
+    ...activeCandidates(activePath),
+    truncationPath(activePath),
+    completedPathFor(fs, sessionId),
+    terminalPath,
+    `${terminalPath}.next`,
+    ...metaCandidates(fs, sessionId),
+  ];
+}
+
+/** Enumerate QA WAL authority independently of the Snap Lab Activity index.
+ * A coordinate artifact without readable ownership metadata is a visible
+ * privacy-cleanup failure, never an excuse to silently leave an orphan. */
+export async function listSnapLabHikeTrackIdsForOwner(expectedUserId: string): Promise<string[]> {
+  if (!expectedUserId || expectedUserId === 'guest') throw new Error('snap_lab_wal_owner_required');
+  const fs = await getFs();
+  if (!fs) return [];
+  const root = fs.documentDirectory + QA_HIKE_DIR;
+  const sessionIds = new Set<string>();
+  for (const directory of ['active/', 'completed/', 'meta/']) {
+    const path = root + directory;
+    let files: string[];
+    try {
+      const info = await fs.getInfoAsync(path);
+      if (!info.exists) continue;
+      files = await fs.readDirectoryAsync(path);
+    } catch {
+      throw new Error('snap_lab_wal_enumeration_failed');
+    }
+    for (const filename of files) {
+      const match = directory === 'meta/'
+        ? filename.match(/^(qa-snap-.*)\.json(?:\.next|\.bak)?$/)
+        : filename.match(/^(qa-snap-.*)\.jsonl(?:\.next|\.bak|\.truncate\.json)?$/);
+      if (match?.[1] && !filename.includes('.terminal.')) sessionIds.add(match[1]);
+    }
+  }
+  const owned: string[] = [];
+  for (const sessionId of sessionIds) {
+    let meta: HikeMeta;
+    try {
+      meta = await readHikeMeta(fs, sessionId);
+    } catch {
+      throw new Error(`snap_lab_wal_owner_unavailable:${sessionId}`);
+    }
+    if (String(meta.user_id ?? '') === String(expectedUserId)) owned.push(sessionId);
+  }
+  return owned.sort();
+}
+
+/** Strict owner-scoped deletion for one synthetic Activity journal. */
+export async function deleteSnapLabHikeTrackForOwner(
+  sessionId: string,
+  expectedUserId: string,
+): Promise<void> {
+  if (!isSnapLabActivityId(sessionId)) throw new Error('snap_lab_wal_identity_required');
+  await assertHikeTrackCleanupOwner(sessionId, expectedUserId);
+  if (state?.sessionId === sessionId) {
+    state.buffer = [];
+    state = null;
+  }
+  await flushChainTail.catch(() => {});
+  await durableWriteTail.catch(() => {});
+  const fs = await getFs();
+  if (!fs) return;
+  for (const path of snapLabArtifactPaths(fs, sessionId)) await deleteAndVerifyAbsent(fs, path);
+}
+
+/** Complete owner-scoped QA purge with post-delete re-enumeration. */
+export async function purgeSnapLabHikeTracksForOwner(expectedUserId: string): Promise<void> {
+  const ids = await listSnapLabHikeTrackIdsForOwner(expectedUserId);
+  for (const id of ids) await deleteSnapLabHikeTrackForOwner(id, expectedUserId);
+  const remaining = await listSnapLabHikeTrackIdsForOwner(expectedUserId);
+  if (remaining.length > 0) throw new Error('snap_lab_wal_cleanup_incomplete');
 }
 
 async function deleteAndVerifyAbsent(fs: any, path: string): Promise<void> {
@@ -1451,8 +1677,8 @@ export async function assertHikeTrackCleanupOwner(sessionId: string, expectedUse
   if (!expectedUserId || expectedUserId === 'guest') throw new Error('activity_journal_owner_required');
   const fs = await getFs();
   if (!fs) return;
-  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
-  const completedPath = fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl';
+  const activePath = activePathFor(fs, sessionId);
+  const completedPath = completedPathFor(fs, sessionId);
   const terminalPath = terminalPathFor(fs, sessionId);
   const artifactPaths = [
     ...activeCandidates(activePath),
@@ -1489,12 +1715,12 @@ export async function deleteAcknowledgedHikeTrackArtifacts(
   await assertHikeTrackCleanupOwner(sessionId, expectedUserId);
   const fs = await getFs();
   if (!fs) return;
-  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  const activePath = activePathFor(fs, sessionId);
   for (const candidate of activeCandidates(activePath)) {
     await deleteAndVerifyAbsent(fs, candidate);
   }
   await deleteAndVerifyAbsent(fs, truncationPath(activePath));
-  await deleteAndVerifyAbsent(fs, fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl');
+  await deleteAndVerifyAbsent(fs, completedPathFor(fs, sessionId));
   const terminalPath = terminalPathFor(fs, sessionId);
   await deleteAndVerifyAbsent(fs, terminalPath);
   await deleteAndVerifyAbsent(fs, `${terminalPath}.next`);
@@ -1512,7 +1738,7 @@ export async function appendBackgroundHikePoints(points: HikePoint[], expectedUs
   }
   const fs = await getFs();
   if (!fs) return;
-  await ensureDirs(fs);
+  await ensureDirs(fs, sessionId);
   const meta = await readHikeMeta(fs, sessionId);
   if (meta.ended_at) throw new Error('background_activity_already_finalized');
   if (await readTerminalMarker(fs, sessionId)) throw new Error('background_activity_finalizing');
@@ -1522,7 +1748,7 @@ export async function appendBackgroundHikePoints(points: HikePoint[], expectedUs
   if (meta.owner_generation && points.some(point => point.ownerGeneration !== meta.owner_generation)) {
     throw new Error('stale_background_owner_generation');
   }
-  const activePath = fs.documentDirectory + ACTIVE_DIR + sessionId + '.jsonl';
+  const activePath = activePathFor(fs, sessionId);
   const lines = points.map(encodeJournalPoint).join('\n') + '\n';
   // Capture the verified prefix before committing. If a separate runtime's
   // terminal marker wins during the append, the crash-safe truncation marker
@@ -1538,7 +1764,7 @@ export async function appendBackgroundHikePoints(points: HikePoint[], expectedUs
   // resurrected active remnant. Otherwise leave it for Finish's full drain.
   if (await readTerminalMarker(fs, sessionId)) {
     await replaceSnapshotWithPrefix(fs, activePath, prefixBeforeAppend, prefixLineCount);
-    const completedPath = fs.documentDirectory + COMPLETED_DIR + sessionId + '.jsonl';
+    const completedPath = completedPathFor(fs, sessionId);
     if ((await fs.getInfoAsync(completedPath)).exists) {
       // Finish may have moved the just-appended P+L snapshot before this
       // runtime observed the terminal marker. Repair the completed copy to

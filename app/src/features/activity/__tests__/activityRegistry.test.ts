@@ -49,6 +49,37 @@ describe('bounded durable Activity registry', () => {
     )).rejects.toThrow('unfinished_activity_exists');
   });
 
+  test('Snap Lab lifecycle is owner-scoped and cannot occupy the production singleton', async () => {
+    const productionId = '11111111-1111-4111-8111-111111111111';
+    const qaId = 'qa-snap-22222222-2222-4222-8222-222222222222';
+    await registerUnfinishedActivity(unfinished('user-realm', productionId));
+    await registerUnfinishedActivity({
+      ...unfinished('user-realm', qaId, 'running'),
+      locationProviderSource: 'simulator',
+    });
+
+    expect((await getUnfinishedActivity('user-realm', 'production'))?.clientActivityId).toBe(productionId);
+    expect((await getUnfinishedActivity('user-realm', 'snap-lab'))?.clientActivityId).toBe(qaId);
+    expect([...mockMemory.keys()].filter(key => key.includes('snap_lab'))).toHaveLength(1);
+
+    await completeActivity({
+      clientActivityId: qaId,
+      serverActivityId: null,
+      userId: 'user-realm',
+      activityMode: 'running',
+      startedAt: 100,
+      endedAt: 200,
+      lifecycle: 'completed_local',
+      syncState: 'synced',
+      locationProviderSource: 'simulator',
+    });
+    expect((await getActivityRegistry('user-realm', 'production')).completed).toHaveLength(0);
+    expect((await getActivityRegistry('user-realm', 'snap-lab')).completed[0]).toMatchObject({
+      clientActivityId: qaId,
+      serverActivityId: null,
+    });
+  });
+
   test('recovery updates the exact immutable Activity identity', async () => {
     const id = '33333333-3333-4333-8333-333333333333';
     await registerUnfinishedActivity(unfinished('user-exact', id));

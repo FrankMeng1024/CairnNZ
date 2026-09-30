@@ -117,6 +117,15 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(run).toContain("simulatorObservationMode === 'raw-gps'");
   });
 
+  test('authoritative raw replay suppresses autonomous fixture-external ticks', () => {
+    const engine = read('src/features/activitySimulator/activitySimulatorEngine.ts');
+    const runner = read('src/features/activitySimulator/snapLabLogicalRunner.ts');
+    expect(engine).toContain('armExternalRawReplay(): void');
+    expect(engine).toContain('if (!this.externalRawReplayArmed) this.startRuntime()');
+    expect(engine).toContain('if (!this.externalRawReplayArmed) setTimeout');
+    expect(runner).toContain('activitySimulatorEngine.armExternalRawReplay()');
+  });
+
   test('manual reacquisition and rollback preserve central segment/metric authority', () => {
     const tracking = read('src/store/useTrackingStore.ts');
     const correction = read('src/features/activitySimulator/simulatorActivityCorrection.ts');
@@ -153,7 +162,9 @@ describe('Activity Simulator integration and safety contracts', () => {
     const passive = read('src/features/memory/components/PassiveMemoryRecorder.tsx');
     expect(markers.indexOf('await offlineMarkers.saveLocal')).toBeLessThan(markers.indexOf("appendSimulatorLog('CAIRN_COMMIT'"));
     expect(markers).toContain('originActivityClientId: activeActivityClientId');
-    expect(tracking).toContain("'simulator_test' : 'activity_real'");
+    expect(tracking).toContain("source: 'simulator_test'");
+    expect(tracking).toContain("source: 'activity_real'");
+    expect(tracking).toContain("if (isSimulatorSample)");
     expect(passive).toContain("source: 'simulator_test'");
     expect(passive).toContain("source: 'passive_real'");
     expect(passive).toContain("status === 'idle' || status === 'paused'");

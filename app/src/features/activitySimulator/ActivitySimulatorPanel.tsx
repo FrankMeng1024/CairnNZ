@@ -36,6 +36,12 @@ import {
   SIMULATOR_JOYSTICK_TRAVEL,
 } from './joystickInput';
 import { fetchSimulatorWalkingRoute } from './simulatorWalkingRoute';
+import {
+  currentSnapLabRunContext,
+  snapLabTransportConfigured,
+  updateSnapLabRunContext,
+  type SnapLabTransportMode,
+} from './snapLabActivityStore';
 
 const JOYSTICK_SIZE = SIMULATOR_JOYSTICK_SIZE;
 const JOYSTICK_KNOB = 44;
@@ -133,6 +139,10 @@ export function ActivitySimulatorPanel() {
   const [verticalDraft, setVerticalDraft] = useState(String(verticalRateMPerHour));
   const [accuracyDraft, setAccuracyDraft] = useState(String(customAccuracyM ?? simulatorAccuracyMeters()));
   const [seedDraft, setSeedDraft] = useState(String(deterministicSeed));
+  const initialSnapLabContext = useRef(currentSnapLabRunContext()).current;
+  const [snapLabCaseDraft, setSnapLabCaseDraft] = useState(initialSnapLabContext.caseId);
+  const [snapLabProfileDraft, setSnapLabProfileDraft] = useState(initialSnapLabContext.profileId);
+  const [snapLabTransportMode, setSnapLabTransportMode] = useState<SnapLabTransportMode>(initialSnapLabContext.transportMode);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const straightLinePickerRef = useRef(false);
 
@@ -519,10 +529,37 @@ export function ActivitySimulatorPanel() {
 
   const setSeed = () => {
     const accepted = actions.setDeterministicSeed(Number(seedDraft));
+    if (accepted) updateSnapLabRunContext({ seed: useActivitySimulatorStore.getState().deterministicSeed });
     appendSimulatorLog('SIM_INPUT', accepted ? 'simulator_seed_set' : 'simulator_seed_rejected', {
       deterministicSeed: accepted ? useActivitySimulatorStore.getState().deterministicSeed : null,
       rejectionReason: accepted ? null : useActivitySimulatorStore.getState().lastFailure,
     }, { coordinateSource: 'none' });
+  };
+
+  const applySnapLabIdentity = () => {
+    const caseId = snapLabCaseDraft.trim().slice(0, 80) || 'manual-replay';
+    const profileId = snapLabProfileDraft.trim().slice(0, 80) || 'interactive';
+    updateSnapLabRunContext({ caseId, profileId });
+    setSnapLabCaseDraft(caseId);
+    setSnapLabProfileDraft(profileId);
+  };
+
+  const selectSnapLabTransport = (mode: SnapLabTransportMode) => {
+    if (mode !== 'offline' && !snapLabTransportConfigured()) {
+      Alert.alert(
+        'Replay transport not loaded',
+        'Load an exact-identity deterministic or captured cassette through the Snap Lab batch launcher first. CairnNZ will not fall through to the network.',
+      );
+      return;
+    }
+    setSnapLabTransportMode(mode);
+    updateSnapLabRunContext({
+      transportMode: mode,
+      networkCondition: mode,
+      evidenceLabel: mode === 'offline'
+        ? 'LOCAL_ONLY'
+        : mode === 'captured' ? 'CAPTURED_REAL_RESPONSE' : 'DETERMINISTIC_TRANSPORT',
+    });
   };
 
   const forceInterruption = async () => {
@@ -605,6 +642,18 @@ export function ActivitySimulatorPanel() {
           <Text style={[styles.collapseText, { color: theme.foregroundSecondary }]}>更多</Text>
         </TouchableOpacity>
         {showAdvanced ? <>
+          <Text style={[styles.sectionTitle, { color: theme.foreground }]}>SNAP LAB RUN</Text>
+          <View style={styles.inputActionRow}>
+            <TextInput value={snapLabCaseDraft} onChangeText={setSnapLabCaseDraft} style={styles.input} placeholder="Case ID" autoCapitalize="none" />
+            <TextInput value={snapLabProfileDraft} onChangeText={setSnapLabProfileDraft} style={styles.input} placeholder="Profile" autoCapitalize="none" />
+            <TinyButton label="Apply" onPress={applySnapLabIdentity} />
+          </View>
+          <View style={styles.buttonRowWrap} testID="snap-lab-network-controls">
+            <TinyButton label="Offline" active={snapLabTransportMode === 'offline'} onPress={() => selectSnapLabTransport('offline')} />
+            <TinyButton label="Deterministic" active={snapLabTransportMode === 'deterministic'} onPress={() => selectSnapLabTransport('deterministic')} />
+            <TinyButton label="Captured" active={snapLabTransportMode === 'captured'} onPress={() => selectSnapLabTransport('captured')} />
+          </View>
+          <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>Network replay is isolated and exact-identity only; no live fallback.</Text>
           <View style={styles.inputActionRow}>
             <TextInput value={seedDraft} onChangeText={setSeedDraft} style={styles.smallInput} keyboardType="number-pad" placeholder="Seed" />
             <TinyButton label="Set seed" onPress={setSeed} />

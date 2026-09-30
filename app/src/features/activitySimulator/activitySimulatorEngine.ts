@@ -82,6 +82,15 @@ class ActivitySimulatorEngine {
   private correctionPaused = false;
   private providerPaused = false;
   private frozenReportedPosition: { lat: number; lng: number; altitudeM: number } | null = null;
+  /** Authoritative replay owns callback delivery. The Activity provider lease
+   * remains real, but autonomous ticks would be extra evidence absent from the
+   * frozen raw fixture. */
+  private externalRawReplayArmed = false;
+
+  armExternalRawReplay(): void {
+    if (this.lease) throw new Error('simulator_external_replay_requires_idle_provider');
+    this.externalRawReplayArmed = true;
+  }
 
   startRuntime(): void {
     if (this.timer) return;
@@ -109,7 +118,7 @@ class ActivitySimulatorEngine {
       lease.clientActivityId,
       startedAt,
     );
-    this.startRuntime();
+    if (!this.externalRawReplayArmed) this.startRuntime();
     appendSimulatorLog('SIM_SESSION', 'simulator_activity_bound', {
       mode: lease.mode,
       segmentId: lease.segmentId,
@@ -127,7 +136,7 @@ class ActivitySimulatorEngine {
     });
     // The first sample establishes the normal Activity location anchor even
     // before the tester moves. It still passes through canonical acceptance.
-    setTimeout(() => { void this.tick(Date.now(), true); }, 0);
+    if (!this.externalRawReplayArmed) setTimeout(() => { void this.tick(Date.now(), true); }, 0);
   }
 
   pauseActivity(): void {
@@ -162,6 +171,7 @@ class ActivitySimulatorEngine {
     this.correctionPaused = false;
     this.providerPaused = false;
     this.frozenReportedPosition = null;
+    this.externalRawReplayArmed = false;
     if (lease) {
       appendSimulatorLog('SIM_SESSION', 'simulator_activity_unbound', { reason }, {
         userId: lease.ownerUserId,

@@ -108,6 +108,7 @@ export interface FinalRouteSection {
 }
 
 export interface PedestrianFinalRequestResult {
+  requestId: string;
   kind: 'map-matching' | 'walking-directions';
   sourceStart: number;
   sourceEnd: number;
@@ -130,6 +131,47 @@ export interface PedestrianFinalRequestResult {
   responseBytes: number;
 }
 
+export type SnapSectionClassification =
+  | 'SNAP_ELIGIBLE'
+  | 'LOCAL_ONLY'
+  | 'AMBIGUOUS';
+
+export type SnapSectionReasonCode =
+  | 'TRACEPOINT_SUPPORTED'
+  | 'LOCAL_TRACEPOINT_SUPPORT_INSUFFICIENT'
+  | 'LOCAL_TRACEPOINT_SUPPORT_DISCONTINUITY'
+  | 'LOCAL_CORRIDOR_ATTRIBUTION_CHANGE'
+  | 'LOCAL_PARALLEL_ROAD_AMBIGUITY'
+  | 'LOCAL_PROVIDER_AMBIGUITY_UNKNOWN'
+  | 'LOCAL_SOURCE_UNCERTAINTY_HIGH'
+  | 'LOCAL_SOURCE_CORRESPONDENCE_WEAK'
+  | 'LOCAL_ENDPOINT_SUPPORT_WEAK'
+  | 'LOCAL_CORRIDOR_STRUCTURE_MISMATCH'
+  | 'LOCAL_TRUTH_ENVELOPE_EXCEEDED'
+  | 'LOCAL_SEAM_UNSAFE'
+  | 'LOCAL_ASSEMBLY_UNSAFE'
+  | 'LOCAL_NO_MEANINGFUL_IMPROVEMENT'
+  | 'LOCAL_DIRECTIONS_WITHOUT_MATCHING_AUTHORITY'
+  | 'LOCAL_DIRECTIONS_COMPETING_ROUTES';
+
+export interface PedestrianFinalSectionDecision {
+  requestId: string;
+  requestKind: 'map-matching' | 'walking-directions';
+  sourceStart: number;
+  sourceEnd: number;
+  tracepointSupportCount: number;
+  expectedTracepointCount: number;
+  classification: SnapSectionClassification;
+  result: 'accepted' | 'rejected' | 'not-evaluated';
+  reasonCode: SnapSectionReasonCode;
+  providerConfidence: number | null;
+  localShapeScore: number | null;
+  alternativesKnownFraction: number;
+  unambiguousFraction: number;
+  candidateSource: 'map-matching' | 'walking-directions';
+  notes: string[];
+}
+
 export interface PedestrianFinalStats {
   algorithmVersion: 'pedestrian-final-v2-base';
   canonicalPointCount: number;
@@ -137,6 +179,7 @@ export interface PedestrianFinalStats {
   mapMatchingRequestCount: number;
   directionsRequestCount: number;
   requestResults: PedestrianFinalRequestResult[];
+  sectionDecisions: PedestrianFinalSectionDecision[];
   matchedIslandCount: number;
   directionsIslandCount: number;
   canonicalDerivedSectionCount: number;
@@ -197,6 +240,9 @@ export interface LocalFinalDiagnostics extends BaseFinalDiagnostics {
 
 export interface PedestrianFinalOptions {
   mapboxToken: string;
+  /** HTTP boundary injection for the isolated Snap Lab. Production callers
+   * omit this and use the platform fetch implementation unchanged. */
+  fetchImpl?: typeof fetch;
   totalTimeoutMs?: number;
   perCallTimeoutMs?: number;
   concurrency?: number;
@@ -252,19 +298,43 @@ interface CandidateBuildInput {
   routeAlternativeCount: number;
 }
 
+interface DirectionsAuthority {
+  sourceStart: number;
+  sourceEnd: number;
+  supportCount: number;
+  expectedSupportCount: number;
+  alternatives: Array<number | null>;
+  names: Array<string | null>;
+  mapboxConfidence: number;
+  matchingGeometry: SnappedPoint[];
+  matchingEvidence: CorridorEvidence;
+}
+
+export interface MatchingWindowPlan {
+  requestId: string;
+  points: MatcherSubmittedPoint[];
+}
+
 const EARTH_R = 6_371_000;
 const MAPBOX_MATCHING_ENDPOINT = 'https://api.mapbox.com/matching/v5/mapbox/walking';
 const MAPBOX_DIRECTIONS_ENDPOINT = 'https://api.mapbox.com/directions/v5/mapbox/walking';
-const MATCHING_WINDOW_SIZE = 24;
-const MATCHING_WINDOW_OVERLAP = 4;
-const LONG_ACTIVITY_WINDOW_SIZE = 80;
-const LONG_ACTIVITY_THRESHOLD = 240;
+// Map Matching accepts up to 100 coordinates. Keep a bounded margin for URL
+// size and preserve an overlap for chronology, but do not inherit the
+// Directions API's 25-coordinate limit as a Matching decision boundary.
+const MATCHING_WINDOW_SIZE = 80;
+const MATCHING_WINDOW_OVERLAP = 8;
 const MAX_MATCHING_REQUESTS = 33;
 const DEFAULT_TOTAL_TIMEOUT_MS = 10_000;
 const DEFAULT_PER_CALL_TIMEOUT_MS = 2_600;
 const DEFAULT_CONCURRENCY = 2;
-const MIN_NETWORK_SUPPORT = 3;
-const MIN_NETWORK_DISTANCE_M = 10;
+const MIN_NETWORK_SUPPORT = 4;
+const MIN_NETWORK_DISTANCE_M = 15;
+// Weak same-corridor evidence is useful for smoothing a persistent corridor,
+// but a tiny endpoint run can otherwise introduce a network-shaped hook with
+// no meaningful route benefit. High-confidence pedestrian/offset modes retain
+// the general four-sample floor; only this weaker authority needs persistence.
+const MIN_WEAK_CORRIDOR_SUPPORT = 8;
+const MIN_WEAK_CORRIDOR_DISTANCE_M = 30;
 const MAX_SEAM_TRIM = 3;
 const MAX_DIRECTIONS_REQUESTS = 2;
 const MAX_DIRECTIONS_SPAN_M = 260;
@@ -1352,6 +1422,8 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
     // Exact sidewalk side is uncertain, but the topology is not. Place a
     // smooth evidence-centred line on the identified corridor within a
     // bounded uncertainty envelope instead of falling back to GPS serration.
+    if (input.supportCount < MIN_WEAK_CORRIDOR_SUPPORT
+      || pathLength(rawSubsection) < MIN_WEAK_CORRIDOR_DISTANCE_M) return null;
     const maximumWeakOffsetM = Math.min(12, Math.max(3, evidence.accuracyP95M * 0.75));
     const evidenceCentredOffsetM = clamp(
       evidence.lateral.signedMedianM,
@@ -1393,12 +1465,150 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
   };
 }
 
-interface MapboxTracepoint {
+export interface MapboxTracepoint {
   matchings_index?: number;
   waypoint_index?: number;
   alternatives_count?: number;
   name?: string;
   location?: [number, number];
+}
+
+export interface DerivedSnapSectionRun {
+  submittedStart: number;
+  submittedEnd: number;
+  sourceStart: number;
+  sourceEnd: number;
+  submittedIndices: number[];
+  classification: SnapSectionClassification;
+  reasonCode: SnapSectionReasonCode;
+}
+
+function sourceCorrespondenceEnvelopeM(point: MatcherSubmittedPoint): number {
+  const accuracyM = typeof point.accuracy === 'number' && Number.isFinite(point.accuracy)
+    ? Math.max(0, point.accuracy)
+    : 10;
+  return Math.min(20, Math.max(8, accuracyM * 1.25));
+}
+
+function snapSectionRegime(
+  point: MatcherSubmittedPoint,
+  tracepoint: MapboxTracepoint,
+): { key: string; classification: SnapSectionClassification; reasonCode: SnapSectionReasonCode } {
+  const accuracyM = typeof point.accuracy === 'number' && Number.isFinite(point.accuracy)
+    ? point.accuracy
+    : 10;
+  if (accuracyM > 30) {
+    return {
+      key: 'local:uncertainty-high',
+      classification: 'LOCAL_ONLY',
+      reasonCode: 'LOCAL_SOURCE_UNCERTAINTY_HIGH',
+    };
+  }
+  if (tracepoint.alternatives_count == null) {
+    return {
+      key: 'ambiguous:provider-unknown',
+      classification: 'AMBIGUOUS',
+      reasonCode: 'LOCAL_PROVIDER_AMBIGUITY_UNKNOWN',
+    };
+  }
+  if (tracepoint.alternatives_count > 0) {
+    return {
+      key: 'ambiguous:parallel-corridor',
+      classification: 'AMBIGUOUS',
+      reasonCode: 'LOCAL_PARALLEL_ROAD_AMBIGUITY',
+    };
+  }
+  if (!tracepoint.location) {
+    return {
+      key: 'local:missing-correspondence',
+      classification: 'LOCAL_ONLY',
+      reasonCode: 'LOCAL_TRACEPOINT_SUPPORT_INSUFFICIENT',
+    };
+  }
+  const correspondenceM = hav(point, { lng: tracepoint.location[0], lat: tracepoint.location[1] });
+  if (correspondenceM > sourceCorrespondenceEnvelopeM(point)) {
+    return {
+      key: 'local:correspondence-weak',
+      classification: 'LOCAL_ONLY',
+      reasonCode: 'LOCAL_SOURCE_CORRESPONDENCE_WEAK',
+    };
+  }
+  return {
+    key: accuracyM <= 15 ? 'eligible:precise' : 'eligible:usable',
+    classification: 'SNAP_ELIGIBLE',
+    reasonCode: 'TRACEPOINT_SUPPORTED',
+  };
+}
+
+/**
+ * Turn one provider sub-matching into deterministic evidence sections. The
+ * split inputs are source uncertainty, tracepoint correspondence and provider
+ * ambiguity—not whether an arbitrary cropped range happens to pass p95.
+ * Single-sample regime flicker remains inside its neighbours so the algorithm
+ * cannot p-hack a failing point away. Accepted islands require four supported
+ * observations and 15 m of source movement.
+ */
+export function deriveSnapSectionRuns(
+  chunk: MatcherSubmittedPoint[],
+  tracepoints: Array<MapboxTracepoint | null>,
+  matchingIndex: number,
+): DerivedSnapSectionRun[] {
+  const supported = tracepoints.flatMap((tracepoint, index) => (
+    tracepoint?.matchings_index === matchingIndex ? [index] : []
+  ));
+  const contiguous: number[][] = [];
+  let current: number[] = [];
+  for (const index of supported) {
+    if (current.length > 0 && index !== current[current.length - 1] + 1) {
+      contiguous.push(current);
+      current = [];
+    }
+    current.push(index);
+  }
+  if (current.length > 0) contiguous.push(current);
+
+  const sections: DerivedSnapSectionRun[] = [];
+  for (const run of contiguous) {
+    const labels = run.map(index => snapSectionRegime(chunk[index], tracepoints[index]!));
+    // Preserve isolated negative context inside the evaluated section. Two or
+    // more persistent samples are required before a local failure can become
+    // its own bounded section and release independent evidence around it.
+    for (let offset = 0; offset < labels.length; offset += 1) {
+      const start = offset;
+      while (offset + 1 < labels.length && labels[offset + 1].key === labels[start].key) offset += 1;
+      const length = offset - start + 1;
+      if (length !== 1 || labels[start].classification === 'SNAP_ELIGIBLE') continue;
+      const previous = labels[start - 1];
+      const next = labels[offset + 1];
+      if (previous?.classification === 'SNAP_ELIGIBLE' && next?.classification === 'SNAP_ELIGIBLE') {
+        labels[start] = previous;
+      }
+    }
+
+    let startOffset = 0;
+    while (startOffset < run.length) {
+      let endOffset = startOffset;
+      while (endOffset + 1 < run.length && labels[endOffset + 1].key === labels[startOffset].key) {
+        endOffset += 1;
+      }
+      const indices = run.slice(startOffset, endOffset + 1);
+      const first = indices[0];
+      const last = indices[indices.length - 1];
+      const sourceDistanceM = pathLength(chunk.slice(first, last + 1));
+      const tooSmall = indices.length < MIN_NETWORK_SUPPORT || sourceDistanceM < MIN_NETWORK_DISTANCE_M;
+      sections.push({
+        submittedStart: first,
+        submittedEnd: last,
+        sourceStart: chunk[first].sourceIndex,
+        sourceEnd: chunk[last].sourceIndex,
+        submittedIndices: indices,
+        classification: tooSmall ? 'LOCAL_ONLY' : labels[startOffset].classification,
+        reasonCode: tooSmall ? 'LOCAL_TRACEPOINT_SUPPORT_INSUFFICIENT' : labels[startOffset].reasonCode,
+      });
+      startOffset = endOffset + 1;
+    }
+  }
+  return sections;
 }
 
 function nearestGeometryIndex(
@@ -1451,7 +1661,8 @@ export function cropGeometryToTracepoints(
 interface WindowResult {
   candidates: NetworkCandidate[];
   request: PedestrianFinalRequestResult;
-  directionsHints?: Array<[number, number]>;
+  sectionDecisions: PedestrianFinalSectionDecision[];
+  directionsHints?: DirectionsAuthority[];
 }
 
 function linkedAbortController(externalSignal: AbortSignal | undefined, timeoutMs: number): {
@@ -1475,6 +1686,7 @@ function linkedAbortController(externalSignal: AbortSignal | undefined, timeoutM
 }
 
 async function mapMatchingWindow(
+  requestId: string,
   chunk: MatcherSubmittedPoint[],
   canonical: RawPoint[],
   token: string,
@@ -1483,9 +1695,11 @@ async function mapMatchingWindow(
   governor?: ActivityMapboxRequestGovernor,
   phase: Extract<ActivityMapboxPhase, 'live' | 'final'> = 'final',
   reason = 'qualified-unresolved-window',
+  requestFetch: typeof fetch = fetch,
 ): Promise<WindowResult> {
   const startedAt = Date.now();
   const diagnostic: PedestrianFinalRequestResult = {
+    requestId,
     kind: 'map-matching',
     sourceStart: chunk[0]?.sourceIndex ?? 0,
     sourceEnd: chunk[chunk.length - 1]?.sourceIndex ?? 0,
@@ -1508,11 +1722,11 @@ async function mapMatchingWindow(
   };
   if (chunk.length < 2 || !token) {
     diagnostic.result = !token ? 'no-token' : 'too-short';
-    return { candidates: [], request: diagnostic };
+    return { candidates: [], request: diagnostic, sectionDecisions: [] };
   }
   if (signal?.aborted) {
     diagnostic.result = 'aborted';
-    return { candidates: [], request: diagnostic };
+    return { candidates: [], request: diagnostic, sectionDecisions: [] };
   }
   const coords = chunk.map(point => `${point.lng.toFixed(6)},${point.lat.toFixed(6)}`).join(';');
   const radiuses = chunk.map(point => clamp(Math.round(point.accuracy ?? 15), 5, 50)).join(';');
@@ -1534,28 +1748,28 @@ async function mapMatchingWindow(
       if (!permit.allowed || !permit.receiptId) {
         diagnostic.result = `governor-${permit.reason}`;
         diagnostic.durationMs = Date.now() - startedAt;
-        return { candidates: [], request: diagnostic };
+        return { candidates: [], request: diagnostic, sectionDecisions: [] };
       }
       receiptId = permit.receiptId;
     } catch {
       diagnostic.governorReason = 'persistence-error';
       diagnostic.result = 'governor-persistence-error';
       diagnostic.durationMs = Date.now() - startedAt;
-      return { candidates: [], request: diagnostic };
+      return { candidates: [], request: diagnostic, sectionDecisions: [] };
     }
   }
   if (signal?.aborted) {
     if (receiptId && governor) await governor.releaseUndispatched(receiptId).catch(() => undefined);
     diagnostic.result = 'aborted';
     diagnostic.durationMs = Date.now() - startedAt;
-    return { candidates: [], request: diagnostic };
+    return { candidates: [], request: diagnostic, sectionDecisions: [] };
   }
   const abort = linkedAbortController(signal, timeoutMs);
   let completionResult: 'ok' | 'http' | 'timeout' | 'aborted' | 'network-error' | 'disused' = 'network-error';
   let completionRetryAfterMs: number | null = null;
   try {
     diagnostic.invoked = true;
-    const response = await fetch(url, { signal: abort.controller.signal });
+    const response = await requestFetch(url, { signal: abort.controller.signal });
     diagnostic.httpStatus = response.status;
     completionRetryAfterMs = retryAfterMs(response);
     const headerBytes = Number(response.headers?.get?.('content-length'));
@@ -1563,7 +1777,7 @@ async function mapMatchingWindow(
     if (!response.ok) {
       diagnostic.result = `http-${response.status}`;
       completionResult = 'http';
-      return { candidates: [], request: diagnostic };
+      return { candidates: [], request: diagnostic, sectionDecisions: [] };
     }
     const body = await response.json() as {
       code?: string;
@@ -1583,47 +1797,96 @@ async function mapMatchingWindow(
     if (body.code !== 'Ok' || !body.matchings?.length || body.tracepoints?.length !== chunk.length) {
       diagnostic.result = body.code ?? 'unusable-response';
       completionResult = 'disused';
-      return { candidates: [], request: diagnostic };
+      return { candidates: [], request: diagnostic, sectionDecisions: [] };
     }
     const candidates: NetworkCandidate[] = [];
-    const directionsHints: Array<[number, number]> = [];
+    const directionsHints: DirectionsAuthority[] = [];
+    const sectionDecisions: PedestrianFinalSectionDecision[] = [];
     for (const [matchingIndex, matching] of body.matchings.entries()) {
       const fullGeometry = (matching.geometry?.coordinates ?? []).map(([lng, lat]) => ({ lng, lat }));
       if (fullGeometry.length < 2) continue;
-      const supported = body.tracepoints.flatMap((tracepoint, index) => (
-        tracepoint?.matchings_index === matchingIndex ? [index] : []
-      ));
-      const runs: number[][] = [];
-      let run: number[] = [];
-      for (const submittedIndex of supported) {
-        if (run.length > 0 && submittedIndex !== run[run.length - 1] + 1) {
-          runs.push(run);
-          run = [];
-        }
-        run.push(submittedIndex);
-      }
-      if (run.length > 0) runs.push(run);
-      for (const indices of runs) {
-        if (indices.length < MIN_NETWORK_SUPPORT) {
+      const runs = deriveSnapSectionRuns(chunk, body.tracepoints, matchingIndex);
+      for (const section of runs) {
+        const indices = section.submittedIndices;
+        const headIndex = section.submittedStart;
+        const tailIndex = section.submittedEnd;
+        const tracepoints = indices.map(index => body.tracepoints?.[index]).filter(Boolean) as MapboxTracepoint[];
+        const knownAlternatives = tracepoints.flatMap(point => (
+          point.alternatives_count == null ? [] : [point.alternatives_count]
+        ));
+        const alternativesKnownFraction = knownAlternatives.length / Math.max(1, tracepoints.length);
+        const unambiguousFraction = knownAlternatives.length > 0
+          ? knownAlternatives.filter(value => value === 0).length / knownAlternatives.length
+          : 0;
+        const baseDecision: PedestrianFinalSectionDecision = {
+          requestId,
+          requestKind: 'map-matching',
+          sourceStart: section.sourceStart,
+          sourceEnd: section.sourceEnd,
+          tracepointSupportCount: tracepoints.length,
+          expectedTracepointCount: tailIndex - headIndex + 1,
+          classification: section.classification,
+          result: 'rejected',
+          reasonCode: section.reasonCode,
+          providerConfidence: matching.confidence ?? 0,
+          localShapeScore: null,
+          alternativesKnownFraction,
+          unambiguousFraction,
+          candidateSource: 'map-matching',
+          notes: [],
+        };
+        if (section.classification !== 'SNAP_ELIGIBLE') {
           diagnostic.rejectedCandidateCount += 1;
+          sectionDecisions.push(baseDecision);
           continue;
         }
-        const headIndex = indices[0];
-        const tailIndex = indices[indices.length - 1];
-        directionsHints.push([chunk[headIndex].sourceIndex, chunk[tailIndex].sourceIndex]);
-        const tracepoints = indices.map(index => body.tracepoints?.[index]).filter(Boolean) as MapboxTracepoint[];
         const cropped = cropGeometryToTracepoints(
           fullGeometry,
           tracepoints.flatMap(tracepoint => tracepoint.location ? [tracepoint.location] : []),
         );
         if (!cropped) {
           diagnostic.rejectedCandidateCount += 1;
+          sectionDecisions.push({
+            ...baseDecision,
+            reasonCode: 'LOCAL_TRACEPOINT_SUPPORT_INSUFFICIENT',
+            notes: ['response geometry could not be cropped monotonically to supported tracepoints'],
+          });
           continue;
+        }
+        const rawSubsection = canonical.slice(section.sourceStart, section.sourceEnd + 1);
+        const matchingEvidence = evaluateCorridorEvidence({
+          canonical: rawSubsection,
+          network: cropped,
+          mapboxConfidence: matching.confidence ?? 0,
+          supportCount: indices.length,
+          expectedSupportCount: tailIndex - headIndex + 1,
+          alternatives: tracepoints.map(point => point.alternatives_count ?? null),
+          routeAlternativeCount: Math.max(0, ...tracepoints.map(point => point.alternatives_count ?? 0)),
+        });
+        // Directions may only refine a corridor already identified by real
+        // Matching tracepoint evidence. It cannot manufacture confidence or
+        // full-sequence support from two routed endpoints.
+        if ((matching.confidence ?? 0) >= 0.72
+          && matchingEvidence.tracepointCoverage >= 0.76
+          && matchingEvidence.ambiguityKnownFraction >= 0.7
+          && matchingEvidence.unambiguousFraction >= 0.8
+          && matchingEvidence.corridorIdentityScore >= 0.72) {
+          directionsHints.push({
+            sourceStart: section.sourceStart,
+            sourceEnd: section.sourceEnd,
+            supportCount: indices.length,
+            expectedSupportCount: tailIndex - headIndex + 1,
+            alternatives: tracepoints.map(point => point.alternatives_count ?? null),
+            names: tracepoints.map(point => point.name ?? null),
+            mapboxConfidence: matching.confidence ?? 0,
+            matchingGeometry: cropped,
+            matchingEvidence,
+          });
         }
         const candidate = buildNetworkCandidate({
           canonical,
-          sourceStart: chunk[headIndex].sourceIndex,
-          sourceEnd: chunk[tailIndex].sourceIndex,
+          sourceStart: section.sourceStart,
+          sourceEnd: section.sourceEnd,
           networkPoints: cropped,
           confidence: matching.confidence ?? 0,
           supportCount: indices.length,
@@ -1638,20 +1901,49 @@ async function mapMatchingWindow(
         if (candidate) {
           candidates.push(candidate);
           diagnostic.acceptedCandidateCount += 1;
+          sectionDecisions.push({
+            ...baseDecision,
+            result: 'accepted',
+            reasonCode: 'TRACEPOINT_SUPPORTED',
+            localShapeScore: candidate.evidence.score,
+            notes: [candidate.reason],
+          });
         } else {
           diagnostic.rejectedCandidateCount += 1;
+          const endpoint = analyzeTrustedEndpointCoverage(rawSubsection, cropped);
+          const quality = evaluateMatchedGeometryQuality(rawSubsection, cropped);
+          const seam = evaluateIslandSeamQuality(canonical, section.sourceStart, section.sourceEnd, cropped);
+          const reasonCode: SnapSectionReasonCode = !endpoint.eligibleForAnchoring
+            ? 'LOCAL_ENDPOINT_SUPPORT_WEAK'
+            : !matchingEvidence.accepted
+              ? quality.reason === 'raw_deviation' || quality.reason === 'max_raw_deviation'
+                ? 'LOCAL_TRUTH_ENVELOPE_EXCEEDED'
+                : 'LOCAL_CORRIDOR_STRUCTURE_MISMATCH'
+              : !seam.accepted
+                ? 'LOCAL_SEAM_UNSAFE'
+                : 'LOCAL_NO_MEANINGFUL_IMPROVEMENT';
+          sectionDecisions.push({
+            ...baseDecision,
+            reasonCode,
+            localShapeScore: matchingEvidence.score,
+            notes: [
+              `corridor:${matchingEvidence.reason}`,
+              `quality:${quality.reason}`,
+              `seam:${seam.reason}`,
+            ],
+          });
         }
       }
     }
     diagnostic.result = candidates.length > 0 ? 'accepted-candidate' : 'no-safe-candidate';
     completionResult = candidates.length > 0 ? 'ok' : 'disused';
-    return { candidates, request: diagnostic, directionsHints };
+    return { candidates, request: diagnostic, directionsHints, sectionDecisions };
   } catch (error: any) {
     diagnostic.result = error?.name === 'AbortError' ? 'timeout-or-abort' : 'network-error';
     completionResult = error?.name === 'AbortError'
       ? signal?.aborted ? 'aborted' : 'timeout'
       : 'network-error';
-    return { candidates: [], request: diagnostic };
+    return { candidates: [], request: diagnostic, sectionDecisions: [] };
   } finally {
     diagnostic.durationMs = Date.now() - startedAt;
     abort.dispose();
@@ -1668,18 +1960,76 @@ async function mapMatchingWindow(
   }
 }
 
-function matchingWindows(points: MatcherSubmittedPoint[]): MatcherSubmittedPoint[][] {
-  if (points.length <= MATCHING_WINDOW_SIZE) return points.length >= 2 ? [points] : [];
-  const size = points.length > LONG_ACTIVITY_THRESHOLD ? LONG_ACTIVITY_WINDOW_SIZE : MATCHING_WINDOW_SIZE;
-  const overlap = Math.min(MATCHING_WINDOW_OVERLAP, size - 2);
-  const windows: MatcherSubmittedPoint[][] = [];
-  for (let start = 0; start < points.length - 1; start += size - overlap) {
-    const chunk = points.slice(start, Math.min(points.length, start + size));
-    if (chunk.length >= 2) windows.push(chunk);
-    if (start + size >= points.length) break;
+function compactMatcherEvidence(points: MatcherSubmittedPoint[]): MatcherSubmittedPoint[] {
+  if (points.length <= 2) return points.slice();
+  const compacted: MatcherSubmittedPoint[] = [points[0]];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const point = points[index];
+    const previous = compacted[compacted.length - 1];
+    const mandatory = point.mandatoryReasons.length > 0;
+    const movedM = hav(previous, point);
+    const elapsedMs = point.t != null && previous.t != null
+      ? Number(point.t) - Number(previous.t)
+      : Infinity;
+    // Dense stationary observations add URL/budget cost without corridor
+    // information. Preserve structural anchors, material movement, and a
+    // 12-second temporal witness while never fabricating timestamps.
+    if (mandatory || movedM >= 3 || elapsedMs >= 12_000) compacted.push(point);
   }
-  // Privacy and cost guardrail: no activity can create an unbounded request fanout.
-  return windows.slice(0, MAX_MATCHING_REQUESTS);
+  compacted.push(points[points.length - 1]);
+  return compacted;
+}
+
+function coverageFairWindowOrder(windows: MatchingWindowPlan[]): MatchingWindowPlan[] {
+  if (windows.length <= 2) return windows;
+  const remaining = windows.map((_window, index) => index);
+  const selected: number[] = [];
+  while (remaining.length > 0) {
+    let chosenOffset = 0;
+    let chosenScore = -Infinity;
+    for (let offset = 0; offset < remaining.length; offset += 1) {
+      const index = remaining[offset];
+      const centre = (windows[index].points[0].sourceIndex
+        + windows[index].points[windows[index].points.length - 1].sourceIndex) / 2;
+      const distance = selected.length === 0
+        ? -index // deterministic start endpoint first
+        : Math.min(...selected.map(selectedIndex => {
+            const selectedCentre = (windows[selectedIndex].points[0].sourceIndex
+              + windows[selectedIndex].points[windows[selectedIndex].points.length - 1].sourceIndex) / 2;
+            return Math.abs(centre - selectedCentre);
+          }));
+      if (distance > chosenScore) {
+        chosenScore = distance;
+        chosenOffset = offset;
+      }
+    }
+    selected.push(remaining.splice(chosenOffset, 1)[0]);
+  }
+  return selected.map(index => windows[index]);
+}
+
+export function matchingWindows(points: MatcherSubmittedPoint[]): MatchingWindowPlan[] {
+  const prepared = compactMatcherEvidence(points);
+  if (prepared.length <= MATCHING_WINDOW_SIZE) {
+    return prepared.length >= 2 ? [{
+      requestId: `matching:${prepared[0].sourceIndex}-${prepared[prepared.length - 1].sourceIndex}`,
+      points: prepared,
+    }] : [];
+  }
+  const overlap = Math.min(MATCHING_WINDOW_OVERLAP, MATCHING_WINDOW_SIZE - 2);
+  const windows: MatchingWindowPlan[] = [];
+  for (let start = 0; start < prepared.length - 1; start += MATCHING_WINDOW_SIZE - overlap) {
+    const chunk = prepared.slice(start, Math.min(prepared.length, start + MATCHING_WINDOW_SIZE));
+    if (chunk.length >= 2) windows.push({
+      requestId: `matching:${chunk[0].sourceIndex}-${chunk[chunk.length - 1].sourceIndex}`,
+      points: chunk,
+    });
+    if (start + MATCHING_WINDOW_SIZE >= prepared.length) break;
+  }
+  // Persisted request ceilings can be smaller than the complete plan. Order
+  // windows for useful Activity-wide opportunity rather than consuming every
+  // permit at the beginning of a dense trace.
+  return coverageFairWindowOrder(windows).slice(0, MAX_MATCHING_REQUESTS);
 }
 
 async function runBounded<T>(
@@ -1783,22 +2133,45 @@ function selectNonOverlappingCandidates(candidates: NetworkCandidate[]): Network
 interface DirectionsResult {
   candidate: NetworkCandidate | null;
   request: PedestrianFinalRequestResult;
+  sectionDecision: PedestrianFinalSectionDecision;
+}
+
+function directionsRoutesEquivalent(routes: SnappedPoint[][]): boolean {
+  if (routes.length <= 1) return true;
+  const reference = routes[0];
+  return routes.slice(1).every(route => {
+    const leftP95 = percentile(
+      reference.map(point => projectPointToPath(point, route).distanceM),
+      0.95,
+    );
+    const rightP95 = percentile(
+      route.map(point => projectPointToPath(point, reference).distanceM),
+      0.95,
+    );
+    const referenceLengthM = pathLength(reference);
+    const lengthRatio = referenceLengthM > 0 ? pathLength(route) / referenceLengthM : 1;
+    return leftP95 <= 5 && rightP95 <= 5 && lengthRatio >= 0.92 && lengthRatio <= 1.08;
+  });
 }
 
 async function walkingDirectionsCandidate(
   canonical: RawPoint[],
-  sourceStart: number,
-  sourceEnd: number,
+  authority: DirectionsAuthority,
   token: string,
   timeoutMs: number,
   signal?: AbortSignal,
   governor?: ActivityMapboxRequestGovernor,
   phase: Extract<ActivityMapboxPhase, 'live' | 'final'> = 'final',
   reason = 'qualified-unresolved-directions-span',
+  requestFetch: typeof fetch = fetch,
 ): Promise<DirectionsResult> {
+  const sourceStart = authority.sourceStart;
+  const sourceEnd = authority.sourceEnd;
+  const requestId = `directions:${sourceStart}-${sourceEnd}`;
   const startedAt = Date.now();
   const subsection = canonical.slice(sourceStart, sourceEnd + 1);
   const request: PedestrianFinalRequestResult = {
+    requestId,
     kind: 'walking-directions',
     sourceStart,
     sourceEnd,
@@ -1819,13 +2192,32 @@ async function walkingDirectionsCandidate(
     governorReason: null,
     responseBytes: 0,
   };
+  const baseDecision: PedestrianFinalSectionDecision = {
+    requestId,
+    requestKind: 'walking-directions',
+    sourceStart,
+    sourceEnd,
+    tracepointSupportCount: authority.supportCount,
+    expectedTracepointCount: authority.expectedSupportCount,
+    classification: 'SNAP_ELIGIBLE',
+    result: 'rejected',
+    reasonCode: 'LOCAL_DIRECTIONS_WITHOUT_MATCHING_AUTHORITY',
+    providerConfidence: authority.mapboxConfidence,
+    localShapeScore: null,
+    alternativesKnownFraction: authority.matchingEvidence.ambiguityKnownFraction,
+    unambiguousFraction: authority.matchingEvidence.unambiguousFraction,
+    candidateSource: 'walking-directions',
+    notes: [
+      'Directions has no Map Matching confidence or tracepoints; authority comes from the exact supported Matching section.',
+    ],
+  };
   if (!token || subsection.length < 2) {
     request.result = !token ? 'no-token' : 'too-short';
-    return { candidate: null, request };
+    return { candidate: null, request, sectionDecision: baseDecision };
   }
   if (signal?.aborted) {
     request.result = 'aborted';
-    return { candidate: null, request };
+    return { candidate: null, request, sectionDecision: baseDecision };
   }
   const start = subsection[0];
   const end = subsection[subsection.length - 1];
@@ -1844,28 +2236,28 @@ async function walkingDirectionsCandidate(
       if (!permit.allowed || !permit.receiptId) {
         request.result = `governor-${permit.reason}`;
         request.durationMs = Date.now() - startedAt;
-        return { candidate: null, request };
+        return { candidate: null, request, sectionDecision: baseDecision };
       }
       receiptId = permit.receiptId;
     } catch {
       request.governorReason = 'persistence-error';
       request.result = 'governor-persistence-error';
       request.durationMs = Date.now() - startedAt;
-      return { candidate: null, request };
+      return { candidate: null, request, sectionDecision: baseDecision };
     }
   }
   if (signal?.aborted) {
     if (receiptId && governor) await governor.releaseUndispatched(receiptId).catch(() => undefined);
     request.result = 'aborted';
     request.durationMs = Date.now() - startedAt;
-    return { candidate: null, request };
+    return { candidate: null, request, sectionDecision: baseDecision };
   }
   const abort = linkedAbortController(signal, timeoutMs);
   let completionResult: 'ok' | 'http' | 'timeout' | 'aborted' | 'network-error' | 'disused' = 'network-error';
   let completionRetryAfterMs: number | null = null;
   try {
     request.invoked = true;
-    const response = await fetch(url, { signal: abort.controller.signal });
+    const response = await requestFetch(url, { signal: abort.controller.signal });
     request.httpStatus = response.status;
     completionRetryAfterMs = retryAfterMs(response);
     const headerBytes = Number(response.headers?.get?.('content-length'));
@@ -1873,7 +2265,7 @@ async function walkingDirectionsCandidate(
     if (!response.ok) {
       request.result = `http-${response.status}`;
       completionResult = 'http';
-      return { candidate: null, request };
+      return { candidate: null, request, sectionDecision: baseDecision };
     }
     const body = await response.json() as {
       code?: string;
@@ -1890,16 +2282,36 @@ async function walkingDirectionsCandidate(
     if (body.code !== 'Ok' || !body.routes?.length) {
       request.result = body.code ?? 'no-route';
       completionResult = 'disused';
-      return { candidate: null, request };
+      return { candidate: null, request, sectionDecision: baseDecision };
+    }
+    const routeGeometries = body.routes.map(route => (
+      (route.geometry?.coordinates ?? []).map(([lng, lat]) => ({ lng, lat }))
+    )).filter(route => route.length >= 2);
+    if (!directionsRoutesEquivalent(routeGeometries)) {
+      request.rejectedCandidateCount = routeGeometries.length;
+      request.result = 'ambiguous-routes';
+      completionResult = 'disused';
+      return {
+        candidate: null,
+        request,
+        sectionDecision: {
+          ...baseDecision,
+          classification: 'AMBIGUOUS',
+          reasonCode: 'LOCAL_DIRECTIONS_COMPETING_ROUTES',
+          notes: [...baseDecision.notes, `${routeGeometries.length} materially distinct Directions routes returned`],
+        },
+      };
     }
     const candidates: NetworkCandidate[] = [];
+    const localScores = new Map<NetworkCandidate, number>();
     for (const route of body.routes) {
       const geometry = (route.geometry?.coordinates ?? []).map(([lng, lat]) => ({ lng, lat }));
       if (geometry.length < 2) continue;
       const quality = evaluateMatchedGeometryQuality(subsection, geometry);
-      // Directions has no tracepoint confidence. Its confidence is derived
-      // only from observed-shape agreement, never from successful routing.
-      const shapeConfidence = clamp(
+      // Diagnostic shape agreement remains separate from provider authority.
+      // It is never represented as Map Matching confidence or tracepoint
+      // support merely because endpoint routing returned HTTP 200.
+      const localShapeScore = clamp(
         0.94
         - quality.p95DeviationM / 100
         - Math.abs(1 - quality.lengthRatio) * 0.35,
@@ -1912,28 +2324,45 @@ async function walkingDirectionsCandidate(
         sourceStart,
         sourceEnd,
         networkPoints: geometry,
-        confidence: shapeConfidence,
-        supportCount: Math.min(24, subsection.length),
-        expectedSupportCount: Math.min(24, subsection.length),
-        alternatives: [],
-        names,
+        confidence: authority.mapboxConfidence,
+        supportCount: authority.supportCount,
+        expectedSupportCount: authority.expectedSupportCount,
+        alternatives: authority.alternatives,
+        names: [...authority.names, ...names],
         source: 'walking-directions',
-        routeAlternativeCount: body.routes.length - 1,
+        routeAlternativeCount: 0,
       });
-      if (candidate) candidates.push(candidate);
+      if (candidate) {
+        candidates.push(candidate);
+        localScores.set(candidate, localShapeScore);
+      }
     }
     const candidate = candidates.sort((left, right) => right.confidence - left.confidence)[0] ?? null;
     request.acceptedCandidateCount = candidate ? 1 : 0;
     request.rejectedCandidateCount = Math.max(0, body.routes.length - (candidate ? 1 : 0));
     request.result = candidate ? 'accepted-candidate' : 'no-safe-candidate';
     completionResult = candidate ? 'ok' : 'disused';
-    return { candidate, request };
+    return {
+      candidate,
+      request,
+      sectionDecision: candidate ? {
+        ...baseDecision,
+        result: 'accepted',
+        reasonCode: 'TRACEPOINT_SUPPORTED',
+        localShapeScore: localScores.get(candidate) ?? null,
+        notes: [...baseDecision.notes, candidate.reason],
+      } : {
+        ...baseDecision,
+        reasonCode: 'LOCAL_TRUTH_ENVELOPE_EXCEEDED',
+        notes: [...baseDecision.notes, 'Directions geometry failed unchanged endpoint, corridor, topology, truth-envelope, or seam gates.'],
+      },
+    };
   } catch (error: any) {
     request.result = error?.name === 'AbortError' ? 'timeout-or-abort' : 'network-error';
     completionResult = error?.name === 'AbortError'
       ? signal?.aborted ? 'aborted' : 'timeout'
       : 'network-error';
-    return { candidate: null, request };
+    return { candidate: null, request, sectionDecision: baseDecision };
   } finally {
     request.durationMs = Date.now() - startedAt;
     abort.dispose();
@@ -2140,6 +2569,67 @@ function assembleFinal(
   return { points: output, sections };
 }
 
+function wholeRouteViolationScore(validation: WholeRouteValidation): number {
+  if (validation.accepted) return 0;
+  if (validation.reason === 'endpoint_change') return 1_000_000;
+  if (validation.reason === 'duplicate_edge') return 100_000;
+  if (validation.reason === 'edge_spike') {
+    const allowed = Math.max(30, validation.maximumCanonicalEdgeM * 4);
+    return 10_000 + validation.maximumFinalEdgeM / Math.max(1, allowed);
+  }
+  return 1_000 + Math.abs(Math.log(Math.max(0.001, validation.lengthRatio)));
+}
+
+/**
+ * Final assembly safety is Activity-wide, but its fallback scope is local.
+ * When otherwise valid islands interact badly at their final joins, remove
+ * only the smallest candidate set needed to restore a valid complete route.
+ * This prevents one unsafe window from reverting unrelated matched islands.
+ */
+function retainAssemblySafeCandidates(
+  canonical: RawPoint[],
+  candidates: NetworkCandidate[],
+): {
+  selected: NetworkCandidate[];
+  removed: NetworkCandidate[];
+  assembled: ReturnType<typeof assembleFinal>;
+  initialValidation: WholeRouteValidation;
+  validation: WholeRouteValidation;
+} {
+  let selected = candidates.slice();
+  const removed: NetworkCandidate[] = [];
+  let assembled = assembleFinal(canonical, selected);
+  let validation = evaluateWholeRouteQuality(canonical, assembled.points);
+  const initialValidation = validation;
+  while (!validation.accepted && selected.length > 0) {
+    const trials = selected.map((candidate, index) => {
+      const retained = selected.filter((_item, itemIndex) => itemIndex !== index);
+      const nextAssembled = assembleFinal(canonical, retained);
+      const nextValidation = evaluateWholeRouteQuality(canonical, nextAssembled.points);
+      const retainedCoverageM = retained.reduce((sum, item) => sum + item.quality.rawLengthM, 0);
+      return { candidate, retained, nextAssembled, nextValidation, retainedCoverageM };
+    }).sort((left, right) => {
+      if (left.nextValidation.accepted !== right.nextValidation.accepted) {
+        return left.nextValidation.accepted ? -1 : 1;
+      }
+      const penalty = wholeRouteViolationScore(left.nextValidation)
+        - wholeRouteViolationScore(right.nextValidation);
+      if (Math.abs(penalty) > 1e-9) return penalty;
+      if (left.retainedCoverageM !== right.retainedCoverageM) {
+        return right.retainedCoverageM - left.retainedCoverageM;
+      }
+      return left.candidate.confidence - right.candidate.confidence;
+    });
+    const best = trials[0];
+    if (!best) break;
+    removed.push(best.candidate);
+    selected = best.retained;
+    assembled = best.nextAssembled;
+    validation = best.nextValidation;
+  }
+  return { selected, removed, assembled, initialValidation, validation };
+}
+
 function emptyStats(canonical: RawPoint[], durationMs = 0): PedestrianFinalStats {
   const canonicalGeometry = canonical.map(canonicalPoint);
   const baseFinalDiagnostics = buildBaseFinalGeometry(canonical).diagnostics;
@@ -2150,6 +2640,7 @@ function emptyStats(canonical: RawPoint[], durationMs = 0): PedestrianFinalStats
     mapMatchingRequestCount: 0,
     directionsRequestCount: 0,
     requestResults: [],
+    sectionDecisions: [],
     matchedIslandCount: 0,
     directionsIslandCount: 0,
     canonicalDerivedSectionCount: 0,
@@ -2192,8 +2683,9 @@ export async function reconstructPedestrianFinalRoute(
   const matchingResults = await runBounded(
     windows,
     options.concurrency ?? DEFAULT_CONCURRENCY,
-    chunk => mapMatchingWindow(
-      chunk,
+    plan => mapMatchingWindow(
+      plan.requestId,
+      plan.points,
       canonical,
       options.mapboxToken,
       options.perCallTimeoutMs ?? DEFAULT_PER_CALL_TIMEOUT_MS,
@@ -2201,6 +2693,7 @@ export async function reconstructPedestrianFinalRoute(
       options.requestGovernor,
       options.requestPhase ?? 'final',
       options.requestReason ?? 'qualified-unresolved-window',
+      options.fetchImpl,
     ),
     totalAbort.controller.signal,
   );
@@ -2209,13 +2702,14 @@ export async function reconstructPedestrianFinalRoute(
   annotateWindowAgreement(matchingCandidates);
   let selected = selectNonOverlappingCandidates(matchingCandidates);
   const requestResults = completedMatchingResults.map(result => result.request);
+  const sectionDecisions = completedMatchingResults.flatMap(result => result.sectionDecisions);
 
   if (options.directionsFallback !== false && options.mapboxToken && !totalAbort.controller.signal.aborted) {
     const supportedHints = completedMatchingResults.flatMap(result => result.directionsHints ?? [])
-      .filter(([start, end]) => {
-        const distanceM = pathLength(canonical.slice(start, end + 1));
+      .filter(authority => {
+        const distanceM = pathLength(canonical.slice(authority.sourceStart, authority.sourceEnd + 1));
         const alreadyOwned = selected.some(candidate => (
-          start >= candidate.sourceStart && end <= candidate.sourceEnd
+          authority.sourceStart >= candidate.sourceStart && authority.sourceEnd <= candidate.sourceEnd
         ));
         return !alreadyOwned
           && distanceM >= MIN_DIRECTIONS_SPAN_M
@@ -2223,32 +2717,28 @@ export async function reconstructPedestrianFinalRoute(
       })
       // Observed tail/head corridors get first bounded fallback opportunity:
       // endpoint safety is stronger there and completion must not starve them.
-      .sort((left, right) => right[1] - left[1]);
-    const genericSpans = uncoveredSpans(canonical, selected)
-      .flatMap(([start, end]) => splitSpanForDirections(canonical, start, end))
-      .sort((left, right) => pathLength(canonical.slice(right[0], right[1] + 1))
-        - pathLength(canonical.slice(left[0], left[1] + 1)));
+      .sort((left, right) => right.sourceEnd - left.sourceEnd);
     const seenSpans = new Set<string>();
-    const directionSpans = [...supportedHints, ...genericSpans]
-      .filter(([start, end]) => {
-        const key = `${start}:${end}`;
+    const directionAuthorities = supportedHints
+      .filter(authority => {
+        const key = `${authority.sourceStart}:${authority.sourceEnd}`;
         if (seenSpans.has(key)) return false;
         seenSpans.add(key);
         return true;
       })
       .slice(0, options.maxDirectionsRequests ?? MAX_DIRECTIONS_REQUESTS);
-    for (const [sourceStart, sourceEnd] of directionSpans) {
+    for (const authority of directionAuthorities) {
       if (totalAbort.controller.signal.aborted) break;
       const directionPromise = walkingDirectionsCandidate(
         canonical,
-        sourceStart,
-        sourceEnd,
+        authority,
         options.mapboxToken,
         options.perCallTimeoutMs ?? DEFAULT_PER_CALL_TIMEOUT_MS,
         totalAbort.controller.signal,
         options.requestGovernor,
         options.requestPhase ?? 'final',
         options.requestReason ?? 'qualified-unresolved-directions-span',
+        options.fetchImpl,
       );
       const direction = await Promise.race([
         directionPromise,
@@ -2259,6 +2749,7 @@ export async function reconstructPedestrianFinalRoute(
       ]);
       if (!direction) break;
       requestResults.push(direction.request);
+      sectionDecisions.push(direction.sectionDecision);
       if (direction.candidate) {
         selected = selectNonOverlappingCandidates([...selected, direction.candidate]);
       }
@@ -2275,13 +2766,29 @@ export async function reconstructPedestrianFinalRoute(
     confidence: candidate.confidence,
     maximumDisplayEdgeM: maximumEdge(candidate.points),
   }));
-  let assembled = assembleFinal(canonical, selected);
-  let wholeRouteValidation = evaluateWholeRouteQuality(canonical, assembled.points);
-  const preFallbackWholeRouteValidation = wholeRouteValidation;
-  if (!wholeRouteValidation.accepted) {
-    selected = [];
-    assembled = assembleFinal(canonical, []);
-    wholeRouteValidation = evaluateWholeRouteQuality(canonical, assembled.points);
+  const assemblySafety = retainAssemblySafeCandidates(canonical, selected);
+  let assembled = assemblySafety.assembled;
+  let wholeRouteValidation = assemblySafety.validation;
+  const preFallbackWholeRouteValidation = assemblySafety.initialValidation;
+  if (assemblySafety.removed.length > 0) {
+    const removed = new Set(assemblySafety.removed);
+    selected = assemblySafety.selected;
+    for (let index = 0; index < sectionDecisions.length; index += 1) {
+      const decision = sectionDecisions[index];
+      const candidate = assemblySafety.removed.find(item => (
+        item.sourceStart === decision.sourceStart
+        && item.sourceEnd === decision.sourceEnd
+        && item.source === decision.candidateSource
+      ));
+      if (candidate && removed.has(candidate) && decision.result === 'accepted') {
+        sectionDecisions[index] = {
+          ...decision,
+          result: 'rejected',
+          reasonCode: 'LOCAL_ASSEMBLY_UNSAFE',
+          notes: [...decision.notes, `whole-route:${preFallbackWholeRouteValidation.reason};island removed while unrelated safe islands were retained`],
+        };
+      }
+    }
   }
   if (!wholeRouteValidation.accepted) {
     assembled = {
@@ -2306,6 +2813,7 @@ export async function reconstructPedestrianFinalRoute(
     mapMatchingRequestCount: mapRequests.length,
     directionsRequestCount: directionRequests.length,
     requestResults,
+    sectionDecisions,
     matchedIslandCount: assembled.sections.filter(section => section.networkSource === 'map-matching').length,
     directionsIslandCount: assembled.sections.filter(section => section.networkSource === 'walking-directions').length,
     canonicalDerivedSectionCount: assembled.sections.filter(section => section.decision === 'canonical-derived').length,

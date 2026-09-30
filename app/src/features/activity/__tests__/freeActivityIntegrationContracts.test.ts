@@ -331,7 +331,9 @@ describe('Free Activity integration contracts', () => {
     expect(source).toContain('const sourceSegments = canonicalSegments');
     expect(source).toContain('const snapRes = await reconstructPedestrianFinalRoute(canonicalInput');
     expect(source).toContain('for (const point of s.trackPoints)');
-    expect(source).toContain("'simulator_test' : 'activity_real'");
+    expect(source).toContain("source: 'simulator_test'");
+    expect(source).toContain("source: 'activity_real'");
+    expect(source).toContain('if (isSimulatorSample)');
     expect(source).not.toContain('for (const point of finalDisplayTrackPoints)');
   });
 
@@ -403,8 +405,8 @@ describe('Free Activity integration contracts', () => {
   test('authoritative Start conflict preserves terminal lifecycle before recovery materialization', () => {
     const source = read('src/store/useTrackingStore.ts');
     const conflict = source.slice(
-      source.indexOf("startResolution.kind === 'conflict'"),
-      source.indexOf("crashLogger.breadcrumb('session:start:server-unavailable')", source.indexOf("startResolution.kind === 'conflict'")),
+      source.indexOf("startResolution?.kind === 'conflict'"),
+      source.indexOf("crashLogger.breadcrumb('session:start:server-unavailable')", source.indexOf("startResolution?.kind === 'conflict'")),
     );
     expect(conflict).toContain('await reconcileStartConflict');
     expect(conflict).toContain("disposition === 'completed-local'");

@@ -2,10 +2,12 @@ import {
   appendBackgroundHikePoints,
   appendHikePoint,
   assertHikeTrackCleanupOwner,
+  completeSnapLabHikeTrack,
   deleteAcknowledgedHikeTrackArtifacts,
   discardActiveHike,
   estimateJournalWriteWork,
   getJournalEfficiencyMetrics,
+  listSnapLabHikeTrackIdsForOwner,
   listActiveHikes,
   readActiveHikeTail,
   readActiveHikeTerminalSnapshot,
@@ -16,6 +18,7 @@ import {
   truncateActiveHikeTrack,
   updateHikeMetaStrict,
   resetJournalEfficiencyMetrics,
+  purgeSnapLabHikeTracksForOwner,
 } from '../hikeTrackWriter';
 import { shouldStartNewSegment } from '../../features/activity/activityContracts';
 
@@ -62,6 +65,114 @@ describe('crash-safe Activity journal', () => {
     expect(await listActiveHikes()).toEqual([
       expect.objectContaining({ session_id: activityId, total_points: 0, activity_mode: 'running', user_id: 'user-a' }),
     ]);
+  });
+
+  test('Snap Lab uses the real WAL in an isolated namespace hidden from production recovery', async () => {
+    const qaId = 'qa-snap-wal-isolation';
+    await startHikeTrack(qaId, {
+      started_at: 1_000,
+      activity_mode: 'hiking',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    await appendHikePoint({
+      t: 2_000,
+      lat: -41,
+      lng: 174,
+      src: 'sim',
+      clientActivityId: qaId,
+      ownerGeneration: owner,
+      segmentId: 'qa-segment',
+      segmentStartReason: 'start',
+    });
+
+    expect(await readActiveHikeTail(qaId)).toEqual([
+      expect.objectContaining({ clientActivityId: qaId, source: 'simulator' }),
+    ]);
+    expect(await listActiveHikes()).toEqual([]);
+    expect([...mockWebStorage.keys()].some(key => (
+      key.includes('cairn-snap-lab/hike-tracks/active/qa-snap-wal-isolation.jsonl')
+    ))).toBe(true);
+    expect([...mockWebStorage.keys()].some(key => (
+      key.includes('cairn-hike-tracks/active/qa-snap-wal-isolation.jsonl')
+    ))).toBe(false);
+    await discardActiveHike(qaId);
+  });
+
+  test('Snap Lab WAL cleanup enumerates storage rather than an Activity index and preserves other owners', async () => {
+    const ownerAId = 'qa-snap-wal-owner-a';
+    const ownerBId = 'qa-snap-wal-owner-b';
+    for (const [id, userId] of [[ownerAId, 'user-a'], [ownerBId, 'user-b']] as const) {
+      await startHikeTrack(id, {
+        started_at: 1_000,
+        activity_mode: 'hiking',
+        user_id: userId,
+        owner_generation: owner,
+      });
+      await appendHikePoint({
+        t: 2_000, lat: -41, lng: 174, src: 'sim', clientActivityId: id,
+        ownerGeneration: owner, segmentId: 'qa-segment', segmentStartReason: 'start',
+      });
+    }
+    await expect(listSnapLabHikeTrackIdsForOwner('user-a')).resolves.toEqual([ownerAId]);
+    await purgeSnapLabHikeTracksForOwner('user-a');
+    await expect(listSnapLabHikeTrackIdsForOwner('user-a')).resolves.toEqual([]);
+    await expect(listSnapLabHikeTrackIdsForOwner('user-b')).resolves.toEqual([ownerBId]);
+    expect((await readActiveHikeTail(ownerBId))).toHaveLength(1);
+  });
+
+  test('Snap Lab WAL privacy cleanup fails visibly when coordinate artifacts lose ownership metadata', async () => {
+    const qaId = 'qa-snap-wal-corrupt-owner';
+    await startHikeTrack(qaId, {
+      started_at: 1_000,
+      activity_mode: 'running',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    mockWebStorage.delete(`cairn-fs://cairn-snap-lab/hike-tracks/meta/${qaId}.json`);
+    await expect(listSnapLabHikeTrackIdsForOwner('user-a'))
+      .rejects.toThrow(`snap_lab_wal_owner_unavailable:${qaId}`);
+  });
+
+  test('Snap Lab strict completion moves only the verified terminal evidence frontier', async () => {
+    const qaId = 'qa-snap-wal-strict-complete';
+    await startHikeTrack(qaId, {
+      started_at: 1_000,
+      activity_mode: 'hiking',
+      user_id: 'user-a',
+      owner_generation: owner,
+    });
+    await appendHikePoint({
+      t: 2_000, lat: -41, lng: 174, src: 'sim', clientActivityId: qaId,
+      ownerGeneration: owner, segmentId: 'qa-segment', segmentStartReason: 'start',
+    });
+    await sealHikeTrackForFinish(qaId, owner, 2_500);
+    await expect(completeSnapLabHikeTrack(qaId, 'user-a', owner, 2_500, 3_000))
+      .resolves.toEqual([expect.objectContaining({ t: 2_000, clientActivityId: qaId })]);
+    expect(mockWebStorage.has(`cairn-fs://cairn-snap-lab/hike-tracks/active/${qaId}.jsonl`)).toBe(false);
+    expect(mockWebStorage.has(`cairn-fs://cairn-snap-lab/hike-tracks/completed/${qaId}.jsonl`)).toBe(true);
+  });
+
+  test('Snap Lab strict completion preserves pre-Resume generations inside one immutable Activity', async () => {
+    const qaId = 'qa-snap-wal-multi-generation';
+    await startHikeTrack(qaId, {
+      started_at: 1_000, activity_mode: 'running', user_id: 'user-a', owner_generation: 'generation-a',
+    });
+    await appendHikePoint({
+      t: 2_000, lat: -41, lng: 174, src: 'sim', clientActivityId: qaId,
+      ownerGeneration: 'generation-a', segmentId: 'segment-a', segmentStartReason: 'start',
+    });
+    await updateHikeMetaStrict(qaId, { owner_generation: 'generation-b' });
+    await appendHikePoint({
+      t: 3_000, lat: -41.001, lng: 174.001, src: 'sim', clientActivityId: qaId,
+      ownerGeneration: 'generation-b', segmentId: 'segment-b', segmentStartReason: 'resume',
+    });
+    await sealHikeTrackForFinish(qaId, 'generation-b', 3_500);
+    const completed = await completeSnapLabHikeTrack(
+      qaId, 'user-a', 'generation-b', 3_500, 4_000,
+    );
+    expect(completed.map(point => point.ownerGeneration)).toEqual(['generation-a', 'generation-b']);
+    expect(completed.map(point => point.segmentId)).toEqual(['segment-a', 'segment-b']);
   });
 
   test('a torn Resume generation stage preserves the prior discoverable Activity metadata', async () => {

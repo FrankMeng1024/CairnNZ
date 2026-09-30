@@ -45,6 +45,13 @@ import { Platform } from 'react-native';
 const CHECKPOINT_KEY = 'cairn_boot_checkpoint_v1';
 const PREVIOUS_KEY = 'cairn_boot_checkpoint_previous_v1';
 const BEACON_ENDPOINT = '/api/edit-diag';
+// Keep this module dependency-free: internal builds that can manufacture GPS
+// evidence are a local-only QA realm and must never emit production beacons.
+// Keep the exact static property access used by Expo's public-env inliner.
+// Optional/dynamic process access survives into Web and becomes false because
+// there is intentionally no Node `process` global in the browser.
+const QA_PROCESS_LOCAL_ONLY =
+  process.env.EXPO_PUBLIC_ACTIVITY_SIMULATOR_ENABLED === 'true';
 
 const API_BASE_URL =
   (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_BASE_URL) ||
@@ -70,6 +77,7 @@ interface BootCheckpoint {
  * already left the device by then.
  */
 function fireBeacon(phase: string, extra?: Record<string, any>): void {
+  if (QA_PROCESS_LOCAL_ONLY) return;
   try {
     const url = API_BASE_URL.replace(/\/$/, '') + BEACON_ENDPOINT;
     const body = JSON.stringify({

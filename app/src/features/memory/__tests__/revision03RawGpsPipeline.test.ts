@@ -6,6 +6,9 @@ const mockStorageValues = new Map<string, string>();
 let mockHoldDiagnosticWrite = false;
 let mockDiagnosticWriteBlocked = false;
 let releaseMockDiagnosticWrite: (() => void) | null = null;
+const releaseBlockedDiagnosticWrite = () => {
+  if (releaseMockDiagnosticWrite) releaseMockDiagnosticWrite();
+};
 let mockCurrentUserId = 'raw-gps-qa';
 const mockHikeJournalPoints: any[] = [];
 const mockAddSession = jest.fn(async () => undefined);
@@ -111,7 +114,9 @@ jest.mock('../../../services/backgroundLocationTask', () => ({
 jest.mock('../../../services/hikeTrackWriter', () => ({
   appendHikePoint: jest.fn(async (point: any) => { mockHikeJournalPoints.push(point); }), startHikeTrack: jest.fn(async () => undefined),
   updateHikeMeta: jest.fn(async () => undefined), updateHikeMetaStrict: jest.fn(async () => undefined), flushNow: jest.fn(async () => undefined),
-  renameToCompleted: jest.fn(async () => undefined), discardActiveHike: jest.fn(async () => undefined),
+  renameToCompleted: jest.fn(async () => undefined),
+  completeSnapLabHikeTrack: jest.fn(async () => []),
+  discardActiveHike: jest.fn(async () => undefined),
   readActiveHikeTail: jest.fn(async () => mockCanonicalHikeJournal()),
   readActiveHikeTerminalSnapshot: jest.fn(async (_sessionId: string, options?: { expectedCutoffAt?: number; expectedOwnerGeneration?: string }) => ({
     status: 'complete', source: 'active', points: mockCanonicalHikeJournal(),
@@ -603,7 +608,7 @@ describe('revision-03 realistic Raw GPS -> live isolated Memory pipeline', () =>
     ]);
     expect(result).toMatchObject({ status: 'saved-local', clientActivityId });
     expect(mockDiagnosticWriteBlocked).toBe(true);
-    releaseMockDiagnosticWrite?.();
+    releaseBlockedDiagnosticWrite();
     await ledger.flushActivityStageLedger(account);
   });
 

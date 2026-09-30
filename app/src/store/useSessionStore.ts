@@ -72,6 +72,9 @@ export interface TrackingSession {
   finalGeometryFingerprint?: string;
   /** Stable local route is usable while one optional online refinement is queued. */
   roadRefinementPending?: boolean;
+  /** Explicitly isolated Activity Replay Lab record. QA sessions never enter
+   * this store's production persistence, remote mutation, or sync paths. */
+  qaProvenance?: 'snap_lab';
   /** Retained evidence of an impossible UUID↔numeric mapping collision. */
   identityConflict?: {
     kind: 'server_mapping';

@@ -121,7 +121,7 @@ describe('Mapbox Final refinement failure matrix', () => {
   });
 
   test('only successful windows contribute when other windows fail', async () => {
-    const canonical = Array.from({ length: 70 }, (_unused, index) => point(index));
+    const canonical = Array.from({ length: 260 }, (_unused, index) => point(index));
     let call = 0;
     global.fetch = jest.fn(async (url: string) => {
       call += 1;
@@ -152,8 +152,14 @@ describe('Mapbox Final refinement failure matrix', () => {
     expect(ambiguous.stats.acceptedMatchedDistanceM).toBe(0);
     expect(ambiguous.stats.sections.every(section => (
       section.geometryMode === 'C_CANONICAL_DERIVED'
-      && section.reason.includes('network-side-ambiguous')
     ))).toBe(true);
+    expect(ambiguous.stats.sectionDecisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        classification: 'AMBIGUOUS',
+        reasonCode: 'LOCAL_PARALLEL_ROAD_AMBIGUITY',
+        result: 'rejected',
+      }),
+    ]));
 
     const mixed = canonical.map((sample, index) => ({
       ...sample,

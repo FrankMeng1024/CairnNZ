@@ -1062,7 +1062,7 @@ export function RunningScreen() {
             }
           }}
         />
-        {showSimulator ? <ActivitySimulatorPanel /> : null}
+        {showSimulator && !showSaveSheet ? <ActivitySimulatorPanel /> : null}
       </View>
     );
   }
@@ -1204,7 +1204,7 @@ export function RunningScreen() {
         featureName="Running"
         onDismiss={() => setPermissionDeniedVisible(false)}
       />
-      {showSimulator ? <ActivitySimulatorPanel /> : null}
+      {showSimulator && !showSaveSheet ? <ActivitySimulatorPanel /> : null}
     </View>
   );
 }

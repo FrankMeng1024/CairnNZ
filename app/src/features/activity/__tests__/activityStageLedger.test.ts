@@ -136,6 +136,20 @@ describe('local owner-exportable Activity stage ledger', () => {
     expect((await exportLatestActivityStageLedger('owner-b')).clientActivityId).toBe('other');
   });
 
+  test('Snap Lab diagnostics have a separate owner realm and cannot become the production latest export', async () => {
+    await recordActivityStageEvent({
+      ownerUserId: 'owner-a', clientActivityId: 'product-activity', stage: 'activity-start', wallTimeMs: 1_000,
+    });
+    await recordActivityStageEvent({
+      ownerUserId: 'owner-a', clientActivityId: 'qa-snap-lab-activity', stage: 'activity-start', wallTimeMs: 2_000,
+    });
+    await flushActivityStageLedger('owner-a');
+    expect((await exportLatestActivityStageLedger('owner-a')).clientActivityId).toBe('product-activity');
+    expect((await exportLatestActivityStageLedger('owner-a', 'snap-lab')).clientActivityId).toBe('qa-snap-lab-activity');
+    const keys = await AsyncStorage.getAllKeys();
+    expect(keys.some(key => key.startsWith(activityStageLedgerOwnerPrefix('owner-a', 'snap-lab')))).toBe(true);
+  });
+
   test('privacy purge drains queued writes and removes only the exact owner', async () => {
     void recordActivityStageEvent({
       ownerUserId: 'owner-a', clientActivityId: 'activity-a', stage: 'provider-state',

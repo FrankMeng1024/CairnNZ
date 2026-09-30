@@ -37,6 +37,13 @@ describe('shared Hike and Run recording UI contracts', () => {
     expect(hike).toContain('{!stopSummary && !followUser ? (');
   });
 
+  test('simulator setup cannot remount over Finish confirmation or completion', () => {
+    expect(hike.match(/showSimulator && !stopSummary \? <ActivitySimulatorPanel/g)).toHaveLength(2);
+    expect(run.match(/showSimulator && !showSaveSheet \? <ActivitySimulatorPanel/g)).toHaveLength(2);
+    expect(hike).not.toContain('{showSimulator ? <ActivitySimulatorPanel /> : null}');
+    expect(run).not.toContain('{showSimulator ? <ActivitySimulatorPanel /> : null}');
+  });
+
   test('metric hierarchy deliberately differs inside one family', () => {
     expect(hike).toContain("primaryMetric={{ label: 'DISTANCE'");
     expect(hike).toContain("{ label: 'ACTIVE TIME'");

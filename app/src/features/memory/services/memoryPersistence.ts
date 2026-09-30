@@ -867,6 +867,23 @@ export async function flushSyntheticMemoryNow(): Promise<void> {
   await flushSynthetic(userId, useMemoryStore.getState().testPoints.slice());
 }
 
+/** Delete only the labeled simulator/QA Memory realm for one owner. */
+export async function clearSyntheticMemoryForUser(userId: string): Promise<void> {
+  if (!userId) throw new Error('memory_user_required');
+  if (currentUserId === userId) {
+    if (syntheticFlushTimer) clearTimeout(syntheticFlushTimer);
+    if (syntheticMaxWaitTimer) clearTimeout(syntheticMaxWaitTimer);
+    syntheticFlushTimer = null;
+    syntheticMaxWaitTimer = null;
+    useMemoryStore.getState().replaceTestPoints([]);
+  }
+  const emptySynthetic = JSON.stringify(serializeSynthetic([]));
+  await storage.setItem(syntheticStorageKey(userId), emptySynthetic, { strict: true });
+  if (await storage.getItemStrict(syntheticStorageKey(userId)) !== emptySynthetic) {
+    throw new Error('synthetic_memory_cleanup_verify_failed');
+  }
+}
+
 /** Attach the durable local Memory authority on first product write. */
 export async function ensureMemoryPersistenceForUser(userId: string): Promise<void> {
   if (!userId) throw new Error('memory_user_required');

@@ -111,6 +111,7 @@ jest.mock('../src/services/hikeTrackWriter', () => ({
   releaseHikeTrackFinishSeal: jest.fn(async () => true),
   flushNow: jest.fn(async () => {}),
   renameToCompleted: jest.fn(async () => {}),
+  completeSnapLabHikeTrack: jest.fn(async () => [...mockHikeJournalPoints]),
   discardActiveHike: jest.fn(async () => {}),
   readActiveHikeTail: jest.fn(async () => []),
   readActiveHikeTerminalSnapshot: jest.fn(async (_sessionId: string, options?: {

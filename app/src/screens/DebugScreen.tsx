@@ -34,6 +34,12 @@ import { activitySimulatorBuildCapable } from '../features/activitySimulator/cap
 import { useActivitySimulatorStore } from '../features/activitySimulator/useActivitySimulatorStore';
 import { resolveSimulatorContinuityLock } from '../features/activitySimulator/simulatorContinuity';
 import { useTrackingStore } from '../store/useTrackingStore';
+import { useAppStore } from '../store/useAppStore';
+import {
+  clearSnapLabRealmForOwner,
+  listSnapLabActivities,
+  type SnapLabActivityRecord,
+} from '../features/activitySimulator/snapLabActivityStore';
 
 export function DebugScreen() {
   const nav = useNavigation();
@@ -51,7 +57,10 @@ export function DebugScreen() {
   const [bufferSize, setBufferSize] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<SessionMetadata | null>(null);
   const [clearAllOpen, setClearAllOpen] = useState(false);
+  const [clearSnapLabOpen, setClearSnapLabOpen] = useState(false);
   const [destructiveBusy, setDestructiveBusy] = useState(false);
+  const [snapLabActivities, setSnapLabActivities] = useState<SnapLabActivityRecord[]>([]);
+  const ownerUserId = String(useAppStore(state => state.user?.id) ?? '');
   const qaToolsAvailable = activitySimulatorBuildCapable || (typeof __DEV__ !== 'undefined' && __DEV__);
   const activitySimulatorEnabled = useActivitySimulatorStore(state => state.enabled);
   const setActivitySimulatorEnabled = useActivitySimulatorStore(state => state.setEnabled);
@@ -76,10 +85,17 @@ export function DebugScreen() {
         totalSize: list.reduce((a, s) => a + (s.raw_size_bytes ?? 0), 0),
       });
       setBufferSize(debugLogger.getBufferSize());
+      setSnapLabActivities(ownerUserId ? await listSnapLabActivities(ownerUserId) : []);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [ownerUserId]);
+
+  const openSnapLabRecorder = useCallback((mode: 'Hiking' | 'Running') => {
+    if (!debugMode || simulatorContinuity.locked) return;
+    setActivitySimulatorEnabled(true);
+    (nav as any).navigate(mode);
+  }, [debugMode, nav, setActivitySimulatorEnabled, simulatorContinuity.locked]);
 
   useEffect(() => {
     refresh();
@@ -154,6 +170,24 @@ export function DebugScreen() {
       await debugLogger.clearAllSessions();
       setClearAllOpen(false);
       await refresh();
+    } finally {
+      setDestructiveBusy(false);
+    }
+  }
+
+  async function confirmClearSnapLab() {
+    if (destructiveBusy || !ownerUserId) return;
+    setDestructiveBusy(true);
+    try {
+      await clearSnapLabRealmForOwner(ownerUserId);
+      setClearSnapLabOpen(false);
+      await refresh();
+      Alert.alert('Snap Lab cleared', 'All isolated Activities, WAL evidence, diagnostics and QA Memory for this owner were verified removed.');
+    } catch (error) {
+      Alert.alert(
+        'Snap Lab not fully cleared',
+        `CairnNZ could not verify complete removal. No success was claimed. ${String(error).slice(0, 140)}`,
+      );
     } finally {
       setDestructiveBusy(false);
     }
@@ -248,6 +282,48 @@ export function DebugScreen() {
                 </Text>
               </View>
             ) : null}
+
+          {activitySimulatorBuildCapable ? (
+            <View style={styles.section} testID="snap-lab-shelf">
+              <Text style={styles.sectionHeader}>QA → ACTIVITY REPLAY LAB</Text>
+              <View style={styles.statusBox}>
+                <Text style={styles.statusLine}>Snap Lab records: {snapLabActivities.length}</Text>
+                <Text style={styles.fieldHint}>
+                  Raw GPS → qualification → canonical → isolated WAL → Live → Finish → selected Final → persisted QA Detail. Records and QA Route snapshots stay local and never enter product sync or Personal Memory.
+                </Text>
+                <View style={styles.actionRow}>
+                  <ActionPill label="Record Hike" onPress={() => openSnapLabRecorder('Hiking')} />
+                  <ActionPill label="Record Run" onPress={() => openSnapLabRecorder('Running')} />
+                </View>
+                {snapLabActivities.map(activity => (
+                  <TouchableOpacity
+                    key={activity.activityId}
+                    style={styles.snapLabCard}
+                    testID={`snap-lab-record-${activity.activityId}`}
+                    onPress={() => (nav as any).navigate('MapHistory', { sessionId: activity.activityId })}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.sessionTitle}>{activity.session.name}</Text>
+                      <Text style={styles.sessionMeta}>
+                        {activity.context.caseId} · {activity.context.profileId} · {activity.selectedSource} · {activity.selectedFinal.length} points
+                      </Text>
+                      <Text style={styles.sessionId}>{activity.activityId}</Text>
+                    </View>
+                    <Icon name="ChevronRight" size={16} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                ))}
+                {snapLabActivities.length > 0 ? (
+                  <TouchableOpacity
+                    style={styles.clearAllBtn}
+                    testID="clear-snap-lab-records"
+                    onPress={() => setClearSnapLabOpen(true)}
+                  >
+                    <Text style={styles.clearAllText}>Clear Snap Lab records</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
 
           {activitySimulatorBuildCapable ? <View style={styles.section} testID="qa-snap-review">
             <Text style={styles.sectionHeader}>QA SNAP REVIEW</Text>
@@ -378,6 +454,21 @@ export function DebugScreen() {
             )}
           </View>
         </ScrollView>
+        <ModalCard
+          visible={clearSnapLabOpen}
+          onDismiss={() => !destructiveBusy && setClearSnapLabOpen(false)}
+          dismissible={!destructiveBusy}
+          testID="snap-lab-clear-confirmation"
+        >
+          <ModalCardHeader
+            title="Clear Snap Lab records?"
+            body="This deletes only this owner's saved QA Activities, QA Routes, isolated QA journal, stage ledger, and test Memory. Product Activities and Personal Memory are not changed."
+          />
+          <View style={styles.modalActions}>
+            <PrimaryButton label="Clear QA records" variant="destructive" loading={destructiveBusy} onPress={() => { void confirmClearSnapLab(); }} />
+            <PrimaryButton label="Keep records" variant="secondary" disabled={destructiveBusy} onPress={() => setClearSnapLabOpen(false)} />
+          </View>
+        </ModalCard>
         <ModalCard
           visible={deleteTarget !== null}
           onDismiss={() => !destructiveBusy && setDeleteTarget(null)}
@@ -560,6 +651,14 @@ const styles = StyleSheet.create({
   notUploadedText: { color: '#b36b00', fontSize: 12 },
   errorText: { color: Colors.danger, fontSize: 11, marginTop: Spacing.xs },
   actionRow: { flexDirection: 'row', marginTop: Spacing.sm, gap: 8 },
+  snapLabCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    paddingTop: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
   pill: {
     paddingHorizontal: 10,
     paddingVertical: 6,

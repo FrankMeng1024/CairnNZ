@@ -71,6 +71,12 @@ import {
   loadOrBuildAlmostDoneCloneV1,
   type AlmostDoneCloneV1,
 } from '../features/activity/almostDoneCloneV1';
+import {
+  loadSnapLabActivity,
+  recordSnapLabDetailLoaded,
+  saveSnapLabRouteSnapshot,
+  type SnapLabActivityRecord,
+} from '../features/activitySimulator/snapLabActivityStore';
 
 // ── Conditional Mapbox import ─────────────────────────────────────────────
 // Native: render the track on top of a real Mapbox map. Web / Expo Go:
@@ -860,6 +866,8 @@ function MapHistoryObjectScreen() {
   const debugMode = useSettingsStore(s => s.debugMode);
   const [qaReviewClone, setQaReviewClone] = useState<AlmostDoneCloneV1 | null>(null);
   const [qaReviewError, setQaReviewError] = useState<string | null>(null);
+  const [snapLabRecord, setSnapLabRecord] = useState<SnapLabActivityRecord | null>(null);
+  const [snapLabLoading, setSnapLabLoading] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   // A Detail screen owns its projection for the lifetime of this mount. Sync
   // may delete handed-off local files while the screen is open; retaining the
@@ -945,8 +953,40 @@ function MapHistoryObjectScreen() {
 
   const region = getCurrentRegion();
   const allSessions = useSessionStore(s => s.sessions);
+  const currentUserId = useSessionStore(s => s.currentUserId);
+  const isSnapLabTarget = !!targetSessionId?.startsWith('qa-snap-');
+  useEffect(() => {
+    if (!isSnapLabTarget || !targetSessionId || !currentUserId) {
+      setSnapLabRecord(null);
+      setSnapLabLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setSnapLabLoading(true);
+    void loadSnapLabActivity(currentUserId, targetSessionId).then(record => {
+      if (cancelled) return;
+      setSnapLabRecord(record);
+      setSnapLabLoading(false);
+      if (record) {
+        detailSessionSnapshots.current.set(record.session.id, record.session);
+        detailTrackSnapshots.current.set(record.session.id, record.selectedFinal);
+        detailTrackRevisions.current.set(record.session.id, record.session.finalGeometryRevision ?? 1);
+        void recordSnapLabDetailLoaded(currentUserId, record.activityId).catch(error => {
+          crashLogger.breadcrumb(`snap_lab:detail_ledger_failed ${String(error).slice(0, 80)}`);
+        });
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setSnapLabRecord(null);
+        setSnapLabLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [currentUserId, isSnapLabTarget, targetSessionId]);
   const resolvedTargetSession = targetSessionId
-    ? allSessions.find(session => activityMatchesTarget(session, targetSessionId)) ?? null
+    ? isSnapLabTarget
+      ? snapLabRecord?.session ?? null
+      : allSessions.find(session => activityMatchesTarget(session, targetSessionId)) ?? null
     : null;
   // A Finish/local identity and a Trails/server identity resolve to the same
   // stable Activity object. The route param never creates a second projection.
@@ -1097,6 +1137,7 @@ function MapHistoryObjectScreen() {
     const id = selectedSessionId;
     const trimmed = renameText.trim();
     if (!id || id === invalidatedSessionId || !trimmed || renameSaving) return;
+    if (id.startsWith('qa-snap-')) return;
     setRenameSaving(true);
     const result = await renameSession(id, trimmed);
     setRenameSaving(false);
@@ -1121,6 +1162,7 @@ function MapHistoryObjectScreen() {
   const deleteSelectedActivity = useCallback(async () => {
     const id = selectedSessionId;
     if (!id || id === invalidatedSessionId || deleteSaving) return;
+    if (id.startsWith('qa-snap-')) return;
     // Invalidate this mounted projection before the first await. It can no
     // longer rename, create a Route, or re-delete while persistence runs.
     setInvalidatedSessionId(id);
@@ -1191,6 +1233,21 @@ function MapHistoryObjectScreen() {
   useEffect(() => {
     if (targetQaReviewClone) return undefined;
     if (!selectedSessionId) { setLoadedTrackPoints(null); return; }
+    if (selectedSessionId.startsWith('qa-snap-')) {
+      if (!snapLabRecord || snapLabRecord.activityId !== selectedSessionId) {
+        setLoadedTrackPoints(null);
+        return undefined;
+      }
+      const snapshot = snapLabRecord.selectedFinal.map(point => ({ ...point }));
+      detailSessionSnapshots.current.set(selectedSessionId, snapLabRecord.session);
+      detailTrackSnapshots.current.set(selectedSessionId, snapshot);
+      detailTrackRevisions.current.set(
+        selectedSessionId,
+        snapLabRecord.session.finalGeometryRevision ?? 1,
+      );
+      setLoadedTrackPoints(snapshot);
+      return undefined;
+    }
     const session = useSessionStore.getState().sessions.find(s => s.id === selectedSessionId) ?? null;
     if (session && !detailSessionSnapshots.current.has(selectedSessionId)) {
       detailSessionSnapshots.current.set(selectedSessionId, {
@@ -1343,6 +1400,7 @@ function MapHistoryObjectScreen() {
     liveSelectedSession?.serverActivityId,
     liveSelectedSession?.finalGeometryRevision,
     liveSelectedSession?.finalGeometryFingerprint,
+    snapLabRecord,
   ]);
 
   // Merge loaded track points into the selected session for display.
@@ -1353,6 +1411,7 @@ function MapHistoryObjectScreen() {
     ? { ...selectedSession, trackPoints: loadedTrackPoints ?? [] }
     : null;
   const isQaReviewClone = selectedSession?.id === ALMOST_DONE_CLONE_V1_ID;
+  const isSnapLabActivity = selectedSession?.qaProvenance === 'snap_lab';
   const selectedActivityRouteState = selectedSession
     ? deriveActivityRouteState({ session: selectedSession, trackPoints: loadedTrackPoints })
     : null;
@@ -1373,6 +1432,20 @@ function MapHistoryObjectScreen() {
 
   const openActivityRouteDraft = useCallback(() => {
     if (!selectedSession || routeDraftOpening) return;
+    if (selectedSession.qaProvenance === 'snap_lab') {
+      const ownerUserId = useSessionStore.getState().currentUserId;
+      setRouteDraftOpening(true);
+      void saveSnapLabRouteSnapshot(
+        ownerUserId,
+        selectedSession.id,
+        `${selectedSession.name || 'QA Activity'} route`,
+      ).then(() => {
+        Alert.alert('QA Route snapshot saved', 'The selected Final was copied inside Snap Lab only. No product Route or server data was created.');
+      }).catch(() => {
+        Alert.alert('QA Route snapshot failed', 'The Snap Lab Activity remains saved. Try the QA action again.');
+      }).finally(() => setRouteDraftOpening(false));
+      return;
+    }
     const realSegments = segmentTrace(loadedTrackPoints ?? []).segments
       .filter(segment => segment.length >= 2);
     const openSegment = (segment: typeof realSegments[number], reconnectsGap = false) => {
@@ -1825,7 +1898,7 @@ function MapHistoryObjectScreen() {
                   </View>
                 ) : (
                   <TouchableOpacity
-                    disabled={isQaReviewClone}
+                    disabled={isQaReviewClone || isSnapLabActivity}
                     onPress={() => {
                       setRenameText(selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike'));
                       setRenameEditing(true);
@@ -1839,7 +1912,7 @@ function MapHistoryObjectScreen() {
                       <Text style={[styles.detailTitle, { color: visualTheme.foreground }]} numberOfLines={2}>
                         {selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike')}
                       </Text>
-                      {!isQaReviewClone ? <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} /> : null}
+                      {!isQaReviewClone && !isSnapLabActivity ? <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} /> : null}
                     </View>
                   </TouchableOpacity>
                 )}
@@ -1864,6 +1937,13 @@ function MapHistoryObjectScreen() {
                 <View style={styles.detailMetaRow} testID="qa-snap-review-clone-label">
                   <Icon name="Eye" size={13} color={visualTheme.iconActive} strokeWidth={2} />
                   <Text style={[styles.detailMetaText, { color: visualTheme.primary, fontWeight: '700' }]}>QA / SNAP REVIEW CLONE · NO PRODUCT EFFECTS</Text>
+                </View>
+              ) : null}
+
+              {isSnapLabActivity ? (
+                <View style={styles.detailMetaRow} testID="qa-snap-lab-activity-label">
+                  <Icon name="Wrench" size={13} color={visualTheme.iconActive} strokeWidth={2} />
+                  <Text style={[styles.detailMetaText, { color: visualTheme.primary, fontWeight: '700' }]}>SNAP LAB · LOCAL QA REALM · ZERO PRODUCTION UPLOADS</Text>
                 </View>
               ) : null}
 
@@ -1975,6 +2055,18 @@ function MapHistoryObjectScreen() {
                   <Icon name="Lock" size={13} color={visualTheme.iconInactive} strokeWidth={2} />
                   <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Read-only · rename, delete, Save as Route, sync, Memory and stats are disabled</Text>
                 </View>
+              ) : isSnapLabActivity ? (
+                <View style={styles.activityActions}>
+                  <PrimaryButton
+                    label="Save QA Route snapshot"
+                    onPress={openActivityRouteDraft}
+                    disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}
+                    loading={routeDraftOpening}
+                    renderIcon={color => <Icon name="Route" size={IconSize.sm} color={color} strokeWidth={2} />}
+                    testID="snap-lab-save-route-snapshot"
+                  />
+                  <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Rename, delete, product sync, Personal Memory and production Routes are disabled here.</Text>
+                </View>
               ) : (
                 <View style={styles.activityActions}>
                   <PrimaryButton
@@ -2038,8 +2130,8 @@ function MapHistoryObjectScreen() {
           <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
           <View style={styles.emptyState}>
             <Icon name="Map" size={34} color={visualTheme.iconInactive} strokeWidth={1.7} />
-            <Text style={[styles.emptyTitle, { color: visualTheme.foreground }]}>Activity unavailable</Text>
-            <Text style={[styles.emptySubtitle, { color: visualTheme.foregroundSecondary }]}>This Activity could not be found in local Activity history.</Text>
+            <Text style={[styles.emptyTitle, { color: visualTheme.foreground }]}>{snapLabLoading ? 'Loading QA Activity' : 'Activity unavailable'}</Text>
+            <Text style={[styles.emptySubtitle, { color: visualTheme.foregroundSecondary }]}>{snapLabLoading ? 'Restoring the isolated Snap Lab record…' : 'This Activity could not be found in local Activity history.'}</Text>
             <PrimaryButton
               label="Back to Activities"
               variant="secondary"

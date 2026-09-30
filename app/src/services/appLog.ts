@@ -35,6 +35,7 @@
 
 import { AppState, Platform } from 'react-native';
 import { API_BASE_URL } from '../config/api';
+import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { sanitizeTelemetryEventForUpload } from './telemetryPrivacy';
 
 const ENDPOINT = '/api/edit-diag';
@@ -97,6 +98,11 @@ function scheduleFlush() {
  * @param ctx small JSON context — categorical/numeric, no PII.
  */
 export function log(tag: string, ctx?: Record<string, any>): void {
+  // A binary that can create synthetic GPS Activities is a sealed QA realm.
+  // Never let generic operational telemetry become an accidental production
+  // export path for anything that happened in that process. Production builds
+  // have the capability compiled off and retain their existing diagnostics.
+  if (activitySimulatorBuildCapable) return;
   ensureAppStateListener();
   // Universal operational logs are never a synthetic-GPS export surface.
   // Fail private before data enters the in-memory queue: coordinates,
@@ -121,6 +127,14 @@ export function log(tag: string, ctx?: Record<string, any>): void {
 
 /** Force-upload now. Returns when the request settles (or aborts). */
 export async function flushNow(): Promise<void> {
+  if (activitySimulatorBuildCapable) {
+    queue = [];
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    return;
+  }
   if (inFlight) return;
   if (queue.length === 0) return;
   if (flushTimer) {

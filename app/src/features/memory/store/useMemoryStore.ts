@@ -110,6 +110,10 @@ interface MemoryState {
   testPoints: VisitedPoint[];
   /** Spatial bucket index for fast isExplored. Internal — null = rebuild on use. */
   _bucketIndex: Map<string, VisitedPoint[]> | null;
+  /** Equivalent isolated index for Snap Lab evidence. It must never be mixed
+   * with the Personal Memory index, but long deterministic journeys still
+   * need the same O(1)-ish spatial dedupe behavior. */
+  _testBucketIndex: Map<string, VisitedPoint[]> | null;
   /** Bumped on geometry mutations. FogLayer keys its memo on this. */
   geometryVersion: number;
   /** Changes only for presence, never drives Fog geometry. */
@@ -324,6 +328,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   presenceWitnesses: [],
   testPoints: [],
   _bucketIndex: null,
+  _testBucketIndex: null,
   geometryVersion: 0,
   presenceVersion: 0,
   _unsyncedCount: 0,
@@ -355,7 +360,9 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     // 之前 32-tail scan 在长 hike 后段的邻近点 dedup 失败 → 服务器 UNIQUE
     // 拦不住 (每个 uuid 不同),同一 cell 存多份。走 bucket index O(1) 查
     // 附近所有已 recordPoint 的点,同 12.5m 内 skip。
-    const idxRef = isTestEvidence ? buildBucketIndex(points) : (get()._bucketIndex ?? buildBucketIndex(points));
+    const idxRef = isTestEvidence
+      ? (get()._testBucketIndex ?? buildBucketIndex(points))
+      : (get()._bucketIndex ?? buildBucketIndex(points));
     const targetBuckets = computeBucketsForRadius({ lat, lng });
     let spatialDuplicate = false;
     for (const k of targetBuckets) {
@@ -388,7 +395,13 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       coverageChanged = true;
     }
     if (isTestEvidence) {
-      if (coverageChanged) set({ testPoints: newPoints });
+      if (coverageChanged && newPoint) {
+        const k = bucketKey(lat, lng);
+        const bucket = idxRef.get(k);
+        if (bucket) bucket.push(newPoint);
+        else idxRef.set(k, [newPoint]);
+        set({ testPoints: newPoints, _testBucketIndex: idxRef });
+      }
       return { accepted: true, coverageChanged, presenceChanged: false, metadataChanged: false };
     }
     let nextPresence = get().presenceWitnesses;
@@ -669,6 +682,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   replaceTestPoints: (points) => {
     set({
       testPoints: points,
+      _testBucketIndex: buildBucketIndex(points),
       geometryVersion: get().geometryVersion + 1,
     });
   },
@@ -696,6 +710,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       presenceWitnesses: [],
       testPoints: [],
       _bucketIndex: null,
+      _testBucketIndex: null,
       geometryVersion: get().geometryVersion + 1,
       presenceVersion: get().presenceVersion + 1,
       _unsyncedCount: 0,
@@ -756,6 +771,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       presenceWitnesses: [],
       testPoints: [],
       _bucketIndex: null,
+      _testBucketIndex: null,
       geometryVersion: get().geometryVersion + 1,
       presenceVersion: get().presenceVersion + 1,
       _unsyncedCount: 0,

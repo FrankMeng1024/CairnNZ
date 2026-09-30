@@ -66,7 +66,15 @@ export interface ActivityRegistrySnapshot {
 const EMPTY: ActivityRegistrySnapshot = {
   version: 1, unfinished: null, recoveryQueue: [], completed: [], tombstones: [],
 };
-const keyFor = (userId: string) => `@cairn:activity_registry:v1:${userId}`;
+export type ActivityRegistryRealm = 'production' | 'snap-lab';
+const realmForClientActivityId = (clientActivityId: string): ActivityRegistryRealm => (
+  clientActivityId.startsWith('qa-snap-') ? 'snap-lab' : 'production'
+);
+const keyFor = (userId: string, realm: ActivityRegistryRealm = 'production') => (
+  realm === 'snap-lab'
+    ? `@cairn:snap_lab:activity_registry:v1:${userId}`
+    : `@cairn:activity_registry:v1:${userId}`
+);
 let writeTail: Promise<void> = Promise.resolve();
 
 function cloneEmpty(): ActivityRegistrySnapshot {
@@ -77,9 +85,12 @@ function validUserId(userId: string): boolean {
   return !!userId && userId !== 'unknown' && userId !== 'guest';
 }
 
-async function read(userId: string): Promise<ActivityRegistrySnapshot> {
+async function read(
+  userId: string,
+  realm: ActivityRegistryRealm = 'production',
+): Promise<ActivityRegistrySnapshot> {
   if (!validUserId(userId)) return cloneEmpty();
-  const raw = await AsyncStorage.getItem(keyFor(userId));
+  const raw = await AsyncStorage.getItem(keyFor(userId, realm));
   if (!raw) return cloneEmpty();
   let parsed: any;
   try {
@@ -126,25 +137,32 @@ async function read(userId: string): Promise<ActivityRegistrySnapshot> {
 async function mutate(
   userId: string,
   fn: (snapshot: ActivityRegistrySnapshot) => ActivityRegistrySnapshot,
+  realm: ActivityRegistryRealm = 'production',
 ): Promise<ActivityRegistrySnapshot> {
   if (!validUserId(userId)) throw new Error('activity_registry_user_required');
   let result = EMPTY;
   const run = writeTail.then(async () => {
-    result = fn(await read(userId));
-    await AsyncStorage.setItem(keyFor(userId), JSON.stringify(result));
+    result = fn(await read(userId, realm));
+    await AsyncStorage.setItem(keyFor(userId, realm), JSON.stringify(result));
   });
   writeTail = run.catch(() => {});
   await run;
   return result;
 }
 
-export async function getActivityRegistry(userId: string): Promise<ActivityRegistrySnapshot> {
+export async function getActivityRegistry(
+  userId: string,
+  realm: ActivityRegistryRealm = 'production',
+): Promise<ActivityRegistrySnapshot> {
   await writeTail.catch(() => {});
-  return read(userId);
+  return read(userId, realm);
 }
 
-export async function getUnfinishedActivity(userId: string): Promise<UnfinishedActivityRecord | null> {
-  return (await getActivityRegistry(userId)).unfinished;
+export async function getUnfinishedActivity(
+  userId: string,
+  realm: ActivityRegistryRealm = 'production',
+): Promise<UnfinishedActivityRecord | null> {
+  return (await getActivityRegistry(userId, realm)).unfinished;
 }
 
 export async function registerUnfinishedActivity(
@@ -161,7 +179,7 @@ export async function registerUnfinishedActivity(
       throw new Error('activity_tombstoned');
     }
     return { ...snapshot, unfinished: record };
-  });
+  }, realmForClientActivityId(record.clientActivityId));
 }
 
 /** Replace only the tentative Start that received an authoritative conflict. */
@@ -179,7 +197,7 @@ export async function replaceUnfinishedActivity(
     }
     replaced = true;
     return { ...snapshot, unfinished: replacement };
-  });
+  }, realmForClientActivityId(expectedClientActivityId));
   return replaced;
 }
 
@@ -209,7 +227,7 @@ export async function replaceUnfinishedActivityQueue(
     if (unique.length === 0) return snapshot;
     replaced = true;
     return { ...snapshot, unfinished: unique[0], recoveryQueue: unique.slice(1) };
-  });
+  }, realmForClientActivityId(expectedClientActivityId));
   return replaced;
 }
 
@@ -279,7 +297,7 @@ export async function reconcileStartConflict(
 
     disposition = 'recoverable-unfinished';
     return { ...snapshot, unfinished: replacement };
-  });
+  }, realmForClientActivityId(expectedSpeculativeClientActivityId));
   return disposition;
 }
 
@@ -295,7 +313,7 @@ export async function updateUnfinishedActivity(
     if (snapshot.unfinished?.clientActivityId !== clientActivityId) return snapshot;
     updated = true;
     return { ...snapshot, unfinished: { ...snapshot.unfinished, ...patch } };
-  });
+  }, realmForClientActivityId(clientActivityId));
   return updated;
 }
 
@@ -327,7 +345,7 @@ export async function mapActivityServerId(
       return { ...item, serverActivityId };
     });
     return { ...snapshot, unfinished, completed };
-  });
+  }, realmForClientActivityId(clientActivityId));
   return target;
 }
 
@@ -342,7 +360,7 @@ export async function completeActivity(record: CompletedActivityRecord): Promise
         .filter(item => item.clientActivityId !== record.clientActivityId),
       completed: [record, ...snapshot.completed.filter((item) => item.clientActivityId !== record.clientActivityId)],
     };
-  });
+  }, realmForClientActivityId(record.clientActivityId));
 }
 
 export async function acknowledgeActivity(
@@ -358,7 +376,7 @@ export async function acknowledgeActivity(
       updated = true;
       return { ...item, serverActivityId, syncState: 'synced', acknowledgedAt: Date.now() };
     }),
-  }));
+  }), realmForClientActivityId(clientActivityId));
   return updated;
 }
 
@@ -372,7 +390,7 @@ export async function updateCompletedActivitySyncState(
     completed: snapshot.completed.map(item =>
       item.clientActivityId === clientActivityId ? { ...item, syncState } : item,
     ),
-  }));
+  }), realmForClientActivityId(clientActivityId));
 }
 
 export async function removeAcknowledgedActivity(userId: string, clientActivityId: string): Promise<void> {
@@ -380,7 +398,7 @@ export async function removeAcknowledgedActivity(userId: string, clientActivityI
     ...snapshot,
     completed: snapshot.completed.filter((item) =>
       item.clientActivityId !== clientActivityId || item.syncState !== 'synced'),
-  }));
+  }), realmForClientActivityId(clientActivityId));
 }
 
 export async function tombstoneActivity(args: {
@@ -409,13 +427,25 @@ export async function tombstoneActivity(args: {
       completed: snapshot.completed.filter((item) => item.clientActivityId !== args.clientActivityId),
       tombstones: [tombstone, ...snapshot.tombstones.filter((item) => item.clientActivityId !== args.clientActivityId)],
     };
-  });
+  }, realmForClientActivityId(args.clientActivityId));
 }
 
 export async function isActivityTombstoned(userId: string, clientActivityId: string): Promise<boolean> {
-  return (await getActivityRegistry(userId)).tombstones.some((item) => item.clientActivityId === clientActivityId);
+  return (await getActivityRegistry(userId, realmForClientActivityId(clientActivityId)))
+    .tombstones.some((item) => item.clientActivityId === clientActivityId);
 }
 
-export function activityRegistryStorageKey(userId: string): string {
-  return keyFor(userId);
+export function activityRegistryStorageKey(
+  userId: string,
+  realm: ActivityRegistryRealm = 'production',
+): string {
+  return keyFor(userId, realm);
+}
+
+/** Explicit QA-only cleanup. Product lifecycle authority is a different key
+ * and is never read, rewritten, or deleted by Snap Lab. */
+export async function purgeSnapLabActivityRegistryForOwner(userId: string): Promise<void> {
+  if (!validUserId(userId)) throw new Error('activity_registry_user_required');
+  await writeTail.catch(() => {});
+  await AsyncStorage.removeItem(keyFor(userId, 'snap-lab'));
 }

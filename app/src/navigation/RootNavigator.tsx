@@ -223,6 +223,15 @@ export function RootNavigator() {
               stores.useActivitySimulatorStore = require('../features/activitySimulator/useActivitySimulatorStore').useActivitySimulatorStore;
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.activitySimulatorEngine = require('../features/activitySimulator/activitySimulatorEngine').activitySimulatorEngine;
+              // Snap Lab's isolated local shelf/final runner is exposed only on
+              // web so Playwright can drive the same persisted QA lifecycle.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.snapLabActivityStore = require('../features/activitySimulator/snapLabActivityStore');
+              // Authoritative acceptance drives the real product lifecycle
+              // through this web-only bridge; latent truth is rejected by the
+              // runner boundary and remains in the external scorer.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.snapLabLogicalRunner = require('../features/activitySimulator/snapLabLogicalRunner');
               // Route-following: exposed so Playwright can drive turn-by-turn
               // scenarios without going through the Simulator panel. Both stores
               // stay accessible for the whole session; test cleans up.

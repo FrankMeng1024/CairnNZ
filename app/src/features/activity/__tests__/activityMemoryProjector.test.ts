@@ -615,6 +615,7 @@ describe('durable Activity → Memory downstream responsibility', () => {
   });
 
   test('legacy no-ordinal Memory projection exports a coordinate-free evidence identity', async () => {
+    mockCurrentOwnerUserId = 'owner-legacy-ledger';
     mockRecordMemoryEvidence.mockResolvedValue({ committed: true, deduplicated: false });
     mockJournal = [{
       lat: -41.1234567,
@@ -624,14 +625,14 @@ describe('durable Activity → Memory downstream responsibility', () => {
       accuracy: 8,
     }];
     await scheduleActivityMemoryProjection({
-      ownerUserId: 'owner-a',
+      ownerUserId: 'owner-legacy-ledger',
       clientActivityId: 'activity-legacy-ledger',
       ownerGeneration: 'legacy-generation',
       points: mockJournal,
     });
     await waitForActivityMemoryProjection('activity-legacy-ledger');
-    await flushActivityStageLedger('owner-a');
-    const exported = await exportLatestActivityStageLedger('owner-a');
+    await flushActivityStageLedger('owner-legacy-ledger');
+    const exported = await exportLatestActivityStageLedger('owner-legacy-ledger');
     expect(exported.events).toEqual(expect.arrayContaining([
       expect.objectContaining({
         stage: 'memory-local-commit',

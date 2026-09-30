@@ -2,13 +2,15 @@ import {
   buildBaseFinalGeometry,
   cleanCanonicalGeometry,
   cropGeometryToTracepoints,
+  deriveSnapSectionRuns,
   evaluateCorridorEvidence,
   evaluateLateralOffsetEvidence,
   finalGeometryCriticalIndices,
+  matchingWindows,
   offsetNetworkGeometry,
   reconstructPedestrianFinalRoute,
 } from '../pedestrianFinalRoute';
-import type { RawPoint, SnappedPoint } from '../snapTrack';
+import { resampleMatcherEvidence, type RawPoint, type SnappedPoint } from '../snapTrack';
 
 const METRES_PER_DEGREE = 111_320;
 const BASE_LAT = 30;
@@ -172,6 +174,26 @@ describe('O50 pedestrian geometry modes', () => {
     expect(lateralRangeM * METRES_PER_DEGREE).toBeLessThan(2);
   });
 
+  test('does not turn a tiny weak-corridor endpoint sliver into a network hook', async () => {
+    const canonical = Array.from({ length: 7 }, (_unused, index) => (
+      point(index * 8, index % 2 === 0 ? -3 : 3, index, 14)
+    ));
+    global.fetch = jest.fn(async () => mapMatchingResponse(canonical, 0, 'Perimeter Road')) as any;
+    const result = await reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: 'pk.test',
+      directionsFallback: false,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.weakSameCorridorSectionCount).toBe(0);
+    expect(result.stats.sectionDecisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        result: 'rejected',
+        reasonCode: 'LOCAL_NO_MEANINGFUL_IMPROVEMENT',
+      }),
+    ]));
+  });
+
   test('ambiguous parallel-road support falls back to canonical-derived Mode C', async () => {
     const canonical = line(0, 100, 8, 12);
     global.fetch = jest.fn(async () => mapMatchingResponse(canonical, 0, 'Parallel Road', 2)) as any;
@@ -189,25 +211,35 @@ describe('O50 pedestrian geometry modes', () => {
     const middle = Array.from({ length: 16 }, (_unused, index) => point(80 + index * 4, 8 + index * 2, index + 16));
     const last = line(148, 223, -8, 16).map((sample, index) => ({ ...sample, t: point(0, 0, index + 32).t }));
     const canonical = [...first, ...middle, ...last];
-    let call = 0;
     global.fetch = jest.fn(async (url: string) => {
       const coords = url.split('/walking/')[1].split('?')[0].split(';').map(value => {
         const [lng, lat] = value.split(',').map(Number);
         return { lng, lat };
       });
-      const start = call === 0 ? 0 : call === 1 ? 12 : 0;
-      const end = call === 0 ? 15 : coords.length - 1;
-      call += 1;
-      const geometry = coords.slice(start, end + 1).map(sample => [sample.lng, BASE_LAT] as [number, number]);
+      const firstEnd = 15;
+      const lastStart = 32;
+      const firstGeometry = coords.slice(0, firstEnd + 1)
+        .map(sample => [sample.lng, BASE_LAT] as [number, number]);
+      const lastGeometry = coords.slice(lastStart)
+        .map(sample => [sample.lng, BASE_LAT] as [number, number]);
       return {
         ok: true,
         status: 200,
         json: async () => ({
           code: 'Ok',
-          matchings: [{ confidence: 0.98, geometry: { coordinates: geometry } }],
-          tracepoints: coords.map((sample, index) => index >= start && index <= end ? ({
+          matchings: [
+            { confidence: 0.98, geometry: { coordinates: firstGeometry } },
+            { confidence: 0.98, geometry: { coordinates: lastGeometry } },
+          ],
+          tracepoints: coords.map((sample, index) => index <= firstEnd ? ({
             matchings_index: 0,
-            waypoint_index: index - start,
+            waypoint_index: index,
+            alternatives_count: 0,
+            name: 'Mixed Road',
+            location: [sample.lng, BASE_LAT],
+          }) : index >= lastStart ? ({
+            matchings_index: 1,
+            waypoint_index: index - lastStart,
             alternatives_count: 0,
             name: 'Mixed Road',
             location: [sample.lng, BASE_LAT],
@@ -541,7 +573,7 @@ describe('temporal Map Matching crop correspondence', () => {
 describe('bounded Directions fallback contract', () => {
   const originalFetch = global.fetch;
   afterEach(() => { global.fetch = originalFetch; });
-  test('Directions-routable but Map-Matching-failing common path is evaluated from observed anchors', async () => {
+  test('NoSegment cannot be laundered into tracepoint confidence by endpoint-only Directions', async () => {
     const canonical = line(0, 80, 0, 12);
     let requestCount = 0;
     global.fetch = jest.fn(async (url: string) => {
@@ -565,9 +597,96 @@ describe('bounded Directions fallback contract', () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(requestCount).toBe(2);
-    expect(result.stats.directionsRequestCount).toBe(1);
-    expect(result.stats.sections.some(section => section.networkSource === 'walking-directions')).toBe(true);
+    expect(requestCount).toBe(1);
+    expect(result.stats.directionsRequestCount).toBe(0);
+    expect(result.stats.sections.every(section => section.networkSource === 'none')).toBe(true);
+  });
+
+  test('low-confidence Matching cannot be laundered by an identical Directions road', async () => {
+    const canonical = line(0, 100, 9, 18).map(sample => ({ ...sample, accuracy: 7 }));
+    let matchingRequests = 0;
+    let directionsRequests = 0;
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.includes('/matching/')) {
+        matchingRequests += 1;
+        const response = mapMatchingResponse(canonical, 0, 'Major Road');
+        const body = await response.json() as any;
+        body.matchings[0].confidence = 0.31;
+        return { ...response, json: async () => body } as Response;
+      }
+      directionsRequests += 1;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 'Ok',
+          routes: [{
+            geometry: { coordinates: canonical.map(sample => [sample.lng, BASE_LAT]) },
+            legs: [{ steps: [{ name: 'Major Road' }] }],
+          }],
+        }),
+      } as Response;
+    }) as any;
+    const result = await reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: 'pk.test',
+      maxDirectionsRequests: 2,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(matchingRequests).toBe(1);
+    expect(directionsRequests).toBe(0);
+    expect(result.stats.directionsRequestCount).toBe(0);
+    expect(result.stats.acceptedMatchedDistanceM).toBe(0);
+  });
+
+  test('accurate internal-path evidence stays local beside a named arterial candidate', async () => {
+    const canonical = line(0, 120, 18, 22).map(sample => ({ ...sample, accuracy: 4 }));
+    global.fetch = jest.fn(async () => mapMatchingResponse(canonical, 0, 'Nearby Arterial')) as any;
+    const result = await reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: 'pk.test',
+      maxDirectionsRequests: 2,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.acceptedMatchedDistanceM).toBe(0);
+    expect(result.stats.directionsRequestCount).toBe(0);
+    expect(result.stats.sections.every(section => section.networkSource === 'none')).toBe(true);
+  });
+});
+
+describe('evidence-scoped section and request planning', () => {
+  test('a persistent ambiguous subsection stays local while supported spans on both sides remain independent', () => {
+    const canonical = line(0, 150, 0, 31);
+    const submitted = resampleMatcherEvidence(canonical, 4_000);
+    const tracepoints = submitted.map((sample, index) => ({
+      matchings_index: 0,
+      waypoint_index: index,
+      alternatives_count: index >= 13 && index <= 17 ? 2 : 0,
+      name: 'Candidate corridor',
+      location: [sample.lng, sample.lat] as [number, number],
+    }));
+    const sections = deriveSnapSectionRuns(submitted, tracepoints, 0);
+    expect(sections.map(section => section.classification)).toEqual([
+      'SNAP_ELIGIBLE', 'AMBIGUOUS', 'SNAP_ELIGIBLE',
+    ]);
+    expect(sections[1]).toMatchObject({
+      reasonCode: 'LOCAL_PARALLEL_ROAD_AMBIGUITY',
+    });
+    expect(sections[0].sourceEnd).toBeLessThan(sections[1].sourceStart);
+    expect(sections[1].sourceEnd).toBeLessThan(sections[2].sourceStart);
+  });
+
+  test('Matching uses provider-scale windows and gives bounded plans Activity-wide coverage', () => {
+    const canonical = line(0, 1_500, 0, 301);
+    const plans = matchingWindows(resampleMatcherEvidence(canonical, 4_000));
+    expect(plans.length).toBeGreaterThanOrEqual(4);
+    expect(Math.max(...plans.map(plan => plan.points.length))).toBeLessThanOrEqual(80);
+    const firstFour = plans.slice(0, 4).map(plan => [
+      plan.points[0].sourceIndex,
+      plan.points.at(-1)!.sourceIndex,
+    ]);
+    expect(firstFour.some(([, end]) => end >= 290)).toBe(true);
+    expect(firstFour.some(([start, end]) => start < 170 && end > 130)).toBe(true);
   });
 });
 

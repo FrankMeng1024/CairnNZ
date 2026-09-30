@@ -331,17 +331,31 @@ function bounded(events: SimulatorLogEvent[]): SimulatorLogEvent[] {
     result = [...protectedEvents.filter(event => !identities.has(`${event.timestamp}:${event.eventName}:${event.sampleSequence}`)), ...result]
       .sort((a, b) => a.timestamp - b.timestamp);
   }
-  let serialized = JSON.stringify(result);
-  while (serialized.length > MAX_BYTES_PER_SESSION && result.length > 1) {
-    const nonCritical = result.findIndex(event => !isCriticalEvent(event));
-    // Critical transitions survive ordinary high-volume sample churn, but the
-    // diagnostic buffer is still a hard bound. Pathological critical-only
-    // input drops its oldest entry instead of growing without limit.
-    const removable = nonCritical >= 0 ? nonCritical : 0;
-    result = [...result.slice(0, removable), ...result.slice(removable + 1)];
-    serialized = JSON.stringify(result);
+  // Calculate the exact JSON array character budget once. The former loop
+  // re-stringified the full 512 KiB buffer after every removed callback,
+  // producing seconds-long pauses near the retention boundary on long QA
+  // journeys. Removal priority and hard bounds remain identical.
+  const encodedLengths = result.map(event => JSON.stringify(event).length);
+  const retained = result.map(() => true);
+  let retainedCount = result.length;
+  let serializedLength = 2
+    + encodedLengths.reduce((sum, length) => sum + length, 0)
+    + Math.max(0, result.length - 1);
+  const discard = (index: number) => {
+    if (!retained[index] || retainedCount <= 1) return;
+    retained[index] = false;
+    retainedCount -= 1;
+    serializedLength -= encodedLengths[index] + 1;
+  };
+  for (let index = 0; index < result.length && serializedLength > MAX_BYTES_PER_SESSION; index += 1) {
+    if (!isCriticalEvent(result[index])) discard(index);
   }
-  return result;
+  // Critical transitions survive ordinary churn. Pathological critical-only
+  // input remains hard-bounded by dropping its oldest entries last.
+  for (let index = 0; index < result.length && serializedLength > MAX_BYTES_PER_SESSION; index += 1) {
+    if (retained[index]) discard(index);
+  }
+  return result.filter((_event, index) => retained[index]);
 }
 
 export function boundSimulatorLogEvents(events: SimulatorLogEvent[]): SimulatorLogEvent[] {
@@ -728,7 +742,13 @@ export async function flushSimulatorLogs(requestedUserId?: string): Promise<void
   writeTail = run.catch(() => {});
   await run;
   for (const entry of entries) {
-    if (entry.owner) scheduleQaUpload(entry.owner.userId, entry.owner.sessionId);
+    // Snap Lab/Simulator diagnostics are a local export artifact. Only a
+    // forensic session containing an actual real-provider Activity may use
+    // the reviewed operations telemetry path.
+    if (entry.owner && entry.events.some(event =>
+      event.providerSource === 'real' && event.coordinateSource === 'real')) {
+      scheduleQaUpload(entry.owner.userId, entry.owner.sessionId);
+    }
   }
 }
 
@@ -760,6 +780,12 @@ export async function uploadQaTelemetrySession(
     if (flushFirst) await flushSimulatorLogs(userId);
     const events = await loadSession(userId, qaSessionId);
     if (events.length === 0) return false;
+    // Simulator/Snap Lab sessions are deliberately local-only. A QA session may
+    // contain lifecycle events emitted before its provider is selected, so the
+    // provider label alone is not sufficient upload authority. Only an event
+    // backed by a real coordinate source can authorize the existing QA upload.
+    if (!events.some(event =>
+      event.providerSource === 'real' && event.coordinateSource === 'real')) return false;
     const uploadState = await loadQaUploadState(userId, qaSessionId, events[0]?.timestamp ?? Date.now());
     if (
       Date.now() > uploadState.expiresAt
