@@ -759,6 +759,29 @@ describe('evidence-scoped section and request planning', () => {
     ]);
   });
 
+  test('a uniformly offset coherent corridor remains eligible for the unchanged composite gates', () => {
+    const canonical = line(0, 100, 16, 11).map(sample => ({ ...sample, accuracy: 14 }));
+    const submitted = resampleMatcherEvidence(canonical, 4_000);
+    const tracepoints = submitted.map((sample, index) => {
+      const network = point(index * 10, 0, index, 14);
+      return {
+        matchings_index: 0,
+        waypoint_index: index,
+        alternatives_count: 0,
+        location: [network.lng, network.lat] as [number, number],
+      };
+    });
+
+    expect(deriveSnapSectionRuns(submitted, tracepoints, 0)).toEqual([
+      expect.objectContaining({
+        sourceStart: 0,
+        sourceEnd: 10,
+        classification: 'SNAP_ELIGIBLE',
+        reasonCode: 'TRACEPOINT_SUPPORTED',
+      }),
+    ]);
+  });
+
   test('a persistent ambiguous subsection stays local while supported spans on both sides remain independent', () => {
     const canonical = line(0, 150, 0, 31);
     const submitted = resampleMatcherEvidence(canonical, 4_000);

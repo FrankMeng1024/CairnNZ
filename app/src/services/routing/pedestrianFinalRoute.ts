@@ -1500,6 +1500,21 @@ function localTruthEnvelopeM(point: MatcherSubmittedPoint): number {
   return Math.min(15, Math.max(8, accuracyM * 1.25));
 }
 
+function eligibleSnapSectionRegime(point: MatcherSubmittedPoint): {
+  key: string;
+  classification: SnapSectionClassification;
+  reasonCode: SnapSectionReasonCode;
+} {
+  const accuracyM = typeof point.accuracy === 'number' && Number.isFinite(point.accuracy)
+    ? point.accuracy
+    : 10;
+  return {
+    key: accuracyM <= 15 ? 'eligible:precise' : 'eligible:usable',
+    classification: 'SNAP_ELIGIBLE',
+    reasonCode: 'TRACEPOINT_SUPPORTED',
+  };
+}
+
 function snapSectionRegime(
   point: MatcherSubmittedPoint,
   tracepoint: MapboxTracepoint,
@@ -1550,11 +1565,7 @@ function snapSectionRegime(
       reasonCode: 'LOCAL_TRUTH_ENVELOPE_EXCEEDED',
     };
   }
-  return {
-    key: accuracyM <= 15 ? 'eligible:precise' : 'eligible:usable',
-    classification: 'SNAP_ELIGIBLE',
-    reasonCode: 'TRACEPOINT_SUPPORTED',
-  };
+  return eligibleSnapSectionRegime(point);
 }
 
 /**
@@ -1597,13 +1608,22 @@ export function deriveSnapSectionRuns(
       const start = offset;
       while (offset + 1 < labels.length && labels[offset + 1].key === labels[start].key) offset += 1;
       const length = offset - start + 1;
-      if (labels[start].classification === 'SNAP_ELIGIBLE') continue;
-      const minimumPersistence = labels[start].reasonCode === 'LOCAL_TRUTH_ENVELOPE_EXCEEDED' ? 3 : 2;
-      if (length >= minimumPersistence) continue;
       const previous = labels[start - 1];
       const next = labels[offset + 1];
-      if (previous?.classification === 'SNAP_ELIGIBLE' && next?.classification === 'SNAP_ELIGIBLE') {
-        for (let fill = start; fill <= offset; fill += 1) labels[fill] = previous;
+      if (labels[start].classification === 'SNAP_ELIGIBLE') continue;
+      const isBoundedInterior = previous?.classification === 'SNAP_ELIGIBLE'
+        && next?.classification === 'SNAP_ELIGIBLE';
+      const minimumPersistence = labels[start].reasonCode === 'LOCAL_TRUTH_ENVELOPE_EXCEEDED' ? 3 : 2;
+      // Truth pressure is useful as a split only when it is local relative to
+      // supported evidence on both sides. A uniformly offset corridor still
+      // belongs to the unchanged composite/lateral gates below.
+      const keepAsLocalRegime = length >= minimumPersistence
+        && (labels[start].reasonCode !== 'LOCAL_TRUTH_ENVELOPE_EXCEEDED' || isBoundedInterior);
+      if (keepAsLocalRegime) continue;
+      if (isBoundedInterior || labels[start].reasonCode === 'LOCAL_TRUTH_ENVELOPE_EXCEEDED') {
+        for (let fill = start; fill <= offset; fill += 1) {
+          labels[fill] = eligibleSnapSectionRegime(chunk[run[fill]]);
+        }
       }
     }
 
