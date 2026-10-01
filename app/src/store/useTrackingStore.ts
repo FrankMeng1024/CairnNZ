@@ -1195,6 +1195,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   },
 
   startTracking: async (requestedClientActivityId) => {
+    if (Platform.OS === 'web') {
+      (globalThis as unknown as { __cairnActivityStartFailure?: string | null }).__cairnActivityStartFailure = null;
+    }
     const beforeStart = get();
     // Store-boundary idempotency: the synchronous requesting transition is
     // the lock. A second tap/caller cannot initialize another writer,
@@ -1205,6 +1208,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     const mode = beforeStart.activityMode;
     const userId = String(useAppStore.getState().user?.id ?? '');
     if (!userId) {
+      if (Platform.OS === 'web') {
+        (globalThis as unknown as { __cairnActivityStartFailure?: string | null }).__cairnActivityStartFailure = 'missing-user';
+      }
       set({ ...initialState, activityMode: mode, startError: 'initialization-failed' });
       return false;
     }
@@ -1551,6 +1557,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           rawOrdinal: realGpsRawOrdinal,
         });
     if (!contextPersisted) {
+      if (Platform.OS === 'web') {
+        (globalThis as unknown as { __cairnActivityStartFailure?: string | null }).__cairnActivityStartFailure = 'simulator-context-clear-failed';
+      }
+      if (locationProviderSource === 'simulator') {
+        useActivitySimulatorStore.getState().setLastFailure('Activity initialization failed: simulator context was not cleared.');
+      }
       await tombstoneActivity({ userId, clientActivityId: localSessionId });
       if (locationProviderSource === 'real') void deleteRemoteSessionByClientId(localSessionId);
       set({ ...initialState, activityMode: mode, startError: 'initialization-failed' });
@@ -1578,7 +1590,20 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         });
       }
     } catch (e) {
+      if (Platform.OS === 'web') {
+        (globalThis as unknown as { __cairnActivityStartFailure?: string | null }).__cairnActivityStartFailure =
+          `journal-start:${String(e instanceof Error ? e.message : e).slice(0, 160)}`;
+      }
       crashLogger.breadcrumb(`v409:hikeTrackWriter:startHikeTrack failed ${String(e).slice(0, 80)}`);
+      if (locationProviderSource === 'simulator') {
+        useActivitySimulatorStore.getState().setLastFailure(
+          `Activity journal initialization failed: ${String(e instanceof Error ? e.message : e).slice(0, 160)}`,
+        );
+        appendSimulatorLog('ERROR', 'activity_journal_start_failed', {
+          rejectionReason: String(e instanceof Error ? e.message : e).slice(0, 160),
+        }, { userId, clientActivityId: localSessionId, coordinateSource: 'none' });
+        await flushSimulatorLogs(userId).catch(() => {});
+      }
       await tombstoneActivity({ userId, clientActivityId: localSessionId });
       await persistBackgroundContext(null, false);
       if (locationProviderSource === 'real') void deleteRemoteSessionByClientId(localSessionId);
@@ -1960,7 +1985,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       } catch { /* swallow */ }
       return true;
     } catch (err) {
+      if (Platform.OS === 'web') {
+        (globalThis as unknown as { __cairnActivityStartFailure?: string | null }).__cairnActivityStartFailure =
+          `provider-start:${String(err instanceof Error ? err.message : err).slice(0, 160)}`;
+      }
       debugLogger.logError(err, 'startTracking');
+      if (locationProviderSource === 'simulator') {
+        useActivitySimulatorStore.getState().setLastFailure(
+          `Activity provider initialization failed: ${String(err instanceof Error ? err.message : err).slice(0, 160)}`,
+        );
+      }
       // Roll back every resource created during initialization. A failed
       // start must be retryable and must not leave timers, writers or
       // subscriptions masquerading as an active session.
@@ -2007,6 +2041,15 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         providerSource: locationProviderSource,
         rejectionReason: String(err instanceof Error ? err.message : err).slice(0, 160),
       }, { userId, clientActivityId: localSessionId, coordinateSource: 'none' });
+      if (locationProviderSource === 'simulator') await flushSimulatorLogs(userId).catch(() => {});
+      // endSimulatorProvider rolls back the bound simulator state, including
+      // its prior transient failure field. Publish the terminal cause after
+      // rollback so the next screen and external QA runner can diagnose it.
+      if (locationProviderSource === 'simulator') {
+        useActivitySimulatorStore.getState().setLastFailure(
+          `Activity provider initialization failed: ${String(err instanceof Error ? err.message : err).slice(0, 160)}`,
+        );
+      }
       set({ ...initialState, activityMode: mode, startError: 'initialization-failed' });
       return false;
     }

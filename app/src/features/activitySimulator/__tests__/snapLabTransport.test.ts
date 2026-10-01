@@ -1,5 +1,6 @@
 import {
   createSnapLabCassetteTransport,
+  createSnapLabLiveTransport,
   sanitizeSnapLabRequestUrl,
   snapLabRequestFingerprint,
 } from '../snapLabTransport';
@@ -55,5 +56,43 @@ describe('Snap Lab exact-identity transport', () => {
       body: {},
       provenance: 'DETERMINISTIC_TRANSPORT',
     }])).toThrow('snap_lab_cassette_identity_mismatch');
+  });
+});
+
+describe('Snap Lab live-response boundary', () => {
+  const isolatedUrl = 'https://api.mapbox.com/matching/v5/mapbox/walking/174.000000,-41.000000;174.001000,-41.000000?geometries=geojson&access_token=snap-lab-isolated-authority';
+
+  afterEach(() => jest.restoreAllMocks());
+
+  test('allows only the walking navigation placeholder request and sanitizes its receipt', async () => {
+    const body = { code: 'Ok', tracepoints: [], matchings: [] };
+    const response = {
+      ok: true,
+      status: 200,
+      clone: () => ({ json: async () => body }),
+      json: async () => body,
+    } as unknown as Response;
+    const network = jest.spyOn(globalThis, 'fetch').mockResolvedValue(response);
+    const transport = createSnapLabLiveTransport();
+    expect(await transport.fetch(isolatedUrl)).toBe(response);
+    expect(network).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(transport.receipts())).not.toContain('snap-lab-isolated-authority');
+    expect(transport.receipts()[0]).toMatchObject({
+      endpoint: 'matching',
+      matched: true,
+      status: 200,
+      responseCode: 'Ok',
+      provenance: 'LIVE_MAPBOX_RESPONSE',
+    });
+  });
+
+  test.each([
+    'https://example.com/matching/v5/mapbox/walking/1,1;2,2?access_token=snap-lab-isolated-authority',
+    'https://api.mapbox.com/styles/v1/mapbox/outdoors-v12?access_token=snap-lab-isolated-authority',
+    'https://api.mapbox.com/matching/v5/mapbox/walking/1,1;2,2?access_token=pk.real-token',
+  ])('rejects requests outside the credential and endpoint boundary: %s', async url => {
+    const network = jest.spyOn(globalThis, 'fetch');
+    await expect(createSnapLabLiveTransport().fetch(url)).rejects.toThrow(/snap_lab_live_/);
+    expect(network).not.toHaveBeenCalled();
   });
 });

@@ -17,9 +17,10 @@ export interface SnapLabTransportReceipt {
   status: number | null;
   startedAt: number;
   completedAt: number;
-  provenance: SnapLabCassetteEntry['provenance'] | 'NO_CASSETTE_MATCH';
+  provenance: SnapLabCassetteEntry['provenance'] | 'LIVE_MAPBOX_RESPONSE' | 'NO_CASSETTE_MATCH';
   endpoint?: 'matching' | 'directions';
   requestOrdinal?: number;
+  responseCode?: string | null;
   errorCategory?: string | null;
 }
 
@@ -112,6 +113,88 @@ export function createSnapLabCassetteTransport(entries: SnapLabCassetteEntry[]):
   };
   return {
     fetch: cassetteFetch as typeof fetch,
+    receipts: () => recorded.map(receipt => ({ ...receipt })),
+  };
+}
+
+function liveEndpoint(url: URL): 'matching' | 'directions' {
+  if (url.origin !== 'https://api.mapbox.com') throw new Error('snap_lab_live_origin_rejected');
+  if (url.pathname.startsWith('/matching/v5/mapbox/walking/')) return 'matching';
+  if (url.pathname.startsWith('/directions/v5/mapbox/walking/')) return 'directions';
+  throw new Error('snap_lab_live_endpoint_rejected');
+}
+
+/**
+ * Browser-side half of the real-response boundary. The URL is built by the
+ * production routing code and deliberately retains its isolated placeholder
+ * credential. The external browser orchestrator authorizes/counts the request,
+ * substitutes the public token only for the network hop, captures the exact
+ * response, then fulfils this request. No credential is exposed to Snap Lab
+ * records, local storage, receipts, or exported evidence.
+ */
+export function createSnapLabLiveTransport(): {
+  fetch: typeof fetch;
+  receipts: () => SnapLabTransportReceipt[];
+} {
+  const recorded: SnapLabTransportReceipt[] = [];
+  let ordinal = 0;
+  const liveFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const startedAt = Date.now();
+    const method = String(init?.method ?? 'GET').toUpperCase();
+    const rawUrl = typeof input === 'string' ? input : input.toString();
+    const parsed = new URL(rawUrl);
+    const endpoint = liveEndpoint(parsed);
+    if (method !== 'GET') throw new Error('snap_lab_live_method_rejected');
+    if (parsed.searchParams.get('access_token') !== 'snap-lab-isolated-authority') {
+      throw new Error('snap_lab_live_credential_boundary_rejected');
+    }
+    const requestOrdinal = ++ordinal;
+    const sanitizedUrl = sanitizeSnapLabRequestUrl(rawUrl);
+    const requestFingerprint = snapLabRequestFingerprint(method, rawUrl);
+    try {
+      const response = await globalThis.fetch(input, init);
+      let responseCode: string | null = null;
+      try {
+        const body = await response.clone().json() as { code?: unknown };
+        responseCode = typeof body?.code === 'string' ? body.code : null;
+      } catch { /* a non-JSON response is still recorded by HTTP category */ }
+      recorded.push({
+        requestFingerprint,
+        method,
+        sanitizedUrl,
+        matched: true,
+        status: response.status,
+        startedAt,
+        completedAt: Date.now(),
+        provenance: 'LIVE_MAPBOX_RESPONSE',
+        endpoint,
+        requestOrdinal,
+        responseCode,
+        errorCategory: response.ok ? null : `http-${response.status}`,
+      });
+      return response;
+    } catch (error) {
+      recorded.push({
+        requestFingerprint,
+        method,
+        sanitizedUrl,
+        matched: false,
+        status: null,
+        startedAt,
+        completedAt: Date.now(),
+        provenance: 'LIVE_MAPBOX_RESPONSE',
+        endpoint,
+        requestOrdinal,
+        responseCode: null,
+        errorCategory: error instanceof DOMException && error.name === 'AbortError'
+          ? 'aborted'
+          : 'network-error',
+      });
+      throw error;
+    }
+  };
+  return {
+    fetch: liveFetch as typeof fetch,
     receipts: () => recorded.map(receipt => ({ ...receipt })),
   };
 }

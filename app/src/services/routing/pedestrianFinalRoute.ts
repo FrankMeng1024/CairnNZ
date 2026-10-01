@@ -296,6 +296,8 @@ interface CandidateBuildInput {
   names: Array<string | null>;
   source: 'map-matching' | 'walking-directions';
   routeAlternativeCount: number;
+  diagnosticNotes?: string[];
+  allowSeamTrim?: boolean;
 }
 
 interface DirectionsAuthority {
@@ -1378,9 +1380,17 @@ function anchorEndpoints(points: SnappedPoint[], canonical: RawPoint[]): Snapped
 
 function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | null {
   const rawSubsection = input.canonical.slice(input.sourceStart, input.sourceEnd + 1);
-  if (rawSubsection.length < 2 || pathLength(rawSubsection) < MIN_NETWORK_DISTANCE_M) return null;
+  if (rawSubsection.length < 2 || pathLength(rawSubsection) < MIN_NETWORK_DISTANCE_M) {
+    input.diagnosticNotes?.push('candidate:source-too-short');
+    return null;
+  }
   const endpointCoverage = analyzeTrustedEndpointCoverage(rawSubsection, input.networkPoints);
-  if (!endpointCoverage.eligibleForAnchoring) return null;
+  if (!endpointCoverage.eligibleForAnchoring) {
+    input.diagnosticNotes?.push(
+      `candidate:endpoint-coverage:head=${endpointCoverage.headDisplacementM.toFixed(1)};tail=${endpointCoverage.tailDisplacementM.toFixed(1)};envelope=${endpointCoverage.anchoringEnvelopeM.toFixed(1)}`,
+    );
+    return null;
+  }
   const evidence = evaluateCorridorEvidence({
     canonical: rawSubsection,
     network: input.networkPoints,
@@ -1390,7 +1400,10 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
     alternatives: input.alternatives,
     routeAlternativeCount: input.routeAlternativeCount,
   });
-  if (!evidence.accepted) return null;
+  if (!evidence.accepted) {
+    input.diagnosticNotes?.push(`candidate:corridor:${evidence.reason}`);
+    return null;
+  }
 
   const modalNetworkName = modalValue(input.names);
   const lowAmbiguity = input.source === 'walking-directions'
@@ -1423,7 +1436,10 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
     // smooth evidence-centred line on the identified corridor within a
     // bounded uncertainty envelope instead of falling back to GPS serration.
     if (input.supportCount < MIN_WEAK_CORRIDOR_SUPPORT
-      || pathLength(rawSubsection) < MIN_WEAK_CORRIDOR_DISTANCE_M) return null;
+      || pathLength(rawSubsection) < MIN_WEAK_CORRIDOR_DISTANCE_M) {
+      input.diagnosticNotes?.push('candidate:weak-corridor-too-short');
+      return null;
+    }
     const maximumWeakOffsetM = Math.min(12, Math.max(3, evidence.accuracyP95M * 0.75));
     const evidenceCentredOffsetM = clamp(
       evidence.lateral.signedMedianM,
@@ -1444,7 +1460,51 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
   const quality = evaluateMatchedGeometryQuality(rawSubsection, display);
   const topology = evaluateTopologyQuality(rawSubsection, display);
   const seam = evaluateIslandSeamQuality(input.canonical, input.sourceStart, input.sourceEnd, display);
-  if (!quality.accepted || !topology.accepted || !seam.accepted) return null;
+  if (quality.accepted && topology.accepted && !seam.accepted
+    && input.allowSeamTrim !== false
+    && (seam.reason === 'entry_heading' || seam.reason === 'exit_heading')) {
+    for (let trim = 1; trim <= MAX_SEAM_TRIM; trim += 1) {
+      const headTrim = seam.reason === 'entry_heading' ? trim : 0;
+      const tailTrim = seam.reason === 'exit_heading' ? trim : 0;
+      const sourceStart = input.sourceStart + headTrim;
+      const sourceEnd = input.sourceEnd - tailTrim;
+      if (sourceEnd - sourceStart + 1 < MIN_NETWORK_SUPPORT) break;
+      const trimmedNetwork = cropGeometryToTracepoints(input.networkPoints, [
+        [input.canonical[sourceStart].lng, input.canonical[sourceStart].lat],
+        [input.canonical[sourceEnd].lng, input.canonical[sourceEnd].lat],
+      ]);
+      if (!trimmedNetwork) continue;
+      const trimDiagnostics: string[] = [];
+      const trimmed = buildNetworkCandidate({
+        ...input,
+        sourceStart,
+        sourceEnd,
+        networkPoints: trimmedNetwork,
+        supportCount: Math.max(0, input.supportCount - headTrim - tailTrim),
+        expectedSupportCount: Math.max(1, input.expectedSupportCount - headTrim - tailTrim),
+        alternatives: input.alternatives.slice(headTrim, tailTrim > 0 ? -tailTrim : undefined),
+        names: input.names.slice(headTrim, tailTrim > 0 ? -tailTrim : undefined),
+        diagnosticNotes: trimDiagnostics,
+        allowSeamTrim: false,
+      });
+      if (trimmed) {
+        input.diagnosticNotes?.push(
+          `candidate:seam-boundary-trim:head=${headTrim};tail=${tailTrim};original=${seam.reason}`,
+        );
+        return {
+          ...trimmed,
+          reason: `${trimmed.reason};bounded-seam-trim-${headTrim}-${tailTrim}`,
+        };
+      }
+      input.diagnosticNotes?.push(...trimDiagnostics.map(note => `trim-${headTrim}-${tailTrim}:${note}`));
+    }
+  }
+  if (!quality.accepted || !topology.accepted || !seam.accepted) {
+    input.diagnosticNotes?.push(
+      `candidate:display-mode=${mode};quality=${quality.reason};topology=${topology.reason};seam=${seam.reason};lateralMedian=${evidence.lateral.signedMedianM.toFixed(1)};lateralStable=${evidence.lateral.stable}`,
+    );
+    return null;
+  }
   return {
     sourceStart: input.sourceStart,
     sourceEnd: input.sourceEnd,
@@ -1928,6 +1988,7 @@ async function mapMatchingWindow(
             matchingEvidence,
           });
         }
+        const candidateDiagnostics: string[] = [];
         const candidate = buildNetworkCandidate({
           canonical,
           sourceStart: section.sourceStart,
@@ -1942,6 +2003,7 @@ async function mapMatchingWindow(
           // Matchings are disjoint sub-traces, not route alternatives. Real
           // ambiguity is reported per tracepoint by alternatives_count.
           routeAlternativeCount: Math.max(0, ...tracepoints.map(point => point.alternatives_count ?? 0)),
+          diagnosticNotes: candidateDiagnostics,
         });
         if (candidate) {
           candidates.push(candidate);
@@ -1957,6 +2019,7 @@ async function mapMatchingWindow(
           diagnostic.rejectedCandidateCount += 1;
           const endpoint = analyzeTrustedEndpointCoverage(rawSubsection, cropped);
           const quality = evaluateMatchedGeometryQuality(rawSubsection, cropped);
+          const topology = evaluateTopologyQuality(rawSubsection, cropped);
           const seam = evaluateIslandSeamQuality(canonical, section.sourceStart, section.sourceEnd, cropped);
           const reasonCode: SnapSectionReasonCode = !endpoint.eligibleForAnchoring
             ? 'LOCAL_ENDPOINT_SUPPORT_WEAK'
@@ -1973,8 +2036,11 @@ async function mapMatchingWindow(
             localShapeScore: matchingEvidence.score,
             notes: [
               `corridor:${matchingEvidence.reason}`,
+              `evidence:confidence=${matchingEvidence.mapboxConfidence.toFixed(3)};coverage=${matchingEvidence.tracepointCoverage.toFixed(3)};score=${matchingEvidence.score.toFixed(3)};identity=${matchingEvidence.corridorIdentityScore.toFixed(3)};bearingDelta=${matchingEvidence.bearingDeltaDeg.toFixed(1)};lengthRatio=${matchingEvidence.lengthRatio.toFixed(3)};endpointDeviation=${matchingEvidence.endpointDeviationM.toFixed(1)};ambiguityKnown=${matchingEvidence.ambiguityKnownFraction.toFixed(3)};unambiguous=${matchingEvidence.unambiguousFraction.toFixed(3)};lateralMad=${matchingEvidence.lateral.madM.toFixed(1)}`,
               `quality:${quality.reason}`,
+              `topology:${topology.reason}`,
               `seam:${seam.reason}`,
+              ...candidateDiagnostics,
             ],
           });
         }

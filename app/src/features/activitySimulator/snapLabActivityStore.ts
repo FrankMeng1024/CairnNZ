@@ -17,11 +17,12 @@ import {
 } from '../activity/activityStageLedger';
 import type { SnapLabTransportReceipt } from './snapLabTransport';
 
-export type SnapLabTransportMode = 'offline' | 'deterministic' | 'captured';
+export type SnapLabTransportMode = 'offline' | 'deterministic' | 'captured' | 'live';
 export type SnapLabEvidenceLabel =
   | 'LOCAL_ONLY'
   | 'DETERMINISTIC_TRANSPORT'
-  | 'CAPTURED_REAL_RESPONSE';
+  | 'CAPTURED_REAL_RESPONSE'
+  | 'LIVE_MAPBOX';
 
 export interface SnapLabRunContext {
   caseId: string;

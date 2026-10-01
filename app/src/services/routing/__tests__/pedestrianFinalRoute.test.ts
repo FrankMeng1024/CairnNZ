@@ -199,6 +199,53 @@ describe('O50 pedestrian geometry modes', () => {
     ]));
   });
 
+  test('trims at most the bounded failing seam edge before retaining supported corridor evidence', async () => {
+    const canonical = line(0, 110, 0, 12);
+    global.fetch = jest.fn(async () => {
+      const network = canonical.map(sample => [sample.lng, sample.lat] as [number, number]);
+      const hook = point(100, 8);
+      const responseGeometry = [
+        ...network.slice(0, 10),
+        [hook.lng, hook.lat] as [number, number],
+        ...network.slice(10),
+      ];
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 'Ok',
+          matchings: [{ confidence: 0.98, geometry: { coordinates: responseGeometry } }],
+          tracepoints: network.map((location, index) => ({
+            matchings_index: 0,
+            waypoint_index: index,
+            alternatives_count: index === network.length - 1 ? 1 : 0,
+            name: 'Boundary Path',
+            location,
+          })),
+        }),
+      } as Response;
+    }) as any;
+    const result = await reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: 'pk.test',
+      directionsFallback: false,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const accepted = result.stats.sectionDecisions.find(decision => decision.result === 'accepted');
+    expect(accepted).toMatchObject({ sourceStart: 0, sourceEnd: 10 });
+    expect(result.stats.sections).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceStart: 0,
+        sourceEnd: 9,
+        decision: 'refined',
+        reason: expect.stringContaining('bounded-seam-trim-0-1'),
+      }),
+    ]));
+    expect(result.stats.sections.some(section => (
+      section.sourceStart <= 10 && section.sourceEnd >= 11 && section.networkSource === 'none'
+    ))).toBe(true);
+  });
+
   test('ambiguous parallel-road support falls back to canonical-derived Mode C', async () => {
     const canonical = line(0, 100, 8, 12);
     global.fetch = jest.fn(async () => mapMatchingResponse(canonical, 0, 'Parallel Road', 2)) as any;

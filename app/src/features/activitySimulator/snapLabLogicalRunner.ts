@@ -18,6 +18,11 @@ import {
   type SnapLabSyntheticBarrier,
 } from './snapLabSyntheticTransport';
 import {
+  createSnapLabCassetteTransport,
+  createSnapLabLiveTransport,
+  type SnapLabCassetteEntry,
+} from './snapLabTransport';
+import {
   clearSnapLabFaultPlan,
   configureSnapLabFaultPlan,
   snapLabFaultPlanSnapshot,
@@ -36,7 +41,7 @@ export interface SnapLabPublicRawEvent {
   appState: string;
   observedLocal?: { x: number; y: number };
   coordinate: { lat: number; lng: number };
-  accuracyM: number;
+  accuracyM: number | null;
   speedMps: number | null;
   speedAccuracyMps: number | null;
   source: 'simulator';
@@ -57,7 +62,7 @@ export interface SnapLabPublicFixture {
     observationIntervalSeconds: number;
     deliveryMode: string;
   };
-  availableMap: {
+  availableMap?: {
     origin: { lat: number; lng: number };
     paths: Array<{
       id: string;
@@ -78,6 +83,8 @@ export interface SnapLabPublicFixture {
   };
   transportScenario: string;
   transportConfig?: {
+    mode?: 'deterministic' | 'live-mapbox' | 'captured-real';
+    cassetteEntries?: SnapLabCassetteEntry[];
     failureMode?: 'none' | 'timeout' | 'nomatch' | 'auth-then-unavailable';
     forceLowMatchingConfidence?: boolean;
   };
@@ -153,6 +160,11 @@ function receiptBatchOrdinals(events: SnapLabPublicRawEvent[]): Map<number, numb
 }
 
 function transportFor(fixture: SnapLabPublicFixture) {
+  if (fixture.transportConfig?.mode === 'live-mapbox') return createSnapLabLiveTransport();
+  if (fixture.transportConfig?.mode === 'captured-real') {
+    return createSnapLabCassetteTransport(fixture.transportConfig.cassetteEntries ?? []);
+  }
+  if (!fixture.availableMap) throw new Error('snap_lab_deterministic_map_required');
   return createSnapLabSyntheticGraphTransport({
     caseId: fixture.caseId,
     profileId: fixture.profile,
@@ -161,6 +173,30 @@ function transportFor(fixture: SnapLabPublicFixture) {
     failureMode: fixture.transportConfig?.failureMode ?? 'none',
     forceLowMatchingConfidence: fixture.transportConfig?.forceLowMatchingConfidence,
   });
+}
+
+function configuredTransportMode(fixture: SnapLabPublicFixture): SnapLabRunContext['transportMode'] {
+  if (fixture.lifecycle.offlineAtFinish) return 'offline';
+  if (fixture.transportConfig?.mode === 'live-mapbox') return 'live';
+  if (fixture.transportConfig?.mode === 'captured-real') return 'captured';
+  return 'deterministic';
+}
+
+function configuredEvidenceLabel(fixture: SnapLabPublicFixture): SnapLabRunContext['evidenceLabel'] {
+  if (fixture.lifecycle.offlineAtFinish) return 'LOCAL_ONLY';
+  if (fixture.transportConfig?.mode === 'live-mapbox') return 'LIVE_MAPBOX';
+  if (fixture.transportConfig?.mode === 'captured-real') return 'CAPTURED_REAL_RESPONSE';
+  return 'DETERMINISTIC_TRANSPORT';
+}
+
+function configuredNetworkCondition(fixture: SnapLabPublicFixture): string {
+  if (fixture.lifecycle.offlineAtFinish) return 'offline-at-finish';
+  if (fixture.transportConfig?.mode === 'live-mapbox') return 'live-mapbox';
+  if (fixture.transportConfig?.mode === 'captured-real') return 'captured-real-response-replay';
+  if (fixture.transportConfig?.failureMode && fixture.transportConfig.failureMode !== 'none') {
+    return fixture.transportConfig.failureMode;
+  }
+  return 'deterministic-online';
 }
 
 /**
@@ -205,13 +241,9 @@ let firstFinishResult: unknown = null;
       caseId: fixture.caseId,
       profileId: fixture.profile,
       seed: fixture.seed,
-      networkCondition: fixture.lifecycle.offlineAtFinish
-        ? 'offline-at-finish'
-        : fixture.transportConfig?.failureMode && fixture.transportConfig.failureMode !== 'none'
-          ? fixture.transportConfig.failureMode
-          : 'deterministic-online',
-      transportMode: fixture.lifecycle.offlineAtFinish ? 'offline' : 'deterministic',
-      evidenceLabel: fixture.lifecycle.offlineAtFinish ? 'LOCAL_ONLY' : 'DETERMINISTIC_TRANSPORT',
+      networkCondition: configuredNetworkCondition(fixture),
+      transportMode: configuredTransportMode(fixture),
+      evidenceLabel: configuredEvidenceLabel(fixture),
       matrixSha256: options.matrixSha256,
       requestIdentity: fixture.fixtureSha256,
       clockSpeed: 1,
@@ -278,7 +310,7 @@ let firstFinishResult: unknown = null;
       });
       const coordinate: ActivityCoordinate = {
         ...event.coordinate,
-        accuracy: event.accuracyM,
+        ...(event.accuracyM == null ? {} : { accuracy: event.accuracyM }),
         speed: event.speedMps,
         speedAccuracy: event.speedAccuracyMps,
         source: 'simulator',
@@ -367,8 +399,8 @@ let firstFinishResult: unknown = null;
       configureSnapLabRun({
         ...context,
         networkCondition: 'online-restored',
-        transportMode: 'deterministic',
-        evidenceLabel: 'DETERMINISTIC_TRANSPORT',
+        transportMode: configuredTransportMode({ ...fixture, lifecycle: { ...fixture.lifecycle, offlineAtFinish: false } }),
+        evidenceLabel: configuredEvidenceLabel({ ...fixture, lifecycle: { ...fixture.lifecycle, offlineAtFinish: false } }),
       }, restoredTransport.fetch, restoredTransport.receipts);
       const firstUpgrade = await upgradeSnapLabActivityOnce(options.ownerUserId, options.activityId);
       const secondUpgrade = await upgradeSnapLabActivityOnce(options.ownerUserId, options.activityId);
@@ -520,13 +552,9 @@ export async function prepareSnapLabUiJourney(
     caseId: fixture.caseId,
     profileId: fixture.profile,
     seed: fixture.seed,
-    networkCondition: fixture.lifecycle.offlineAtFinish
-      ? 'offline-at-finish'
-      : fixture.transportConfig?.failureMode && fixture.transportConfig.failureMode !== 'none'
-        ? fixture.transportConfig.failureMode
-        : 'deterministic-online',
-    transportMode: fixture.lifecycle.offlineAtFinish ? 'offline' : 'deterministic',
-    evidenceLabel: fixture.lifecycle.offlineAtFinish ? 'LOCAL_ONLY' : 'DETERMINISTIC_TRANSPORT',
+    networkCondition: configuredNetworkCondition(fixture),
+    transportMode: configuredTransportMode(fixture),
+    evidenceLabel: configuredEvidenceLabel(fixture),
     matrixSha256: options.matrixSha256,
     requestIdentity: fixture.fixtureSha256,
     clockSpeed: 1,
@@ -590,7 +618,7 @@ export async function replaySnapLabUiJourney(
     });
     const decision = await useTrackingStore.getState().addTrackPoint({
       ...event.coordinate,
-      accuracy: event.accuracyM,
+      ...(event.accuracyM == null ? {} : { accuracy: event.accuracyM }),
       speed: event.speedMps,
       speedAccuracy: event.speedAccuracyMps,
       source: 'simulator',
@@ -649,6 +677,11 @@ export async function completeSnapLabUiJourney(ownerUserId: string, activityId: 
   return { simulatorDiagnostics, faultPlanAfter };
 }
 
+/** Read-only failure evidence for the external browser orchestrator. */
+export async function readSnapLabUiDiagnostics(ownerUserId: string): Promise<string> {
+  return readSimulatorDiagnostics(ownerUserId);
+}
+
 export async function upgradeSnapLabUiJourneyAfterReconnect(
   fixture: SnapLabPublicFixture,
   ownerUserId: string,
@@ -664,8 +697,8 @@ export async function upgradeSnapLabUiJourneyAfterReconnect(
     profileId: fixture.profile,
     seed: fixture.seed,
     networkCondition: 'online-restored',
-    transportMode: 'deterministic',
-    evidenceLabel: 'DETERMINISTIC_TRANSPORT',
+    transportMode: configuredTransportMode({ ...fixture, lifecycle: { ...fixture.lifecycle, offlineAtFinish: false } }),
+    evidenceLabel: configuredEvidenceLabel({ ...fixture, lifecycle: { ...fixture.lifecycle, offlineAtFinish: false } }),
     requestIdentity: fixture.fixtureSha256,
   }, transport.fetch, transport.receipts);
   const first = await upgradeSnapLabActivityOnce(ownerUserId, activityId);
@@ -699,9 +732,26 @@ export async function probeSnapLabFinalForFixture(
     profileId: fixture.profile,
     seed: fixture.seed,
     networkCondition: 'deterministic-online',
-    transportMode: 'deterministic',
-    evidenceLabel: 'DETERMINISTIC_TRANSPORT',
+    transportMode: configuredTransportMode(fixture),
+    evidenceLabel: configuredEvidenceLabel(fixture),
     requestIdentity: fixture.fixtureSha256,
+  }, transport.fetch, transport.receipts);
+  return runSnapLabFinal(canonical);
+}
+
+/** Exact captured-response diagnostic. Request drift is a hard cassette miss;
+ * this helper can never fall through to a real network call. */
+export async function probeSnapLabFinalWithCapturedResponses(
+  canonical: SnapLabActivityRecord['canonicalPoints'],
+  entries: SnapLabCassetteEntry[],
+  context: Pick<SnapLabRunContext, 'caseId' | 'profileId' | 'seed' | 'requestIdentity'>,
+) {
+  const transport = createSnapLabCassetteTransport(entries);
+  configureSnapLabRun({
+    ...context,
+    networkCondition: 'captured-real-response-replay',
+    transportMode: 'captured',
+    evidenceLabel: 'CAPTURED_REAL_RESPONSE',
   }, transport.fetch, transport.receipts);
   return runSnapLabFinal(canonical);
 }
