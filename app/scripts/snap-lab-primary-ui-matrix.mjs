@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { chromium } from 'playwright';
 import sharp from 'sharp';
+import { renderUiActivityComparison } from './snap-lab-ui-activity-evidence.mjs';
 
 const arg = (name, fallback = null) => {
   const index = process.argv.indexOf(name);
@@ -38,19 +39,6 @@ function publicFixture(fixture) {
       return publicEvent;
     }),
   };
-}
-
-function copyDiagnosticImages(caseId, mode, runDir) {
-  if (!logicalRoot) return [];
-  const sourceDir = path.join(logicalRoot, 'cases', caseId, mode, 'primary');
-  const copied = [];
-  const comparison = path.join(sourceDir, 'comparison.png');
-  if (fs.existsSync(comparison)) {
-    const target = path.join(runDir, 'comparison.png');
-    fs.copyFileSync(comparison, target);
-    copied.push(target);
-  }
-  return copied;
 }
 
 async function makeCriticalZoom(runDir) {
@@ -434,7 +422,12 @@ async function runJourney(fixture) {
     throw new Error('Offline upgrade mutated the pre-upgrade Route snapshot');
   }
   writeJson(path.join(runDir, 'QA_ACTIVITY_SNAPSHOT.json'), persisted);
-  const diagnosticImages = copyDiagnosticImages(fixture.caseId, mode, runDir);
+  const comparison = path.join(runDir, 'comparison.png');
+  await renderUiActivityComparison(persisted, comparison, {
+    fixtureSha256: fixture.fixtureSha256,
+    title: `${fixture.caseId} ${mode} primary — persisted UI Activity geometry`,
+  });
+  const diagnosticImages = [comparison];
   const criticalZoom = await makeCriticalZoom(runDir);
   const runRequests = requests.slice(networkStart);
   const productWrites = runRequests.filter(request => request.method !== 'GET');

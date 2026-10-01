@@ -10,7 +10,12 @@ import {
   offsetNetworkGeometry,
   reconstructPedestrianFinalRoute,
 } from '../pedestrianFinalRoute';
-import { resampleMatcherEvidence, type RawPoint, type SnappedPoint } from '../snapTrack';
+import {
+  evaluateMatchedGeometryQuality,
+  resampleMatcherEvidence,
+  type RawPoint,
+  type SnappedPoint,
+} from '../snapTrack';
 
 const METRES_PER_DEGREE = 111_320;
 const BASE_LAT = 30;
@@ -655,6 +660,105 @@ describe('bounded Directions fallback contract', () => {
 });
 
 describe('evidence-scoped section and request planning', () => {
+  test('a persistent local truth-envelope excursion does not poison supported spans on both sides', async () => {
+    const canonical = line(0, 100, 0, 11).map(sample => ({ ...sample, accuracy: 14 }));
+    const network = canonical.map((sample, index) => {
+      const northM = index >= 4 && index <= 6 ? 16 : 0;
+      const shifted = point(index * 10, northM, index, 14);
+      return [shifted.lng, shifted.lat] as [number, number];
+    });
+    const fetchImpl = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 'Ok',
+        matchings: [{ confidence: 0.98, geometry: { coordinates: network } }],
+        tracepoints: network.map((location, index) => ({
+          matchings_index: 0,
+          waypoint_index: index,
+          alternatives_count: 0,
+          name: null,
+          location,
+        })),
+      }),
+    })) as any;
+    const wholeCandidateQuality = evaluateMatchedGeometryQuality(
+      canonical,
+      network.map(([lng, lat]) => ({ lng, lat })),
+    );
+    const correspondencesM = canonical.map((sample, index) => (
+      Math.abs(network[index][1] - sample.lat) * METRES_PER_DEGREE
+    ));
+    expect(wholeCandidateQuality.reason).toBe('raw_deviation');
+    expect(wholeCandidateQuality.deviationEnvelopeM).toBe(15);
+    expect(wholeCandidateQuality.p95DeviationM).toBeGreaterThan(15);
+    expect(Math.max(...correspondencesM)).toBeLessThan(14 * 1.25);
+
+    const result = await reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: 'pk.test',
+      directionsFallback: false,
+      fetchImpl,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.sectionDecisions.map(section => ({
+      sourceStart: section.sourceStart,
+      sourceEnd: section.sourceEnd,
+      classification: section.classification,
+      result: section.result,
+      reasonCode: section.reasonCode,
+    }))).toEqual([
+      {
+        sourceStart: 0,
+        sourceEnd: 3,
+        classification: 'SNAP_ELIGIBLE',
+        result: 'accepted',
+        reasonCode: 'TRACEPOINT_SUPPORTED',
+      },
+      {
+        sourceStart: 4,
+        sourceEnd: 6,
+        classification: 'LOCAL_ONLY',
+        result: 'rejected',
+        reasonCode: 'LOCAL_TRUTH_ENVELOPE_EXCEEDED',
+      },
+      {
+        sourceStart: 7,
+        sourceEnd: 10,
+        classification: 'SNAP_ELIGIBLE',
+        result: 'accepted',
+        reasonCode: 'TRACEPOINT_SUPPORTED',
+      },
+    ]);
+    expect(result.stats.sections.map(section => section.decision)).toEqual([
+      'refined', 'canonical-derived', 'refined',
+    ]);
+  });
+
+  test('one or two truth-envelope-pressure samples cannot manufacture a matched crop', () => {
+    const canonical = line(0, 100, 0, 11).map(sample => ({ ...sample, accuracy: 14 }));
+    const submitted = resampleMatcherEvidence(canonical, 4_000);
+    const tracepoints = submitted.map((sample, index) => {
+      const shifted = point(index * 10, index >= 4 && index <= 5 ? 16 : 0, index, 14);
+      return {
+        matchings_index: 0,
+        waypoint_index: index,
+        alternatives_count: 0,
+        location: [shifted.lng, shifted.lat] as [number, number],
+      };
+    });
+
+    expect(deriveSnapSectionRuns(submitted, tracepoints, 0)).toEqual([
+      expect.objectContaining({
+        sourceStart: 0,
+        sourceEnd: 10,
+        classification: 'SNAP_ELIGIBLE',
+        reasonCode: 'TRACEPOINT_SUPPORTED',
+      }),
+    ]);
+  });
+
   test('a persistent ambiguous subsection stays local while supported spans on both sides remain independent', () => {
     const canonical = line(0, 150, 0, 31);
     const submitted = resampleMatcherEvidence(canonical, 4_000);

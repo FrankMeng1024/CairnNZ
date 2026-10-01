@@ -1490,6 +1490,16 @@ function sourceCorrespondenceEnvelopeM(point: MatcherSubmittedPoint): number {
   return Math.min(20, Math.max(8, accuracyM * 1.25));
 }
 
+function localTruthEnvelopeM(point: MatcherSubmittedPoint): number {
+  const accuracyM = typeof point.accuracy === 'number' && Number.isFinite(point.accuracy)
+    ? Math.max(0, point.accuracy)
+    : 10;
+  // Keep this identical to the production candidate truth envelope. Section
+  // derivation may localize a persistent failing regime, but it must never
+  // widen the geometry acceptance threshold to make a candidate pass.
+  return Math.min(15, Math.max(8, accuracyM * 1.25));
+}
+
 function snapSectionRegime(
   point: MatcherSubmittedPoint,
   tracepoint: MapboxTracepoint,
@@ -1533,6 +1543,13 @@ function snapSectionRegime(
       reasonCode: 'LOCAL_SOURCE_CORRESPONDENCE_WEAK',
     };
   }
+  if (correspondenceM > localTruthEnvelopeM(point)) {
+    return {
+      key: 'local:truth-envelope-pressure',
+      classification: 'LOCAL_ONLY',
+      reasonCode: 'LOCAL_TRUTH_ENVELOPE_EXCEEDED',
+    };
+  }
   return {
     key: accuracyM <= 15 ? 'eligible:precise' : 'eligible:usable',
     classification: 'SNAP_ELIGIBLE',
@@ -1570,18 +1587,23 @@ export function deriveSnapSectionRuns(
   const sections: DerivedSnapSectionRun[] = [];
   for (const run of contiguous) {
     const labels = run.map(index => snapSectionRegime(chunk[index], tracepoints[index]!));
-    // Preserve isolated negative context inside the evaluated section. Two or
-    // more persistent samples are required before a local failure can become
-    // its own bounded section and release independent evidence around it.
+    // Preserve isolated negative context inside the evaluated section. Truth-
+    // envelope pressure needs three consecutive observations before it may
+    // release independent evidence around it; this is a deterministic local
+    // regime, not an arbitrary crop or removal of one inconvenient sample.
+    // Existing provider ambiguity/correspondence regimes retain their two-fix
+    // persistence contract.
     for (let offset = 0; offset < labels.length; offset += 1) {
       const start = offset;
       while (offset + 1 < labels.length && labels[offset + 1].key === labels[start].key) offset += 1;
       const length = offset - start + 1;
-      if (length !== 1 || labels[start].classification === 'SNAP_ELIGIBLE') continue;
+      if (labels[start].classification === 'SNAP_ELIGIBLE') continue;
+      const minimumPersistence = labels[start].reasonCode === 'LOCAL_TRUTH_ENVELOPE_EXCEEDED' ? 3 : 2;
+      if (length >= minimumPersistence) continue;
       const previous = labels[start - 1];
       const next = labels[offset + 1];
       if (previous?.classification === 'SNAP_ELIGIBLE' && next?.classification === 'SNAP_ELIGIBLE') {
-        labels[start] = previous;
+        for (let fill = start; fill <= offset; fill += 1) labels[fill] = previous;
       }
     }
 
@@ -1596,6 +1618,7 @@ export function deriveSnapSectionRuns(
       const last = indices[indices.length - 1];
       const sourceDistanceM = pathLength(chunk.slice(first, last + 1));
       const tooSmall = indices.length < MIN_NETWORK_SUPPORT || sourceDistanceM < MIN_NETWORK_DISTANCE_M;
+      const alreadyLocal = labels[startOffset].classification !== 'SNAP_ELIGIBLE';
       sections.push({
         submittedStart: first,
         submittedEnd: last,
@@ -1603,7 +1626,9 @@ export function deriveSnapSectionRuns(
         sourceEnd: chunk[last].sourceIndex,
         submittedIndices: indices,
         classification: tooSmall ? 'LOCAL_ONLY' : labels[startOffset].classification,
-        reasonCode: tooSmall ? 'LOCAL_TRACEPOINT_SUPPORT_INSUFFICIENT' : labels[startOffset].reasonCode,
+        reasonCode: tooSmall && !alreadyLocal
+          ? 'LOCAL_TRACEPOINT_SUPPORT_INSUFFICIENT'
+          : labels[startOffset].reasonCode,
       });
       startOffset = endOffset + 1;
     }
