@@ -753,5 +753,5 @@ export async function probeSnapLabFinalWithCapturedResponses(
     transportMode: 'captured',
     evidenceLabel: 'CAPTURED_REAL_RESPONSE',
   }, transport.fetch, transport.receipts);
-  return runSnapLabFinal(canonical);
+  return runSnapLabFinal(canonical, { qualityTrace: true });
 }

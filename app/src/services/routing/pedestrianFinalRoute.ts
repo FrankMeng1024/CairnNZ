@@ -105,6 +105,18 @@ export interface FinalRouteSection {
   canonicalDisplacementP95M: number;
   canonicalDisplacementMaxM: number;
   seam: IslandSeamQuality | null;
+  promotionUtility: CandidatePromotionUtility | null;
+}
+
+export interface CandidatePromotionUtility {
+  accepted: boolean;
+  reason: string;
+  providerGeometryRetained: boolean;
+  networkAuthority: 'strong' | 'weak' | 'none';
+  corridorEvidenceScore: number;
+  canonicalP95DeviationM: number;
+  lengthRatio: number;
+  seamAccepted: boolean;
 }
 
 export interface PedestrianFinalRequestResult {
@@ -209,6 +221,37 @@ export interface PedestrianFinalStats {
   wholeRouteValidation: WholeRouteValidation;
   finalGeometryFingerprint: string | null;
   baseFinalDiagnostics: BaseFinalDiagnostics;
+  /** Opt-in QA trace. Production callers leave qualityTrace disabled so
+   * response geometry is never duplicated into persisted Activity stats. */
+  candidateTransformationTraces?: CandidateTransformationTrace[];
+}
+
+export interface CandidateGeometryTraceStage {
+  stage:
+    | 'provider-response'
+    | 'source-correspondence-crop'
+    | 'densified-crop'
+    | 'road-offset-transformation'
+    | 'pedestrian-network-transformation'
+    | 'weak-corridor-transformation'
+    | 'canonical-derived-transformation'
+    | 'endpoint-anchoring';
+  geometryFingerprint: string;
+  pathLengthM: number;
+  points: Array<{ lat: number; lng: number }>;
+}
+
+export interface CandidateTransformationTrace {
+  requestId: string;
+  sourceStart: number;
+  sourceEnd: number;
+  source: 'map-matching' | 'walking-directions';
+  mode: PedestrianGeometryMode;
+  reason: string;
+  confidence: number;
+  selectedByIntervalScheduler: boolean;
+  retainedByAssemblySafety: boolean;
+  stages: CandidateGeometryTraceStage[];
 }
 
 export interface BaseFinalDiagnostics {
@@ -252,6 +295,8 @@ export interface PedestrianFinalOptions {
   requestGovernor?: ActivityMapboxRequestGovernor;
   requestPhase?: Extract<ActivityMapboxPhase, 'live' | 'final'>;
   requestReason?: string;
+  /** QA-only forensic geometry trace; defaults to false. */
+  qualityTrace?: boolean;
 }
 
 export type PedestrianFinalResult =
@@ -282,6 +327,8 @@ interface NetworkCandidate {
   topology: TopologyQuality;
   seam: IslandSeamQuality;
   modalNetworkName: string | null;
+  promotionUtility: CandidatePromotionUtility;
+  trace?: CandidateTransformationTrace;
 }
 
 interface CandidateBuildInput {
@@ -298,6 +345,9 @@ interface CandidateBuildInput {
   routeAlternativeCount: number;
   diagnosticNotes?: string[];
   allowSeamTrim?: boolean;
+  requestId: string;
+  providerResponsePoints?: SnappedPoint[];
+  qualityTrace?: boolean;
 }
 
 interface DirectionsAuthority {
@@ -1370,12 +1420,100 @@ export function evaluateCorridorEvidence(input: {
   };
 }
 
-function anchorEndpoints(points: SnappedPoint[], canonical: RawPoint[]): SnappedPoint[] {
+function anchorEndpoints(
+  points: SnappedPoint[],
+  canonical: RawPoint[],
+  anchorHead = true,
+  anchorTail = true,
+): SnappedPoint[] {
   if (points.length < 2 || canonical.length < 2) return points;
   const result = points.slice();
-  result[0] = canonicalPoint(canonical[0]);
-  result[result.length - 1] = canonicalPoint(canonical[canonical.length - 1]);
+  const blendAnchor = (head: boolean) => {
+    const endpointIndex = head ? 0 : result.length - 1;
+    const anchor = canonicalPoint(head ? canonical[0] : canonical[canonical.length - 1]);
+    const displacementM = hav(result[endpointIndex], anchor);
+    const blendDistanceM = clamp(displacementM * 4, 16, 48);
+    const latDelta = anchor.lat - result[endpointIndex].lat;
+    const lngDelta = anchor.lng - result[endpointIndex].lng;
+    let travelledM = 0;
+    let previousIndex = endpointIndex;
+    for (let offset = 0; offset < result.length; offset += 1) {
+      const index = head ? offset : result.length - 1 - offset;
+      if (offset > 0) travelledM += hav(result[previousIndex], result[index]);
+      if (travelledM >= blendDistanceM) break;
+      const weight = 1 - travelledM / blendDistanceM;
+      result[index] = {
+        ...result[index],
+        lat: result[index].lat + latDelta * weight,
+        lng: result[index].lng + lngDelta * weight,
+      };
+      previousIndex = index;
+    }
+    result[endpointIndex] = anchor;
+  };
+  if (anchorHead) blendAnchor(true);
+  if (anchorTail) blendAnchor(false);
   return result;
+}
+
+function candidateTraceStage(
+  stage: CandidateGeometryTraceStage['stage'],
+  points: SnappedPoint[],
+): CandidateGeometryTraceStage {
+  const geometry = points.map(point => ({ lat: point.lat, lng: point.lng }));
+  return {
+    stage,
+    geometryFingerprint: geometryFingerprint(geometry),
+    pathLengthM: pathLength(geometry),
+    points: geometry,
+  };
+}
+
+export function evaluateCandidatePromotionUtility(input: {
+  mode: PedestrianGeometryMode;
+  evidence: CorridorEvidence;
+  quality: MatchedGeometryQuality;
+  seam: IslandSeamQuality;
+}): CandidatePromotionUtility {
+  const providerGeometryRetained = input.mode === 'A_PEDESTRIAN_NETWORK'
+    || input.mode === 'B_ROAD_OFFSET'
+    || input.mode === 'D_WEAK_SAME_CORRIDOR';
+  const networkAuthority = input.mode === 'D_WEAK_SAME_CORRIDOR'
+    ? 'weak' as const
+    : input.mode === 'A_PEDESTRIAN_NETWORK' || input.mode === 'B_ROAD_OFFSET'
+      ? 'strong' as const
+      : 'none' as const;
+  const weakUtilitySupported = input.evidence.score >= 0.76
+    && input.quality.p95DeviationM <= 6
+    && input.quality.lengthRatio <= 1.12;
+  const strongUtilitySupported = networkAuthority === 'strong'
+    && input.quality.p95DeviationM <= 6;
+  const accepted = input.seam.accepted && (
+    strongUtilitySupported
+    || networkAuthority === 'none'
+    || weakUtilitySupported
+  );
+  const reason = !input.seam.accepted
+    ? `unsafe-seam:${input.seam.reason}`
+    : strongUtilitySupported
+      ? 'strong-provider-network-authority-with-bounded-truth-distance'
+      : networkAuthority === 'strong'
+        ? `strong-provider-line-no-bounded-utility:p95=${input.quality.p95DeviationM.toFixed(1)}`
+      : networkAuthority === 'none'
+        ? 'canonical-derived-not-network-promotion'
+        : weakUtilitySupported
+          ? 'weak-provider-line-with-bounded-truth-distance'
+          : `weak-provider-line-no-bounded-utility:score=${input.evidence.score.toFixed(3)};p95=${input.quality.p95DeviationM.toFixed(1)};length=${input.quality.lengthRatio.toFixed(3)}`;
+  return {
+    accepted,
+    reason,
+    providerGeometryRetained,
+    networkAuthority,
+    corridorEvidenceScore: input.evidence.score,
+    canonicalP95DeviationM: input.quality.p95DeviationM,
+    lengthRatio: input.quality.lengthRatio,
+    seamAccepted: input.seam.accepted,
+  };
 }
 
 function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | null {
@@ -1413,6 +1551,12 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
   let display: SnappedPoint[];
   let reason: string;
   const networkForDisplay = densifyGeometry(input.networkPoints);
+  const traceStages: CandidateGeometryTraceStage[] = input.qualityTrace ? [
+    candidateTraceStage('provider-response', input.providerResponsePoints ?? input.networkPoints),
+    candidateTraceStage('source-correspondence-crop', input.networkPoints),
+    candidateTraceStage('densified-crop', networkForDisplay),
+  ] : [];
+  let transformationStage: CandidateGeometryTraceStage['stage'];
   if (
     evidence.lateral.stable
     && lowAmbiguity
@@ -1420,8 +1564,14 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
     && evidence.lateral.absoluteMedianM <= ROAD_OFFSET_MAX_M
   ) {
     mode = 'B_ROAD_OFFSET';
-    display = offsetNetworkGeometry(networkForDisplay, evidence.lateral.signedMedianM);
-    reason = `${evidence.reason};stable-evidence-offset`;
+    // A stable GPS-to-network lateral offset proves corridor identity, but it
+    // does not prove which side of a mapped line contains a legal pedestrian
+    // facility. Preserve provider geometry until independent side-of-road
+    // authority exists; applying the noisy GPS median here can move an
+    // otherwise useful response away from its network corridor.
+    display = networkForDisplay;
+    transformationStage = 'road-offset-transformation';
+    reason = `${evidence.reason};stable-lateral-evidence;provider-line-retained`;
   } else if (
     modalNetworkName == null
     && lowAmbiguity
@@ -1430,6 +1580,7 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
   ) {
     mode = 'A_PEDESTRIAN_NETWORK';
     display = networkForDisplay;
+    transformationStage = 'pedestrian-network-transformation';
     reason = `${evidence.reason};pedestrian-aligned-network`;
   } else if (lowAmbiguity) {
     // Exact sidewalk side is uncertain, but the topology is not. Place a
@@ -1440,23 +1591,30 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
       input.diagnosticNotes?.push('candidate:weak-corridor-too-short');
       return null;
     }
-    const maximumWeakOffsetM = Math.min(12, Math.max(3, evidence.accuracyP95M * 0.75));
-    const evidenceCentredOffsetM = clamp(
-      evidence.lateral.signedMedianM,
-      -maximumWeakOffsetM,
-      maximumWeakOffsetM,
-    );
     mode = 'D_WEAK_SAME_CORRIDOR';
-    display = offsetNetworkGeometry(networkForDisplay, evidenceCentredOffsetM);
-    reason = `${evidence.reason};corridor-strong-side-uncertain;evidence-centred-offset`;
+    display = networkForDisplay;
+    transformationStage = 'weak-corridor-transformation';
+    reason = `${evidence.reason};corridor-strong-side-uncertain;provider-line-retained`;
   } else {
     // Road topology may still be confidently identified, but uncertain side
     // evidence is not permission to put a walker on the carriageway centre.
     mode = 'C_CANONICAL_DERIVED';
     display = cleanCanonicalGeometry(rawSubsection);
+    transformationStage = 'canonical-derived-transformation';
     reason = `${evidence.reason};network-side-ambiguous`;
   }
-  display = anchorEndpoints(attachDisplayMetadata(display, rawSubsection), rawSubsection);
+  if (input.qualityTrace) traceStages.push(candidateTraceStage(transformationStage, display));
+  // Anchor over a displacement-scaled transition rather than replacing one
+  // vertex. A one-edge replacement can manufacture a hook even when the
+  // provider crop is good; the blended transition keeps exact chronological
+  // joins while allowing the seam gate to inspect the complete shape.
+  display = anchorEndpoints(
+    attachDisplayMetadata(display, rawSubsection),
+    rawSubsection,
+    true,
+    true,
+  );
+  if (input.qualityTrace) traceStages.push(candidateTraceStage('endpoint-anchoring', display));
   const quality = evaluateMatchedGeometryQuality(rawSubsection, display);
   const topology = evaluateTopologyQuality(rawSubsection, display);
   const seam = evaluateIslandSeamQuality(input.canonical, input.sourceStart, input.sourceEnd, display);
@@ -1505,6 +1663,11 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
     );
     return null;
   }
+  const promotionUtility = evaluateCandidatePromotionUtility({ mode, evidence, quality, seam });
+  if (!promotionUtility.accepted) {
+    input.diagnosticNotes?.push(`candidate:promotion:${promotionUtility.reason}`);
+    return null;
+  }
   return {
     sourceStart: input.sourceStart,
     sourceEnd: input.sourceEnd,
@@ -1515,13 +1678,28 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
       ? 'NETWORK_AMBIGUOUS'
       : mode === 'D_WEAK_SAME_CORRIDOR' ? 'NETWORK_WEAK_SAME_CORRIDOR' : 'NETWORK_CONFIDENT',
     mode,
-    reason,
+    reason: `${reason};promotion:${promotionUtility.reason}`,
     confidence: evidence.score,
     evidence,
     quality,
     topology,
     seam,
     modalNetworkName,
+    promotionUtility,
+    ...(input.qualityTrace ? {
+      trace: {
+        requestId: input.requestId,
+        sourceStart: input.sourceStart,
+        sourceEnd: input.sourceEnd,
+        source: input.source,
+        mode,
+        reason: `${reason};promotion:${promotionUtility.reason}`,
+        confidence: evidence.score,
+        selectedByIntervalScheduler: false,
+        retainedByAssemblySafety: false,
+        stages: traceStages,
+      },
+    } : {}),
   };
 }
 
@@ -1802,6 +1980,7 @@ async function mapMatchingWindow(
   phase: Extract<ActivityMapboxPhase, 'live' | 'final'> = 'final',
   reason = 'qualified-unresolved-window',
   requestFetch: typeof fetch = fetch,
+  qualityTrace = false,
 ): Promise<WindowResult> {
   const startedAt = Date.now();
   const diagnostic: PedestrianFinalRequestResult = {
@@ -2001,6 +2180,9 @@ async function mapMatchingWindow(
           alternatives: tracepoints.map(point => point.alternatives_count ?? null),
           names: tracepoints.map(point => point.name ?? null),
           source: 'map-matching',
+          requestId: `${requestId}:matching-${matchingIndex}`,
+          providerResponsePoints: fullGeometry,
+          qualityTrace,
           // Matchings are disjoint sub-traces, not route alternatives. Real
           // ambiguity is reported per tracepoint by alternatives_count.
           routeAlternativeCount: Math.max(0, ...tracepoints.map(point => point.alternatives_count ?? 0)),
@@ -2276,6 +2458,7 @@ async function walkingDirectionsCandidate(
   phase: Extract<ActivityMapboxPhase, 'live' | 'final'> = 'final',
   reason = 'qualified-unresolved-directions-span',
   requestFetch: typeof fetch = fetch,
+  qualityTrace = false,
 ): Promise<DirectionsResult> {
   const sourceStart = authority.sourceStart;
   const sourceEnd = authority.sourceEnd;
@@ -2442,6 +2625,9 @@ async function walkingDirectionsCandidate(
         alternatives: authority.alternatives,
         names: [...authority.names, ...names],
         source: 'walking-directions',
+        requestId,
+        providerResponsePoints: geometry,
+        qualityTrace,
         routeAlternativeCount: 0,
       });
       if (candidate) {
@@ -2545,6 +2731,7 @@ function candidateSection(candidate: NetworkCandidate): FinalRouteSection {
     canonicalDisplacementP95M: candidate.quality.p95DeviationM,
     canonicalDisplacementMaxM: candidate.quality.maxDeviationM,
     seam: candidate.seam,
+    promotionUtility: candidate.promotionUtility,
   };
 }
 
@@ -2595,6 +2782,7 @@ function fallbackSection(
       canonicalDisplacementP95M: deviation.p95,
       canonicalDisplacementMaxM: deviation.max,
       seam,
+      promotionUtility: null,
     },
   };
 }
@@ -2806,11 +2994,13 @@ export async function reconstructPedestrianFinalRoute(
       options.requestPhase ?? 'final',
       options.requestReason ?? 'qualified-unresolved-window',
       options.fetchImpl,
+      options.qualityTrace ?? false,
     ),
     totalAbort.controller.signal,
   );
   const completedMatchingResults = matchingResults.filter((result): result is WindowResult => Boolean(result));
   const matchingCandidates = completedMatchingResults.flatMap(result => result.candidates);
+  const allCandidates = matchingCandidates.slice();
   annotateWindowAgreement(matchingCandidates);
   let selected = selectNonOverlappingCandidates(matchingCandidates);
   const requestResults = completedMatchingResults.map(result => result.request);
@@ -2851,6 +3041,7 @@ export async function reconstructPedestrianFinalRoute(
         options.requestPhase ?? 'final',
         options.requestReason ?? 'qualified-unresolved-directions-span',
         options.fetchImpl,
+        options.qualityTrace ?? false,
       );
       const direction = await Promise.race([
         directionPromise,
@@ -2863,6 +3054,7 @@ export async function reconstructPedestrianFinalRoute(
       requestResults.push(direction.request);
       sectionDecisions.push(direction.sectionDecision);
       if (direction.candidate) {
+        allCandidates.push(direction.candidate);
         selected = selectNonOverlappingCandidates([...selected, direction.candidate]);
       }
     }
@@ -2878,6 +3070,7 @@ export async function reconstructPedestrianFinalRoute(
     confidence: candidate.confidence,
     maximumDisplayEdgeM: maximumEdge(candidate.points),
   }));
+  const intervalSelected = new Set(selected);
   const assemblySafety = retainAssemblySafeCandidates(canonical, selected);
   let assembled = assemblySafety.assembled;
   let wholeRouteValidation = assemblySafety.validation;
@@ -2918,6 +3111,7 @@ export async function reconstructPedestrianFinalRoute(
     .filter(section => section.decision === 'refined')
     .reduce((sum, section) => sum + section.canonicalDistanceM, 0);
   const baseFinalDiagnostics = buildBaseFinalGeometry(canonical).diagnostics;
+  const assemblyRetained = new Set(selected);
   const stats: PedestrianFinalStats = {
     algorithmVersion: 'pedestrian-final-v2-base',
     canonicalPointCount: canonical.length,
@@ -2949,6 +3143,13 @@ export async function reconstructPedestrianFinalRoute(
     wholeRouteValidation,
     finalGeometryFingerprint: geometryFingerprint(assembled.points),
     baseFinalDiagnostics,
+    ...(options.qualityTrace ? {
+      candidateTransformationTraces: allCandidates.flatMap(candidate => candidate.trace ? [{
+        ...candidate.trace,
+        selectedByIntervalScheduler: intervalSelected.has(candidate),
+        retainedByAssemblySafety: assemblyRetained.has(candidate),
+      }] : []),
+    } : {}),
   };
   return { ok: true, points: assembled.points, stats };
 }

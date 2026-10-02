@@ -1,0 +1,63 @@
+{
+  "schema": "cairn.real-map-snap.targeted-safety-oracles.v1",
+  "authority": "Frozen O70 route references plus retained Activity physical-segment identity; attempted 2026-10-02 OSM vector supplements are recorded separately",
+  "rules": {
+    "neverDeriveOracleFromSelectedFinal": true,
+    "missingCompetingCorridorIsUnknown": true,
+    "missingBuildingOrBarrierPolygonIsUnknown": true,
+    "referenceLineMayVerifyOrderedTopologyAndIntendedCorridorCoverageOnly": true
+  },
+  "cases": [
+    {
+      "runId": "U03-hike-normal",
+      "purpose": "mapped internal-road/path beside arterial",
+      "intendedCorridor": { "source": "frozen-campaign/references/U03.geojson", "sha256": "425111a012d3158a388dfdaa423c24cd6441fecdefee601c86f3a059620503d0", "radiusM": 11 },
+      "competingCorridors": null,
+      "competingCorridorStatus": "UNKNOWN_OSM_VECTOR_SUPPLEMENT_UNAVAILABLE",
+      "protectedTopology": ["Fish Lane", "South Way", "internal-lane sequence"]
+    },
+    {
+      "runId": "U04-hike-normal",
+      "purpose": "unmapped/new internal path beside arterial",
+      "intendedCorridor": { "source": "frozen-campaign/references/U04.geojson", "sha256": "5a670979abed275f181960cdd80281b0301247488cf114c34479af65c86a61f0", "radiusM": 18 },
+      "competingCorridors": null,
+      "competingCorridorStatus": "UNKNOWN_LAMBIE_DRIVE_VECTOR_SUPPLEMENT_UNAVAILABLE",
+      "protectedTopology": ["complete Hayman Park circuit", "no rail transfer"]
+    },
+    {
+      "runId": "U05-hike-normal",
+      "purpose": "building/courtyard constrained supported passage",
+      "intendedCorridor": { "source": "frozen-campaign/references/U05.geojson", "sha256": "0845fd6fabe1c7dd577f7d4e61b1c66ddc25e1ced0d402fca51c110d53574af4", "radiusM": 10 },
+      "validPassage": { "name": "Chambers Laneway", "waypoint": { "lng": 174.8527353, "lat": -36.9798454 }, "authority": "Auckland Urban Development Office" },
+      "buildingPolygons": null,
+      "buildingStatus": "UNKNOWN_BUILDING_POLYGON_SUPPLEMENT_UNAVAILABLE",
+      "protectedTopology": ["St George Street approach", "Chambers Laneway", "Wallace Road / leisure-centre exit"]
+    },
+    {
+      "runId": "X03-hike-normal",
+      "purpose": "building/wall/barrier constrained park transition",
+      "intendedCorridor": { "source": "frozen-campaign/references/X03.geojson", "sha256": "03985bff7676fd6ebaf0e53872168a303a77fff55e327ae04ba38589d73a9296", "radiusM": 13 },
+      "buildingPolygons": null,
+      "hardBarriers": null,
+      "buildingStatus": "UNKNOWN_BUILDING_POLYGON_SUPPLEMENT_UNAVAILABLE",
+      "barrierStatus": "UNKNOWN_HARD_BARRIER_VECTOR_SUPPLEMENT_UNAVAILABLE",
+      "protectedTopology": ["street approach", "Albert Park interior", "street exit"]
+    },
+    {
+      "runId": "M02-hike-normal",
+      "purpose": "switchback topology",
+      "intendedCorridor": { "source": "frozen-campaign/references/M02.geojson", "sha256": "3e8c0d3f0ecea4c4c8aab906378a42ce36183936ae16efb5cc98a656c7706052", "radiusM": 15 },
+      "competingCorridors": null,
+      "competingCorridorStatus": "UNKNOWN_HILLSIDE_ROAD_VECTOR_SUPPLEMENT_UNAVAILABLE",
+      "protectedTopology": ["ordered switchbacks", "no hillside shortcut"]
+    },
+    {
+      "runId": "U06-hike-normal",
+      "purpose": "true physical gap",
+      "intendedCorridor": { "source": "frozen-campaign/references/U06.geojson", "sha256": "5cb641a2040400e979a086f5b587169c46a23cd95c8c70e12e5036dd8d34672a", "radiusM": 13 },
+      "gapAuthority": "persisted immutable physical segment identity",
+      "expectedPhysicalSegmentCount": 2,
+      "protectedTopology": ["pre-gap shop approach", "physical gap", "post-gap exit"]
+    }
+  ]
+}

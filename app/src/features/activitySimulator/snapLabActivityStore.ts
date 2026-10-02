@@ -452,7 +452,10 @@ function projectSelectedSegment(source: SegmentedTrackPoint[], points: Array<{
 
 /** Runs the exact production request builder, gates, selector and assembler,
  * but with a QA-controlled HTTP boundary and no production governor ledger. */
-export async function runSnapLabFinal(canonical: TrackPoint[]): Promise<SnapLabFinalRun> {
+export async function runSnapLabFinal(
+  canonical: TrackPoint[],
+  options: { qualityTrace?: boolean } = {},
+): Promise<SnapLabFinalRun> {
   const context = currentSnapLabRunContext();
   const localFinal = buildLocalFinalTrackPoints(canonical);
   if (context.transportMode === 'offline') {
@@ -487,6 +490,7 @@ export async function runSnapLabFinal(canonical: TrackPoint[]): Promise<SnapLabF
       maxDirectionsRequests: 2,
       requestPhase: 'final',
       requestReason: `snap-lab:${context.caseId}:${context.profileId}`,
+      qualityTrace: options.qualityTrace,
     });
     segmentStats.push(result.stats);
     if (!result.ok || result.points.length < 2 || result.stats.acceptedMatchedDistanceM <= 0.5) {

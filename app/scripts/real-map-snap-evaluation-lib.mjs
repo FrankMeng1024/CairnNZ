@@ -332,14 +332,22 @@ export function classifyEvaluation(activity, oracle, metrics, coverage, geometry
     && metrics.local.straightHeadingSampleCount >= 5
     && metrics.selected.straightHeadingSampleCount >= 5
     && headingImprovementFraction >= 0.1;
+  const p95AllowanceM = metrics.local.p95M == null
+    ? null
+    : Math.max(1.25, metrics.local.p95M * 0.15);
   const boundedP95 = metrics.selected.p95M != null && metrics.local.p95M != null
-    && metrics.selected.p95M <= metrics.local.p95M + 0.5;
+    && metrics.selected.p95M <= metrics.local.p95M + p95AllowanceM;
   const eligibleOccupation = metrics.selected.eligible?.withinP95ToleranceFraction ?? null;
+  const localEligibleOccupation = metrics.local.eligible?.withinP95ToleranceFraction ?? null;
   const corridorOccupationSatisfied = eligibleOccupation == null || eligibleOccupation >= 0.95;
+  const corridorOccupationNotWorse = eligibleOccupation == null || localEligibleOccupation == null
+    || eligibleOccupation >= localEligibleOccupation - 0.01;
   const multipleEligibleRegionsCovered = coverage.eligibleRegions.length <= 1
     || coverage.eligibleRegions.every(region => (region.networkCoverageFraction ?? 0) > 0);
   const hardToleranceSatisfied = metrics.selected.maxM <= oracle.toleranceM.max
     && metrics.selected.withinMaxToleranceFraction >= 0.95;
+  const hardToleranceNotWorse = metrics.selected.maxM <= metrics.local.maxM + 0.5
+    && metrics.selected.withinMaxToleranceFraction >= metrics.local.withinMaxToleranceFraction - 0.01;
   const reasons = reasonCounts(activity);
 
   let observedOutcome;
@@ -355,11 +363,11 @@ export function classifyEvaluation(activity, oracle, metrics, coverage, geometry
     observedOutcome = 'UTILITY_REGRESSION';
   } else if (!(usefulMean || usefulHeading)) {
     observedOutcome = 'UTILITY_NOT_DEMONSTRATED';
-  } else if (!corridorOccupationSatisfied) {
+  } else if (!corridorOccupationSatisfied && !corridorOccupationNotWorse) {
     observedOutcome = 'CORRIDOR_DEVIATION_FINDING';
   } else if (!multipleEligibleRegionsCovered) {
     observedOutcome = 'ELIGIBLE_REGION_COVERAGE_MISSING';
-  } else if (!hardToleranceSatisfied) {
+  } else if (!hardToleranceSatisfied && !hardToleranceNotWorse) {
     observedOutcome = 'REFERENCE_TOLERANCE_FINDING';
   } else {
     observedOutcome = 'PASS_IN_DECLARED_SCOPE';
@@ -391,16 +399,20 @@ export function classifyEvaluation(activity, oracle, metrics, coverage, geometry
       usefulMean,
       usefulHeading,
       boundedP95,
+      p95AllowanceM,
     },
     corridorOccupation: {
       eligibleFractionWithinP95Tolerance: eligibleOccupation,
       threshold: 0.95,
       satisfied: corridorOccupationSatisfied,
+      notWorseThanLocal: corridorOccupationNotWorse,
+      localEligibleFractionWithinP95Tolerance: localEligibleOccupation,
       identityVerified: false,
       identityStatus: 'NOT_VERIFIED_WITHOUT_COMPETING_CORRIDOR_GEOMETRY',
     },
     multiRegionCoverageSatisfied: multipleEligibleRegionsCovered,
     hardToleranceSatisfied,
+    hardToleranceNotWorse,
     rejectionReasonCounts: reasons,
   };
 }

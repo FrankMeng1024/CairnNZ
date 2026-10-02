@@ -91,10 +91,23 @@ try {
       acceptedIslandCount: result.acceptedIslandCount,
       requestCount: result.requestCount,
       directionsRequestCount: result.directionsRequestCount,
+      localFinal: result.localFinal,
+      selectedFinal: result.selectedFinal,
       segmentStats: result.segmentStats,
       transportReceipts: result.transportReceipts,
     };
     writeJson(path.join(outputRoot, 'captured-probes', `${runId}.json`), report);
+    writeJson(path.join(outputRoot, 'replayed-activities', runId, 'QA_ACTIVITY.json'), {
+      ...activity,
+      localFinal: result.localFinal,
+      selectedFinal: result.selectedFinal,
+      selectedSource: result.selectedSource,
+      segmentStats: result.segmentStats,
+      requestCount: result.requestCount,
+      directionsRequestCount: result.directionsRequestCount,
+      acceptedIslandCount: result.acceptedIslandCount,
+      transportReceipts: result.transportReceipts,
+    });
     reports.push(report);
   }
   if (unexpectedNavigationRequests !== 0) throw new Error('captured_probe_network_fallback');

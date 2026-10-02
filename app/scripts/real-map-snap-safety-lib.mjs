@@ -106,6 +106,40 @@ function referenceCoverage(reference, selected, thresholdM, referenceFractions =
   return referenceSamples.length ? covered.length / referenceSamples.length : null;
 }
 
+function orderedReferenceCheckpoints(reference, selected, thresholdM, referenceFractions = [[0, 1]]) {
+  const allReferenceSamples = resamplePhysicalSegments(reference, 5).flat();
+  const totalM = allReferenceSamples.at(-1)?.globalDistanceM ?? 0;
+  const eligible = allReferenceSamples.filter(point => {
+    const fraction = totalM <= 0 ? 0 : point.globalDistanceM / totalM;
+    return referenceFractions.some(([start, end]) => fraction >= start && fraction <= end);
+  });
+  if (eligible.length === 0) return null;
+  const checkpointCount = Math.min(12, eligible.length);
+  const checkpoints = Array.from({ length: checkpointCount }, (_unused, index) => (
+    eligible[Math.round(index * (eligible.length - 1) / Math.max(1, checkpointCount - 1))]
+  ));
+  const selectedSamples = resamplePhysicalSegments(selected, 5).flat();
+  let minimumSelectedIndex = 0;
+  const matches = checkpoints.map(checkpoint => {
+    let best = { selectedIndex: -1, distanceM: Infinity };
+    for (let index = minimumSelectedIndex; index < selectedSamples.length; index += 1) {
+      const distanceM = hav(checkpoint, selectedSamples[index]);
+      if (distanceM < best.distanceM) best = { selectedIndex: index, distanceM };
+    }
+    const matched = best.selectedIndex >= 0 && best.distanceM <= thresholdM;
+    if (matched) minimumSelectedIndex = best.selectedIndex;
+    return { matched, ...best };
+  });
+  const matchedCount = matches.filter(item => item.matched).length;
+  return {
+    checkpointCount,
+    matchedCheckpointCount: matchedCount,
+    matchedCheckpointFraction: matchedCount / checkpointCount,
+    orderPreserved: matchedCount === checkpointCount,
+    maximumCheckpointDeviationM: Math.max(...matches.map(item => item.distanceM)),
+  };
+}
+
 export function evaluateRouteSafety({
   selected,
   localFinal,
@@ -154,6 +188,14 @@ export function evaluateRouteSafety({
     )
     : null;
   const topologyThreshold = context.topologyCoverageThreshold ?? 0.95;
+  const orderedCheckpoints = reference?.length >= 2
+    ? orderedReferenceCheckpoints(
+      reference,
+      selected,
+      context.topologyToleranceM ?? 15,
+      context.topologyReferenceFractions ?? [[0, 1]],
+    )
+    : null;
 
   return {
     finalAssembledEdgeCount: edges.length,
@@ -177,12 +219,17 @@ export function evaluateRouteSafety({
         outsidePermittedSampleCount: outsidePermitted.length,
         competingCorridorSampleCount: onCompeting.length,
       },
-    orderedReferenceTopology: topologyCoverageFraction == null
+    orderedReferenceTopology: topologyCoverageFraction == null || orderedCheckpoints == null
       ? { status: 'NOT_VERIFIED', reason: 'ORDERED_REFERENCE_UNAVAILABLE' }
       : {
-        status: topologyCoverageFraction >= topologyThreshold ? 'PARTIAL_REFERENCE_PASS' : 'FINDING',
+        status: topologyCoverageFraction >= topologyThreshold
+          && orderedCheckpoints.matchedCheckpointFraction >= topologyThreshold
+          && orderedCheckpoints.orderPreserved
+          ? 'PARTIAL_REFERENCE_PASS'
+          : 'FINDING',
         referenceCoverageFraction: topologyCoverageFraction,
         threshold: topologyThreshold,
+        ...orderedCheckpoints,
         limitation: 'Reference coverage checks erased geometry but is not a surveyed connectivity or layer proof.',
       },
   };

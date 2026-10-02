@@ -128,8 +128,8 @@ describe('O50 pedestrian geometry modes', () => {
   const originalFetch = global.fetch;
   afterEach(() => { global.fetch = originalFetch; });
 
-  test('mapped road centerline plus stable side becomes Mode B, not centreline display', async () => {
-    const canonical = line(0, 100, 8, 12);
+  test('stable lateral evidence retains the authoritative provider line without inventing a sidewalk side', async () => {
+    const canonical = line(0, 100, 4, 12);
     global.fetch = jest.fn(async () => mapMatchingResponse(canonical, 0, 'Example Road')) as any;
     const result = await reconstructPedestrianFinalRoute(canonical, {
       mapboxToken: 'pk.test',
@@ -139,7 +139,30 @@ describe('O50 pedestrian geometry modes', () => {
     if (!result.ok) return;
     expect(result.stats.sections.some(section => section.geometryMode === 'B_ROAD_OFFSET')).toBe(true);
     expect(result.stats.sections.find(section => section.geometryMode === 'B_ROAD_OFFSET')?.lateralOffsetM)
-      .toBeGreaterThan(6);
+      .toBeGreaterThan(3);
+    const midpoint = result.points[Math.floor(result.points.length / 2)];
+    expect(Math.abs(midpoint.lat - BASE_LAT) * METRES_PER_DEGREE).toBeLessThan(0.5);
+  });
+
+  test('strong road identity alone does not promote a provider line far from stable local truth', async () => {
+    const canonical = line(0, 100, 8, 12);
+    global.fetch = jest.fn(async () => mapMatchingResponse(canonical, 0, 'Example Road')) as any;
+    const result = await reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: 'pk.test',
+      directionsFallback: false,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.roadOffsetSectionCount).toBe(0);
+    expect(result.stats.sectionDecisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        result: 'rejected',
+        reasonCode: 'LOCAL_NO_MEANINGFUL_IMPROVEMENT',
+        notes: expect.arrayContaining([
+          expect.stringContaining('candidate:promotion:strong-provider-line-no-bounded-utility'),
+        ]),
+      }),
+    ]));
   });
 
   test('independent unnamed pedestrian-aligned geometry becomes Mode A', async () => {
@@ -171,12 +194,34 @@ describe('O50 pedestrian geometry modes', () => {
       && section.geometryMode === 'D_WEAK_SAME_CORRIDOR'
       && section.decision === 'refined'
     ))).toBe(true);
-    // The two exact canonical endpoints remain truth anchors; the reconstructed
-    // corridor between them should no longer oscillate between sidewalk sides.
+    // The exact canonical endpoints remain truth anchors with blended seams;
+    // the centre of the reconstructed corridor stays on provider authority.
     const corridorInterior = result.points.slice(1, -1);
-    const lateralRangeM = Math.max(...corridorInterior.map(sample => sample.lat))
-      - Math.min(...corridorInterior.map(sample => sample.lat));
-    expect(lateralRangeM * METRES_PER_DEGREE).toBeLessThan(2);
+    const midpoint = corridorInterior[Math.floor(corridorInterior.length / 2)];
+    expect(Math.abs(midpoint.lat - BASE_LAT) * METRES_PER_DEGREE).toBeLessThan(0.5);
+  });
+
+  test('does not promote weak network authority that remains outside the bounded truth distance', async () => {
+    const canonical = Array.from({ length: 18 }, (_unused, index) => (
+      point(index * 8, index >= 6 && index <= 9 ? 7 : 1, index, 14)
+    ));
+    global.fetch = jest.fn(async () => mapMatchingResponse(canonical, 0, 'Ordinary Road')) as any;
+    const result = await reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: 'pk.test',
+      directionsFallback: false,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.weakSameCorridorSectionCount).toBe(0);
+    expect(result.stats.sectionDecisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        result: 'rejected',
+        reasonCode: 'LOCAL_NO_MEANINGFUL_IMPROVEMENT',
+        notes: expect.arrayContaining([
+          expect.stringContaining('candidate:promotion:weak-provider-line-no-bounded-utility'),
+        ]),
+      }),
+    ]));
   });
 
   test('does not turn a tiny weak-corridor endpoint sliver into a network hook', async () => {
@@ -259,9 +304,9 @@ describe('O50 pedestrian geometry modes', () => {
   });
 
   test('mapped → off-network → mapped assembles one chronological mixed Final', async () => {
-    const first = line(0, 75, 8, 16);
+    const first = line(0, 75, 4, 16);
     const middle = Array.from({ length: 16 }, (_unused, index) => point(80 + index * 4, 8 + index * 2, index + 16));
-    const last = line(148, 223, -8, 16).map((sample, index) => ({ ...sample, t: point(0, 0, index + 32).t }));
+    const last = line(148, 223, -4, 16).map((sample, index) => ({ ...sample, t: point(0, 0, index + 32).t }));
     const canonical = [...first, ...middle, ...last];
     global.fetch = jest.fn(async (url: string) => {
       const coords = url.split('/walking/')[1].split('?')[0].split(';').map(value => {

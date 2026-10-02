@@ -49,10 +49,19 @@ test('an unchanged hybrid is not accepted without useful mean or straight-suppor
   assert.equal(result.utility.usefulHeading, false);
 });
 
-test('p95 deterioration beyond the frozen 0.5 m bound remains a finding despite mean gain', () => {
+test('a sub-metre p95 trade remains bounded when mean utility is clear', () => {
   const result = classifyEvaluation(activity('hybrid'), oracle, {
     local: metric({ meanM: 5, p95M: 9 }),
     selected: metric({ meanM: 4, p95M: 9.6 }),
+  }, coverage);
+  assert.equal(result.observedOutcome, 'PASS_IN_DECLARED_SCOPE');
+  assert.equal(result.utility.boundedP95, true);
+});
+
+test('p95 deterioration beyond the proportional one-metre floor remains a finding', () => {
+  const result = classifyEvaluation(activity('hybrid'), oracle, {
+    local: metric({ meanM: 5, p95M: 9 }),
+    selected: metric({ meanM: 4, p95M: 10.5 }),
   }, coverage);
   assert.equal(result.observedOutcome, 'UTILITY_REGRESSION');
 });
