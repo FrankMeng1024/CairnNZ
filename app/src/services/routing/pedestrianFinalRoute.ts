@@ -1560,16 +1560,17 @@ function localTruthEnvelopeM(point: MatcherSubmittedPoint): number {
   return Math.min(15, Math.max(8, accuracyM * 1.25));
 }
 
-function eligibleSnapSectionRegime(point: MatcherSubmittedPoint): {
+function eligibleSnapSectionRegime(): {
   key: string;
   classification: SnapSectionClassification;
   reasonCode: SnapSectionReasonCode;
 } {
-  const accuracyM = typeof point.accuracy === 'number' && Number.isFinite(point.accuracy)
-    ? point.accuracy
-    : 10;
   return {
-    key: accuracyM <= 15 ? 'eligible:precise' : 'eligible:usable',
+    // Accuracy still controls the explicit uncertainty/correspondence/truth
+    // gates above. Once those gates agree that adjacent observations are
+    // eligible, a harmless metadata transition must not manufacture a new
+    // physical section before minimum-support checks run.
+    key: 'eligible:supported',
     classification: 'SNAP_ELIGIBLE',
     reasonCode: 'TRACEPOINT_SUPPORTED',
   };
@@ -1625,7 +1626,7 @@ function snapSectionRegime(
       reasonCode: 'LOCAL_TRUTH_ENVELOPE_EXCEEDED',
     };
   }
-  return eligibleSnapSectionRegime(point);
+  return eligibleSnapSectionRegime();
 }
 
 /**
@@ -1682,7 +1683,7 @@ export function deriveSnapSectionRuns(
       if (keepAsLocalRegime) continue;
       if (isBoundedInterior || labels[start].reasonCode === 'LOCAL_TRUTH_ENVELOPE_EXCEEDED') {
         for (let fill = start; fill <= offset; fill += 1) {
-          labels[fill] = eligibleSnapSectionRegime(chunk[run[fill]]);
+          labels[fill] = eligibleSnapSectionRegime();
         }
       }
     }

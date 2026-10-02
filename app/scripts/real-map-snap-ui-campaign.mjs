@@ -35,6 +35,7 @@ const selection = argument('--selection', 'sentinels');
 const onlyRun = argument('--run');
 const skipRuns = new Set(String(argument('--skip-runs', '')).split(',').filter(Boolean));
 const appendToShelf = process.argv.includes('--append');
+const capturedOnly = process.argv.includes('--captured-only');
 const capturedRoot = argument('--captured-root') ? path.resolve(argument('--captured-root')) : null;
 const capturedRuns = new Set(String(argument('--captured-runs', sentinelIds.join(','))).split(',').filter(Boolean));
 const ownerUserId = argument('--owner', `real-map-snap-${selection}-owner`);
@@ -54,7 +55,7 @@ function readPublicToken() {
   return match[1];
 }
 
-const mapboxPublicToken = readPublicToken();
+const mapboxPublicToken = capturedOnly ? null : readPublicToken();
 const writeJson = (file, value, mode = 0o644) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.tmp`;
@@ -89,6 +90,7 @@ const networkAudit = [];
 const runtimeErrors = [];
 const captureRecoveries = [];
 const results = [];
+let unexpectedLiveNavigationRequests = 0;
 let active = { phase: 'boot', runId: 'none', activityId: null };
 const mark = phase => {
   active.phase = phase;
@@ -155,6 +157,19 @@ async function handleNavigationRequest(route, endpoint) {
   const parsed = new URL(placeholderUrl);
   const sanitizedUrl = sanitizeUrl(placeholderUrl);
   const fingerprint = requestFingerprint(request.method(), placeholderUrl);
+  if (capturedOnly) {
+    unexpectedLiveNavigationRequests += 1;
+    networkAudit.push({
+      runId: active.runId,
+      phase: active.phase,
+      boundary: 'mapbox-blocked-captured-only',
+      endpoint,
+      fingerprint,
+      sanitizedUrl,
+    });
+    await route.abort('blockedbyclient');
+    return;
+  }
   if (request.method() !== 'GET'
       || parsed.origin !== 'https://api.mapbox.com'
       || parsed.searchParams.get('access_token') !== 'snap-lab-isolated-authority') {
@@ -543,6 +558,9 @@ async function runJourney(entry) {
 }
 
 try {
+  if (capturedOnly && (!capturedRoot || entries.some(entry => !capturedRuns.has(entry.runId)))) {
+    throw new Error('captured_only_requires_captured_root_and_every_selected_run');
+  }
   await initialize();
   if (!appendToShelf) {
     await page.evaluate(async ownerId => {
@@ -604,10 +622,15 @@ try {
     liveNavigationRequests: readCampaignLedger(ledgerPath).totals.navigation,
     runtimeErrors,
     captureRecoveries,
+    capturedOnly,
+    unexpectedLiveNavigationRequests,
     themeEvidence,
     cases: results,
   };
   writeJson(path.join(outputRoot, 'RUN_RESULTS.json'), summary);
+  if (capturedOnly && unexpectedLiveNavigationRequests !== 0) {
+    throw new Error(`captured_only_network_fallback:${unexpectedLiveNavigationRequests}`);
+  }
   if (runtimeErrors.length > 0) throw new Error(`real_map_runtime_errors:${runtimeErrors.join(' | ')}`);
   process.stdout.write(`${JSON.stringify({ ok: true, outputRoot, executed: results.length, retained: shelf.length }, null, 2)}\n`);
 } finally {

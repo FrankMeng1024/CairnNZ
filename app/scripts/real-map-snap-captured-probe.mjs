@@ -12,6 +12,9 @@ const outputRoot = path.resolve(argument(
   '--output',
   path.join(process.env.HOME, 'Desktop/Cairn_RealMap_Snap_Final_Review/sentinels-before-fix'),
 ));
+const inputRoot = path.resolve(argument('--input', outputRoot));
+const inputActivityRoot = path.resolve(argument('--activities', path.join(inputRoot, 'activities')));
+const inputCaptureRoot = path.resolve(argument('--captures', path.join(inputRoot, 'http-captures')));
 const baseUrl = argument('--url', 'http://127.0.0.1:8098');
 const runIds = String(argument('--runs', 'X01-hike-normal,X02-hike-normal')).split(',').filter(Boolean);
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -45,12 +48,12 @@ try {
   const reports = [];
   for (const runId of runIds) {
     const activity = JSON.parse(fs.readFileSync(
-      path.join(outputRoot, 'activities', runId, 'QA_ACTIVITY.json'),
+      path.join(inputActivityRoot, runId, 'QA_ACTIVITY.json'),
       'utf8',
     ));
     const entries = activity.transportReceipts.map(receipt => {
       const capture = JSON.parse(fs.readFileSync(
-        path.join(outputRoot, 'http-captures', `${receipt.requestFingerprint}.json`),
+        path.join(inputCaptureRoot, `${receipt.requestFingerprint}.json`),
         'utf8',
       ));
       return {

@@ -21,6 +21,10 @@ const evaluationRoot = path.resolve(argument('--evaluation', path.join(reviewRoo
 const atlasRoot = path.resolve(argument('--atlas', path.join(reviewRoot, 'real-map-atlas')));
 const outputRoot = path.resolve(argument('--output', path.join(reviewRoot, 'reviewers')));
 const ledgerPath = path.resolve(argument('--ledger', path.join(reviewRoot, 'request-cost-ledger.json')));
+const safetyPath = path.resolve(argument(
+  '--safety',
+  path.join(process.env.HOME, 'Desktop/Cairn_O71_Targeted_RealMap_Closure/safety-check-old-activities/REAL_MAP_SAFETY_REPORT.json'),
+));
 const runPath = path.join(path.dirname(activityRoot), 'RUN_RESULTS.json');
 const auditPath = path.join(path.dirname(activityRoot), 'NETWORK_BOUNDARY_AUDIT.json');
 
@@ -34,9 +38,15 @@ const pointsFingerprint = points => crypto.createHash('sha256').update(JSON.stri
 
 const evaluation = JSON.parse(fs.readFileSync(path.join(evaluationRoot, 'SUMMARY.json'), 'utf8'));
 const evaluationById = new Map(evaluation.cases.map(item => [item.runId, item]));
+const evaluationReportById = new Map(evaluation.cases.map(item => {
+  const reportPath = path.join(evaluationRoot, 'reports', `${item.runId}.json`);
+  return [item.runId, fs.existsSync(reportPath) ? JSON.parse(fs.readFileSync(reportPath, 'utf8')) : null];
+}));
 const run = JSON.parse(fs.readFileSync(runPath, 'utf8'));
 const audit = JSON.parse(fs.readFileSync(auditPath, 'utf8'));
 const ledger = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
+const safety = fs.existsSync(safetyPath) ? JSON.parse(fs.readFileSync(safetyPath, 'utf8')) : null;
+const safetyById = new Map((safety?.cases ?? []).map(item => [item.runId, item]));
 const records = [];
 for (const runId of fs.readdirSync(activityRoot).sort()) {
   const directory = path.join(activityRoot, runId);
@@ -72,11 +82,14 @@ async function laneAReport() {
     const directionsAccepted = networkSections.filter(section => section.networkSource === 'walking-directions');
     const maxSeamEdgeM = Math.max(0, ...sections.flatMap(section => [section.seam?.entryEdgeM ?? 0, section.seam?.exitEdgeM ?? 0]));
     const maxSeamAngleDeg = Math.max(0, ...sections.flatMap(section => [section.seam?.entryHeadingDeltaDeg ?? 0, section.seam?.exitHeadingDeltaDeg ?? 0]));
-    const verdict = record.evaluation?.verdict ?? 'UNKNOWN';
+    const evaluationReport = evaluationReportById.get(record.runId);
+    const observedOutcome = record.evaluation?.observedOutcome ?? record.evaluation?.verdict ?? 'UNKNOWN';
+    const provenRootCause = record.evaluation?.provenRootCause ?? 'NOT_REPORTED_BY_LEGACY_EVALUATOR';
+    const safetyCase = safetyById.get(record.runId) ?? null;
     const topology = record.oracle.protectedTopology.join('; ');
     const comment = networkSections.length > 0
       ? `${record.runId}: ${networkSections.length} persisted network section(s) survived whole-route assembly; protected sequence reviewed against ${topology}.`
-      : `${record.runId}: provider output was retained in receipts but Selected Final stayed local; ${record.oracle.expectedClass} is reported as ${verdict}.`;
+      : `${record.runId}: provider output was retained in receipts but Selected Final stayed local; ${record.oracle.expectedClass} has observed outcome ${observedOutcome}; root cause ${provenRootCause}.`;
     return {
       runId: record.runId,
       activityId: record.activity.activityId,
@@ -98,19 +111,39 @@ async function laneAReport() {
       maxSeamEdgeM: fmt(maxSeamEdgeM),
       maxSeamAngleDeg: fmt(maxSeamAngleDeg),
       referenceDeviationM: {
-        localMean: record.evaluation?.localMeanM ?? null,
-        selectedMean: record.evaluation?.selectedMeanM ?? null,
+        localMean: evaluationReport?.metrics?.local?.meanM ?? record.evaluation?.localMeanM ?? null,
+        selectedMean: evaluationReport?.metrics?.selected?.meanM ?? record.evaluation?.selectedMeanM ?? null,
         selectedP95: record.evaluation?.selectedP95M ?? null,
-        selectedMax: record.evaluation?.selectedMaxM ?? null,
+        selectedMax: evaluationReport?.metrics?.selected?.maxM ?? record.evaluation?.selectedMaxM ?? null,
       },
       protectedTopology: record.oracle.protectedTopology,
-      verdict,
-      outcome: outcomeFor(verdict),
+      observedOutcome,
+      provenRootCause,
+      outcome: record.evaluation?.observedOutcome
+        ? (observedOutcome === 'PASS_IN_DECLARED_SCOPE' ? 'PASS' : 'FINDING')
+        : outcomeFor(observedOutcome),
+      independentSafety: safetyCase ? {
+        outcome: safetyCase.outcome,
+        obstacleOrBarrier: safetyCase.wholeSelectedVersusIndependentContext?.obstacleOrBarrier ?? null,
+        corridorIdentity: safetyCase.wholeSelectedVersusIndependentContext?.corridorIdentity ?? null,
+        movementGap: safetyCase.wholeSelectedVersusIndependentContext?.movementGap ?? null,
+        orderedReferenceTopology: safetyCase.wholeSelectedVersusIndependentContext?.orderedReferenceTopology ?? null,
+        introducedVersusLocal: safetyCase.introducedVersusLocal ?? null,
+      } : {
+        outcome: 'UNKNOWN',
+        reason: 'INDEPENDENT_SAFETY_REPORT_UNAVAILABLE',
+      },
       reviewerComment: comment,
     };
   });
-  const wrong = cases.filter(item => item.verdict === 'WRONG_CORRIDOR').length;
-  const obstacle = cases.filter(item => item.verdict === 'UNSUPPORTED_OBSTACLE_CROSSING').length;
+  const wrong = cases.filter(item => item.observedOutcome === 'WRONG_CORRIDOR').length;
+  const checkedObstacle = cases.filter(item => item.independentSafety.obstacleOrBarrier?.status?.startsWith('VERIFIED'));
+  const obstacle = checkedObstacle.reduce((sum, item) => (
+    sum + (item.independentSafety.obstacleOrBarrier?.crossingCount ?? 0)
+  ), 0);
+  const unknownObstacle = cases.length - checkedObstacle.length;
+  const checkedCorridor = cases.filter(item => item.independentSafety.corridorIdentity?.status?.startsWith('VERIFIED'));
+  const unknownCorridor = cases.length - checkedCorridor.length;
   const unsafeWhole = cases.filter(item => !item.wholeRouteAccepted).length;
   return {
     schema: 'cairn.real-map-snap.reviewer-a.v1',
@@ -121,17 +154,23 @@ async function laneAReport() {
     summary: {
       outcomes: groupCounts(cases.map(item => item.outcome)),
       selectedSources: groupCounts(cases.map(item => item.selectedSource)),
-      wrongCorridorCount: wrong,
-      unsupportedObstacleCrossingCount: obstacle,
+      wrongCorridorProxyVerdictCount: wrong,
+      independentlyCheckedObstacleCaseCount: checkedObstacle.length,
+      independentlyObservedObstacleCrossingCount: checkedObstacle.length > 0 ? obstacle : null,
+      obstacleCaseNotVerifiedCount: unknownObstacle,
+      independentlyCheckedCorridorIdentityCaseCount: checkedCorridor.length,
+      corridorIdentityCaseNotVerifiedCount: unknownCorridor,
       wholeRouteValidationFailureCount: unsafeWhole,
       topologyFailureCount: unsafeWhole,
-      responseGeometryLossFindings: cases.filter(item => item.verdict === 'RESPONSE_GEOMETRY_LOSS').length,
-      conservativeUtilityFindings: cases.filter(item => item.verdict === 'URBAN_TOO_CONSERVATIVE').length,
-      mapDataLimitations: cases.filter(item => item.verdict === 'MAP_DATA_LIMITATION').length,
+      responseGeometryLossFindings: cases.filter(item => item.provenRootCause === 'RESPONSE_GEOMETRY_LOSS').length,
+      utilityNotDemonstrated: cases.filter(item => item.observedOutcome === 'UTILITY_NOT_DEMONSTRATED').length,
+      utilityRegressions: cases.filter(item => item.observedOutcome === 'UTILITY_REGRESSION').length,
+      mapDataLimitations: cases.filter(item => item.provenRootCause === 'MAP_DATA_LIMITATION').length,
     },
     verdict: wrong === 0 && obstacle === 0 && unsafeWhole === 0
-      ? 'PASS_SAFETY_WITH_RETAINED_UTILITY_FINDINGS'
-      : 'HOLD',
+      && unknownObstacle === 0 && unknownCorridor === 0
+      ? 'PASS_INDEPENDENT_SAFETY_WITH_RETAINED_UTILITY_FINDINGS'
+      : 'HOLD_SAFETY_NOT_FULLY_VERIFIED',
     cases,
   };
 }
@@ -262,10 +301,7 @@ async function laneCReport() {
       && atlas.finalGeometryFingerprint === record.activity.session.finalGeometryFingerprint
       && atlas.routeSnapshotFingerprint === record.activity.routeSnapshots[0]?.artifactFingerprint
       && atlas.mapSha256 === mapHash;
-    const context = record.oracle.context.join(', ');
-    const visualFinding = record.evaluation?.verdict === 'PASS_IN_DECLARED_SCOPE'
-      ? `${record.runId}: same-bounds map retains ${context}; persisted ${record.activity.selectedSource} overlays the reference without a scored safety violation.`
-      : `${record.runId}: ${record.evaluation?.verdict} remains visible for owner review in ${context}; the difficult case is not omitted or relabelled PASS.`;
+    const integrityComment = `${record.runId}: verified atlas file/hash binding, ${screens.length} retained screenshot files, and required stage filenames. No route-semantic visual judgment is made by this automated lane.`;
     cases.push({
       runId: record.runId,
       activityId: record.activity.activityId,
@@ -279,20 +315,20 @@ async function laneCReport() {
       x05BeforeAndAfterUpgradeScreensPresent: record.runId !== 'X05-hike-normal'
         || ['06-online-upgrade', '07-post-upgrade-cold-reopen'].every(stage => screens.some(name => name.startsWith(stage))),
       activityGeometryHashBinding: Boolean(binding),
-      expectedContext: record.oracle.context,
-      verdict: record.evaluation?.verdict ?? 'UNKNOWN',
-      reviewerComment: visualFinding,
+      expectedContextMetadata: record.oracle.context,
+      observedOutcome: record.evaluation?.observedOutcome ?? record.evaluation?.verdict ?? 'UNKNOWN',
+      reviewerComment: integrityComment,
     });
   }
   return {
-    schema: 'cairn.real-map-snap.reviewer-c.v1',
-    lane: 'C — Real-map visual',
-    execution: 'separated read-only pass over every atlas card and every retained screenshot stage; no production edits and no network dispatch',
+    schema: 'cairn.real-map-snap.reviewer-c-artifact-integrity.v2',
+    lane: 'C — Artifact integrity (not visual semantics)',
+    execution: 'automated read-only file/hash/dimension/stage inspection; it does not claim that a human or vision tool judged route semantics',
     caseCount: cases.length,
     mapsInspected: cases.filter(item => item.mapWidth > 0 && item.mapHeight > 0).length,
     screenshotStageSetsInspected: cases.filter(item => item.screenshotStagesPresent).length,
     geometryHashBindings: cases.filter(item => item.activityGeometryHashBinding).length,
-    retainedNonPassCases: cases.filter(item => item.verdict !== 'PASS_IN_DECLARED_SCOPE').length,
+    retainedNonPassCases: cases.filter(item => item.observedOutcome !== 'PASS_IN_DECLARED_SCOPE').length,
     themeEvidence: {
       valid: themeEvidenceValid,
       captures: themeEvidence,
@@ -302,13 +338,13 @@ async function laneCReport() {
       && item.x05BeforeAndAfterUpgradeScreensPresent
       && item.activityGeometryHashBinding
       && item.mapWidth === 1200
-      && item.mapHeight === 820) && themeEvidenceValid ? 'PASS_WITH_RETAINED_FINDINGS' : 'HOLD',
+      && item.mapHeight === 820) && themeEvidenceValid ? 'PASS_ARTIFACT_INTEGRITY_ONLY' : 'HOLD_ARTIFACT_INTEGRITY',
     cases,
   };
 }
 
 const report = lane === 'A' ? await laneAReport() : lane === 'B' ? await laneBReport() : await laneCReport();
-const filename = `REVIEWER_${lane}_${lane === 'A' ? 'PROVIDER_GEOMETRY' : lane === 'B' ? 'LIFECYCLE_COST' : 'REAL_MAP_VISUAL'}.json`;
+const filename = `REVIEWER_${lane}_${lane === 'A' ? 'PROVIDER_GEOMETRY' : lane === 'B' ? 'LIFECYCLE_COST' : 'ARTIFACT_INTEGRITY'}.json`;
 writeJson(path.join(outputRoot, filename), report);
 const markdown = `# ${report.lane}\n\nVerdict: **${report.verdict}**\n\nExecution: ${report.execution}\n\nCases reviewed: ${report.caseCount}.\n\n\`\`\`json\n${JSON.stringify(report.summary ?? {
   savedAndReopened: report.savedAndReopened,

@@ -1,0 +1,51 @@
+{
+  "schema": "cairn.real-map-snap.closure-safety-context.v1",
+  "authority": "Frozen O71 reference files, route plan, retained real-map atlas, and public authority metadata already captured before closure",
+  "limitations": [
+    "No building, wall, water polygon, access-layer, or competing-road identity geometry was frozen for these cases.",
+    "Raster atlas images are visual context and are not converted into fabricated vector obstacles.",
+    "Missing geometry is reported as NOT_VERIFIED rather than a zero crossing count."
+  ],
+  "criticalCases": [
+    "U02-hike-degraded",
+    "U02-run-degraded",
+    "U03-hike-degraded",
+    "U05-hike-normal",
+    "U06-hike-normal",
+    "M02-hike-normal",
+    "M02-run-degraded",
+    "M03-hike-degraded",
+    "M06-hike-normal",
+    "X01-hike-normal",
+    "X02-hike-normal",
+    "X05-hike-normal",
+    "X06-hike-normal"
+  ],
+  "coverage": {
+    "obstacleGeometry": "NOT_AVAILABLE",
+    "competingCorridorGeometry": "NOT_AVAILABLE",
+    "orderedReferenceGeometry": "AVAILABLE",
+    "physicalSegmentIdentity": "AVAILABLE",
+    "providerResponseGeometry": "AVAILABLE"
+  },
+  "knownPassages": [
+    {
+      "routeId": "U05",
+      "name": "Chambers Laneway",
+      "layer": "open-to-sky pedestrian passage",
+      "waypoint": { "lng": 174.8527353, "lat": -36.9798454 },
+      "reviewRadiusM": 45,
+      "provenance": "Auckland Urban Development Office public reference plus frozen OSM pedestrian route",
+      "coverage": "Passage identity/endpoints supported; surrounding building polygons and wall apertures were not frozen."
+    },
+    {
+      "routeId": "M06",
+      "name": "Falls River Suspension Bridge",
+      "layer": "bridge",
+      "waypoint": { "lng": 173.0486477, "lat": -40.9287808 },
+      "reviewRadiusM": 60,
+      "provenance": "Department of Conservation Abel Tasman Coast Track context plus frozen OSM pedestrian route",
+      "coverage": "Legitimate bridge connector supported; water polygon and bridge layer tags were not frozen as vector evidence."
+    }
+  ]
+}

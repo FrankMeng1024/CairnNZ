@@ -850,6 +850,81 @@ describe('evidence-scoped section and request planning', () => {
     expect(sections[1].sourceEnd).toBeLessThan(sections[2].sourceStart);
   });
 
+  test.each([
+    ['constant below the former threshold', Array(24).fill(14.9)],
+    ['alternating across the former threshold', Array.from({ length: 24 }, (_unused, index) => (
+      index % 2 === 0 ? 14.9 : 15.1
+    ))],
+    ['opposite alternating phase', Array.from({ length: 24 }, (_unused, index) => (
+      index % 2 === 0 ? 15.1 : 14.9
+    ))],
+    ['two sustained usable plateaus', [...Array(12).fill(14.9), ...Array(12).fill(15.1)]],
+    ['slowly changing accuracy', Array.from({ length: 24 }, (_unused, index) => 14.6 + index * 0.04)],
+  ])('keeps compatible eligible accuracy context together: %s', (_label, accuracies) => {
+    const canonical = line(0, 230, 0, 24).map((sample, index) => ({
+      ...sample,
+      accuracy: accuracies[index],
+    }));
+    const submitted = resampleMatcherEvidence(canonical, 4_000);
+    const tracepoints = submitted.map((sample, index) => ({
+      matchings_index: 0,
+      waypoint_index: index,
+      alternatives_count: 0,
+      name: 'Same supported corridor',
+      location: [sample.lng, sample.lat] as [number, number],
+    }));
+
+    expect(deriveSnapSectionRuns(submitted, tracepoints, 0)).toEqual([
+      expect.objectContaining({
+        sourceStart: 0,
+        sourceEnd: 23,
+        classification: 'SNAP_ELIGIBLE',
+        reasonCode: 'TRACEPOINT_SUPPORTED',
+      }),
+    ]);
+  });
+
+  test('keeps sustained high source uncertainty local between eligible flanks', () => {
+    const canonical = line(0, 230, 0, 24).map((sample, index) => ({
+      ...sample,
+      accuracy: index >= 9 && index <= 13 ? 31 : 15,
+    }));
+    const submitted = resampleMatcherEvidence(canonical, 4_000);
+    const tracepoints = submitted.map((sample, index) => ({
+      matchings_index: 0,
+      waypoint_index: index,
+      alternatives_count: 0,
+      name: 'Same supported corridor',
+      location: [sample.lng, sample.lat] as [number, number],
+    }));
+
+    expect(deriveSnapSectionRuns(submitted, tracepoints, 0).map(section => ({
+      sourceStart: section.sourceStart,
+      sourceEnd: section.sourceEnd,
+      classification: section.classification,
+      reasonCode: section.reasonCode,
+    }))).toEqual([
+      {
+        sourceStart: 0,
+        sourceEnd: 8,
+        classification: 'SNAP_ELIGIBLE',
+        reasonCode: 'TRACEPOINT_SUPPORTED',
+      },
+      {
+        sourceStart: 9,
+        sourceEnd: 13,
+        classification: 'LOCAL_ONLY',
+        reasonCode: 'LOCAL_SOURCE_UNCERTAINTY_HIGH',
+      },
+      {
+        sourceStart: 14,
+        sourceEnd: 23,
+        classification: 'SNAP_ELIGIBLE',
+        reasonCode: 'TRACEPOINT_SUPPORTED',
+      },
+    ]);
+  });
+
   test('Matching uses provider-scale windows and gives bounded plans Activity-wide coverage', () => {
     const canonical = line(0, 1_500, 0, 301);
     const plans = matchingWindows(resampleMatcherEvidence(canonical, 4_000));
