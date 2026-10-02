@@ -117,6 +117,7 @@ export interface CandidatePromotionUtility {
   canonicalP95DeviationM: number;
   lengthRatio: number;
   seamAccepted: boolean;
+  explicitPedestrianAuthority: boolean;
 }
 
 export interface PedestrianFinalRequestResult {
@@ -1474,6 +1475,7 @@ export function evaluateCandidatePromotionUtility(input: {
   evidence: CorridorEvidence;
   quality: MatchedGeometryQuality;
   seam: IslandSeamQuality;
+  explicitPedestrianNetwork?: boolean;
 }): CandidatePromotionUtility {
   const providerGeometryRetained = input.mode === 'A_PEDESTRIAN_NETWORK'
     || input.mode === 'B_ROAD_OFFSET'
@@ -1483,11 +1485,27 @@ export function evaluateCandidatePromotionUtility(input: {
     : input.mode === 'A_PEDESTRIAN_NETWORK' || input.mode === 'B_ROAD_OFFSET'
       ? 'strong' as const
       : 'none' as const;
-  const weakUtilitySupported = input.evidence.score >= 0.76
+  const weakUtilitySupported = networkAuthority === 'weak'
+    && input.evidence.score >= 0.76
     && input.quality.p95DeviationM <= 6
     && input.quality.lengthRatio <= 1.12;
-  const strongUtilitySupported = networkAuthority === 'strong'
+  const explicitPedestrianAuthority = input.explicitPedestrianNetwork === true;
+  const pedestrianNetworkUtility = input.mode === 'A_PEDESTRIAN_NETWORK'
+    && explicitPedestrianAuthority
+    && input.quality.accepted
+    && input.evidence.score >= 0.8
+    && input.evidence.endpointDeviationM <= 6
+    && input.quality.lengthRatio >= 0.8
+    && input.quality.lengthRatio <= 1.2;
+  const unnamedPedestrianUtility = input.mode === 'A_PEDESTRIAN_NETWORK'
+    && !explicitPedestrianAuthority
+    && input.evidence.score >= 0.76
+    && input.quality.p95DeviationM <= 6
+    && input.quality.lengthRatio <= 1.12;
+  const roadNetworkUtility = input.mode === 'B_ROAD_OFFSET'
     && input.quality.p95DeviationM <= 6;
+  const strongUtilitySupported = networkAuthority === 'strong'
+    && (pedestrianNetworkUtility || unnamedPedestrianUtility || roadNetworkUtility);
   const accepted = input.seam.accepted && (
     strongUtilitySupported
     || networkAuthority === 'none'
@@ -1513,7 +1531,13 @@ export function evaluateCandidatePromotionUtility(input: {
     canonicalP95DeviationM: input.quality.p95DeviationM,
     lengthRatio: input.quality.lengthRatio,
     seamAccepted: input.seam.accepted,
+    explicitPedestrianAuthority,
   };
+}
+
+function explicitlyPedestrianNetworkName(name: string | null): boolean {
+  return name != null
+    && /\b(?:footpath|footway|path|pedestrian|trail|track|walk|walkway)\b/i.test(name);
 }
 
 function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | null {
@@ -1544,6 +1568,7 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
   }
 
   const modalNetworkName = modalValue(input.names);
+  input.diagnosticNotes?.push(`candidate:network-name:${modalNetworkName ?? 'unnamed'}`);
   const lowAmbiguity = input.source === 'walking-directions'
     ? input.routeAlternativeCount === 0
     : evidence.ambiguityKnownFraction >= 0.7 && evidence.unambiguousFraction >= 0.75;
@@ -1557,7 +1582,16 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
     candidateTraceStage('densified-crop', networkForDisplay),
   ] : [];
   let transformationStage: CandidateGeometryTraceStage['stage'];
-  if (
+  if (lowAmbiguity && explicitlyPedestrianNetworkName(modalNetworkName)) {
+    // A named pedestrian facility is direct provider authority for the
+    // display corridor. It must still pass the unchanged truth-envelope,
+    // topology, seam and length gates; noisy lateral GPS does not demote the
+    // provider's pedestrian facility into an ordinary weak road candidate.
+    mode = 'A_PEDESTRIAN_NETWORK';
+    display = networkForDisplay;
+    transformationStage = 'pedestrian-network-transformation';
+    reason = `${evidence.reason};explicit-pedestrian-network`;
+  } else if (
     evidence.lateral.stable
     && lowAmbiguity
     && evidence.lateral.absoluteMedianM >= ROAD_OFFSET_MIN_M
@@ -1663,7 +1697,13 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
     );
     return null;
   }
-  const promotionUtility = evaluateCandidatePromotionUtility({ mode, evidence, quality, seam });
+  const promotionUtility = evaluateCandidatePromotionUtility({
+    mode,
+    evidence,
+    quality,
+    seam,
+    explicitPedestrianNetwork: explicitlyPedestrianNetworkName(modalNetworkName),
+  });
   if (!promotionUtility.accepted) {
     input.diagnosticNotes?.push(`candidate:promotion:${promotionUtility.reason}`);
     return null;

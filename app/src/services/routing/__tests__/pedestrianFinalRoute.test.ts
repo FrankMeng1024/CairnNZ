@@ -177,6 +177,29 @@ describe('O50 pedestrian geometry modes', () => {
     expect(result.stats.sections.some(section => section.geometryMode === 'A_PEDESTRIAN_NETWORK')).toBe(true);
   });
 
+  test('explicit pedestrian provider authority survives noisy interior evidence with supported endpoints', async () => {
+    const canonical = Array.from({ length: 18 }, (_unused, index) => (
+      point(index * 8, index === 0 || index === 17 ? 0 : 6.5, index, 9)
+    ));
+    global.fetch = jest.fn(async () => mapMatchingResponse(canonical, 0, 'Mapped pedestrian trail')) as any;
+    const result = await reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: 'pk.test',
+      directionsFallback: false,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.sections).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        geometryMode: 'A_PEDESTRIAN_NETWORK',
+        decision: 'refined',
+        promotionUtility: expect.objectContaining({
+          accepted: true,
+          networkAuthority: 'strong',
+        }),
+      }),
+    ]));
+  });
+
   test('strong corridor with uncertain sidewalk side becomes weak-same-corridor reconstruction', async () => {
     const canonical = Array.from({ length: 18 }, (_unused, index) => (
       point(index * 8, index % 2 === 0 ? -3 : 3, index, 14)
