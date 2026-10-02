@@ -1494,7 +1494,7 @@ export function evaluateCandidatePromotionUtility(input: {
     && explicitPedestrianAuthority
     && input.quality.accepted
     && input.evidence.score >= 0.8
-    && input.evidence.endpointDeviationM <= 6
+    && input.evidence.endpointDeviationM <= input.quality.deviationEnvelopeM
     && input.quality.lengthRatio >= 0.8
     && input.quality.lengthRatio <= 1.2;
   const unnamedPedestrianUtility = input.mode === 'A_PEDESTRIAN_NETWORK'

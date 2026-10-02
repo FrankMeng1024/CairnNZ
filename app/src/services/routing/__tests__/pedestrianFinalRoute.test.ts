@@ -3,6 +3,7 @@ import {
   cleanCanonicalGeometry,
   cropGeometryToTracepoints,
   deriveSnapSectionRuns,
+  evaluateCandidatePromotionUtility,
   evaluateCorridorEvidence,
   evaluateLateralOffsetEvidence,
   finalGeometryCriticalIndices,
@@ -177,9 +178,9 @@ describe('O50 pedestrian geometry modes', () => {
     expect(result.stats.sections.some(section => section.geometryMode === 'A_PEDESTRIAN_NETWORK')).toBe(true);
   });
 
-  test('explicit pedestrian provider authority survives noisy interior evidence with supported endpoints', async () => {
+  test('explicit pedestrian provider authority survives noisy evidence inside the accuracy-derived endpoint envelope', async () => {
     const canonical = Array.from({ length: 18 }, (_unused, index) => (
-      point(index * 8, index === 0 || index === 17 ? 0 : 6.5, index, 9)
+      point(index * 8, index === 0 || index === 17 ? 10 : 6.5, index, 9)
     ));
     global.fetch = jest.fn(async () => mapMatchingResponse(canonical, 0, 'Mapped pedestrian trail')) as any;
     const result = await reconstructPedestrianFinalRoute(canonical, {
@@ -198,6 +199,26 @@ describe('O50 pedestrian geometry modes', () => {
         }),
       }),
     ]));
+  });
+
+  test('explicit pedestrian provider authority outside the accuracy-derived endpoint envelope is not promoted', () => {
+    const utility = evaluateCandidatePromotionUtility({
+      mode: 'A_PEDESTRIAN_NETWORK',
+      evidence: { score: 0.81, endpointDeviationM: 13 } as any,
+      quality: {
+        accepted: true,
+        p95DeviationM: 4.6,
+        lengthRatio: 0.98,
+        deviationEnvelopeM: 11.25,
+      } as any,
+      seam: { accepted: true, reason: 'accepted' } as any,
+      explicitPedestrianNetwork: true,
+    });
+    expect(utility).toMatchObject({
+      accepted: false,
+      networkAuthority: 'strong',
+      explicitPedestrianAuthority: true,
+    });
   });
 
   test('strong corridor with uncertain sidewalk side becomes weak-same-corridor reconstruction', async () => {
