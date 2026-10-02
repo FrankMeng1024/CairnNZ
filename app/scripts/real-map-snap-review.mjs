@@ -25,8 +25,8 @@ const safetyPath = path.resolve(argument(
   '--safety',
   path.join(process.env.HOME, 'Desktop/Cairn_O71_Targeted_RealMap_Closure/safety-check-old-activities/REAL_MAP_SAFETY_REPORT.json'),
 ));
-const runPath = path.join(path.dirname(activityRoot), 'RUN_RESULTS.json');
-const auditPath = path.join(path.dirname(activityRoot), 'NETWORK_BOUNDARY_AUDIT.json');
+const runPath = path.resolve(argument('--run', path.join(path.dirname(activityRoot), 'RUN_RESULTS.json')));
+const auditPath = path.resolve(argument('--audit', path.join(path.dirname(activityRoot), 'NETWORK_BOUNDARY_AUDIT.json')));
 
 const sha256File = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const writeJson = (file, value) => {
@@ -178,6 +178,9 @@ async function laneAReport() {
 async function laneBReport() {
   const product = audit.filter(item => item.boundary === 'cairn-api-isolated');
   const mapbox = audit.filter(item => item.boundary?.startsWith('mapbox'));
+  const acceptedOwnerUserIds = new Set(
+    run.ownerUserIds ?? (run.ownerUserId ? [run.ownerUserId] : []),
+  );
   const cases = records.map(record => {
     const activity = record.activity;
     const stages = activity.stageTimestamps;
@@ -196,7 +199,7 @@ async function laneBReport() {
       && snapshot?.artifactFingerprint === record.result.persisted.routeSnapshotFingerprint
     );
     const ok = activity.realm === 'snap-lab'
-      && activity.ownerUserId === run.ownerUserId
+      && acceptedOwnerUserIds.has(activity.ownerUserId)
       && activity.session.id === activity.activityId
       && activity.session.clientActivityId === activity.activityId
       && record.result.result === 'SAVED_AND_COLD_REOPENED'
@@ -251,6 +254,8 @@ async function laneBReport() {
       coordinatePayloadCount: product.filter(item => item.containsCoordinates).length,
       writeMethodCount: product.filter(item => item.method !== 'GET').length,
     },
+    acceptedOwnerUserIds: [...acceptedOwnerUserIds].sort(),
+    observedOwnerUserIds: [...new Set(cases.map(item => item.ownerUserId))].sort(),
     realProviderBoundary: {
       auditEntries: mapbox.length,
       statuses: groupCounts(mapbox.map(item => String(item.status ?? item.boundary))),
