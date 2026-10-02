@@ -43,9 +43,20 @@ const headingDelta = (left, right) => {
   if (delta > 180) delta = 360 - delta;
   return delta;
 };
-const geometryFingerprint = points => crypto.createHash('sha256').update(
+const geometrySha256 = points => crypto.createHash('sha256').update(
   points.map(point => `${point.lat.toFixed(7)},${point.lng.toFixed(7)}`).join('|'),
 ).digest('hex');
+const productionGeometryFingerprint = points => {
+  let hash = 0x811c9dc5;
+  for (const point of points) {
+    const text = `${point.lat.toFixed(6)},${point.lng.toFixed(6)};`;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193);
+    }
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+};
 
 function closestReferenceIndex(point, reference) {
   let best = { index: 0, distanceM: Infinity };
@@ -144,7 +155,9 @@ function stageReport(stage, context, previous) {
   return {
     stage: stage.stage,
     geometryFingerprint: stage.geometryFingerprint,
-    fingerprintVerified: stage.geometryFingerprint === geometryFingerprint(stage.points),
+    productionFingerprint: productionGeometryFingerprint(stage.points),
+    geometrySha256: geometrySha256(stage.points),
+    fingerprintVerified: stage.geometryFingerprint === productionGeometryFingerprint(stage.points),
     pointCount: stage.points.length,
     independentReference: {
       ...independent,

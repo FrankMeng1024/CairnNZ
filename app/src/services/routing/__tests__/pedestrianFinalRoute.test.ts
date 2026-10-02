@@ -212,6 +212,13 @@ describe('O50 pedestrian geometry modes', () => {
         deviationEnvelopeM: 11.25,
       } as any,
       seam: { accepted: true, reason: 'accepted' } as any,
+      transition: {
+        accepted: true,
+        reason: 'accepted',
+        maximumDeformationM: 13,
+        influenceCoverage: 0.5,
+        preservedInteriorM: 40,
+      } as any,
       explicitPedestrianNetwork: true,
     });
     expect(utility).toMatchObject({

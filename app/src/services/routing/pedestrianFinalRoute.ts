@@ -118,6 +118,34 @@ export interface CandidatePromotionUtility {
   lengthRatio: number;
   seamAccepted: boolean;
   explicitPedestrianAuthority: boolean;
+  anchorTransitionReason: EndpointTransitionQuality['reason'];
+  providerToAnchoredMaxM: number;
+  anchorInfluenceCoverage: number;
+  preservedInteriorM: number;
+}
+
+export interface EndpointTransitionQuality {
+  accepted: boolean;
+  reason:
+    | 'accepted'
+    | 'LOCAL_ANCHOR_OVERLAP_UNRESOLVED'
+    | 'LOCAL_ANCHOR_DEFORMATION_EXCEEDED';
+  sourceLengthM: number;
+  headDisplacementM: number;
+  tailDisplacementM: number;
+  headInfluenceM: number;
+  tailInfluenceM: number;
+  influenceCoverage: number;
+  preservedInteriorM: number;
+  maximumDeformationM: number;
+  lengthRatio: number;
+  sourceFingerprint: string;
+  anchoredFingerprint: string;
+}
+
+export interface EndpointTransitionResult {
+  points: SnappedPoint[];
+  quality: EndpointTransitionQuality;
 }
 
 export interface PedestrianFinalRequestResult {
@@ -163,6 +191,8 @@ export type SnapSectionReasonCode =
   | 'LOCAL_TRUTH_ENVELOPE_EXCEEDED'
   | 'LOCAL_SEAM_UNSAFE'
   | 'LOCAL_ASSEMBLY_UNSAFE'
+  | 'LOCAL_ANCHOR_DEFORMATION_EXCEEDED'
+  | 'LOCAL_ANCHOR_OVERLAP_UNRESOLVED'
   | 'LOCAL_NO_MEANINGFUL_IMPROVEMENT'
   | 'LOCAL_DIRECTIONS_WITHOUT_MATCHING_AUTHORITY'
   | 'LOCAL_DIRECTIONS_COMPETING_ROUTES';
@@ -1421,40 +1451,200 @@ export function evaluateCorridorEvidence(input: {
   };
 }
 
+function interpolateSnappedPoint(
+  start: SnappedPoint,
+  end: SnappedPoint,
+  fraction: number,
+): SnappedPoint {
+  const interpolateOptional = (left: number | null | undefined, right: number | null | undefined) => (
+    typeof left === 'number' && Number.isFinite(left)
+      && typeof right === 'number' && Number.isFinite(right)
+      ? left + (right - left) * fraction
+      : left ?? right
+  );
+  const alt = interpolateOptional(start.alt, end.alt);
+  const t = interpolateOptional(start.t, end.t);
+  return {
+    lat: start.lat + (end.lat - start.lat) * fraction,
+    lng: start.lng + (end.lng - start.lng) * fraction,
+    ...(alt != null ? { alt } : {}),
+    ...(t != null ? { t: Math.round(t) } : {}),
+  };
+}
+
+function immutableChainageSamples(
+  points: SnappedPoint[],
+  boundaryChainagesM: number[],
+): Array<{ point: SnappedPoint; chainageM: number }> {
+  if (points.length === 0) return [];
+  const cumulativeM = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    cumulativeM.push(cumulativeM[index - 1] + hav(points[index - 1], points[index]));
+  }
+  const totalM = cumulativeM[cumulativeM.length - 1];
+  // Match the route validator's duplicate-edge tolerance: a transition
+  // boundary already represented within five centimetres is the same
+  // chainage, not a reason to manufacture another display vertex.
+  const chainageIdentityM = 0.05;
+  const boundaries = boundaryChainagesM
+    .filter(value => value > chainageIdentityM && value < totalM - chainageIdentityM)
+    .sort((left, right) => left - right)
+    .filter((value, index, values) => index === 0 || value - values[index - 1] > chainageIdentityM);
+  const result: Array<{ point: SnappedPoint; chainageM: number }> = [
+    { point: { ...points[0] }, chainageM: 0 },
+  ];
+  let boundaryIndex = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const segmentStartM = cumulativeM[index - 1];
+    const segmentEndM = cumulativeM[index];
+    const segmentLengthM = segmentEndM - segmentStartM;
+    while (boundaryIndex < boundaries.length && boundaries[boundaryIndex] < segmentEndM - chainageIdentityM) {
+      const boundaryM = boundaries[boundaryIndex];
+      if (boundaryM > segmentStartM + chainageIdentityM && segmentLengthM > chainageIdentityM) {
+        result.push({
+          point: interpolateSnappedPoint(
+            points[index - 1],
+            points[index],
+            (boundaryM - segmentStartM) / segmentLengthM,
+          ),
+          chainageM: boundaryM,
+        });
+      }
+      boundaryIndex += 1;
+    }
+    result.push({ point: { ...points[index] }, chainageM: segmentEndM });
+    while (boundaryIndex < boundaries.length && boundaries[boundaryIndex] <= segmentEndM + chainageIdentityM) {
+      boundaryIndex += 1;
+    }
+  }
+  return result;
+}
+
+/**
+ * Join an immutable provider crop to its canonical boundary points.
+ *
+ * Both influence functions are derived once from source-polyline chainage.
+ * They are then applied in one symmetric pass, so vertex density and
+ * head/tail iteration order cannot change the physical transition. When the
+ * requested end regions consume the entire provider span, an exact symmetric
+ * attempted join is returned for diagnostics but is explicitly ineligible
+ * for network promotion.
+ */
+export function anchorEndpointTransition(
+  points: SnappedPoint[],
+  canonical: RawPoint[],
+  anchorHead = true,
+  anchorTail = true,
+): EndpointTransitionResult {
+  const source = points.map(point => ({ ...point }));
+  const sourceFingerprint = geometryFingerprint(source);
+  if (source.length < 2 || canonical.length < 2) {
+    return {
+      points: source,
+      quality: {
+        accepted: true,
+        reason: 'accepted',
+        sourceLengthM: pathLength(source),
+        headDisplacementM: 0,
+        tailDisplacementM: 0,
+        headInfluenceM: 0,
+        tailInfluenceM: 0,
+        influenceCoverage: 0,
+        preservedInteriorM: pathLength(source),
+        maximumDeformationM: 0,
+        lengthRatio: 1,
+        sourceFingerprint,
+        anchoredFingerprint: sourceFingerprint,
+      },
+    };
+  }
+  const sourceLengthM = pathLength(source);
+  const headAnchor = canonicalPoint(canonical[0]);
+  const tailAnchor = canonicalPoint(canonical[canonical.length - 1]);
+  const headDisplacementM = anchorHead ? hav(source[0], headAnchor) : 0;
+  const tailDisplacementM = anchorTail ? hav(source[source.length - 1], tailAnchor) : 0;
+  const headRequestedM = anchorHead && headDisplacementM > 0.001
+    ? clamp(headDisplacementM * 4, 16, 48)
+    : 0;
+  const tailRequestedM = anchorTail && tailDisplacementM > 0.001
+    ? clamp(tailDisplacementM * 4, 16, 48)
+    : 0;
+  const headInfluenceM = Math.min(sourceLengthM, headRequestedM);
+  const tailInfluenceM = Math.min(sourceLengthM, tailRequestedM);
+  const preservedInteriorM = Math.max(0, sourceLengthM - headInfluenceM - tailInfluenceM);
+  const consumesProviderSpan = sourceLengthM <= 0.001 || (
+    headInfluenceM + tailInfluenceM > 0
+    && preservedInteriorM <= 0.001
+  );
+  const overlappingEnds = headInfluenceM > 0 && tailInfluenceM > 0
+    && headInfluenceM + tailInfluenceM >= sourceLengthM - 0.001;
+  const reason: EndpointTransitionQuality['reason'] = overlappingEnds
+    ? 'LOCAL_ANCHOR_OVERLAP_UNRESOLVED'
+    : consumesProviderSpan
+      ? 'LOCAL_ANCHOR_DEFORMATION_EXCEEDED'
+      : 'accepted';
+  const samples = immutableChainageSamples(source, reason === 'accepted'
+    ? [headInfluenceM, sourceLengthM - tailInfluenceM]
+    : []);
+  const headLatDelta = headAnchor.lat - source[0].lat;
+  const headLngDelta = headAnchor.lng - source[0].lng;
+  const tailLatDelta = tailAnchor.lat - source[source.length - 1].lat;
+  const tailLngDelta = tailAnchor.lng - source[source.length - 1].lng;
+  const deformationsM: number[] = [];
+  const result = samples.map(({ point, chainageM }) => {
+    // The rejected overlap diagnostic remains symmetric and exact. It is not
+    // eligible for promotion because every provider chainage is influenced.
+    const headWeight = reason === 'LOCAL_ANCHOR_OVERLAP_UNRESOLVED'
+      ? 1 - chainageM / Math.max(0.001, sourceLengthM)
+      : headInfluenceM > 0 && chainageM < headInfluenceM
+        ? 1 - chainageM / headInfluenceM
+        : 0;
+    const tailWeight = reason === 'LOCAL_ANCHOR_OVERLAP_UNRESOLVED'
+      ? chainageM / Math.max(0.001, sourceLengthM)
+      : tailInfluenceM > 0 && sourceLengthM - chainageM < tailInfluenceM
+        ? 1 - (sourceLengthM - chainageM) / tailInfluenceM
+        : 0;
+    const transformed = {
+      ...point,
+      lat: point.lat + headLatDelta * headWeight + tailLatDelta * tailWeight,
+      lng: point.lng + headLngDelta * headWeight + tailLngDelta * tailWeight,
+    };
+    deformationsM.push(hav(point, transformed));
+    return transformed;
+  });
+  if (anchorHead) result[0] = headAnchor;
+  if (anchorTail) result[result.length - 1] = tailAnchor;
+  const anchoredFingerprint = geometryFingerprint(result);
+  const anchoredLengthM = pathLength(result);
+  return {
+    points: result,
+    quality: {
+      accepted: reason === 'accepted',
+      reason,
+      sourceLengthM,
+      headDisplacementM,
+      tailDisplacementM,
+      headInfluenceM,
+      tailInfluenceM,
+      influenceCoverage: sourceLengthM > 0
+        ? Math.min(1, (headInfluenceM + tailInfluenceM) / sourceLengthM)
+        : 1,
+      preservedInteriorM,
+      maximumDeformationM: deformationsM.length > 0 ? Math.max(...deformationsM) : 0,
+      lengthRatio: sourceLengthM > 0 ? anchoredLengthM / sourceLengthM : 1,
+      sourceFingerprint,
+      anchoredFingerprint,
+    },
+  };
+}
+
 function anchorEndpoints(
   points: SnappedPoint[],
   canonical: RawPoint[],
   anchorHead = true,
   anchorTail = true,
 ): SnappedPoint[] {
-  if (points.length < 2 || canonical.length < 2) return points;
-  const result = points.slice();
-  const blendAnchor = (head: boolean) => {
-    const endpointIndex = head ? 0 : result.length - 1;
-    const anchor = canonicalPoint(head ? canonical[0] : canonical[canonical.length - 1]);
-    const displacementM = hav(result[endpointIndex], anchor);
-    const blendDistanceM = clamp(displacementM * 4, 16, 48);
-    const latDelta = anchor.lat - result[endpointIndex].lat;
-    const lngDelta = anchor.lng - result[endpointIndex].lng;
-    let travelledM = 0;
-    let previousIndex = endpointIndex;
-    for (let offset = 0; offset < result.length; offset += 1) {
-      const index = head ? offset : result.length - 1 - offset;
-      if (offset > 0) travelledM += hav(result[previousIndex], result[index]);
-      if (travelledM >= blendDistanceM) break;
-      const weight = 1 - travelledM / blendDistanceM;
-      result[index] = {
-        ...result[index],
-        lat: result[index].lat + latDelta * weight,
-        lng: result[index].lng + lngDelta * weight,
-      };
-      previousIndex = index;
-    }
-    result[endpointIndex] = anchor;
-  };
-  if (anchorHead) blendAnchor(true);
-  if (anchorTail) blendAnchor(false);
-  return result;
+  return anchorEndpointTransition(points, canonical, anchorHead, anchorTail).points;
 }
 
 function candidateTraceStage(
@@ -1475,11 +1665,12 @@ export function evaluateCandidatePromotionUtility(input: {
   evidence: CorridorEvidence;
   quality: MatchedGeometryQuality;
   seam: IslandSeamQuality;
+  transition: EndpointTransitionQuality;
   explicitPedestrianNetwork?: boolean;
 }): CandidatePromotionUtility {
-  const providerGeometryRetained = input.mode === 'A_PEDESTRIAN_NETWORK'
+  const providerGeometryRetained = input.transition.accepted && (input.mode === 'A_PEDESTRIAN_NETWORK'
     || input.mode === 'B_ROAD_OFFSET'
-    || input.mode === 'D_WEAK_SAME_CORRIDOR';
+    || input.mode === 'D_WEAK_SAME_CORRIDOR');
   const networkAuthority = input.mode === 'D_WEAK_SAME_CORRIDOR'
     ? 'weak' as const
     : input.mode === 'A_PEDESTRIAN_NETWORK' || input.mode === 'B_ROAD_OFFSET'
@@ -1506,13 +1697,15 @@ export function evaluateCandidatePromotionUtility(input: {
     && input.quality.p95DeviationM <= 6;
   const strongUtilitySupported = networkAuthority === 'strong'
     && (pedestrianNetworkUtility || unnamedPedestrianUtility || roadNetworkUtility);
-  const accepted = input.seam.accepted && (
+  const accepted = input.transition.accepted && input.seam.accepted && (
     strongUtilitySupported
     || networkAuthority === 'none'
     || weakUtilitySupported
   );
-  const reason = !input.seam.accepted
-    ? `unsafe-seam:${input.seam.reason}`
+  const reason = !input.transition.accepted
+    ? `unsafe-anchor-transition:${input.transition.reason}`
+    : !input.seam.accepted
+      ? `unsafe-seam:${input.seam.reason}`
     : strongUtilitySupported
       ? 'strong-provider-network-authority-with-bounded-truth-distance'
       : networkAuthority === 'strong'
@@ -1532,6 +1725,10 @@ export function evaluateCandidatePromotionUtility(input: {
     lengthRatio: input.quality.lengthRatio,
     seamAccepted: input.seam.accepted,
     explicitPedestrianAuthority,
+    anchorTransitionReason: input.transition.reason,
+    providerToAnchoredMaxM: input.transition.maximumDeformationM,
+    anchorInfluenceCoverage: input.transition.influenceCoverage,
+    preservedInteriorM: input.transition.preservedInteriorM,
   };
 }
 
@@ -1642,13 +1839,20 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
   // vertex. A one-edge replacement can manufacture a hook even when the
   // provider crop is good; the blended transition keeps exact chronological
   // joins while allowing the seam gate to inspect the complete shape.
-  display = anchorEndpoints(
+  const endpointTransition = anchorEndpointTransition(
     attachDisplayMetadata(display, rawSubsection),
     rawSubsection,
     true,
     true,
   );
+  display = endpointTransition.points;
   if (input.qualityTrace) traceStages.push(candidateTraceStage('endpoint-anchoring', display));
+  if (!endpointTransition.quality.accepted) {
+    input.diagnosticNotes?.push(
+      `candidate:anchor-transition:${endpointTransition.quality.reason};source=${endpointTransition.quality.sourceFingerprint};anchored=${endpointTransition.quality.anchoredFingerprint};length=${endpointTransition.quality.sourceLengthM.toFixed(1)};head=${endpointTransition.quality.headDisplacementM.toFixed(1)}/${endpointTransition.quality.headInfluenceM.toFixed(1)};tail=${endpointTransition.quality.tailDisplacementM.toFixed(1)}/${endpointTransition.quality.tailInfluenceM.toFixed(1)};coverage=${endpointTransition.quality.influenceCoverage.toFixed(3)};interior=${endpointTransition.quality.preservedInteriorM.toFixed(1)}`,
+    );
+    return null;
+  }
   const quality = evaluateMatchedGeometryQuality(rawSubsection, display);
   const topology = evaluateTopologyQuality(rawSubsection, display);
   const seam = evaluateIslandSeamQuality(input.canonical, input.sourceStart, input.sourceEnd, display);
@@ -1702,6 +1906,7 @@ function buildNetworkCandidate(input: CandidateBuildInput): NetworkCandidate | n
     evidence,
     quality,
     seam,
+    transition: endpointTransition.quality,
     explicitPedestrianNetwork: explicitlyPedestrianNetworkName(modalNetworkName),
   });
   if (!promotionUtility.accepted) {
@@ -2244,7 +2449,17 @@ async function mapMatchingWindow(
           const quality = evaluateMatchedGeometryQuality(rawSubsection, cropped);
           const topology = evaluateTopologyQuality(rawSubsection, cropped);
           const seam = evaluateIslandSeamQuality(canonical, section.sourceStart, section.sourceEnd, cropped);
-          const reasonCode: SnapSectionReasonCode = !endpoint.eligibleForAnchoring
+          const anchorOverlapUnresolved = candidateDiagnostics.some(note => (
+            note.includes('LOCAL_ANCHOR_OVERLAP_UNRESOLVED')
+          ));
+          const anchorDeformationExceeded = candidateDiagnostics.some(note => (
+            note.includes('LOCAL_ANCHOR_DEFORMATION_EXCEEDED')
+          ));
+          const reasonCode: SnapSectionReasonCode = anchorOverlapUnresolved
+            ? 'LOCAL_ANCHOR_OVERLAP_UNRESOLVED'
+            : anchorDeformationExceeded
+              ? 'LOCAL_ANCHOR_DEFORMATION_EXCEEDED'
+            : !endpoint.eligibleForAnchoring
             ? 'LOCAL_ENDPOINT_SUPPORT_WEAK'
             : !matchingEvidence.accepted
               ? quality.reason === 'raw_deviation' || quality.reason === 'max_raw_deviation'
