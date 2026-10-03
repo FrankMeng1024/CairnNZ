@@ -1,0 +1,16 @@
+{
+  "schema": "cairn.ui-legacy-baseline.v1",
+  "capturedAtHead": "45c241fb9e64e5f16f13fc4a025d561b0394a3e9",
+  "denominator": "Production app/src TS/TSX plus App.tsx; excludes tests, mocks, dev/preview, OLD backups, and non-mounted generated screen families. Live home_generated remains included.",
+  "ceilings": {
+    "alertCalls": 82,
+    "rnModalUsages": 7,
+    "localBackControls": 1,
+    "hardcodedThemeViolationCandidates": 524,
+    "mapOverlayHardcodedColorCandidates": 129
+  },
+  "allowedLocalBackFiles": [
+    "src/screens/FriendsScreen.tsx"
+  ],
+  "maintenance": "When a reviewed migration reduces a count, lower the matching ceiling in the same change. Never raise a ceiling without an inventory report and owner-visible justification."
+}

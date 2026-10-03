@@ -66,6 +66,7 @@ import {
 import { routeMatchesIdentity, routeOriginLines } from '../features/route/routeContracts';
 import { cairnDisplayTitle, splitTitleBody } from '../features/plant/services/noteEncoding';
 import { CairnDeleteDialog } from '../features/cairns/CairnDeleteDialog';
+import { resolveActivityDetailBackAction } from '../features/activity/activityDetailNavigation';
 import {
   ALMOST_DONE_CLONE_V1_ID,
   loadOrBuildAlmostDoneCloneV1,
@@ -845,6 +846,7 @@ function MapHistoryObjectScreen() {
   const targetSessionId = targetQaReviewClone
     ? ALMOST_DONE_CLONE_V1_ID
     : route.params?.sessionId as string | undefined;
+  const activityBackContext = route.params?.activityBackContext as 'previous' | 'activities' | undefined;
   const targetRouteId = (route.params as { routeId?: string } | undefined)?.routeId;
   // 2026-08-16 Round 13: Route Detail (concept T5) — look up route object
   // by targetRouteId. Renders a full-screen route detail view with Edit Route
@@ -1132,6 +1134,15 @@ function MapHistoryObjectScreen() {
       routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'activities' } }],
     }));
   }, [nav]);
+
+  const handleActivityBack = useCallback(() => {
+    const action = resolveActivityDetailBackAction(activityBackContext, nav.canGoBack());
+    if (action === 'go-back') {
+      nav.goBack();
+      return;
+    }
+    returnToActivities();
+  }, [activityBackContext, nav, returnToActivities]);
 
   const commitActivityRename = useCallback(async () => {
     const id = selectedSessionId;
@@ -1602,7 +1613,7 @@ function MapHistoryObjectScreen() {
           <BackButton
             variant="inline"
             onPress={targetSessionId
-              ? returnToActivities
+              ? handleActivityBack
               : undefined}
           />
           {/* User decision 2026-08-16: Trails index view (no targetSessionId)
@@ -2133,9 +2144,11 @@ function MapHistoryObjectScreen() {
             <Text style={[styles.emptyTitle, { color: visualTheme.foreground }]}>{snapLabLoading ? 'Loading QA Activity' : 'Activity unavailable'}</Text>
             <Text style={[styles.emptySubtitle, { color: visualTheme.foregroundSecondary }]}>{snapLabLoading ? 'Restoring the isolated Snap Lab record…' : 'This Activity could not be found in local Activity history.'}</Text>
             <PrimaryButton
-              label="Back to Activities"
+              label={activityBackContext === 'previous' && nav.canGoBack()
+                ? 'Back'
+                : 'Back to Activities'}
               variant="secondary"
-              onPress={returnToActivities}
+              onPress={handleActivityBack}
             />
           </View>
         </View>

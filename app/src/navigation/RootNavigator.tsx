@@ -72,7 +72,17 @@ export type RootStackParamList = {
   Home: undefined;
   Hiking: { recoverClientActivityId?: string; routeId?: string; sharedRouteLease?: SharedRouteLaunch } | undefined;
   Running: { recoverClientActivityId?: string; routeId?: string; sharedRouteLease?: SharedRouteLaunch } | undefined;
-  MapHistory: { sessionId?: string; routeId?: string; qaReviewClone?: 'almost-done-v1' } | undefined;
+  MapHistory: {
+    sessionId?: string;
+    routeId?: string;
+    qaReviewClone?: 'almost-done-v1';
+    /**
+     * Activity Detail is shared by Home, Trails, Cairn provenance, Finish and
+     * direct/deep-link entry. Only callers with a real retained parent may ask
+     * Back to pop it; absent/activities remains the safe canonical fallback.
+     */
+    activityBackContext?: 'previous' | 'activities';
+  } | undefined;
   Routes: { initialTab?: 'routes' | 'activities' } | undefined;
   RouteEditor: {
     routeId?: string;

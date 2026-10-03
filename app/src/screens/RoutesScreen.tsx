@@ -329,7 +329,10 @@ function ActivitiesLibrary() {
       renderItem={({ item }) => (
         <ActivityRecord
           session={item}
-          onOpen={() => nav.navigate('MapHistory', { sessionId: item.id })}
+          onOpen={() => nav.navigate('MapHistory', {
+            sessionId: item.id,
+            activityBackContext: 'activities',
+          })}
           onRetry={retry}
         />
       )}

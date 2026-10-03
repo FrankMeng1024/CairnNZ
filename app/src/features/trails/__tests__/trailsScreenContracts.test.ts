@@ -27,7 +27,8 @@ describe('Trails personal journey library screen contracts', () => {
   });
 
   test('rows open real Detail directly with no redundant long-press View sheet', () => {
-    expect(trails).toContain("nav.navigate('MapHistory', { sessionId: item.id })");
+    expect(trails).toContain("sessionId: item.id");
+    expect(trails).toContain("activityBackContext: 'activities'");
     expect(trails).toContain("nav.navigate('MapHistory', { routeId: item.id })");
     expect(trails).not.toContain('onLongPress');
     expect(trails).not.toContain('ActivitySheet');

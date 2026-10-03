@@ -458,7 +458,10 @@ export function MarkerDetailScreen() {
         {sourceActivity ? (
           <ContentSurface
             level="record"
-            onPress={() => nav.navigate('MapHistory', { sessionId: sourceActivity.id })}
+            onPress={() => nav.navigate('MapHistory', {
+              sessionId: sourceActivity.id,
+              activityBackContext: 'previous',
+            })}
             style={styles.activityContext}
             testID="cairn-source-activity"
           >

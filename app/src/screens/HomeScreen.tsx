@@ -397,7 +397,10 @@ export function HomeScreen() {
                   );
                 }
               : lastHike
-                ? () => nav.navigate('MapHistory', { sessionId: lastHike.id })
+                ? () => nav.navigate('MapHistory', {
+                    sessionId: lastHike.id,
+                    activityBackContext: 'previous',
+                  })
                 : undefined}
             onHikingPress={() => nav.navigate('Hiking')}
             onRunningPress={() => nav.navigate('Running')}

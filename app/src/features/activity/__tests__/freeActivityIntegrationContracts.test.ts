@@ -604,7 +604,9 @@ describe('Free Activity integration contracts', () => {
     const source = read('src/screens/MapHistoryScreen.tsx');
     expect(source).toContain('testID="activity-detail-unavailable"');
     expect(source).toContain('This Activity could not be found in local Activity history.');
-    expect(source).toContain('label="Back to Activities"');
+    expect(source).toContain("? 'Back'");
+    expect(source).toContain(": 'Back to Activities'");
+    expect(source).toContain('onPress={handleActivityBack}');
   });
 
   test('Activity Detail uses shared semantic roles across Day, Sunset, and Night', () => {

@@ -266,17 +266,24 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(map).toContain('mapboxTokenConfigured: isMapboxTokenConfigured()');
   });
 
-  test('Activity Detail deletion invalidates retained state and resets to Trails without a Back loop', () => {
+  test('Activity Detail deletion stays canonical while explicit retained origins may pop safely', () => {
     const detail = read('src/screens/MapHistoryScreen.tsx');
-    const backContract = detail.slice(
+    const canonicalReset = detail.slice(
       detail.indexOf('const returnToActivities'),
+      detail.indexOf('const handleActivityBack'),
+    );
+    const contextualBack = detail.slice(
+      detail.indexOf('const handleActivityBack'),
       detail.indexOf('const commitActivityRename'),
     );
     expect(detail).toContain('selectedSessionId === invalidatedSessionId ? null');
     expect(detail).toContain('setInvalidatedSessionId(id)');
     expect(detail).toContain('detailSessionSnapshots.current.delete(id)');
     expect(detail).toContain("routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'activities' } }]");
-    expect(backContract).not.toContain('nav.goBack()');
+    expect(canonicalReset).not.toContain('nav.goBack()');
+    expect(contextualBack).toContain('resolveActivityDetailBackAction(activityBackContext, nav.canGoBack())');
+    expect(contextualBack).toContain("action === 'go-back'");
+    expect(contextualBack).toContain('nav.goBack()');
     expect(detail).not.toContain("? () => nav.navigate('Routes', { initialTab: 'activities' })");
   });
 
