@@ -148,6 +148,36 @@ describe('Snap Lab isolated persistent Activity shelf', () => {
     expect(result.selectedSource).toBe('local');
     expect(result.localFinal).toEqual(result.selectedFinal);
     expect(result.localFinal.length).toBeGreaterThanOrEqual(2);
+    expect(result.refinementAuthority).toMatchObject({
+      runResult: 'pending-network',
+      jobStatus: 'queued',
+      roadEnhancementState: 'pending-network',
+      roadRefinementPending: true,
+    });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test('provider failure consumes the production retryable-pending authority', async () => {
+    const fetchImpl = jest.fn(async () => { throw new Error('provider unavailable'); });
+    configureSnapLabRun({
+      caseId: 'provider-failure',
+      profileId: 'primary',
+      seed: 4,
+      networkCondition: 'online-provider-failure',
+      transportMode: 'captured',
+      evidenceLabel: 'CAPTURED_REAL_RESPONSE',
+    }, fetchImpl as unknown as typeof fetch);
+    const result = await runSnapLabFinal(points());
+    expect(result.selectedSource).toBe('local');
+    expect(result.refinementAuthority).toMatchObject({
+      runResult: 'pending-retry',
+      jobStatus: 'queued',
+      jobOutcome: 'pending',
+      roadEnhancementState: 'pending-retry',
+      roadRefinementPending: true,
+      technicalOutcome: 'network-failure',
+      requestHttpCategory: 'network',
+    });
+    expect(fetchImpl).toHaveBeenCalled();
   });
 });

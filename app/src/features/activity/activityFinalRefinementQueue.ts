@@ -28,6 +28,10 @@ import {
   type ActivityFinalArtifact,
 } from './activityFinalArtifact';
 import { recordActivityStageEvent } from './activityStageLedger';
+import {
+  activityFinalRefinementRequestCategory,
+  decideRetainedLocalRefinement,
+} from './activityFinalRefinementDecision';
 
 export interface ActivityFinalRefinementJob {
   format: 'cairn-activity-final-refinement';
@@ -182,81 +186,6 @@ function stateForArtifact(artifact: ActivityFinalArtifact): 'base_ready' | 'enha
   if (artifact.source === 'matched' || artifact.source === 'hybrid') return 'enhanced';
   if (artifact.source === 'base') return 'base_ready';
   return 'limited_evidence';
-}
-
-function classifyRetainedLocalRoute(input: {
-  deadlineReached: boolean;
-  requestResults: PedestrianFinalRequestResult[];
-  resultReasons: string[];
-  governorAuthorized: boolean | null | undefined;
-}): { technicalOutcome: string; candidateDecision: string } {
-  const results = input.requestResults;
-  const normalizedReasons = input.resultReasons.map(reason => reason.toLowerCase());
-  if (input.deadlineReached
-    || results.some(request => request.result.includes('timeout'))
-    || normalizedReasons.some(reason => reason.includes('timeout') || reason.includes('abort'))) {
-    return { technicalOutcome: 'deadline', candidateDecision: 'stable-local-deadline' };
-  }
-  if (results.some(request => request.httpStatus === 401 || request.httpStatus === 403
-    || request.responseCode?.toLowerCase().includes('unauthor'))) {
-    return { technicalOutcome: 'auth', candidateDecision: 'stable-local-auth-rejected' };
-  }
-  if (results.some(request => request.governorReason === 'budget')) {
-    return { technicalOutcome: 'budget', candidateDecision: 'stable-local-governor-denied' };
-  }
-  if (results.some(request => request.responseCode === 'NoMatch'
-    || request.result.toLowerCase().includes('no-match'))
-    || normalizedReasons.some(reason => reason.includes('no_match') || reason.includes('no-match'))) {
-    return { technicalOutcome: 'no-match', candidateDecision: 'stable-local-no-match' };
-  }
-  if (results.some(request => request.httpStatus != null && request.httpStatus >= 500)) {
-    return { technicalOutcome: 'server-error', candidateDecision: 'stable-local-server-error' };
-  }
-  if (results.some(request => request.httpStatus != null && request.httpStatus >= 400)) {
-    return { technicalOutcome: 'client-error', candidateDecision: 'stable-local-client-error' };
-  }
-  if (results.some(request => request.result === 'network-error')) {
-    return { technicalOutcome: 'network-failure', candidateDecision: 'stable-local-network-failure' };
-  }
-  if (results.some(request => request.rejectedCandidateCount > 0)) {
-    return { technicalOutcome: 'unsafe-candidate', candidateDecision: 'candidate-rejected' };
-  }
-  if (input.governorAuthorized === false) {
-    return { technicalOutcome: 'governor-denied', candidateDecision: 'stable-local-governor-denied' };
-  }
-  if (results.some(request => request.invoked)) {
-    return { technicalOutcome: 'no-meaningful-improvement', candidateDecision: 'stable-local-no-improvement' };
-  }
-  return { technicalOutcome: 'no-match', candidateDecision: 'stable-local-no-match' };
-}
-
-function requestHttpCategory(results: PedestrianFinalRequestResult[], technicalOutcome: string): NonNullable<
-ActivityFinalRefinementJob['requestHttpCategory']> {
-  if (technicalOutcome === 'deadline') return 'timeout';
-  if (results.length === 0 || !results.some(result => result.invoked)) {
-    if (technicalOutcome === 'deadline') return 'timeout';
-    if (technicalOutcome === 'network-failure') return 'network';
-    if (technicalOutcome === 'no-match') return 'no-match';
-    if (technicalOutcome === 'auth') return 'auth';
-    return 'not-attempted';
-  }
-  const categories = new Set(results.filter(result => result.invoked).map(result => {
-    if (result.httpStatus === 401 || result.httpStatus === 403) return 'auth';
-    if (result.result.includes('timeout')) return 'timeout';
-    if (result.responseCode === 'NoMatch' || result.result.includes('no-match')) return 'no-match';
-    if (result.httpStatus != null && result.httpStatus >= 500) return 'server-error';
-    if (result.httpStatus != null && result.httpStatus >= 400) return 'client-error';
-    if (result.result === 'network-error') return 'network';
-    return 'success';
-  }));
-  if (categories.size === 1) return [...categories][0] as NonNullable<ActivityFinalRefinementJob['requestHttpCategory']>;
-  return 'mixed';
-}
-
-function isTransientRoadOutcome(technicalOutcome: string): boolean {
-  return technicalOutcome === 'deadline'
-    || technicalOutcome === 'network-failure'
-    || technicalOutcome === 'server-error';
 }
 
 async function publishStableLocalPending(
@@ -656,27 +585,26 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   if (matchedSegments === 0 && locallyImprovedSegments === 0) {
     const deadlineReached = Date.now() >= deadlineMs;
     const snapshot = await governor.snapshot().catch(() => null);
-    const retained = classifyRetainedLocalRoute({
+    const retained = decideRetainedLocalRefinement({
+      networkState: 'online',
       deadlineReached: deadlineReached || (snapshot?.timeoutInvocations ?? 0) > 0,
       requestResults,
       resultReasons,
       governorAuthorized: running.governorAuthorized,
+      networkAttemptCount: running.networkAttemptCount ?? 0,
+      maxNetworkAttempts: MAX_NETWORK_ATTEMPTS,
+      retryDelaysMs: RETRY_DELAYS_MS,
     });
     running.technicalOutcome = retained.technicalOutcome;
     running.candidateDecision = retained.candidateDecision;
-    running.requestHttpCategory = requestHttpCategory(requestResults, retained.technicalOutcome);
+    running.requestHttpCategory = retained.requestHttpCategory;
     await writeJob(running);
-    if (isTransientRoadOutcome(retained.technicalOutcome)
-      && (running.networkAttemptCount ?? 0) < MAX_NETWORK_ATTEMPTS) {
-      const delayIndex = Math.max(0, Math.min(
-        RETRY_DELAYS_MS.length - 1,
-        (running.networkAttemptCount ?? 1) - 1,
-      ));
+    if (retained.runResult === 'pending-retry') {
       return publishStableLocalPending(
         running,
         baseArtifact,
         'pending-retry',
-        Date.now() + RETRY_DELAYS_MS[delayIndex],
+        Date.now() + (retained.nextRetryDelayMs ?? 0),
         signal,
       );
     }
@@ -714,7 +642,7 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   const acceptedArtifact = committed.artifact;
   running.technicalOutcome = matchedSegments > 0 ? 'matched-success' : 'local-improvement';
   running.candidateDecision = 'accepted';
-  running.requestHttpCategory = requestHttpCategory(requestResults, running.technicalOutcome);
+  running.requestHttpCategory = activityFinalRefinementRequestCategory(requestResults, running.technicalOutcome);
   await writeJob(running);
   const stoppedAfterCommit = await stoppedRunResult(running, signal);
   if (stoppedAfterCommit) return stoppedAfterCommit;

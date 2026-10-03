@@ -2111,7 +2111,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // late lifecycle result after this point.
     activityLifecycleTransitionEpoch += 1;
     realLocationLifecycleIntentEpoch += 1;
+    const monotonicNow = () => (
+      typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now()
+    );
     const saveTimelineStartedAt = Date.now();
+    const saveTimelineStartedMonotonicAt = monotonicNow();
     const recordSavePhase = (phase: string, phaseStartedAt: number, details: Record<string, unknown> = {}) => {
       appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_save_phase_timing', {
         phase,
@@ -2519,6 +2525,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
       if (s.locationProviderSource === 'simulator') {
         const qaCommitStartedAt = Date.now();
+        const qaCommitStartedMonotonicAt = monotonicNow();
         let qaRecordPrepared = false;
         let qaWalTerminalized = false;
         try {
@@ -2526,21 +2533,15 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           // canonical evidence. Finish only drains that isolated writer; it
           // never reads or mutates Personal Memory.
           await flushRecordedMemoryEvidence();
-          set({
-            finishProgress: {
-              hike: 'saved',
-              route: 'refining',
-              sync: 'pending',
-              roadRefinementPending: false,
-            },
-          });
           const qaContext = currentSnapLabRunContext();
-          const snap = await runSnapLabFinal(s.trackPoints);
-          const roadRefinementPending = qaContext.transportMode === 'offline';
-          const selectedFingerprint = activityGeometryFingerprint(snap.selectedFinal);
-          const finalGeometryState: NonNullable<TrackingSession['finalGeometryState']> =
-            snap.selectedSource === 'local' ? 'base_ready' : 'enhanced';
-          const qaSession: TrackingSession = {
+          const localFinalStartedMonotonicAt = monotonicNow();
+          const qaLocalFinal = buildLocalFinalTrackPoints(s.trackPoints);
+          const localFinalGenerationMs = monotonicNow() - localFinalStartedMonotonicAt;
+          const localFingerprint = activityGeometryFingerprint(qaLocalFinal);
+          const qaMemoryPointCount = useMemoryStore.getState().testPoints.filter(point => (
+            point.sourceActivityClientId === s.sessionId
+          )).length;
+          const localSession: TrackingSession = {
             id: s.sessionId,
             clientActivityId: s.sessionId,
             activityMode: s.activityMode,
@@ -2550,33 +2551,18 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             durationS: finalDurationS,
             distanceM: finalStats.distanceM,
             elevationGainM: finalStats.elevationGainM,
-            trackPoints: snap.selectedFinal,
+            trackPoints: qaLocalFinal,
             markerIds: s.markerIds,
             name: finalName,
-            memoryNewCells: useMemoryStore.getState().testPoints.filter(point => (
-              point.sourceActivityClientId === s.sessionId
-            )).length,
-            syncState: 'synced',
-            finalGeometryState,
+            memoryNewCells: qaMemoryPointCount,
+            syncState: qaContext.transportMode === 'offline' ? 'pending' : 'synced',
+            finalGeometryState: 'refining',
             finalGeometryVersion: 'pedestrian-final-v2-base',
             finalGeometryRevision: 1,
-            finalGeometryFingerprint: selectedFingerprint,
-            roadRefinementPending,
+            finalGeometryFingerprint: localFingerprint,
+            roadRefinementPending: false,
             qaProvenance: 'snap_lab',
           };
-          void recordActivityStageEvent({
-            ownerUserId,
-            clientActivityId: s.sessionId,
-            stage: 'final-selected',
-            details: {
-              realm: 'snap-lab',
-              selectedSource: snap.selectedSource,
-              artifactRevision: 1,
-              artifactFingerprint: selectedFingerprint,
-              matchingRequestCount: snap.requestCount,
-              directionsRequestCount: snap.directionsRequestCount,
-            },
-          });
           const baseRecord = {
             format: 'cairn-snap-lab-activity' as const,
             version: 1 as const,
@@ -2585,31 +2571,50 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             activityId: s.sessionId,
             createdAt: Date.now(),
             context: qaContext,
-            session: qaSession,
+            session: localSession,
             rawPoints: s.trackPointsRaw.map(point => ({ ...point })),
             canonicalPoints: s.trackPoints.map(point => ({ ...point })),
             liveBeforeFinish: (s.trackPointsSmoothed.length > 0
               ? s.trackPointsSmoothed
               : s.trackPoints).map(point => ({ ...point })),
-            localFinal: snap.localFinal.map(point => ({ ...point })),
-            selectedFinal: snap.selectedFinal.map(point => ({ ...point })),
-            selectedSource: snap.selectedSource,
-            segmentStats: snap.segmentStats,
-            requestCount: snap.requestCount,
-            directionsRequestCount: snap.directionsRequestCount,
-            acceptedIslandCount: snap.acceptedIslandCount,
-            transportReceipts: snap.transportReceipts,
-            qaMemoryPointCount: qaSession.memoryNewCells ?? 0,
+            localFinal: qaLocalFinal.map(point => ({ ...point })),
+            selectedFinal: qaLocalFinal.map(point => ({ ...point })),
+            selectedSource: 'local' as const,
+            segmentStats: [],
+            requestCount: 0,
+            directionsRequestCount: 0,
+            acceptedIslandCount: 0,
+            transportReceipts: [],
+            qaMemoryPointCount,
             stageTimestamps: {
               finishRequestedAt: saveTimelineStartedAt,
               qaCommitStartedAt,
-              qaActivityDurableAt: Date.now(),
+              qaActivityDurableAt: null,
               completionPresentedAt: null,
+            },
+            stageMonotonicTimestamps: {
+              stopTrackingEnteredAt: saveTimelineStartedMonotonicAt,
+              qaCommitStartedAt: qaCommitStartedMonotonicAt,
+              localActivityDurableAt: null,
+              refinementBeganAt: null,
+              refinementDecisionAt: null,
+              selectedRevisionCommittedAt: null,
+              completionStatePublishedAt: null,
+            },
+            finishDurationsMs: {
+              localFinalGeneration: localFinalGenerationMs,
+              providerWork: null,
+              mapMatching: null,
+              directions: null,
+              selectionAssembly: null,
+              localPersistence: null,
+              selectedPersistence: null,
             },
             stageLedger: null,
             routeSnapshots: [],
             roadUpgrade: null,
           };
+          const localPersistenceStartedMonotonicAt = monotonicNow();
           await saveSnapLabActivity(baseRecord);
           qaRecordPrepared = true;
           // The strict terminal move verifies that the completed QA WAL is
@@ -2625,7 +2630,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             endedAt,
           );
           qaWalTerminalized = true;
-          const qaActivityDurableAt = Date.now();
           await completeActivity({
             clientActivityId: s.sessionId,
             serverActivityId: null,
@@ -2634,43 +2638,150 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             startedAt: s.startedAt,
             endedAt,
             lifecycle: 'completed_local',
-            syncState: 'synced',
+            syncState: qaContext.transportMode === 'offline' ? 'pending' : 'synced',
             locationProviderSource: 'simulator',
           });
+          const qaActivityDurableAt = Date.now();
+          const qaActivityDurableMonotonicAt = monotonicNow();
           durableSaveCommitted = true;
           serverSaveAcknowledged = true;
           stopReason = 'saved';
-          finishResult = activityFinishResultFromSession(qaSession);
+          // Snap Lab remains storage-isolated, but its actual completion UI
+          // consumes the same in-memory TrackingSession authority as a real
+          // Hike/Run. The isolated realm cleanup removes this projection.
+          useSessionStore.setState(state => ({
+            sessions: [
+              localSession,
+              ...state.sessions.filter(item => item.id !== localSession.id),
+            ],
+          }));
           notifyLocalCommit(s.sessionId);
           set({
             finishProgress: {
               hike: 'saved',
+              route: 'refining',
+              sync: qaContext.transportMode === 'offline' ? 'waiting' : 'synced',
+              roadRefinementPending: false,
+            },
+          });
+
+          const refinementBeganAt = monotonicNow();
+          const snap = await runSnapLabFinal(s.trackPoints, {
+            localFinal: qaLocalFinal,
+            localFinalGenerationMs,
+          });
+          const refinementDecisionAt = monotonicNow();
+          const roadRefinementPending = snap.refinementAuthority.roadRefinementPending;
+          const selectedFingerprint = activityGeometryFingerprint(snap.selectedFinal);
+          const finalGeometryState: NonNullable<TrackingSession['finalGeometryState']> =
+            snap.selectedSource === 'local' ? 'base_ready' : 'enhanced';
+          const selectedRevision = snap.selectedSource === 'local' ? 1 : 2;
+          const qaSession: TrackingSession = {
+            ...localSession,
+            trackPoints: snap.selectedFinal,
+            finalGeometryState,
+            finalGeometryRevision: selectedRevision,
+            finalGeometryFingerprint: selectedFingerprint,
+            roadRefinementPending,
+          };
+          void recordActivityStageEvent({
+            ownerUserId,
+            clientActivityId: s.sessionId,
+            stage: 'final-selected',
+            details: {
+              realm: 'snap-lab',
+              selectedSource: snap.selectedSource,
+              artifactRevision: selectedRevision,
+              artifactFingerprint: selectedFingerprint,
+              matchingRequestCount: snap.requestCount,
+              directionsRequestCount: snap.directionsRequestCount,
+              jobStatus: snap.refinementAuthority.jobStatus,
+              jobOutcome: snap.refinementAuthority.jobOutcome,
+              roadEnhancementState: snap.refinementAuthority.roadEnhancementState,
+              technicalOutcome: snap.refinementAuthority.technicalOutcome,
+              candidateDecision: snap.refinementAuthority.candidateDecision,
+              requestHttpCategory: snap.refinementAuthority.requestHttpCategory,
+            },
+          });
+          const selectedRecord = {
+            ...baseRecord,
+            session: qaSession,
+            localFinal: snap.localFinal.map(point => ({ ...point })),
+            selectedFinal: snap.selectedFinal.map(point => ({ ...point })),
+            selectedSource: snap.selectedSource,
+            segmentStats: snap.segmentStats,
+            requestCount: snap.requestCount,
+            directionsRequestCount: snap.directionsRequestCount,
+            acceptedIslandCount: snap.acceptedIslandCount,
+            transportReceipts: snap.transportReceipts,
+            refinementAuthority: snap.refinementAuthority,
+            stageTimestamps: {
+              ...baseRecord.stageTimestamps,
+              qaActivityDurableAt,
+            },
+            stageMonotonicTimestamps: {
+              ...baseRecord.stageMonotonicTimestamps,
+              localActivityDurableAt: qaActivityDurableMonotonicAt,
+              refinementBeganAt,
+              refinementDecisionAt,
+            },
+            finishDurationsMs: {
+              ...baseRecord.finishDurationsMs,
+              ...snap.timingDurationsMs,
+              localPersistence: qaActivityDurableMonotonicAt - localPersistenceStartedMonotonicAt,
+            },
+          };
+          const selectedPersistenceStartedAt = monotonicNow();
+          await saveSnapLabActivity(selectedRecord);
+          const selectedRevisionCommittedAt = monotonicNow();
+          useSessionStore.setState(state => ({
+            sessions: [
+              qaSession,
+              ...state.sessions.filter(item => item.id !== qaSession.id),
+            ],
+          }));
+          finishResult = activityFinishResultFromSession(qaSession);
+          set({
+            finishProgress: {
+              hike: 'saved',
               route: 'ready',
-              sync: roadRefinementPending ? 'waiting' : 'synced',
+              sync: qaContext.transportMode === 'offline' ? 'waiting' : 'synced',
               roadRefinementPending,
             },
           });
+          const completionStatePublishedAt = monotonicNow();
           void recordActivityStageEvent({
             ownerUserId,
             clientActivityId: s.sessionId,
             stage: 'completion-presented',
             details: {
               realm: 'snap-lab',
-              artifactRevision: 1,
+              artifactRevision: selectedRevision,
               artifactFingerprint: selectedFingerprint,
               routeState: finalGeometryState,
-              syncState: roadRefinementPending ? 'qa-offline-waiting' : 'qa-local-only',
+              roadEnhancementState: snap.refinementAuthority.roadEnhancementState,
+              roadRefinementPending,
+              syncState: qaContext.transportMode === 'offline' ? 'qa-offline-waiting' : 'qa-synced',
             },
           });
           await flushActivityStageLedger(ownerUserId);
           const stageLedger = await exportLatestActivityStageLedger(ownerUserId, 'snap-lab');
           await saveSnapLabActivity({
-            ...baseRecord,
+            ...selectedRecord,
             stageLedger,
             stageTimestamps: {
-              ...baseRecord.stageTimestamps,
+              ...selectedRecord.stageTimestamps,
               qaActivityDurableAt,
               completionPresentedAt: Date.now(),
+            },
+            stageMonotonicTimestamps: {
+              ...selectedRecord.stageMonotonicTimestamps,
+              selectedRevisionCommittedAt,
+              completionStatePublishedAt,
+            },
+            finishDurationsMs: {
+              ...selectedRecord.finishDurationsMs,
+              selectedPersistence: selectedRevisionCommittedAt - selectedPersistenceStartedAt,
             },
           });
           recordSavePhase('snap_lab_local_completion', qaCommitStartedAt, {

@@ -7,8 +7,15 @@ import {
 } from '../activity/activityFinalArtifact';
 import {
   reconstructPedestrianFinalRoute,
+  type PedestrianFinalRequestResult,
   type PedestrianFinalStats,
 } from '../../services/routing/pedestrianFinalRoute';
+import {
+  acceptedActivityFinalRefinement,
+  decideRetainedLocalRefinement,
+  type AcceptedRefinementDecision,
+  type RetainedLocalRefinementDecision,
+} from '../activity/activityFinalRefinementDecision';
 import {
   exportLatestActivityStageLedger,
   flushActivityStageLedger,
@@ -55,6 +62,14 @@ export interface SnapLabFinalRun {
   directionsRequestCount: number;
   acceptedIslandCount: number;
   transportReceipts: SnapLabTransportReceipt[];
+  refinementAuthority: RetainedLocalRefinementDecision | AcceptedRefinementDecision;
+  timingDurationsMs: {
+    localFinalGeneration: number;
+    providerWork: number;
+    mapMatching: number;
+    directions: number;
+    selectionAssembly: number;
+  };
 }
 
 export interface SnapLabActivityRecord {
@@ -77,8 +92,11 @@ export interface SnapLabActivityRecord {
   directionsRequestCount: number;
   acceptedIslandCount: number;
   transportReceipts: SnapLabTransportReceipt[];
+  refinementAuthority?: RetainedLocalRefinementDecision | AcceptedRefinementDecision;
   qaMemoryPointCount: number;
   stageTimestamps: Record<string, number | null>;
+  stageMonotonicTimestamps?: Record<string, number | null>;
+  finishDurationsMs?: Record<string, number | null>;
   stageLedger: ActivityStageLedgerExport | null;
   routeSnapshots: SnapLabRouteSnapshot[];
   roadUpgrade?: {
@@ -424,6 +442,10 @@ export async function clearSnapLabRealmForOwner(ownerUserId: string): Promise<vo
   await purgeSnapLabActivityRegistryForOwner(ownerUserId);
   await purgeActivityStageLedgerRealmForOwner(ownerUserId, 'snap-lab');
   await memory.clearSyntheticMemoryForUser(ownerUserId);
+  const { useSessionStore } = await import('../../store/useSessionStore');
+  useSessionStore.setState(state => ({
+    sessions: state.sessions.filter(session => session.qaProvenance !== 'snap_lab'),
+  }));
   if ((await enumerateSnapLabActivityIds(ownerUserId)).length > 0
     || (await writer.listSnapLabHikeTrackIdsForOwner(ownerUserId)).length > 0) {
     throw new Error('snap_lab_realm_cleanup_incomplete');
@@ -454,10 +476,18 @@ function projectSelectedSegment(source: SegmentedTrackPoint[], points: Array<{
  * but with a QA-controlled HTTP boundary and no production governor ledger. */
 export async function runSnapLabFinal(
   canonical: TrackPoint[],
-  options: { qualityTrace?: boolean } = {},
+  options: {
+    qualityTrace?: boolean;
+    localFinal?: TrackPoint[];
+    localFinalGenerationMs?: number;
+  } = {},
 ): Promise<SnapLabFinalRun> {
   const context = currentSnapLabRunContext();
-  const localFinal = buildLocalFinalTrackPoints(canonical);
+  const localStartedAt = performance.now();
+  const localFinal = options.localFinal?.map(point => ({ ...point }))
+    ?? buildLocalFinalTrackPoints(canonical);
+  const localFinalGenerationMs = options.localFinalGenerationMs
+    ?? performance.now() - localStartedAt;
   if (context.transportMode === 'offline') {
     return {
       localFinal,
@@ -468,6 +498,21 @@ export async function runSnapLabFinal(
       directionsRequestCount: 0,
       acceptedIslandCount: 0,
       transportReceipts: [],
+      refinementAuthority: decideRetainedLocalRefinement({
+        networkState: 'offline',
+        deadlineReached: false,
+        requestResults: [],
+        resultReasons: [],
+        governorAuthorized: null,
+        networkAttemptCount: 0,
+      }),
+      timingDurationsMs: {
+        localFinalGeneration: localFinalGenerationMs,
+        providerWork: 0,
+        mapMatching: 0,
+        directions: 0,
+        selectionAssembly: 0,
+      },
     };
   }
   if (!activeFetch) throw new Error('snap_lab_transport_unconfigured');
@@ -479,6 +524,9 @@ export async function runSnapLabFinal(
   let matchedSegmentCount = 0;
   let acceptedIslandCount = 0;
   let hasLocalCoverage = false;
+  const requestResults: PedestrianFinalRequestResult[] = [];
+  const resultReasons: string[] = [];
+  const providerStartedAt = performance.now();
   for (const [segmentIndex, segment] of sourceSegments.entries()) {
     if (segment.length < 2) continue;
     const result = await reconstructPedestrianFinalRoute(segment, {
@@ -493,6 +541,8 @@ export async function runSnapLabFinal(
       qualityTrace: options.qualityTrace,
     });
     segmentStats.push(result.stats);
+    requestResults.push(...(result.stats.requestResults ?? []));
+    resultReasons.push('reason' in result ? result.reason : 'ok');
     if (!result.ok || result.points.length < 2 || result.stats.acceptedMatchedDistanceM <= 0.5) {
       hasLocalCoverage = true;
       continue;
@@ -503,17 +553,39 @@ export async function runSnapLabFinal(
     if (result.stats.canonicalFallbackDistanceM > 0.5) hasLocalCoverage = true;
   }
   const selectedFinal = selectedSegments.flat();
+  const providerWorkMs = performance.now() - providerStartedAt;
+  const mapMatchingMs = segmentStats.reduce((sum, stats) => sum + stats.mapMatchingApiDurationMs, 0);
+  const directionsMs = segmentStats.reduce((sum, stats) => sum + stats.directionsApiDurationMs, 0);
+  const selectedSource = matchedSegmentCount === 0
+    ? 'local' as const
+    : hasLocalCoverage || matchedSegmentCount < sourceSegments.length ? 'hybrid' as const : 'matched' as const;
+  const refinementAuthority = selectedSource === 'local'
+    ? decideRetainedLocalRefinement({
+        networkState: 'online',
+        deadlineReached: requestResults.some(request => request.result.includes('timeout')),
+        requestResults,
+        resultReasons,
+        governorAuthorized: requestResults.some(request => request.invoked) ? true : null,
+        networkAttemptCount: 1,
+      })
+    : acceptedActivityFinalRefinement(requestResults);
   return {
     localFinal,
     selectedFinal,
-    selectedSource: matchedSegmentCount === 0
-      ? 'local'
-      : hasLocalCoverage || matchedSegmentCount < sourceSegments.length ? 'hybrid' : 'matched',
+    selectedSource,
     segmentStats,
     requestCount: segmentStats.reduce((sum, stats) => sum + stats.mapMatchingRequestCount, 0),
     directionsRequestCount: segmentStats.reduce((sum, stats) => sum + stats.directionsRequestCount, 0),
     acceptedIslandCount,
     transportReceipts: activeReceiptReader?.() ?? [],
+    refinementAuthority,
+    timingDurationsMs: {
+      localFinalGeneration: localFinalGenerationMs,
+      providerWork: providerWorkMs,
+      mapMatching: mapMatchingMs,
+      directions: directionsMs,
+      selectionAssembly: Math.max(0, providerWorkMs - mapMatchingMs - directionsMs),
+    },
   };
 }
 
