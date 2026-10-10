@@ -66,6 +66,7 @@ describe('deleted-account local ownership isolation', () => {
       'discardActiveHike(activity.session_id)',
       'deleteExtras(routeId)',
       'clearSimulatorLogs(owner)',
+      'purgeNativeGpsEvidenceScopesForOwner(owner)',
       'debugLogger.clearAllSessions()',
       'deleteAcknowledgedHikeTrackArtifacts(activityId, owner)',
       'purgeDurableMemoryEvidence(owner)',

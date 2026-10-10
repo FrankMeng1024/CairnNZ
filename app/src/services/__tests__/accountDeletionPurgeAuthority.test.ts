@@ -50,6 +50,9 @@ jest.mock('../../store/storage', () => ({
       mockAsyncValues.set(key, value);
     }),
     removeItem: jest.fn(async (key: string) => { mockAsyncValues.delete(key); }),
+    removeItemsStrict: jest.fn(async (keys: string[]) => {
+      keys.forEach((key) => mockAsyncValues.delete(key));
+    }),
   },
 }));
 jest.mock('../../store/useAppStore', () => ({ useAppStore: { getState: () => mockAppState } }));
