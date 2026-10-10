@@ -61,7 +61,10 @@ import { getHomeBackground, getRegisteredBackgroundLayout, getWeatherReviewBackg
 import { PASSWORD_RULES, passwordPolicyError, passwordRuleState } from '../utils/passwordPolicy';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { exportLatestActivityStageLedger } from '../features/activity/activityStageLedger';
-import { exportNativeGpsEvidence } from '../features/activity/nativeGpsEvidence';
+import {
+  buildActivityNativeCrossLedgerReport,
+  exportNativeGpsEvidence,
+} from '../features/activity/nativeGpsEvidence';
 import { offlineMapsFeatureEnabled } from '../features/offlineMaps/offlineMapContracts';
 
 type Page = 'root' | 'account' | 'privacy' | 'help';
@@ -526,17 +529,17 @@ export function SettingsScreen() {
     if (!ownerId || activityDiagnosticsCopying) return;
     setActivityDiagnosticsCopying(true);
     try {
-      const [ledger, nativeGpsEvidence] = await Promise.all([
-        exportLatestActivityStageLedger(ownerId),
-        exportNativeGpsEvidence(),
-      ]);
+      const ledger = await exportLatestActivityStageLedger(ownerId);
+      const nativeGpsEvidence = await exportNativeGpsEvidence(ownerId, ledger.clientActivityId);
+      const nativeCrossLedgerReport = buildActivityNativeCrossLedgerReport(ledger, nativeGpsEvidence);
       if (currentOwnerId() !== ownerId) return;
       const Clipboard = await import('expo-clipboard');
       await Clipboard.setStringAsync(JSON.stringify({
         schema: 'cairn-activity-forensic-export',
-        version: 1,
+        version: 2,
         stageLedger: ledger,
         nativeGpsEvidence,
+        nativeCrossLedgerReport,
       }, null, 2));
       if (currentOwnerId() !== ownerId) return;
       Alert.alert(

@@ -68,7 +68,7 @@ describe('local owner-exportable Activity stage ledger', () => {
       ownerUserId: 'current-owner',
       clientActivityId: 'activity-a',
       privacy: { localOnly: true, coordinatesIncluded: false, automaticUpload: false },
-      presentationMeasurement: 'NOT_MEASURED',
+      presentationMeasurement: 'REACT_COMMIT_NOT_NATIVE_FRAME',
       installedIdentity: {
         nativeApplicationVersion: '0.2.6',
         nativeBuildVersion: '63',
@@ -256,10 +256,8 @@ describe('local owner-exportable Activity stage ledger', () => {
     });
   });
 
-  test('summarizes a fully correlated native-to-sync evidence path without coordinates', () => {
+  test('summarizes correlated JS/WAL/presentation and exact completed upload frontiers', () => {
     const stages = [
-      'native-callback',
-      'native-js-delivery',
       'observation-received',
       'observation-decision',
       'canonical-accepted',
@@ -279,13 +277,23 @@ describe('local owner-exportable Activity stage ledger', () => {
             : {},
     })) as any;
     events.push({
+      ...events[0], eventId: 'completion', stage: 'completion-presented', wallTimeMs: 1_090,
+      evidenceId: null, details: {
+        artifactRevision: 3, artifactFingerprint: 'final-3', canonicalPointCount: 1,
+      },
+    });
+    events.push({
       ...events[0], eventId: 'sync-ack', stage: 'sync-state', wallTimeMs: 1_100,
-      evidenceId: null, details: { operation: 'completed-activity-upload', phase: 'ack' },
+      evidenceId: null, details: {
+        operation: 'completed-activity-upload', phase: 'ack', acknowledged: true,
+        activityIdentityMatched: true, finalRevision: 3, finalFingerprint: 'final-3',
+        canonicalPointCount: 1,
+      },
     });
     const summary = summarizeActivityObservability(events);
     expect(summary.evidenceCompleteness).toEqual({
-      nativeCallback: 'complete',
-      nativeToJsCorrelation: 'complete',
+      nativeCallback: 'not-observable-current-binary',
+      nativeToJsCorrelation: 'not-observable-current-binary',
       jsIntake: 'complete',
       acceptanceDecision: 'complete',
       walDurability: 'complete',
@@ -300,7 +308,7 @@ describe('local owner-exportable Activity stage ledger', () => {
       walCommitsWithoutStorePublication: 0,
     });
     expect(summary.timing).toMatchObject({
-      maximumObservationReceiptLagMs: 120,
+      maximumObservationReceiptLagMs: 100,
       maximumWalToStoreLagMs: 12,
     });
   });
@@ -321,7 +329,6 @@ describe('local owner-exportable Activity stage ledger', () => {
       expect.objectContaining({
         durationMs: 471_000,
         heartbeatCount: 2,
-        nativeCallbackCount: 0,
         conclusion: 'no-js-callback-native-cause-unknown',
       }),
     ]);
@@ -329,7 +336,7 @@ describe('local owner-exportable Activity stage ledger', () => {
     expect(summary.interpretationLimits.join(' ')).toContain('do not prove');
   });
 
-  test('instrumented native receipt without JS delivery localizes the missing boundary', () => {
+  test('native-shaped synthetic JS events cannot prove the separate native boundary', () => {
     const base = {
       schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
       clientActivityId: 'activity-a', monotonicTimeMs: null,
@@ -340,13 +347,12 @@ describe('local owner-exportable Activity stage ledger', () => {
       { ...base, eventId: 'native', stage: 'native-callback', wallTimeMs: 220_000, evidenceId: 'native-7' },
       { ...base, eventId: 'r2', stage: 'observation-received', wallTimeMs: 472_000, evidenceId: 'evidence-2' },
     ] as any);
-    expect(summary.pipelineFindings.nativeCallbacksWithoutJsDelivery).toBe(1);
-    expect(summary.longObservationGaps[0]).toMatchObject({
-      conclusion: 'native-callback-observed-js-delivery-missing',
-    });
+    expect(summary.pipelineFindings.nativeCallbacksWithoutJsDelivery).toBe(0);
+    expect(summary.evidenceCompleteness.nativeCallback).toBe('not-observable-current-binary');
+    expect(summary.longObservationGaps[0].conclusion).toBe('js-runtime-not-observed');
   });
 
-  test('instrumented evidence before and after a gap distinguishes no native callback observed', () => {
+  test('native events before and after a gap do not establish collector coverage', () => {
     const base = {
       schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
       clientActivityId: 'activity-a', monotonicTimeMs: null,
@@ -361,8 +367,83 @@ describe('local owner-exportable Activity stage ledger', () => {
     ] as any);
     expect(summary.longObservationGaps[0]).toMatchObject({
       durationMs: 471_000,
-      nativeCallbackCount: 0,
-      conclusion: 'no-native-callback-observed',
+      conclusion: 'no-js-callback-native-cause-unknown',
+    });
+  });
+
+  test('remote Start mapping and inexact Save acknowledgements cannot false-pass network sync', () => {
+    const base = {
+      schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
+      clientActivityId: 'activity-a', monotonicTimeMs: null,
+      processOriginWallTimeMs: null, processId: 'process-a', evidenceId: null,
+    };
+    const completion = {
+      ...base, eventId: 'completion', stage: 'completion-presented', wallTimeMs: 10,
+      details: { artifactRevision: 4, artifactFingerprint: 'final-4', canonicalPointCount: 12 },
+    };
+    const mapped = {
+      ...base, eventId: 'mapped', stage: 'sync-state', wallTimeMs: 11,
+      details: { operation: 'remote-start', phase: 'mapped', acknowledged: true },
+    };
+    expect(summarizeActivityObservability([completion, mapped] as any)
+      .evidenceCompleteness.networkSync).toBe('partial');
+    const wrongActivity = {
+      ...base, eventId: 'wrong-identity', stage: 'sync-state', wallTimeMs: 12,
+      details: {
+        operation: 'completed-activity-upload', phase: 'ack', acknowledged: true,
+        activityIdentityMatched: false, finalRevision: 4, finalFingerprint: 'final-4',
+        canonicalPointCount: 12,
+      },
+    };
+    expect(summarizeActivityObservability([completion, wrongActivity] as any)
+      .evidenceCompleteness.networkSync).toBe('partial');
+    const staleFinal = {
+      ...wrongActivity, eventId: 'stale-final',
+      details: { ...wrongActivity.details, activityIdentityMatched: true, finalRevision: 3 },
+    };
+    expect(summarizeActivityObservability([completion, staleFinal] as any)
+      .evidenceCompleteness.networkSync).toBe('partial');
+  });
+
+  test('store publication requires matching React presentation coverage', () => {
+    const base = {
+      schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
+      clientActivityId: 'activity-a', monotonicTimeMs: null,
+      processOriginWallTimeMs: null, processId: 'process-a', details: {},
+    };
+    const stores = [7, 8].map(rawOrdinal => ({
+      ...base, eventId: `store-${rawOrdinal}`, stage: 'store-published', wallTimeMs: rawOrdinal,
+      evidenceId: `activity:${rawOrdinal}`,
+    }));
+    const missing = summarizeActivityObservability(stores as any);
+    expect(missing.evidenceCompleteness.livePublication).toBe('partial');
+    expect(missing.pipelineFindings.storePublicationsWithoutPresentationEvidence).toBe(2);
+    const presentation = {
+      ...base, eventId: 'presented', stage: 'presentation', wallTimeMs: 9,
+      evidenceId: 'activity:8', details: { firstRawOrdinal: 7, lastRawOrdinal: 8 },
+    };
+    const complete = summarizeActivityObservability([...stores, presentation] as any);
+    expect(complete.evidenceCompleteness.livePublication).toBe('complete');
+    expect(complete.pipelineFindings.storePublicationsWithoutPresentationEvidence).toBe(0);
+  });
+
+  test('reports JS receipt and original observation timestamp gaps separately', () => {
+    const base = {
+      schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
+      clientActivityId: 'activity-a', monotonicTimeMs: null,
+      processOriginWallTimeMs: null, processId: 'process-a', stage: 'observation-received',
+    };
+    const summary = summarizeActivityObservability([
+      { ...base, eventId: 'one', wallTimeMs: 1_000, evidenceId: 'one', details: { observationTimeMs: 900 } },
+      { ...base, eventId: 'two', wallTimeMs: 472_000, evidenceId: 'two', details: { observationTimeMs: 302_000 } },
+    ] as any);
+    expect(summary.longObservationGaps[0]).toMatchObject({
+      receiptGapDurationMs: 471_000,
+      observationTimestampGapMs: 301_100,
+    });
+    expect(summary.timing).toMatchObject({
+      longestJsReceiptGapMs: 471_000,
+      longestObservationTimestampGapMs: 301_100,
     });
   });
 

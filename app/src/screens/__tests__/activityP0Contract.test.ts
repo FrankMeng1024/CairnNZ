@@ -62,6 +62,15 @@ describe('Activity P0 source contract', () => {
     expect(hikingMap).toMatch(/key=\{`\$\{chunk\.key\}:style-\$\{routeStyleGeneration\}`\}/);
   });
 
+  it('records a correlated React-commit frontier without claiming a native map frame', () => {
+    const hikingMap = read('screens/HikingMap.tsx');
+    expect(hikingMap).toContain("stage: 'presentation'");
+    expect(hikingMap).toContain("consumer: 'activity-map-react-commit'");
+    expect(hikingMap).toContain('firstRawOrdinal');
+    expect(hikingMap).toContain('lastRawOrdinal: presentedTailRawOrdinal');
+    expect(hikingMap).toContain('nativeMapFrameMeasured: false');
+  });
+
   it('binds Activity Detail Final geometry above the style and refits by geometry identity', () => {
     const history = read('screens/MapHistoryScreen.tsx');
     expect(history).toContain('onDidFinishLoadingStyle');

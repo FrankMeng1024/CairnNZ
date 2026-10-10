@@ -793,6 +793,13 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
         operation: 'completed-activity-upload',
         phase: 'ack',
         acknowledged: true,
+        activityIdentityMatched: result.client_activity_id === hike.localId,
+        serverActivityIdentityMatched: result.session_id === mappedRemoteId,
+        canonicalPointCount: Array.isArray(hike.payload.route_points_canonical)
+          ? hike.payload.route_points_canonical.length
+          : null,
+        finalRevision: hike.finalArtifact?.revision ?? null,
+        finalFingerprint: hike.finalArtifact?.displayFingerprint ?? null,
         idempotentReplay: !!result.idempotent_replay,
         elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
       },

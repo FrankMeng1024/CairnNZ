@@ -54,18 +54,20 @@ export interface ActivityObservabilitySummary {
   timing: {
     maximumObservationReceiptLagMs: number | null;
     maximumWalToStoreLagMs: number | null;
-    longestJsObservationGapMs: number | null;
+    longestJsReceiptGapMs: number | null;
+    longestObservationTimestampGapMs: number | null;
   };
   longObservationGaps: Array<{
+    /** Gap between JavaScript receipt clocks. This is not a GPS measurement gap. */
     durationMs: number;
+    receiptGapDurationMs: number;
+    /** Gap between original provider observation timestamps, when both exist. */
+    observationTimestampGapMs: number | null;
     fromWallTimeMs: number;
     toWallTimeMs: number;
     heartbeatCount: number;
-    nativeCallbackCount: number;
-    nativeJsDeliveryCount: number;
     conclusion:
-      | 'native-callback-observed-js-delivery-missing'
-      | 'no-native-callback-observed'
+      | 'recording-source-intentionally-inactive'
       | 'no-js-callback-native-cause-unknown'
       | 'js-runtime-not-observed'
       | 'none';
@@ -100,7 +102,7 @@ export interface ActivityStageLedgerExport {
     coordinatesIncluded: false;
     automaticUpload: false;
   };
-  presentationMeasurement: 'NOT_MEASURED';
+  presentationMeasurement: 'REACT_COMMIT_NOT_NATIVE_FRAME';
   diagnosticCompleteness: {
     persistence: 'complete' | 'partial';
     summaryAvailable: boolean;
@@ -659,6 +661,53 @@ function correlatedStageCompleteness(
     : 'partial';
 }
 
+function detailString(event: ActivityStageLedgerEvent | null, ...keys: string[]): string | null {
+  if (!event) return null;
+  for (const key of keys) {
+    const value = event.details[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return null;
+}
+
+function detailNumber(event: ActivityStageLedgerEvent | null, ...keys: string[]): number | null {
+  if (!event) return null;
+  for (const key of keys) {
+    const value = event.details[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function exactCompletedUploadAcknowledged(events: ActivityStageLedgerEvent[]): boolean {
+  const completion = [...events].reverse().find(event => event.stage === 'completion-presented')
+    ?? [...events].reverse().find(event => event.stage === 'final-selected')
+    ?? null;
+  if (!completion) return false;
+  const expectedRevision = detailNumber(completion, 'artifactRevision', 'selectedRevision', 'revision');
+  const expectedFingerprint = detailString(
+    completion,
+    'artifactFingerprint',
+    'selectedFingerprint',
+    'displayFingerprint',
+  );
+  const expectedCanonicalCount = detailNumber(completion, 'canonicalPointCount');
+  return events.some(event => {
+    if (event.stage !== 'sync-state'
+      || event.details.operation !== 'completed-activity-upload'
+      || event.details.phase !== 'ack'
+      || event.details.acknowledged !== true
+      || event.details.activityIdentityMatched !== true) return false;
+    const acknowledgedRevision = detailNumber(event, 'finalRevision', 'artifactRevision');
+    const acknowledgedFingerprint = detailString(event, 'finalFingerprint', 'artifactFingerprint');
+    const acknowledgedCanonicalCount = detailNumber(event, 'canonicalPointCount');
+    if (expectedRevision !== null && acknowledgedRevision !== expectedRevision) return false;
+    if (expectedFingerprint !== null && acknowledgedFingerprint !== expectedFingerprint) return false;
+    if (expectedCanonicalCount !== null && acknowledgedCanonicalCount !== expectedCanonicalCount) return false;
+    return true;
+  });
+}
+
 /** Pure, coordinate-free interpretation of the retained stage evidence. */
 export function summarizeActivityObservability(
   events: ActivityStageLedgerEvent[],
@@ -677,21 +726,12 @@ export function summarizeActivityObservability(
     };
   }
 
-  const native = evidenceIds(ordered, 'native-callback');
-  const nativeJs = evidenceIds(ordered, 'native-js-delivery');
   const received = evidenceIds(ordered, 'observation-received');
   const decisions = evidenceIds(ordered, 'observation-decision');
   const canonical = evidenceIds(ordered, 'canonical-accepted');
   const wal = evidenceIds(ordered, 'wal-committed');
   const store = evidenceIds(ordered, 'store-published');
-  const presentation = evidenceIds(ordered, 'presentation');
-  const syncEvents = ordered.filter(event => event.stage === 'sync-state');
-  const syncAcknowledged = syncEvents.some(event => (
-    event.details.phase === 'ack'
-    || event.details.phase === 'mapped'
-    || event.details.phase === 'succeeded'
-    || event.details.acknowledged === true
-  ));
+  const syncAcknowledged = exactCompletedUploadAcknowledged(ordered);
   const locallyComplete = ordered.some(event => (
     event.stage === 'final-selected' || event.stage === 'completion-presented'
   ));
@@ -721,22 +761,25 @@ export function summarizeActivityObservability(
       event.wallTimeMs > from.wallTimeMs && event.wallTimeMs < to.wallTimeMs
     ));
     const heartbeatCount = inside.filter(event => event.stage === 'health-heartbeat').length;
-    const nativeCallbackCount = inside.filter(event => event.stage === 'native-callback').length;
-    const nativeJsDeliveryCount = inside.filter(event => event.stage === 'native-js-delivery').length;
-    const conclusion = nativeCallbackCount > 0 && nativeJsDeliveryCount === 0
-      ? 'native-callback-observed-js-delivery-missing' as const
-      : native.size > 0 && nativeCallbackCount === 0
-        ? 'no-native-callback-observed' as const
+    const sourcePaused = inside.some(event => event.stage === 'lifecycle'
+      && event.details.event === 'recording-paused');
+    const fromObservationTimeMs = finiteDetail(from, 'observationTimeMs');
+    const toObservationTimeMs = finiteDetail(to, 'observationTimeMs');
+    const observationTimestampGapMs = fromObservationTimeMs === null || toObservationTimeMs === null
+      ? null
+      : Math.max(0, toObservationTimeMs - fromObservationTimeMs);
+    const conclusion = sourcePaused
+      ? 'recording-source-intentionally-inactive' as const
       : heartbeatCount > 0
         ? 'no-js-callback-native-cause-unknown' as const
         : 'js-runtime-not-observed' as const;
     longObservationGaps.push({
       durationMs,
+      receiptGapDurationMs: durationMs,
+      observationTimestampGapMs,
       fromWallTimeMs: from.wallTimeMs,
       toWallTimeMs: to.wallTimeMs,
       heartbeatCount,
-      nativeCallbackCount,
-      nativeJsDeliveryCount,
       conclusion,
     });
   }
@@ -745,21 +788,20 @@ export function summarizeActivityObservability(
     stageCounts,
     frontiers,
     evidenceCompleteness: {
-      nativeCallback: native.size > 0 ? 'complete' : 'not-observable-current-binary',
-      nativeToJsCorrelation: correlatedCompleteness(
-        native,
-        nativeJs,
-        'not-observable-current-binary',
-      ),
+      // Native evidence is held in a separate owner-correlated ring. A JS
+      // ledger can never promote these stages on its own; the forensic
+      // cross-ledger report is the only authority for that boundary.
+      nativeCallback: 'not-observable-current-binary',
+      nativeToJsCorrelation: 'not-observable-current-binary',
       jsIntake: received.size > 0 ? 'complete' : 'partial',
       acceptanceDecision: correlatedCompleteness(received, decisions),
       walDurability: correlatedStageCompleteness(canonical, ordered, 'wal-committed'),
       canonicalStore: correlatedStageCompleteness(wal, ordered, 'store-published'),
-      livePublication: store.size > 0 ? 'complete' : 'partial',
+      livePublication: correlatedStageCompleteness(store, ordered, 'presentation'),
       networkSync: syncAcknowledged ? 'complete' : 'partial',
     },
     pipelineFindings: {
-      nativeCallbacksWithoutJsDelivery: [...native].filter(identity => !nativeJs.has(identity)).length,
+      nativeCallbacksWithoutJsDelivery: 0,
       jsReceiptsWithoutDecision: [...received].filter(identity => !decisions.has(identity)).length,
       rejectedByFiltering,
       canonicalAcceptsWithoutWal: [...canonical]
@@ -767,7 +809,7 @@ export function summarizeActivityObservability(
       walCommitsWithoutStorePublication: [...wal]
         .filter(identity => !stageCoversEvidence(ordered, 'store-published', identity)).length,
       storePublicationsWithoutPresentationEvidence: [...store]
-        .filter(identity => !presentation.has(identity)).length,
+        .filter(identity => !stageCoversEvidence(ordered, 'presentation', identity)).length,
       locallyCompleteWithoutUploadAck: locallyComplete && !syncAcknowledged,
       refinementUnavailable,
     },
@@ -779,16 +821,21 @@ export function summarizeActivityObservability(
       maximumWalToStoreLagMs: maximum(ordered
         .filter(event => event.stage === 'store-published')
         .map(event => finiteDetail(event, 'walToStoreLatencyMs'))),
-      longestJsObservationGapMs: maximum(observationEvents.slice(1).map((event, index) => (
+      longestJsReceiptGapMs: maximum(observationEvents.slice(1).map((event, index) => (
         event.wallTimeMs - observationEvents[index].wallTimeMs
       ))),
+      longestObservationTimestampGapMs: maximum(observationEvents.slice(1).map((event, index) => {
+        const previous = finiteDetail(observationEvents[index], 'observationTimeMs');
+        const current = finiteDetail(event, 'observationTimeMs');
+        return previous === null || current === null ? null : Math.max(0, current - previous);
+      })),
     },
     longObservationGaps,
-    interpretationLimits: native.size > 0 ? [
-      'Native callback evidence exists only for an instrumented binary and remains independent of JS-ledger persistence.',
-    ] : [
+    interpretationLimits: [
       'This installed binary cannot observe CLLocation callback receipt before Expo delivers it to JavaScript.',
       'Missing JavaScript observations alone do not prove an iOS, hardware, permission, or native-provider cause.',
+      'JavaScript receipt gaps and original GPS observation-timestamp gaps are reported separately.',
+      'Native callback conclusions require the separately exported owner-correlated collector coverage report.',
     ],
   };
 }
@@ -972,7 +1019,7 @@ export async function exportLatestActivityStageLedger(
     clientActivityId: latestActivityId,
     installedIdentity: installedIdentity(),
     privacy: { localOnly: true, coordinatesIncluded: false, automaticUpload: false },
-    presentationMeasurement: 'NOT_MEASURED',
+    presentationMeasurement: 'REACT_COMMIT_NOT_NATIVE_FRAME',
     diagnosticCompleteness: {
       persistence: partial ? 'partial' : 'complete',
       summaryAvailable,

@@ -219,6 +219,10 @@ import {
   flushActivityStageLedger,
   recordActivityStageEvent,
 } from '../features/activity/activityStageLedger';
+import {
+  activateNativeGpsEvidenceScope,
+  deactivateNativeGpsEvidenceScope,
+} from '../features/activity/nativeGpsEvidence';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
@@ -1614,6 +1618,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       return false;
     }
 
+    if (locationProviderSource === 'real') {
+      // Diagnostics must never join or delay source activation. The future
+      // instrumented native writer reads this opaque scope on its own utility
+      // queue; missing the initial race remains explicitly partial evidence.
+      void activateNativeGpsEvidenceScope(userId, localSessionId).catch(() => undefined);
+    }
+
     // Start battery + network monitors (non-blocking)
     if (locationProviderSource === 'real') batteryMonitor.start().catch(() => {});
     networkMonitor.start().catch(() => {});
@@ -2050,6 +2061,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         void debugLogger.endSession().catch(() => {});
       }
       await persistBackgroundContext(null, false).catch(() => {});
+      if (locationProviderSource === 'real') {
+        void deactivateNativeGpsEvidenceScope(userId, localSessionId).catch(() => undefined);
+      }
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { discardActiveHike } = require('../services/hikeTrackWriter');
@@ -3815,6 +3829,22 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           );
           if (!sessionMarked || !registryMarked) throw new Error('activity_ack_persistence_failed');
           serverSaveAcknowledged = true;
+          void recordActivityStageEvent({
+            ownerUserId,
+            clientActivityId: s.sessionId!,
+            stage: 'sync-state',
+            details: {
+              operation: 'completed-activity-upload',
+              phase: 'ack',
+              acknowledged: true,
+              activityIdentityMatched: v412Result.client_activity_id === s.sessionId,
+              serverActivityIdentityMatched: v412Result.session_id === remoteId,
+              canonicalPointCount: v412RouteCanonical.length,
+              finalRevision: finalArtifact.revision,
+              finalFingerprint: finalArtifact.displayFingerprint,
+              idempotentReplay: !!v412Result.idempotent_replay,
+            },
+          });
           if (finishResult) finishResult = { ...finishResult, syncState: 'synced' };
           recordSavePhase('server_ack_persistence', serverAckPersistenceStartedAt, {
             acknowledged: true,
@@ -4215,10 +4245,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         details: {
           artifactRevision: finishResult.finalGeometryRevision,
           artifactFingerprint: finishResult.finalGeometryFingerprint,
+          canonicalPointCount: s.trackPoints.length,
           routeState: finishResult.finalGeometryState,
           syncState: serverSaveAcknowledged ? 'synced' : 'pending',
         },
       });
+    }
+    if (s.locationProviderSource === 'real' && s.sessionId) {
+      void deactivateNativeGpsEvidenceScope(ownerUserId, s.sessionId).catch(() => undefined);
     }
     set((prev) => ({
       ...initialState,
@@ -4294,6 +4328,19 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         'CairnNZ paused the visible GPS source but could not verify background storage. You can still Finish this Activity.',
       );
       return;
+    }
+    if (pauseOwner.locationProviderSource === 'real'
+      && pauseOwner.ownerUserId && pauseOwner.sessionId) {
+      void deactivateNativeGpsEvidenceScope(
+        pauseOwner.ownerUserId,
+        pauseOwner.sessionId,
+      ).catch(() => undefined);
+      void recordActivityStageEvent({
+        ownerUserId: pauseOwner.ownerUserId,
+        clientActivityId: pauseOwner.sessionId,
+        stage: 'lifecycle',
+        details: { event: 'recording-paused', providerActive: false },
+      });
     }
     // The simulator may move physically while paused. Clearing the accepted
     // anchor ensures Resume starts a real new segment and never fabricates
@@ -4506,6 +4553,19 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       startError: null,
       activeDurationStartedAtMs: lifecycleStartedAt,
     });
+    if (resumeSource === 'real') {
+      void activateNativeGpsEvidenceScope(ownerUserId, resumeState.sessionId).catch(() => undefined);
+      void recordActivityStageEvent({
+        ownerUserId,
+        clientActivityId: resumeState.sessionId,
+        stage: 'lifecycle',
+        details: {
+          event: 'recording-resumed',
+          providerActive: true,
+          recovery: rebuildingAfterProcessDeath,
+        },
+      });
+    }
     startActivityLifecycleTimer(resumeState.sessionId);
     startRealTelemetryHealthTimer();
     appendSimulatorLog('ACTIVITY_STATE', 'activity_resumed', {
@@ -5005,7 +5065,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             ownerUserId: before.ownerUserId,
             clientActivityId: before.sessionId,
             stage: 'observation-decision',
-            evidenceId: `${before.sessionId.slice(-8)}:${rawOrdinal}`,
+            evidenceId: receiptEvidenceId,
             details: {
               observationTimeMs: sampleTimestamp,
               prefilterDecision: 'PASS',
@@ -5362,6 +5422,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           accuracy: acceptedCoord.accuracy,
           speed: acceptedCoord.speed,
           t,
+          rawOrdinal: cleanPoint.rawOrdinal,
           segmentId,
           ...(segmentStartReason ? { segmentStartReason } : {}),
         };
@@ -6372,6 +6433,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     } catch { /* monitor unavailable */ }
     const backgroundFence = await persistBackgroundContext(null, false).catch(() => false);
     if (!backgroundFence) throw new Error('activity_logout_background_fence_failed');
+    if (activity.locationProviderSource === 'real') {
+      void deactivateNativeGpsEvidenceScope(
+        String(activity.ownerUserId ?? ''),
+        activity.sessionId,
+      ).catch(() => undefined);
+    }
     await pointIngestTail.catch(() => {});
     // Finish owns a captured A snapshot and may be persisting its local commit.
     // Keep A as the active store owner until that operation resolves, otherwise
@@ -6476,6 +6543,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         }
         if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
       }
+    }
+    if (s.locationProviderSource === 'real' && s.sessionId) {
+      void deactivateNativeGpsEvidenceScope(ownerUserId, s.sessionId).catch(() => undefined);
     }
     // Persist cancellation before attempting any network or file cleanup.
     // A crash after this point cannot let stale queued work resurrect the

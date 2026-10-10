@@ -69,8 +69,13 @@ describe('build-gated Expo Location native GPS observability patch', () => {
     ), 'utf8');
     expect(recorder).toContain('writer.async');
     expect(recorder).toContain('512 * 1024');
+    expect(recorder).toContain('collector-heartbeat');
+    expect(recorder).toContain('collector-retention-start');
+    expect(recorder).toContain('native-gps-context-v1.json');
+    expect(recorder).toContain('collectorRunId');
     expect(recorder).toContain('FileProtectionType.completeUntilFirstUserAuthentication');
     expect(recorder).not.toMatch(/latitude|longitude|\.coordinate\b/);
     expect(recorder).not.toContain('DispatchQueue.main.sync');
+    expect(recorder).not.toContain('writer.sync');
   });
 });
