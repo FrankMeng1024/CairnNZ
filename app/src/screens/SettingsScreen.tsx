@@ -61,6 +61,7 @@ import { getHomeBackground, getRegisteredBackgroundLayout, getWeatherReviewBackg
 import { PASSWORD_RULES, passwordPolicyError, passwordRuleState } from '../utils/passwordPolicy';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { exportLatestActivityStageLedger } from '../features/activity/activityStageLedger';
+import { exportNativeGpsEvidence } from '../features/activity/nativeGpsEvidence';
 
 type Page = 'root' | 'account' | 'privacy' | 'help';
 type FeedbackKind = 'feedback' | 'bug';
@@ -524,10 +525,18 @@ export function SettingsScreen() {
     if (!ownerId || activityDiagnosticsCopying) return;
     setActivityDiagnosticsCopying(true);
     try {
-      const ledger = await exportLatestActivityStageLedger(ownerId);
+      const [ledger, nativeGpsEvidence] = await Promise.all([
+        exportLatestActivityStageLedger(ownerId),
+        exportNativeGpsEvidence(),
+      ]);
       if (currentOwnerId() !== ownerId) return;
       const Clipboard = await import('expo-clipboard');
-      await Clipboard.setStringAsync(JSON.stringify(ledger, null, 2));
+      await Clipboard.setStringAsync(JSON.stringify({
+        schema: 'cairn-activity-forensic-export',
+        version: 1,
+        stageLedger: ledger,
+        nativeGpsEvidence,
+      }, null, 2));
       if (currentOwnerId() !== ownerId) return;
       Alert.alert(
         'Activity diagnostics copied',
