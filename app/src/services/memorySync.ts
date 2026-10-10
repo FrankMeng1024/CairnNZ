@@ -31,6 +31,10 @@ import {
 } from '../features/memory/services/memoryPersistence';
 import { purgeFogDisplayCache } from '../features/memory/services/fogDisplayCache';
 import { resetH3PersistenceForUser } from '../features/memory/services/h3Persistence';
+import {
+  flushMemorySyncAttachSkipSummary,
+  recordMemorySyncAttachSkip,
+} from './memorySyncDiagnosticNoise';
 
 const PUSH_DEBOUNCE_MS = 30_000;
 const PUSH_MAX_WAIT_MS = 60_000;
@@ -659,7 +663,7 @@ export function attachMemorySync(userId: string): void {
   // + AuthScreen 二次 hydrate 三处都调 attachMemorySync 时反复 detach
   // abort in-flight push,memory_points 丢批次(下个 bounded debounce 后重推)。
   if (activeUserId === userId && unsubscribe) {
-    require('./appLog').log('memory_sync.attach_skip', { userId, reason: 'same-user-already-attached' });
+    recordMemorySyncAttachSkip();
     return;
   }
   const fromEpoch = epoch;
@@ -683,6 +687,7 @@ export function attachMemorySync(userId: string): void {
 }
 
 export function detachMemorySync(): void {
+  flushMemorySyncAttachSkipSummary('detach');
   epoch++;
   if (pushAbortController) {
     try { pushAbortController.abort(); } catch { /* noop */ }
