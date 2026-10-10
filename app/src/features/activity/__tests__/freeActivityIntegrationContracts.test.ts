@@ -402,19 +402,27 @@ describe('Free Activity integration contracts', () => {
     expect(foreground).toContain('ownerGeneration');
   });
 
-  test('authoritative Start conflict preserves terminal lifecycle before recovery materialization', () => {
+  test('remote Start is downstream of local registry, WAL and active GPS authority', () => {
     const source = read('src/store/useTrackingStore.ts');
-    const conflict = source.slice(
-      source.indexOf("startResolution?.kind === 'conflict'"),
-      source.indexOf("crashLogger.breadcrumb('session:start:server-unavailable')", source.indexOf("startResolution?.kind === 'conflict'")),
+    const start = source.slice(
+      source.indexOf('startTracking: async'),
+      source.indexOf('stopTracking: async'),
     );
-    expect(conflict).toContain('await reconcileStartConflict');
-    expect(conflict).toContain("disposition === 'completed-local'");
-    expect(conflict).toContain('await updateRemoteId(existing.clientActivityId, existing.id)');
-    expect(conflict).toContain('await startHikeTrack');
-    expect(conflict.indexOf('await reconcileStartConflict')).toBeLessThan(conflict.indexOf('await startHikeTrack'));
-    expect(conflict.indexOf("disposition === 'completed-local'")).toBeLessThan(conflict.indexOf('await startHikeTrack'));
-    expect(source).toContain('await mapActivityServerId(userId, localSessionId, startResolution.serverActivityId)');
+    const registry = start.indexOf('await registerUnfinishedActivity');
+    const lease = start.indexOf('await persistBackgroundContext(get().sessionId');
+    const journal = start.indexOf('await startHikeTrack(sid');
+    const sourceActivation = start.indexOf('await activateForegroundSource()');
+    const tracking = start.indexOf("status: 'tracking'");
+    const remote = start.indexOf("scheduleRemoteSessionStart(get, set, 'local-start')");
+    expect(registry).toBeGreaterThan(0);
+    expect(registry).toBeLessThan(lease);
+    expect(lease).toBeLessThan(journal);
+    expect(journal).toBeLessThan(sourceActivation);
+    expect(sourceActivation).toBeLessThan(tracking);
+    expect(tracking).toBeLessThan(remote);
+    expect(start).not.toContain('await startSessionResolved');
+    expect(source).toContain('persistServerMapping: serverActivityId => mapActivityServerId');
+    expect(source).toContain("mappingTarget === 'tombstoned'");
   });
 
   test('Hike and Run use the same terminal-aware Start error presentation', () => {

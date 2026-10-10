@@ -19,6 +19,7 @@ import {
   flushActivityStageLedger,
   purgeActivityStageLedgerForOwner,
   recordActivityStageEvent,
+  summarizeActivityObservability,
 } from '../activityStageLedger';
 
 describe('local owner-exportable Activity stage ledger', () => {
@@ -252,6 +253,119 @@ describe('local owner-exportable Activity stage ledger', () => {
       stages: {
         'observation-received': expect.objectContaining({ count: 1_201 }),
       },
+    });
+  });
+
+  test('summarizes a fully correlated native-to-sync evidence path without coordinates', () => {
+    const stages = [
+      'native-callback',
+      'native-js-delivery',
+      'observation-received',
+      'observation-decision',
+      'canonical-accepted',
+      'wal-committed',
+      'store-published',
+      'presentation',
+    ] as const;
+    const events = stages.map((stage, index) => ({
+      schema: 'cairn-activity-stage-ledger', version: 1, eventId: `event-${index}`,
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', stage,
+      wallTimeMs: 1_000 + index * 10, monotonicTimeMs: index * 10,
+      processOriginWallTimeMs: 1_000, processId: 'process-a', evidenceId: 'evidence-1',
+      details: stage === 'observation-received'
+        ? { observationTimeMs: 900 }
+        : stage === 'observation-decision' ? { decision: 'ACCEPT' }
+          : stage === 'store-published' ? { walToStoreLatencyMs: 12 }
+            : {},
+    })) as any;
+    events.push({
+      ...events[0], eventId: 'sync-ack', stage: 'sync-state', wallTimeMs: 1_100,
+      evidenceId: null, details: { operation: 'completed-activity-upload', phase: 'ack' },
+    });
+    const summary = summarizeActivityObservability(events);
+    expect(summary.evidenceCompleteness).toEqual({
+      nativeCallback: 'complete',
+      nativeToJsCorrelation: 'complete',
+      jsIntake: 'complete',
+      acceptanceDecision: 'complete',
+      walDurability: 'complete',
+      canonicalStore: 'complete',
+      livePublication: 'complete',
+      networkSync: 'complete',
+    });
+    expect(summary.pipelineFindings).toMatchObject({
+      nativeCallbacksWithoutJsDelivery: 0,
+      jsReceiptsWithoutDecision: 0,
+      canonicalAcceptsWithoutWal: 0,
+      walCommitsWithoutStorePublication: 0,
+    });
+    expect(summary.timing).toMatchObject({
+      maximumObservationReceiptLagMs: 120,
+      maximumWalToStoreLagMs: 12,
+    });
+  });
+
+  test('a seven-minute JavaScript gap retains native uncertainty in the current binary', () => {
+    const event = (eventId: string, stage: any, wallTimeMs: number, evidenceId: string | null = null) => ({
+      schema: 'cairn-activity-stage-ledger', version: 1, eventId,
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', stage, wallTimeMs,
+      monotonicTimeMs: null, processOriginWallTimeMs: null, processId: 'process-a', evidenceId, details: {},
+    });
+    const summary = summarizeActivityObservability([
+      event('received-1', 'observation-received', 1_000, 'evidence-1'),
+      event('heartbeat-1', 'health-heartbeat', 61_000),
+      event('heartbeat-2', 'health-heartbeat', 301_000),
+      event('received-2', 'observation-received', 472_000, 'evidence-2'),
+    ] as any);
+    expect(summary.longObservationGaps).toEqual([
+      expect.objectContaining({
+        durationMs: 471_000,
+        heartbeatCount: 2,
+        nativeCallbackCount: 0,
+        conclusion: 'no-js-callback-native-cause-unknown',
+      }),
+    ]);
+    expect(summary.evidenceCompleteness.nativeCallback).toBe('not-observable-current-binary');
+    expect(summary.interpretationLimits.join(' ')).toContain('do not prove');
+  });
+
+  test('instrumented native receipt without JS delivery localizes the missing boundary', () => {
+    const base = {
+      schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
+      clientActivityId: 'activity-a', monotonicTimeMs: null,
+      processOriginWallTimeMs: null, processId: 'process-a', details: {},
+    };
+    const summary = summarizeActivityObservability([
+      { ...base, eventId: 'r1', stage: 'observation-received', wallTimeMs: 1_000, evidenceId: 'evidence-1' },
+      { ...base, eventId: 'native', stage: 'native-callback', wallTimeMs: 220_000, evidenceId: 'native-7' },
+      { ...base, eventId: 'r2', stage: 'observation-received', wallTimeMs: 472_000, evidenceId: 'evidence-2' },
+    ] as any);
+    expect(summary.pipelineFindings.nativeCallbacksWithoutJsDelivery).toBe(1);
+    expect(summary.longObservationGaps[0]).toMatchObject({
+      conclusion: 'native-callback-observed-js-delivery-missing',
+    });
+  });
+
+  test('reports filtering, durability, publication, upload and refinement frontiers independently', () => {
+    const base = {
+      schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
+      clientActivityId: 'activity-a', monotonicTimeMs: null,
+      processOriginWallTimeMs: null, processId: 'process-a',
+    };
+    const summary = summarizeActivityObservability([
+      { ...base, eventId: 'rx', stage: 'observation-received', wallTimeMs: 1, evidenceId: 'rejected', details: {} },
+      { ...base, eventId: 'dx', stage: 'observation-decision', wallTimeMs: 2, evidenceId: 'rejected', details: { decision: 'REJECT', reason: 'poor-accuracy' } },
+      { ...base, eventId: 'ca', stage: 'canonical-accepted', wallTimeMs: 3, evidenceId: 'accepted-no-wal', details: {} },
+      { ...base, eventId: 'wal', stage: 'wal-committed', wallTimeMs: 4, evidenceId: 'wal-no-store', details: {} },
+      { ...base, eventId: 'final', stage: 'final-selected', wallTimeMs: 5, evidenceId: null, details: { revision: 1 } },
+      { ...base, eventId: 'provider', stage: 'final-job', wallTimeMs: 6, evidenceId: null, details: { phase: 'unavailable' } },
+    ] as any);
+    expect(summary.pipelineFindings).toMatchObject({
+      rejectedByFiltering: 1,
+      canonicalAcceptsWithoutWal: 1,
+      walCommitsWithoutStorePublication: 1,
+      locallyCompleteWithoutUploadAck: true,
+      refinementUnavailable: true,
     });
   });
 });

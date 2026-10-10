@@ -3,6 +3,10 @@ import { applySnapLabDiagnosticWriteDelay } from '../activitySimulator/snapLabFa
 
 export type ActivityStage =
   | 'activity-start'
+  | 'lifecycle'
+  | 'health-heartbeat'
+  | 'native-callback'
+  | 'native-js-delivery'
   | 'observation-received'
   | 'observation-decision'
   | 'canonical-accepted'
@@ -15,7 +19,58 @@ export type ActivityStage =
   | 'final-job'
   | 'final-selected'
   | 'completion-presented'
-  | 'detail-selected';
+  | 'detail-selected'
+  | 'sync-state';
+
+export type ActivityEvidenceCompleteness = 'complete' | 'partial' | 'not-observable-current-binary';
+
+export interface ActivityObservabilitySummary {
+  stageCounts: Partial<Record<ActivityStage, number>>;
+  frontiers: Partial<Record<ActivityStage, {
+    count: number;
+    lastWallTimeMs: number;
+    lastEvidenceId: string | null;
+  }>>;
+  evidenceCompleteness: {
+    nativeCallback: ActivityEvidenceCompleteness;
+    nativeToJsCorrelation: ActivityEvidenceCompleteness;
+    jsIntake: ActivityEvidenceCompleteness;
+    acceptanceDecision: ActivityEvidenceCompleteness;
+    walDurability: ActivityEvidenceCompleteness;
+    canonicalStore: ActivityEvidenceCompleteness;
+    livePublication: ActivityEvidenceCompleteness;
+    networkSync: ActivityEvidenceCompleteness;
+  };
+  pipelineFindings: {
+    nativeCallbacksWithoutJsDelivery: number;
+    jsReceiptsWithoutDecision: number;
+    rejectedByFiltering: number;
+    canonicalAcceptsWithoutWal: number;
+    walCommitsWithoutStorePublication: number;
+    storePublicationsWithoutPresentationEvidence: number;
+    locallyCompleteWithoutUploadAck: boolean;
+    refinementUnavailable: boolean;
+  };
+  timing: {
+    maximumObservationReceiptLagMs: number | null;
+    maximumWalToStoreLagMs: number | null;
+    longestJsObservationGapMs: number | null;
+  };
+  longObservationGaps: Array<{
+    durationMs: number;
+    fromWallTimeMs: number;
+    toWallTimeMs: number;
+    heartbeatCount: number;
+    nativeCallbackCount: number;
+    nativeJsDeliveryCount: number;
+    conclusion:
+      | 'native-callback-observed-js-delivery-missing'
+      | 'no-js-callback-native-cause-unknown'
+      | 'js-runtime-not-observed'
+      | 'none';
+  }>;
+  interpretationLimits: string[];
+}
 
 export interface ActivityStageLedgerEvent {
   schema: 'cairn-activity-stage-ledger';
@@ -57,6 +112,7 @@ export interface ActivityStageLedgerExport {
     missingRequiredStages: ActivityStage[];
   };
   phaseSummary: ActivityStagePhaseSummary | null;
+  observability: ActivityObservabilitySummary;
   events: ActivityStageLedgerEvent[];
 }
 
@@ -543,6 +599,197 @@ async function waitBounded<T>(promise: Promise<T>, timeoutMs: number): Promise<{
   }
 }
 
+function finiteDetail(event: ActivityStageLedgerEvent, key: string): number | null {
+  const value = event.details[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function maximum(values: Array<number | null>): number | null {
+  const finite = values.filter((value): value is number => value !== null && Number.isFinite(value));
+  return finite.length > 0 ? Math.max(...finite) : null;
+}
+
+function evidenceIds(events: ActivityStageLedgerEvent[], stage: ActivityStage): Set<string> {
+  const result = new Set<string>();
+  events.filter(event => event.stage === stage).forEach(event => {
+    if (event.evidenceId) result.add(event.evidenceId);
+    const batch = event.details.evidenceIds;
+    if (Array.isArray(batch)) {
+      batch.filter(identity => typeof identity === 'string').forEach(identity => result.add(identity));
+    }
+  });
+  return result;
+}
+
+function correlatedCompleteness(
+  upstream: Set<string>,
+  downstream: Set<string>,
+  unavailable: ActivityEvidenceCompleteness = 'partial',
+): ActivityEvidenceCompleteness {
+  if (upstream.size === 0) return unavailable;
+  return [...upstream].every(identity => downstream.has(identity)) ? 'complete' : 'partial';
+}
+
+function stageCoversEvidence(
+  events: ActivityStageLedgerEvent[],
+  stage: ActivityStage,
+  identity: string,
+): boolean {
+  const direct = evidenceIds(events, stage);
+  if (direct.has(identity)) return true;
+  const ordinal = Number(identity.slice(identity.lastIndexOf(':') + 1));
+  if (!Number.isFinite(ordinal)) return false;
+  return events.some(event => {
+    if (event.stage !== stage) return false;
+    const first = finiteDetail(event, 'firstRawOrdinal');
+    const last = finiteDetail(event, 'lastRawOrdinal');
+    return first !== null && last !== null && ordinal >= first && ordinal <= last;
+  });
+}
+
+function correlatedStageCompleteness(
+  upstream: Set<string>,
+  events: ActivityStageLedgerEvent[],
+  downstreamStage: ActivityStage,
+): ActivityEvidenceCompleteness {
+  if (upstream.size === 0) return 'partial';
+  return [...upstream].every(identity => stageCoversEvidence(events, downstreamStage, identity))
+    ? 'complete'
+    : 'partial';
+}
+
+/** Pure, coordinate-free interpretation of the retained stage evidence. */
+export function summarizeActivityObservability(
+  events: ActivityStageLedgerEvent[],
+): ActivityObservabilitySummary {
+  const ordered = events.slice().sort(
+    (left, right) => left.wallTimeMs - right.wallTimeMs || left.eventId.localeCompare(right.eventId),
+  );
+  const stageCounts: Partial<Record<ActivityStage, number>> = {};
+  const frontiers: ActivityObservabilitySummary['frontiers'] = {};
+  for (const event of ordered) {
+    stageCounts[event.stage] = (stageCounts[event.stage] ?? 0) + 1;
+    frontiers[event.stage] = {
+      count: stageCounts[event.stage]!,
+      lastWallTimeMs: event.wallTimeMs,
+      lastEvidenceId: event.evidenceId ?? null,
+    };
+  }
+
+  const native = evidenceIds(ordered, 'native-callback');
+  const nativeJs = evidenceIds(ordered, 'native-js-delivery');
+  const received = evidenceIds(ordered, 'observation-received');
+  const decisions = evidenceIds(ordered, 'observation-decision');
+  const canonical = evidenceIds(ordered, 'canonical-accepted');
+  const wal = evidenceIds(ordered, 'wal-committed');
+  const store = evidenceIds(ordered, 'store-published');
+  const presentation = evidenceIds(ordered, 'presentation');
+  const syncEvents = ordered.filter(event => event.stage === 'sync-state');
+  const syncAcknowledged = syncEvents.some(event => (
+    event.details.phase === 'ack'
+    || event.details.phase === 'mapped'
+    || event.details.phase === 'succeeded'
+    || event.details.acknowledged === true
+  ));
+  const locallyComplete = ordered.some(event => (
+    event.stage === 'final-selected' || event.stage === 'completion-presented'
+  ));
+  const refinementUnavailable = ordered.some(event => (
+    (event.stage === 'final-job' || event.stage === 'sync-state')
+    && (event.details.phase === 'unavailable'
+      || event.details.phase === 'failed'
+      || event.details.providerAvailable === false)
+  ));
+
+  const decisionsById = new Map(ordered
+    .filter(event => event.stage === 'observation-decision' && event.evidenceId)
+    .map(event => [event.evidenceId!, event]));
+  const rejectedByFiltering = [...decisionsById.values()].filter(event => {
+    const decision = String(event.details.decision ?? '').toUpperCase();
+    return decision !== 'ACCEPT' && decision !== 'ACCEPTED';
+  }).length;
+
+  const observationEvents = ordered.filter(event => event.stage === 'observation-received');
+  const longObservationGaps: ActivityObservabilitySummary['longObservationGaps'] = [];
+  for (let index = 1; index < observationEvents.length; index += 1) {
+    const from = observationEvents[index - 1];
+    const to = observationEvents[index];
+    const durationMs = to.wallTimeMs - from.wallTimeMs;
+    if (durationMs < 7 * 60_000) continue;
+    const inside = ordered.filter(event => (
+      event.wallTimeMs > from.wallTimeMs && event.wallTimeMs < to.wallTimeMs
+    ));
+    const heartbeatCount = inside.filter(event => event.stage === 'health-heartbeat').length;
+    const nativeCallbackCount = inside.filter(event => event.stage === 'native-callback').length;
+    const nativeJsDeliveryCount = inside.filter(event => event.stage === 'native-js-delivery').length;
+    const conclusion = nativeCallbackCount > 0 && nativeJsDeliveryCount === 0
+      ? 'native-callback-observed-js-delivery-missing' as const
+      : heartbeatCount > 0
+        ? 'no-js-callback-native-cause-unknown' as const
+        : 'js-runtime-not-observed' as const;
+    longObservationGaps.push({
+      durationMs,
+      fromWallTimeMs: from.wallTimeMs,
+      toWallTimeMs: to.wallTimeMs,
+      heartbeatCount,
+      nativeCallbackCount,
+      nativeJsDeliveryCount,
+      conclusion,
+    });
+  }
+
+  return {
+    stageCounts,
+    frontiers,
+    evidenceCompleteness: {
+      nativeCallback: native.size > 0 ? 'complete' : 'not-observable-current-binary',
+      nativeToJsCorrelation: correlatedCompleteness(
+        native,
+        nativeJs,
+        'not-observable-current-binary',
+      ),
+      jsIntake: received.size > 0 ? 'complete' : 'partial',
+      acceptanceDecision: correlatedCompleteness(received, decisions),
+      walDurability: correlatedStageCompleteness(canonical, ordered, 'wal-committed'),
+      canonicalStore: correlatedStageCompleteness(wal, ordered, 'store-published'),
+      livePublication: store.size > 0 ? 'complete' : 'partial',
+      networkSync: syncAcknowledged ? 'complete' : 'partial',
+    },
+    pipelineFindings: {
+      nativeCallbacksWithoutJsDelivery: [...native].filter(identity => !nativeJs.has(identity)).length,
+      jsReceiptsWithoutDecision: [...received].filter(identity => !decisions.has(identity)).length,
+      rejectedByFiltering,
+      canonicalAcceptsWithoutWal: [...canonical]
+        .filter(identity => !stageCoversEvidence(ordered, 'wal-committed', identity)).length,
+      walCommitsWithoutStorePublication: [...wal]
+        .filter(identity => !stageCoversEvidence(ordered, 'store-published', identity)).length,
+      storePublicationsWithoutPresentationEvidence: [...store]
+        .filter(identity => !presentation.has(identity)).length,
+      locallyCompleteWithoutUploadAck: locallyComplete && !syncAcknowledged,
+      refinementUnavailable,
+    },
+    timing: {
+      maximumObservationReceiptLagMs: maximum(observationEvents.map(event => {
+        const observationTimeMs = finiteDetail(event, 'observationTimeMs');
+        return observationTimeMs === null ? null : Math.max(0, event.wallTimeMs - observationTimeMs);
+      })),
+      maximumWalToStoreLagMs: maximum(ordered
+        .filter(event => event.stage === 'store-published')
+        .map(event => finiteDetail(event, 'walToStoreLatencyMs'))),
+      longestJsObservationGapMs: maximum(observationEvents.slice(1).map((event, index) => (
+        event.wallTimeMs - observationEvents[index].wallTimeMs
+      ))),
+    },
+    longObservationGaps,
+    interpretationLimits: native.size > 0 ? [
+      'Native callback evidence exists only for an instrumented binary and remains independent of JS-ledger persistence.',
+    ] : [
+      'This installed binary cannot observe CLLocation callback receipt before Expo delivers it to JavaScript.',
+      'Missing JavaScript observations alone do not prove an iOS, hardware, permission, or native-provider cause.',
+    ],
+  };
+}
+
 /**
  * Persist one privacy-safe stage fact without joining the GPS ingest mutex.
  * Coordinates and credential-shaped fields are removed at this boundary.
@@ -735,6 +982,7 @@ export async function exportLatestActivityStageLedger(
       missingRequiredStages,
     },
     phaseSummary,
+    observability: summarizeActivityObservability(events),
     events: events.map(event => ({ ...event, ownerUserId: 'current-owner' })),
   };
 }

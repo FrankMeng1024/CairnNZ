@@ -48,6 +48,7 @@ import {
   reconcileActivityMemoryProjection,
   retireActivityMemoryProjection,
 } from '../features/activity/activityMemoryProjector';
+import { recordActivityStageEvent } from '../features/activity/activityStageLedger';
 
 let isDraining = false;
 let pendingSignal = false;
@@ -538,6 +539,21 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     return 'skipped';
   }
 
+  const syncAttemptStartedAt = Date.now();
+  void recordActivityStageEvent({
+    ownerUserId: hike.userId,
+    clientActivityId: hike.localId,
+    stage: 'sync-state',
+    wallTimeMs: syncAttemptStartedAt,
+    details: {
+      operation: 'completed-activity-upload',
+      phase: 'attempt',
+      attemptCount: hike.attemptCount ?? 0,
+      remoteMapped: !!hike.remoteId,
+      wakeFromOfflineQueue: true,
+    },
+  });
+
   try {
     const preflightRegistry = await getActivityRegistry(hike.userId);
     simulatorActivity = preflightRegistry.completed.some(
@@ -590,6 +606,18 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
           });
         } catch { /* pending metadata remains authoritative */ }
         await updateCompletedActivitySyncState(hike.userId, hike.localId, 'sync_error');
+        void recordActivityStageEvent({
+          ownerUserId: hike.userId,
+          clientActivityId: hike.localId,
+          stage: 'sync-state',
+          details: {
+            operation: 'completed-activity-upload',
+            phase: 'conflict',
+            status: 409,
+            code: start.code,
+            elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
+          },
+        });
         crashLogger.breadcrumb(`activity:sync_start_conflict localId=${hike.localId.slice(0, 8)} existing=${start.existing?.clientActivityId?.slice(0, 8) ?? 'legacy'}`);
         return 'failed';
       }
@@ -613,6 +641,19 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
           } catch { /* pending metadata remains authoritative */ }
           await updateCompletedActivitySyncState(hike.userId, hike.localId, 'sync_error');
         }
+        void recordActivityStageEvent({
+          ownerUserId: hike.userId,
+          clientActivityId: hike.localId,
+          stage: 'sync-state',
+          details: {
+            operation: 'completed-activity-upload',
+            phase: 'unavailable',
+            status: start.status,
+            code: start.code,
+            retryable: start.retryable,
+            elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
+          },
+        });
         crashLogger.breadcrumb(`v412:sync_start_failed localId=${hike.localId.slice(0, 8)}`);
         return 'failed';
       }
@@ -697,6 +738,18 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     }
     const registryAcked = await acknowledgeActivity(hike.userId, hike.localId, result.session_id);
     if (!registryAcked) return 'failed';
+    void recordActivityStageEvent({
+      ownerUserId: hike.userId,
+      clientActivityId: hike.localId,
+      stage: 'sync-state',
+      details: {
+        operation: 'completed-activity-upload',
+        phase: 'ack',
+        acknowledged: true,
+        idempotentReplay: !!result.idempotent_replay,
+        elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
+      },
+    });
     try {
       // Public qualification is downstream of the normal Activity ACK. Its
       // own durable action queue may remain offline without weakening or
@@ -756,6 +809,19 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     }
     const failure = classifyPendingSyncFailure(err);
     await markAttempt(hike.localId, failure);
+    void recordActivityStageEvent({
+      ownerUserId: hike.userId,
+      clientActivityId: hike.localId,
+      stage: 'sync-state',
+      details: {
+        operation: 'completed-activity-upload',
+        phase: 'failed',
+        status: failure.status ?? null,
+        code: failure.code ?? null,
+        failureKind: failure.kind,
+        elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
+      },
+    });
     if (failure.kind !== 'retryable' || (hike.attemptCount || 0) + 1 >= 3) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
