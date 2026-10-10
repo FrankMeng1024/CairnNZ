@@ -7,7 +7,8 @@ import { ContentSurface } from '../../components/ContentSurface';
 import { Icon } from '../../components/Icon';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { FontSize, RadiusRole, Spacing } from '../../components/tokens';
-import { getPrimaryMapStyle } from '../../config/mapbox';
+import { buildStandardConfig, getMapStyleForTheme } from '../../config/mapbox';
+import { useMapTheme } from '../../hooks/useMapTheme';
 import { useVisualTheme } from '../../hooks/useVisualTheme';
 import { getMapbox } from '../memory/services/mapboxAdapter';
 import { useTrackingStore } from '../../store/useTrackingStore';
@@ -34,6 +35,8 @@ function packTitle(pack: OfflineMapPackRecord): string {
 
 export function OfflineMapsScreen() {
   const theme = useVisualTheme();
+  const mapTheme = useMapTheme();
+  const resolvedMapStyle = getMapStyleForTheme('outdoors', mapTheme);
   const trackingStatus = useTrackingStore(state => state.status);
   const recordingActive = trackingStatus === 'tracking' || trackingStatus === 'paused' || trackingStatus === 'requesting';
   const [center, setCenter] = useState(DEFAULT_CENTER);
@@ -129,7 +132,7 @@ export function OfflineMapsScreen() {
     await execute();
   }, [recordingActive, refreshList]);
 
-  const { MapView, Camera, ShapeSource, FillLayer } = Mapbox;
+  const { MapView, Camera, ShapeSource, FillLayer, StyleImport } = Mapbox;
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]} edges={['top', 'bottom']} testID="offline-maps-screen">
       <View style={styles.header}>
@@ -152,7 +155,8 @@ export function OfflineMapsScreen() {
           {Mapbox.available && MapView ? (
             <MapView
               style={StyleSheet.absoluteFill}
-              styleURL={getPrimaryMapStyle()}
+              styleURL={resolvedMapStyle.kind === 'url' ? resolvedMapStyle.url : undefined}
+              styleJSON={resolvedMapStyle.kind === 'json' ? resolvedMapStyle.json : undefined}
               logoEnabled
               attributionEnabled
               logoPosition={{ bottom: 8, left: 8 }}
@@ -166,6 +170,13 @@ export function OfflineMapsScreen() {
                 }
               }}
             >
+              {StyleImport ? (
+                <StyleImport
+                  id="basemap"
+                  existing
+                  config={buildStandardConfig(mapTheme) as any}
+                />
+              ) : null}
               <Camera centerCoordinate={[center.lng, center.lat]} zoomLevel={11} animationDuration={250} />
               <ShapeSource id="offline-map-boundary" shape={boundary}>
                 <FillLayer id="offline-map-boundary-fill" style={{ fillColor: theme.primary, fillOpacity: 0.16, fillOutlineColor: theme.primary }} />
@@ -198,7 +209,7 @@ export function OfflineMapsScreen() {
             </Pressable>
           ))}
         </View>
-        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>Pan the map so the crosshair marks the centre. Zoom 10–15 is included. Actual storage depends on Mapbox resources and is reported after the download starts.</Text>
+        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>Pan the map so the crosshair marks the centre. The selector follows Cairn’s day, dusk and night map theme. Zoom 10–15 is included.</Text>
         <View style={styles.actionRow}>
           <PrimaryButton label="Use last location" variant="secondary" onPress={() => void useLastLocation()} style={styles.flex} />
           <PrimaryButton label="Download area" onPress={() => void createPack()} loading={busy === 'create'} disabled={!offlineMapService.supported || recordingActive} style={styles.flex} />
@@ -243,6 +254,7 @@ export function OfflineMapsScreen() {
           <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>What works offline</Text>
           <Text style={[styles.body, { color: theme.textSecondary }]}>Downloaded Mapbox basemap resources can render without network access. GPS recording, local Finish/Save and personal Cairn evidence are already local-first.</Text>
           <Text style={[styles.body, { color: theme.textSecondary }]}>Road refinement, sharing, public Cairns and server sync still wait for connectivity. A map download does not change canonical Activity geometry.</Text>
+          <Text style={[styles.body, { color: theme.textSecondary }]}>This pilot’s download remains pinned to the compatible legacy Mapbox style until a physical iPhone proves Standard labels and all three presets after a cold airplane-mode launch.</Text>
         </ContentSurface>
       </ScrollView>
     </SafeAreaView>

@@ -33,4 +33,24 @@ describe('Mapbox attribution contracts', () => {
     expect(text).toContain('does not change canonical Activity geometry');
     expect(text).not.toContain('estimatedSizeMB');
   });
+
+  test('offline selector shares Standard theme config while downloads retain a truthful device gate', () => {
+    const text = source('features/offlineMaps/OfflineMapsScreen.tsx');
+    expect(text).toContain("getMapStyleForTheme('outdoors', mapTheme)");
+    expect(text).toContain('buildStandardConfig(mapTheme)');
+    expect(text).toContain('<StyleImport');
+    expect(text).toContain('day, dusk and night map theme');
+    expect(text).toContain('physical iPhone proves Standard labels');
+  });
+
+  test('Activity-start download handoff is default-off, fire-and-forget and after tracking publication', () => {
+    const tracking = source('store/useTrackingStore.ts');
+    const trackingPublished = tracking.indexOf("status: 'tracking'");
+    const featureGate = tracking.indexOf('offlineMapsFeatureEnabled()', trackingPublished);
+    const pauseCall = tracking.indexOf('void offlineMapService.pauseForActivityStart()', featureGate);
+    expect(trackingPublished).toBeGreaterThan(-1);
+    expect(featureGate).toBeGreaterThan(trackingPublished);
+    expect(pauseCall).toBeGreaterThan(featureGate);
+    expect(tracking.slice(featureGate, pauseCall)).not.toContain('await offlineMapService');
+  });
 });

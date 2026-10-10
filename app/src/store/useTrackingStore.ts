@@ -1769,6 +1769,20 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         activeDurationAccumulatedMs: 0,
         activeDurationStartedAtMs: lifecycleStartedAt,
       });
+      if (locationProviderSource === 'real') {
+        // GPS source + WAL ownership are already live. The default-off map
+        // pilot may now yield its in-progress downloads without extending or
+        // becoming a prerequisite of Activity Start.
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const contracts = require('../features/offlineMaps/offlineMapContracts');
+          if (contracts.offlineMapsFeatureEnabled()) {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { offlineMapService } = require('../features/offlineMaps/offlineMapService');
+            void offlineMapService.pauseForActivityStart().catch(() => undefined);
+          }
+        } catch { /* download throttling is diagnostic/resource best-effort */ }
+      }
       await updateUnfinishedActivity(userId, localSessionId, {
         activeDurationMs: 0,
         activeSinceMs: lifecycleStartedAt,

@@ -60,10 +60,50 @@ describe('OfflineMapService', () => {
     await expect(service.remove('foreign-pack')).rejects.toThrow('only change maps it created');
   });
 
+  test('Activity handoff pauses only Cairn-owned incomplete downloads', async () => {
+    const { manager, packs } = managerFixture();
+    const service = new OfflineMapService(manager);
+    const incompletePause = jest.fn(async () => undefined);
+    const completePause = jest.fn(async () => undefined);
+    const foreignPause = jest.fn(async () => undefined);
+    packs.set('cairn-offline-v1-incomplete', {
+      name: 'cairn-offline-v1-incomplete',
+      status: async () => ({ percentage: 47, completedResourceCount: 47, requiredResourceCount: 100 }),
+      pause: incompletePause,
+      resume: jest.fn(),
+    });
+    packs.set('cairn-offline-v1-complete', {
+      name: 'cairn-offline-v1-complete',
+      status: async () => ({ percentage: 100, completedResourceCount: 100, requiredResourceCount: 100 }),
+      pause: completePause,
+      resume: jest.fn(),
+    });
+    packs.set('foreign-pack', {
+      name: 'foreign-pack',
+      status: async () => ({ percentage: 12 }),
+      pause: foreignPause,
+      resume: jest.fn(),
+    });
+
+    await expect(service.pauseForActivityStart()).resolves.toEqual({
+      inspected: 2,
+      paused: 1,
+      alreadyComplete: 1,
+      failed: 0,
+    });
+    expect(manager.setProgressEventThrottle).toHaveBeenCalledWith(5_000);
+    expect(incompletePause).toHaveBeenCalledTimes(1);
+    expect(completePause).not.toHaveBeenCalled();
+    expect(foreignPause).not.toHaveBeenCalled();
+  });
+
   test('unsupported platforms fail closed without touching a native manager', async () => {
     const service = new OfflineMapService(null);
     expect(service.supported).toBe(false);
     expect(await service.list()).toEqual([]);
+    await expect(service.pauseForActivityStart()).resolves.toEqual({
+      inspected: 0, paused: 0, alreadyComplete: 0, failed: 0,
+    });
     await expect(service.create({ center: { lat: 0, lng: 0 }, radiusKm: 2 }, jest.fn(), jest.fn())).rejects.toThrow('native Cairn build');
   });
 });

@@ -51,6 +51,13 @@ export type OfflineManagerBridge = {
 
 export type OfflineMapProgressListener = (status: OfflineMapPackStatus) => void;
 
+export type OfflineMapActivityPauseResult = {
+  inspected: number;
+  paused: number;
+  alreadyComplete: number;
+  failed: number;
+};
+
 function safeNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
@@ -152,6 +159,50 @@ export class OfflineMapService {
     if (!isCairnOfflineMapPack(name)) throw new Error('Cairn will only change maps it created.');
     this.manager.unsubscribe?.(name);
     await this.manager.deletePack(name);
+  }
+
+  /**
+   * Best-effort resource handoff after Activity GPS/WAL ownership is already
+   * live. Completed packs are untouched; only Cairn-owned in-progress packs
+   * are paused. Callers must not await this from Activity Start.
+   */
+  async pauseForActivityStart(): Promise<OfflineMapActivityPauseResult> {
+    const result: OfflineMapActivityPauseResult = {
+      inspected: 0,
+      paused: 0,
+      alreadyComplete: 0,
+      failed: 0,
+    };
+    if (!this.manager) return result;
+    // Reduce callback pressure immediately while asynchronous pause requests
+    // settle. This does not alter GPS, WAL or Activity lifecycle ownership.
+    this.manager.setProgressEventThrottle?.(5_000);
+    let packs: NativePack[];
+    try {
+      packs = (await this.manager.getPacks()).filter(pack => isCairnOfflineMapPack(pack.name));
+    } catch {
+      result.failed = 1;
+      return result;
+    }
+    result.inspected = packs.length;
+    await Promise.all(packs.map(async pack => {
+      try {
+        const status = await pack.status();
+        const required = safeNumber(status.requiredResourceCount);
+        const complete = (safeNumber(status.percentage) ?? 0) >= 100
+          || (required !== null && required > 0
+            && safeNumber(status.completedResourceCount) === required);
+        if (complete) {
+          result.alreadyComplete += 1;
+          return;
+        }
+        await pack.pause();
+        result.paused += 1;
+      } catch {
+        result.failed += 1;
+      }
+    }));
+    return result;
   }
 
   release(name: string): void {
