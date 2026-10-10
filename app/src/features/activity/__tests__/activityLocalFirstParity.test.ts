@@ -17,6 +17,12 @@ import {
   activityGeometryFingerprint,
   buildLocalFinalTrackPoints,
 } from '../activityFinalArtifact';
+import {
+  flushActivityStageLedger,
+  purgeActivityStageLedgerForOwner,
+  recordActivityStageEvent,
+  type ActivityStage,
+} from '../activityStageLedger';
 
 type Connectivity = 'online' | 'offline';
 const ORIGIN = { lat: -41.28, lng: 174.77 };
@@ -59,6 +65,7 @@ const evidence: RealGpsObservation[] = [
 function replay(
   mode: ActivityMode,
   connectivityAtObservation: Connectivity[],
+  diagnosticSink?: (stage: ActivityStage, evidenceId: string, wallTimeMs: number) => void,
 ) {
   expect(connectivityAtObservation).toHaveLength(evidence.length);
   let continuity = createRealGpsContinuityState();
@@ -72,7 +79,9 @@ function replay(
     // never to GPS qualification, segmenting, metric or Final generation.
     // It can wake only the independent remote coordinator tested separately.
     void connectivityAtObservation[index];
+    diagnosticSink?.('observation-received', raw.observationId, raw.t + 250);
     const decision = evaluateRealGpsObservation(continuity, raw, mode, raw.t + 250);
+    diagnosticSink?.('observation-decision', raw.observationId, raw.t + 251);
     decisions.push({ id: raw.observationId, kind: decision.kind, reason: decision.reason });
     continuity = decision.state;
     if (decision.kind !== 'ACCEPT') return;
@@ -98,6 +107,8 @@ function replay(
           ? { segmentStartReason: 'start' as const }
           : startsNewSegment ? { segmentStartReason: 'gps-reacquired' as const } : {}),
       });
+      diagnosticSink?.('wal-committed', accepted.observationId, accepted.t + 252);
+      diagnosticSink?.('store-published', accepted.observationId, accepted.t + 253);
     }
   });
 
@@ -164,6 +175,25 @@ describe.each(['hiking', 'running'] as ActivityMode[])(
         selectedFinalFingerprint: result.selectedFinalFingerprint,
         selectedFinalRevision: result.selectedFinalRevision,
       }).toMatchSnapshot();
+    });
+
+    test('diagnostic ledger ON and OFF produce identical local truth', async () => {
+      const withoutDiagnostics = replay(mode, allOnline);
+      const ownerUserId = `diagnostic-parity-${mode}`;
+      const clientActivityId = `diagnostic-parity-${mode}`;
+      const withDiagnostics = replay(mode, allOnline, (stage, evidenceId, wallTimeMs) => {
+        void recordActivityStageEvent({
+          ownerUserId,
+          clientActivityId,
+          stage,
+          evidenceId,
+          wallTimeMs,
+          details: { mode, diagnosticParityReplay: true },
+        });
+      });
+      await flushActivityStageLedger(ownerUserId);
+      expect(withDiagnostics).toEqual(withoutDiagnostics);
+      await purgeActivityStageLedgerForOwner(ownerUserId);
     });
   },
 );
