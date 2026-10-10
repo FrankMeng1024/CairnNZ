@@ -303,6 +303,7 @@ export function RunningScreen() {
     void refreshBackgroundLocationPermission();
   }, [isFocused, refreshBackgroundLocationPermission, simulatorLocationAuthoritative, status]);
   const sessionId = useTrackingStore(s => s.sessionId);
+  const remoteStartConflict = useTrackingStore(s => s.remoteStartConflict);
   const activityOwnerUserId = useTrackingStore(s => s.ownerUserId);
   const liveOwnerGeneration = useTrackingStore(s => s.liveOwnerGeneration);
   const activityMode = useTrackingStore(s => s.activityMode);
@@ -1113,6 +1114,9 @@ export function RunningScreen() {
             : status === 'paused' ? 'paused' : 'tracking'}
           safeBottom={insets.bottom}
           backgroundWarning={backgroundTrackingWarning}
+          syncWarning={remoteStartConflict
+            ? 'Saved locally · another unfinished Activity must be resolved before sync'
+            : null}
           cairnDisabled={!locationAvailable || quickCairnInFlight}
           onPauseResume={() => {
             haptic.impact('light');

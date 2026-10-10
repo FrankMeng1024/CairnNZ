@@ -11,12 +11,31 @@ const identity = {
   startedAt: 1_800_000_000_000,
 };
 
-function dependencies(start: jest.Mock) {
+function dependencies(start: jest.Mock): any {
   return {
     isLocallyCurrent: jest.fn(() => true),
     start,
     persistServerMapping: jest.fn(async () => 'unfinished'),
     persistPendingMapping: jest.fn(async () => undefined),
+    readPendingConflict: jest.fn(async () => null),
+    persistConflict: jest.fn(async (conflict: any) => ({
+      schema: 'cairn-activity-remote-start-conflict', version: 1,
+      ownerUserId: identity.ownerUserId, clientActivityId: identity.clientActivityId,
+      ownerGeneration: identity.ownerGeneration, activityMode: identity.activityMode,
+      localStartedAt: identity.startedAt, state: 'owner-action-required',
+      code: conflict.code, detectedAt: 1, lastObservedAt: 1,
+      retryNotBefore: Date.now() + 60_000, occurrenceCount: 1,
+      conflictingActivities: [{
+        serverActivityId: conflict.existing.id,
+        clientActivityId: conflict.existing.clientActivityId,
+        activityMode: conflict.existing.type,
+        startedAt: conflict.existing.startedAt,
+        pointCount: conflict.existing.pointCount,
+        rawPointCount: conflict.existing.rawPointCount,
+      }],
+    })),
+    clearConflict: jest.fn(async () => undefined),
+    publishConflict: jest.fn(),
     publishServerMapping: jest.fn(),
     observe: jest.fn(),
   };
@@ -35,6 +54,8 @@ describe('local-first Activity remote Start coordinator', () => {
     const first = reconcileActivityRemoteStart(identity, 'local-start', deps);
     const second = reconcileActivityRemoteStart(identity, 'network-online', deps);
     expect(first).toBe(second);
+    await Promise.resolve();
+    await Promise.resolve();
     expect(start).toHaveBeenCalledTimes(1);
     release({ kind: 'started', serverActivityId: 73, clientActivityId: identity.clientActivityId });
     await expect(first).resolves.toMatchObject({ kind: 'mapped', serverActivityId: 73 });
@@ -99,9 +120,37 @@ describe('local-first Activity remote Start coordinator', () => {
       kind: 'conflict',
       code: 'UNFINISHED_ACTIVITY_EXISTS',
       existingClientActivityId: '22222222-2222-4222-8222-222222222222',
+      durable: true,
     });
+    expect(deps.persistConflict).toHaveBeenCalledTimes(1);
+    expect(deps.publishConflict).toHaveBeenCalledWith(expect.objectContaining({
+      state: 'owner-action-required',
+    }));
     expect(deps.persistServerMapping).not.toHaveBeenCalled();
     expect(deps.publishServerMapping).not.toHaveBeenCalled();
+  });
+
+  test('a durable conflict suppresses restart retry until its bounded frontier', async () => {
+    const deps = dependencies(jest.fn());
+    deps.readPendingConflict.mockResolvedValueOnce({
+      schema: 'cairn-activity-remote-start-conflict', version: 1,
+      ownerUserId: identity.ownerUserId, clientActivityId: identity.clientActivityId,
+      ownerGeneration: identity.ownerGeneration, activityMode: identity.activityMode,
+      localStartedAt: identity.startedAt, state: 'owner-action-required',
+      code: 'UNFINISHED_ACTIVITY_EXISTS', detectedAt: 1, lastObservedAt: 2,
+      retryNotBefore: Date.now() + 60_000, occurrenceCount: 1,
+      conflictingActivities: [{
+        serverActivityId: 91,
+        clientActivityId: '22222222-2222-4222-8222-222222222222',
+        activityMode: 'running', startedAt: new Date(identity.startedAt).toISOString(),
+        pointCount: 12, rawPointCount: 15,
+      }],
+    });
+    await expect(reconcileActivityRemoteStart(identity, 'process-recovery', deps)).resolves.toMatchObject({
+      kind: 'conflict', durable: true, deferredByDurableConflict: true,
+    });
+    expect(deps.start).not.toHaveBeenCalled();
+    expect(deps.publishConflict).toHaveBeenCalled();
   });
 
   test('a Finish race persists both registry and pending mappings before publication', async () => {
@@ -126,6 +175,8 @@ describe('local-first Activity remote Start coordinator', () => {
       if (mountedOwner === identity.ownerUserId) throw new Error('test publisher should have fenced B');
     });
     const result = reconcileActivityRemoteStart(identity, 'local-start', deps);
+    await Promise.resolve();
+    await Promise.resolve();
     mountedOwner = 'account-b';
     release({ kind: 'started', serverActivityId: 101, clientActivityId: identity.clientActivityId });
     await expect(result).resolves.toMatchObject({ kind: 'mapped', serverActivityId: 101 });

@@ -7,6 +7,10 @@ const mockFailures: any[] = [];
 const mockSavedPending: any[] = [];
 const mockAddedSessions: any[] = [];
 let mockArtifact: any = null;
+const mockPersistRemoteConflict = jest.fn(async (_input?: unknown) => ({
+  conflictingActivities: [{ serverActivityId: 88 }],
+}));
+const mockClearRemoteConflict = jest.fn(async (_ownerUserId?: string, _clientActivityId?: string) => undefined);
 
 jest.mock('../pendingSyncStore', () => ({
   ensurePendingUploadReady: jest.fn(async () => true),
@@ -51,8 +55,15 @@ jest.mock('../../features/activity/activityRegistry', () => ({
   completeActivity: jest.fn(async () => undefined),
   getActivityRegistry: jest.fn(async () => mockRegistry),
   isActivityTombstoned: jest.fn(async () => false),
+  mapActivityServerId: jest.fn(async () => 'completed'),
   removeAcknowledgedActivity: jest.fn(async () => { mockOrder.push('registry-remove'); }),
   updateCompletedActivitySyncState: jest.fn(async () => undefined),
+}));
+jest.mock('../../features/activity/activityRemoteConflictStore', () => ({
+  persistActivityRemoteStartConflict: (input: unknown) => mockPersistRemoteConflict(input),
+  clearActivityRemoteStartConflict: (ownerUserId: string, clientActivityId: string) => (
+    mockClearRemoteConflict(ownerUserId, clientActivityId)
+  ),
 }));
 jest.mock('../../features/activity/activityFinalArtifact', () => ({
   loadActivityFinalArtifact: jest.fn(async () => mockArtifact),
@@ -125,6 +136,8 @@ describe('Activity ACK ownership and cleanup phases', () => {
     mockSavedPending.length = 0;
     mockAddedSessions.length = 0;
     mockArtifact = null;
+    mockPersistRemoteConflict.mockClear();
+    mockClearRemoteConflict.mockClear();
     jest.clearAllMocks();
     mockStartSessionResolved.mockResolvedValue({ kind: 'unavailable' });
     mockResetForResync.mockResolvedValue(true);
@@ -383,12 +396,18 @@ describe('Activity ACK ownership and cleanup phases', () => {
       kind: 'conflict',
       code: 'OTHER_ACTIVITY_UNFINISHED',
       existing: { clientActivityId: 'activity-other' },
+      existingActivities: [],
     });
     await expect(drainPending({ wakeReason: 'manual', force: true })).resolves.toMatchObject({
       attempted: 1,
       failed: 1,
     });
     expect(mockPendingRows[0]).toMatchObject({ failureKind: 'dependency' });
+    expect(mockPersistRemoteConflict).toHaveBeenCalledWith(expect.objectContaining({
+      ownerUserId: 'account-a',
+      clientActivityId: 'activity-a',
+      code: 'OTHER_ACTIVITY_UNFINISHED',
+    }));
 
     mockPendingRows[0].lastAttemptAt = Date.now() - 60_000;
     mockStartSessionResolved.mockResolvedValueOnce({ kind: 'started', serverActivityId: 91 });
@@ -403,6 +422,36 @@ describe('Activity ACK ownership and cleanup phases', () => {
       pending.localId,
       pending.userId,
     );
+  });
+
+  test('a lost Start ACK with the same client identity maps and completes one server Activity', async () => {
+    mockPendingRows = [{ ...pending, remoteId: null }];
+    mockStartSessionResolved.mockResolvedValueOnce({
+      kind: 'conflict',
+      code: 'UNFINISHED_ACTIVITY_EXISTS',
+      existing: {
+        id: 91,
+        clientActivityId: pending.localId,
+        type: pending.activityMode,
+        startedAt: new Date(pending.startedAt).toISOString(),
+        pointCount: 0,
+        rawPointCount: 0,
+      },
+      existingActivities: [],
+    });
+    await expect(drainPending({ wakeReason: 'manual', force: true })).resolves.toMatchObject({
+      attempted: 1,
+      succeeded: 1,
+    });
+    expect(mockSaveHikeAtomic).toHaveBeenCalledWith(
+      91,
+      expect.any(Object),
+      pending.idempotencyKey,
+      pending.localId,
+      pending.userId,
+    );
+    expect(mockPersistRemoteConflict).not.toHaveBeenCalled();
+    expect(mockClearRemoteConflict).toHaveBeenCalledWith(pending.userId, pending.localId);
   });
 
   test('a structured 404 resets the dead server identity instead of becoming a permanent action error', async () => {

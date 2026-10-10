@@ -347,6 +347,7 @@ export function ActivityControlDock({
   phase,
   safeBottom,
   backgroundWarning,
+  syncWarning,
   cairnDisabled = false,
   onPauseResume,
   onCairn,
@@ -356,6 +357,7 @@ export function ActivityControlDock({
   phase: 'tracking' | 'paused' | 'resuming' | 'pausing' | 'finishing';
   safeBottom: number;
   backgroundWarning?: string | null;
+  syncWarning?: string | null;
   cairnDisabled?: boolean;
   onPauseResume: () => void;
   onCairn: () => void;
@@ -405,6 +407,15 @@ export function ActivityControlDock({
             <Icon name="CloudOff" size={13} color={Colors.severityWarning} strokeWidth={2.2} />
             <Text style={[styles.compactWarningText, { color: theme.foreground }]} numberOfLines={1}>
               {backgroundWarning}
+            </Text>
+          </View>
+        ) : null}
+
+        {syncWarning ? (
+          <View style={[styles.compactWarning, { backgroundColor: theme.surfaceSecondary }]} pointerEvents="none">
+            <Icon name="TriangleAlert" size={13} color={Colors.severityWarning} strokeWidth={2.2} />
+            <Text style={[styles.compactWarningText, { color: theme.foreground }]} numberOfLines={2}>
+              {syncWarning}
             </Text>
           </View>
         ) : null}

@@ -114,6 +114,12 @@ import {
   type ActivityRemoteStartWakeReason,
 } from '../features/activity/activityRemoteStartCoordinator';
 import {
+  clearActivityRemoteStartConflict,
+  getActivityRemoteStartConflict,
+  persistActivityRemoteStartConflict,
+  type ActivityRemoteStartConflictRecord,
+} from '../features/activity/activityRemoteConflictStore';
+import {
   flushRecordedMemoryEvidence,
   recordMemoryEvidence,
 } from '../features/memory/services/recordMemoryEvidence';
@@ -942,6 +948,9 @@ interface TrackingState {
   isFinishing: boolean;
   /** Last proven start failure. Cleared on a new start attempt or success. */
   startError: TrackingStartError | null;
+  /** Durable, owner-scoped server singleton conflict. This is advisory remote
+   * state only and can never stop or replace the local recording lifecycle. */
+  remoteStartConflict: ActivityRemoteStartConflictRecord | null;
   sessionId: string | null;
   /** Immutable account owner captured before Activity initialization awaits. */
   ownerUserId: string | null;
@@ -1157,6 +1166,31 @@ function scheduleRemoteSessionStart(
         await updateRemoteId(identity.clientActivityId, serverActivityId);
       } catch { /* no completed-local pending payload exists yet */ }
     },
+    readPendingConflict: () => getActivityRemoteStartConflict(
+      identity.ownerUserId,
+      identity.clientActivityId,
+    ),
+    persistConflict: conflict => persistActivityRemoteStartConflict({
+      ownerUserId: identity.ownerUserId,
+      clientActivityId: identity.clientActivityId,
+      ownerGeneration: identity.ownerGeneration,
+      activityMode: identity.activityMode,
+      localStartedAt: identity.startedAt,
+      code: conflict.code,
+      existing: conflict.existing,
+      existingActivities: conflict.existingActivities,
+    }),
+    clearConflict: () => clearActivityRemoteStartConflict(
+      identity.ownerUserId,
+      identity.clientActivityId,
+    ),
+    publishConflict: conflict => {
+      const current = getState();
+      if (String(useAppStore.getState().user?.id ?? '') !== identity.ownerUserId
+        || current.ownerUserId !== identity.ownerUserId
+        || current.sessionId !== identity.clientActivityId) return;
+      setState({ remoteStartConflict: conflict });
+    },
     publishServerMapping: (serverActivityId, mappingTarget) => {
       const current = getState();
       if (mappingTarget === 'tombstoned'
@@ -1213,6 +1247,7 @@ const initialState = {
   transitionState: 'idle' as ActivityTransitionState,
   isFinishing: false,
   startError: null as TrackingStartError | null,
+  remoteStartConflict: null as ActivityRemoteStartConflictRecord | null,
   sessionId: null,
   ownerUserId: null as string | null,
   liveOwnerGeneration: null as string | null,

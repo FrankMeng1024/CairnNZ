@@ -1,4 +1,5 @@
 import type { StartSessionResolution } from '../../services/sessionService';
+import type { ActivityRemoteStartConflictRecord } from './activityRemoteConflictStore';
 
 export interface ActivityRemoteStartIdentity {
   ownerUserId: string;
@@ -17,7 +18,13 @@ export type ActivityRemoteStartWakeReason =
 
 export type ActivityRemoteStartResult =
   | { kind: 'mapped'; serverActivityId: number; mappingTarget: string; replayedConflict: boolean }
-  | { kind: 'conflict'; code: string; existingClientActivityId: string | null }
+  | {
+      kind: 'conflict';
+      code: string;
+      existingClientActivityId: string | null;
+      durable: boolean;
+      deferredByDurableConflict?: boolean;
+    }
   | { kind: 'unavailable'; status: number; code: string | null; retryable: boolean }
   | { kind: 'not-current' };
 
@@ -27,8 +34,14 @@ interface ActivityRemoteStartDependencies {
   persistServerMapping: (serverActivityId: number) => Promise<string>;
   persistPendingMapping: (serverActivityId: number) => Promise<void>;
   publishServerMapping: (serverActivityId: number, mappingTarget: string) => void;
+  readPendingConflict?: () => Promise<ActivityRemoteStartConflictRecord | null>;
+  persistConflict?: (
+    conflict: Extract<StartSessionResolution, { kind: 'conflict' }>,
+  ) => Promise<ActivityRemoteStartConflictRecord>;
+  clearConflict?: () => Promise<void>;
+  publishConflict?: (conflict: ActivityRemoteStartConflictRecord | null) => void;
   observe?: (event: {
-    phase: 'attempt' | 'mapped' | 'conflict' | 'unavailable' | 'failed';
+    phase: 'attempt' | 'mapped' | 'conflict' | 'conflict-pending' | 'unavailable' | 'failed';
     wakeReason: ActivityRemoteStartWakeReason;
     elapsedMs: number;
     status?: number;
@@ -84,6 +97,25 @@ export function reconcileActivityRemoteStart(
   let promise!: Promise<ActivityRemoteStartResult>;
   promise = (async (): Promise<ActivityRemoteStartResult> => {
     try {
+      const pendingConflict = await dependencies.readPendingConflict?.() ?? null;
+      if (pendingConflict && pendingConflict.retryNotBefore > Date.now()) {
+        dependencies.publishConflict?.(pendingConflict);
+        dependencies.observe?.({
+          phase: 'conflict-pending',
+          wakeReason,
+          elapsedMs: Date.now() - startedAt,
+          status: 409,
+          code: pendingConflict.code,
+        });
+        return {
+          kind: 'conflict',
+          code: pendingConflict.code,
+          existingClientActivityId:
+            pendingConflict.conflictingActivities[0]?.clientActivityId ?? null,
+          durable: true,
+          deferredByDurableConflict: true,
+        };
+      }
       const resolution = await dependencies.start();
       const matchingConflict = resolution.kind === 'conflict'
         && resolution.existing?.clientActivityId === identity.clientActivityId
@@ -100,6 +132,8 @@ export function reconcileActivityRemoteStart(
       if (serverActivityId !== null) {
         const mappingTarget = await dependencies.persistServerMapping(serverActivityId);
         await dependencies.persistPendingMapping(serverActivityId);
+        try { await dependencies.clearConflict?.(); } catch { /* mapping remains authoritative */ }
+        dependencies.publishConflict?.(null);
         dependencies.publishServerMapping(serverActivityId, mappingTarget);
         const replayedConflict = resolution.kind === 'conflict';
         dependencies.observe?.({
@@ -114,6 +148,8 @@ export function reconcileActivityRemoteStart(
       }
 
       if (resolution.kind === 'conflict') {
+        const durableConflict = await dependencies.persistConflict?.(resolution) ?? null;
+        if (durableConflict) dependencies.publishConflict?.(durableConflict);
         dependencies.observe?.({
           phase: 'conflict',
           wakeReason,
@@ -125,6 +161,7 @@ export function reconcileActivityRemoteStart(
           kind: 'conflict',
           code: resolution.code,
           existingClientActivityId: resolution.existing?.clientActivityId ?? null,
+          durable: durableConflict !== null,
         };
       }
 

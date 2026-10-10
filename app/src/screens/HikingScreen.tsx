@@ -208,6 +208,7 @@ export function HikingScreen() {
     void refreshBackgroundLocationPermission();
   }, [isFocused, refreshBackgroundLocationPermission, simulatorLocationAuthoritative, status]);
   const sessionId = useTrackingStore(s => s.sessionId);
+  const remoteStartConflict = useTrackingStore(s => s.remoteStartConflict);
   const liveOwnerGeneration = useTrackingStore(s => s.liveOwnerGeneration);
   const trackPoints = useTrackingStore(s => s.trackPoints);
   const trackPointsSmoothed = useTrackingStore(s => s.trackPointsSmoothed);
@@ -1319,6 +1320,9 @@ export function HikingScreen() {
             : status === 'paused' ? 'paused' : 'tracking'}
           safeBottom={insets.bottom}
           backgroundWarning={backgroundTrackingWarning}
+          syncWarning={remoteStartConflict
+            ? 'Saved locally · another unfinished Activity must be resolved before sync'
+            : null}
           onPauseResume={handlePauseResumeHike}
           onCairn={() => {
             haptic.selection();
