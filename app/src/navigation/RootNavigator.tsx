@@ -41,6 +41,7 @@ import { HikingPreviewScreen } from '../screens/HikingPreviewScreen';
 import { RunningPreviewScreen } from '../screens/RunningPreviewScreen';
 import { RoutesPreviewScreen } from '../screens/RoutesPreviewScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { OfflineMapsScreen } from '../features/offlineMaps/OfflineMapsScreen';
 import { MemoryScreen } from '../features/memory/screens/MemoryScreen';
 import { MarkDetailDevPreviewScreen } from '../features/marks/dev/MarkDetailDevPreviewScreen';
 import { Gate1IconSheetScreen } from '../screens/Gate1IconSheetScreen';
@@ -119,6 +120,7 @@ export type RootStackParamList = {
    *  Query param 'state' picks which of R0-R9 to render (10 Trails-Flow screens). */
   RoutesPreview: { state?: string } | undefined;
   Settings: undefined;
+  OfflineMaps: undefined;
   Memory: undefined;
   Debug: undefined;
   /** Sprint 68 STORY-00532: dev-only preview for MarkDetailSheet 4 forms. */
@@ -305,6 +307,7 @@ export function RootNavigator() {
             {__DEV__ && <Stack.Screen name="RunningPreview" component={RunningPreviewScreen} />}
             {__DEV__ && <Stack.Screen name="RoutesPreview" component={RoutesPreviewScreen} />}
             <Stack.Screen name="Settings"    component={SettingsScreen} />
+            <Stack.Screen name="OfflineMaps" component={OfflineMapsScreen} />
             <Stack.Screen name="Memory"      component={MemoryScreen} />
             <Stack.Screen name="Debug"       component={DebugScreen} />
             {__DEV__ && <Stack.Screen name="MarkDetailDevPreview" component={MarkDetailDevPreviewScreen} />}

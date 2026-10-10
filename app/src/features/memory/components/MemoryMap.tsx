@@ -381,8 +381,10 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           : { styleJSON: memoryResolvedMapStyle.json })}
         compassEnabled={false}
         scaleBarEnabled={false}
-        logoEnabled={false}
-        attributionEnabled={false}
+        logoEnabled
+        attributionEnabled
+        logoPosition={{ bottom: 76, left: 8 }}
+        attributionPosition={{ bottom: 76, right: 8 }}
         onMapIdle={onMapSettle}
         onCameraChanged={(e: any) => {
           // v386: propagate live zoom to shared value every camera frame

@@ -62,6 +62,7 @@ import { PASSWORD_RULES, passwordPolicyError, passwordRuleState } from '../utils
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { exportLatestActivityStageLedger } from '../features/activity/activityStageLedger';
 import { exportNativeGpsEvidence } from '../features/activity/nativeGpsEvidence';
+import { offlineMapsFeatureEnabled } from '../features/offlineMaps/offlineMapContracts';
 
 type Page = 'root' | 'account' | 'privacy' | 'help';
 type FeedbackKind = 'feedback' | 'bug';
@@ -676,6 +677,12 @@ export function SettingsScreen() {
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Privacy & Data</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row icon="Shield" title="Privacy & Data" detail="Location, export and exploration history" value="Review" onPress={() => openPage('privacy')} testID="settings-privacy-row" />
+          {offlineMapsFeatureEnabled() ? (
+            <>
+              <Divider color={background.settingsCardBorderColor} />
+              <Row icon="Download" title="Offline maps" detail="Download basemap areas to this device" value="Pilot" onPress={() => navigation.navigate('OfflineMaps')} testID="settings-offline-maps-row" />
+            </>
+          ) : null}
         </ContentSurface>
 
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Help & About</SectionTitle>
