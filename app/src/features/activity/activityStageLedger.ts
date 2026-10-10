@@ -65,6 +65,7 @@ export interface ActivityObservabilitySummary {
     nativeJsDeliveryCount: number;
     conclusion:
       | 'native-callback-observed-js-delivery-missing'
+      | 'no-native-callback-observed'
       | 'no-js-callback-native-cause-unknown'
       | 'js-runtime-not-observed'
       | 'none';
@@ -724,6 +725,8 @@ export function summarizeActivityObservability(
     const nativeJsDeliveryCount = inside.filter(event => event.stage === 'native-js-delivery').length;
     const conclusion = nativeCallbackCount > 0 && nativeJsDeliveryCount === 0
       ? 'native-callback-observed-js-delivery-missing' as const
+      : native.size > 0 && nativeCallbackCount === 0
+        ? 'no-native-callback-observed' as const
       : heartbeatCount > 0
         ? 'no-js-callback-native-cause-unknown' as const
         : 'js-runtime-not-observed' as const;

@@ -346,6 +346,26 @@ describe('local owner-exportable Activity stage ledger', () => {
     });
   });
 
+  test('instrumented evidence before and after a gap distinguishes no native callback observed', () => {
+    const base = {
+      schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
+      clientActivityId: 'activity-a', monotonicTimeMs: null,
+      processOriginWallTimeMs: null, processId: 'process-a', details: {},
+    };
+    const summary = summarizeActivityObservability([
+      { ...base, eventId: 'native-before', stage: 'native-callback', wallTimeMs: 900, evidenceId: 'native-before' },
+      { ...base, eventId: 'r1', stage: 'observation-received', wallTimeMs: 1_000, evidenceId: 'evidence-1' },
+      { ...base, eventId: 'heartbeat', stage: 'health-heartbeat', wallTimeMs: 220_000, evidenceId: null },
+      { ...base, eventId: 'r2', stage: 'observation-received', wallTimeMs: 472_000, evidenceId: 'evidence-2' },
+      { ...base, eventId: 'native-after', stage: 'native-callback', wallTimeMs: 472_100, evidenceId: 'native-after' },
+    ] as any);
+    expect(summary.longObservationGaps[0]).toMatchObject({
+      durationMs: 471_000,
+      nativeCallbackCount: 0,
+      conclusion: 'no-native-callback-observed',
+    });
+  });
+
   test('reports filtering, durability, publication, upload and refinement frontiers independently', () => {
     const base = {
       schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
