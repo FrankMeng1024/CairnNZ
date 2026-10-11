@@ -286,7 +286,8 @@ describe('local owner-exportable Activity stage ledger', () => {
       ...events[0], eventId: 'sync-ack', stage: 'sync-state', wallTimeMs: 1_100,
       evidenceId: null, details: {
         operation: 'completed-activity-upload', phase: 'ack', acknowledged: true,
-        activityIdentityMatched: true, finalRevision: 3, finalFingerprint: 'final-3',
+        activityIdentityMatched: true, serverActivityIdentityMatched: true,
+        finalRevision: 3, finalFingerprint: 'final-3',
         canonicalPointCount: 1,
       },
     });
@@ -334,6 +335,77 @@ describe('local owner-exportable Activity stage ledger', () => {
     ]);
     expect(summary.evidenceCompleteness.nativeCallback).toBe('not-observable-current-binary');
     expect(summary.interpretationLimits.join(' ')).toContain('do not prove');
+  });
+
+  test('a short Pause inside a 471-second gap cannot explain the resumed active interval', () => {
+    const base = {
+      schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
+      clientActivityId: 'activity-a', monotonicTimeMs: null,
+      processOriginWallTimeMs: 0, processId: 'process-a', evidenceId: null,
+    };
+    const summary = summarizeActivityObservability([
+      { ...base, eventId: 'received-1', stage: 'observation-received', wallTimeMs: 1_000, evidenceId: 'evidence-1', details: { observationTimeMs: 900 } },
+      { ...base, eventId: 'pause', stage: 'lifecycle', wallTimeMs: 11_000, details: { event: 'recording-paused' } },
+      { ...base, eventId: 'resume', stage: 'lifecycle', wallTimeMs: 21_000, details: { event: 'recording-resumed' } },
+      { ...base, eventId: 'heartbeat', stage: 'health-heartbeat', wallTimeMs: 300_000, details: {} },
+      { ...base, eventId: 'received-2', stage: 'observation-received', wallTimeMs: 472_000, evidenceId: 'evidence-2', details: { observationTimeMs: 471_900 } },
+    ] as any);
+    expect(summary.longObservationGaps[0]).toMatchObject({
+      receiptGapDurationMs: 471_000,
+      observationTimestampGapMs: 471_000,
+      intentionalInactiveDurationMs: 10_000,
+      pauseEvidenceCompleteness: 'partial',
+      conclusion: 'no-js-callback-native-cause-unknown',
+    });
+  });
+
+  test('only an explicitly bounded Pause interval can explain a whole receipt gap', () => {
+    const base = {
+      schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
+      clientActivityId: 'activity-a', monotonicTimeMs: null,
+      processOriginWallTimeMs: 0, processId: 'process-a', evidenceId: null, details: {},
+    };
+    const summary = summarizeActivityObservability([
+      { ...base, eventId: 'pause', stage: 'lifecycle', wallTimeMs: 1_000, details: { event: 'recording-paused' } },
+      { ...base, eventId: 'received-1', stage: 'observation-received', wallTimeMs: 1_000, evidenceId: 'evidence-1' },
+      { ...base, eventId: 'received-2', stage: 'observation-received', wallTimeMs: 472_000, evidenceId: 'evidence-2' },
+      { ...base, eventId: 'resume', stage: 'lifecycle', wallTimeMs: 472_000, details: { event: 'recording-resumed' } },
+    ] as any);
+    expect(summary.longObservationGaps[0]).toMatchObject({
+      intentionalInactiveDurationMs: 471_000,
+      pauseEvidenceCompleteness: 'complete',
+      conclusion: 'recording-source-intentionally-inactive',
+    });
+  });
+
+  test.each([
+    ['Pause without Resume', [
+      { eventId: 'pause', stage: 'lifecycle', wallTimeMs: 11_000, processId: 'process-a', details: { event: 'recording-paused' } },
+    ]],
+    ['process restart across Pause and Resume', [
+      { eventId: 'pause', stage: 'lifecycle', wallTimeMs: 11_000, processId: 'process-a', details: { event: 'recording-paused' } },
+      { eventId: 'resume', stage: 'lifecycle', wallTimeMs: 21_000, processId: 'process-b', details: { event: 'recording-resumed' } },
+    ]],
+    ['Resume without retained Pause', [
+      { eventId: 'resume', stage: 'lifecycle', wallTimeMs: 21_000, processId: 'process-a', details: { event: 'recording-resumed' } },
+    ]],
+  ])('%s leaves pause coverage unknown', (_label, lifecycleEvents) => {
+    const base = {
+      schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
+      clientActivityId: 'activity-a', monotonicTimeMs: null,
+      processOriginWallTimeMs: 0, processId: 'process-a', evidenceId: null, details: {},
+    };
+    const summary = summarizeActivityObservability([
+      { ...base, eventId: 'received-1', stage: 'observation-received', wallTimeMs: 1_000, evidenceId: 'evidence-1' },
+      ...lifecycleEvents.map(event => ({ ...base, ...event })),
+      { ...base, eventId: 'heartbeat', stage: 'health-heartbeat', wallTimeMs: 300_000 },
+      { ...base, eventId: 'received-2', stage: 'observation-received', wallTimeMs: 472_000, processId: 'process-b', evidenceId: 'evidence-2' },
+    ] as any);
+    expect(summary.longObservationGaps[0]).toMatchObject({
+      intentionalInactiveDurationMs: null,
+      pauseEvidenceCompleteness: 'unknown',
+      conclusion: 'no-js-callback-native-cause-unknown',
+    });
   });
 
   test('native-shaped synthetic JS events cannot prove the separate native boundary', () => {
@@ -403,6 +475,59 @@ describe('local owner-exportable Activity stage ledger', () => {
     };
     expect(summarizeActivityObservability([completion, staleFinal] as any)
       .evidenceCompleteness.networkSync).toBe('partial');
+    const wrongFingerprint = {
+      ...staleFinal, eventId: 'wrong-fingerprint',
+      details: { ...staleFinal.details, finalRevision: 4, finalFingerprint: 'other-final' },
+    };
+    expect(summarizeActivityObservability([completion, wrongFingerprint] as any)
+      .evidenceCompleteness.networkSync).toBe('partial');
+    const wrongCanonicalCount = {
+      ...wrongFingerprint, eventId: 'wrong-canonical-count',
+      details: { ...wrongFingerprint.details, finalFingerprint: 'final-4', canonicalPointCount: 11 },
+    };
+    expect(summarizeActivityObservability([completion, wrongCanonicalCount] as any)
+      .evidenceCompleteness.networkSync).toBe('partial');
+    const wrongServer = {
+      ...wrongActivity, eventId: 'wrong-server',
+      details: {
+        ...wrongActivity.details,
+        activityIdentityMatched: true,
+        serverActivityIdentityMatched: false,
+      },
+    };
+    expect(summarizeActivityObservability([completion, wrongServer] as any)
+      .evidenceCompleteness.networkSync).toBe('partial');
+    const missingCanonicalCount = {
+      ...wrongServer, eventId: 'missing-canonical-count',
+      details: {
+        operation: 'completed-activity-upload', phase: 'ack', acknowledged: true,
+        activityIdentityMatched: true, serverActivityIdentityMatched: true,
+        finalRevision: 4, finalFingerprint: 'final-4',
+      },
+    };
+    expect(summarizeActivityObservability([completion, missingCanonicalCount] as any)
+      .evidenceCompleteness.networkSync).toBe('partial');
+    const exactAck = {
+      ...missingCanonicalCount, eventId: 'exact-ack',
+      details: { ...missingCanonicalCount.details, canonicalPointCount: 12 },
+    };
+    expect(summarizeActivityObservability([completion, exactAck] as any)
+      .evidenceCompleteness.networkSync).toBe('complete');
+    expect(summarizeActivityObservability([completion, exactAck] as any, { retentionTruncated: true })
+      .evidenceCompleteness.networkSync).toBe('partial');
+    const legacyCompletion = {
+      ...completion,
+      details: { artifactRevision: 4, canonicalPointCount: 12 },
+    };
+    expect(summarizeActivityObservability([legacyCompletion, exactAck] as any)
+      .evidenceCompleteness.networkSync).toBe('partial');
+    const replayAck = {
+      ...exactAck, eventId: 'idempotent-replay-ack',
+      details: { ...exactAck.details, idempotentReplay: true },
+    };
+    const replaySummary = summarizeActivityObservability([completion, replayAck] as any);
+    expect(replaySummary.evidenceCompleteness.networkSync).toBe('complete');
+    expect(replaySummary.stageCounts['sync-state']).toBe(1);
   });
 
   test('store publication requires matching React presentation coverage', () => {

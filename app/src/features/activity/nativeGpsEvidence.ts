@@ -81,10 +81,14 @@ export interface ActivityNativeCrossLedgerReport {
     collectorCoverage: 'complete' | 'incomplete' | 'unavailable';
     nativeCallbackCount: number;
     nativeDeliveryCount: number;
+    callbacksWithInWindowNativeDelivery: number;
+    callbacksWithDelayedNativeDelivery: number;
     callbacksWithoutNativeDelivery: number;
+    callbackDeliveryEvidenceCompleteness: 'complete' | 'partial' | 'not-applicable';
     conclusion:
       | 'no-native-callback-observed-with-complete-collector-coverage'
       | 'native-callback-observed-native-delivery-missing'
+      | 'native-callback-observed-native-delivery-delayed'
       | 'native-delivery-invoked-js-intake-not-observed'
       | 'recording-source-intentionally-inactive'
       | 'collector-coverage-incomplete-cause-unknown'
@@ -401,6 +405,22 @@ function coverageForGap(
   return 'incomplete';
 }
 
+function nativeGroupKey(event: NativeGpsEvidenceEvent): string {
+  return `${event.collectorRunId}:${event.retentionEpoch}`;
+}
+
+function matchingDeliveryAfterCallback(
+  callback: NativeGpsEvidenceEvent,
+  evidenceId: string,
+  events: NativeGpsEvidenceEvent[],
+): NativeGpsEvidenceEvent | null {
+  return events.find(event => event.event === 'native-js-delivery'
+    && nativeGroupKey(event) === nativeGroupKey(callback)
+    && event.sequence > callback.sequence
+    && event.receiptWallTimeMs >= callback.receiptWallTimeMs
+    && event.evidenceIds.includes(evidenceId)) ?? null;
+}
+
 /**
  * Correlates only owner-scoped wall-time windows. Monotonic clocks are never
  * compared across collector/JS process boots, and no per-point bridge match is
@@ -429,20 +449,68 @@ export function buildActivityNativeCrossLedgerReport(
         && event.receiptWallTimeMs < gap.toWallTimeMs);
       const callbacks = inside.filter(event => event.event === 'native-callback');
       const deliveries = inside.filter(event => event.event === 'native-js-delivery');
-      const deliveredIds = new Set(deliveries.flatMap(event => event.evidenceIds));
-      const callbacksWithoutNativeDelivery = callbacks.flatMap(event => event.evidenceIds)
-        .filter(identity => !deliveredIds.has(identity)).length;
-      const conclusion = gap.conclusion === 'recording-source-intentionally-inactive'
-        ? 'recording-source-intentionally-inactive' as const
-        : coverage === 'unavailable'
-        ? 'native-evidence-unavailable' as const
-        : callbacksWithoutNativeDelivery > 0
-          ? 'native-callback-observed-native-delivery-missing' as const
-          : deliveries.length > 0
-            ? 'native-delivery-invoked-js-intake-not-observed' as const
-            : coverage === 'complete'
-              ? 'no-native-callback-observed-with-complete-collector-coverage' as const
-              : 'collector-coverage-incomplete-cause-unknown' as const;
+      let callbacksWithInWindowNativeDelivery = 0;
+      let callbacksWithDelayedNativeDelivery = 0;
+      let callbacksWithoutNativeDelivery = 0;
+      let callbacksWithIncompleteEvidence = 0;
+      for (const callback of callbacks) {
+        if (callback.evidenceIds.length === 0) {
+          callbacksWithIncompleteEvidence += 1;
+          continue;
+        }
+        const group = native.events.filter(event => nativeGroupKey(event) === nativeGroupKey(callback));
+        const callbackCoverage = coverageForGap(
+          group,
+          gap.fromWallTimeMs,
+          gap.toWallTimeMs,
+          native.retentionTruncated,
+        );
+        for (const identity of callback.evidenceIds) {
+          const delivery = matchingDeliveryAfterCallback(callback, identity, group);
+          const deliveryAcrossCollectorBoundary = native.events.some(event => (
+            event.event === 'native-js-delivery'
+            && nativeGroupKey(event) !== nativeGroupKey(callback)
+            && event.receiptWallTimeMs >= callback.receiptWallTimeMs
+            && event.evidenceIds.includes(identity)
+          ));
+          if (delivery && delivery.receiptWallTimeMs < gap.toWallTimeMs) {
+            callbacksWithInWindowNativeDelivery += 1;
+          } else if (delivery) {
+            callbacksWithDelayedNativeDelivery += 1;
+          } else if (deliveryAcrossCollectorBoundary) {
+            callbacksWithIncompleteEvidence += 1;
+          } else if (callbackCoverage === 'complete') {
+            callbacksWithoutNativeDelivery += 1;
+          } else {
+            callbacksWithIncompleteEvidence += 1;
+          }
+        }
+      }
+      const callbackEvidenceIdentityCount = callbacks
+        .reduce((count, callback) => count + Math.max(1, callback.evidenceIds.length), 0);
+      const callbackDeliveryEvidenceCompleteness = callbackEvidenceIdentityCount === 0
+        ? 'not-applicable' as const
+        : callbacksWithIncompleteEvidence > 0
+          ? 'partial' as const
+          : 'complete' as const;
+      let conclusion: ActivityNativeCrossLedgerReport['gaps'][number]['conclusion'];
+      if (gap.conclusion === 'recording-source-intentionally-inactive') {
+        conclusion = 'recording-source-intentionally-inactive';
+      } else if (coverage === 'unavailable') {
+        conclusion = 'native-evidence-unavailable';
+      } else if (callbacksWithoutNativeDelivery > 0) {
+        conclusion = 'native-callback-observed-native-delivery-missing';
+      } else if (callbacksWithDelayedNativeDelivery > 0) {
+        conclusion = 'native-callback-observed-native-delivery-delayed';
+      } else if (callbacksWithIncompleteEvidence > 0) {
+        conclusion = 'collector-coverage-incomplete-cause-unknown';
+      } else if (deliveries.length > 0) {
+        conclusion = 'native-delivery-invoked-js-intake-not-observed';
+      } else if (coverage === 'complete') {
+        conclusion = 'no-native-callback-observed-with-complete-collector-coverage';
+      } else {
+        conclusion = 'collector-coverage-incomplete-cause-unknown';
+      }
       return {
         fromWallTimeMs: gap.fromWallTimeMs,
         toWallTimeMs: gap.toWallTimeMs,
@@ -451,13 +519,17 @@ export function buildActivityNativeCrossLedgerReport(
         collectorCoverage: coverage,
         nativeCallbackCount: callbacks.length,
         nativeDeliveryCount: deliveries.length,
+        callbacksWithInWindowNativeDelivery,
+        callbacksWithDelayedNativeDelivery,
         callbacksWithoutNativeDelivery,
+        callbackDeliveryEvidenceCompleteness,
         conclusion,
       };
     }),
     interpretationLimits: [
       'A native no-callback conclusion requires uninterrupted owner-scoped heartbeats in one collector run and retention epoch.',
       'Native delivery means Expo invoked its JS delivery boundary; it does not prove the JS task/store accepted the payload.',
+      'Callback-to-delivery matching uses exact evidence IDs only within one retained collector run and retention epoch; delayed matches may occur after the JS gap.',
       'Native evidence IDs correlate callback to native delivery only. Per-point native-to-JS identity remains unavailable.',
       'Missing heartbeats, rotation, another owner scope, or another process boot leaves the native cause unknown.',
     ],

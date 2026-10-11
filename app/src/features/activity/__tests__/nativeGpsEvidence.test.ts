@@ -180,17 +180,112 @@ describe('owner-correlated native GPS evidence export', () => {
     });
   });
 
-  test('native callback/delivery IDs localize only their proven native boundary', () => {
+  test('uncovered native callback/delivery IDs localize only their proven native boundary', () => {
     const events = [
       diskEvent({ receiptWallTimeMs: 200_000, correlationScopeId: 'current-activity', evidenceIds: ['native-batch-a'] }),
       diskEvent({ event: 'native-js-delivery', receiptWallTimeMs: 200_010, correlationScopeId: 'current-activity', evidenceIds: ['native-other'] }),
     ];
     const report = buildActivityNativeCrossLedgerReport(ledgerWithGap(), nativeExport(events));
     expect(report.gaps[0]).toMatchObject({
-      callbacksWithoutNativeDelivery: 1,
-      conclusion: 'native-callback-observed-native-delivery-missing',
+      callbacksWithoutNativeDelivery: 0,
+      callbackDeliveryEvidenceCompleteness: 'partial',
+      conclusion: 'collector-coverage-incomplete-cause-unknown',
     });
     expect(report.clockContract.perPointNativeToJsIdentity).toBe('unavailable');
+  });
+
+  test('a matching delivery just after the JS gap is delayed, not missing', () => {
+    const heartbeatTimes = [900, 60_000, 120_000, 180_000, 240_000, 300_000, 360_000, 420_000, 472_200];
+    const events = [
+      ...heartbeatTimes.map((receiptWallTimeMs, index) => diskEvent({
+        event: 'collector-heartbeat', source: 'collector', evidenceIds: [], batchCount: 0,
+        receiptWallTimeMs, receiptMonotonicTimeMs: index * 60_000, sequence: index + 1,
+        correlationScopeId: 'current-activity',
+      })),
+      diskEvent({ receiptWallTimeMs: 180_000, sequence: 20, evidenceIds: ['native-delayed'], correlationScopeId: 'current-activity' }),
+      diskEvent({ event: 'native-js-delivery', receiptWallTimeMs: 472_100, sequence: 21, evidenceIds: ['native-delayed'], correlationScopeId: 'current-activity' }),
+    ];
+    const report = buildActivityNativeCrossLedgerReport(ledgerWithGap(), nativeExport(events));
+    expect(report.gaps[0]).toMatchObject({
+      nativeCallbackCount: 1,
+      callbacksWithDelayedNativeDelivery: 1,
+      callbacksWithoutNativeDelivery: 0,
+      conclusion: 'native-callback-observed-native-delivery-delayed',
+    });
+  });
+
+  test('same-run callback delivery association distinguishes in-window from proven missing', () => {
+    const heartbeatTimes = [900, 60_000, 120_000, 180_000, 240_000, 300_000, 360_000, 420_000, 472_200];
+    const heartbeats = heartbeatTimes.map((receiptWallTimeMs, index) => diskEvent({
+      event: 'collector-heartbeat', source: 'collector', evidenceIds: [], batchCount: 0,
+      receiptWallTimeMs, receiptMonotonicTimeMs: index * 60_000, sequence: index + 1,
+      correlationScopeId: 'current-activity',
+    }));
+    const matched = buildActivityNativeCrossLedgerReport(ledgerWithGap(), nativeExport([
+      ...heartbeats,
+      diskEvent({ receiptWallTimeMs: 180_000, sequence: 20, evidenceIds: ['native-matched'], correlationScopeId: 'current-activity' }),
+      diskEvent({ event: 'native-js-delivery', receiptWallTimeMs: 180_010, sequence: 21, evidenceIds: ['native-matched'], correlationScopeId: 'current-activity' }),
+    ]));
+    expect(matched.gaps[0]).toMatchObject({
+      callbacksWithInWindowNativeDelivery: 1,
+      callbacksWithDelayedNativeDelivery: 0,
+      callbacksWithoutNativeDelivery: 0,
+      conclusion: 'native-delivery-invoked-js-intake-not-observed',
+    });
+    const missing = buildActivityNativeCrossLedgerReport(ledgerWithGap(), nativeExport([
+      ...heartbeats,
+      diskEvent({ receiptWallTimeMs: 180_000, sequence: 20, evidenceIds: ['native-missing'], correlationScopeId: 'current-activity' }),
+    ]));
+    expect(missing.gaps[0]).toMatchObject({
+      callbacksWithoutNativeDelivery: 1,
+      callbackDeliveryEvidenceCompleteness: 'complete',
+      conclusion: 'native-callback-observed-native-delivery-missing',
+    });
+  });
+
+  test.each([
+    ['collector restart', {}, 'run-b', 0],
+    ['retention epoch rotation', {}, 'native-run-1', 1],
+  ])('%s cannot invent an exact callback-to-delivery match', (_label, exportOverrides, deliveryRun, deliveryEpoch) => {
+    const heartbeatTimes = [900, 60_000, 120_000, 180_000, 240_000, 300_000, 360_000, 420_000, 472_200];
+    const events = [
+      ...heartbeatTimes.map((receiptWallTimeMs, index) => diskEvent({
+        event: 'collector-heartbeat', source: 'collector', evidenceIds: [], batchCount: 0,
+        receiptWallTimeMs, receiptMonotonicTimeMs: index * 60_000, sequence: index + 1,
+        correlationScopeId: 'current-activity',
+      })),
+      diskEvent({ receiptWallTimeMs: 180_000, sequence: 20, evidenceIds: ['native-cross-boundary'], correlationScopeId: 'current-activity' }),
+      diskEvent({
+        event: 'native-js-delivery', receiptWallTimeMs: 180_010, sequence: 21,
+        evidenceIds: ['native-cross-boundary'], collectorRunId: deliveryRun,
+        retentionEpoch: deliveryEpoch, correlationScopeId: 'current-activity',
+      }),
+    ];
+    const report = buildActivityNativeCrossLedgerReport(
+      ledgerWithGap(),
+      nativeExport(events, exportOverrides),
+    );
+    expect(report.gaps[0]).toMatchObject({
+      callbacksWithInWindowNativeDelivery: 0,
+      callbacksWithDelayedNativeDelivery: 0,
+      callbacksWithoutNativeDelivery: 0,
+      callbackDeliveryEvidenceCompleteness: 'partial',
+      conclusion: 'collector-coverage-incomplete-cause-unknown',
+    });
+  });
+
+  test('retention truncation makes an otherwise missing delivery unknown', () => {
+    const report = buildActivityNativeCrossLedgerReport(
+      ledgerWithGap(),
+      nativeExport([
+        diskEvent({ receiptWallTimeMs: 180_000, sequence: 20, evidenceIds: ['native-rotated-away'], correlationScopeId: 'current-activity' }),
+      ], { retentionTruncated: true }),
+    );
+    expect(report.gaps[0]).toMatchObject({
+      callbacksWithoutNativeDelivery: 0,
+      callbackDeliveryEvidenceCompleteness: 'partial',
+      conclusion: 'collector-coverage-incomplete-cause-unknown',
+    });
   });
 
   test('an intentional Pause cannot be diagnosed as a native failure', () => {

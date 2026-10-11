@@ -66,6 +66,10 @@ export interface ActivityObservabilitySummary {
     fromWallTimeMs: number;
     toWallTimeMs: number;
     heartbeatCount: number;
+    /** Exact overlap with retained Pause -> Resume intervals, never an estimate. */
+    intentionalInactiveDurationMs: number | null;
+    /** Whether retained lifecycle boundaries explain none, part, or all of the gap. */
+    pauseEvidenceCompleteness: 'none' | 'partial' | 'complete' | 'unknown';
     conclusion:
       | 'recording-source-intentionally-inactive'
       | 'no-js-callback-native-cause-unknown'
@@ -692,25 +696,121 @@ function exactCompletedUploadAcknowledged(events: ActivityStageLedgerEvent[]): b
     'displayFingerprint',
   );
   const expectedCanonicalCount = detailNumber(completion, 'canonicalPointCount');
+  // A legacy/truncated completion cannot establish which exact local artifact
+  // the server acknowledged. Prefer honest partial evidence to a false PASS.
+  if (expectedRevision === null
+    || expectedFingerprint === null
+    || expectedCanonicalCount === null) return false;
   return events.some(event => {
     if (event.stage !== 'sync-state'
       || event.details.operation !== 'completed-activity-upload'
       || event.details.phase !== 'ack'
       || event.details.acknowledged !== true
-      || event.details.activityIdentityMatched !== true) return false;
+      || event.details.activityIdentityMatched !== true
+      || event.details.serverActivityIdentityMatched !== true) return false;
     const acknowledgedRevision = detailNumber(event, 'finalRevision', 'artifactRevision');
     const acknowledgedFingerprint = detailString(event, 'finalFingerprint', 'artifactFingerprint');
     const acknowledgedCanonicalCount = detailNumber(event, 'canonicalPointCount');
-    if (expectedRevision !== null && acknowledgedRevision !== expectedRevision) return false;
-    if (expectedFingerprint !== null && acknowledgedFingerprint !== expectedFingerprint) return false;
-    if (expectedCanonicalCount !== null && acknowledgedCanonicalCount !== expectedCanonicalCount) return false;
-    return true;
+    return acknowledgedRevision === expectedRevision
+      && acknowledgedFingerprint === expectedFingerprint
+      && acknowledgedCanonicalCount === expectedCanonicalCount;
   });
+}
+
+interface PauseEvidenceForGap {
+  intentionalInactiveDurationMs: number | null;
+  pauseEvidenceCompleteness: 'none' | 'partial' | 'complete' | 'unknown';
+}
+
+/**
+ * Interpret only explicit Pause -> Resume pairs from one uninterrupted JS
+ * process. Open/missing/cross-process boundaries are evidence of uncertainty,
+ * never authority to label an entire receipt gap as intentional inactivity.
+ */
+function pauseEvidenceForGap(
+  events: ActivityStageLedgerEvent[],
+  fromWallTimeMs: number,
+  toWallTimeMs: number,
+): PauseEvidenceForGap {
+  const lifecycle = events.filter(event => event.stage === 'lifecycle'
+    && (event.details.event === 'recording-paused'
+      || event.details.event === 'recording-resumed'));
+  const gapProcessIds = new Set(events
+    .filter(event => event.wallTimeMs >= fromWallTimeMs && event.wallTimeMs <= toWallTimeMs)
+    .map(event => event.processId));
+  const boundedIntervals: Array<{ fromWallTimeMs: number; toWallTimeMs: number }> = [];
+  let openPause: ActivityStageLedgerEvent | null = null;
+  let unknownBoundaryInGap = false;
+
+  for (const event of lifecycle) {
+    if (event.details.event === 'recording-paused') {
+      if (openPause && openPause.wallTimeMs < toWallTimeMs
+        && event.wallTimeMs > fromWallTimeMs) unknownBoundaryInGap = true;
+      openPause = event;
+      continue;
+    }
+    if (!openPause) {
+      if (event.wallTimeMs > fromWallTimeMs && event.wallTimeMs < toWallTimeMs) {
+        unknownBoundaryInGap = true;
+      }
+      continue;
+    }
+    const processDiscontinuity = event.processId !== openPause.processId
+      || events.some(candidate => candidate.wallTimeMs > openPause!.wallTimeMs
+        && candidate.wallTimeMs < event.wallTimeMs
+        && candidate.processId !== openPause!.processId);
+    if (processDiscontinuity) {
+      if (openPause.wallTimeMs < toWallTimeMs && event.wallTimeMs > fromWallTimeMs) {
+        unknownBoundaryInGap = true;
+      }
+    } else {
+      boundedIntervals.push({
+        fromWallTimeMs: openPause.wallTimeMs,
+        toWallTimeMs: event.wallTimeMs,
+      });
+    }
+    openPause = null;
+  }
+
+  if (openPause && openPause.wallTimeMs < toWallTimeMs) unknownBoundaryInGap = true;
+  const lifecycleRelevantToGap = lifecycle.some(event => (
+    event.wallTimeMs > fromWallTimeMs && event.wallTimeMs < toWallTimeMs
+  )) || boundedIntervals.some(interval => (
+    interval.fromWallTimeMs < toWallTimeMs && interval.toWallTimeMs > fromWallTimeMs
+  ));
+  if (lifecycleRelevantToGap && gapProcessIds.size > 1) unknownBoundaryInGap = true;
+  if (unknownBoundaryInGap) {
+    return { intentionalInactiveDurationMs: null, pauseEvidenceCompleteness: 'unknown' };
+  }
+
+  const clipped = boundedIntervals
+    .map(interval => ({
+      fromWallTimeMs: Math.max(fromWallTimeMs, interval.fromWallTimeMs),
+      toWallTimeMs: Math.min(toWallTimeMs, interval.toWallTimeMs),
+    }))
+    .filter(interval => interval.toWallTimeMs > interval.fromWallTimeMs)
+    .sort((left, right) => left.fromWallTimeMs - right.fromWallTimeMs);
+  let inactiveDurationMs = 0;
+  let frontier = fromWallTimeMs;
+  for (const interval of clipped) {
+    const start = Math.max(frontier, interval.fromWallTimeMs);
+    if (interval.toWallTimeMs > start) inactiveDurationMs += interval.toWallTimeMs - start;
+    frontier = Math.max(frontier, interval.toWallTimeMs);
+  }
+  const gapDurationMs = Math.max(0, toWallTimeMs - fromWallTimeMs);
+  if (inactiveDurationMs >= gapDurationMs && gapDurationMs > 0) {
+    return { intentionalInactiveDurationMs: gapDurationMs, pauseEvidenceCompleteness: 'complete' };
+  }
+  if (inactiveDurationMs > 0) {
+    return { intentionalInactiveDurationMs: inactiveDurationMs, pauseEvidenceCompleteness: 'partial' };
+  }
+  return { intentionalInactiveDurationMs: 0, pauseEvidenceCompleteness: 'none' };
 }
 
 /** Pure, coordinate-free interpretation of the retained stage evidence. */
 export function summarizeActivityObservability(
   events: ActivityStageLedgerEvent[],
+  options: { retentionTruncated?: boolean } = {},
 ): ActivityObservabilitySummary {
   const ordered = events.slice().sort(
     (left, right) => left.wallTimeMs - right.wallTimeMs || left.eventId.localeCompare(right.eventId),
@@ -731,7 +831,8 @@ export function summarizeActivityObservability(
   const canonical = evidenceIds(ordered, 'canonical-accepted');
   const wal = evidenceIds(ordered, 'wal-committed');
   const store = evidenceIds(ordered, 'store-published');
-  const syncAcknowledged = exactCompletedUploadAcknowledged(ordered);
+  const syncAcknowledged = options.retentionTruncated !== true
+    && exactCompletedUploadAcknowledged(ordered);
   const locallyComplete = ordered.some(event => (
     event.stage === 'final-selected' || event.stage === 'completion-presented'
   ));
@@ -761,14 +862,13 @@ export function summarizeActivityObservability(
       event.wallTimeMs > from.wallTimeMs && event.wallTimeMs < to.wallTimeMs
     ));
     const heartbeatCount = inside.filter(event => event.stage === 'health-heartbeat').length;
-    const sourcePaused = inside.some(event => event.stage === 'lifecycle'
-      && event.details.event === 'recording-paused');
+    const pauseEvidence = pauseEvidenceForGap(ordered, from.wallTimeMs, to.wallTimeMs);
     const fromObservationTimeMs = finiteDetail(from, 'observationTimeMs');
     const toObservationTimeMs = finiteDetail(to, 'observationTimeMs');
     const observationTimestampGapMs = fromObservationTimeMs === null || toObservationTimeMs === null
       ? null
       : Math.max(0, toObservationTimeMs - fromObservationTimeMs);
-    const conclusion = sourcePaused
+    const conclusion = pauseEvidence.pauseEvidenceCompleteness === 'complete'
       ? 'recording-source-intentionally-inactive' as const
       : heartbeatCount > 0
         ? 'no-js-callback-native-cause-unknown' as const
@@ -780,6 +880,7 @@ export function summarizeActivityObservability(
       fromWallTimeMs: from.wallTimeMs,
       toWallTimeMs: to.wallTimeMs,
       heartbeatCount,
+      ...pauseEvidence,
       conclusion,
     });
   }
@@ -1032,7 +1133,7 @@ export async function exportLatestActivityStageLedger(
       missingRequiredStages,
     },
     phaseSummary,
-    observability: summarizeActivityObservability(events),
+    observability: summarizeActivityObservability(events, { retentionTruncated }),
     events: events.map(event => ({ ...event, ownerUserId: 'current-owner' })),
   };
 }
