@@ -20,6 +20,23 @@ test('derives continuous authority and preserves connected provenance sections',
   const result = authorizeRouteGeometry({ ownerId: 7, points: [a, b, c], orderedDraft: ordered, resolutionState: 'continuous' });
   assert.equal(result.resolutionState, 'continuous');
   assert.deepEqual(result.points, [a, b, c]);
+  assert.ok(result.distanceM > 1_000 && result.distanceM < 1_500);
+});
+
+test('derives distance from ordered parts and excludes declared gap connectors', () => {
+  const far = { lat: -40.2, lng: 175.8 };
+  const end = { lat: -40.199, lng: 175.801 };
+  const ordered = draft([
+    { id: 'left', resolution: 'recorded', points: [a, b] },
+    { id: 'right', resolution: 'recorded', points: [far, end] },
+  ], [{ id: 'gap', afterPartId: 'left', reason: 'activity-gap' }]);
+  const result = authorizeRouteGeometry({
+    ownerId: 7,
+    points: [a, b, far, end],
+    orderedDraft: ordered,
+    resolutionState: 'unresolved_gaps',
+  });
+  assert.ok(result.distanceM > 700 && result.distanceM < 900);
 });
 
 test('rejects a fake continuous state for a real ordered gap', () => {

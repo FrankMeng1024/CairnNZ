@@ -1157,7 +1157,12 @@ function MapHistoryObjectScreen() {
         // Retain the same operation identity and retry only recipients that
         // did not receive this snapshot. Already delivered friends are not
         // needlessly resubmitted.
-        setRouteShareRecipients(result.failed.map(item => String(item.recipient_id)));
+        const failedRecipients = result.failed.map(item => String(item.recipient_id)).sort();
+        routeShareAttemptRef.current = {
+          signature: `${serverRouteId}|${failedRecipients.join(',')}`,
+          key: attempt.key,
+        };
+        setRouteShareRecipients(failedRecipients);
       } else {
         routeShareAttemptRef.current = null;
       }

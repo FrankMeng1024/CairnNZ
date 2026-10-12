@@ -63,6 +63,24 @@ describe('Route planning provider boundaries', () => {
     });
   });
 
+  test('Draw rejects a far spur hidden between more than 100 provider vertices', async () => {
+    const raw = [p(0, 0), p(80, 0)];
+    const dense = Array.from({ length: 201 }, (_, index) => p(index * 0.4, 0));
+    dense[1] = p(2_000, 2_000);
+    expect(orderedShapeDeviationM(raw, dense)).toBeGreaterThan(90);
+    await expect(resolveDrawPlan(raw, { matcher: async () => ok(dense) })).resolves.toEqual({
+      outcome: 'manual-available', rawPoints: raw, reason: 'shape-deviation', callCount: 1,
+    });
+  });
+
+  test('same line with very different provider vertex density has zero shape deviation', async () => {
+    const raw = [p(0, 0), p(200, 0)];
+    const dense = Array.from({ length: 501 }, (_, index) => p(index * 0.4, 0));
+    expect(orderedShapeDeviationM(raw, dense)).toBeLessThan(0.01);
+    await expect(resolveDrawPlan(raw, { matcher: async () => ok(dense) }))
+      .resolves.toMatchObject({ outcome: 'accepted' });
+  });
+
   test('Draw does not accept a collapsed deliberate loop with matching endpoints', async () => {
     const raw = [p(0, 0), p(80, 0), p(80, 80), p(0, 80), p(0, 0)];
     await expect(resolveDrawPlan(raw, { matcher: async () => ok([raw[0], raw.at(-1)!]) }))

@@ -101,6 +101,8 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(detail).toContain('title="Send an independent Route"');
     expect(detail).toContain('shareRouteSnapshot(serverRouteId, recipients, attempt.key)');
     expect(detail).toContain('Retry uses the same request identity');
+    expect(detail).toContain('key: attempt.key');
+    expect(detail).toContain("signature: `${serverRouteId}|${failedRecipients.join(',')}`");
     expect(detail).toContain('disabled={!routeCanBeUsed(selectedRoute)}');
     expect(detail).toContain('route-unresolved-gap-notice');
     expect(detail).not.toContain('Share Activity');

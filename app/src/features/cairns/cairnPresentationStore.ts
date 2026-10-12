@@ -218,9 +218,41 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
   error: null,
 
   initialize: async (viewerId) => {
+    // Some auth flows replace one authenticated identity with another without
+    // rendering the logged-out navigator in between. Treat that as a complete
+    // account boundary synchronously: no coordinate, unread or in-flight
+    // request from the previous owner may be visible/reused by the new owner.
+    if ((observedViewerId && observedViewerId !== viewerId)
+      || (get().viewerId && get().viewerId !== viewerId)) {
+      observedViewerId = '';
+      accountGeneration += 1;
+      refreshPromise = null;
+      mapRefreshPromise = null;
+      presentationBlockers.clear();
+      set({
+        viewerId: null,
+        pendingGroups: [],
+        activeGroup: null,
+        activeSurface: null,
+        unreadCount: 0,
+        acquiredMarkers: [],
+        presentationBlocked: false,
+        loading: false,
+        error: null,
+      });
+    }
     const generation = bind(viewerId);
     if (generation === null) return;
-    set({ viewerId, pendingGroups: [], activeGroup: null, activeSurface: null, loading: true, error: null });
+    set({
+      viewerId,
+      pendingGroups: [],
+      activeGroup: null,
+      activeSurface: null,
+      unreadCount: 0,
+      acquiredMarkers: [],
+      loading: true,
+      error: null,
+    });
     // Load only the durable ACK outbox. Cached presentation/coordinates are
     // not render authority: archive, removal or friendship changes may have
     // happened while the process was stopped.

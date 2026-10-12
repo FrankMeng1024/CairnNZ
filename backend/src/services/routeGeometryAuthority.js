@@ -25,6 +25,16 @@ function samePoint(a, b) {
     && (a.alt == null || b.alt == null || Math.abs(Number(a.alt) - Number(b.alt)) <= 0.02);
 }
 
+function pathDistanceM(points) {
+  let total = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const segment = distanceM(points[index - 1], points[index]);
+    if (!Number.isFinite(segment)) throw geometryError('Route contains an invalid coordinate.');
+    total += segment;
+  }
+  return total;
+}
+
 function authorizeOrderedDraft(ownerId, orderedDraft) {
   if (!orderedDraft || typeof orderedDraft !== 'object') throw geometryError('Ordered Route geometry is required.');
   if (String(orderedDraft.ownerId) !== String(ownerId)) throw geometryError('Route draft belongs to another account.', 'ROUTE_DRAFT_OWNER_MISMATCH');
@@ -49,6 +59,7 @@ function authorizeOrderedDraft(ownerId, orderedDraft) {
     gapsAfter.add(gap.afterPartId);
   }
   const points = [];
+  let resolvedDistanceM = 0;
   parts.forEach((part, index) => {
     if (index > 0 && !gapsAfter.has(parts[index - 1].id)) {
       const prior = parts[index - 1].points[parts[index - 1].points.length - 1];
@@ -59,11 +70,18 @@ function authorizeOrderedDraft(ownerId, orderedDraft) {
       if (index > 0 && pointIndex === 0 && previous && samePoint(previous, point)) return;
       points.push({ ...point });
     });
+    // Each part is factual/planned geometry. A declared unknown gap between
+    // parts is deliberately excluded rather than counted as a straight line.
+    resolvedDistanceM += pathDistanceM(part.points);
   });
   if (orderedDraft.startPoint && !samePoint(orderedDraft.startPoint, parts[0].points[0])) {
     throw geometryError('Route start does not match its ordered geometry.');
   }
-  return { points, resolutionState: gaps.length > 0 ? 'unresolved_gaps' : 'continuous' };
+  return {
+    points,
+    resolutionState: gaps.length > 0 ? 'unresolved_gaps' : 'continuous',
+    distanceM: resolvedDistanceM,
+  };
 }
 
 function authorizeRouteGeometry({ ownerId, points, orderedDraft, resolutionState }) {
@@ -75,6 +93,7 @@ function authorizeRouteGeometry({ ownerId, points, orderedDraft, resolutionState
       points,
       orderedDraft: null,
       resolutionState: 'continuous',
+      distanceM: pathDistanceM(points),
     };
   }
   const derived = authorizeOrderedDraft(ownerId, orderedDraft);
@@ -85,7 +104,12 @@ function authorizeRouteGeometry({ ownerId, points, orderedDraft, resolutionState
     || points.some((point, index) => !samePoint(point, derived.points[index]))) {
     throw geometryError('Route points do not match the ordered path.', 'ROUTE_POINTS_MISMATCH');
   }
-  return { points: derived.points, orderedDraft, resolutionState: derived.resolutionState };
+  return {
+    points: derived.points,
+    orderedDraft,
+    resolutionState: derived.resolutionState,
+    distanceM: derived.distanceM,
+  };
 }
 
 module.exports = {

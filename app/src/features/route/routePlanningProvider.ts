@@ -97,7 +97,44 @@ function maxPointToPolylineDistanceM(source: RoutePoint[], candidate: RoutePoint
   return max;
 }
 
-/** Order-sensitive discrete Fréchet distance, bounded to provider limits. */
+/**
+ * Equal-distance progress sampling is independent of provider vertex density.
+ * It preserves traversal order while avoiding the false deviation produced by
+ * comparing a two-vertex line with the same line split into hundreds of
+ * vertices.
+ */
+function resamplePolylineProgress(points: RoutePoint[], count: number): RoutePoint[] {
+  if (points.length < 2 || count < 2) return points.map(point => ({ ...point }));
+  const cumulative = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    cumulative.push(cumulative[index - 1] + routePointDistanceM(points[index - 1], points[index]));
+  }
+  const total = cumulative[cumulative.length - 1];
+  if (!Number.isFinite(total) || total <= 0) return points.map(point => ({ ...point }));
+  const result: RoutePoint[] = [];
+  let segment = 1;
+  for (let index = 0; index < count; index += 1) {
+    const target = total * index / (count - 1);
+    while (segment < cumulative.length - 1 && cumulative[segment] < target) segment += 1;
+    const startDistance = cumulative[segment - 1];
+    const endDistance = cumulative[segment];
+    const fraction = endDistance === startDistance ? 0 : (target - startDistance) / (endDistance - startDistance);
+    const start = points[segment - 1];
+    const end = points[segment];
+    result.push({
+      lat: start.lat + (end.lat - start.lat) * fraction,
+      lng: start.lng + (end.lng - start.lng) * fraction,
+      ...(Number.isFinite(start.alt) && Number.isFinite(end.alt)
+        ? { alt: Number(start.alt) + (Number(end.alt) - Number(start.alt)) * fraction }
+        : {}),
+    });
+  }
+  result[0] = { ...points[0] };
+  result[result.length - 1] = { ...points[points.length - 1] };
+  return result;
+}
+
+/** Order-sensitive discrete Fréchet distance over density-normalized paths. */
 function orderedFrechetDistanceM(source: RoutePoint[], candidate: RoutePoint[]): number {
   const rows = source.length;
   const columns = candidate.length;
@@ -120,12 +157,15 @@ function orderedFrechetDistanceM(source: RoutePoint[], candidate: RoutePoint[]):
 }
 
 export function orderedShapeDeviationM(source: RoutePoint[], candidate: RoutePoint[]): number {
-  const boundedSource = resampleOrderedForBudget(source, ROUTE_MATCH_MAX_COORDINATES);
-  const boundedCandidate = resampleOrderedForBudget(candidate, ROUTE_MATCH_MAX_COORDINATES);
+  if (source.length < 2 || candidate.length < 2) return Infinity;
+  const progressSource = resamplePolylineProgress(source, ROUTE_MATCH_MAX_COORDINATES);
+  const progressCandidate = resamplePolylineProgress(candidate, ROUTE_MATCH_MAX_COORDINATES);
   return Math.max(
-    maxPointToPolylineDistanceM(boundedSource, boundedCandidate),
-    maxPointToPolylineDistanceM(boundedCandidate, boundedSource),
-    orderedFrechetDistanceM(boundedSource, boundedCandidate),
+    // Evaluate every original vertex in both directions. Request-budget
+    // sampling must never hide a provider-added spur or a collapsed detour.
+    maxPointToPolylineDistanceM(source, candidate),
+    maxPointToPolylineDistanceM(candidate, source),
+    orderedFrechetDistanceM(progressSource, progressCandidate),
   );
 }
 

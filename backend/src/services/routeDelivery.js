@@ -9,7 +9,7 @@ function parseJson(value, fallback) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
-function deliverySnapshot(route) {
+function deliverySnapshot(route, authoritativeGeometry = null) {
   return {
     schema_version: 1,
     name: route.name,
@@ -17,7 +17,7 @@ function deliverySnapshot(route) {
     points: parseJson(route.points, []),
     ordered_draft: parseJson(route.ordered_draft, null),
     resolution_state: route.resolution_state ?? 'continuous',
-    distance_m: Number(route.distance_m ?? 0),
+    distance_m: Number(authoritativeGeometry?.distanceM ?? route.distance_m ?? 0),
     elevation_gain_m: Number(route.elevation_gain_m ?? 0),
     source: {
       sender_id: String(route.user_id),
@@ -110,7 +110,7 @@ async function deliverRoute(pool, {
       error.code = 'ROUTE_UNRESOLVED_GAPS';
       throw error;
     }
-    const snapshot = deliverySnapshot(route);
+    const snapshot = deliverySnapshot(route, authoritativeGeometry);
     if (!Array.isArray(snapshot.points) || snapshot.points.length < 2) {
       const error = new Error('Route has no usable geometry.');
       error.code = 'ROUTE_NOT_USABLE';

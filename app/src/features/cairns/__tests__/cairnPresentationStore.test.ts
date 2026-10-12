@@ -171,6 +171,57 @@ describe('Cairn presentation coordinator', () => {
     expect(useCairnPresentationStore.getState()).toMatchObject({ viewerId: null, activeGroup: null, pendingGroups: [] });
   });
 
+  test('direct A to B switch clears coordinates and does not reuse A map refresh', async () => {
+    mockFetch.mockResolvedValueOnce(pending());
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+
+    let releaseA!: (value: any) => void;
+    mockFetch.mockReturnValueOnce(new Promise(resolve => { releaseA = resolve; }));
+    const oldMap = useCairnPresentationStore.getState().refreshAcquiredMap();
+    while (mockFetch.mock.calls.length < 2) await Promise.resolve();
+
+    mockAuthenticatedOwnerId = 'viewer-b';
+    mockFetch.mockResolvedValueOnce(response(200, { groups: [], unread_count: 0 }));
+    await useCairnPresentationStore.getState().initialize('viewer-b');
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      viewerId: 'viewer-b', unreadCount: 0, acquiredMarkers: [], pendingGroups: [],
+    });
+
+    mockFetch.mockResolvedValueOnce(response(200, {
+      unread_count: 1,
+      cairns: [{ marker_id: 'b-1', lat: -41.3, lng: 174.8, availability: 'available', has_unread: 1 }],
+    }));
+    await useCairnPresentationStore.getState().refreshAcquiredMap();
+    expect(useCairnPresentationStore.getState().acquiredMarkers.map(marker => marker.markerId)).toEqual(['b-1']);
+    expect(mockFetch.mock.calls.at(-1)?.[1]).toMatchObject({ expectedUserId: 'viewer-b' });
+
+    releaseA(response(200, {
+      unread_count: 9,
+      cairns: [{ marker_id: 'a-private', lat: -40, lng: 175, availability: 'available', has_unread: 1 }],
+    }));
+    await oldMap;
+    expect(useCairnPresentationStore.getState()).toMatchObject({ viewerId: 'viewer-b', unreadCount: 1 });
+    expect(useCairnPresentationStore.getState().acquiredMarkers.map(marker => marker.markerId)).toEqual(['b-1']);
+  });
+
+  test('direct A to offline B switch fails closed without A unread or coordinates', async () => {
+    mockFetch.mockResolvedValueOnce(pending());
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    useCairnPresentationStore.setState({
+      unreadCount: 4,
+      acquiredMarkers: [{
+        markerId: 'a-private', lat: -41.2, lng: 174.7, unread: true, acquiredAt: null,
+        sourceAudience: 'friends', authorName: 'A', currentFriend: true,
+      }],
+    });
+    mockAuthenticatedOwnerId = 'viewer-b';
+    mockFetch.mockRejectedValueOnce(new Error('offline'));
+    await useCairnPresentationStore.getState().initialize('viewer-b');
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      viewerId: 'viewer-b', unreadCount: 0, acquiredMarkers: [], pendingGroups: [], error: 'offline',
+    });
+  });
+
   test('cold-start cache is fail-closed until the safety authority refresh succeeds', async () => {
     mockValues.set(`${__cairnPresentationTest.cachePrefix}viewer-a`, JSON.stringify({
       version: 1,

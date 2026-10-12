@@ -71,7 +71,7 @@ router.post('/', validateBody(schemas.route.create), idempotency, async (req, re
       description: description ?? null,
       points: geometry.points,
       waypoints: waypoints ?? [],
-      distanceM: distance_m ?? 0,
+      distanceM: geometry.distanceM,
       elevationGainM: elevation_gain_m ?? 0,
       permission, // already validated above; Route.create defaults undefined → 'personal'
       clientRouteId: client_route_id,
@@ -233,7 +233,7 @@ router.put('/:id', validateBody(schemas.route.update), async (req, res) => {
 
   try {
     let geometry = null;
-    if (points !== undefined || ordered_draft !== undefined || resolution_state !== undefined) {
+    if (points !== undefined || ordered_draft !== undefined || resolution_state !== undefined || distance_m !== undefined) {
       const existing = await Route.findByIdAndUser(id, req.user.userId);
       if (!existing) return res.status(404).json({ error: 'Route not found.' });
       geometry = authorizeRouteGeometry({
@@ -248,7 +248,7 @@ router.put('/:id', validateBody(schemas.route.update), async (req, res) => {
       description,
       points: geometry?.points ?? points,
       waypoints,
-      distanceM: distance_m,
+      distanceM: geometry?.distanceM,
       elevationGainM: elevation_gain_m,
       permission, // already validated; Route.update ignores undefined
       orderedDraft: geometry?.orderedDraft ?? ordered_draft,
