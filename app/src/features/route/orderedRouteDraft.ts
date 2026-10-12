@@ -1,6 +1,7 @@
 import type { RoutePoint } from '../../store/useRouteStore';
 
-export type RouteResolution = 'recorded' | 'point' | 'draw-matched' | 'draw-manual';
+export type RouteResolution = 'recorded' | 'point' | 'draw-matched' | 'draw-manual' | 'legacy';
+export type EditableRouteResolution = 'point' | 'draw-matched' | 'draw-manual';
 export type RouteDraftOrigin = 'plan' | 'activity' | 'received-copy';
 
 export interface OrderedRoutePart {
@@ -168,6 +169,31 @@ export function createImportedOrderedDraft(args: {
   };
 }
 
+/** Wraps a pre-contract continuous Route without inventing its drawing tool. */
+export function createLegacyOrderedDraft(args: {
+  draftId: string;
+  ownerId: string;
+  points: RoutePoint[];
+  origin?: RouteDraftOrigin;
+  recorded?: boolean;
+}): OrderedRouteDraft {
+  const points = normalizeOrderedPoints(args.points);
+  if (points.length < 2) throw new Error('INVALID_LEGACY_ROUTE');
+  return {
+    schemaVersion: 1,
+    draftId: args.draftId,
+    ownerId: args.ownerId,
+    origin: args.origin ?? 'plan',
+    revision: 0,
+    parts: [{
+      id: `${args.draftId}:legacy:0`,
+      points,
+      resolution: args.recorded ? 'recorded' : 'legacy',
+    }],
+    gaps: [],
+  };
+}
+
 export function orderedDraftIsContinuous(draft: OrderedRouteDraft): boolean {
   return draft.parts.length > 0
     && draft.parts.every(part => part.points.length >= 2)
@@ -229,7 +255,7 @@ function connectCandidate(
 export function appendOrderedSegment(
   draft: OrderedRouteDraft,
   candidate: RoutePoint[],
-  resolution: Exclude<RouteResolution, 'recorded'>,
+  resolution: EditableRouteResolution,
 ): RouteEditResult {
   const terminal = draft.parts.length > 0
     ? draft.parts[draft.parts.length - 1].points.at(-1)
@@ -262,7 +288,7 @@ export function replaceOrderedInterval(
   start: OrderedPosition,
   end: OrderedPosition,
   candidate: RoutePoint[],
-  resolution: Exclude<RouteResolution, 'recorded'>,
+  resolution: EditableRouteResolution,
 ): RouteEditResult {
   const startPartIndex = orderedPositionIndex(draft, start);
   const endPartIndex = orderedPositionIndex(draft, end);
@@ -290,7 +316,7 @@ export function bridgeOrderedGap(
   draft: OrderedRouteDraft,
   gapId: string,
   candidate: RoutePoint[],
-  resolution: Exclude<RouteResolution, 'recorded'>,
+  resolution: EditableRouteResolution,
 ): RouteEditResult {
   const gap = draft.gaps.find(item => item.id === gapId);
   if (!gap) return { ok: false, code: 'NOT_ADJACENT_GAP', draft };

@@ -5,6 +5,7 @@ import {
   commitRouteHistory,
   createEmptyOrderedDraft,
   createImportedOrderedDraft,
+  createLegacyOrderedDraft,
   keepOnlyOrderedPart,
   normalizeOrderedPoints,
   orderedDraftCanUseOrShare,
@@ -52,6 +53,13 @@ describe('ordered Route draft topology', () => {
     const a = p(0, 0);
     const b = p(20, 0);
     expect(normalizeOrderedPoints([a, a, b, a])).toEqual([a, b, a]);
+  });
+
+  test('legacy continuous Routes retain order without inventing a drawing tool', () => {
+    const points = [p(0, 0), p(20, 0), p(0, 0)];
+    const draft = createLegacyOrderedDraft({ draftId: 'legacy-a', ownerId: 'owner-a', points });
+    expect(draft.parts[0]).toMatchObject({ resolution: 'legacy', points });
+    expect(orderedDraftCanUseOrShare(draft)).toBe(true);
   });
 
   test('empty plan establishes start explicitly and appends at its terminal', () => {

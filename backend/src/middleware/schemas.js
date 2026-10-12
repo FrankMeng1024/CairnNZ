@@ -218,7 +218,7 @@ const waypointObj = Joi.object({
 const orderedRoutePart = Joi.object({
   id: Joi.string().min(1).max(160).required(),
   points: Joi.array().items(pointObj).min(2).max(5000).required(),
-  resolution: Joi.string().valid('recorded', 'point', 'draw-matched', 'draw-manual').required(),
+  resolution: Joi.string().valid('recorded', 'point', 'draw-matched', 'draw-manual', 'legacy').required(),
 });
 
 const orderedRouteGap = Joi.object({

@@ -1,0 +1,104 @@
+import { storage } from '../../store/storage';
+import {
+  cloneOrderedDraft,
+  validateOrderedDraft,
+  type OrderedRouteDraft,
+  type RouteDraftHistory,
+} from './orderedRouteDraft';
+
+const KEY_PREFIX = '@cairn:route-planner:v1:';
+
+export interface PersistedRoutePlannerDraft {
+  schemaVersion: 1;
+  ownerId: string;
+  draftId: string;
+  history: RouteDraftHistory;
+  name: string;
+  permission: 'personal' | 'friend';
+  sourceActivityId?: string;
+  sourceRouteId?: string;
+  reconnectsActivityGap?: boolean;
+  savedAt: number;
+}
+
+function draftKey(ownerId: string, draftId: string): string {
+  return `${KEY_PREFIX}${encodeURIComponent(ownerId)}:${encodeURIComponent(draftId)}`;
+}
+
+function latestKey(ownerId: string): string {
+  return `${KEY_PREFIX}${encodeURIComponent(ownerId)}:latest`;
+}
+
+function validRecord(value: any, ownerId: string): value is PersistedRoutePlannerDraft {
+  return value?.schemaVersion === 1
+    && value.ownerId === ownerId
+    && value.draftId === value.history?.present?.draftId
+    && value.history.present.ownerId === ownerId
+    && validateOrderedDraft(value.history.present).length === 0
+    && Array.isArray(value.history.past);
+}
+
+export async function saveRoutePlannerDraft(
+  record: Omit<PersistedRoutePlannerDraft, 'schemaVersion' | 'savedAt'>,
+): Promise<void> {
+  const snapshot: PersistedRoutePlannerDraft = {
+    ...record,
+    schemaVersion: 1,
+    history: {
+      present: cloneOrderedDraft(record.history.present),
+      past: record.history.past.map(item => ({
+        operation: item.operation,
+        draft: cloneOrderedDraft(item.draft),
+      })),
+    },
+    savedAt: Date.now(),
+  };
+  await storage.setItem(draftKey(record.ownerId, record.draftId), JSON.stringify(snapshot), { strict: true });
+  await storage.setItem(latestKey(record.ownerId), record.draftId, { strict: true });
+}
+
+export async function loadRoutePlannerDraft(
+  ownerId: string,
+  requestedDraftId?: string,
+): Promise<PersistedRoutePlannerDraft | null> {
+  if (!ownerId) return null;
+  const draftId = requestedDraftId ?? await storage.getItemStrict(latestKey(ownerId));
+  if (!draftId) return null;
+  const raw = await storage.getItemStrict(draftKey(ownerId, draftId));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return validRecord(parsed, ownerId) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function removeRoutePlannerDraft(ownerId: string, draftId: string): Promise<void> {
+  await storage.removeItem(draftKey(ownerId, draftId), { strict: true });
+  const latest = await storage.getItemStrict(latestKey(ownerId));
+  if (latest === draftId) await storage.removeItem(latestKey(ownerId), { strict: true });
+}
+
+export function plannerDraftStoragePrefix(ownerId: string): string {
+  return `${KEY_PREFIX}${encodeURIComponent(ownerId)}:`;
+}
+
+export function clonePlannerHistory(history: RouteDraftHistory): RouteDraftHistory {
+  return {
+    present: cloneOrderedDraft(history.present),
+    past: history.past.map(item => ({ operation: item.operation, draft: cloneOrderedDraft(item.draft) })),
+  };
+}
+
+export function plannerRecordForDraft(
+  draft: OrderedRouteDraft,
+  partial: Omit<PersistedRoutePlannerDraft, 'schemaVersion' | 'savedAt' | 'ownerId' | 'draftId' | 'history'>,
+): Omit<PersistedRoutePlannerDraft, 'schemaVersion' | 'savedAt'> {
+  return {
+    ownerId: draft.ownerId,
+    draftId: draft.draftId,
+    history: { present: cloneOrderedDraft(draft), past: [] },
+    ...partial,
+  };
+}
