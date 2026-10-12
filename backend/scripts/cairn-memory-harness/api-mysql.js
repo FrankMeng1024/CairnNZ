@@ -676,6 +676,37 @@ async function main() {
       method: 'POST', body: {},
     });
     assert.deepEqual(friendRevisionFirst.acquired.map(item => item.content_revision), [1]);
+
+    // End the v1 visit and establish a genuinely new visit before the edit.
+    // This distinguishes the revision temporal frontier from the same-visit
+    // marker guard: v5 must not become eligible merely because its evidence is
+    // newer than the edit while this second visit remains open.
+    const friendRevisionDeparture = {
+      lat: friendRevisionPlace.lat + 0.002,
+      lng: friendRevisionPlace.lng,
+    };
+    await acceptedPresence(
+      friendRevisionViewer,
+      friendRevisionDeparture.lat,
+      friendRevisionDeparture.lng,
+      Date.now() + 9_000,
+    );
+    await api(friendRevisionViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+    await db.execute(
+      `UPDATE cairn_local_visits SET departed_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 16 MINUTE)
+        WHERE viewer_id=? AND anchor_lat BETWEEN ? AND ?`,
+      [friendRevisionViewer.id, friendRevisionPlace.lat - 0.0001, friendRevisionPlace.lat + 0.0001],
+    );
+    await acceptedPresence(
+      friendRevisionViewer,
+      friendRevisionPlace.lat,
+      friendRevisionPlace.lng,
+      Date.now() + 25_000,
+    );
+    assert.deepEqual((await api(friendRevisionViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    })).acquired, []);
+    await new Promise(resolve => setTimeout(resolve, 20));
     await publishFriendRevision(db, friendRevisionCairn, friendRevisionOwner, {
       text: 'Friend revision five', revision: 5,
     });
@@ -688,10 +719,9 @@ async function main() {
     assert.deepEqual((await api(friendRevisionViewer, '/api/cairn-memory/discover', {
       method: 'POST', body: {},
     })).acquired, []);
-    const friendRevisionDeparture = {
-      lat: friendRevisionPlace.lat + 0.002,
-      lng: friendRevisionPlace.lng,
-    };
+    // MySQL timestamps are millisecond-granular. Ensure the next server-side
+    // visit entry is observably after the edit rather than equal to it.
+    await new Promise(resolve => setTimeout(resolve, 20));
     await acceptedPresence(
       friendRevisionViewer,
       friendRevisionDeparture.lat,
@@ -719,7 +749,7 @@ async function main() {
       `/api/cairn-memory/cairns/${friendRevisionCairn.markerId}/history`,
     );
     assert.deepEqual(friendRevisionHistory.revisions.map(item => Number(item.content_revision)), [5, 1]);
-    pass('DISC-PROD-03e.friend-revision-boundary', 'a Friends-only v5 edit while the viewer remained nearby did not create a stationary acquisition; a genuine later visit acquired v5 and retained v1');
+    pass('DISC-PROD-03e.friend-revision-boundary', 'a Friends-only v5 edit after a later visit began did not create a stationary acquisition; only another genuine post-edit visit acquired v5 and retained v1');
 
     const cadenceViewer = await actor(db, 'CadenceViewer');
     const cadenceMarkers = [];
@@ -967,8 +997,90 @@ async function main() {
     await api(operator, `/api/cairn-memory/operator/cases/${currentRevisionCase.case_id}/decision`, {
       method: 'POST',
       body: {
+        case_state: 'reviewed', content_state: 'under_review',
+        decision_scope: 'source', reason: 'synthetic_source_review_over_revision',
+      },
+    });
+    await api(operator, `/api/cairn-memory/operator/cases/${currentRevisionCase.case_id}/decision`, {
+      method: 'POST',
+      body: {
+        case_state: 'dismissed', content_state: 'available',
+        decision_scope: 'source', reason: 'synthetic_source_restore_preserves_revision',
+      },
+    });
+    const [stillFrozenAfterSourceRestore] = await db.execute(
+      `SELECT availability FROM cairn_revisions
+        WHERE marker_id=? AND content_revision=5`,
+      [versionOnly.markerId],
+    );
+    assert.ok(stillFrozenAfterSourceRestore.every(item => item.availability === 'under_review'));
+    await api(operator, `/api/cairn-memory/operator/cases/${currentRevisionCase.case_id}/decision`, {
+      method: 'POST',
+      body: {
         case_state: 'dismissed', content_state: 'available',
         decision_scope: 'revision', reason: 'synthetic_cross_audience_restore',
+      },
+    });
+
+    // Reverse the ordering: restore the revision while a source freeze remains.
+    // Effective readers must continue to fail closed until the independent
+    // source state itself is restored.
+    await api(operator, `/api/cairn-memory/operator/cases/${currentRevisionCase.case_id}/decision`, {
+      method: 'POST',
+      body: {
+        case_state: 'reviewed', content_state: 'under_review',
+        decision_scope: 'revision', reason: 'synthetic_revision_review_before_source_overlay',
+      },
+    });
+    await api(operator, `/api/cairn-memory/operator/cases/${currentRevisionCase.case_id}/decision`, {
+      method: 'POST',
+      body: {
+        case_state: 'reviewed', content_state: 'under_review',
+        decision_scope: 'source', reason: 'synthetic_source_overlay',
+      },
+    });
+    await api(operator, `/api/cairn-memory/operator/cases/${currentRevisionCase.case_id}/decision`, {
+      method: 'POST',
+      body: {
+        case_state: 'dismissed', content_state: 'available',
+        decision_scope: 'revision', reason: 'synthetic_revision_restore_under_source_overlay',
+      },
+    });
+    const [[independentModerationState]] = await db.execute(
+      `SELECT moderation.state AS source_state,
+              MIN(revision.availability='available') AS all_revision_snapshots_available
+         FROM cairn_source_moderation moderation
+         JOIN cairn_revisions revision ON revision.marker_id=moderation.marker_id
+        WHERE moderation.marker_id=? AND revision.content_revision=5
+        GROUP BY moderation.state`,
+      [versionOnly.markerId],
+    );
+    assert.equal(independentModerationState.source_state, 'under_review');
+    assert.equal(Number(independentModerationState.all_revision_snapshots_available), 1);
+    const sourceOverlayLibrary = await api(versionViewer, '/api/cairn-memory/library?section=found');
+    const sourceOverlayCairn = sourceOverlayLibrary.cairns
+      .find(item => String(item.marker_id) === versionOnly.markerId);
+    assert.equal(sourceOverlayCairn.availability, 'under_review');
+    assert.equal(sourceOverlayCairn.text, null);
+    const sourceOverlayHistory = await api(
+      versionViewer,
+      `/api/cairn-memory/cairns/${versionOnly.markerId}/history`,
+    );
+    const sourceOverlayLatest = sourceOverlayHistory.revisions
+      .find(item => Number(item.content_revision) === 5);
+    assert.equal(sourceOverlayLatest.availability, 'under_review');
+    assert.equal(sourceOverlayLatest.text, null);
+    await api(versionViewer, `/api/cairn-memory/revisions/${latest.revision_id}/read`, {
+      method: 'POST', body: {}, expected: 404,
+    });
+    await api(versionViewer, `/api/cairn-memory/revisions/${latest.revision_id}/thanks`, {
+      method: 'POST', body: {}, expected: 404,
+    });
+    await api(operator, `/api/cairn-memory/operator/cases/${currentRevisionCase.case_id}/decision`, {
+      method: 'POST',
+      body: {
+        case_state: 'dismissed', content_state: 'available',
+        decision_scope: 'source', reason: 'synthetic_source_overlay_restore',
       },
     });
     assert.equal(
@@ -979,7 +1091,7 @@ async function main() {
       (await api(versionViewer, `/api/public-cairns/cairns/${versionOnly.markerId}`)).cairn.text,
       'Version five',
     );
-    pass('DISC-PROD-06c.cross-audience-moderation', 'revision moderation froze every Friends/Public snapshot of current v5 and denied owner, legacy Friends, Circle, and Public reads until explicit restore');
+    pass('DISC-PROD-06c.cross-audience-moderation', 'logical revision moderation covered every Friends/Public snapshot; source freeze/restore preserved revision state, revision restore could not bypass a source freeze, and all read paths reopened only after the controlling scope was restored');
 
     const oldRevision = history.revisions[1];
     const revisionCase = await api(versionViewer, `/api/cairn-memory/revisions/${oldRevision.revision_id}/cases`, {

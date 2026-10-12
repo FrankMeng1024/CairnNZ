@@ -84,6 +84,7 @@ function buildOwnedCairnLibraryQuery({ userId, limit, query, cursor }) {
                     JOIN cairn_revisions thanked_revision
                       ON thanked_revision.id=thanked.cairn_revision_id
                    WHERE thanked.marker_id=marker.id
+                     AND thanked.viewer_id<>marker.user_id
                      AND thanked.thanked_at IS NOT NULL
                      AND thanked.removed_at IS NULL
                      AND thanked_revision.availability='available') AS thanks_count,

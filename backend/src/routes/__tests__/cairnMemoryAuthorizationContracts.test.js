@@ -14,7 +14,10 @@ test('Friend revision eligibility starts after the trusted mutable revision fron
     source.indexOf('async function loadDiscoveryCandidates'),
     source.indexOf("router.post('/discover'"),
   );
-  assert.match(candidates, /GREATEST\([\s\S]*episode\.started_at,marker\.created_at,marker\.updated_at,audience\.starts_at/);
+  const revisionFrontiers = candidates.match(
+    /GREATEST\([\s\S]*?episode\.started_at,marker\.created_at,marker\.updated_at,audience\.starts_at[\s\S]*?\)/g,
+  ) || [];
+  assert.ok(revisionFrontiers.length >= 2, 'both evidence and visit-entry frontiers include marker.updated_at');
   assert.match(candidates, /moderated_revision\.content_revision=marker\.content_revision/);
   assert.doesNotMatch(candidates, /moderated_revision\.source_audience='friends'/);
 });
@@ -44,6 +47,23 @@ test('logical revision moderation spans every audience snapshot and matching del
   assert.ok((publicSource.match(/moderated_revision\.availability<>'available'/g) || []).length >= 3);
 });
 
+test('source moderation overlays rather than overwrites independent revision state', () => {
+  const source = read('routes/cairn-memory.js');
+  const decision = source.slice(source.indexOf("router.post('/operator/cases/:case_id/decision'"));
+  assert.doesNotMatch(
+    decision,
+    /decisionScope === 'source'[\s\S]{0,300}UPDATE cairn_revisions SET availability=\?/,
+  );
+  assert.match(decision, /else if \(decisionScope === 'revision'\)/);
+
+  const history = source.slice(
+    source.indexOf("router.get('/cairns/:marker_id/history'"),
+    source.indexOf("router.put('/cairns/:marker_id/collection'"),
+  );
+  assert.ok((history.match(/LEFT JOIN cairn_source_moderation moderation/g) || []).length >= 3);
+  assert.ok((history.match(/COALESCE\(moderation\.state,'available'\)='available'/g) || []).length >= 3);
+});
+
 test('legacy screen-load verifier is fail-closed and cannot create a second entitlement', () => {
   const source = read('routes/friend-content.js');
   const route = source.slice(
@@ -64,6 +84,9 @@ test('Thanks rejects self-acknowledgement even if an invalid acquisition row exi
   assert.match(thanks, /revision\.owner_id<>\?/);
   assert.match(thanks, /acquisition\.opened_at IS NOT NULL/);
   assert.match(thanks, /thanked_at=COALESCE\(thanked_at,UTC_TIMESTAMP\(3\)\)/);
+  for (const relative of ['routes/cairn-memory.js', 'routes/markers.js', 'services/ownedCairnLibrary.js']) {
+    assert.match(read(relative), /thanked\.viewer_id<>marker\.user_id/);
+  }
 });
 
 test('acquisition idempotency is keyed by viewer, Cairn and logical content revision', () => {

@@ -125,7 +125,9 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
         AND marker.user_id<>?
         AND COALESCE(moderation.state,'available')='available'
         AND ST_Distance_Sphere(POINT(marker.lng,marker.lat),POINT(?,?))<=?
-        AND GREATEST(episode.started_at,marker.created_at,audience.starts_at)<=FROM_UNIXTIME(?/1000)
+        AND GREATEST(
+          episode.started_at,marker.created_at,marker.updated_at,audience.starts_at
+        )<=FROM_UNIXTIME(?/1000)
         AND NOT EXISTS (
           SELECT 1 FROM blocked_users blocked
            WHERE (blocked.blocker_id=? AND blocked.blocked_id=marker.user_id)
@@ -357,6 +359,7 @@ router.get('/library', async (req, res) => {
                    JOIN cairn_revisions thanked_revision
                      ON thanked_revision.id=thanked.cairn_revision_id
                   WHERE thanked.marker_id=marker.id
+                    AND thanked.viewer_id<>marker.user_id
                     AND thanked.thanked_at IS NOT NULL
                     AND thanked.removed_at IS NULL
                     AND thanked_revision.availability='available') AS thanks_count
@@ -381,8 +384,12 @@ router.get('/library', async (req, res) => {
        )
        SELECT collection.marker_id,collection.archived_at,collection.removed_at,
               revision.id AS revision_id,revision.content_revision,revision.content_type AS type,
-              CASE WHEN revision.availability='available' THEN revision.content_text ELSE NULL END AS text,
-              revision.lat,revision.lng,revision.source_audience,revision.availability,
+              CASE WHEN revision.availability='available'
+                         AND COALESCE(moderation.state,'available')='available'
+                   THEN revision.content_text ELSE NULL END AS text,
+              revision.lat,revision.lng,revision.source_audience,
+              CASE WHEN COALESCE(moderation.state,'available')<>'available'
+                   THEN moderation.state ELSE revision.availability END AS availability,
               CASE
                 WHEN revision.identity_policy='friends_acquired'
                   THEN revision.friend_author_name_snapshot
@@ -416,12 +423,14 @@ router.get('/library', async (req, res) => {
                   AND unread.marker_id=collection.marker_id
                   AND unread.removed_at IS NULL AND unread.opened_at IS NULL
                   AND unread_revision.availability='available'
+                  AND COALESCE(moderation.state,'available')='available'
               ) AS has_unread
          FROM cairn_collections collection
          JOIN latest ON latest.viewer_id=collection.viewer_id
                     AND latest.marker_id=collection.marker_id AND latest.rank_in_cairn=1
          JOIN cairn_revisions revision ON revision.id=latest.cairn_revision_id
          LEFT JOIN users author ON author.id=revision.owner_id AND author.deleted_at IS NULL
+         LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
         WHERE collection.viewer_id=? AND collection.relationship='found'
           AND collection.archived_at IS ${collectionState === 'archived' ? 'NOT NULL' : 'NULL'}
           AND collection.removed_at IS NULL
@@ -449,14 +458,19 @@ router.get('/cairns/:marker_id/history', async (req, res) => {
     const [rows] = await pool.execute(
       `SELECT acquisition.id AS acquisition_id,revision.id AS revision_id,
               revision.content_revision,revision.content_type AS type,
-              CASE WHEN revision.availability='available' THEN revision.content_text ELSE NULL END AS text,
-              revision.lat,revision.lng,revision.source_audience,revision.availability,
+              CASE WHEN revision.availability='available'
+                         AND COALESCE(moderation.state,'available')='available'
+                   THEN revision.content_text ELSE NULL END AS text,
+              revision.lat,revision.lng,revision.source_audience,
+              CASE WHEN COALESCE(moderation.state,'available')<>'available'
+                   THEN moderation.state ELSE revision.availability END AS availability,
               acquisition.acquired_at,acquisition.opened_at,acquisition.thanked_at
          FROM cairn_acquisitions acquisition
          JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
          JOIN cairn_collections collection
            ON collection.viewer_id=acquisition.viewer_id
           AND collection.marker_id=acquisition.marker_id
+         LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
         WHERE acquisition.viewer_id=? AND acquisition.marker_id=?
           AND acquisition.removed_at IS NULL
           AND collection.removed_at IS NULL
@@ -484,9 +498,11 @@ router.post('/revisions/:revision_id/read', mutationLimiter, async (req, res) =>
          JOIN cairn_collections collection
            ON collection.viewer_id=acquisition.viewer_id
           AND collection.marker_id=acquisition.marker_id
+         LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
         WHERE acquisition.viewer_id=? AND acquisition.cairn_revision_id=?
           AND acquisition.removed_at IS NULL AND collection.removed_at IS NULL
           AND revision.availability='available'
+          AND COALESCE(moderation.state,'available')='available'
         LIMIT 1 FOR UPDATE`,
       [req.user.userId, revisionId],
     );
@@ -522,10 +538,12 @@ router.post('/revisions/:revision_id/thanks', mutationLimiter, async (req, res) 
          JOIN cairn_collections collection
            ON collection.viewer_id=acquisition.viewer_id
           AND collection.marker_id=acquisition.marker_id
+         LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
         WHERE acquisition.viewer_id=? AND acquisition.cairn_revision_id=?
           AND acquisition.removed_at IS NULL AND collection.removed_at IS NULL
           AND acquisition.opened_at IS NOT NULL
           AND revision.availability='available'
+          AND COALESCE(moderation.state,'available')='available'
           AND revision.owner_id<>?
         LIMIT 1 FOR UPDATE`,
       [req.user.userId, revisionId, req.user.userId],
@@ -579,10 +597,12 @@ router.get('/presentation/pending', async (req, res) => {
          JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
          JOIN cairn_collections collection
            ON collection.viewer_id=acquisition.viewer_id AND collection.marker_id=acquisition.marker_id
+         LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
         WHERE presentation.viewer_id=? AND presentation.announced_at IS NULL
           AND presentation.merge_until<=UTC_TIMESTAMP(3)
           AND acquisition.removed_at IS NULL AND collection.archived_at IS NULL
           AND collection.removed_at IS NULL AND revision.availability='available'
+          AND COALESCE(moderation.state,'available')='available'
         GROUP BY presentation.id,presentation.group_token,presentation.merge_started_at,
                  presentation.merge_until,presentation.haptic_eligible,presentation.sound_eligible
         ORDER BY presentation.merge_started_at ASC`,
@@ -635,8 +655,8 @@ router.get('/review-cases/mine', async (req, res) => {
               review_case.created_at,review_case.disposed_at,review_case.disposition_note,
               review_case.decision_scope,
               revision.content_revision,
-              CASE WHEN revision.availability<>'available' THEN revision.availability
-                   ELSE COALESCE(moderation.state,'available') END AS content_state,
+              CASE WHEN COALESCE(moderation.state,'available')<>'available' THEN moderation.state
+                   ELSE revision.availability END AS content_state,
               CASE WHEN revision.owner_id=? THEN 1 ELSE 0 END AS owner_case
          FROM cairn_review_cases review_case
          LEFT JOIN cairn_revisions revision ON revision.id=review_case.cairn_revision_id
@@ -648,8 +668,8 @@ router.get('/review-cases/mine', async (req, res) => {
     const [affected] = await pool.execute(
       `WITH owned AS (
          SELECT revision.id AS revision_id,revision.marker_id,revision.content_revision,
-                CASE WHEN revision.availability<>'available' THEN revision.availability
-                     ELSE moderation.state END AS content_state,
+                CASE WHEN COALESCE(moderation.state,'available')<>'available' THEN moderation.state
+                     ELSE revision.availability END AS content_state,
                 COALESCE(moderation.changed_at,revision.created_at) AS changed_at,
                 ROW_NUMBER() OVER (PARTITION BY revision.marker_id
                   ORDER BY revision.content_revision DESC,revision.id DESC) AS revision_rank
@@ -856,13 +876,7 @@ router.post('/operator/cases/:case_id/decision', mutationLimiter, requireOperato
           WHERE revision.marker_id=? AND revision.content_revision=?`,
         [logicalMarkerId, logicalContentRevision],
       );
-    } else if (decisionScope === 'source') {
-      await conn.execute(
-        `UPDATE cairn_revisions SET availability=?
-          WHERE marker_id=? AND availability<>'removed'`,
-        [contentState, reviewCase.marker_id],
-      );
-    } else {
+    } else if (decisionScope === 'revision') {
       await conn.execute(
         `UPDATE cairn_revisions SET availability=?
           WHERE marker_id=? AND content_revision=? AND availability<>'removed'`,
