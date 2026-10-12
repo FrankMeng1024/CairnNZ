@@ -5,7 +5,7 @@
     "R00": { "status": "IN_PROGRESS", "evidence": ["docs/review/routes/ROUTES_CONTINUATION_STATE.md"] },
     "R01": { "status": "IN_PROGRESS", "evidence": ["docs/review/routes/ROUTES_PREFLIGHT.md"] },
     "R02": { "status": "PASS", "evidence": ["docs/review/routes/ROUTES_PREFLIGHT.md"] },
-    "R03": { "status": "IN_PROGRESS", "evidence": ["app/src/features/route/orderedRouteDraft.ts"] },
+    "R03": { "status": "IN_PROGRESS", "evidence": ["app/src/features/route/orderedRouteDraft.ts", "backend/src/migrations/046_ordered_routes_and_deliveries.sql"] },
     "R04": { "status": "DELTA_REQUIRED", "evidence": ["app/src/screens/RouteEditorScreen.tsx", "app/src/components/map/EditOverlayV274.tsx"] },
     "R05": { "status": "PASS_UNIT_PROPERTY", "evidence": ["app/src/features/route/routePlanningProvider.ts", "app/src/features/route/__tests__/routePlanningProvider.test.ts"] },
     "R06": { "status": "PASS_UNIT_PROPERTY", "evidence": ["app/src/features/route/orderedRouteDraft.ts", "app/src/features/route/__tests__/orderedRouteDraft.test.ts"] },
@@ -13,9 +13,9 @@
     "R08": { "status": "PASS_UNIT_PROPERTY", "evidence": ["app/src/features/route/orderedRouteDraft.ts"] },
     "R09": { "status": "IN_PROGRESS", "evidence": ["app/src/features/route/routePlanningProvider.ts"] },
     "R10": { "status": "DELTA_REQUIRED", "evidence": ["app/src/screens/RouteEditorScreen.tsx"] },
-    "R11": { "status": "DELTA_REQUIRED", "evidence": ["backend/src/routes/friend-content.js", "backend/src/migrations/037_personal_friends_v1.sql"] },
-    "R12": { "status": "IN_PROGRESS", "evidence": ["app/src/store/useRouteStore.ts", "backend/src/models/Route.js"] },
-    "R13": { "status": "IN_PROGRESS", "evidence": ["app/src/features/route/__tests__/orderedRouteDraft.test.ts", "app/src/features/route/__tests__/routePlanningProvider.test.ts"] },
+    "R11": { "status": "IN_PROGRESS", "evidence": ["backend/src/services/routeDelivery.js", "backend/src/services/__tests__/routeDelivery.test.js", "backend/src/migrations/046_ordered_routes_and_deliveries.sql"] },
+    "R12": { "status": "PASS_UNIT_INTEGRATION", "evidence": ["app/src/store/useRouteStore.ts", "app/src/store/__tests__/useRouteStore.offline.test.ts", "backend/src/models/Route.js", "backend/src/routes/__tests__/routeOriginRoundTrip.test.js"] },
+    "R13": { "status": "IN_PROGRESS", "evidence": ["app/src/features/route/__tests__/orderedRouteDraft.test.ts", "app/src/features/route/__tests__/routePlanningProvider.test.ts", "app/src/store/__tests__/useRouteStore.offline.test.ts", "backend/src/services/__tests__/routeDelivery.test.js"] },
     "R14": { "status": "IN_PROGRESS", "evidence": ["docs/review/routes/ROUTES_CONTINUATION_STATE.md"] }
   }
 }

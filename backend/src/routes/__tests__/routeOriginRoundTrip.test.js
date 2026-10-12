@@ -72,13 +72,15 @@ function createMemoryPool() {
     if (compact.startsWith('INSERT INTO routes')) {
       const [user_id, client_route_id, creation_origin, source_activity_client_id,
         source_session_id, origin_geometry_hash, created_geometry_hash,
-        origin_gap_reconnected, name, description, points, waypoints,
+        origin_gap_reconnected, name, description, points, ordered_draft,
+        resolution_state, waypoints,
         distance_m, elevation_gain_m, permission] = params;
       const row = {
         id: state.nextId++, user_id, client_route_id, creation_origin,
         source_activity_client_id, source_session_id, origin_geometry_hash,
         created_geometry_hash, geometry_edited_since_creation: 0,
         origin_gap_reconnected, name, description, points: JSON.parse(points),
+        ordered_draft: ordered_draft == null ? null : JSON.parse(ordered_draft), resolution_state,
         waypoints: JSON.parse(waypoints), distance_m, elevation_gain_m, permission,
         audience_epoch: 1, run_count: 0, last_run_at: null,
         created_at: '2026-09-17T00:01:00.000Z', updated_at: '2026-09-17T00:01:00.000Z',
@@ -93,20 +95,29 @@ function createMemoryPool() {
       if (!row) return [{ affectedRows: 0 }];
       [row.name, row.description] = params;
       row.points = JSON.parse(params[2]);
-      row.waypoints = JSON.parse(params[3]);
-      row.distance_m = params[4];
-      row.elevation_gain_m = params[5];
-      row.permission = params[6];
-      row.geometry_edited_since_creation = Math.max(row.geometry_edited_since_creation, params[7]);
-      if (params[8] === 1) row.audience_epoch += 1;
+      row.ordered_draft = params[3] == null ? null : JSON.parse(params[3]);
+      row.resolution_state = params[4];
+      row.waypoints = JSON.parse(params[5]);
+      row.distance_m = params[6];
+      row.elevation_gain_m = params[7];
+      row.permission = params[8];
+      row.geometry_edited_since_creation = Math.max(row.geometry_edited_since_creation, params[9]);
+      if (params[10] === 1) row.audience_epoch += 1;
       return [{ affectedRows: 1 }];
     }
     if (compact.startsWith('UPDATE routes SET points = ?')) {
       const [points, hash, id, userId] = params;
-      const row = state.routes.find(item => item.id === id && item.user_id === userId);
+      const hasOrdered = compact.includes('ordered_draft = ?');
+      const targetId = hasOrdered ? params[params.length - 2] : id;
+      const targetUserId = hasOrdered ? params[params.length - 1] : userId;
+      const row = state.routes.find(item => item.id === targetId && item.user_id === targetUserId);
       if (!row) return [{ affectedRows: 0 }];
       row.points = JSON.parse(points);
       if (!row.created_geometry_hash || row.created_geometry_hash !== hash) row.geometry_edited_since_creation = 1;
+      if (hasOrdered) {
+        row.ordered_draft = JSON.parse(params[2]);
+        row.resolution_state = params[3];
+      }
       return [{ affectedRows: 1 }];
     }
     if (compact.startsWith('SELECT id, user_id, client_route_id') && compact.includes('WHERE id = ?')) {
@@ -245,4 +256,49 @@ test('source Activity must be finalized and owned by the Route owner', async () 
     }),
     error => error.code === 'SOURCE_ACTIVITY_DELETED',
   );
+});
+
+test('ordered draft and unresolved gap state survive create and update', async () => {
+  const pool = createMemoryPool();
+  const Route = loadRouteWithPool(pool);
+  const points = [{ lat: -45, lng: 168 }, { lat: -45.001, lng: 168.001 }];
+  const ordered = {
+    schemaVersion: 1,
+    draftId: 'ordered-a',
+    ownerId: '7',
+    origin: 'activity',
+    revision: 0,
+    parts: [
+      { id: 'part-a', points, resolution: 'recorded' },
+      { id: 'part-b', points: points.map(point => ({ lat: point.lat - 0.01, lng: point.lng })), resolution: 'recorded' },
+    ],
+    gaps: [{ id: 'gap-a', afterPartId: 'part-a', reason: 'activity-gap' }],
+  };
+  const id = await Route.create({
+    userId: 7,
+    clientRouteId: '22222222-2222-4222-8222-222222222222',
+    name: 'Multipart',
+    points,
+    orderedDraft: ordered,
+    resolutionState: 'unresolved_gaps',
+    waypoints: [],
+  });
+  const created = await Route.findByIdAndUser(id, 7);
+  assert.deepEqual(created.ordered_draft, ordered);
+  assert.equal(created.resolution_state, 'unresolved_gaps');
+
+  const resolved = {
+    ...ordered,
+    revision: 1,
+    parts: [{ id: 'part-a', points, resolution: 'draw-manual' }],
+    gaps: [],
+  };
+  await Route.update(id, 7, {
+    points,
+    orderedDraft: resolved,
+    resolutionState: 'continuous',
+  });
+  const updated = await Route.findByIdAndUser(id, 7);
+  assert.deepEqual(updated.ordered_draft, resolved);
+  assert.equal(updated.resolution_state, 'continuous');
 });

@@ -52,6 +52,8 @@ export const offlineRoutes = createOfflineEntity<OfflineRouteCreatePayload, Rout
         name: data.route.name,
         description: data.route.description,
         points: data.route.points,
+        ordered_draft: data.route.orderedDraft,
+        resolution_state: data.route.resolutionState,
         waypoints: data.route.waypoints,
         distance_m: data.route.distanceM,
         elevation_gain_m: data.route.elevationGainM,

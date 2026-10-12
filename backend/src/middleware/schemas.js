@@ -215,10 +215,35 @@ const waypointObj = Joi.object({
   name: Joi.string().max(100).allow('', null),
 }).unknown(true); // Allow other UI-only fields (icon, id) — server ignores.
 
+const orderedRoutePart = Joi.object({
+  id: Joi.string().min(1).max(160).required(),
+  points: Joi.array().items(pointObj).min(2).max(5000).required(),
+  resolution: Joi.string().valid('recorded', 'point', 'draw-matched', 'draw-manual').required(),
+});
+
+const orderedRouteGap = Joi.object({
+  id: Joi.string().min(1).max(160).required(),
+  afterPartId: Joi.string().min(1).max(160).required(),
+  reason: Joi.string().valid('activity-gap').required(),
+});
+
+const orderedRouteDraft = Joi.object({
+  schemaVersion: Joi.number().valid(1).required(),
+  draftId: Joi.string().min(1).max(160).required(),
+  ownerId: Joi.string().min(1).max(80).required(),
+  origin: Joi.string().valid('plan', 'activity', 'received-copy').required(),
+  revision: Joi.number().integer().min(0).required(),
+  startPoint: pointObj,
+  parts: Joi.array().items(orderedRoutePart).max(128).required(),
+  gaps: Joi.array().items(orderedRouteGap).max(127).required(),
+});
+
 const routeCreate = Joi.object({
   client_route_id: clientUuid,
   name: Joi.string().min(1).max(100).required(),
   points: Joi.array().items(pointObj).min(2).max(10000).required(),
+  ordered_draft: orderedRouteDraft,
+  resolution_state: Joi.string().valid('continuous', 'unresolved_gaps'),
   waypoints: Joi.array().items(waypointObj).max(500).allow(null),
   description: Joi.string().max(1000).allow('', null),
   distance_m: Joi.number().min(0).max(1000000),
@@ -237,12 +262,19 @@ const routeCreate = Joi.object({
 const routeUpdate = Joi.object({
   name: Joi.string().min(1).max(100),
   points: Joi.array().items(pointObj).min(2).max(10000),
+  ordered_draft: orderedRouteDraft,
+  resolution_state: Joi.string().valid('continuous', 'unresolved_gaps'),
   waypoints: Joi.array().items(waypointObj).max(500).allow(null),
   description: Joi.string().max(1000).allow('', null),
   distance_m: Joi.number().min(0).max(1000000),
   elevation_gain_m: Joi.number().min(0).max(100000),
   permission: Joi.string().valid('personal', 'group', 'friend', 'public'),
 }).min(1);
+
+const routeShare = Joi.object({
+  recipient_ids: Joi.array().items(Joi.number().integer().min(1)).min(1).max(50).required(),
+  idempotency_key: clientUuid.required(),
+});
 
 // ── Friends ────────────────────────────────────────────────────────────
 const friendRequest = Joi.object({
@@ -400,6 +432,7 @@ module.exports = {
   route: {
     create: routeCreate,
     update: routeUpdate,
+    share: routeShare,
   },
   friend: {
     request: friendRequest,

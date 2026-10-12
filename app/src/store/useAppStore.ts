@@ -219,6 +219,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       await storage.removeItem('cairn_friends');
       crashLogger.breadcrumb('logout:friends_cleared');
     } catch { /* friend state is non-blocking during sign-out */ }
+    try {
+      // Shared Route snapshots are private account-scoped data. Never let an
+      // outgoing account's delivery list flash under the next account.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useRouteStore } = require('./useRouteStore');
+      useRouteStore.setState({
+        routes: [],
+        sharedRoutes: [],
+        circleRoutes: [],
+        routeOwnerId: null,
+        activityRouteReference: null,
+        followingRouteId: null,
+        routeDetailState: {},
+      });
+      crashLogger.breadcrumb('logout:routes_cleared');
+    } catch { /* Route store may not be initialized */ }
     if (!ownsLogout()) return abortLogout();
     // Detach while the outgoing user's in-memory snapshot is still present.
     // detachMemoryPersistence snapshots synchronously before its first await;

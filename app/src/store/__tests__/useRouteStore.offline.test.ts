@@ -26,6 +26,9 @@ jest.mock('../useAppStore', () => ({
 jest.mock('../../services/routeService', () => ({
   fetchRoutes: jest.fn(async () => { throw new Error('offline'); }),
   fetchRouteDetail: jest.fn(async () => null),
+  fetchSharedRoutes: jest.fn(async () => []),
+  fetchSharedRouteDetail: jest.fn(async () => null),
+  removeSharedRouteDelivery: jest.fn(async () => undefined),
   createRoute: jest.fn(async () => { throw new Error('network unavailable'); }),
   updateRoute: jest.fn(async () => null),
   deleteRoute: jest.fn(async () => 'deleted'),
@@ -39,6 +42,9 @@ import {
   deleteRouteByClientId,
   fetchRouteDetail,
   fetchRoutes,
+  fetchSharedRouteDetail,
+  fetchSharedRoutes,
+  removeSharedRouteDelivery,
   updateRoute,
 } from '../../services/routeService';
 import { useRouteStore } from '../useRouteStore';
@@ -86,11 +92,15 @@ describe('offline Route creation', () => {
     jest.mocked(createRoute).mockRejectedValue(new Error('network unavailable'));
     jest.mocked(fetchRoutes).mockRejectedValue(new Error('offline'));
     jest.mocked(fetchRouteDetail).mockResolvedValue(null);
+    jest.mocked(fetchSharedRoutes).mockResolvedValue([]);
+    jest.mocked(fetchSharedRouteDetail).mockResolvedValue(null);
+    jest.mocked(removeSharedRouteDelivery).mockResolvedValue(undefined);
     jest.mocked(updateRoute).mockResolvedValue(null);
     jest.mocked(deleteRemoteRoute).mockResolvedValue('deleted');
     jest.mocked(deleteRouteByClientId).mockResolvedValue('deleted');
     useRouteStore.setState({
       routes: [],
+      sharedRoutes: [],
       routeOwnerId: 'route-owner',
       routesLoading: false,
       routesLoadError: false,
@@ -761,5 +771,65 @@ describe('offline Route creation', () => {
     });
     expect(updateRoute).toHaveBeenCalledTimes(2);
     expect(useRouteStore.getState().routes[0].points).toEqual(g1);
+  });
+
+  test('loads recipient-owned shared projections separately from personal Routes', async () => {
+    const shared = {
+      id: 'delivery:delivery-1',
+      name: 'Shared ridge',
+      createdAt: 10,
+      updatedAt: 10,
+      points: geometryG0,
+      waypoints: [],
+      distanceM: 250,
+      elevationGainM: 15,
+      runCount: 0,
+      sharedBy: 'Bee',
+      sharedDeliveryId: 'delivery-1',
+      sharedContentHash: 'hash-1',
+      isSharedDelivery: true,
+      isActive: false,
+    };
+    jest.mocked(fetchSharedRoutes).mockResolvedValueOnce([shared]);
+
+    await useRouteStore.getState().loadSharedRoutes();
+
+    expect(useRouteStore.getState().routes).toEqual([]);
+    expect(useRouteStore.getState().sharedRoutes).toEqual([shared]);
+  });
+
+  test('late shared list and detail responses cannot cross an account boundary', async () => {
+    let resolveList!: (value: any[]) => void;
+    let resolveDetail!: (value: any) => void;
+    jest.mocked(fetchSharedRoutes).mockReturnValueOnce(new Promise(resolve => { resolveList = resolve; }));
+    jest.mocked(fetchSharedRouteDetail).mockReturnValueOnce(new Promise(resolve => { resolveDetail = resolve; }));
+    const listRead = useRouteStore.getState().loadSharedRoutes();
+    const detailRead = useRouteStore.getState().loadSharedRouteDetail('delivery-1');
+
+    mockOwnerId = 'next-owner';
+    await useRouteStore.getState().loadRoutes();
+    resolveList([{ id: 'delivery:late-list' }]);
+    resolveDetail({ id: 'delivery:late-detail', sharedDeliveryId: 'delivery-1', points: geometryG0 });
+
+    await listRead;
+    await expect(detailRead).resolves.toBe('idle');
+    expect(useRouteStore.getState().sharedRoutes).toEqual([]);
+  });
+
+  test('removing a shared delivery waits for acknowledgement and is account fenced', async () => {
+    const shared = {
+      id: 'delivery:delivery-1', name: 'Shared ridge', createdAt: 1, updatedAt: 1,
+      points: geometryG0, waypoints: [], distanceM: 250, elevationGainM: 15,
+      runCount: 0, isActive: false, sharedDeliveryId: 'delivery-1', isSharedDelivery: true,
+    };
+    useRouteStore.setState({ sharedRoutes: [shared] });
+    let acknowledge!: () => void;
+    jest.mocked(removeSharedRouteDelivery).mockReturnValueOnce(new Promise(resolve => { acknowledge = resolve; }));
+    const removal = useRouteStore.getState().removeSharedRoute('delivery-1');
+    expect(useRouteStore.getState().sharedRoutes).toHaveLength(1);
+    mockOwnerId = 'next-owner';
+    acknowledge();
+    await removal;
+    expect(useRouteStore.getState().sharedRoutes).toHaveLength(1);
   });
 });
