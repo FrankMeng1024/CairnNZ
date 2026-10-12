@@ -6,6 +6,7 @@ jest.mock('../../../store/storage', () => ({
   storage: {
     getItem: jest.fn(async (key: string) => mockValues.get(key) ?? null),
     setItem: jest.fn(async (key: string, value: string) => { mockValues.set(key, value); }),
+    removeItem: jest.fn(async (key: string) => { mockValues.delete(key); }),
   },
 }));
 jest.mock('../../../services/apiService', () => ({ authenticatedFetch: jest.fn() }));
@@ -20,6 +21,7 @@ jest.mock('../../../store/useAppStore', () => ({
 
 import {
   __cairnPresentationTest,
+  purgeCairnPresentationForOwner,
   useCairnPresentationStore,
 } from '../cairnPresentationStore';
 
@@ -167,6 +169,37 @@ describe('Cairn presentation coordinator', () => {
     release(pending());
     await old;
     expect(useCairnPresentationStore.getState()).toMatchObject({ viewerId: null, activeGroup: null, pendingGroups: [] });
+  });
+
+  test('cold-start cache is fail-closed until the safety authority refresh succeeds', async () => {
+    mockValues.set(`${__cairnPresentationTest.cachePrefix}viewer-a`, JSON.stringify({
+      version: 1,
+      viewerId: 'viewer-a',
+      groups: [{
+        id: '31', token: 'stale', mergeStartedAt: 1, mergeUntil: 2,
+        cairnCount: 1, singleMarkerId: 'private-marker', eventThroughId: '11',
+        unannouncedEventCount: 1, unannouncedUpdatedEventCount: 0,
+        eventCount: 1, updatedEventCount: 0,
+      }],
+      acknowledged: {}, pendingAcks: {}, unreadCount: 1,
+      acquiredMarkers: [{ markerId: 'private-marker', lat: -41.2, lng: 174.7, unread: true }],
+    }));
+    mockFetch.mockRejectedValueOnce(new Error('offline'));
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      pendingGroups: [], activeGroup: null, acquiredMarkers: [], unreadCount: 0, error: 'offline',
+    });
+  });
+
+  test('account deletion clears durable and in-process presentation evidence without touching another owner', async () => {
+    mockValues.set(`${__cairnPresentationTest.cachePrefix}viewer-a`, JSON.stringify({ version: 1, viewerId: 'viewer-a' }));
+    mockValues.set(`${__cairnPresentationTest.cachePrefix}viewer-b`, JSON.stringify({ version: 1, viewerId: 'viewer-b' }));
+    mockFetch.mockResolvedValueOnce(pending());
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    await purgeCairnPresentationForOwner('viewer-a');
+    expect(mockValues.has(`${__cairnPresentationTest.cachePrefix}viewer-a`)).toBe(false);
+    expect(mockValues.has(`${__cairnPresentationTest.cachePrefix}viewer-b`)).toBe(true);
+    expect(useCairnPresentationStore.getState()).toMatchObject({ viewerId: null, pendingGroups: [], acquiredMarkers: [] });
   });
 
   test('acquired map data keeps only active available finite Cairn groups', async () => {

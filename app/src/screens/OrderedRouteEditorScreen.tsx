@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { CommonActions, useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from '../components/BackButton';
 import { Icon } from '../components/Icon';
@@ -60,6 +60,7 @@ import {
 } from '../features/route/orderedRouteDraft';
 import {
   loadRoutePlannerDraft,
+  plannerDraftMatchesRequest,
   removeRoutePlannerDraft,
   saveRoutePlannerDraft,
 } from '../features/route/routePlannerDraftPersistence';
@@ -248,8 +249,10 @@ export function OrderedRouteEditorScreen() {
   const cameraCenterRef = useRef<RoutePoint | null>(null);
   const initialBoundsRef = useRef<ReturnType<typeof initialBounds>>(null);
   const operationAbortRef = useRef<AbortController | null>(null);
+  const activeOperationIdRef = useRef<string | null>(null);
   const routeAnimationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initializedKeyRef = useRef('');
+  const initializingKeyRef = useRef('');
 
   useEffect(() => {
     let mounted = true;
@@ -263,6 +266,18 @@ export function OrderedRouteEditorScreen() {
     routeAnimationTimerRef.current = null;
     setRouteGrowthAnimation(null);
   }, []);
+
+  const invalidatePendingOperation = useCallback(() => {
+    operationAbortRef.current?.abort();
+    operationAbortRef.current = null;
+    activeOperationIdRef.current = null;
+    finishRouteAnimation();
+    setProviderBusy(false);
+    setPendingReview(null);
+    setPendingPointReview(null);
+    setManualRecovery(null);
+    setPendingDrawChoice(null);
+  }, [finishRouteAnimation]);
 
   const animateAcceptedPoint = useCallback((points: RoutePoint[], hiddenPartId?: string) => {
     finishRouteAnimation();
@@ -299,8 +314,8 @@ export function OrderedRouteEditorScreen() {
 
   useEffect(() => {
     const initKey = `${ownerId}|${routeId ?? ''}|${fromSessionId ?? ''}|${sharedDeliveryId ?? ''}|${creationSource ?? ''}`;
-    if (!ownerId || initializedKeyRef.current === initKey) return;
-    initializedKeyRef.current = initKey;
+    if (!ownerId || initializedKeyRef.current === initKey || initializingKeyRef.current === initKey) return;
+    initializingKeyRef.current = initKey;
     let cancelled = false;
     setInitializing(true);
     setError(null);
@@ -317,7 +332,7 @@ export function OrderedRouteEditorScreen() {
             : undefined;
       if (!readOnlyShared) {
         const recovered = await loadRoutePlannerDraft(ownerId, requestedDraftId);
-        if (recovered && (!requestedDraftId || recovered.draftId === requestedDraftId)) {
+        if (recovered && plannerDraftMatchesRequest(recovered, requestedDraftId)) {
           if (cancelled) return;
           historyRef.current = recovered.history;
           initialDraftRef.current = cloneOrderedDraft(recovered.history.present);
@@ -325,12 +340,14 @@ export function OrderedRouteEditorScreen() {
           setName(recovered.name);
           setPermission(recovered.permission);
           initialBoundsRef.current = initialBounds(recovered.history.present);
+          initializedKeyRef.current = initKey;
+          initializingKeyRef.current = '';
           setInitializing(false);
           return;
         }
       }
       if (routeId) {
-        let source = routes.find(item => routeMatchesIdentity(item, routeId));
+        let source = useRouteStore.getState().routes.find(item => routeMatchesIdentity(item, routeId));
         if (!source || source.points.length < 2) {
           await loadRouteDetail(routeId);
           source = useRouteStore.getState().routes.find(item => routeMatchesIdentity(item, routeId));
@@ -348,7 +365,7 @@ export function OrderedRouteEditorScreen() {
         initialName = source.name;
         initialPermission = source.permission === 'friend' ? 'friend' : 'personal';
       } else if (fromSessionId) {
-        const session = sessions.find(item => item.id === fromSessionId);
+        const session = useSessionStore.getState().sessions.find(item => item.id === fromSessionId);
         if (!session) throw new Error('This Activity is no longer available.');
         const clientActivityId = session.clientActivityId ?? session.id;
         const artifact = await loadActivityFinalArtifact(ownerId, clientActivityId);
@@ -360,7 +377,7 @@ export function OrderedRouteEditorScreen() {
         draft = createImportedOrderedDraft({ draftId: `activity:${fromSessionId}`, ownerId, segments });
         initialName = `${session.name || (session.activityMode === 'running' ? 'Run' : 'Hike')} Route`;
       } else if (sharedDeliveryId) {
-        let shared = sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
+        let shared = useRouteStore.getState().sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
         if (!shared || shared.points.length < 2) {
           await loadSharedRouteDetail(sharedDeliveryId);
           shared = useRouteStore.getState().sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
@@ -394,6 +411,8 @@ export function OrderedRouteEditorScreen() {
           setName(initialName);
           setPermission(initialPermission);
           initialBoundsRef.current = initialBounds(recoveredHistory.present);
+          initializedKeyRef.current = initKey;
+          initializingKeyRef.current = '';
           setInitializing(false);
           return;
         }
@@ -407,15 +426,22 @@ export function OrderedRouteEditorScreen() {
       setHistory(nextHistory);
       setName(initialName);
       setPermission(initialPermission);
+      initializedKeyRef.current = initKey;
+      initializingKeyRef.current = '';
       setInitializing(false);
     })().catch(cause => {
       if (!cancelled) {
+        if (initializingKeyRef.current === initKey) initializingKeyRef.current = '';
         setError(String(cause?.message ?? cause));
         setInitializing(false);
       }
     });
-    return () => { cancelled = true; operationAbortRef.current?.abort(); };
-  }, [creationSource, fromSessionId, loadRouteDetail, loadSharedRouteDetail, ownerId, readOnlyShared, routeId, routes, sessions, sharedDeliveryId, sharedRoutes]);
+    return () => {
+      cancelled = true;
+      if (initializingKeyRef.current === initKey) initializingKeyRef.current = '';
+      operationAbortRef.current?.abort();
+    };
+  }, [creationSource, fromSessionId, loadRouteDetail, loadSharedRouteDetail, ownerId, readOnlyShared, routeId, sharedDeliveryId]);
 
   useEffect(() => {
     if (!history || initializing || readOnlyShared) return;
@@ -475,12 +501,14 @@ export function OrderedRouteEditorScreen() {
     operationAbortRef.current?.abort();
     const controller = new AbortController();
     operationAbortRef.current = controller;
+    activeOperationIdRef.current = operationId;
     setProviderBusy(true);
     setError(null);
     try {
       const resolved = await resolveDrawPlan(raw, { signal: controller.signal });
       const live = historyRef.current;
-      if (!live || controller.signal.aborted || !routeOperationIsCurrent(live.present, ownerId, token)) return;
+      if (!live || controller.signal.aborted
+        || !routeOperationIsCurrent(live.present, ownerId, token, activeOperationIdRef.current)) return;
       if (resolved.outcome === 'accepted') {
         applyResolvedDraw(resolved.points, 'draw-matched', intent);
       } else if (resolved.outcome === 'review') {
@@ -505,7 +533,10 @@ export function OrderedRouteEditorScreen() {
         setError(providerReason(resolved.reason));
       }
     } finally {
-      if (operationAbortRef.current === controller) operationAbortRef.current = null;
+      if (operationAbortRef.current === controller) {
+        operationAbortRef.current = null;
+        if (activeOperationIdRef.current === operationId) activeOperationIdRef.current = null;
+      }
       if (!controller.signal.aborted) setProviderBusy(false);
     }
   }, [applyResolvedDraw, ownerId, selectedGapId]);
@@ -559,22 +590,28 @@ export function OrderedRouteEditorScreen() {
     if (!current) return;
     finishRouteAnimation();
     const baseRevision = current.present.revision;
-    const token = beginRouteOperation(current.present, ownerId, 'point', uuidv4());
+    const operationId = uuidv4();
+    const token = beginRouteOperation(current.present, ownerId, 'point', operationId);
     operationAbortRef.current?.abort();
     const controller = new AbortController();
     operationAbortRef.current = controller;
+    activeOperationIdRef.current = operationId;
     setProviderBusy(true);
     setError(null);
     try {
       const result = await resolvePointPlan(start, target, { signal: controller.signal });
       const live = historyRef.current;
-      if (!live || controller.signal.aborted || !routeOperationIsCurrent(live.present, ownerId, token)) return;
+      if (!live || controller.signal.aborted
+        || !routeOperationIsCurrent(live.present, ownerId, token, activeOperationIdRef.current)) return;
       if (result.outcome === 'accepted') applyResolvedPoint(result.points, intent, baseRevision);
       else if (result.outcome === 'review') {
         setPendingPointReview({ kind: 'point', points: result.points, intent, reason: result.reason, baseRevision });
       } else setError(providerReason(result.reason));
     } finally {
-      if (operationAbortRef.current === controller) operationAbortRef.current = null;
+      if (operationAbortRef.current === controller) {
+        operationAbortRef.current = null;
+        if (activeOperationIdRef.current === operationId) activeOperationIdRef.current = null;
+      }
       if (!controller.signal.aborted) setProviderBusy(false);
     }
   }, [applyResolvedPoint, finishRouteAnimation, ownerId]);
@@ -646,20 +683,14 @@ export function OrderedRouteEditorScreen() {
   }, [chooseAnchor, chooseReplacementEnd, commitResult, pointIntent, providerBusy, replacementStart, runPointRequest, selectedGap]);
 
   const handleUndo = useCallback(() => {
-    finishRouteAnimation();
-    operationAbortRef.current?.abort();
-    setProviderBusy(false);
+    invalidatePendingOperation();
     const current = historyRef.current;
     if (!current) return;
     const next = undoRouteHistory(current);
     historyRef.current = next;
     setHistory(next);
-    setPendingReview(null);
-    setPendingPointReview(null);
-    setManualRecovery(null);
-    setPendingDrawChoice(null);
     setError(null);
-  }, [finishRouteAnimation]);
+  }, [invalidatePendingOperation]);
 
   const applyTrim = useCallback(() => {
     const current = historyRef.current;
@@ -717,10 +748,9 @@ export function OrderedRouteEditorScreen() {
       }
       if (!savedId) throw new Error('Route save did not complete.');
       await removeRoutePlannerDraft(ownerId, current.present.draftId).catch(() => undefined);
-      nav.dispatch(CommonActions.reset({
-        index: 1,
-        routes: [{ name: 'Home' }, { name: 'MapHistory', params: { routeId: savedId } }],
-      }));
+      // Replace only the editor so Back returns to the originating Trails /
+      // Routes context (tab, query and scroll state remain owned there).
+      nav.replace('MapHistory', { routeId: savedId });
     } catch (cause: any) {
       setError(cause?.outcomeUnknown
         ? 'The save outcome is not confirmed. This draft remains available for recovery.'
@@ -1073,6 +1103,7 @@ export function OrderedRouteEditorScreen() {
         <PrimaryButton label="Trim beginning or end" variant="secondary" onPress={() => { setMoreOpen(false); setTrimOpen(true); }} style={styles.modalButton} />
         {draft.parts.length > 1 ? <PrimaryButton label="Keep one recorded section" variant="secondary" onPress={() => { setMoreOpen(false); setKeepPartOpen(true); }} style={styles.modalButton} /> : null}
         <PrimaryButton label="Reset draft" variant="destructive" onPress={() => {
+          invalidatePendingOperation();
           const initial = initialDraftRef.current;
           if (initial) {
             const next = { present: cloneOrderedDraft(initial), past: [] };

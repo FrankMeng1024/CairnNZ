@@ -302,12 +302,30 @@ export function replaceOrderedInterval(
   if (end.pointIndex >= part.points.length) return { ok: false, code: 'INVALID_INTERVAL', draft };
   const connected = connectCandidate(candidate, part.points[start.pointIndex], part.points[end.pointIndex]);
   if (!connected.ok) return { ok: false, code: connected.code, draft };
-  const prefix = part.points.slice(0, start.pointIndex);
-  const suffix = part.points.slice(end.pointIndex + 1);
-  const replacement = normalizeOrderedPoints([...prefix, ...connected.points, ...suffix]);
-  if (replacement.length < 2) return { ok: false, code: 'ZERO_LENGTH', draft };
+  const prefix = part.points.slice(0, start.pointIndex + 1);
+  const suffix = part.points.slice(end.pointIndex);
+  const replacementParts: OrderedRoutePart[] = [];
+  if (prefix.length >= 2) replacementParts.push({
+    id: makePartId(draft, `replace-prefix:${startPartIndex}`),
+    points: prefix.map(clonePoint),
+    resolution: part.resolution,
+  });
+  replacementParts.push({
+    id: makePartId(draft, `replace:${startPartIndex}`),
+    points: connected.points,
+    resolution,
+  });
+  if (suffix.length >= 2) replacementParts.push({
+    id: makePartId(draft, `replace-suffix:${startPartIndex}`),
+    points: suffix.map(clonePoint),
+    resolution: part.resolution,
+  });
   const next = cloneOrderedDraft(draft);
-  next.parts[startPartIndex] = { ...part, points: replacement, resolution };
+  next.parts.splice(startPartIndex, 1, ...replacementParts);
+  const lastReplacementPartId = replacementParts[replacementParts.length - 1].id;
+  next.gaps = next.gaps.map(gap => gap.afterPartId === part.id
+    ? { ...gap, afterPartId: lastReplacementPartId }
+    : gap);
   next.revision += 1;
   return { ok: true, draft: next };
 }
@@ -396,11 +414,13 @@ export function routeOperationIsCurrent(
   draft: OrderedRouteDraft,
   accountId: string,
   token: RouteOperationToken,
+  activeOperationId: string | null,
 ): boolean {
   return token.accountId === accountId
     && token.accountId === draft.ownerId
     && token.draftId === draft.draftId
-    && token.baseRevision === draft.revision;
+    && token.baseRevision === draft.revision
+    && activeOperationId === token.operationId;
 }
 
 export function commitRouteHistory(
@@ -435,6 +455,15 @@ export function validateOrderedDraft(draft: OrderedRouteDraft): RouteEditFailure
   for (const gap of draft.gaps) {
     const leftIndex = draft.parts.findIndex(part => part.id === gap.afterPartId);
     if (leftIndex < 0 || leftIndex >= draft.parts.length - 1) failures.add('NOT_ADJACENT_GAP');
+  }
+  const gapsAfter = new Set(draft.gaps.map(gap => gap.afterPartId));
+  for (let index = 1; index < draft.parts.length; index += 1) {
+    const previous = draft.parts[index - 1];
+    const current = draft.parts[index];
+    if (!gapsAfter.has(previous.id)
+      && routePointDistanceM(previous.points.at(-1)!, current.points[0]) > ROUTE_COORDINATE_EQUALITY_M) {
+      failures.add('DISCONNECTED');
+    }
   }
   return [...failures];
 }

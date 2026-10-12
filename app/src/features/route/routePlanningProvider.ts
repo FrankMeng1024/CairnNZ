@@ -71,14 +71,62 @@ export function chunkOrderedTrace(points: RoutePoint[]): RoutePoint[][] {
   return chunks;
 }
 
-function maxNearestVertexDistanceM(source: RoutePoint[], candidate: RoutePoint[]): number {
+function pointToSegmentDistanceM(point: RoutePoint, start: RoutePoint, end: RoutePoint): number {
+  const metresPerLat = 111_000;
+  const metresPerLng = metresPerLat * Math.cos(point.lat * Math.PI / 180);
+  const ax = (start.lng - point.lng) * metresPerLng;
+  const ay = (start.lat - point.lat) * metresPerLat;
+  const bx = (end.lng - point.lng) * metresPerLng;
+  const by = (end.lat - point.lat) * metresPerLat;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSquared));
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+
+function maxPointToPolylineDistanceM(source: RoutePoint[], candidate: RoutePoint[]): number {
   let max = 0;
   for (const point of source) {
     let nearest = Infinity;
-    for (const other of candidate) nearest = Math.min(nearest, routePointDistanceM(point, other));
+    for (let index = 1; index < candidate.length; index += 1) {
+      nearest = Math.min(nearest, pointToSegmentDistanceM(point, candidate[index - 1], candidate[index]));
+    }
     max = Math.max(max, nearest);
   }
   return max;
+}
+
+/** Order-sensitive discrete Fréchet distance, bounded to provider limits. */
+function orderedFrechetDistanceM(source: RoutePoint[], candidate: RoutePoint[]): number {
+  const rows = source.length;
+  const columns = candidate.length;
+  const previous = new Array<number>(columns).fill(Infinity);
+  const current = new Array<number>(columns).fill(Infinity);
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const distance = routePointDistanceM(source[row], candidate[column]);
+      if (row === 0 && column === 0) current[column] = distance;
+      else if (row === 0) current[column] = Math.max(current[column - 1], distance);
+      else if (column === 0) current[column] = Math.max(previous[column], distance);
+      else current[column] = Math.max(Math.min(previous[column], previous[column - 1], current[column - 1]), distance);
+    }
+    for (let column = 0; column < columns; column += 1) {
+      previous[column] = current[column];
+      current[column] = Infinity;
+    }
+  }
+  return previous[columns - 1];
+}
+
+export function orderedShapeDeviationM(source: RoutePoint[], candidate: RoutePoint[]): number {
+  const boundedSource = resampleOrderedForBudget(source, ROUTE_MATCH_MAX_COORDINATES);
+  const boundedCandidate = resampleOrderedForBudget(candidate, ROUTE_MATCH_MAX_COORDINATES);
+  return Math.max(
+    maxPointToPolylineDistanceM(boundedSource, boundedCandidate),
+    maxPointToPolylineDistanceM(boundedCandidate, boundedSource),
+    orderedFrechetDistanceM(boundedSource, boundedCandidate),
+  );
 }
 
 function providerFailureReason(result: Extract<MatchResult, { ok: false }>): RouteProviderReason {
@@ -141,10 +189,10 @@ export async function resolveDrawPlan(
       stitched.push(...matched);
     }
   }
-  const maxDeviation = maxNearestVertexDistanceM(
-    resampleOrderedForBudget(normalized, ROUTE_MATCH_MAX_COORDINATES),
-    stitched,
-  );
+  // Both directions plus ordered Fréchet prevent a matcher from adding an
+  // unrequested far spur or collapsing a loop while retaining the raw input
+  // vertices somewhere in the response.
+  const maxDeviation = orderedShapeDeviationM(normalized, stitched);
   if (maxDeviation > ROUTE_MATCH_REJECT_DEVIATION_M) {
     return { outcome: 'manual-available', rawPoints: normalized, reason: 'shape-deviation', callCount: calls };
   }

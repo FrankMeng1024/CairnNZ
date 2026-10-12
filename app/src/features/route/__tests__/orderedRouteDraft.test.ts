@@ -111,10 +111,14 @@ describe('ordered interval replacement', () => {
       );
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.draft.parts[0].points).toEqual([
+      expect(orderedDraftPoints(result.draft)).toEqual([
         p(0, 0), p(10, 0), p(20, 15), p(30, 0), p(40, 0),
       ]);
-      expect(result.draft.parts[0].resolution).toBe(resolution);
+      expect(result.draft.parts.map(part => part.resolution)).toEqual([
+        'draw-manual', resolution, 'draw-manual',
+      ]);
+      expect(result.draft.parts[0].points).toEqual([p(0, 0), p(10, 0)]);
+      expect(result.draft.parts[2].points).toEqual([p(30, 0), p(40, 0)]);
     },
   );
 
@@ -133,8 +137,8 @@ describe('ordered interval replacement', () => {
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.draft.parts[0].points.slice(0, 2)).toEqual(points.slice(0, 2));
-    expect(result.draft.parts[0].points).toHaveLength(5);
+    expect(orderedDraftPoints(result.draft).slice(0, 2)).toEqual(points.slice(0, 2));
+    expect(orderedDraftPoints(result.draft)).toHaveLength(5);
   });
 
   test('material endpoint mismatch rejects without synthetic connector', () => {
@@ -234,13 +238,15 @@ describe('transaction fencing and exact Undo', () => {
   test('late replies fail after edit, Undo, account switch or draft switch', () => {
     const draft = empty();
     const token = beginRouteOperation(draft, 'owner-a', 'point', 'op-1');
-    expect(routeOperationIsCurrent(draft, 'owner-a', token)).toBe(true);
+    expect(routeOperationIsCurrent(draft, 'owner-a', token, 'op-1')).toBe(true);
     const edit = appendOrderedSegment(draft, [p(0, 0), p(20, 0)], 'point');
     expect(edit.ok).toBe(true);
     if (!edit.ok) return;
-    expect(routeOperationIsCurrent(edit.draft, 'owner-a', token)).toBe(false);
-    expect(routeOperationIsCurrent(draft, 'owner-b', token)).toBe(false);
-    expect(routeOperationIsCurrent({ ...draft, draftId: 'other' }, 'owner-a', token)).toBe(false);
+    expect(routeOperationIsCurrent(edit.draft, 'owner-a', token, 'op-1')).toBe(false);
+    expect(routeOperationIsCurrent(draft, 'owner-b', token, 'op-1')).toBe(false);
+    expect(routeOperationIsCurrent({ ...draft, draftId: 'other' }, 'owner-a', token, 'op-1')).toBe(false);
+    expect(routeOperationIsCurrent(draft, 'owner-a', token, null)).toBe(false);
+    expect(routeOperationIsCurrent(draft, 'owner-a', token, 'replacement-operation')).toBe(false);
   });
 
   test('Undo restores geometry, gaps, provenance and revision exactly', () => {

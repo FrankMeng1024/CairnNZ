@@ -141,6 +141,7 @@ export type RouteDetailState = 'idle' | 'loading' | 'ready' | 'not-found' | 'err
 export interface RouteDeleteResult { remoteState: 'not-needed' | 'deleted' | 'queued' }
 
 const routeCacheKey = (userId: string) => `@cairn:routes:v1:${userId}`;
+const sharedRouteCacheKey = (userId: string) => `@cairn:shared-routes:v1:${userId}`;
 const routeCacheWriteTails = new Map<string, Promise<void>>();
 
 let routeMutationEpoch = 0;
@@ -232,6 +233,31 @@ async function persistRouteCache(routes: Route[], userId = currentUserId()): Pro
     await write;
   } finally {
     if (routeCacheWriteTails.get(userId) === write) routeCacheWriteTails.delete(userId);
+  }
+}
+
+async function readSharedRouteCache(userId: string): Promise<Route[]> {
+  if (!userId) return [];
+  try {
+    const raw = await storage.getItem(sharedRouteCacheKey(userId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter(route => route?.isSharedDelivery === true) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function persistSharedRouteCache(routes: Route[], userId = currentUserId()): Promise<void> {
+  if (!userId) return;
+  const tailKey = `shared:${userId}`;
+  const snapshot = JSON.stringify(routes);
+  const previous = routeCacheWriteTails.get(tailKey) ?? Promise.resolve();
+  const write = previous.catch(() => undefined).then(() => (
+    storage.setItem(sharedRouteCacheKey(userId), snapshot, { strict: true })
+  ));
+  routeCacheWriteTails.set(tailKey, write);
+  try { await write; } finally {
+    if (routeCacheWriteTails.get(tailKey) === write) routeCacheWriteTails.delete(tailKey);
   }
 }
 
@@ -523,10 +549,21 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       set({ sharedRoutes: [] });
       return;
     }
+    const cached = await readSharedRouteCache(ownerId);
+    if (requestId !== sharedRequestSequence || currentUserId() !== ownerId) return;
+    set({ sharedRoutes: cached });
     try {
       const routes = await fetchSharedRoutes();
       if (requestId !== sharedRequestSequence || currentUserId() !== ownerId) return;
-      set({ sharedRoutes: routes });
+      const cachedByDelivery = new Map(cached.map(route => [route.sharedDeliveryId, route]));
+      const merged = routes.map(route => {
+        const local = cachedByDelivery.get(route.sharedDeliveryId);
+        return local && local.sharedContentHash === route.sharedContentHash && local.points.length >= 2
+          ? { ...route, points: local.points, orderedDraft: local.orderedDraft, resolutionState: local.resolutionState }
+          : route;
+      });
+      set({ sharedRoutes: merged });
+      await persistSharedRouteCache(merged, ownerId);
     } catch {
       // A failed refresh never discards already-delivered projections.
     }
@@ -548,6 +585,7 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       set(state => ({
         sharedRoutes: [route, ...state.sharedRoutes.filter(item => item.sharedDeliveryId !== deliveryId)],
       }));
+      await persistSharedRouteCache(get().sharedRoutes, ownerId);
       return 'ready';
     } catch {
       return get().sharedRoutes.some(item => item.sharedDeliveryId === deliveryId && item.points.length >= 2)
@@ -564,6 +602,7 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     set(state => ({
       sharedRoutes: state.sharedRoutes.filter(item => item.sharedDeliveryId !== deliveryId),
     }));
+    await persistSharedRouteCache(get().sharedRoutes, ownerId);
   },
 
   // Sprint 69 STORY-00538: load subscribed-friend routes from

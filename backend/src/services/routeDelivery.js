@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { authorizeRouteGeometry } = require('./routeGeometryAuthority');
 
 function parseJson(value, fallback) {
   if (value == null) return fallback;
@@ -98,7 +99,13 @@ async function deliverRoute(pool, {
       error.code = 'ROUTE_NOT_FOUND';
       throw error;
     }
-    if ((route.resolution_state ?? 'continuous') !== 'continuous') {
+    const authoritativeGeometry = authorizeRouteGeometry({
+      ownerId: route.user_id,
+      points: parseJson(route.points, []),
+      orderedDraft: parseJson(route.ordered_draft, null),
+      resolutionState: route.resolution_state,
+    });
+    if (authoritativeGeometry.resolutionState !== 'continuous') {
       const error = new Error('Repair Route gaps before sharing.');
       error.code = 'ROUTE_UNRESOLVED_GAPS';
       throw error;

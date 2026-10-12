@@ -187,6 +187,7 @@ test('unfriending changes future delivery only and leaves received history intac
   const deliveryId = first.delivered[0].delivery_id;
   pool.state.friends.delete('1:2');
   pool.state.route.points = [...pool.state.route.points, { lat: -41.27, lng: 174.79 }];
+  pool.state.route.ordered_draft.parts[0].points = pool.state.route.points;
   const next = await deliverRoute(pool, {
     senderId: 1,
     routeId: 10,
@@ -212,10 +213,32 @@ test('ordinary source deletion or mutation cannot change an existing snapshot', 
 
 test('unresolved multipart drafts cannot be shared', async () => {
   const pool = fixturePool();
+  const first = pool.state.route.ordered_draft.parts[0];
+  const second = {
+    id: 'p2', resolution: 'draw-manual',
+    points: [{ lat: -41.2, lng: 174.9 }, { lat: -41.19, lng: 174.91 }],
+  };
+  pool.state.route.ordered_draft.parts = [first, second];
+  pool.state.route.ordered_draft.gaps = [{ id: 'gap-1', afterPartId: first.id, reason: 'activity-gap' }];
+  pool.state.route.points = [...first.points, ...second.points];
   pool.state.route.resolution_state = 'unresolved_gaps';
   await assert.rejects(
     deliverRoute(pool, { senderId: 1, routeId: 10, recipientIds: [2], idempotencyKey: keyA }),
     error => error.code === 'ROUTE_UNRESOLVED_GAPS',
+  );
+  assert.equal(pool.state.deliveries.length, 0);
+});
+
+test('a poisoned flat shortcut cannot bypass ordered Route continuity at share time', async () => {
+  const pool = fixturePool();
+  pool.state.route.ordered_draft.parts[0].points = [
+    pool.state.route.points[0],
+    { lat: -40.1, lng: 175.9 },
+    pool.state.route.points[1],
+  ];
+  await assert.rejects(
+    deliverRoute(pool, { senderId: 1, routeId: 10, recipientIds: [2], idempotencyKey: keyA }),
+    error => error.code === 'ROUTE_POINTS_MISMATCH',
   );
   assert.equal(pool.state.deliveries.length, 0);
 });

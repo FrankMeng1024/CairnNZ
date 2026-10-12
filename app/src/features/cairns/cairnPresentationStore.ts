@@ -81,6 +81,24 @@ function emptySnapshot(viewerId: string): Snapshot {
 
 function cacheKey(viewerId: string): string { return `${CACHE_PREFIX}${viewerId}`; }
 
+/** Account deletion must clear both durable and process-memory copies. */
+export async function purgeCairnPresentationForOwner(viewerId: string): Promise<void> {
+  if (!viewerId) throw new Error('cairn_presentation_owner_required');
+  if (observedViewerId === viewerId) {
+    observedViewerId = '';
+    accountGeneration += 1;
+  }
+  await loads.get(viewerId)?.catch(() => undefined);
+  await writeTails.get(viewerId)?.catch(() => undefined);
+  loads.delete(viewerId);
+  writeTails.delete(viewerId);
+  snapshots.delete(viewerId);
+  await storage.removeItem(cacheKey(viewerId), { strict: true });
+  if (useCairnPresentationStore.getState().viewerId === viewerId) {
+    useCairnPresentationStore.getState().clearForAccountBoundary();
+  }
+}
+
 function authoritativeViewerId(): string {
   const state = useAppStore.getState();
   return state.isLoggedIn ? String(state.user?.id ?? '') : '';
@@ -203,9 +221,11 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
     const generation = bind(viewerId);
     if (generation === null) return;
     set({ viewerId, pendingGroups: [], activeGroup: null, activeSurface: null, loading: true, error: null });
-    const snapshot = await loadSnapshot(viewerId);
+    // Load only the durable ACK outbox. Cached presentation/coordinates are
+    // not render authority: archive, removal or friendship changes may have
+    // happened while the process was stopped.
+    await loadSnapshot(viewerId);
     if (!current(viewerId, generation)) return;
-    set({ pendingGroups: availableGroups(snapshot), unreadCount: snapshot.unreadCount, acquiredMarkers: snapshot.acquiredMarkers, loading: false });
     await get().refresh();
   },
 
@@ -252,7 +272,8 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
         await persist(snapshot, generation);
         if (current(viewerId, generation)) set({ acquiredMarkers: snapshot.acquiredMarkers, unreadCount: snapshot.unreadCount });
       } catch {
-        if (current(viewerId, generation)) set({ acquiredMarkers: snapshot.acquiredMarkers });
+        // Keep only data already authorized during this process. A cold-start
+        // cache never becomes visible merely because the authority is offline.
       }
     })();
     const finalPromise = work.finally(() => { if (mapRefreshPromise === finalPromise) mapRefreshPromise = null; });
@@ -302,7 +323,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
         });
       } catch {
         if (!current(viewerId, generation)) return;
-        set({ pendingGroups: availableGroups(snapshot), unreadCount: snapshot.unreadCount, loading: false, error: 'offline' });
+        set({ pendingGroups: [], activeGroup: null, activeSurface: null, unreadCount: 0, acquiredMarkers: [], loading: false, error: 'offline' });
       }
     })();
     const finalPromise = work.finally(() => { if (refreshPromise === finalPromise) refreshPromise = null; });

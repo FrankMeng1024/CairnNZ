@@ -18,6 +18,7 @@ const {
   listDeliveries,
   removeDelivery,
 } = require('../services/routeDelivery');
+const { authorizeRouteGeometry } = require('../services/routeGeometryAuthority');
 const authenticate = require('../middleware/authenticate');
 const idempotency = require('../middleware/idempotency');
 const { isClientWriteable, PERMISSION } = require('../constants/permission');
@@ -58,11 +59,17 @@ router.post('/', validateBody(schemas.route.create), idempotency, async (req, re
   }
 
   try {
+    const geometry = authorizeRouteGeometry({
+      ownerId: req.user.userId,
+      points,
+      orderedDraft: ordered_draft,
+      resolutionState: resolution_state,
+    });
     const id = await Route.create({
       userId: req.user.userId,
       name: name.trim(),
       description: description ?? null,
-      points,
+      points: geometry.points,
       waypoints: waypoints ?? [],
       distanceM: distance_m ?? 0,
       elevationGainM: elevation_gain_m ?? 0,
@@ -71,12 +78,15 @@ router.post('/', validateBody(schemas.route.create), idempotency, async (req, re
       sourceActivityClientId: source_activity_client_id,
       sourceSessionId: source_session_id,
       originGapReconnected: origin_gap_reconnected,
-      orderedDraft: ordered_draft,
-      resolutionState: resolution_state,
+      orderedDraft: geometry.orderedDraft,
+      resolutionState: geometry.resolutionState,
     });
     const route = await Route.findByIdAndUser(id, req.user.userId);
     return res.status(201).json({ route });
   } catch (err) {
+    if (String(err.code || '').startsWith('ROUTE_') && err.code !== 'ROUTE_TOMBSTONED') {
+      return res.status(400).json({ error: err.message, code: err.code });
+    }
     if (err.code === 'SOURCE_ACTIVITY_NOT_FOUND' || err.code === 'SOURCE_ACTIVITY_NOT_READY') {
       return res.status(409).json({
         error: 'Source Activity has not completed syncing.',
@@ -222,22 +232,36 @@ router.put('/:id', validateBody(schemas.route.update), async (req, res) => {
   }
 
   try {
+    let geometry = null;
+    if (points !== undefined || ordered_draft !== undefined || resolution_state !== undefined) {
+      const existing = await Route.findByIdAndUser(id, req.user.userId);
+      if (!existing) return res.status(404).json({ error: 'Route not found.' });
+      geometry = authorizeRouteGeometry({
+        ownerId: req.user.userId,
+        points: points ?? existing.points,
+        orderedDraft: ordered_draft ?? existing.ordered_draft,
+        resolutionState: resolution_state ?? existing.resolution_state,
+      });
+    }
     const affected = await Route.update(id, req.user.userId, {
       name,
       description,
-      points,
+      points: geometry?.points ?? points,
       waypoints,
       distanceM: distance_m,
       elevationGainM: elevation_gain_m,
       permission, // already validated; Route.update ignores undefined
-      orderedDraft: ordered_draft,
-      resolutionState: resolution_state,
+      orderedDraft: geometry?.orderedDraft ?? ordered_draft,
+      resolutionState: geometry?.resolutionState ?? resolution_state,
     });
     if (affected === 0) return res.status(404).json({ error: 'Route not found.' });
 
     const route = await Route.findByIdAndUser(id, req.user.userId);
     return res.json({ route });
   } catch (err) {
+    if (String(err.code || '').startsWith('ROUTE_')) {
+      return res.status(400).json({ error: err.message, code: err.code });
+    }
     console.error('[routes/update]', err.message);
     return res.status(500).json({ error: 'Server error.' });
   }

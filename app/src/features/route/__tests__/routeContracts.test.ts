@@ -115,6 +115,10 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(editor).toContain("'This Route changed while the edit was being reviewed");
     expect(editor).toContain('setPendingPointReview({ kind: \'point\', points: result.points, intent');
     expect(editor).toContain('animateAcceptedPoint(points');
+    expect(editor).toContain('plannerDraftMatchesRequest(recovered, requestedDraftId)');
+    expect(editor).toContain('useRouteStore.getState().routes.find');
+    expect(editor).toContain('invalidatePendingOperation();');
+    expect(editor).toContain("nav.replace('MapHistory', { routeId: savedId })");
     expect(editor).toContain('scopeOverride={planningMemoryScope} opacityScale={0.42}');
     expect(overlay).toContain('<Polyline');
     expect(overlay).toContain('.maxPointers(1)');

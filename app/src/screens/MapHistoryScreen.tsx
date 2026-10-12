@@ -1153,9 +1153,16 @@ function MapHistoryObjectScreen() {
       setRouteShareMessage(failed
         ? `${delivered} delivered; ${failed} could not be delivered. No existing copy was overwritten.`
         : `${delivered} independent Route ${delivered === 1 ? 'snapshot' : 'snapshots'} delivered.`);
-      routeShareAttemptRef.current = null;
+      if (failed) {
+        // Retain the same operation identity and retry only recipients that
+        // did not receive this snapshot. Already delivered friends are not
+        // needlessly resubmitted.
+        setRouteShareRecipients(result.failed.map(item => String(item.recipient_id)));
+      } else {
+        routeShareAttemptRef.current = null;
+      }
     } catch (cause: any) {
-      setRouteShareMessage(cause?.code === 'ROUTE_HAS_UNRESOLVED_GAPS'
+      setRouteShareMessage(cause?.code === 'ROUTE_UNRESOLVED_GAPS'
         ? 'Connect every unknown gap before sharing this Route.'
         : 'Delivery was not confirmed. Retry uses the same request identity so it cannot duplicate the same snapshot.');
     } finally {

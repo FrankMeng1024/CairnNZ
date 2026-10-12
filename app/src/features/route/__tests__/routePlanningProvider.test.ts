@@ -5,6 +5,7 @@ import {
   resampleOrderedForBudget,
   resolveDrawPlan,
   resolvePointPlan,
+  orderedShapeDeviationM,
 } from '../routePlanningProvider';
 
 const origin = { lat: -41.2865, lng: 174.7762 };
@@ -51,6 +52,21 @@ describe('Route planning provider boundaries', () => {
     const result = await resolveDrawPlan(raw, { matcher });
     expect(result).toEqual({ outcome: 'accepted', points: raw, callCount: 1 });
     expect(matcher.mock.calls[0][0].coords).toEqual(raw);
+  });
+
+  test('Draw rejects a provider-added far spur even when every raw vertex remains present', async () => {
+    const raw = [p(0, 0), p(40, 0), p(80, 0)];
+    const withFarSpur = [raw[0], raw[1], p(2_000, 2_000), raw[2]];
+    expect(orderedShapeDeviationM(raw, withFarSpur)).toBeGreaterThan(90);
+    await expect(resolveDrawPlan(raw, { matcher: async () => ok(withFarSpur) })).resolves.toEqual({
+      outcome: 'manual-available', rawPoints: raw, reason: 'shape-deviation', callCount: 1,
+    });
+  });
+
+  test('Draw does not accept a collapsed deliberate loop with matching endpoints', async () => {
+    const raw = [p(0, 0), p(80, 0), p(80, 80), p(0, 80), p(0, 0)];
+    await expect(resolveDrawPlan(raw, { matcher: async () => ok([raw[0], raw.at(-1)!]) }))
+      .resolves.toMatchObject({ outcome: 'manual-available', reason: 'no-match' });
   });
 
   test('Point may use a direct provider path for the same endpoints', async () => {
