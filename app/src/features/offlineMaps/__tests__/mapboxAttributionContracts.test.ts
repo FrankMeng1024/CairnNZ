@@ -17,7 +17,7 @@ describe('Mapbox attribution contracts', () => {
       'screens/MapHistoryScreen.tsx',
       'screens/MarkerDetailScreen.tsx',
       'screens/PublicCairnDetailScreen.tsx',
-      'screens/RouteEditorScreen.tsx',
+      'screens/OrderedRouteEditorScreen.tsx',
     ];
     for (const file of mapFiles) {
       const text = source(file);

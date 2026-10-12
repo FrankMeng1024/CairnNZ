@@ -30,7 +30,7 @@ import { HikingScreen } from '../screens/HikingScreen';
 import { RunningScreen } from '../screens/RunningScreen';
 import { MapHistoryScreen } from '../screens/MapHistoryScreen';
 import { RoutesScreen } from '../screens/RoutesScreen';
-import { RouteEditorScreen } from '../screens/RouteEditorScreen';
+import { OrderedRouteEditorScreen as RouteEditorScreen } from '../screens/OrderedRouteEditorScreen';
 import { DebugScreen } from '../screens/DebugScreen';
 import { PlantScreen } from '../screens/PlantScreen';
 import { FriendsScreen } from '../screens/FriendsScreen';
@@ -89,9 +89,8 @@ export type RootStackParamList = {
   RouteEditor: {
     routeId?: string;
     fromSessionId?: string;
-    fromSessionTrackPoints?: Array<{ lat: number; lng: number; alt?: number | null; t?: number; accuracy?: number | null }>;
-    /** Explicit user choice; never written back to the Activity. */
-    reconnectsActivityGap?: boolean;
+    sharedDeliveryId?: string;
+    creationSource?: 'plan' | 'activity' | 'shared-copy';
   } | undefined;
   Plant: {
     origin: {

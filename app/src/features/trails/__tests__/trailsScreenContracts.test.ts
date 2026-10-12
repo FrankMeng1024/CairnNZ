@@ -68,18 +68,15 @@ describe('Trails personal journey library screen contracts', () => {
     expect(read('src/screens/HikingMap.tsx')).toContain('id="planned-route-line"');
   });
 
-  test('Activity Save as Route lands on canonical Route Detail after local creation', () => {
-    const editor = read('src/screens/RouteEditorScreen.tsx');
-    const success = editor.slice(
-      editor.indexOf('if (!targetId && savedRouteId)'),
-      editor.indexOf('// Editing an existing route'),
-    );
-    expect(success).toContain("{ name: 'MapHistory', params: { routeId: savedRouteId } }");
-    expect(success).not.toContain("{ name: 'RouteEditor', params: { routeId: savedRouteId } }");
-    expect(detail).toContain('activity-save-as-route');
-    expect(detail).toContain('routeDraftOpening');
-    expect(editor).toContain('if (saving) return;');
-    expect(editor).toContain('disabled={!canSaveView}');
+  test('Activity conversion is reachable only from Routes and saves an independent Route', () => {
+    const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
+    expect(trails).toContain('testID="route-create-source"');
+    expect(trails).toContain('testID="route-create-activity"');
+    expect(trails).toContain("nav.navigate('RouteEditor', { creationSource: 'activity', fromSessionId: session.id })");
+    expect(detail).not.toContain('activity-save-as-route');
+    expect(detail).not.toContain('Save as Route');
+    expect(editor).toContain('createImportedOrderedDraft');
+    expect(editor).toContain("routes: [{ name: 'Home' }, { name: 'MapHistory', params: { routeId: savedId } }]");
   });
 
   test('Activity deletion does not cascade into Memory, Cairns, or independent Routes', () => {

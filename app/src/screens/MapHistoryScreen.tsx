@@ -18,6 +18,7 @@ import { useSessionStore, loadActivityTrackPoints } from '../store/useSessionSto
 import { useTrackingStore } from '../store/useTrackingStore';
 import { fetchSessionDetail } from '../services/sessionService';
 import { useRouteStore } from '../store/useRouteStore';
+import { useFriendStore } from '../store/useFriendStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
 import { crashLogger } from '../services/crashLogger';
@@ -63,7 +64,9 @@ import {
   formatAverageActivityPace,
   linkedCairnsForActivity,
 } from '../features/activity/activityDetailPresentation';
-import { routeMatchesIdentity, routeOriginLines } from '../features/route/routeContracts';
+import { routeCanBeUsed, routeMatchesIdentity, routeOriginLines } from '../features/route/routeContracts';
+import { shareRouteSnapshot } from '../services/routeService';
+import { uuidv4 } from '../services/offlineQueue';
 import { cairnDisplayTitle, splitTitleBody } from '../features/plant/services/noteEncoding';
 import { CairnDeleteDialog } from '../features/cairns/CairnDeleteDialog';
 import { resolveActivityDetailBackAction } from '../features/activity/activityDetailNavigation';
@@ -862,6 +865,13 @@ function MapHistoryObjectScreen() {
   const [routeUseLoading, setRouteUseLoading] = useState(false);
   const [routeUseTargetId, setRouteUseTargetId] = useState<string | null>(null);
   const [routeDeleteConfirm, setRouteDeleteConfirm] = useState(false);
+  const routeFriends = useFriendStore(s => s.friends);
+  const loadFriendsFromBackend = useFriendStore(s => s.loadFriendsFromBackend);
+  const [routeShareOpen, setRouteShareOpen] = useState(false);
+  const [routeShareRecipients, setRouteShareRecipients] = useState<string[]>([]);
+  const [routeShareLoading, setRouteShareLoading] = useState(false);
+  const [routeShareMessage, setRouteShareMessage] = useState<string | null>(null);
+  const routeShareAttemptRef = useRef<{ signature: string; key: string } | null>(null);
   const routeUseInFlightRef = useRef(false);
   // O12: settings-aware distance format for detail modal + stat displays.
   const dist = useDistance();
@@ -911,6 +921,10 @@ function MapHistoryObjectScreen() {
         );
         return;
       }
+      if (!routeCanBeUsed(ready)) {
+        Alert.alert('Route needs repair', 'Connect every unknown gap before using this Route for a Hike or Run.');
+        return;
+      }
       const tracking = useTrackingStore.getState();
       if (tracking.status !== 'idle') {
         Alert.alert(
@@ -941,9 +955,11 @@ function MapHistoryObjectScreen() {
   const openRouteForActivity = useCallback((mode: 'hiking' | 'running') => {
     if (!routeUseTargetId || routeUseInFlightRef.current) return;
     const ready = useRouteStore.getState().routes.find(item => routeMatchesIdentity(item, routeUseTargetId));
-    if (!ready || ready.points.length < 2) {
+    if (!ready || !routeCanBeUsed(ready)) {
       setRouteUseTargetId(null);
-      Alert.alert('Route unavailable', 'The route could not be prepared. Check your connection and try again.');
+      Alert.alert('Route unavailable', ready
+        ? 'Connect every unknown gap before using this Route.'
+        : 'The route could not be prepared. Check your connection and try again.');
       return;
     }
     routeUseInFlightRef.current = true;
@@ -1100,6 +1116,52 @@ function MapHistoryObjectScreen() {
       setDeleteSaving(false);
     }
   }, [deleteSaving, nav, selectedRoute]);
+
+  const openRouteShare = useCallback(() => {
+    if (!selectedRoute) return;
+    if (!routeCanBeUsed(selectedRoute)) {
+      setRouteActionError('Connect every unknown gap before sharing this Route.');
+      return;
+    }
+    setRouteActionError(null);
+    setRouteShareMessage(null);
+    setRouteShareRecipients([]);
+    setRouteShareOpen(true);
+    void loadFriendsFromBackend();
+  }, [loadFriendsFromBackend, selectedRoute]);
+
+  const deliverRouteSnapshot = useCallback(async () => {
+    if (!selectedRoute || routeShareLoading || routeShareRecipients.length === 0) return;
+    const serverRouteId = selectedRoute.remoteId
+      ?? (/^\d+$/.test(selectedRoute.id) ? selectedRoute.id : null);
+    if (!serverRouteId) {
+      setRouteShareMessage('This Route must finish syncing before it can be delivered.');
+      return;
+    }
+    const recipients = [...new Set(routeShareRecipients)].sort();
+    const signature = `${serverRouteId}|${recipients.join(',')}`;
+    if (routeShareAttemptRef.current?.signature !== signature) {
+      routeShareAttemptRef.current = { signature, key: uuidv4() };
+    }
+    const attempt = routeShareAttemptRef.current;
+    setRouteShareLoading(true);
+    setRouteShareMessage(null);
+    try {
+      const result = await shareRouteSnapshot(serverRouteId, recipients, attempt.key);
+      const delivered = result.delivered.length;
+      const failed = result.failed.length;
+      setRouteShareMessage(failed
+        ? `${delivered} delivered; ${failed} could not be delivered. No existing copy was overwritten.`
+        : `${delivered} independent Route ${delivered === 1 ? 'snapshot' : 'snapshots'} delivered.`);
+      routeShareAttemptRef.current = null;
+    } catch (cause: any) {
+      setRouteShareMessage(cause?.code === 'ROUTE_HAS_UNRESOLVED_GAPS'
+        ? 'Connect every unknown gap before sharing this Route.'
+        : 'Delivery was not confirmed. Retry uses the same request identity so it cannot duplicate the same snapshot.');
+    } finally {
+      setRouteShareLoading(false);
+    }
+  }, [routeShareLoading, routeShareRecipients, selectedRoute]);
 
   useFocusEffect(useCallback(() => {
     setRouteDraftOpening(false);
@@ -1441,74 +1503,21 @@ function MapHistoryObjectScreen() {
     ? activityMetricLabels(selectedSession.activityMode)
     : activityMetricLabels('hiking');
 
-  const openActivityRouteDraft = useCallback(() => {
+  const saveSnapLabRouteDraft = useCallback(() => {
     if (!selectedSession || routeDraftOpening) return;
-    if (selectedSession.qaProvenance === 'snap_lab') {
-      const ownerUserId = useSessionStore.getState().currentUserId;
-      setRouteDraftOpening(true);
-      void saveSnapLabRouteSnapshot(
-        ownerUserId,
-        selectedSession.id,
-        `${selectedSession.name || 'QA Activity'} route`,
-      ).then(() => {
-        Alert.alert('QA Route snapshot saved', 'The selected Final was copied inside Snap Lab only. No product Route or server data was created.');
-      }).catch(() => {
-        Alert.alert('QA Route snapshot failed', 'The Snap Lab Activity remains saved. Try the QA action again.');
-      }).finally(() => setRouteDraftOpening(false));
-      return;
-    }
-    const realSegments = segmentTrace(loadedTrackPoints ?? []).segments
-      .filter(segment => segment.length >= 2);
-    const openSegment = (segment: typeof realSegments[number], reconnectsGap = false) => {
-      if (routeDraftOpening) return;
-      setRouteDraftOpening(true);
-      const ownerUserId = useSessionStore.getState().currentUserId;
-      const clientActivityId = selectedSession.clientActivityId ?? selectedSession.id;
-      void recordActivityStageEvent({
-        ownerUserId,
-        clientActivityId,
-        stage: 'detail-selected',
-        details: {
-          consumer: 'save-as-route',
-          artifactRevision: selectedSession.finalGeometryRevision ?? null,
-          artifactFingerprint: selectedSession.finalGeometryFingerprint
-            ?? activityGeometryFingerprint(loadedTrackPoints ?? []),
-          reconnectsGap,
-        },
-      });
-      crashLogger.breadcrumb(`saveroute:nav-to-editor session=${selectedSession.id} segment=${segment[0]?.segmentId ?? 'legacy'}`);
-      (nav as any).navigate('RouteEditor', {
-        fromSessionId: selectedSession.id,
-        reconnectsActivityGap: reconnectsGap,
-        fromSessionTrackPoints: segment.map(point => ({
-          lat: point.lat,
-          lng: point.lng,
-          alt: point.alt ?? null,
-          t: point.t,
-          accuracy: point.accuracy ?? null,
-        })),
-      });
-    };
-    if (realSegments.length <= 1) {
-      if (realSegments[0]) openSegment(realSegments[0]);
-      return;
-    }
-    Alert.alert(
-      'Choose a recorded section',
-      'The missing section is not Activity geometry. Choose one recorded section, or explicitly reconnect only in the new Route.',
-      [
-        {
-          text: 'Reconnect in Route',
-          onPress: () => openSegment(realSegments.flat(), true),
-        },
-        ...realSegments.map((segment, index) => ({
-          text: `Section ${index + 1}`,
-          onPress: () => openSegment(segment),
-        })),
-        { text: 'Cancel', style: 'cancel' as const },
-      ],
-    );
-  }, [loadedTrackPoints, nav, routeDraftOpening, selectedSession]);
+    if (selectedSession.qaProvenance !== 'snap_lab') return;
+    const ownerUserId = useSessionStore.getState().currentUserId;
+    setRouteDraftOpening(true);
+    void saveSnapLabRouteSnapshot(
+      ownerUserId,
+      selectedSession.id,
+      `${selectedSession.name || 'QA Activity'} route`,
+    ).then(() => {
+      Alert.alert('QA Route snapshot saved', 'The selected Final was copied inside Snap Lab only. No product Route or server data was created.');
+    }).catch(() => {
+      Alert.alert('QA Route snapshot failed', 'The Snap Lab Activity remains saved. Try the QA action again.');
+    }).finally(() => setRouteDraftOpening(false));
+  }, [routeDraftOpening, selectedSession]);
 
   // Show real markers on map. Activity Detail requires explicit Activity
   // provenance or recorded marker membership; spatial proximity alone never
@@ -1516,15 +1525,22 @@ function MapHistoryObjectScreen() {
   const mapMarkers: Marker[] = sessionForDisplay
     ? routeFlags
     : markers.slice(0, 8);
-  const routePreviewSession = selectedRoute && selectedRoute.points.length >= 2
+  const routePreviewPoints = selectedRoute?.orderedDraft?.parts.length
+    ? selectedRoute.orderedDraft.parts.flatMap((part, partIndex) => part.points.map((point, pointIndex) => ({
+        ...point,
+        t: selectedRoute.createdAt + partIndex * 1_000_000 + pointIndex,
+        segmentId: part.id,
+      })))
+    : selectedRoute?.points.map((point, index) => ({
+        ...point,
+        t: selectedRoute.createdAt + index,
+        segmentId: 'route-reference',
+      })) ?? [];
+  const routePreviewSession = selectedRoute && routePreviewPoints.length >= 2
     ? ({
         id: `route-preview-${selectedRoute.id}`,
         activityMode: selectedRoute.activityMode ?? 'hiking',
-        trackPoints: selectedRoute.points.map((point, index) => ({
-          ...point,
-          t: selectedRoute.createdAt + index,
-          segmentId: 'route-reference',
-        })),
+        trackPoints: routePreviewPoints,
       } as unknown as TrackingSession)
     : null;
 
@@ -1743,6 +1759,11 @@ function MapHistoryObjectScreen() {
             ) : null}
             <Text style={[styles.routeUpdatedText, { color: visualTheme.muted }]}>Updated {formatDate(selectedRoute.updatedAt)}</Text>
           </View>
+          {!routeCanBeUsed(selectedRoute) ? (
+            <Text style={[styles.routeStateText, { color: Colors.warning }]} testID="route-unresolved-gap-notice">
+              This draft contains unknown gaps. Repair them before Use for Hike or sharing; the dashed connectors are not part of the Route distance.
+            </Text>
+          ) : null}
           <View style={styles.singleSessionStats}>
             <View style={styles.singleStat}>
               <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{dist.format(selectedRoute.distanceM ?? 0, 2)}</Text>
@@ -1760,6 +1781,7 @@ function MapHistoryObjectScreen() {
               label="Use Route"
               onPress={() => { void useSelectedRoute(); }}
               loading={routeUseLoading}
+              disabled={!routeCanBeUsed(selectedRoute)}
               renderIcon={color => <Icon name="Navigation" size={IconSize.sm} color={color} strokeWidth={2} />}
               testID="route-use-action"
             />
@@ -1777,6 +1799,16 @@ function MapHistoryObjectScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
+                onPress={openRouteShare}
+                disabled={!routeCanBeUsed(selectedRoute)}
+                accessibilityRole="button"
+                accessibilityLabel="Share route with friends"
+              >
+                <Icon name="Share2" size={IconSize.sm} color={routeCanBeUsed(selectedRoute) ? visualTheme.iconActive : visualTheme.iconInactive} strokeWidth={2} />
+                <Text style={[styles.routeMaintenanceText, { color: routeCanBeUsed(selectedRoute) ? visualTheme.foreground : visualTheme.foregroundSecondary }]}>Share</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
                 onPress={() => setRouteDeleteConfirm(true)}
                 disabled={deleteSaving}
                 accessibilityRole="button"
@@ -1790,6 +1822,51 @@ function MapHistoryObjectScreen() {
             </View>
           </View>
         </View>
+        <ModalCard
+          visible={routeShareOpen}
+          onDismiss={() => !routeShareLoading && setRouteShareOpen(false)}
+          dismissible={!routeShareLoading}
+          testID="route-share-friend-picker"
+        >
+          <ModalCardHeader
+            title="Send an independent Route"
+            body="Each selected friend receives a complete snapshot in Shared Routes. Later edits to your Route do not alter their copy."
+            onClose={() => !routeShareLoading && setRouteShareOpen(false)}
+          />
+          <ScrollView style={{ maxHeight: 280 }}>
+            {routeFriends.length === 0 ? (
+              <Text style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary }]}>No accepted friends are available.</Text>
+            ) : routeFriends.map(friend => {
+              const selected = routeShareRecipients.includes(friend.userId);
+              return (
+                <TouchableOpacity
+                  key={friend.userId}
+                  style={[styles.routeShareFriend, { borderColor: selected ? visualTheme.primary : visualTheme.borderSubtle, backgroundColor: selected ? visualTheme.controlSelected : visualTheme.surface }]}
+                  onPress={() => setRouteShareRecipients(current => selected
+                    ? current.filter(id => id !== friend.userId)
+                    : [...current, friend.userId])}
+                  disabled={routeShareLoading}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selected }}
+                >
+                  <Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]} numberOfLines={1}>{friend.name}</Text>
+                  <Icon name={selected ? 'Check' : 'UserPlus'} size={18} color={selected ? visualTheme.primary : visualTheme.iconInactive} />
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          {routeShareMessage ? <Text style={[styles.routeStateText, { color: visualTheme.foregroundSecondary }]}>{routeShareMessage}</Text> : null}
+          <View style={styles.deleteModalActions}>
+            <PrimaryButton
+              label={routeShareRecipients.length ? `Deliver to ${routeShareRecipients.length}` : 'Choose friends'}
+              onPress={() => { void deliverRouteSnapshot(); }}
+              loading={routeShareLoading}
+              disabled={routeShareRecipients.length === 0}
+              testID="route-share-deliver"
+            />
+            <PrimaryButton label="Done" variant="secondary" onPress={() => setRouteShareOpen(false)} disabled={routeShareLoading} />
+          </View>
+        </ModalCard>
         <ModalCard
           visible={routeUseTargetId != null}
           onDismiss={() => setRouteUseTargetId(null)}
@@ -2064,13 +2141,13 @@ function MapHistoryObjectScreen() {
               {isQaReviewClone ? (
                 <View style={[styles.detailMetaRow, { marginTop: Spacing.sm }]}>
                   <Icon name="Lock" size={13} color={visualTheme.iconInactive} strokeWidth={2} />
-                  <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Read-only · rename, delete, Save as Route, sync, Memory and stats are disabled</Text>
+                  <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Read-only · rename, delete, sync, Memory and stats are disabled</Text>
                 </View>
               ) : isSnapLabActivity ? (
                 <View style={styles.activityActions}>
                   <PrimaryButton
                     label="Save QA Route snapshot"
-                    onPress={openActivityRouteDraft}
+                    onPress={saveSnapLabRouteDraft}
                     disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}
                     loading={routeDraftOpening}
                     renderIcon={color => <Icon name="Route" size={IconSize.sm} color={color} strokeWidth={2} />}
@@ -2080,14 +2157,6 @@ function MapHistoryObjectScreen() {
                 </View>
               ) : (
                 <View style={styles.activityActions}>
-                  <PrimaryButton
-                    label={selectedActivityRouteState?.routeReadiness === 'ready' ? 'Save as Route' : 'Review Route'}
-                    onPress={openActivityRouteDraft}
-                    disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}
-                    loading={routeDraftOpening}
-                    renderIcon={color => <Icon name="Route" size={IconSize.sm} color={color} strokeWidth={2} />}
-                    testID="activity-save-as-route"
-                  />
                   <TouchableOpacity
                     style={styles.activityDeleteAction}
                     onPress={() => setDeleteConfirm(true)}
@@ -2341,13 +2410,6 @@ function MapHistoryObjectScreen() {
                 >
                   <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
                   <Text style={[cardStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Route'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[cardStyles.deleteBtn, { flex: 1, borderColor: Colors.primary, backgroundColor: Colors.primary }]}
-                  onPress={openActivityRouteDraft}
-                >
-                  <Icon name="Edit3" size={IconSize.sm} color="#fff" strokeWidth={2} />
-                  <Text style={[cardStyles.deleteBtnText, { color: '#fff' }]}>Edit Route</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -2740,10 +2802,21 @@ const styles = StyleSheet.create({
     borderRadius: Radius.button,
   },
   routeMaintenanceText: { fontSize: FontSize.caption, fontWeight: '700' },
+  routeShareFriend: {
+    minHeight: 48,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderWidth: 1,
+    borderRadius: Radius.button,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
   legacyRedirect: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
   legacyRedirectText: { fontSize: FontSize.caption, fontWeight: '600' },
-  // Concept action row: Delete (red outline pill) + Save as Route (deep
-  // green pill), side-by-side, equal flex. Route Detail uses the same
+  // Concept action row: bounded Activity management actions, side-by-side.
+  // Route Detail uses the same
   // pill styles stacked (gap wraps them). Auth submit pill spec:
   // radius 14, minHeight 54, no shadow, 13pt/600 label per project rule.
   actionRow: {

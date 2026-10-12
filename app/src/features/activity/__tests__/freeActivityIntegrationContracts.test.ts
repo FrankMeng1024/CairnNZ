@@ -631,14 +631,16 @@ describe('Free Activity integration contracts', () => {
     expect(detail).toContain('<PrimaryButton');
   });
 
-  test('Save as Route sends only selected real segment geometry', () => {
-    const source = read('src/screens/MapHistoryScreen.tsx');
-    expect(source).toContain('const realSegments = segmentTrace(loadedTrackPoints ?? []).segments');
-    expect(source).toContain('const openSegment = (segment: typeof realSegments[number], reconnectsGap = false)');
-    expect(source).toContain('fromSessionTrackPoints: segment.map');
-    expect(source).toContain("text: 'Reconnect in Route'");
-    expect(source).toContain('openSegment(realSegments.flat(), true)');
-    expect(source).not.toContain('trace.gaps.flatMap');
+  test('Activity Detail stays factual while Routes import preserves real ordered segments', () => {
+    const detail = read('src/screens/MapHistoryScreen.tsx');
+    const trails = read('src/screens/RoutesScreen.tsx');
+    const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
+    expect(detail).not.toContain('activity-save-as-route');
+    expect(detail).not.toContain('Save as Route');
+    expect(trails).toContain('Use an Activity');
+    expect(editor).toContain('const segments = segmentTrace(points).segments');
+    expect(editor).toContain('createImportedOrderedDraft');
+    expect(editor).not.toContain('trace.gaps.flatMap');
   });
 
   test('discard writes resurrection protection before deleting pending work', () => {

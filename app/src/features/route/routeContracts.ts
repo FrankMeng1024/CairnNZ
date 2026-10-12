@@ -55,5 +55,7 @@ export function routeOriginLines(route: Route): string[] {
 }
 
 export function routeCanBeUsed(route: Route): boolean {
-  return route.points.length >= 2 && route.resolutionState !== 'unresolved_gaps';
+  return route.points.length >= 2
+    && route.resolutionState !== 'unresolved_gaps'
+    && !(route.orderedDraft?.gaps.length);
 }

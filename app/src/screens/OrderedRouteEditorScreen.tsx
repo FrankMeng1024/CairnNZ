@@ -1,0 +1,1142 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { CommonActions, useNavigation, useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BackButton } from '../components/BackButton';
+import { Icon } from '../components/Icon';
+import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay';
+import { ModalCard, ModalCardHeader } from '../components/ModalCard';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { RouteDrawOverlay } from '../components/map/RouteDrawOverlay';
+import { FogLayer } from '../features/memory/components/FogLayer';
+import { useFriendMemoryStore } from '../features/memory/store/useFriendMemoryStore';
+import { TrimSlider } from '../components/map/TrimSlider';
+import { FontSize, RadiusRole, Spacing } from '../components/tokens';
+import { getCurrentRegion } from '../config/regions';
+import { buildStandardConfig, getMapStyleForTheme, themeToStandardPreset } from '../config/mapbox';
+import { segmentTrace } from '../features/activity/activityContracts';
+import { loadActivityFinalArtifact } from '../features/activity/activityFinalArtifact';
+import {
+  applyDrawTransaction,
+  classifyDrawTransaction,
+  nearestOrderedPositions,
+  type DrawTransactionIntent,
+  type RouteAnchorCandidate,
+  type RouteIntervalCandidate,
+} from '../features/route/routeEditTransactions';
+import {
+  appendOrderedSegment,
+  beginRouteOperation,
+  bridgeOrderedGap,
+  cloneOrderedDraft,
+  commitRouteHistory,
+  createEmptyOrderedDraft,
+  createImportedOrderedDraft,
+  createLegacyOrderedDraft,
+  keepOnlyOrderedPart,
+  orderedDraftCanUseOrShare,
+  orderedDraftDistanceM,
+  orderedDraftPoints,
+  replaceOrderedInterval,
+  routeOperationIsCurrent,
+  setOrderedDraftStart,
+  trimOrderedDraft,
+  undoRouteHistory,
+  type EditableRouteResolution,
+  type OrderedPosition,
+  type OrderedRouteDraft,
+  type RouteDraftHistory,
+} from '../features/route/orderedRouteDraft';
+import {
+  loadRoutePlannerDraft,
+  removeRoutePlannerDraft,
+  saveRoutePlannerDraft,
+} from '../features/route/routePlannerDraftPersistence';
+import {
+  resolveDrawPlan,
+  resolvePointPlan,
+  type RouteProviderReason,
+} from '../features/route/routePlanningProvider';
+import { routeMatchesIdentity } from '../features/route/routeContracts';
+import { useMapTheme } from '../hooks/useMapTheme';
+import { useVisualTheme } from '../hooks/useVisualTheme';
+import { uuidv4 } from '../services/offlineQueue';
+import { useAppStore } from '../store/useAppStore';
+import { useRouteStore, type RoutePoint } from '../store/useRouteStore';
+import { loadActivityTrackPoints, useSessionStore } from '../store/useSessionStore';
+import { useDistance } from '../utils/distanceFormat';
+
+let MapView: any = null;
+let Camera: any = null;
+let ShapeSource: any = null;
+let LineLayer: any = null;
+let CircleLayer: any = null;
+let StyleImport: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Mapbox = require('@rnmapbox/maps');
+    MapView = Mapbox.MapView;
+    Camera = Mapbox.Camera;
+    ShapeSource = Mapbox.ShapeSource;
+    LineLayer = Mapbox.LineLayer;
+    CircleLayer = Mapbox.CircleLayer;
+    StyleImport = Mapbox.StyleImport ?? null;
+  } catch { /* explicit fallback below */ }
+}
+
+type PlannerTool = 'browse' | 'draw' | 'point';
+type PointIntent = 'append' | 'replace-start' | 'replace-end';
+
+interface PendingDrawChoice {
+  points: RoutePoint[];
+  resolution: EditableRouteResolution;
+  options: RouteIntervalCandidate[];
+}
+
+interface PendingCandidateReview {
+  kind: 'draw';
+  points: RoutePoint[];
+  resolution: EditableRouteResolution;
+  intent: DrawTransactionIntent;
+  reason: RouteProviderReason;
+  baseRevision: number;
+}
+
+type PointTransactionIntent =
+  | { kind: 'append' }
+  | { kind: 'bridge'; gapId: string }
+  | { kind: 'replace'; start: OrderedPosition; end: OrderedPosition; reverse: boolean };
+
+interface PendingPointReview {
+  kind: 'point';
+  points: RoutePoint[];
+  intent: PointTransactionIntent;
+  reason: RouteProviderReason;
+  baseRevision: number;
+}
+
+interface PendingAnchorChoice {
+  role: 'start' | 'end';
+  options: RouteAnchorCandidate[];
+  target: RoutePoint;
+}
+
+interface RouteGrowthAnimation {
+  key: string;
+  hiddenPartId?: string;
+  points: RoutePoint[];
+  visibleCount: number;
+}
+
+function providerReason(reason: RouteProviderReason): string {
+  switch (reason) {
+    case 'no-route': return 'No walking route found. Move the target or draw this section yourself.';
+    case 'no-match': return 'We could not match this part. Zoom in and draw a shorter section.';
+    case 'split-match': return 'The provider returned disconnected pieces. Your Route is unchanged.';
+    case 'endpoint-shift': return 'The mapped result moved an endpoint. Review it before applying.';
+    case 'shape-deviation': return 'The mapped result may shortcut the path you drew. Review it first.';
+    case 'chunk-seam': return 'The matched sections did not join safely. Your Route is unchanged.';
+    case 'provider-unavailable': return 'Routing is unavailable. Your Route is unchanged; try again when connected.';
+    default: return 'This edit could not be used. Your Route is unchanged.';
+  }
+}
+
+function editFailure(code: string): string {
+  switch (code) {
+    case 'ZERO_LENGTH': return 'Move farther before confirming this edit.';
+    case 'DISCONNECTED': return 'Start from the end of your Route, or choose a section to replace.';
+    case 'AMBIGUOUS_INTERVAL': return 'Choose which section to replace.';
+    case 'INVALID_COORDINATE': return 'The map could not read that position. Your Route is unchanged.';
+    default: return 'Your Route is unchanged. Try again while connected.';
+  }
+}
+
+function elevationGain(draft: OrderedRouteDraft): number {
+  return draft.parts.reduce((total, part) => total + part.points.reduce((gain, point, index) => {
+    if (index === 0) return gain;
+    const previous = part.points[index - 1];
+    return typeof point.alt === 'number' && typeof previous.alt === 'number' && point.alt > previous.alt
+      ? gain + point.alt - previous.alt
+      : gain;
+  }, 0), 0);
+}
+
+function initialBounds(draft: OrderedRouteDraft): { ne: [number, number]; sw: [number, number] } | null {
+  const points = draft.parts.flatMap(part => part.points);
+  if (points.length < 2) return null;
+  return {
+    ne: [Math.max(...points.map(point => point.lng)), Math.max(...points.map(point => point.lat))],
+    sw: [Math.min(...points.map(point => point.lng)), Math.min(...points.map(point => point.lat))],
+  };
+}
+
+function pointAt(draft: OrderedRouteDraft, position: OrderedPosition): RoutePoint | null {
+  return draft.parts.find(part => part.id === position.partId)?.points[position.pointIndex] ?? null;
+}
+
+function positionLabel(draft: OrderedRouteDraft, position: OrderedPosition): string {
+  const part = draft.parts.findIndex(item => item.id === position.partId);
+  return `Section ${part + 1}, point ${position.pointIndex + 1}`;
+}
+
+export function OrderedRouteEditorScreen() {
+  const nav = useNavigation<any>();
+  const screenRoute = useRoute<any>();
+  const insets = useSafeAreaInsets();
+  const theme = useVisualTheme();
+  const mapTheme = useMapTheme();
+  const dist = useDistance();
+  const params = screenRoute.params ?? {};
+  const routeId = params.routeId as string | undefined;
+  const fromSessionId = params.fromSessionId as string | undefined;
+  const sharedDeliveryId = params.sharedDeliveryId as string | undefined;
+  const creationSource = params.creationSource as 'plan' | 'activity' | 'shared-copy' | undefined;
+  const readOnlyShared = Boolean(sharedDeliveryId && creationSource !== 'shared-copy');
+  const ownerId = useAppStore(state => String(state.user?.id ?? ''));
+  const sessions = useSessionStore(state => state.sessions);
+  const routes = useRouteStore(state => state.routes);
+  const sharedRoutes = useRouteStore(state => state.sharedRoutes);
+  const addRoute = useRouteStore(state => state.addRoute);
+  const updateRoute = useRouteStore(state => state.updateRoute);
+  const loadRouteDetail = useRouteStore(state => state.loadRouteDetail);
+  const loadSharedRouteDetail = useRouteStore(state => state.loadSharedRouteDetail);
+  const removeSharedRoute = useRouteStore(state => state.removeSharedRoute);
+  const captureActivityRouteReference = useRouteStore(state => state.captureActivityRouteReference);
+
+  const [history, setHistory] = useState<RouteDraftHistory | null>(null);
+  const historyRef = useRef<RouteDraftHistory | null>(null);
+  const initialDraftRef = useRef<OrderedRouteDraft | null>(null);
+  const [name, setName] = useState('');
+  const [permission, setPermission] = useState<'personal' | 'friend'>('personal');
+  const [tool, setTool] = useState<PlannerTool>('browse');
+  const [pointIntent, setPointIntent] = useState<PointIntent>('append');
+  const [replacementStart, setReplacementStart] = useState<OrderedPosition | null>(null);
+  const [selectedGapId, setSelectedGapId] = useState<string | undefined>();
+  const [pendingDrawChoice, setPendingDrawChoice] = useState<PendingDrawChoice | null>(null);
+  const [pendingReview, setPendingReview] = useState<PendingCandidateReview | null>(null);
+  const [pendingPointReview, setPendingPointReview] = useState<PendingPointReview | null>(null);
+  const [manualRecovery, setManualRecovery] = useState<PendingCandidateReview | null>(null);
+  const [pendingAnchor, setPendingAnchor] = useState<PendingAnchorChoice | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [trimOpen, setTrimOpen] = useState(false);
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(1);
+  const [keepPartOpen, setKeepPartOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [initializing, setInitializing] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [providerBusy, setProviderBusy] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
+  const [mapEpoch, setMapEpoch] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [planningMemoryScope, setPlanningMemoryScope] = useState<'self' | 'combined'>('self');
+  const [routeGrowthAnimation, setRouteGrowthAnimation] = useState<RouteGrowthAnimation | null>(null);
+  const mapViewRef = useRef<any>(null);
+  const cameraCenterRef = useRef<RoutePoint | null>(null);
+  const initialBoundsRef = useRef<ReturnType<typeof initialBounds>>(null);
+  const operationAbortRef = useRef<AbortController | null>(null);
+  const routeAnimationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const initializedKeyRef = useRef('');
+
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => mounted && setReduceMotion(value));
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => { mounted = false; subscription.remove(); };
+  }, []);
+
+  const finishRouteAnimation = useCallback(() => {
+    if (routeAnimationTimerRef.current) clearInterval(routeAnimationTimerRef.current);
+    routeAnimationTimerRef.current = null;
+    setRouteGrowthAnimation(null);
+  }, []);
+
+  const animateAcceptedPoint = useCallback((points: RoutePoint[], hiddenPartId?: string) => {
+    finishRouteAnimation();
+    if (reduceMotion || points.length < 3) return;
+    const durationMs = 800;
+    const tickMs = 32;
+    const startedAt = Date.now();
+    const key = uuidv4();
+    setRouteGrowthAnimation({ key, hiddenPartId, points, visibleCount: 2 });
+    routeAnimationTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const progress = Math.min(1, elapsed / durationMs);
+      const visibleCount = Math.max(2, Math.ceil(progress * points.length));
+      setRouteGrowthAnimation(current => current?.key === key ? { ...current, visibleCount } : current);
+      if (progress >= 1) finishRouteAnimation();
+    }, tickMs);
+  }, [finishRouteAnimation, reduceMotion]);
+
+  useEffect(() => () => finishRouteAnimation(), [finishRouteAnimation]);
+
+  const commitResult = useCallback((result: ReturnType<typeof appendOrderedSegment>, operation: string) => {
+    const current = historyRef.current;
+    if (!current) return false;
+    if (!result.ok) {
+      setError(editFailure(result.code));
+      return false;
+    }
+    const next = commitRouteHistory(current, result, operation);
+    historyRef.current = next;
+    setHistory(next);
+    setError(null);
+    return true;
+  }, []);
+
+  useEffect(() => {
+    const initKey = `${ownerId}|${routeId ?? ''}|${fromSessionId ?? ''}|${sharedDeliveryId ?? ''}|${creationSource ?? ''}`;
+    if (!ownerId || initializedKeyRef.current === initKey) return;
+    initializedKeyRef.current = initKey;
+    let cancelled = false;
+    setInitializing(true);
+    setError(null);
+    void (async () => {
+      let draft: OrderedRouteDraft;
+      let initialName = '';
+      let initialPermission: 'personal' | 'friend' = 'personal';
+      const requestedDraftId = routeId
+        ? `route:${routeId}`
+        : fromSessionId
+          ? `activity:${fromSessionId}`
+          : sharedDeliveryId && creationSource === 'shared-copy'
+            ? `received:${sharedDeliveryId}`
+            : undefined;
+      if (!readOnlyShared) {
+        const recovered = await loadRoutePlannerDraft(ownerId, requestedDraftId);
+        if (recovered && (!requestedDraftId || recovered.draftId === requestedDraftId)) {
+          if (cancelled) return;
+          historyRef.current = recovered.history;
+          initialDraftRef.current = cloneOrderedDraft(recovered.history.present);
+          setHistory(recovered.history);
+          setName(recovered.name);
+          setPermission(recovered.permission);
+          initialBoundsRef.current = initialBounds(recovered.history.present);
+          setInitializing(false);
+          return;
+        }
+      }
+      if (routeId) {
+        let source = routes.find(item => routeMatchesIdentity(item, routeId));
+        if (!source || source.points.length < 2) {
+          await loadRouteDetail(routeId);
+          source = useRouteStore.getState().routes.find(item => routeMatchesIdentity(item, routeId));
+        }
+        if (!source || source.points.length < 2) throw new Error('This Route is not available on this device.');
+        draft = source.orderedDraft
+          ? { ...cloneOrderedDraft(source.orderedDraft), ownerId, draftId: `route:${source.id}` }
+          : createLegacyOrderedDraft({
+              draftId: `route:${source.id}`,
+              ownerId,
+              points: source.points,
+              origin: source.creationOrigin === 'activity' ? 'activity' : 'plan',
+              recorded: source.creationOrigin === 'activity',
+            });
+        initialName = source.name;
+        initialPermission = source.permission === 'friend' ? 'friend' : 'personal';
+      } else if (fromSessionId) {
+        const session = sessions.find(item => item.id === fromSessionId);
+        if (!session) throw new Error('This Activity is no longer available.');
+        const clientActivityId = session.clientActivityId ?? session.id;
+        const artifact = await loadActivityFinalArtifact(ownerId, clientActivityId);
+        const points = artifact?.points?.length ? artifact.points : await loadActivityTrackPoints(session);
+        const segments = segmentTrace(points).segments
+          .filter(segment => segment.length >= 2)
+          .map(segment => segment.map(point => ({ lat: point.lat, lng: point.lng, alt: point.alt ?? null })));
+        if (segments.length === 0) throw new Error('This Activity has no usable path.');
+        draft = createImportedOrderedDraft({ draftId: `activity:${fromSessionId}`, ownerId, segments });
+        initialName = `${session.name || (session.activityMode === 'running' ? 'Run' : 'Hike')} Route`;
+      } else if (sharedDeliveryId) {
+        let shared = sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
+        if (!shared || shared.points.length < 2) {
+          await loadSharedRouteDetail(sharedDeliveryId);
+          shared = useRouteStore.getState().sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
+        }
+        if (!shared || shared.points.length < 2) throw new Error('This shared Route is unavailable.');
+        draft = shared.orderedDraft
+          ? {
+              ...cloneOrderedDraft(shared.orderedDraft),
+              ownerId,
+              draftId: creationSource === 'shared-copy' ? `received:${sharedDeliveryId}` : `shared-view:${sharedDeliveryId}`,
+              origin: creationSource === 'shared-copy' ? 'received-copy' : shared.orderedDraft.origin,
+            }
+          : createLegacyOrderedDraft({
+              draftId: creationSource === 'shared-copy' ? `received:${sharedDeliveryId}` : `shared-view:${sharedDeliveryId}`,
+              ownerId,
+              points: shared.points,
+              origin: creationSource === 'shared-copy' ? 'received-copy' : 'plan',
+            });
+        initialName = creationSource === 'shared-copy' ? `${shared.name} copy` : shared.name;
+      } else {
+        const recovered = await loadRoutePlannerDraft(ownerId);
+        if (recovered && recovered.history.present.origin === 'plan' && !recovered.sourceRouteId && !recovered.sourceActivityId) {
+          draft = recovered.history.present;
+          initialName = recovered.name;
+          initialPermission = recovered.permission;
+          const recoveredHistory = recovered.history;
+          if (cancelled) return;
+          historyRef.current = recoveredHistory;
+          initialDraftRef.current = cloneOrderedDraft(recoveredHistory.present);
+          setHistory(recoveredHistory);
+          setName(initialName);
+          setPermission(initialPermission);
+          initialBoundsRef.current = initialBounds(recoveredHistory.present);
+          setInitializing(false);
+          return;
+        }
+        draft = createEmptyOrderedDraft({ draftId: `plan:${uuidv4()}`, ownerId });
+      }
+      const nextHistory = { present: draft, past: [] };
+      if (cancelled) return;
+      historyRef.current = nextHistory;
+      initialDraftRef.current = cloneOrderedDraft(draft);
+      initialBoundsRef.current = initialBounds(draft);
+      setHistory(nextHistory);
+      setName(initialName);
+      setPermission(initialPermission);
+      setInitializing(false);
+    })().catch(cause => {
+      if (!cancelled) {
+        setError(String(cause?.message ?? cause));
+        setInitializing(false);
+      }
+    });
+    return () => { cancelled = true; operationAbortRef.current?.abort(); };
+  }, [creationSource, fromSessionId, loadRouteDetail, loadSharedRouteDetail, ownerId, readOnlyShared, routeId, routes, sessions, sharedDeliveryId, sharedRoutes]);
+
+  useEffect(() => {
+    if (!history || initializing || readOnlyShared) return;
+    const timeout = setTimeout(() => {
+      void saveRoutePlannerDraft({
+        ownerId,
+        draftId: history.present.draftId,
+        history,
+        name,
+        permission,
+        sourceActivityId: fromSessionId,
+        sourceRouteId: routeId,
+        reconnectsActivityGap: history.present.gaps.length === 0 && initialDraftRef.current?.gaps.length !== 0,
+      }).catch(() => setError('This draft could not be saved on this device. Keep this screen open.'));
+    }, 120);
+    return () => clearTimeout(timeout);
+  }, [fromSessionId, history, initializing, name, ownerId, permission, readOnlyShared, routeId]);
+
+  const draft = history?.present ?? null;
+  const routeParts = draft?.parts ?? [];
+  const selectedGap = draft?.gaps.find(gap => gap.id === selectedGapId);
+  const mapStyle = getMapStyleForTheme('outdoors', mapTheme);
+  const lightPreset = themeToStandardPreset(mapTheme);
+  const region = getCurrentRegion();
+  const fallbackCenter: [number, number] = [region.centerLng, region.centerLat];
+
+  const applyResolvedDraw = useCallback((
+    points: RoutePoint[],
+    resolution: EditableRouteResolution,
+    intent: DrawTransactionIntent,
+  ) => {
+    const current = historyRef.current;
+    if (!current) return;
+    if (intent.kind === 'replace') {
+      if (intent.options.length > 1) {
+        setPendingDrawChoice({ points, resolution, options: intent.options });
+        return;
+      }
+      const option = intent.options[0];
+      if (!option) { setError('Choose which section to replace.'); return; }
+      commitResult(applyDrawTransaction(current.present, { kind: 'replace', option }, points, resolution), 'replace-draw');
+      return;
+    }
+    if (intent.kind === 'reject') { setError(editFailure(intent.code)); return; }
+    commitResult(applyDrawTransaction(current.present, intent, points, resolution), intent.kind === 'bridge' ? 'bridge-draw' : 'append-draw');
+    if (intent.kind === 'bridge') setSelectedGapId(undefined);
+  }, [commitResult]);
+
+  const handleDrawStroke = useCallback(async (raw: RoutePoint[]) => {
+    setTool('browse');
+    const current = historyRef.current;
+    if (!current) return;
+    const intent = classifyDrawTransaction(current.present, raw, selectedGapId);
+    if (intent.kind === 'reject') { setError(editFailure(intent.code)); return; }
+    const operationId = uuidv4();
+    const token = beginRouteOperation(current.present, ownerId, intent.kind === 'bridge' ? 'bridge' : intent.kind === 'replace' ? 'replace' : 'draw', operationId);
+    operationAbortRef.current?.abort();
+    const controller = new AbortController();
+    operationAbortRef.current = controller;
+    setProviderBusy(true);
+    setError(null);
+    try {
+      const resolved = await resolveDrawPlan(raw, { signal: controller.signal });
+      const live = historyRef.current;
+      if (!live || controller.signal.aborted || !routeOperationIsCurrent(live.present, ownerId, token)) return;
+      if (resolved.outcome === 'accepted') {
+        applyResolvedDraw(resolved.points, 'draw-matched', intent);
+      } else if (resolved.outcome === 'review') {
+        setPendingReview({
+          kind: 'draw',
+          points: resolved.points,
+          resolution: 'draw-matched',
+          intent,
+          reason: resolved.reason,
+          baseRevision: live.present.revision,
+        });
+      } else if (resolved.outcome === 'manual-available') {
+        setManualRecovery({
+          kind: 'draw',
+          points: resolved.rawPoints,
+          resolution: 'draw-manual',
+          intent,
+          reason: resolved.reason,
+          baseRevision: live.present.revision,
+        });
+      } else {
+        setError(providerReason(resolved.reason));
+      }
+    } finally {
+      if (operationAbortRef.current === controller) operationAbortRef.current = null;
+      if (!controller.signal.aborted) setProviderBusy(false);
+    }
+  }, [applyResolvedDraw, ownerId, selectedGapId]);
+
+  const applyResolvedPoint = useCallback((points: RoutePoint[], intent: PointTransactionIntent, baseRevision: number) => {
+    const current = historyRef.current;
+    if (!current) return;
+    if (current.present.revision !== baseRevision) {
+      setError('This Route changed while the edit was being reviewed. The older result was not applied.');
+      return;
+    }
+    if (intent.kind === 'append') {
+      const result = appendOrderedSegment(current.present, points, 'point');
+      if (commitResult(result, 'append-point')) {
+        animateAcceptedPoint(points, result.ok ? result.draft.parts.at(-1)?.id : undefined);
+        setTool('browse');
+      }
+      return;
+    }
+    if (intent.kind === 'bridge') {
+      const previousPartIds = new Set(current.present.parts.map(part => part.id));
+      const result = bridgeOrderedGap(current.present, intent.gapId, points, 'point');
+      if (commitResult(result, 'bridge-point')) {
+        const addedPart = result.ok ? result.draft.parts.find(part => !previousPartIds.has(part.id)) : undefined;
+        animateAcceptedPoint(points, addedPart?.id);
+        setSelectedGapId(undefined);
+        setTool('browse');
+      }
+      return;
+    }
+    if (commitResult(replaceOrderedInterval(
+      current.present,
+      intent.start,
+      intent.end,
+      intent.reverse ? [...points].reverse() : points,
+      'point',
+    ), 'replace-point')) {
+      animateAcceptedPoint(points);
+      setReplacementStart(null);
+      setPointIntent('append');
+      setTool('browse');
+    }
+  }, [animateAcceptedPoint, commitResult]);
+
+  const runPointRequest = useCallback(async (
+    start: RoutePoint,
+    target: RoutePoint,
+    intent: PointTransactionIntent,
+  ) => {
+    const current = historyRef.current;
+    if (!current) return;
+    finishRouteAnimation();
+    const baseRevision = current.present.revision;
+    const token = beginRouteOperation(current.present, ownerId, 'point', uuidv4());
+    operationAbortRef.current?.abort();
+    const controller = new AbortController();
+    operationAbortRef.current = controller;
+    setProviderBusy(true);
+    setError(null);
+    try {
+      const result = await resolvePointPlan(start, target, { signal: controller.signal });
+      const live = historyRef.current;
+      if (!live || controller.signal.aborted || !routeOperationIsCurrent(live.present, ownerId, token)) return;
+      if (result.outcome === 'accepted') applyResolvedPoint(result.points, intent, baseRevision);
+      else if (result.outcome === 'review') {
+        setPendingPointReview({ kind: 'point', points: result.points, intent, reason: result.reason, baseRevision });
+      } else setError(providerReason(result.reason));
+    } finally {
+      if (operationAbortRef.current === controller) operationAbortRef.current = null;
+      if (!controller.signal.aborted) setProviderBusy(false);
+    }
+  }, [applyResolvedPoint, finishRouteAnimation, ownerId]);
+
+  const chooseReplacementEnd = useCallback((end: RouteAnchorCandidate) => {
+    const current = historyRef.current;
+    const start = replacementStart;
+    if (!current || !start || start.partId !== end.partId || start.pointIndex === end.pointIndex) {
+      setError('Choose two different positions on the same ordered section.');
+      return;
+    }
+    const startPoint = pointAt(current.present, start);
+    const endPoint = pointAt(current.present, end);
+    if (!startPoint || !endPoint) return;
+    setPendingAnchor(null);
+    const forward = start.pointIndex < end.pointIndex;
+    const lower = forward ? start : end;
+    const upper = forward ? end : start;
+    void runPointRequest(startPoint, endPoint, { kind: 'replace', start: lower, end: upper, reverse: !forward });
+  }, [replacementStart, runPointRequest]);
+
+  const chooseAnchor = useCallback((candidate: RouteAnchorCandidate) => {
+    if (pendingAnchor?.role === 'start') {
+      setReplacementStart({ partId: candidate.partId, pointIndex: candidate.pointIndex });
+      setPointIntent('replace-end');
+      setPendingAnchor(null);
+      setError('Pan to the end of the section, then confirm it.');
+    } else if (pendingAnchor?.role === 'end') {
+      chooseReplacementEnd(candidate);
+    }
+  }, [chooseReplacementEnd, pendingAnchor?.role]);
+
+  const confirmPointTarget = useCallback(() => {
+    const current = historyRef.current;
+    const target = cameraCenterRef.current;
+    if (!current || !target || providerBusy) return;
+    if (selectedGap) {
+      const leftIndex = current.present.parts.findIndex(part => part.id === selectedGap.afterPartId);
+      const left = current.present.parts[leftIndex]?.points.at(-1);
+      const right = current.present.parts[leftIndex + 1]?.points[0];
+      if (!left || !right) return;
+      void runPointRequest(left, right, { kind: 'bridge', gapId: selectedGap.id });
+      return;
+    }
+    if (current.present.parts.length === 0 && !current.present.startPoint) {
+      if (commitResult(setOrderedDraftStart(current.present, target), 'set-start')) {
+        setError('Start set. Pan to a destination and add it.');
+      }
+      return;
+    }
+    if (pointIntent === 'replace-start') {
+      const options = nearestOrderedPositions(current.present, target);
+      if (options.length === 0) { setError('Move the target onto the Route.'); return; }
+      if (options.length > 1) setPendingAnchor({ role: 'start', options, target });
+      else chooseAnchor(options[0]);
+      return;
+    }
+    if (pointIntent === 'replace-end') {
+      const options = nearestOrderedPositions(current.present, target)
+        .filter(option => option.partId === replacementStart?.partId && option.pointIndex !== replacementStart?.pointIndex);
+      if (options.length === 0) { setError('Choose another position on the same section.'); return; }
+      if (options.length > 1) setPendingAnchor({ role: 'end', options, target });
+      else chooseReplacementEnd(options[0]);
+      return;
+    }
+    const start = current.present.parts.at(-1)?.points.at(-1) ?? current.present.startPoint;
+    if (!start) return;
+    void runPointRequest(start, target, { kind: 'append' });
+  }, [chooseAnchor, chooseReplacementEnd, commitResult, pointIntent, providerBusy, replacementStart, runPointRequest, selectedGap]);
+
+  const handleUndo = useCallback(() => {
+    finishRouteAnimation();
+    operationAbortRef.current?.abort();
+    setProviderBusy(false);
+    const current = historyRef.current;
+    if (!current) return;
+    const next = undoRouteHistory(current);
+    historyRef.current = next;
+    setHistory(next);
+    setPendingReview(null);
+    setPendingPointReview(null);
+    setManualRecovery(null);
+    setPendingDrawChoice(null);
+    setError(null);
+  }, [finishRouteAnimation]);
+
+  const applyTrim = useCallback(() => {
+    const current = historyRef.current;
+    if (!current || current.present.parts.length === 0) return;
+    const occurrences = current.present.parts.flatMap(part => part.points.map((_point, pointIndex) => ({ partId: part.id, pointIndex })));
+    const start = occurrences[Math.min(occurrences.length - 1, Math.round(trimStart * (occurrences.length - 1)))];
+    const end = occurrences[Math.min(occurrences.length - 1, Math.round(trimEnd * (occurrences.length - 1)))];
+    if (commitResult(trimOrderedDraft(current.present, start, end), 'trim')) {
+      setTrimOpen(false);
+      setTrimStart(0);
+      setTrimEnd(1);
+    }
+  }, [commitResult, trimEnd, trimStart]);
+
+  const saveRoute = useCallback(async () => {
+    const current = historyRef.current;
+    if (!current || saving || readOnlyShared) return;
+    const title = name.trim();
+    if (!title) { setError('Name this Route before saving.'); return; }
+    if (current.present.parts.length === 0) { setError('Add a path before saving this Route.'); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      const points = orderedDraftPoints(current.present);
+      const resolutionState = current.present.gaps.length ? 'unresolved_gaps' as const : 'continuous' as const;
+      const distanceM = orderedDraftDistanceM(current.present);
+      let savedId = routeId;
+      if (routeId) {
+        await updateRoute(routeId, {
+          name: title,
+          points,
+          orderedDraft: current.present,
+          resolutionState,
+          distanceM,
+          elevationGainM: elevationGain(current.present),
+          permission,
+        });
+      } else {
+        const source = fromSessionId ? sessions.find(item => item.id === fromSessionId) : undefined;
+        savedId = await addRoute({
+          name: title,
+          points,
+          orderedDraft: current.present,
+          resolutionState,
+          waypoints: [],
+          distanceM,
+          elevationGainM: elevationGain(current.present),
+          permission: 'personal',
+          activityMode: source?.activityMode,
+        }, source ? {
+          clientActivityId: source.clientActivityId ?? (!/^\d+$/.test(source.id) ? source.id : undefined),
+          serverActivityId: source.remoteId ?? source.serverActivityId ?? (/^\d+$/.test(source.id) ? Number(source.id) : undefined),
+          reconnectsActivityGap: initialDraftRef.current?.gaps.length !== 0 && current.present.gaps.length === 0,
+        } : undefined) ?? undefined;
+      }
+      if (!savedId) throw new Error('Route save did not complete.');
+      await removeRoutePlannerDraft(ownerId, current.present.draftId).catch(() => undefined);
+      nav.dispatch(CommonActions.reset({
+        index: 1,
+        routes: [{ name: 'Home' }, { name: 'MapHistory', params: { routeId: savedId } }],
+      }));
+    } catch (cause: any) {
+      setError(cause?.outcomeUnknown
+        ? 'The save outcome is not confirmed. This draft remains available for recovery.'
+        : 'This Route could not be saved. The draft remains on this device.');
+    } finally {
+      setSaving(false);
+    }
+  }, [addRoute, fromSessionId, name, nav, ownerId, permission, readOnlyShared, routeId, saving, sessions, updateRoute]);
+
+  const useSharedRoute = useCallback((mode: 'hiking' | 'running') => {
+    const shared = sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
+    if (!shared || !orderedDraftCanUseOrShare(historyRef.current?.present ?? createEmptyOrderedDraft({ draftId: 'invalid', ownerId }))) {
+      setError('Repair every unknown gap before using this Route.');
+      return;
+    }
+    captureActivityRouteReference(shared.id);
+    nav.navigate(mode === 'running' ? 'Running' : 'Hiking', { routeId: shared.id });
+  }, [captureActivityRouteReference, nav, ownerId, sharedDeliveryId, sharedRoutes]);
+
+  if (initializing || !draft) {
+    return (
+      <View style={[styles.centered, { backgroundColor: theme.background }]}>
+        <ActivityIndicator color={theme.primary} />
+        <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Preparing Route…</Text>
+        {error ? <Text style={[styles.errorText, { color: theme.destructive }]}>{error}</Text> : null}
+      </View>
+    );
+  }
+
+  const pointActionLabel = selectedGap
+    ? 'Connect gap with Point'
+    : draft.parts.length === 0 && !draft.startPoint
+      ? 'Set start'
+      : pointIntent === 'replace-start'
+        ? 'Set replacement start'
+        : pointIntent === 'replace-end'
+          ? 'Set replacement end'
+          : 'Add destination';
+  const mapParts = routeParts.filter(part => part.id !== routeGrowthAnimation?.hiddenPartId).map(part => ({
+    type: 'Feature' as const,
+    id: part.id,
+    properties: { resolution: part.resolution },
+    geometry: { type: 'LineString' as const, coordinates: part.points.map(point => [point.lng, point.lat]) },
+  }));
+  const animationFeature = routeGrowthAnimation ? {
+    type: 'Feature' as const,
+    properties: {},
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: routeGrowthAnimation.points
+        .slice(0, routeGrowthAnimation.visibleCount)
+        .map(point => [point.lng, point.lat]),
+    },
+  } : null;
+  const gapFeatures = draft.gaps.flatMap(gap => {
+    const left = draft.parts.findIndex(part => part.id === gap.afterPartId);
+    const a = draft.parts[left]?.points.at(-1);
+    const b = draft.parts[left + 1]?.points[0];
+    return a && b ? [{
+      type: 'Feature' as const,
+      id: gap.id,
+      properties: {},
+      geometry: { type: 'LineString' as const, coordinates: [[a.lng, a.lat], [b.lng, b.lat]] },
+    }] : [];
+  });
+
+  return (
+    <View style={[styles.screen, { backgroundColor: theme.background }]} testID="ordered-route-editor">
+      {MapView ? (
+        <MapView
+          key={`ordered-route-map-${mapEpoch}`}
+          ref={mapViewRef}
+          style={StyleSheet.absoluteFill}
+          {...(mapStyle.kind === 'url' ? { styleURL: mapStyle.url } : { styleJSON: mapStyle.json })}
+          logoEnabled
+          attributionEnabled
+          logoPosition={{ top: insets.top + 56, right: 8 }}
+          attributionPosition={{ top: insets.top + 88, right: 8 }}
+          scaleBarEnabled={false}
+          compassEnabled={false}
+          scrollEnabled={tool !== 'draw'}
+          zoomEnabled={tool !== 'draw'}
+          rotateEnabled={tool !== 'draw'}
+          pitchEnabled={tool !== 'draw'}
+          onDidFinishLoadingMap={() => setMapReady(true)}
+          onDidFinishRenderingMapFully={() => setMapReady(true)}
+          onMapLoadingError={() => setMapLoadState('error')}
+          onCameraChanged={(event: any) => {
+            const center = event?.properties?.center;
+            if (Array.isArray(center) && center.length >= 2) cameraCenterRef.current = { lng: Number(center[0]), lat: Number(center[1]) };
+          }}
+        >
+          {StyleImport ? <StyleImport key={lightPreset} id="basemap" existing config={buildStandardConfig(mapTheme) as any} /> : null}
+          {Camera ? initialBoundsRef.current ? (
+            <Camera
+              bounds={{
+                ...initialBoundsRef.current,
+                paddingTop: insets.top + 100,
+                paddingBottom: insets.bottom + 300,
+                paddingLeft: 40,
+                paddingRight: 40,
+              }}
+              animationDuration={0}
+            />
+          ) : <Camera centerCoordinate={fallbackCenter} zoomLevel={region.defaultZoom} animationDuration={0} /> : null}
+          <FogLayer scopeOverride={planningMemoryScope} opacityScale={0.42} />
+          {ShapeSource && LineLayer && mapParts.length ? (
+            <ShapeSource id="ordered-route-parts" shape={{ type: 'FeatureCollection', features: mapParts }}>
+              <LineLayer id="ordered-route-parts-line" style={{ lineColor: theme.primary, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
+            </ShapeSource>
+          ) : null}
+          {ShapeSource && LineLayer && animationFeature ? (
+            <ShapeSource id="ordered-route-growth" shape={animationFeature}>
+              <LineLayer id="ordered-route-growth-line" style={{ lineColor: theme.primary, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
+            </ShapeSource>
+          ) : null}
+          {ShapeSource && LineLayer && gapFeatures.length ? (
+            <ShapeSource id="ordered-route-gaps" shape={{ type: 'FeatureCollection', features: gapFeatures }}>
+              <LineLayer id="ordered-route-gap-line" style={{ lineColor: theme.destructive, lineWidth: 3, lineDasharray: [2, 2], lineOpacity: 0.85 }} />
+            </ShapeSource>
+          ) : null}
+          {ShapeSource && CircleLayer && draft.startPoint && draft.parts.length === 0 ? (
+            <ShapeSource id="ordered-route-start" shape={{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [draft.startPoint.lng, draft.startPoint.lat] } }}>
+              <CircleLayer id="ordered-route-start-ring" style={{ circleRadius: 8, circleColor: theme.surfaceElevated, circleStrokeColor: theme.primary, circleStrokeWidth: 3 }} />
+            </ShapeSource>
+          ) : null}
+        </MapView>
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.centered, { backgroundColor: theme.background }]}>
+          <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Map unavailable</Text>
+        </View>
+      )}
+      {MapView && !mapReady ? (
+        <MapLoadOverlay
+          state={mapLoadState}
+          onRetry={() => { setMapReady(false); setMapLoadState('loading'); setMapEpoch(value => value + 1); }}
+          testID="ordered-route-map-load-overlay"
+        />
+      ) : null}
+
+      <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm }]} pointerEvents="box-none">
+        <BackButton variant="inline" onPress={() => nav.goBack()} />
+        <View style={styles.topTitleWrap}>
+          <Text style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? 'Shared Route' : routeId ? 'Edit Route' : 'Create Route'}</Text>
+          <Text style={[styles.topSubtitle, { color: theme.foregroundSecondary }]}>Plan only · not walking evidence</Text>
+        </View>
+        {!readOnlyShared ? (
+          <TouchableOpacity
+            style={[styles.topUtility, { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle }]}
+            onPress={handleUndo}
+            disabled={!history || history.past.length === 0}
+            accessibilityRole="button"
+            accessibilityLabel="Undo last Route edit"
+          >
+            <Icon name="Undo2" size={17} color={theme.iconActive} strokeWidth={2.2} />
+          </TouchableOpacity>
+        ) : <View style={styles.topUtilityPlaceholder} />}
+      </View>
+
+      {tool === 'point' && !readOnlyShared ? (
+        <View pointerEvents="none" style={styles.centerTarget}>
+          <View style={[styles.targetRing, { borderColor: theme.primary }]} />
+          <View style={[styles.targetDot, { backgroundColor: theme.primary }]} />
+        </View>
+      ) : null}
+
+      <RouteDrawOverlay
+        active={tool === 'draw' && !readOnlyShared}
+        mapViewRef={mapViewRef}
+        onStroke={points => { void handleDrawStroke(points); }}
+        onCancel={reason => {
+          setTool('browse');
+          setError(reason === 'gesture-interrupted'
+            ? 'Drawing cancelled so the map gesture could continue. Your Route is unchanged.'
+            : 'The map could not read that stroke. Your Route is unchanged.');
+        }}
+        bottomInset={300 + insets.bottom}
+        strokeColor={theme.primary}
+      />
+
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.bottomWrap} pointerEvents="box-none">
+        <View style={[styles.bottomCard, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow }]}>
+          {error ? (
+            <TouchableOpacity style={[styles.notice, { backgroundColor: theme.destructiveSurface }]} onPress={() => setError(null)}>
+              <Icon name="TriangleAlert" size={15} color={theme.destructive} strokeWidth={2.2} />
+              <Text style={[styles.noticeText, { color: theme.destructive }]}>{error}</Text>
+            </TouchableOpacity>
+          ) : null}
+          {providerBusy ? (
+            <View style={styles.busyRow}><ActivityIndicator size="small" color={theme.primary} /><Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Preparing one Route edit…</Text></View>
+          ) : null}
+          {draft.gaps.length > 0 ? (
+            <View style={[styles.gapNotice, { backgroundColor: theme.destructiveSurface, borderColor: theme.borderSubtle }]}>
+              <View style={styles.gapHeading}><Icon name="TriangleAlert" size={16} color={theme.destructive} /><Text style={[styles.gapTitle, { color: theme.foreground }]}>{draft.gaps.length} unknown {draft.gaps.length === 1 ? 'gap' : 'gaps'}</Text></View>
+              <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Dashed connectors are not counted or claimed as walked. Repair adjacent sections before Use or Share.</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                {draft.gaps.map((gap, index) => (
+                  <TouchableOpacity key={gap.id} style={[styles.chip, { borderColor: selectedGapId === gap.id ? theme.primary : theme.borderSubtle }, selectedGapId === gap.id && { backgroundColor: theme.controlSelected }]} onPress={() => setSelectedGapId(selectedGapId === gap.id ? undefined : gap.id)}>
+                    <Text style={[styles.chipText, { color: theme.foreground }]}>Gap {index + 1}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {readOnlyShared ? (
+            <>
+              <View style={[styles.summary, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
+                <Text style={[styles.nameReadOnly, { color: theme.foreground }]}>{name}</Text>
+                <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Independent snapshot · {dist.format(orderedDraftDistanceM(draft), 1)} {dist.unit}</Text>
+              </View>
+              <View style={styles.row}>
+                <PrimaryButton label="Use for Hike" onPress={() => useSharedRoute('hiking')} style={styles.flexButton} disabled={!orderedDraftCanUseOrShare(draft)} />
+                <PrimaryButton label="Use for Run" variant="secondary" onPress={() => useSharedRoute('running')} style={styles.flexButton} disabled={!orderedDraftCanUseOrShare(draft)} />
+              </View>
+              <View style={styles.row}>
+                <PrimaryButton label="Edit a copy" variant="secondary" onPress={() => nav.replace('RouteEditor', { sharedDeliveryId, creationSource: 'shared-copy' })} style={styles.flexButton} />
+                <PrimaryButton label="Remove" variant="destructive" onPress={() => { void removeSharedRoute(sharedDeliveryId!).then(() => nav.goBack()); }} style={styles.flexButton} />
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={[styles.summary, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Route name"
+                  placeholderTextColor={theme.muted}
+                  style={[styles.nameInput, { color: theme.foreground }]}
+                  accessibilityLabel="Route name"
+                />
+                <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>
+                  {draft.parts.length} {draft.parts.length === 1 ? 'section' : 'sections'} · {dist.format(orderedDraftDistanceM(draft), 1)} {dist.unit}{reduceMotion ? ' · Reduce Motion' : ''}
+                </Text>
+              </View>
+              <View style={styles.toolRow}>
+                <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'draw' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'draw' ? theme.controlSelected : theme.surface }]} onPress={() => { setTool('draw'); setError(selectedGap ? 'Draw from one highlighted gap endpoint to the other.' : 'Draw one connected stroke, then browse the map to continue.'); }} accessibilityRole="button" accessibilityState={{ selected: tool === 'draw' }}>
+                  <Icon name="Pencil" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Draw</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'point' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'point' ? theme.controlSelected : theme.surface }]} onPress={() => setTool('point')} accessibilityRole="button" accessibilityState={{ selected: tool === 'point' }}>
+                  <Icon name="MapPin" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Point</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.toolButton, { borderColor: theme.borderSubtle, backgroundColor: theme.surface }]} onPress={() => setMoreOpen(true)} accessibilityRole="button" accessibilityLabel="More Route actions">
+                  <Icon name="Settings2" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>More</Text>
+                </TouchableOpacity>
+              </View>
+              {tool === 'point' ? (
+                <View style={styles.pointActions}>
+                  <PrimaryButton label={pointActionLabel} onPress={confirmPointTarget} loading={providerBusy} />
+                  {!selectedGap && draft.parts.length > 0 ? (
+                    <TouchableOpacity onPress={() => { setPointIntent(pointIntent === 'append' ? 'replace-start' : 'append'); setReplacementStart(null); }} accessibilityRole="button">
+                      <Text style={[styles.linkText, { color: theme.primary }]}>{pointIntent === 'append' ? 'Replace a section' : 'Return to append'}</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              ) : null}
+              <PrimaryButton
+                label={draft.gaps.length ? 'Save repairable draft' : 'Save Route'}
+                onPress={() => { void saveRoute(); }}
+                loading={saving}
+                disabled={draft.parts.length === 0 || !name.trim()}
+                testID="ordered-route-save"
+              />
+            </>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+
+      <ModalCard visible={Boolean(pendingDrawChoice)} onDismiss={() => setPendingDrawChoice(null)} testID="route-interval-choice">
+        <ModalCardHeader title="Choose which section to replace" body="Repeated or crossing coordinates can refer to different moments in the ordered Route." />
+        <ScrollView style={styles.modalScroll}>
+          {pendingDrawChoice?.options.map(option => (
+            <PrimaryButton
+              key={option.id}
+              label={`${positionLabel(draft, option.start)} → ${positionLabel(draft, option.end)}`}
+              variant="secondary"
+              onPress={() => {
+                const pending = pendingDrawChoice;
+                setPendingDrawChoice(null);
+                if (!pending) return;
+                const current = historyRef.current;
+                if (!current) return;
+                commitResult(applyDrawTransaction(current.present, { kind: 'replace', option }, pending.points, pending.resolution), 'replace-draw');
+              }}
+              style={styles.modalButton}
+            />
+          ))}
+        </ScrollView>
+      </ModalCard>
+
+      <ModalCard visible={Boolean(pendingAnchor)} onDismiss={() => setPendingAnchor(null)}>
+        <ModalCardHeader title="Choose the ordered position" body="This location occurs more than once. Cairn will not guess which visit you meant." />
+        {pendingAnchor?.options.map(option => (
+          <PrimaryButton key={`${option.partId}:${option.pointIndex}`} label={positionLabel(draft, option)} variant="secondary" onPress={() => chooseAnchor(option)} style={styles.modalButton} />
+        ))}
+      </ModalCard>
+
+      <ModalCard visible={Boolean(pendingReview)} onDismiss={() => setPendingReview(null)}>
+        <ModalCardHeader title="Review this Route edit" body={pendingReview ? providerReason(pendingReview.reason) : ''} />
+        <PrimaryButton label="Apply reviewed edit" onPress={() => {
+          const pending = pendingReview;
+          setPendingReview(null);
+          if (!pending) return;
+          if (historyRef.current?.present.revision !== pending.baseRevision) {
+            setError('This Route changed while the edit was being reviewed. The older result was not applied.');
+            return;
+          }
+          applyResolvedDraw(pending.points, pending.resolution, pending.intent);
+        }} />
+        <PrimaryButton label="Keep Route unchanged" variant="secondary" onPress={() => setPendingReview(null)} style={styles.modalButton} />
+      </ModalCard>
+
+      <ModalCard visible={Boolean(pendingPointReview)} onDismiss={() => setPendingPointReview(null)}>
+        <ModalCardHeader title="Review this walking Route" body={pendingPointReview ? providerReason(pendingPointReview.reason) : ''} />
+        <PrimaryButton label="Apply reviewed path" onPress={() => {
+          const pending = pendingPointReview;
+          setPendingPointReview(null);
+          if (pending) applyResolvedPoint(pending.points, pending.intent, pending.baseRevision);
+        }} />
+        <PrimaryButton label="Keep Route unchanged" variant="secondary" onPress={() => setPendingPointReview(null)} style={styles.modalButton} />
+      </ModalCard>
+
+      <ModalCard visible={Boolean(manualRecovery)} onDismiss={() => setManualRecovery(null)}>
+        <ModalCardHeader title="Mapped path unavailable" body={manualRecovery ? `${providerReason(manualRecovery.reason)} You can explicitly keep the coherent stroke as a manual plan.` : ''} />
+        <PrimaryButton label="Keep as drawn — not matched" onPress={() => {
+          const pending = manualRecovery;
+          setManualRecovery(null);
+          if (!pending) return;
+          if (historyRef.current?.present.revision !== pending.baseRevision) {
+            setError('This Route changed while the edit was being reviewed. The older result was not applied.');
+            return;
+          }
+          applyResolvedDraw(pending.points, 'draw-manual', pending.intent);
+        }} />
+        <PrimaryButton label="Redraw this section" variant="secondary" onPress={() => { setManualRecovery(null); setTool('draw'); }} style={styles.modalButton} />
+      </ModalCard>
+
+      <ModalCard visible={moreOpen} onDismiss={() => setMoreOpen(false)}>
+        <ModalCardHeader title="Route actions" body="These actions affect only this planned Route, never its source Activity or Memory." />
+        <PrimaryButton
+          label={planningMemoryScope === 'self' ? 'Planning context: Mine' : 'Planning context: Mine + Friends'}
+          variant="secondary"
+          onPress={() => {
+            const next = planningMemoryScope === 'self' ? 'combined' : 'self';
+            setPlanningMemoryScope(next);
+            if (next === 'combined') void useFriendMemoryStore.getState().loadSelectedProjections();
+          }}
+          style={styles.modalButton}
+        />
+        <PrimaryButton label="Trim beginning or end" variant="secondary" onPress={() => { setMoreOpen(false); setTrimOpen(true); }} style={styles.modalButton} />
+        {draft.parts.length > 1 ? <PrimaryButton label="Keep one recorded section" variant="secondary" onPress={() => { setMoreOpen(false); setKeepPartOpen(true); }} style={styles.modalButton} /> : null}
+        <PrimaryButton label="Reset draft" variant="destructive" onPress={() => {
+          const initial = initialDraftRef.current;
+          if (initial) {
+            const next = { present: cloneOrderedDraft(initial), past: [] };
+            historyRef.current = next;
+            setHistory(next);
+          }
+          setMoreOpen(false);
+        }} style={styles.modalButton} />
+      </ModalCard>
+
+      <ModalCard visible={trimOpen} onDismiss={() => setTrimOpen(false)}>
+        <ModalCardHeader title="Trim Route ends" body="Trim preserves the remaining order and any internal unknown gaps." />
+        <TrimSlider trimStartFrac={trimStart} trimEndFrac={trimEnd} onTrimStartChange={setTrimStart} onTrimEndChange={setTrimEnd} onTrimDragBegin={() => undefined} totalLengthM={orderedDraftDistanceM(draft)} />
+        <PrimaryButton label="Apply Trim" onPress={applyTrim} style={styles.modalButton} />
+      </ModalCard>
+
+      <ModalCard visible={keepPartOpen} onDismiss={() => setKeepPartOpen(false)}>
+        <ModalCardHeader title="Keep one section" body="Other imported sections are removed only from this Route draft. The Activity stays unchanged." />
+        {draft.parts.filter(part => part.resolution === 'recorded').map((part, index) => (
+          <PrimaryButton key={part.id} label={`Keep section ${index + 1}`} variant="secondary" onPress={() => { const current = historyRef.current; if (current) commitResult(keepOnlyOrderedPart(current.present, part.id), 'keep-section'); setKeepPartOpen(false); }} style={styles.modalButton} />
+        ))}
+      </ModalCard>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, padding: Spacing.xl },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, zIndex: 10 },
+  topTitleWrap: { flex: 1, alignItems: 'center' },
+  topTitle: { fontSize: FontSize.h3, fontWeight: '800' },
+  topSubtitle: { marginTop: 2, fontSize: FontSize.tiny, fontWeight: '600' },
+  topUtility: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  topUtilityPlaceholder: { width: 44, height: 44 },
+  // This target deliberately matches Mapbox's camera center. The bottom card
+  // does not change the camera coordinate; camera padding is only used for the
+  // one-time initial fit, so the visual target and confirmed coordinate agree.
+  centerTarget: { position: 'absolute', left: '50%', top: '50%', width: 34, height: 34, marginLeft: -17, marginTop: -17, alignItems: 'center', justifyContent: 'center', zIndex: 8 },
+  targetRing: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, backgroundColor: 'rgba(255,255,255,0.35)' },
+  targetDot: { position: 'absolute', width: 6, height: 6, borderRadius: 3 },
+  bottomWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  bottomCard: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, paddingHorizontal: Spacing.base, paddingTop: Spacing.md, gap: Spacing.sm, elevation: 10 },
+  summary: { borderWidth: 1, borderRadius: RadiusRole.card, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
+  nameInput: { fontSize: FontSize.h3, fontWeight: '700', paddingVertical: Spacing.xs },
+  nameReadOnly: { fontSize: FontSize.h3, fontWeight: '700', marginBottom: Spacing.xs },
+  helper: { fontSize: FontSize.small, lineHeight: 18 },
+  errorText: { fontSize: FontSize.small, textAlign: 'center' },
+  notice: { minHeight: 42, borderRadius: RadiusRole.input, padding: Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  noticeText: { flex: 1, fontSize: FontSize.small, fontWeight: '600' },
+  busyRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  gapNotice: { borderWidth: 1, borderRadius: RadiusRole.input, padding: Spacing.sm, gap: Spacing.xs },
+  gapHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  gapTitle: { fontSize: FontSize.body, fontWeight: '700' },
+  chipRow: { gap: Spacing.sm, paddingTop: Spacing.xs },
+  chip: { minHeight: 36, borderRadius: 18, borderWidth: 1, justifyContent: 'center', paddingHorizontal: Spacing.md },
+  chipText: { fontSize: FontSize.small, fontWeight: '700' },
+  toolRow: { flexDirection: 'row', gap: Spacing.sm },
+  toolButton: { flex: 1, minHeight: 56, borderWidth: 1, borderRadius: RadiusRole.button, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  toolLabel: { fontSize: FontSize.small, fontWeight: '700' },
+  pointActions: { gap: Spacing.sm, alignItems: 'center' },
+  linkText: { fontSize: FontSize.small, fontWeight: '700', padding: Spacing.xs },
+  row: { flexDirection: 'row', gap: Spacing.sm },
+  flexButton: { flex: 1 },
+  modalButton: { marginTop: Spacing.sm },
+  modalScroll: { maxHeight: 320 },
+});

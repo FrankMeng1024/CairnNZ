@@ -27,6 +27,7 @@ import {
 import type { SyncState } from '../services/offlineEntity';
 import {
   cloneActivityRouteReference,
+  routeCanBeUsed,
   routeIdentityKeys,
   routeMatchesIdentity,
   type ActivityRouteReference,
@@ -372,8 +373,9 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       set({ activityRouteReference: null });
       return null;
     }
-    const route = get().routes.find(item => routeMatchesIdentity(item, id));
-    if (!route || route.points.length < 2) return null;
+    const route = [...get().routes, ...get().sharedRoutes]
+      .find(item => routeMatchesIdentity(item, id));
+    if (!route || !routeCanBeUsed(route)) return null;
     const snapshot = cloneActivityRouteReference(route);
     set({ activityRouteReference: snapshot });
     return snapshot;

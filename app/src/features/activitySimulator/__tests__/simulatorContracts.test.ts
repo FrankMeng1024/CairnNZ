@@ -303,13 +303,13 @@ describe('Activity Simulator integration and safety contracts', () => {
   test('rename and Activity-derived Route mutations are server-authoritative', () => {
     const sessions = read('src/store/useSessionStore.ts');
     const sessionService = read('src/services/sessionService.ts');
-    const editor = read('src/screens/RouteEditorScreen.tsx');
+    const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
     const routeService = read('src/services/routeService.ts');
     expect(sessions).toContain('await renameRemoteSession(remoteId, trimmed)');
     expect(sessions.indexOf('await renameRemoteSession(remoteId, trimmed)'))
       .toBeLessThan(sessions.indexOf('const run = sessionWriteTail.then', sessions.indexOf('renameSession: async')));
     expect(sessionService).toContain('/api/sessions/${remoteId}/name');
-    expect(editor).toContain('if (fromSessionId && !liveSourceSession)');
+    expect(editor).toContain("if (!session) throw new Error('This Activity is no longer available.')");
     expect(routeService).toContain('source_activity_client_id');
   });
 
