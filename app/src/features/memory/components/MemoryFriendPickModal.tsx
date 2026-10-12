@@ -1,13 +1,9 @@
 /**
  * MemoryFriendPickModal — Friend System v1 / Sprint 70 / STORY-00540
  *
- * Modal shown from Memory tab Friends scope. Lists the viewer's friends
- * (from useFriendStore) with a check next to each subscribed friend
- * (from useMemorySubscriptionsStore). Tap to toggle; tapping a 6th
- * (after 5 already subscribed) triggers the Paywall sheet (Story-542).
- *
- * v4 §1 row M: cap = users.memory_subscription_limit (default 5). Server
- * trigger enforces; client shows 🔒 on rows beyond the cap.
+ * Lists every current friend. Authorized-empty sources remain selectable;
+ * friends who have not shared are visible but disabled. A stored preference
+ * distinguishes an explicit empty selection from first use.
  *
  * v372→v373 UX overhaul (UX-C/D/E):
  *   - Title copy: 'See friends on your map' → 'Show friends on your map'
@@ -29,16 +25,12 @@ import { useVisualTheme } from '../../../hooks/useVisualTheme';
 interface Props {
   visible: boolean;
   onClose: () => void;
-  /** Called when the user taps a friend beyond the cap (UI shows lock,
-   *  parent opens Paywall sheet — Story-542). */
-  onCapHit: (friendId: number) => void;
 }
 
-export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
+export function MemoryFriendPickModal({ visible, onClose }: Props) {
   const theme = useVisualTheme();
   const sources = useMemorySubscriptionsStore((s) => s.availableSources);
   const subs = useMemorySubscriptionsStore((s) => s.subscriptions);
-  const limit = useMemorySubscriptionsStore((s) => s.limit);
   const loading = useMemorySubscriptionsStore((s) => s.loading);
   const load = useMemorySubscriptionsStore((s) => s.load);
   const subscribe = useMemorySubscriptionsStore((s) => s.subscribe);
@@ -96,17 +88,12 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
     ]).start(() => onClose());
   };
 
-  const atCap = subs.length >= limit;
-
-  const onTap = async (friendId: number) => {
+  const onTap = async (friendId: number, sharingStatus: 'not_shared' | 'shared_empty' | 'shared') => {
     if (pendingId !== null) return;
+    if (sharingStatus === 'not_shared') return;
     if (isSubscribed(friendId)) {
       setScope('friend', String(friendId));
       dismiss();
-      return;
-    }
-    if (atCap) {
-      onCapHit(friendId);
       return;
     }
     setPendingId(friendId);
@@ -119,15 +106,12 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
       return;
     }
     if (status === 409) {
-      // A 409 may be a duplicate after an unknown prior commit, not only a
-      // cap. Reconcile before choosing product feedback.
+      // A duplicate after an unknown prior commit is reconciled from server.
       await load();
       const reconciled = useMemorySubscriptionsStore.getState();
       if (reconciled.isSubscribed(friendId)) {
         setScope('friend', String(friendId));
         dismiss();
-      } else if (reconciled.subscriptions.length >= reconciled.limit) {
-        onCapHit(friendId);
       } else {
         setMutationError('Could not add this friend to Memory. Try again.');
       }
@@ -166,7 +150,7 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
             <View style={{ flex: 1 }}>
               <Text style={[styles.title, { color: theme.foreground }]}>Friends in Memory</Text>
               <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>
-                Choose all friends or one person · {subs.length} of {limit} available
+                Show all shared friends, one person, or Mine only
               </Text>
             </View>
             <TouchableOpacity onPress={dismiss} testID="memory-friend-pick-close" style={styles.close}>
@@ -177,7 +161,7 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
           {loading ? (
             <View style={styles.loadingBox}><ActivityIndicator color={theme.primary} /></View>
           ) : sources.length === 0 ? (
-            <Text style={[styles.emptyHint, { color: theme.muted }]}>No shared Memory is available yet. Friends choose whether new completed Activities can appear here.</Text>
+            <Text style={[styles.emptyHint, { color: theme.muted }]}>No friends yet. Add and accept a friend before choosing a Memory layer.</Text>
           ) : (
             <>
             {subs.length > 0 ? (
@@ -190,7 +174,7 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
               >
                 <View style={styles.rowMain}>
                   <Text style={[styles.rowName, { color: theme.foreground }]}>All available friends</Text>
-                  <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>Friend Memory only — your own Memory stays under Mine</Text>
+                  <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>Your own Memory remains the strongest layer</Text>
                 </View>
                 {selectedFriendId == null ? <Icon name="Check" size={18} color={Colors.success} strokeWidth={2.5} /> : null}
               </TouchableOpacity>
@@ -201,18 +185,23 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
               renderItem={({ item }) => {
                 const friendId = Number(item.friend_id);
                 const subscribed = isSubscribed(friendId);
-                const locked = !subscribed && atCap;
+                const unavailable = item.sharing_status === 'not_shared';
                 return (
                   <TouchableOpacity
-                    style={[styles.row, subscribed && { backgroundColor: theme.surface }]}
-                    onPress={() => onTap(friendId)}
-                    disabled={pendingId !== null}
+                    style={[styles.row, subscribed && { backgroundColor: theme.surface }, unavailable && { opacity: 0.62 }]}
+                    onPress={() => onTap(friendId, item.sharing_status)}
+                    disabled={pendingId !== null || unavailable}
                     testID={`memory-friend-row-${item.friend_id}`}
+                    accessibilityState={{ disabled: unavailable, selected: subscribed }}
                   >
                     <View style={styles.rowMain}>
                       <Text style={[styles.rowName, { color: theme.foreground }]}>{item.friend_name}</Text>
                       <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>
-                        {subscribed ? 'Tap to see this friend only' : 'Available because this friend chose to share new Activities'}
+                        {unavailable
+                          ? 'Not shared with you'
+                          : item.sharing_status === 'shared_empty'
+                            ? 'Shared · no delayed area is available yet'
+                            : subscribed ? 'Selected · tap to view this friend only' : 'Shared with you'}
                       </Text>
                     </View>
                     {pendingId === friendId ? (
@@ -226,7 +215,7 @@ export function MemoryFriendPickModal({ visible, onClose, onCapHit }: Props) {
                       >
                         <Icon name="X" size={14} color={theme.iconInactive} strokeWidth={2.3} />
                       </TouchableOpacity>
-                    ) : locked ? (
+                    ) : unavailable ? (
                       <Icon name="Lock" size={16} color={Colors.warning} strokeWidth={2.2} />
                     ) : (
                       <View style={styles.addCircle}>

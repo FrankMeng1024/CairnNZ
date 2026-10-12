@@ -23,4 +23,12 @@
 | C-08 | Library separates I left / I found and exposes revision history | library API/client | pending |
 | C-09 | Report/appeal has available/under-review/unavailable states | moderation cases + UI | pending |
 | C-10 | No unauthenticated admin action and no threshold auto-deletion | authenticated operator routes only | pending |
+| D-01 | No global discovery cooldown; distinct localities remain immediately eligible | server local-visit service | pending |
+| D-02 | Maximum 3 acquisitions per persisted local visit | visit/acquisition rows under transaction lock | pending |
+| D-03 | Same-locality reset requires both >120m departure and 15 minutes | durable visit transitions + accepted evidence | pending |
+| D-04 | Category-first weights are Friends 50 / Updated 25 / Public 25 with redistribution | bounded server selector | pending |
+| D-05 | Acquisition idempotency is `(viewer, cairn, revision)` | unique entitlement key | pending |
+| D-06 | 20s presentation grouping is independent of durable acquisition | presentation group/event tables | pending |
+| D-07 | Haptic eligibility is at most once per 180s; sound defaults off; no native effect in this task | presentation metadata only | pending |
+| D-08 | `announcedAt` and `readAt` are independent; restart does not replay announced groups | durable group and acquisition state | pending |
 | B-01 | A 50m-adjusted Cairn is always inside 30m Fog | conflicts with locked geometry; Owner decision required | blocked only for this promise |

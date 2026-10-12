@@ -14,7 +14,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
   Animated, Easing, ActivityIndicator,
-  Keyboard, KeyboardAvoidingView, Platform, TouchableWithoutFeedback,
+  Keyboard, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Switch,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -43,6 +43,7 @@ import { DismissButton } from '../components/DismissButton';
 import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { Colors, FontSize, IconSize, Radius, Shadow, Spacing } from '../components/tokens';
 import { deriveFriendsRequestContentState } from '../utils/friendsRequestState';
+import { MemorySharingSheet } from '../features/memory/components/MemorySharingSheet';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ProfileFriend = {
@@ -175,40 +176,58 @@ function FriendRow({
 
 // ── Incoming request row (F2/F3) ────────────────────────────────────────────
 function IncomingRow({
-  id, fromName, fromEmail, busy, onAccept, onReject,
+  id, fromName, fromEmail, requesterShares, busy, onAccept, onReject,
 }: {
   id: string; fromName: string; fromEmail: string;
-  busy: boolean; onAccept: () => void; onReject: () => void;
+  requesterShares: boolean; busy: boolean;
+  onAccept: (shareMemory: boolean) => void; onReject: () => void;
 }) {
   const theme = useVisualTheme();
+  const [shareMemory, setShareMemory] = useState(false);
   return (
-    <ContentSurface style={s.card} testID={`incoming-card-${id}`}>
-      <View style={[s.avatar, { backgroundColor: avatarColorFor(id) }]}>
-        <Text style={s.avatarText}>{initialsOf(fromName)}</Text>
+    <ContentSurface style={[s.card, s.requestCard]} testID={`incoming-card-${id}`}>
+      <View style={s.requestIdentityRow}>
+        <View style={[s.avatar, { backgroundColor: avatarColorFor(id) }]}>
+          <Text style={s.avatarText}>{initialsOf(fromName)}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[s.cardName, { color: theme.foreground }]} numberOfLines={1}>{fromName}</Text>
+          <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{fromEmail}</Text>
+          {requesterShares ? <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>Will share delayed exploration after you accept</Text> : null}
+        </View>
+        <View style={s.actionRow}>
+          <TouchableOpacity
+            style={[s.actionBtn, { backgroundColor: theme.recordSelected, borderColor: theme.borderSubtle }]}
+            onPress={() => onAccept(shareMemory)}
+            disabled={busy}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
+            accessibilityLabel="Accept friend request"
+          >
+            {busy ? <ActivityIndicator size="small" color={theme.iconActive} /> : <Icon name="Check" size={DS.ic_sm} color={theme.iconActive} strokeWidth={2} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.actionBtn, { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle }]}
+            onPress={onReject}
+            disabled={busy}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 6 }}
+            accessibilityLabel="Decline friend request"
+          >
+            <Icon name="X" size={DS.ic_sm} color={theme.icon} strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[s.cardName, { color: theme.foreground }]} numberOfLines={1}>{fromName}</Text>
-        <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{fromEmail}</Text>
-      </View>
-      <View style={s.actionRow}>
-        <TouchableOpacity
-          style={[s.actionBtn, { backgroundColor: theme.recordSelected, borderColor: theme.borderSubtle }]}
-          onPress={onAccept}
+      <View style={[s.requestConsentRow, { borderTopColor: theme.borderSubtle }]}>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <Text style={[s.cardName, { color: theme.foreground }]}>Share my exploration after accepting</Text>
+          <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>Full accepted history, delayed at least 30 min; no route line or timestamps.</Text>
+        </View>
+        <Switch
+          value={shareMemory}
           disabled={busy}
-          hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
-          accessibilityLabel="Accept friend request"
-        >
-          {busy ? <ActivityIndicator size="small" color={theme.iconActive} /> : <Icon name="Check" size={DS.ic_sm} color={theme.iconActive} strokeWidth={2} />}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.actionBtn, { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle }]}
-          onPress={onReject}
-          disabled={busy}
-          hitSlop={{ top: 8, bottom: 8, left: 4, right: 6 }}
-          accessibilityLabel="Decline friend request"
-        >
-          <Icon name="X" size={DS.ic_sm} color={theme.icon} strokeWidth={2} />
-        </TouchableOpacity>
+          onValueChange={setShareMemory}
+          trackColor={{ false: theme.borderStrong, true: theme.primary }}
+          accessibilityLabel={`Share my exploration with ${fromName} after accepting`}
+        />
       </View>
     </ContentSurface>
   );
@@ -257,6 +276,7 @@ function AddFriendPage({ onDismiss, onRequestSent }: { onDismiss: () => void; on
   const [email, setEmail] = useState('');
   const [err, setErr] = useState('');
   const [state, setState] = useState<AddState>('idle');
+  const [shareMemory, setShareMemory] = useState(false);
   const keyboardActive = useRef(false);
   const closing = useRef(false);
 
@@ -312,7 +332,7 @@ function AddFriendPage({ onDismiss, onRequestSent }: { onDismiss: () => void; on
     dismissKeyboard();
     setErr('');
     setState('loading');
-    const r = await sendFriendRequest(trimmed);
+    const r = await sendFriendRequest(trimmed, shareMemory);
     if (r.success) {
       onRequestSent();
       close();
@@ -452,6 +472,19 @@ function AddFriendPage({ onDismiss, onRequestSent }: { onDismiss: () => void; on
                     inputStyle={s.f6Input}
                     testID="add-friend-email"
               />
+              <View style={[s.addFriendConsent, { borderColor: theme.borderSubtle, backgroundColor: theme.surfaceElevated }]}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={[s.cardName, { color: theme.foreground }]}>Share my exploration if accepted</Text>
+                  <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>Full accepted Memory history, delayed at least 30 min. Familiar places may still be inferred; precise routes and times stay hidden.</Text>
+                </View>
+                <Switch
+                  value={shareMemory}
+                  disabled={state === 'loading'}
+                  onValueChange={setShareMemory}
+                  trackColor={{ false: theme.borderStrong, true: theme.primary }}
+                  accessibilityLabel="Share my exploration after this friend request is accepted"
+                />
+              </View>
               <PrimaryButton
                     label="Send request"
                     onPress={submit}
@@ -522,6 +555,7 @@ export function FriendsScreen() {
   const viewerId = useAppStore((state) => String(state.user?.id ?? ''));
   const [tab, setTab] = useState<'friends' | 'pending'>('friends');
   const [showAdd, setShowAdd] = useState(false);
+  const [memorySharingOpen, setMemorySharingOpen] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
   const storeFriends = useFriendStore((st) => st.friends);
@@ -532,6 +566,7 @@ export function FriendsScreen() {
     id: string | number;
     from_name: string;
     from_email: string;
+    requester_memory_share?: number | boolean;
     sent_at: string | number;
   };
   const [incoming, setIncoming] = useState<IncomingRequest[]>([]);
@@ -562,7 +597,8 @@ export function FriendsScreen() {
       const reqs = await fetchFriendRequests();
       setIncoming(
         (reqs as unknown as IncomingRequest[]).map((r) => ({
-          id: r.id, from_name: r.from_name, from_email: r.from_email, sent_at: r.sent_at,
+          id: r.id, from_name: r.from_name, from_email: r.from_email,
+          requester_memory_share: r.requester_memory_share, sent_at: r.sent_at,
         })),
       );
     } catch { /* silent */ }
@@ -587,9 +623,9 @@ export function FriendsScreen() {
     [storeFriends],
   );
 
-  const handleAccept = async (id: string | number) => {
+  const handleAccept = async (id: string | number, shareMemory: boolean) => {
     setBusyId(String(id));
-    const ok = await acceptFriendRequestAPI(String(id));
+    const ok = await acceptFriendRequestAPI(String(id), shareMemory);
     setBusyId(null);
     if (ok) {
       await Promise.all([loadFriendsFromBackend(), loadRequests()]);
@@ -839,6 +875,24 @@ export function FriendsScreen() {
         )}
         {tab === 'friends' && hasFriends && (
           <>
+            <TouchableOpacity
+              onPress={() => setMemorySharingOpen(true)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Manage which friends can see your Memory"
+              testID="friends-memory-sharing-entry"
+            >
+              <ContentSurface style={s.card}>
+                <View style={[s.avatar, { backgroundColor: theme.controlSelected }]}>
+                  <Icon name="Map" size={DS.ic_md} color={theme.iconActive} strokeWidth={1.9} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.cardName, { color: theme.foreground }]}>Memory sharing</Text>
+                  <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]}>Choose friends individually · areas delayed at least 30 min</Text>
+                </View>
+                <Icon name="ChevronRight" size={IconSize.sm} color={theme.iconInactive} strokeWidth={1.8} />
+              </ContentSurface>
+            </TouchableOpacity>
             <Text style={[s.sectionTitle, { color: theme.foregroundSecondary }]}>{friends.length} {friends.length === 1 ? 'friend' : 'friends'}</Text>
             {friends.map((f) => (
               <FriendRow
@@ -876,8 +930,9 @@ export function FriendsScreen() {
                     id={String(r.id)}
                     fromName={r.from_name}
                     fromEmail={r.from_email}
+                    requesterShares={Boolean(r.requester_memory_share)}
                     busy={busyId === String(r.id)}
-                    onAccept={() => handleAccept(r.id)}
+                    onAccept={(shareMemory) => handleAccept(r.id, shareMemory)}
                     onReject={() => handleReject(r.id)}
                   />
                 ))}
@@ -919,6 +974,11 @@ export function FriendsScreen() {
           onRequestSent={() => { void loadRequests(); }}
         />
       )}
+
+      <MemorySharingSheet
+        visible={memorySharingOpen}
+        onClose={() => setMemorySharingOpen(false)}
+      />
 
       {/* Friends-local profile composition; cross-product detail shells remain out of scope. */}
       {profileFriend && (
@@ -1182,6 +1242,17 @@ const s = StyleSheet.create({
     gap: DS.sp2,
     alignItems: 'center',
   },
+  requestCard: { flexDirection: 'column', alignItems: 'stretch' },
+  requestIdentityRow: { flexDirection: 'row', alignItems: 'center', width: '100%' },
+  requestConsentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 12,
+    marginTop: 10,
+  },
+  consentMeta: { fontSize: DS.fs_meta, lineHeight: 16, marginTop: 3 },
   actionBtn: {
     width: 38,
     height: 38,
@@ -1368,6 +1439,14 @@ const s = StyleSheet.create({
   },
   f6Send: {
     marginTop: DS.sp6,
+  },
+  addFriendConsent: {
+    borderWidth: 1,
+    borderRadius: Radius.card,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
 
   // ── Bottom nav (matches Home) ─────────────────────────────────────────────

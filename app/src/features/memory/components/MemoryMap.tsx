@@ -129,10 +129,11 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
   const allMarkers = useMemo(() => {
     if (memoryScope === 'self') return ownMarkers;
-    if (memoryScope === 'friend') {
-      return friendMarkers.filter(marker => String(marker.authorId) === String(selectedFriendId));
-    }
-    return friendMarkers;
+    const visibleFriends = memoryScope === 'friend'
+      ? friendMarkers.filter(marker => String(marker.authorId) === String(selectedFriendId))
+      : friendMarkers;
+    const seen = new Set(ownMarkers.map(marker => String(marker.id)));
+    return [...ownMarkers, ...visibleFriends.filter(marker => !seen.has(String(marker.id)))];
   }, [friendMarkers, memoryScope, ownMarkers, selectedFriendId]);
   const mapViewRef = useRef<any>(null);
 

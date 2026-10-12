@@ -48,6 +48,7 @@ import { Gate1IconSheetScreen } from '../screens/Gate1IconSheetScreen';
 import { MarkerDetailScreen } from '../screens/MarkerDetailScreen';
 import { AllCairnsScreen } from '../screens/AllCairnsScreen';
 import { PublicCairnDetailScreen } from '../screens/PublicCairnDetailScreen';
+import { AcquiredCairnDetailScreen } from '../screens/AcquiredCairnDetailScreen';
 import { OnboardingModal, hasCompletedOnboarding } from '../features/onboarding/OnboardingModal';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useAppStore } from '../store/useAppStore';
@@ -105,6 +106,7 @@ export type RootStackParamList = {
   Friends: undefined;
   FriendContent: { friendId: string; friendName: string };
   PublicCairnDetail: { cairnId: string };
+  AcquiredCairnDetail: { markerId: string };
   /** dev-only preview: renders the auto-generated FriendsScreen from spec.json.
    *  Query param 'state' picks which of F0-F6 to render. */
   FriendsPreview: { state?: string } | undefined;
@@ -301,6 +303,7 @@ export function RootNavigator() {
             <Stack.Screen name="Friends"     component={FriendsScreen} />
             <Stack.Screen name="FriendContent" component={FriendContentScreen} />
             <Stack.Screen name="PublicCairnDetail" component={PublicCairnDetailScreen} />
+            <Stack.Screen name="AcquiredCairnDetail" component={AcquiredCairnDetailScreen} />
             {__DEV__ && <Stack.Screen name="FriendsPreview" component={FriendsPreviewScreen} />}
             {__DEV__ && <Stack.Screen name="HomePreview" component={HomePreviewScreen} />}
             {__DEV__ && <Stack.Screen name="HikingPreview" component={HikingPreviewScreen} />}

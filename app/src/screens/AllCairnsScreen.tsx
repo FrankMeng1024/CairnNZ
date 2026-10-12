@@ -27,10 +27,25 @@ import { CairnPinV10 } from '../features/memory/components/CairnPinV10';
 import { CairnIdentityLine } from '../features/cairns/CairnIdentityLine';
 import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { authenticatedFetch } from '../services/apiService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type AudienceFilter = 'all' | Marker['permission'];
 type CairnSort = 'recent' | 'oldest';
+type LibrarySection = 'left' | 'found';
+type FoundCollectionState = 'active' | 'archived';
+type FoundCairn = {
+  marker_id: number;
+  revision_id: number;
+  content_revision: number;
+  type: Marker['type'];
+  text: string | null;
+  author_name: string | null;
+  availability: 'available' | 'under_review' | 'unavailable' | 'removed';
+  acquired_at: string;
+  opened_at: string | null;
+  revision_count: number;
+};
 
 const AUDIENCE_FILTERS: ReadonlyArray<{ key: AudienceFilter; label: string }> = [
   { key: 'all', label: 'All' },
@@ -87,6 +102,44 @@ function CairnRow({ marker }: { marker: Marker }) {
   );
 }
 
+function FoundCairnRow({ cairn, archived, onRestore }: { cairn: FoundCairn; archived: boolean; onRestore: () => void }) {
+  const theme = useVisualTheme();
+  const nav = useNavigation<Nav>();
+  const decoded = splitTitleBody(cairn.text ?? '');
+  return (
+    <ContentSurface
+      level="record"
+      onPress={() => nav.navigate('AcquiredCairnDetail', { markerId: String(cairn.marker_id) })}
+      style={styles.rowSurface}
+      testID={`found-cairn-row-${cairn.marker_id}`}
+    >
+      <View style={styles.row}>
+        <View style={[styles.rowIcon, { backgroundColor: theme.controlSelected }]}>
+          <CairnPinV10 tier="friend" type={cairn.type} size="detail" />
+        </View>
+        <View style={styles.rowCopy}>
+          <Text style={[styles.rowTitle, { color: theme.foreground }]} numberOfLines={1}>
+            {cairn.availability === 'available'
+              ? decoded.title || decoded.body || 'A moment here'
+              : cairn.availability === 'under_review' ? 'Content under review' : 'Content unavailable'}
+          </Text>
+          <Text style={[styles.rowMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>
+            {cairn.author_name ? `Left by ${cairn.author_name}` : 'Acquired Cairn'} · {cairn.revision_count} {Number(cairn.revision_count) === 1 ? 'version' : 'versions'}
+          </Text>
+          <Text style={[styles.rowMeta, { color: theme.muted }]}>{new Date(cairn.acquired_at).toLocaleDateString()}</Text>
+        </View>
+        {archived ? (
+          <TouchableOpacity onPress={onRestore} accessibilityRole="button" testID={`found-cairn-restore-${cairn.marker_id}`}>
+            <Text style={[styles.restoreText, { color: theme.primary }]}>Restore</Text>
+          </TouchableOpacity>
+        ) : null}
+        {!archived && cairn.availability === 'available' && !cairn.opened_at ? <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} /> : null}
+        <Icon name="ChevronRight" size={17} color={theme.iconInactive} strokeWidth={2} />
+      </View>
+    </ContentSurface>
+  );
+}
+
 export function AllCairnsScreen() {
   const theme = useVisualTheme();
   const storedMarkers = useMarkerStore(state => state.markers);
@@ -102,6 +155,37 @@ export function AllCairnsScreen() {
   const [query, setQuery] = useState(serverQuery);
   const [audience, setAudience] = useState<AudienceFilter>('all');
   const [sort, setSort] = useState<CairnSort>('recent');
+  const [section, setSection] = useState<LibrarySection>('left');
+  const [foundCairns, setFoundCairns] = useState<FoundCairn[]>([]);
+  const [foundLoading, setFoundLoading] = useState(false);
+  const [foundError, setFoundError] = useState('');
+  const [foundCollectionState, setFoundCollectionState] = useState<FoundCollectionState>('active');
+
+  const loadFound = useCallback(async () => {
+    setFoundLoading(true);
+    setFoundError('');
+    try {
+      const response = await authenticatedFetch(`/api/cairn-memory/library?section=found&state=${foundCollectionState}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const body = await response.json();
+      setFoundCairns(Array.isArray(body.cairns) ? body.cairns : []);
+    } catch {
+      setFoundError('Connect to refresh acquired Cairns.');
+    } finally {
+      setFoundLoading(false);
+    }
+  }, [foundCollectionState]);
+
+  const restoreFound = useCallback(async (markerId: number) => {
+    const response = await authenticatedFetch(`/api/cairn-memory/cairns/${markerId}/collection`, {
+      method: 'PUT', body: JSON.stringify({ action: 'restore' }),
+    });
+    if (response.ok) setFoundCairns(current => current.filter(cairn => cairn.marker_id !== markerId));
+  }, []);
+
+  useEffect(() => {
+    if (section === 'found') void loadFound();
+  }, [loadFound, section]);
 
   useEffect(() => {
     if (coverage === 'not-loaded' && !loading) {
@@ -132,6 +216,11 @@ export function AllCairnsScreen() {
         ? (b.createdAt ?? 0) - (a.createdAt ?? 0)
         : (a.createdAt ?? 0) - (b.createdAt ?? 0));
   }, [audience, merged, query, sort]);
+  const visibleFound = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase();
+    return foundCairns.filter(cairn => !normalized
+      || `${cairn.text ?? ''}\n${cairn.author_name ?? ''}`.toLocaleLowerCase().includes(normalized));
+  }, [foundCairns, query]);
 
   const refresh = useCallback(() => {
     void loadLibrary({ query: query.trim(), reset: true }).catch(() => {});
@@ -159,10 +248,27 @@ export function AllCairnsScreen() {
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <BackButton variant="inline" testID="all-cairns-back" />
-        <Text style={[styles.title, { color: theme.foreground }]}>All Cairns</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>Cairn Library</Text>
         <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>
-          Your personal Cairns, recent first.
+          Cairns you left and versions you found.
         </Text>
+      </View>
+
+      <View style={[styles.sectionTabs, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        {(['left', 'found'] as const).map(value => {
+          const selected = section === value;
+          return (
+            <TouchableOpacity
+              key={value}
+              style={[styles.sectionTab, selected && { backgroundColor: theme.controlSelected }]}
+              onPress={() => { setSection(value); setQuery(''); }}
+              accessibilityState={{ selected }}
+              testID={`cairn-library-${value}`}
+            >
+              <Text style={[styles.sectionTabText, { color: selected ? theme.foreground : theme.foregroundSecondary }]}>{value === 'left' ? 'I left' : 'I found'}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <View style={[styles.searchWrap, { backgroundColor: theme.inputSurface, borderColor: theme.border }]}>
@@ -171,7 +277,7 @@ export function AllCairnsScreen() {
           testID="all-cairns-search"
           value={query}
           onChangeText={setQuery}
-          placeholder="Search names and notes"
+          placeholder={section === 'left' ? 'Search names and notes' : 'Search found Cairns'}
           placeholderTextColor={theme.muted}
           style={[styles.searchInput, { color: theme.foreground }]}
           returnKeyType="search"
@@ -185,7 +291,7 @@ export function AllCairnsScreen() {
         ) : null}
       </View>
 
-      <View style={styles.controls} testID="all-cairns-controls">
+      {section === 'left' ? <View style={styles.controls} testID="all-cairns-controls">
         <Text style={[styles.controlLabel, { color: theme.foregroundSecondary }]}>AUDIENCE</Text>
         <View style={styles.filterRow}>
           {AUDIENCE_FILTERS.map(filter => {
@@ -219,9 +325,27 @@ export function AllCairnsScreen() {
             {sort === 'recent' ? 'Planted: newest first' : 'Planted: oldest first'}
           </Text>
         </TouchableOpacity>
-      </View>
+      </View> : null}
 
-      {incompleteCopy ? (
+      {section === 'found' ? (
+        <View style={styles.foundFilterRow}>
+          {(['active', 'archived'] as const).map(value => {
+            const selected = foundCollectionState === value;
+            return (
+              <TouchableOpacity
+                key={value}
+                onPress={() => setFoundCollectionState(value)}
+                style={[styles.filterChip, { borderColor: selected ? theme.borderStrong : theme.border, backgroundColor: selected ? theme.controlSelected : theme.surface }]}
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.filterText, { color: selected ? theme.foreground : theme.foregroundSecondary }]}>{value === 'active' ? 'Current' : 'Archived'}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {section === 'left' && incompleteCopy ? (
         <ContentSurface level="record" style={styles.coverage} testID="all-cairns-coverage">
           <View style={styles.coverageRow}>
             <Icon name="CloudOff" size={16} color={theme.iconInactive} strokeWidth={2} />
@@ -233,7 +357,36 @@ export function AllCairnsScreen() {
         </ContentSurface>
       ) : null}
 
-      {showInitialLoading ? (
+      {section === 'found' ? (
+        foundLoading && visibleFound.length === 0 ? (
+          <View style={styles.centerState}><ActivityIndicator color={theme.primary} /></View>
+        ) : (
+          <FlatList
+            testID="found-cairns-list"
+            data={visibleFound}
+            keyExtractor={item => String(item.marker_id)}
+            renderItem={({ item }) => (
+              <FoundCairnRow
+                cairn={item}
+                archived={foundCollectionState === 'archived'}
+                onRestore={() => void restoreFound(item.marker_id)}
+              />
+            )}
+            contentContainerStyle={[styles.list, visibleFound.length === 0 && styles.listEmpty]}
+            refreshControl={<RefreshControl refreshing={foundLoading} onRefresh={() => void loadFound()} tintColor={theme.primary} />}
+            ListHeaderComponent={foundError ? <Text style={[styles.coverageText, { color: theme.foregroundSecondary }]}>{foundError}</Text> : null}
+            ListEmptyComponent={(
+              <View style={styles.centerState} testID="found-cairns-empty">
+                <View style={[styles.emptyIcon, { backgroundColor: theme.controlSelected, borderColor: theme.borderStrong }]}>
+                  <Icon name="MapPin" size={24} color={theme.iconActive} strokeWidth={2} />
+                </View>
+                <Text style={[styles.stateTitle, { color: theme.foreground }]}>{foundCollectionState === 'archived' ? 'No archived Cairns' : 'No acquired Cairns yet'}</Text>
+                <Text style={[styles.stateBody, { color: theme.foregroundSecondary }]}>{foundCollectionState === 'archived' ? 'Archived Cairns can be restored here.' : 'Cairns discovered during eligible visits will appear here.'}</Text>
+              </View>
+            )}
+          />
+        )
+      ) : showInitialLoading ? (
         <View style={styles.centerState} testID="all-cairns-loading">
           <ActivityIndicator color={theme.primary} />
           <Text style={[styles.stateTitle, { color: theme.foreground }]}>Opening your Cairns…</Text>
@@ -289,6 +442,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
+  sectionTabs: { marginHorizontal: Spacing.xl, marginBottom: Spacing.md, padding: 3, borderWidth: 1, borderRadius: RadiusRole.button, flexDirection: 'row' },
+  sectionTab: { flex: 1, minHeight: 38, borderRadius: RadiusRole.button, alignItems: 'center', justifyContent: 'center' },
+  sectionTabText: { fontSize: FontSize.small, fontWeight: '700' },
   searchInput: { flex: 1, fontSize: FontSize.body, paddingVertical: Spacing.sm },
   controls: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, gap: Spacing.sm },
   controlLabel: { fontSize: FontSize.caption, fontWeight: '700', letterSpacing: 0.8 },
@@ -302,6 +458,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filterText: { fontSize: FontSize.small, fontWeight: '700' },
+  foundFilterRow: { flexDirection: 'row', gap: Spacing.xs, paddingHorizontal: Spacing.xl, paddingTop: Spacing.md },
   sortControl: { minHeight: 32, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   sortText: { fontSize: FontSize.small, fontWeight: '600' },
   coverage: { marginHorizontal: Spacing.xl, marginTop: Spacing.md },
@@ -325,6 +482,8 @@ const styles = StyleSheet.create({
   rowMeta: { fontSize: FontSize.small, marginTop: 3 },
   rowPreview: { fontSize: FontSize.small, lineHeight: 17, marginTop: Spacing.xs },
   rowTrailing: { alignItems: 'flex-end', gap: Spacing.sm },
+  unreadDot: { width: 8, height: 8, borderRadius: 4 },
+  restoreText: { fontSize: FontSize.small, fontWeight: '700' },
   centerState: {
     flex: 1,
     minHeight: 300,

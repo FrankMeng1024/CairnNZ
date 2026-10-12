@@ -95,7 +95,11 @@ Non-goals:
 2. Selector, Union rendering, themes, and city persistence.
 3. Cairn revisions/acquisitions/library and online discovery integration.
 4. Report/appeal/freeze states and authenticated operator transitions.
-5. Targeted production-path service/route tests, client tests, changed-Activity
+5. Persisted local-visit discovery fairness and presentation grouping. The
+   configurable V1 defaults are 3 Cairns per visit, 120 m departure, 15 minute
+   same-locality revisit, 20 second presentation merge, 180 second haptic
+   eligibility, and sound off. These values require later native GPS QA.
+6. Targeted production-path service/route tests, client tests, changed-Activity
    verification, web screenshots where safely renderable, independent review,
    and one review ZIP.
 

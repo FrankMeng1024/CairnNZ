@@ -132,6 +132,10 @@ export interface VisualThemeTokens {
   mapFogFill: string;
   mapFogEdgeOuter: string;
   mapFogEdgeInner: string;
+  mapFriendMemoryFill: string;
+  mapFriendMemoryOpacity: number;
+  mapMemoryOverlapFill: string;
+  mapMemoryOverlapOpacity: number;
 }
 
 export const DAY_VISUAL_THEME: VisualThemeTokens = {
@@ -193,6 +197,10 @@ export const DAY_VISUAL_THEME: VisualThemeTokens = {
   mapFogFill: 'rgba(31,38,42,0.68)',
   mapFogEdgeOuter: 'rgba(223,233,226,0.38)',
   mapFogEdgeInner: 'rgba(227,238,229,0.76)',
+  mapFriendMemoryFill: '#7D91A0',
+  mapFriendMemoryOpacity: 0.22,
+  mapMemoryOverlapFill: '#C98E58',
+  mapMemoryOverlapOpacity: 0.24,
 };
 
 /**
@@ -258,6 +266,10 @@ export const SUNSET_VISUAL_THEME: VisualThemeTokens = {
   mapFogFill: 'rgba(38,35,37,0.70)',
   mapFogEdgeOuter: 'rgba(218,202,191,0.32)',
   mapFogEdgeInner: 'rgba(235,219,205,0.68)',
+  mapFriendMemoryFill: '#788F96',
+  mapFriendMemoryOpacity: 0.24,
+  mapMemoryOverlapFill: '#C58562',
+  mapMemoryOverlapOpacity: 0.25,
 };
 
 export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
@@ -321,6 +333,10 @@ export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
   mapFogFill: 'rgba(16,23,29,0.74)',
   mapFogEdgeOuter: 'rgba(183,207,204,0.28)',
   mapFogEdgeInner: 'rgba(183,213,204,0.64)',
+  mapFriendMemoryFill: '#8CA2B4',
+  mapFriendMemoryOpacity: 0.25,
+  mapMemoryOverlapFill: '#C98C66',
+  mapMemoryOverlapOpacity: 0.27,
 };
 
 export function getVisualTheme(mode: boolean | VisualThemeTokens['mode']): VisualThemeTokens {

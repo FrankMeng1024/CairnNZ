@@ -56,6 +56,10 @@ interface Props {
   ) => void;
   onGoUp: () => void;                        // → parent sets title='world'
   onClose: () => void;
+  friendRegionSources?: Record<string, {
+    names: string[];
+    region: { id: string; parentId: string | null; level: 2 | 3; name: string; bbox: [number, number, number, number]; anchor: [number, number] };
+  }>;
 }
 
 const LIST_MAX_HEIGHT = 260;
@@ -69,6 +73,7 @@ export function HierarchyPanel({
   onSelectItem,
   onGoUp,
   onClose,
+  friendRegionSources = {},
 }: Props) {
   const [data, setData] = useState<PanelData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,13 +119,29 @@ export function HierarchyPanel({
   }, []);
 
   // Sort items: is_here first (green), then marked (desc), then walked (alpha)
+  const visibleLevel = data?.title.id === 'world' ? 2 : 3;
+  const ownIds = new Set(data?.items.map(item => item.id) ?? []);
+  const friendOnlyItems: PanelItem[] = Object.values(friendRegionSources)
+    .filter(source => source.region.level === visibleLevel
+      && (visibleLevel === 2 || source.region.parentId === data?.title.id)
+      && !ownIds.has(source.region.id))
+    .map(source => ({
+      id: source.region.id,
+      name_en: source.region.name,
+      state: 'walked',
+      bbox: source.region.bbox,
+      is_here: visibleLevel === 2
+        ? source.region.id === currentCountryId
+        : source.region.id === currentCityId,
+    }));
+  const visibleItems = data ? [...data.items, ...friendOnlyItems] : [];
   const sortedItems: PanelItem[] = data
     ? [
-        ...data.items.filter((it) => it.is_here),
-        ...data.items
+        ...visibleItems.filter((it) => it.is_here),
+        ...visibleItems
           .filter((it) => !it.is_here && it.state === 'marked')
           .sort((a, b) => a.name_en.localeCompare(b.name_en)),
-        ...data.items
+        ...visibleItems
           .filter((it) => !it.is_here && it.state === 'walked')
           .sort((a, b) => a.name_en.localeCompare(b.name_en)),
       ]
@@ -128,6 +149,15 @@ export function HierarchyPanel({
 
   const isWorldLayer = data?.title.id === 'world';
   const itemType: 'city' | 'country' = isWorldLayer ? 'country' : 'city';
+  const sourceLabel = (item: PanelItem) => {
+    const mine = ownIds.has(item.id);
+    const names = friendRegionSources[item.id]?.names ?? [];
+    if (mine && names.length === 0) return 'Mine';
+    if (!mine && names.length === 1) return names[0];
+    if (!mine) return `${names.length} friends`;
+    if (names.length === 1) return `Mine & ${names[0]}`;
+    return `Mine & ${names.length} friends`;
+  };
 
   // Empty state: World layer with no items + no locked = fresh user
   //  (Actually a fresh user has locked_count = ~214 total countries, so
@@ -135,7 +165,8 @@ export function HierarchyPanel({
   //   of locked_count. But we prefer to show banner only in true first-open
   //   case: items empty AND at world layer.)
   const showEmptyBanner =
-    data !== null && !error && isWorldLayer && data.items.length === 0;
+    data !== null && !error && isWorldLayer && visibleItems.length === 0;
+  const lockedCount = Math.max(0, (data?.locked_count ?? 0) - friendOnlyItems.length);
 
   return (
     <>
@@ -211,14 +242,17 @@ export function HierarchyPanel({
                           : styles.dotWalked,
                       ]}
                     />
-                    <Text
-                      style={[styles.rowName, isHere && styles.rowNameHere]}
-                      numberOfLines={2}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.75}
-                    >
-                      {item.name_en}
-                    </Text>
+                    <View style={styles.rowCopy}>
+                      <Text
+                        style={[styles.rowName, isHere && styles.rowNameHere]}
+                        numberOfLines={2}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.75}
+                      >
+                        {item.name_en}
+                      </Text>
+                      <Text style={styles.rowSources} numberOfLines={1}>{sourceLabel(item)}</Text>
+                    </View>
                   </TouchableOpacity>
                 );
               })}
@@ -232,11 +266,11 @@ export function HierarchyPanel({
         ) : null}
 
         {/* Locked summary row */}
-        {data && !error && data.locked_count > 0 && !showEmptyBanner ? (
+        {data && !error && lockedCount > 0 && !showEmptyBanner ? (
           <View style={styles.lockedSummary} testID="hierarchy-locked-summary">
             <View style={[styles.dot, styles.dotLocked]} />
             <Text style={styles.lockedSummaryText}>
-              {data.locked_count} more locked
+              {lockedCount} more locked
             </Text>
           </View>
         ) : null}
@@ -329,6 +363,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   rowNameHere: { color: Colors.primary, fontWeight: '700' },
+  rowCopy: { flex: 1 },
+  rowSources: { fontSize: FontSize.tiny + 0.5, color: Colors.textSecondary, marginTop: 2 },
   dot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
   dotHere: { backgroundColor: Colors.primary },
   dotMarked: { backgroundColor: MemoryColors.sepia },
