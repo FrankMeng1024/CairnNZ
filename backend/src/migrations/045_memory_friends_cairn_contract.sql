@@ -3,6 +3,20 @@
 -- This migration is additive/corrective and is prepared for review only. It
 -- must be rehearsed in an isolated schema before any production migration.
 
+-- `markers.updated_at` is a deployed whole-second DATETIME and therefore
+-- cannot order a content edit against a visit that began later in the same
+-- second. Keep the legacy display timestamp intact and add a dedicated,
+-- millisecond-precision content frontier. Existing rows inherit their known
+-- legacy frontier; every subsequent material write updates this column in the
+-- same transaction as `content_revision`.
+ALTER TABLE markers
+  ADD COLUMN content_changed_at DATETIME(3) NOT NULL
+    DEFAULT CURRENT_TIMESTAMP(3) AFTER content_revision,
+  ALGORITHM=INPLACE, LOCK=NONE;
+
+UPDATE markers
+   SET content_changed_at = CAST(updated_at AS DATETIME(3));
+
 -- A server receipt frontier is required for the per-contribution visibility
 -- delay. Existing rows intentionally become eligible no sooner than 30 minutes
 -- after this migration is applied; that conservative backfill cannot expose

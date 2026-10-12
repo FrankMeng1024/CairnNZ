@@ -103,8 +103,8 @@ async function seedFriendCairn(db, owner, {
   const [marker] = await db.execute(
     `INSERT INTO markers
        (user_id,type,text,lat,lng,permission,approximate,status,created_at,updated_at,
-        content_revision)
-     VALUES (?,'cairn',?,?,?,'group',1,'healthy',${eligibleAtSql},${eligibleAtSql},?)`,
+        content_revision,content_changed_at)
+     VALUES (?,'cairn',?,?,?,'group',1,'healthy',${eligibleAtSql},${eligibleAtSql},?,${eligibleAtSql})`,
     [owner.id, text, lat, lng, revision],
   );
   await db.execute(
@@ -158,14 +158,6 @@ async function publishRevision(db, cairn, owner, operator, { text, revision, epo
       position.lat, position.lng, hash, locationPolicyVersion(), operator.id],
   );
   return String(publication.insertId);
-}
-
-async function publishFriendRevision(db, cairn, owner, { text, revision }) {
-  await db.execute(
-    `UPDATE markers SET text=?,content_revision=?,updated_at=UTC_TIMESTAMP(3)
-      WHERE id=? AND user_id=? AND permission='group'`,
-    [text, revision, cairn.markerId, owner.id],
-  );
 }
 
 async function acceptedPresence(viewer, lat, lng, observedAt = Date.now()) {
@@ -706,10 +698,34 @@ async function main() {
     assert.deepEqual((await api(friendRevisionViewer, '/api/cairn-memory/discover', {
       method: 'POST', body: {},
     })).acquired, []);
-    await new Promise(resolve => setTimeout(resolve, 20));
-    await publishFriendRevision(db, friendRevisionCairn, friendRevisionOwner, {
-      text: 'Friend revision five', revision: 5,
-    });
+    const [[friendRevisionOpenVisit]] = await db.execute(
+      `SELECT id,UNIX_TIMESTAMP(entered_at)*1000 AS entered_at_ms
+         FROM cairn_local_visits
+        WHERE viewer_id=? AND departed_at IS NULL
+        ORDER BY entered_at DESC,id DESC LIMIT 1`,
+      [friendRevisionViewer.id],
+    );
+    assert.ok(friendRevisionOpenVisit, 'the second visit must exist before editing');
+    for (const revision of [2, 3, 4, 5]) {
+      const updated = await api(
+        friendRevisionOwner,
+        `/api/markers/${friendRevisionCairn.markerId}`,
+        { method: 'PUT', body: { text: `Friend revision ${revision}` } },
+      );
+      assert.equal(Number(updated.content_revision), revision);
+    }
+    const [[friendRevisionFrontier]] = await db.execute(
+      `SELECT content_revision,
+              UNIX_TIMESTAMP(content_changed_at)*1000 AS content_changed_at_ms
+         FROM markers WHERE id=?`,
+      [friendRevisionCairn.markerId],
+    );
+    assert.equal(Number(friendRevisionFrontier.content_revision), 5);
+    assert.ok(
+      Number(friendRevisionFrontier.content_changed_at_ms)
+        > Number(friendRevisionOpenVisit.entered_at_ms),
+      'the authenticated content frontier must be strictly after the open visit',
+    );
     await acceptedPresence(
       friendRevisionViewer,
       friendRevisionPlace.lat,
@@ -719,6 +735,7 @@ async function main() {
     assert.deepEqual((await api(friendRevisionViewer, '/api/cairn-memory/discover', {
       method: 'POST', body: {},
     })).acquired, []);
+    pass('DISC-PROD-03e.content-frontier', 'authenticated Friend edits use a millisecond content frontier strictly after the already-open visit and remain ineligible while stationary');
     // MySQL timestamps are millisecond-granular. Ensure the next server-side
     // visit entry is observably after the edit rather than equal to it.
     await new Promise(resolve => setTimeout(resolve, 20));

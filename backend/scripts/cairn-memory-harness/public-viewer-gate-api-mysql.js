@@ -100,10 +100,12 @@ async function main() {
     const place = { lat: -41.2867, lng: 174.7763 };
     const [friendMarker] = await db.execute(
       `INSERT INTO markers
-         (user_id,type,text,lat,lng,permission,approximate,status,created_at,updated_at,content_revision)
+         (user_id,type,text,lat,lng,permission,approximate,status,created_at,updated_at,
+          content_revision,content_changed_at)
        VALUES (?,'cairn','Friend-only survives Public viewer gate',?,?,'group',1,'healthy',
                DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 2 MINUTE),
-               DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 2 MINUTE),1)`,
+               DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 2 MINUTE),1,
+               DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 2 MINUTE))`,
       [OWNER_ID, place.lat, place.lng],
     );
     await db.execute(

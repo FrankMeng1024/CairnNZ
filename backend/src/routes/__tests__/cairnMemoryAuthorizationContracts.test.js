@@ -10,14 +10,19 @@ const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('Friend revision eligibility starts after the trusted mutable revision frontier', () => {
   const source = read('routes/cairn-memory.js');
+  const markerSource = read('routes/markers.js');
+  const migration = read('migrations/045_memory_friends_cairn_contract.sql');
   const candidates = source.slice(
     source.indexOf('async function loadDiscoveryCandidates'),
     source.indexOf("router.post('/discover'"),
   );
   const revisionFrontiers = candidates.match(
-    /GREATEST\([\s\S]*?episode\.started_at,marker\.created_at,marker\.updated_at,audience\.starts_at[\s\S]*?\)/g,
+    /GREATEST\([\s\S]*?episode\.started_at,marker\.created_at,marker\.content_changed_at,audience\.starts_at[\s\S]*?\)/g,
   ) || [];
-  assert.ok(revisionFrontiers.length >= 2, 'both evidence and visit-entry frontiers include marker.updated_at');
+  assert.ok(revisionFrontiers.length >= 2, 'both evidence and visit-entry frontiers include marker.content_changed_at');
+  assert.match(migration, /content_changed_at DATETIME\(3\) NOT NULL/);
+  assert.match(markerSource, /content_changed_at = CASE WHEN \? = 1 THEN UTC_TIMESTAMP\(3\)/);
+  assert.match(markerSource, /content_changed_at = UTC_TIMESTAMP\(3\)/);
   assert.match(candidates, /moderated_revision\.content_revision=marker\.content_revision/);
   assert.doesNotMatch(candidates, /moderated_revision\.source_audience='friends'/);
 });

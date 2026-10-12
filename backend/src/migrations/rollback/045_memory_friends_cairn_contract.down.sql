@@ -43,3 +43,6 @@ ALTER TABLE memory_share_grants
 ALTER TABLE memory_points
   DROP INDEX idx_memory_friend_delay,
   DROP COLUMN received_at;
+
+ALTER TABLE markers
+  DROP COLUMN content_changed_at;

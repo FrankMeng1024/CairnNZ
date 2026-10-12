@@ -104,7 +104,7 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
             marker.lat,marker.lng,marker.approximate,marker.content_revision,
             marker.audience_epoch,user.name AS author_name,'friends' AS source_audience,
             UNIX_TIMESTAMP(GREATEST(
-              episode.started_at,marker.created_at,marker.updated_at,audience.starts_at
+              episode.started_at,marker.created_at,marker.content_changed_at,audience.starts_at
             ))*1000
               AS eligible_after_ms
        FROM markers marker
@@ -126,7 +126,7 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
         AND COALESCE(moderation.state,'available')='available'
         AND ST_Distance_Sphere(POINT(marker.lng,marker.lat),POINT(?,?))<=?
         AND GREATEST(
-          episode.started_at,marker.created_at,marker.updated_at,audience.starts_at
+          episode.started_at,marker.created_at,marker.content_changed_at,audience.starts_at
         )<=FROM_UNIXTIME(?/1000)
         AND NOT EXISTS (
           SELECT 1 FROM blocked_users blocked

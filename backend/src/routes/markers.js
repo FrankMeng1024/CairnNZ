@@ -409,11 +409,13 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
            SET type = ?, text = ?, permission = ?, approximate = ?,
                public_intent = ?,
                content_revision = content_revision + ?,
+               content_changed_at = CASE WHEN ? = 1 THEN UTC_TIMESTAMP(3) ELSE content_changed_at END,
                audience_epoch = audience_epoch + ?,
                audience_changed_at = CASE WHEN ? = 1 THEN UTC_TIMESTAMP(3) ELSE audience_changed_at END,
                updated_at = NOW()
            WHERE id = ? AND user_id = ?`,
           [type, text || '', perm, approx, perm === PERMISSION.PUBLIC ? 1 : 0,
+            resourceChanged ? 1 : 0,
             resourceChanged ? 1 : 0,
             permissionChanged ? 1 : 0,
             permissionChanged ? 1 : 0, stored.id, req.user.userId],
@@ -578,7 +580,10 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
         });
       }
     }
-    if (resourceChanged) updates.push('content_revision = content_revision + 1');
+    if (resourceChanged) {
+      updates.push('content_revision = content_revision + 1');
+      updates.push('content_changed_at = UTC_TIMESTAMP(3)');
+    }
     if (updates.length > 0) {
       updates.push('updated_at = NOW()');
       values.push(markerId, req.user.userId);

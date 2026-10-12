@@ -171,6 +171,7 @@ async function start() {
       ['users', 'date_of_birth'],
       ['pending_registrations', 'date_of_birth'],
       ['markers', 'content_revision'],
+      ['markers', 'content_changed_at'],
       ['routes', 'content_revision'],
       ['public_cairn_publications', 'snapshot_location_policy_version'],
       ['public_cairn_encounters', 'evidence_lat'],
