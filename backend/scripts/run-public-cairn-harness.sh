@@ -14,6 +14,10 @@ TEMP_DIR=""
 API_PID=""
 
 HARNESS_MODE="${HARNESS_MODE:-api}"
+API_NODE_ENV="test"
+API_REALM="isolated_review"
+API_ISOLATED_SOURCE_CONTRACT="1"
+PUBLIC_USER_IDS=""
 case "$HARNESS_MODE" in
   api)
     HARNESS_SCRIPT="api-mysql.js"
@@ -40,6 +44,15 @@ case "$HARNESS_MODE" in
     PUBLIC_CAIRN_FLAG="1"
     PUBLIC_ZONE_POLICY='{bad'
     ;;
+  memory-public-gate)
+    HARNESS_SCRIPT="public-viewer-gate-api-mysql.js"
+    PUBLIC_CAIRN_FLAG="1"
+    PUBLIC_ZONE_POLICY='[{"lat":0,"lng":0,"radius_m":1}]'
+    API_NODE_ENV="production"
+    API_REALM="production"
+    API_ISOLATED_SOURCE_CONTRACT="0"
+    PUBLIC_USER_IDS="1001,1004"
+    ;;
   *)
     echo "unsupported HARNESS_MODE: $HARNESS_MODE" >&2
     exit 2
@@ -49,7 +62,11 @@ esac
 # A directly executable, side-effect-free preflight proves mode preservation
 # and mode-to-script selection without starting Docker, MySQL or the API.
 if [ "${HARNESS_PREFLIGHT_ONLY:-0}" = "1" ]; then
-  HARNESS_PATH="$SCRIPT_DIR/public-cairn-harness/$HARNESS_SCRIPT"
+  if [ "$HARNESS_MODE" = "memory-public-gate" ]; then
+    HARNESS_PATH="$SCRIPT_DIR/cairn-memory-harness/$HARNESS_SCRIPT"
+  else
+    HARNESS_PATH="$SCRIPT_DIR/public-cairn-harness/$HARNESS_SCRIPT"
+  fi
   if [ ! -f "$HARNESS_PATH" ]; then
     echo "missing harness script: $HARNESS_PATH" >&2
     exit 3
@@ -135,9 +152,10 @@ while nc -z 127.0.0.1 "$API_PORT" >/dev/null 2>&1; do API_PORT=$((API_PORT + 1))
   cd "$BACKEND_DIR"
   DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \
     JWT_SECRET="$JWT_SECRET" NONCE_SECRET="$JWT_SECRET" PORT="$API_PORT" \
-    NODE_ENV=test TRUST_PROXY=false DISABLE_CRON=1 PUBLIC_CAIRN_PILOT_ENABLED="$PUBLIC_CAIRN_FLAG" \
+    NODE_ENV="$API_NODE_ENV" TRUST_PROXY=false DISABLE_CRON=1 PUBLIC_CAIRN_PILOT_ENABLED="$PUBLIC_CAIRN_FLAG" \
+    PUBLIC_CAIRN_PILOT_USER_IDS="$PUBLIC_USER_IDS" \
     PUBLIC_CAIRN_SENSITIVE_ZONES_JSON="$PUBLIC_ZONE_POLICY" \
-    CAIRN_REALM=isolated_review ALLOW_ISOLATED_QA_SOURCE_CONTRACT=1 \
+    CAIRN_REALM="$API_REALM" ALLOW_ISOLATED_QA_SOURCE_CONTRACT="$API_ISOLATED_SOURCE_CONTRACT" \
     node src/index.js
 ) >"$TEMP_DIR/backend.log" 2>&1 &
 API_PID=$!
@@ -150,7 +168,20 @@ done
 
 export HARNESS_API_URL="http://127.0.0.1:$API_PORT" HARNESS_RUN_ID="$RUN_ID"
 export DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME"
-export JWT_SECRET="$JWT_SECRET" CAIRN_REALM=isolated_review ALLOW_ISOLATED_QA_SOURCE_CONTRACT=1
+export JWT_SECRET="$JWT_SECRET" CAIRN_REALM="$API_REALM"
+export ALLOW_ISOLATED_QA_SOURCE_CONTRACT="$API_ISOLATED_SOURCE_CONTRACT"
+export NODE_ENV="$API_NODE_ENV" PUBLIC_CAIRN_PILOT_ENABLED="$PUBLIC_CAIRN_FLAG"
+export PUBLIC_CAIRN_PILOT_USER_IDS="$PUBLIC_USER_IDS"
+export PUBLIC_CAIRN_SENSITIVE_ZONES_JSON="$PUBLIC_ZONE_POLICY"
+if [ "$HARNESS_MODE" = "memory-public-gate" ]; then
+  if [ -n "${EVIDENCE_DIR:-}" ]; then
+    mkdir -p "$EVIDENCE_DIR"
+    node "$SCRIPT_DIR/cairn-memory-harness/$HARNESS_SCRIPT" | tee "$EVIDENCE_DIR/public-viewer-gate-result.json"
+  else
+    node "$SCRIPT_DIR/cairn-memory-harness/$HARNESS_SCRIPT"
+  fi
+  exit 0
+fi
 if [ "${SKIP_API_BASELINE:-0}" != "1" ]; then
   if [ -n "${EVIDENCE_DIR:-}" ]; then
     mkdir -p "$EVIDENCE_DIR"
@@ -162,6 +193,7 @@ fi
 
 if [ "$HARNESS_MODE" = "api" ]; then
   if [ -n "${EVIDENCE_DIR:-}" ]; then
+    mkdir -p "$EVIDENCE_DIR"
     node "$SCRIPT_DIR/cairn-memory-harness/api-mysql.js" | tee "$EVIDENCE_DIR/cairn-memory-result.json"
   else
     node "$SCRIPT_DIR/cairn-memory-harness/api-mysql.js"

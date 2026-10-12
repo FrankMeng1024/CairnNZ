@@ -69,6 +69,9 @@ export interface Marker {
   publicState?: 'not_public' | 'pending' | 'published' | 'rejected' | 'suspended' | 'withdrawn';
   publicationEpoch?: number;
   contentRevision?: number;
+  /** Private aggregate acknowledgement. Never includes discoverer identity,
+   * exact discovery time, location, path, or unread/push semantics. */
+  thanksCount?: number;
   publicSubmissionCode?: string;
   sessionId?: string;      // legacy alias
   originActivityClientId?: string | null;
@@ -175,6 +178,7 @@ function fromBackend(row: {
   public_state?: Marker['publicState'];
   publication_epoch?: number | string | null;
   content_revision?: number | string | null;
+  thanks_count?: number | string | null;
 }): Marker {
   // v300: backend may return public_snapshot as either a parsed object
   // (mysql2 JSON columns auto-parse) or a JSON string (some drivers /
@@ -208,6 +212,7 @@ function fromBackend(row: {
     publicState: row.public_state,
     publicationEpoch: row.publication_epoch == null ? undefined : Number(row.publication_epoch),
     contentRevision: row.content_revision == null ? undefined : Number(row.content_revision),
+    thanksCount: row.thanks_count == null ? undefined : Number(row.thanks_count),
     synced: true,
     approximate: row.approximate === true || row.approximate === 1 || false,
     publicSnapshot,
@@ -872,14 +877,9 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     const hidingSnapshot = new Set(get().hidingIds);
     set({ loadingCircle: true });
     try {
-      // The client never downloads a catalogue of undiscovered friend Cairns.
-      // Ask the server to derive eligible encounters from authoritative real
-      // Memory evidence, then fetch only the resulting read-authorized facts.
-      await authenticatedFetch('/api/friend-content/encounters/verify', {
-        method: 'POST',
-        body: JSON.stringify({}),
-      }).catch(() => null);
-      if (!stillOwnsLoad()) return;
+      // Discovery is owned solely by the durable Memory reconciliation path.
+      // Loading a screen must never create an entitlement or expose a newer
+      // mutable Friend revision while the viewer is standing at home.
       const res = await authenticatedFetch('/api/circle/markers');
       if (!res.ok) return;
       const data = await res.json();

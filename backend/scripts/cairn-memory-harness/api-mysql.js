@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
+const { locationPolicyVersion } = require('../../src/services/publicLocationPolicy');
 
 const baseUrl = process.env.HARNESS_API_URL;
 const jwtSecret = process.env.JWT_SECRET;
@@ -85,9 +86,10 @@ async function seedPublicCairn(db, owner, operator, {
     `INSERT INTO public_cairn_publications
        (marker_id,owner_id,publication_epoch,content_revision,
         snapshot_type,snapshot_text,snapshot_lat,snapshot_lng,snapshot_approximate,
-        snapshot_sha256,state,decided_at,decided_by,published_at)
-     VALUES (?,?,?,?,'cairn',?,?,?,1,?,'published',${eligibleAtSql},?,${eligibleAtSql})`,
-    [marker.insertId, owner.id, epoch, revision, text, lat, lng, hash, operator.id],
+        snapshot_sha256,snapshot_location_policy_version,state,decided_at,decided_by,published_at)
+     VALUES (?,?,?,?,'cairn',?,?,?,1,?,?,'published',${eligibleAtSql},?,${eligibleAtSql})`,
+    [marker.insertId, owner.id, epoch, revision, text, lat, lng, hash,
+      locationPolicyVersion(), operator.id],
   );
   return { markerId: String(marker.insertId), publicationId: String(publication.insertId) };
 }
@@ -150,12 +152,20 @@ async function publishRevision(db, cairn, owner, operator, { text, revision, epo
     `INSERT INTO public_cairn_publications
        (marker_id,owner_id,publication_epoch,content_revision,
         snapshot_type,snapshot_text,snapshot_lat,snapshot_lng,snapshot_approximate,
-        snapshot_sha256,state,decided_at,decided_by,published_at)
-     VALUES (?,?,?,?,'cairn',?,?,?,1,?,'published',UTC_TIMESTAMP(3),?,UTC_TIMESTAMP(3))`,
+        snapshot_sha256,snapshot_location_policy_version,state,decided_at,decided_by,published_at)
+     VALUES (?,?,?,?,'cairn',?,?,?,1,?,?,'published',UTC_TIMESTAMP(3),?,UTC_TIMESTAMP(3))`,
     [cairn.markerId, owner.id, epoch, revision, text,
-      position.lat, position.lng, hash, operator.id],
+      position.lat, position.lng, hash, locationPolicyVersion(), operator.id],
   );
   return String(publication.insertId);
+}
+
+async function publishFriendRevision(db, cairn, owner, { text, revision }) {
+  await db.execute(
+    `UPDATE markers SET text=?,content_revision=?,updated_at=UTC_TIMESTAMP(3)
+      WHERE id=? AND user_id=? AND permission='group'`,
+    [text, revision, cairn.markerId, owner.id],
+  );
 }
 
 async function acceptedPresence(viewer, lat, lng, observedAt = Date.now()) {
@@ -649,6 +659,68 @@ async function main() {
     );
     pass('DISC-PROD-03d.audience-boundary', 'a Friends audience epoch beginning after visit entry did not retroactively unlock a stationary Cairn; a genuine later visit did');
 
+    const friendRevisionOwner = await actor(db, 'FriendRevisionOwner');
+    const friendRevisionViewer = await actor(db, 'FriendRevisionViewer');
+    await makeFriends(db, friendRevisionOwner, friendRevisionViewer);
+    const friendRevisionPlace = { lat: -36.8648, lng: 174.7775 };
+    const friendRevisionCairn = await seedFriendCairn(db, friendRevisionOwner, {
+      ...friendRevisionPlace, text: 'Friend revision one', revision: 1,
+    });
+    await acceptedPresence(
+      friendRevisionViewer,
+      friendRevisionPlace.lat,
+      friendRevisionPlace.lng,
+      Date.now() + 8_000,
+    );
+    const friendRevisionFirst = await api(friendRevisionViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    });
+    assert.deepEqual(friendRevisionFirst.acquired.map(item => item.content_revision), [1]);
+    await publishFriendRevision(db, friendRevisionCairn, friendRevisionOwner, {
+      text: 'Friend revision five', revision: 5,
+    });
+    await acceptedPresence(
+      friendRevisionViewer,
+      friendRevisionPlace.lat,
+      friendRevisionPlace.lng,
+      Date.now() + 8_500,
+    );
+    assert.deepEqual((await api(friendRevisionViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    })).acquired, []);
+    const friendRevisionDeparture = {
+      lat: friendRevisionPlace.lat + 0.002,
+      lng: friendRevisionPlace.lng,
+    };
+    await acceptedPresence(
+      friendRevisionViewer,
+      friendRevisionDeparture.lat,
+      friendRevisionDeparture.lng,
+      Date.now() + 9_000,
+    );
+    await api(friendRevisionViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+    await db.execute(
+      `UPDATE cairn_local_visits SET departed_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 16 MINUTE)
+        WHERE viewer_id=? AND anchor_lat BETWEEN ? AND ?`,
+      [friendRevisionViewer.id, friendRevisionPlace.lat - 0.0001, friendRevisionPlace.lat + 0.0001],
+    );
+    await acceptedPresence(
+      friendRevisionViewer,
+      friendRevisionPlace.lat,
+      friendRevisionPlace.lng,
+      Date.now() + 40_000,
+    );
+    const friendRevisionReturn = await api(friendRevisionViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    });
+    assert.deepEqual(friendRevisionReturn.acquired.map(item => item.content_revision), [5]);
+    const friendRevisionHistory = await api(
+      friendRevisionViewer,
+      `/api/cairn-memory/cairns/${friendRevisionCairn.markerId}/history`,
+    );
+    assert.deepEqual(friendRevisionHistory.revisions.map(item => Number(item.content_revision)), [5, 1]);
+    pass('DISC-PROD-03e.friend-revision-boundary', 'a Friends-only v5 edit while the viewer remained nearby did not create a stationary acquisition; a genuine later visit acquired v5 and retained v1');
+
     const cadenceViewer = await actor(db, 'CadenceViewer');
     const cadenceMarkers = [];
     for (let index = 0; index < 10; index += 1) {
@@ -690,7 +762,13 @@ async function main() {
     await acceptedPresence(versionViewer, versionPlace.lat, versionPlace.lng, Date.now() + 3_000);
     const versionFirst = await api(versionViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
     assert.deepEqual(versionFirst.acquired.map(item => item.content_revision), [1]);
-    await publishRevision(db, versionOnly, owner, operator, { text: 'Version five', revision: 5, epoch: 2 });
+    const versionFivePublicationId = await publishRevision(
+      db,
+      versionOnly,
+      owner,
+      operator,
+      { text: 'Version five', revision: 5, epoch: 2 },
+    );
     const stationaryV5 = await api(versionViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
     assert.deepEqual(stationaryV5.acquired, []);
 
@@ -733,6 +811,31 @@ async function main() {
     );
     assert.ok(readState.opened_at);
     assert.ok(readState.thanked_at);
+    const ownerLibraryAfterThanks = await api(owner, '/api/markers/library?limit=100');
+    const thankedOwnerCairn = ownerLibraryAfterThanks.markers
+      .find(item => String(item.id) === versionOnly.markerId);
+    assert.equal(Number(thankedOwnerCairn.thanks_count), 1);
+    const [selfAcquisition] = await db.execute(
+      `INSERT INTO cairn_acquisitions
+         (viewer_id,marker_id,cairn_revision_id,content_revision,acquired_via,evidence_kind,evidence_id,
+          evidence_observed_at,opened_at)
+       VALUES (?,?,?,5,'public','legacy_coverage',999999,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))`,
+      [owner.id, versionOnly.markerId, latest.revision_id],
+    );
+    await api(owner, `/api/cairn-memory/revisions/${latest.revision_id}/thanks`, {
+      method: 'POST', body: {}, expected: 404,
+    });
+    const [[selfThanksState]] = await db.execute(
+      'SELECT thanked_at FROM cairn_acquisitions WHERE id=?',
+      [selfAcquisition.insertId],
+    );
+    assert.equal(selfThanksState.thanked_at, null);
+    assert.equal(
+      Number((await api(owner, '/api/markers/library?limit=100')).markers
+        .find(item => String(item.id) === versionOnly.markerId).thanks_count),
+      1,
+    );
+    pass('DISC-PROD-04a.thanks-privacy', 'Thanks was idempotent, owner detail received only a private aggregate count, and a synthetic self-acquisition could not create self-Thanks');
     pass('DISC-PROD-04.revisit-revision', 'stationary publication and early return did not award v5; departure, 15-minute gate and fresh proximity created one later v5 entitlement while retaining v1');
 
     const foundBeforeFriend = await api(versionViewer, '/api/cairn-memory/library?section=found');
@@ -791,6 +894,92 @@ async function main() {
     assert.deepEqual(removedReturn.acquired, []);
     assert.equal((await api(removedViewer, '/api/cairn-memory/library?section=found')).cairns.length, 0);
     pass('DISC-PROD-06.reader-removal', 'reader removal immediately blocked history/read/Thanks, persisted across a newer source revision and genuine later visit, and did not resurrect on refresh or discovery');
+
+    const [friendSnapshot] = await db.execute(
+      `INSERT INTO cairn_revisions
+         (marker_id,owner_id,content_revision,content_type,content_text,lat,lng,
+          approximate,content_sha256,source_audience,audience_epoch,identity_policy,
+          friend_author_name_snapshot)
+       SELECT marker_id,owner_id,content_revision,content_type,content_text,lat,lng,
+              approximate,content_sha256,'friends',999999,'friends_acquired',?
+         FROM cairn_revisions
+        WHERE marker_id=? AND content_revision=5 AND source_audience='public'
+        ORDER BY id DESC LIMIT 1`,
+      ['Memory Owner', versionOnly.markerId],
+    );
+    const crossAudienceFriendViewer = await actor(db, 'CrossAudienceFriendViewer');
+    await makeFriends(db, owner, crossAudienceFriendViewer);
+    await db.execute(
+      `INSERT INTO cairn_collections (viewer_id,marker_id,relationship)
+       VALUES (?,?,'found')`,
+      [crossAudienceFriendViewer.id, versionOnly.markerId],
+    );
+    await db.execute(
+      `INSERT INTO cairn_acquisitions
+         (viewer_id,marker_id,cairn_revision_id,content_revision,acquired_via,evidence_kind,evidence_id,
+          evidence_observed_at,opened_at)
+       VALUES (?,?,?,5,'friends','legacy_coverage',999998,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))`,
+      [crossAudienceFriendViewer.id, versionOnly.markerId, friendSnapshot.insertId],
+    );
+    await db.execute(
+      `INSERT INTO public_cairn_encounters
+         (viewer_id,author_id,marker_id,publication_id,publication_epoch,content_revision,
+          evidence_witness_id,source_activity_client_id,observed_at)
+       VALUES (?,?,?,?,2,5,NULL,?,UTC_TIMESTAMP(3))`,
+      [versionViewer.id, owner.id, versionOnly.markerId, versionFivePublicationId, crypto.randomUUID()],
+    );
+    const currentRevisionCase = await api(
+      versionViewer,
+      `/api/cairn-memory/revisions/${latest.revision_id}/cases`,
+      {
+        method: 'POST', expected: 201,
+        body: {
+          client_submission_id: crypto.randomUUID(), case_type: 'report',
+          category: 'privacy', detail: 'Synthetic cross-audience current revision review.',
+        },
+      },
+    );
+    await api(operator, `/api/cairn-memory/operator/cases/${currentRevisionCase.case_id}/decision`, {
+      method: 'POST',
+      body: {
+        case_state: 'reviewed', content_state: 'under_review',
+        decision_scope: 'revision', reason: 'synthetic_cross_audience_review',
+      },
+    });
+    const [frozenCurrentSnapshots] = await db.execute(
+      `SELECT source_audience,availability FROM cairn_revisions
+        WHERE marker_id=? AND content_revision=5 ORDER BY source_audience`,
+      [versionOnly.markerId],
+    );
+    assert.equal(frozenCurrentSnapshots.length, 2);
+    assert.ok(frozenCurrentSnapshots.every(item => item.availability === 'under_review'));
+    const currentOwnerProjection = (await api(owner, '/api/markers'))
+      .find(item => String(item.id) === versionOnly.markerId);
+    assert.equal(currentOwnerProjection.content_state, 'under_review');
+    assert.equal(currentOwnerProjection.text, '');
+    await api(crossAudienceFriendViewer, `/api/friend-content/cairns/${versionOnly.markerId}`, { expected: 404 });
+    await api(versionViewer, `/api/public-cairns/cairns/${versionOnly.markerId}`, { expected: 404 });
+    assert.equal(
+      (await api(crossAudienceFriendViewer, '/api/circle/markers')).markers
+        .some(item => String(item.id) === versionOnly.markerId),
+      false,
+    );
+    await api(operator, `/api/cairn-memory/operator/cases/${currentRevisionCase.case_id}/decision`, {
+      method: 'POST',
+      body: {
+        case_state: 'dismissed', content_state: 'available',
+        decision_scope: 'revision', reason: 'synthetic_cross_audience_restore',
+      },
+    });
+    assert.equal(
+      (await api(crossAudienceFriendViewer, `/api/friend-content/cairns/${versionOnly.markerId}`)).cairn.text,
+      'Version five',
+    );
+    assert.equal(
+      (await api(versionViewer, `/api/public-cairns/cairns/${versionOnly.markerId}`)).cairn.text,
+      'Version five',
+    );
+    pass('DISC-PROD-06c.cross-audience-moderation', 'revision moderation froze every Friends/Public snapshot of current v5 and denied owner, legacy Friends, Circle, and Public reads until explicit restore');
 
     const oldRevision = history.revisions[1];
     const revisionCase = await api(versionViewer, `/api/cairn-memory/revisions/${oldRevision.revision_id}/cases`, {

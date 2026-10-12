@@ -100,6 +100,10 @@ async function capturePublicPublicationRevision(conn, publication) {
 }
 
 async function acquireCairnRevision(conn, acquisition) {
+  const contentRevision = Number(acquisition.contentRevision);
+  if (!Number.isSafeInteger(contentRevision) || contentRevision < 1) {
+    throw new Error('invalid_cairn_content_revision');
+  }
   const [removedCollections] = await conn.execute(
     `SELECT removed_at FROM cairn_collections
       WHERE viewer_id=? AND marker_id=? LIMIT 1 FOR UPDATE`,
@@ -117,25 +121,25 @@ async function acquireCairnRevision(conn, acquisition) {
 
   const [existing] = await conn.execute(
     `SELECT id FROM cairn_acquisitions
-      WHERE viewer_id=? AND cairn_revision_id=? LIMIT 1`,
-    [acquisition.viewerId, acquisition.revisionId],
+      WHERE viewer_id=? AND marker_id=? AND content_revision=? LIMIT 1`,
+    [acquisition.viewerId, acquisition.markerId, contentRevision],
   );
   if (existing[0]) return { acquired: false, reason: 'revision_already_acquired', acquisitionId: Number(existing[0].id) };
 
   const [insert] = await conn.execute(
     `INSERT IGNORE INTO cairn_acquisitions
-       (viewer_id,marker_id,cairn_revision_id,acquired_via,evidence_kind,
+       (viewer_id,marker_id,cairn_revision_id,content_revision,acquired_via,evidence_kind,
         evidence_id,evidence_observed_at)
-     VALUES (?,?,?,?,?,?,FROM_UNIXTIME(? / 1000))`,
+     VALUES (?,?,?,?,?,?,?,FROM_UNIXTIME(? / 1000))`,
     [acquisition.viewerId, acquisition.markerId, acquisition.revisionId,
-      acquisition.via, acquisition.evidenceKind, acquisition.evidenceId,
+      contentRevision, acquisition.via, acquisition.evidenceKind, acquisition.evidenceId,
       acquisition.evidenceObservedAtMs],
   );
   if (Number(insert.affectedRows) !== 1) {
     const [raced] = await conn.execute(
       `SELECT id FROM cairn_acquisitions
-        WHERE viewer_id=? AND cairn_revision_id=? LIMIT 1`,
-      [acquisition.viewerId, acquisition.revisionId],
+        WHERE viewer_id=? AND marker_id=? AND content_revision=? LIMIT 1`,
+      [acquisition.viewerId, acquisition.markerId, contentRevision],
     );
     return { acquired: false, reason: 'revision_already_acquired', acquisitionId: Number(raced[0]?.id) };
   }

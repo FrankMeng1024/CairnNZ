@@ -21,6 +21,11 @@ test('owner history query is always scoped to the authenticated owner', () => {
   assertLiteralLimitContract(built, 41);
   assert.deepEqual(built.values, [71]);
   assert.doesNotMatch(built.sql, /permission = 'public'|circle/);
+  assert.match(built.sql, /revision_state\.content_revision=marker\.content_revision/);
+  assert.match(built.sql, /revision_state\.availability='removed'/);
+  assert.match(built.sql, /thanked\.thanked_at IS NOT NULL/);
+  assert.match(built.sql, /thanked_revision\.availability='available'/);
+  assert.match(built.sql, /AS thanks_count/);
 });
 
 test('restoring the old prepared LIMIT placeholder fails the literal contract', () => {

@@ -98,9 +98,6 @@ describe('FR-CIRCLE-ACCOUNT-01 circle-marker account boundary', () => {
     const accountB = deferred<ReturnType<typeof circleResponse>>();
     let circleRequestCount = 0;
     mockAuthenticatedFetch.mockImplementation(async (url: string) => {
-      if (url === '/api/friend-content/encounters/verify') {
-        return { ok: true, status: 200, json: async () => ({}) };
-      }
       if (url === '/api/circle/markers') {
         circleRequestCount += 1;
         return circleRequestCount === 1 ? accountA.promise : accountB.promise;
@@ -124,6 +121,9 @@ describe('FR-CIRCLE-ACCOUNT-01 circle-marker account boundary', () => {
     const circleGets = mockAuthenticatedFetch.mock.calls
       .filter(([url]) => url === '/api/circle/markers');
     expect(circleGets).toHaveLength(2);
+    expect(mockAuthenticatedFetch.mock.calls.some(
+      ([url]) => url === '/api/friend-content/encounters/verify',
+    )).toBe(false);
     expect(useMarkerStore.getState()).toMatchObject({
       userId: 'owner-b',
       loadingCircle: false,

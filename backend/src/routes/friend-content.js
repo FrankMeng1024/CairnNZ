@@ -70,7 +70,17 @@ function publicRoute(row, includeGeometry = false) {
   };
 }
 
-router.post('/encounters/verify', async (req, res) => {
+// Discovery authority moved to /api/cairn-memory/discover. Retaining this
+// route as an explicit fail-closed response protects older clients without
+// maintaining a second mutable-content acquisition contract.
+router.post('/encounters/verify', (_req, res) => res.status(410).json({
+  error: 'Use durable Cairn discovery.',
+  code: 'CAIRN_MEMORY_DISCOVERY_REQUIRED',
+  encountered_marker_ids: [],
+}));
+
+/* istanbul ignore next -- historical verifier retained for rollback review only */
+async function legacyFriendEncounterVerifier(req, res) {
   let markerIds = [...new Set((Array.isArray(req.body?.marker_ids) ? req.body.marker_ids : [])
     .map(Number).filter(id => Number.isInteger(id) && id > 0))];
   if (markerIds.length > 50) {
@@ -207,7 +217,7 @@ router.post('/encounters/verify', async (req, res) => {
   } finally {
     conn.release();
   }
-});
+}
 
 router.get('/cairns', async (req, res) => {
   const friendId = req.query.friend_id === undefined ? null : Number(req.query.friend_id);
@@ -216,33 +226,47 @@ router.get('/cairns', async (req, res) => {
   }
   try {
     const params = [req.user.userId];
-    const friendClause = friendId === null ? '' : 'AND encounter.author_id = ?';
+    const friendClause = friendId === null ? '' : 'AND revision.owner_id = ?';
     if (friendId !== null) params.push(friendId);
     const [rows] = await pool.execute(
-      `SELECT m.id, m.user_id, m.type, m.text, m.lat, m.lng, m.alt, m.approximate,
-              m.created_at, m.updated_at, m.audience_epoch, m.content_revision,
-              u.name AS author_name,
-              encounter.friendship_episode_id,
-              encounter.created_at AS encountered_at
-         FROM friend_cairn_encounters encounter
-         JOIN markers m
-           ON m.id = encounter.marker_id AND m.user_id = encounter.author_id
-          AND m.permission = 'group' AND m.audience_epoch = encounter.audience_epoch
-          AND m.status <> 'hidden'
-         JOIN friendship_episodes episode
-           ON episode.id = encounter.friendship_episode_id AND episode.ended_at IS NULL
-         JOIN friends f ON f.user_id = encounter.viewer_id AND f.friend_id = encounter.author_id
-         JOIN users u ON u.id = encounter.author_id AND u.deleted_at IS NULL
-         LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=m.id
-        WHERE encounter.viewer_id = ? AND encounter.hidden_at IS NULL
-          AND COALESCE(moderation.state,'available')='available'
-          ${friendClause}
-          AND NOT EXISTS (
-            SELECT 1 FROM blocked_users b
-             WHERE (b.blocker_id = encounter.viewer_id AND b.blocked_id = encounter.author_id)
-                OR (b.blocker_id = encounter.author_id AND b.blocked_id = encounter.viewer_id)
-          )
-        ORDER BY encounter.created_at DESC LIMIT 1000`,
+      `WITH acquired AS (
+         SELECT acquisition.*,revision.owner_id,revision.content_type AS type,
+                revision.content_text AS text,revision.lat,revision.lng,
+                revision.approximate,revision.content_revision,
+                revision.friend_author_name_snapshot AS author_name,
+                revision.created_at,acquisition.acquired_at AS encountered_at,
+                ROW_NUMBER() OVER (PARTITION BY acquisition.marker_id
+                  ORDER BY revision.content_revision DESC,acquisition.acquired_at DESC) AS rank_in_cairn
+           FROM cairn_acquisitions acquisition
+           JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
+           JOIN cairn_collections collection
+             ON collection.viewer_id=acquisition.viewer_id
+            AND collection.marker_id=acquisition.marker_id
+           JOIN friends friend
+             ON friend.user_id=acquisition.viewer_id AND friend.friend_id=revision.owner_id
+           JOIN users owner ON owner.id=revision.owner_id AND owner.deleted_at IS NULL
+           LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
+          WHERE acquisition.viewer_id=? AND acquisition.acquired_via='friends'
+            AND acquisition.removed_at IS NULL AND collection.removed_at IS NULL
+            AND revision.availability='available'
+            AND COALESCE(moderation.state,'available')='available'
+            ${friendClause}
+            AND NOT EXISTS (
+              SELECT 1 FROM hidden_items hidden
+               WHERE hidden.user_id=acquisition.viewer_id
+                 AND hidden.item_type='mark' AND hidden.item_id=acquisition.marker_id
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM blocked_users blocked
+               WHERE (blocked.blocker_id=acquisition.viewer_id AND blocked.blocked_id=revision.owner_id)
+                  OR (blocked.blocker_id=revision.owner_id AND blocked.blocked_id=acquisition.viewer_id)
+            )
+       )
+       SELECT marker_id AS id,owner_id AS user_id,type,text,lat,lng,NULL AS alt,
+              approximate,created_at,created_at AS updated_at,content_revision,
+              author_name,encountered_at
+         FROM acquired WHERE rank_in_cairn=1
+        ORDER BY encountered_at DESC LIMIT 1000`,
       params,
     );
     return res.json({ cairns: rows.map(publicCairn) });
@@ -259,8 +283,8 @@ router.get('/cairns/:id', async (req, res) => {
     const cairn = await authorizedFriendCairn(pool, req.user.userId, markerId);
     if (!cairn) return opaqueUnavailable(res);
     await pool.execute(
-      `UPDATE friend_cairn_encounters SET opened_at = COALESCE(opened_at, UTC_TIMESTAMP(3))
-        WHERE viewer_id = ? AND marker_id = ?`,
+      `UPDATE cairn_acquisitions SET opened_at=COALESCE(opened_at,UTC_TIMESTAMP(3))
+        WHERE viewer_id=? AND marker_id=? AND acquired_via='friends' AND removed_at IS NULL`,
       [req.user.userId, markerId],
     );
     return res.json({ cairn: publicCairn(cairn) });

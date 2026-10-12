@@ -120,6 +120,7 @@ CREATE TABLE cairn_acquisitions (
   viewer_id BIGINT UNSIGNED NOT NULL,
   marker_id BIGINT UNSIGNED NOT NULL,
   cairn_revision_id BIGINT UNSIGNED NOT NULL,
+  content_revision BIGINT UNSIGNED NOT NULL,
   acquired_via ENUM('friends','public') NOT NULL,
   evidence_kind ENUM('presence_witness','legacy_coverage') NOT NULL,
   evidence_id BIGINT UNSIGNED NOT NULL,
@@ -129,6 +130,8 @@ CREATE TABLE cairn_acquisitions (
   thanked_at DATETIME(3) NULL,
   removed_at DATETIME(3) NULL,
   UNIQUE KEY uk_cairn_acquisition_revision (viewer_id, cairn_revision_id),
+  UNIQUE KEY uk_cairn_acquisition_logical_revision
+    (viewer_id, marker_id, content_revision),
   INDEX idx_cairn_acquisition_collection (viewer_id, marker_id, acquired_at),
   CONSTRAINT fk_cairn_acquisition_viewer
     FOREIGN KEY (viewer_id) REFERENCES users(id) ON DELETE CASCADE,

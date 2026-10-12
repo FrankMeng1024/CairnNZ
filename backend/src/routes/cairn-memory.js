@@ -28,6 +28,7 @@ const {
   capturePublicPublicationRevision,
   acquireCairnRevision,
 } = require('../services/cairnHistory');
+const { logicalRevisionStateSql } = require('../services/ownedCairnLibrary');
 
 const router = express.Router();
 router.use(authenticate);
@@ -102,7 +103,9 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
     `SELECT marker.id AS marker_id,marker.user_id AS author_id,marker.type,marker.text,
             marker.lat,marker.lng,marker.approximate,marker.content_revision,
             marker.audience_epoch,user.name AS author_name,'friends' AS source_audience,
-            UNIX_TIMESTAMP(GREATEST(episode.started_at,marker.created_at,audience.starts_at))*1000
+            UNIX_TIMESTAMP(GREATEST(
+              episode.started_at,marker.created_at,marker.updated_at,audience.starts_at
+            ))*1000
               AS eligible_after_ms
        FROM markers marker
        JOIN users user ON user.id=marker.user_id AND user.deleted_at IS NULL
@@ -138,8 +141,6 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
           SELECT 1 FROM cairn_revisions moderated_revision
            WHERE moderated_revision.marker_id=marker.id
              AND moderated_revision.content_revision=marker.content_revision
-             AND moderated_revision.source_audience='friends'
-             AND moderated_revision.audience_epoch=marker.audience_epoch
              AND moderated_revision.availability<>'available'
         )
         AND NOT EXISTS (
@@ -157,6 +158,13 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
       point.lng, point.lat, ENCOUNTER_RADIUS_M, visit.enteredAtMs,
       viewerId, viewerId, viewerId, visit.id, viewerId],
   );
+
+  // Public discovery is a pilot on both sides of the exchange. Friend-only
+  // Cairns remain eligible without this gate, but a friendship never turns a
+  // Public publication into a bypass for an unauthorized viewer.
+  if (!publicPilotAuthorized(viewerId)) {
+    return { friend: friendRows, updated: [], public: [] };
+  }
 
   const [publicRows] = await conn.execute(
     `SELECT marker.id AS marker_id,marker.user_id AS author_id,
@@ -204,8 +212,6 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
           SELECT 1 FROM cairn_revisions moderated_revision
            WHERE moderated_revision.marker_id=marker.id
              AND moderated_revision.content_revision=publication.content_revision
-             AND moderated_revision.source_audience='public'
-             AND moderated_revision.publication_epoch=publication.publication_epoch
              AND moderated_revision.availability<>'available'
         )
         AND NOT EXISTS (
@@ -291,6 +297,7 @@ router.post('/discover', mutationLimiter, async (req, res) => {
         viewerId,
         markerId: candidate.marker_id,
         revisionId: revision.id,
+        contentRevision: revision.content_revision,
         via: candidate.source_audience === 'friends' ? 'friends' : 'public',
         evidenceKind: 'presence_witness',
         evidenceId: evidence.id,
@@ -336,13 +343,23 @@ router.get('/library', async (req, res) => {
       const [rows] = await pool.execute(
         `SELECT marker.id AS marker_id,marker.type,
                 CASE WHEN COALESCE(moderation.state,'available')='available'
+                          AND (${logicalRevisionStateSql})='available'
                      THEN marker.text ELSE NULL END AS text,
                 marker.lat,marker.lng,
                 marker.permission,marker.content_revision,marker.created_at,marker.updated_at,
-                COALESCE(moderation.state,'available') AS content_state,
+                CASE WHEN COALESCE(moderation.state,'available')<>'available'
+                     THEN moderation.state ELSE (${logicalRevisionStateSql}) END AS content_state,
                 collection.archived_at,collection.removed_at,
                 (SELECT COUNT(DISTINCT revision.content_revision) FROM cairn_revisions revision
-                  WHERE revision.marker_id=marker.id) AS revision_count
+                  WHERE revision.marker_id=marker.id) AS revision_count,
+                (SELECT COUNT(*)
+                   FROM cairn_acquisitions thanked
+                   JOIN cairn_revisions thanked_revision
+                     ON thanked_revision.id=thanked.cairn_revision_id
+                  WHERE thanked.marker_id=marker.id
+                    AND thanked.thanked_at IS NOT NULL
+                    AND thanked.removed_at IS NULL
+                    AND thanked_revision.availability='available') AS thanks_count
            FROM cairn_collections collection
            JOIN markers marker ON marker.id=collection.marker_id AND marker.user_id=collection.viewer_id
            LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=marker.id
@@ -509,8 +526,9 @@ router.post('/revisions/:revision_id/thanks', mutationLimiter, async (req, res) 
           AND acquisition.removed_at IS NULL AND collection.removed_at IS NULL
           AND acquisition.opened_at IS NOT NULL
           AND revision.availability='available'
+          AND revision.owner_id<>?
         LIMIT 1 FOR UPDATE`,
-      [req.user.userId, revisionId],
+      [req.user.userId, revisionId, req.user.userId],
     );
     if (!rows[0]) {
       await conn.rollback();
@@ -738,7 +756,8 @@ router.post('/operator/cases/:case_id/decision', mutationLimiter, requireOperato
       [caseState, req.user.userId, reason, decisionScope, caseId],
     );
     const [revisions] = await conn.execute(
-      `SELECT revision.owner_id,revision.availability,
+      `SELECT revision.owner_id,revision.marker_id,revision.content_revision,
+              revision.availability,
               moderation.state AS source_availability
          FROM cairn_revisions revision
          LEFT JOIN cairn_source_moderation moderation
@@ -748,7 +767,19 @@ router.post('/operator/cases/:case_id/decision', mutationLimiter, requireOperato
     );
     const previous = revisions[0]?.availability ?? null;
     const sourcePrevious = revisions[0]?.source_availability ?? 'available';
-    if ((decisionScope === 'revision' && previous === 'removed' && contentState !== 'removed')
+    const logicalMarkerId = revisions[0]?.marker_id;
+    const logicalContentRevision = revisions[0]?.content_revision;
+    if (!logicalMarkerId || logicalContentRevision == null) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Revision unavailable' });
+    }
+    const [logicalSnapshots] = await conn.execute(
+      `SELECT id,availability FROM cairn_revisions
+        WHERE marker_id=? AND content_revision=? FOR UPDATE`,
+      [logicalMarkerId, logicalContentRevision],
+    );
+    const logicalRevisionRemoved = logicalSnapshots.some(row => row.availability === 'removed');
+    if ((decisionScope === 'revision' && logicalRevisionRemoved && contentState !== 'removed')
       || (decisionScope === 'source' && sourcePrevious === 'removed' && contentState !== 'removed')) {
       await conn.rollback();
       return res.status(409).json({ error: 'Confirmed removal cannot be restored' });
@@ -804,25 +835,26 @@ router.post('/operator/cases/:case_id/decision', mutationLimiter, requireOperato
             SET availability='removed',content_text=NULL,lat=0,lng=0,
                 friend_author_name_snapshot=NULL,publication_id=NULL,
                 content_sha256=REPEAT('0',64)
-          WHERE id=?`, [reviewCase.cairn_revision_id],
+          WHERE marker_id=? AND content_revision=?`,
+        [logicalMarkerId, logicalContentRevision],
       );
       await conn.execute(
         `UPDATE public_cairn_publications publication
-         JOIN cairn_revisions revision
-           ON revision.marker_id=publication.marker_id
-          AND revision.content_revision=publication.content_revision
-          AND revision.publication_epoch=publication.publication_epoch
             SET publication.state='withdrawn',
                 publication.withdrawn_at=COALESCE(publication.withdrawn_at,UTC_TIMESTAMP(3)),
                 publication.snapshot_text=NULL,publication.snapshot_lat=NULL,
                 publication.snapshot_lng=NULL,publication.snapshot_type=NULL,
                 publication.snapshot_approximate=NULL,publication.snapshot_sha256=NULL,
                 publication.decision_reason=COALESCE(publication.decision_reason,'confirmed_revision_removal')
-          WHERE revision.id=?`, [reviewCase.cairn_revision_id],
+          WHERE publication.marker_id=? AND publication.content_revision=?`,
+        [logicalMarkerId, logicalContentRevision],
       );
       await conn.execute(
-        `UPDATE cairn_acquisitions SET removed_at=COALESCE(removed_at,UTC_TIMESTAMP(3))
-          WHERE cairn_revision_id=?`, [reviewCase.cairn_revision_id],
+        `UPDATE cairn_acquisitions acquisition
+          JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
+            SET acquisition.removed_at=COALESCE(acquisition.removed_at,UTC_TIMESTAMP(3))
+          WHERE revision.marker_id=? AND revision.content_revision=?`,
+        [logicalMarkerId, logicalContentRevision],
       );
     } else if (decisionScope === 'source') {
       await conn.execute(
@@ -833,8 +865,8 @@ router.post('/operator/cases/:case_id/decision', mutationLimiter, requireOperato
     } else {
       await conn.execute(
         `UPDATE cairn_revisions SET availability=?
-          WHERE id=? AND availability<>'removed'`,
-        [contentState, reviewCase.cairn_revision_id],
+          WHERE marker_id=? AND content_revision=? AND availability<>'removed'`,
+        [contentState, logicalMarkerId, logicalContentRevision],
       );
     }
     await conn.execute(

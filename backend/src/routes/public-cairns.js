@@ -158,6 +158,12 @@ async function loadAuthorizedPublicCairn(conn, viewerId, markerId, lock = false)
         AND publication.snapshot_location_policy_version=?
         AND COALESCE(moderation.state,'available')='available'
         AND NOT EXISTS (
+          SELECT 1 FROM cairn_revisions moderated_revision
+           WHERE moderated_revision.marker_id=marker.id
+             AND moderated_revision.content_revision=marker.content_revision
+             AND moderated_revision.availability<>'available'
+        )
+        AND NOT EXISTS (
           SELECT 1 FROM hidden_items hidden
            WHERE hidden.user_id=encounter.viewer_id
              AND hidden.item_type='mark' AND hidden.item_id=marker.id
@@ -309,6 +315,12 @@ router.post('/encounters/verify', actionLimiter, async (req, res) => {
           AND marker.content_revision=publication.content_revision
           AND publication.snapshot_location_policy_version=?
           AND publication.owner_id <> ?
+          AND NOT EXISTS (
+            SELECT 1 FROM cairn_revisions moderated_revision
+             WHERE moderated_revision.marker_id=marker.id
+               AND moderated_revision.content_revision=marker.content_revision
+               AND moderated_revision.availability<>'available'
+          )
           AND NOT EXISTS (
             SELECT 1 FROM hidden_items hidden
              WHERE hidden.user_id=? AND hidden.item_type='mark' AND hidden.item_id=marker.id
@@ -481,6 +493,12 @@ router.get('/scene', async (req, res) => {
             AND publication.content_revision=marker.content_revision
             AND publication.snapshot_location_policy_version=?
             AND COALESCE(moderation.state,'available')='available'
+            AND NOT EXISTS (
+              SELECT 1 FROM cairn_revisions moderated_revision
+               WHERE moderated_revision.marker_id=marker.id
+                 AND moderated_revision.content_revision=marker.content_revision
+                 AND moderated_revision.availability<>'available'
+            )
             AND NOT EXISTS (
               SELECT 1 FROM hidden_items hidden
                WHERE hidden.user_id=encounter.viewer_id

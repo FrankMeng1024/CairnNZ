@@ -27,6 +27,27 @@ function escapeLike(value) {
   return String(value).replace(/[\\%_]/g, char => `\\${char}`);
 }
 
+const logicalRevisionStateSql = `CASE
+  WHEN EXISTS (
+    SELECT 1 FROM cairn_revisions revision_state
+     WHERE revision_state.marker_id=marker.id
+       AND revision_state.content_revision=marker.content_revision
+       AND revision_state.availability='removed'
+  ) THEN 'removed'
+  WHEN EXISTS (
+    SELECT 1 FROM cairn_revisions revision_state
+     WHERE revision_state.marker_id=marker.id
+       AND revision_state.content_revision=marker.content_revision
+       AND revision_state.availability='under_review'
+  ) THEN 'under_review'
+  WHEN EXISTS (
+    SELECT 1 FROM cairn_revisions revision_state
+     WHERE revision_state.marker_id=marker.id
+       AND revision_state.content_revision=marker.content_revision
+       AND revision_state.availability='unavailable'
+  ) THEN 'unavailable'
+  ELSE 'available' END`;
+
 function buildOwnedCairnLibraryQuery({ userId, limit, query, cursor }) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
     throw new Error('invalid_limit');
@@ -51,11 +72,21 @@ function buildOwnedCairnLibraryQuery({ userId, limit, query, cursor }) {
                  marker.origin_activity_client_id, marker.origin_session_id,
                  marker.type,
                  CASE WHEN COALESCE(moderation.state,'available')='available'
+                           AND (${logicalRevisionStateSql})='available'
                       THEN marker.text ELSE '' END AS text,
                  marker.lat, marker.lng, marker.alt, marker.permission, marker.approximate,
                  marker.public_snapshot, marker.public_intent, marker.public_state,
                  marker.publication_epoch, marker.content_revision,
-                 COALESCE(moderation.state,'available') AS content_state,
+                 CASE WHEN COALESCE(moderation.state,'available')<>'available'
+                      THEN moderation.state ELSE (${logicalRevisionStateSql}) END AS content_state,
+                 (SELECT COUNT(*)
+                    FROM cairn_acquisitions thanked
+                    JOIN cairn_revisions thanked_revision
+                      ON thanked_revision.id=thanked.cairn_revision_id
+                   WHERE thanked.marker_id=marker.id
+                     AND thanked.thanked_at IS NOT NULL
+                     AND thanked.removed_at IS NULL
+                     AND thanked_revision.availability='available') AS thanks_count,
                  marker.created_at, marker.updated_at
           FROM markers marker
           LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=marker.id
@@ -70,4 +101,5 @@ module.exports = {
   buildOwnedCairnLibraryQuery,
   decodeCursor,
   encodeCursor,
+  logicalRevisionStateSql,
 };

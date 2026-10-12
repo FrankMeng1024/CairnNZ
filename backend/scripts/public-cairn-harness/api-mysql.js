@@ -845,9 +845,10 @@ async function main() {
     const pubE = await pendingSubmission(actors.C, markerE.id);
     await decide(actors.C, pubE.id, 'approve');
     const seeE = await completeActivity(actors.D, place.lat + 0.0002, place.lng, Date.now() + 120_000);
-    await api(actors.D, '/api/public-cairns/encounters/verify', {
+    const seeEVerified = await api(actors.D, '/api/public-cairns/encounters/verify', {
       method: 'POST', expected: 200, body: { source_activity_client_id: seeE.clientActivityId },
     });
+    assert.equal(seeEVerified.body.encountered_marker_ids.includes(markerE.id), true);
     await api(actors.D, `/api/public-cairns/cairns/${markerE.id}`, { expected: 200 });
     await api(actors.D, `/api/friends/${actors.E.id}/block`, { method: 'POST', body: {}, expected: 200 });
     await api(actors.D, `/api/public-cairns/cairns/${markerE.id}`, { expected: 404 });

@@ -42,6 +42,14 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
     expect(detail).toContain('Activity link unavailable');
   });
 
+  test('owner acknowledgement is a restrained aggregate with no discoverer or visit details', () => {
+    expect(markerStore).toContain('thanksCount: row.thanks_count == null ? undefined : Number(row.thanks_count)');
+    expect(detail).toContain('testID="cairn-owner-thanks-acknowledgement"');
+    expect(detail).toContain("Number(marker.thanksCount ?? 0) > 0");
+    expect(detail).toContain("'1 Thanks received'");
+    expect(detail).not.toMatch(/thanks.*discoverer|thanks.*observed_at|thanks.*acquired_at/i);
+  });
+
   test('incomplete retrieval never claims a global search-empty result', () => {
     expect(library).toContain("coverage === 'complete' ? 'No matching Cairns' : 'No matches in available Cairns'");
     expect(library).toContain('Some older Cairns may not appear yet.');

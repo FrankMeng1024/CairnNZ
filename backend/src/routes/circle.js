@@ -93,35 +93,47 @@ router.get('/markers', async (req, res) => {
   const viewerId = req.user.userId;
   try {
     const sql = `
-      SELECT m.id, m.user_id, m.type, m.text, m.lat, m.lng, m.alt,
-             m.permission, m.approximate, m.created_at, m.updated_at,
-             u.name AS author_name
-        FROM friend_cairn_encounters encounter
-        JOIN markers m ON m.id = encounter.marker_id
-                      AND m.user_id = encounter.author_id
-                      AND m.audience_epoch = encounter.audience_epoch
-        JOIN friendship_episodes episode
-          ON episode.id = encounter.friendship_episode_id AND episode.ended_at IS NULL
-        JOIN friends f ON f.user_id = encounter.viewer_id AND f.friend_id = encounter.author_id
-        JOIN users  u  ON u.id = m.user_id AND u.deleted_at IS NULL
-   LEFT JOIN hidden_items h
-          ON h.user_id   = ?
-         AND h.item_type = 'mark'
-         AND h.item_id   = m.id
-       WHERE encounter.viewer_id = ?
-         AND encounter.hidden_at IS NULL
-         AND m.permission = 'group'
-         AND m.status = 'healthy'
-         AND h.user_id IS NULL
-         AND NOT EXISTS (
-           SELECT 1 FROM blocked_users b
-            WHERE (b.blocker_id = encounter.viewer_id AND b.blocked_id = encounter.author_id)
-               OR (b.blocker_id = encounter.author_id AND b.blocked_id = encounter.viewer_id)
-         )
-    ORDER BY m.created_at DESC
+      WITH acquired AS (
+        SELECT revision.marker_id AS id,revision.owner_id AS user_id,
+               revision.content_type AS type,revision.content_text AS text,
+               revision.lat,revision.lng,NULL AS alt,'group' AS permission,
+               revision.approximate,revision.created_at,
+               revision.created_at AS updated_at,
+               revision.friend_author_name_snapshot AS author_name,
+               acquisition.acquired_at,
+               ROW_NUMBER() OVER (PARTITION BY acquisition.marker_id
+                 ORDER BY revision.content_revision DESC,acquisition.acquired_at DESC) AS rank_in_cairn
+          FROM cairn_acquisitions acquisition
+          JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
+          JOIN cairn_collections collection
+            ON collection.viewer_id=acquisition.viewer_id
+           AND collection.marker_id=acquisition.marker_id
+          JOIN friends friend
+            ON friend.user_id=acquisition.viewer_id AND friend.friend_id=revision.owner_id
+          JOIN users owner ON owner.id=revision.owner_id AND owner.deleted_at IS NULL
+     LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
+     LEFT JOIN hidden_items hidden
+            ON hidden.user_id=acquisition.viewer_id
+           AND hidden.item_type='mark' AND hidden.item_id=acquisition.marker_id
+         WHERE acquisition.viewer_id=? AND acquisition.acquired_via='friends'
+           AND acquisition.removed_at IS NULL
+           AND collection.removed_at IS NULL AND collection.archived_at IS NULL
+           AND revision.availability='available'
+           AND COALESCE(moderation.state,'available')='available'
+           AND hidden.user_id IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM blocked_users blocked
+              WHERE (blocked.blocker_id=acquisition.viewer_id AND blocked.blocked_id=revision.owner_id)
+                 OR (blocked.blocker_id=revision.owner_id AND blocked.blocked_id=acquisition.viewer_id)
+           )
+      )
+      SELECT id,user_id,type,text,lat,lng,alt,permission,approximate,
+             created_at,updated_at,author_name
+        FROM acquired WHERE rank_in_cairn=1
+    ORDER BY acquired_at DESC
     LIMIT 5000`;
 
-    const [markers] = await pool.execute(sql, [viewerId, viewerId]);
+    const [markers] = await pool.execute(sql, [viewerId]);
 
     // Normalize 'group' → 'friend' on the client wire so the UI never sees legacy.
     // Public marks from friends remain 'public' (per v4: anonymous display still

@@ -214,32 +214,38 @@ async function areCurrentFriends(db, userA, userB) {
 
 async function authorizedFriendCairn(db, viewerId, markerId, { includeHidden = false } = {}) {
   const [rows] = await db.execute(
-    `SELECT m.id, m.user_id, m.type, m.text, m.lat, m.lng, m.alt,
-            m.permission, m.approximate, m.created_at, m.updated_at,
-            m.audience_epoch, m.content_revision, u.name AS author_name,
-            encounter.created_at AS encountered_at, encounter.opened_at, encounter.hidden_at,
-            episode.id AS friendship_episode_id
-       FROM friend_cairn_encounters encounter
-       JOIN markers m
-         ON m.id = encounter.marker_id
-        AND m.user_id = encounter.author_id
-        AND m.permission = 'group'
-        AND m.audience_epoch = encounter.audience_epoch
-        AND m.status <> 'hidden'
-       JOIN friends f ON f.user_id = encounter.viewer_id AND f.friend_id = encounter.author_id
-       JOIN friendship_episodes episode
-         ON episode.id = encounter.friendship_episode_id AND episode.ended_at IS NULL
-       JOIN users u ON u.id = encounter.author_id AND u.deleted_at IS NULL
-       LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=m.id
-      WHERE encounter.viewer_id = ? AND encounter.marker_id = ?
-        ${includeHidden ? '' : 'AND encounter.hidden_at IS NULL'}
+    `SELECT revision.marker_id AS id,revision.owner_id AS user_id,
+            revision.content_type AS type,revision.content_text AS text,
+            revision.lat,revision.lng,NULL AS alt,'group' AS permission,
+            revision.approximate,revision.created_at,revision.created_at AS updated_at,
+            revision.audience_epoch,revision.content_revision,
+            revision.friend_author_name_snapshot AS author_name,
+            acquisition.acquired_at AS encountered_at,acquisition.opened_at,
+            NULL AS hidden_at
+       FROM cairn_acquisitions acquisition
+       JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
+       JOIN cairn_collections collection
+         ON collection.viewer_id=acquisition.viewer_id
+        AND collection.marker_id=acquisition.marker_id
+       JOIN friends friend
+         ON friend.user_id=acquisition.viewer_id AND friend.friend_id=revision.owner_id
+       JOIN users owner ON owner.id=revision.owner_id AND owner.deleted_at IS NULL
+       LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
+       LEFT JOIN hidden_items hidden
+         ON hidden.user_id=acquisition.viewer_id
+        AND hidden.item_type='mark' AND hidden.item_id=acquisition.marker_id
+      WHERE acquisition.viewer_id=? AND acquisition.marker_id=?
+        AND acquisition.acquired_via='friends'
+        AND acquisition.removed_at IS NULL AND collection.removed_at IS NULL
+        ${includeHidden ? '' : 'AND hidden.user_id IS NULL'}
+        AND revision.availability='available'
         AND COALESCE(moderation.state,'available')='available'
         AND NOT EXISTS (
           SELECT 1 FROM blocked_users b
-           WHERE (b.blocker_id = encounter.viewer_id AND b.blocked_id = encounter.author_id)
-              OR (b.blocker_id = encounter.author_id AND b.blocked_id = encounter.viewer_id)
+           WHERE (b.blocker_id=acquisition.viewer_id AND b.blocked_id=revision.owner_id)
+              OR (b.blocker_id=revision.owner_id AND b.blocked_id=acquisition.viewer_id)
         )
-      LIMIT 1`,
+      ORDER BY revision.content_revision DESC,acquisition.acquired_at DESC LIMIT 1`,
     [viewerId, markerId],
   );
   return rows[0] || null;
