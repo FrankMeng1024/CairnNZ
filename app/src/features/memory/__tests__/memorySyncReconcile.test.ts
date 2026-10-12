@@ -35,6 +35,7 @@ describe('Memory server reconciliation', () => {
     }));
 
     const memorySync = require('../../../services/memorySync');
+    expect(memorySync.MEMORY_DISCOVERY_SYNC_CADENCE).toEqual({ debounceMs: 5_000, maxWaitMs: 10_000 });
     memorySync.attachMemorySync('account-a');
     await memorySync.pullMemoryFromServer('account-a', { reconcile: true });
     memorySync.detachMemorySync();

@@ -13,6 +13,7 @@ import { Icon } from '../components/Icon';
 import { FontSize, Spacing } from '../components/tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import * as Crypto from 'expo-crypto';
+import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
 
 type DetailRoute = RouteProp<RootStackParamList, 'AcquiredCairnDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -68,6 +69,7 @@ export function AcquiredCairnDetailScreen() {
       setRevisions(current => current.map(item => item.revision_id === revision.revision_id
         ? { ...item, opened_at: item.opened_at || new Date().toISOString() }
         : item));
+      void useCairnPresentationStore.getState().refreshAcquiredMap();
     });
     return () => { active = false; };
   }, [pageIndex, revisions]);
@@ -76,7 +78,10 @@ export function AcquiredCairnDetailScreen() {
     const response = await authenticatedFetch(`/api/cairn-memory/cairns/${encodeURIComponent(route.params.markerId)}/collection`, {
       method: 'PUT', body: JSON.stringify({ action }),
     });
-    if (response.ok) nav.goBack();
+    if (response.ok) {
+      void useCairnPresentationStore.getState().refreshAcquiredMap();
+      nav.goBack();
+    }
     else setError('Could not update this Memory collection.');
   };
 

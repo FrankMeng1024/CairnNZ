@@ -212,7 +212,7 @@ async function assignPresentationGroup(conn, viewerId, acquisitionId, preferredG
     [openGroups] = await conn.execute(
       `SELECT id,group_token,haptic_eligible,merge_until
          FROM cairn_presentation_groups
-        WHERE id = ? AND viewer_id = ? AND announced_at IS NULL
+        WHERE id = ? AND viewer_id = ? AND merge_until >= UTC_TIMESTAMP(3)
         LIMIT 1 FOR UPDATE`,
       [preferredGroupId, viewerId],
     );
@@ -220,8 +220,7 @@ async function assignPresentationGroup(conn, viewerId, acquisitionId, preferredG
   if (openGroups.length === 0) [openGroups] = await conn.execute(
     `SELECT id,group_token,haptic_eligible,merge_until
        FROM cairn_presentation_groups
-      WHERE viewer_id = ? AND announced_at IS NULL
-        AND merge_until >= UTC_TIMESTAMP(3)
+      WHERE viewer_id = ? AND merge_until >= UTC_TIMESTAMP(3)
       ORDER BY merge_started_at DESC,id DESC LIMIT 1 FOR UPDATE`,
     [viewerId],
   );

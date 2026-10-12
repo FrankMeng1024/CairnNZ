@@ -105,3 +105,24 @@ test('acquisition idempotency is keyed by viewer, Cairn and logical content revi
   assert.match(history, /WHERE viewer_id=\? AND marker_id=\? AND content_revision=\?/);
   assert.match(history, /cairn_revision_id,content_revision,acquired_via/);
 });
+
+test('presentation acknowledgement is event-watermarked while an announced group may keep merging', () => {
+  const route = read('routes/cairn-memory.js');
+  const cadence = read('services/cairnDiscoveryCadence.js');
+  const pending = route.slice(
+    route.indexOf("router.get('/presentation/pending'"),
+    route.indexOf("router.post('/presentation/:group_id/announced'"),
+  );
+  const acknowledged = route.slice(
+    route.indexOf("router.post('/presentation/:group_id/announced'"),
+    route.indexOf("router.get('/review-cases/mine'"),
+  );
+  assert.match(pending, /MAX\(event\.id\) AS event_through_id/);
+  assert.match(pending, /event\.announced_at IS NULL/);
+  assert.doesNotMatch(pending, /merge_until<=UTC_TIMESTAMP/);
+  assert.match(pending, /presentation\.merge_until>=UTC_TIMESTAMP\(3\)/);
+  assert.match(acknowledged, /event_through_id/);
+  assert.match(acknowledged, /presentation_group_id=\? AND id<=\?/);
+  assert.match(cadence, /viewer_id = \? AND merge_until >= UTC_TIMESTAMP\(3\)/);
+  assert.doesNotMatch(cadence, /viewer_id = \? AND announced_at IS NULL\s+AND merge_until/);
+});

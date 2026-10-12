@@ -213,7 +213,6 @@ import {
   runOwnedTrackingTokenRefresh,
   type TrackingTokenRefreshSnapshot,
 } from '../services/trackingTokenRefreshAuthority';
-import { maybeVerifyPublicWalkingDiscovery } from '../features/public/services/publicWalkingDiscovery';
 import {
   exportLatestActivityStageLedger,
   flushActivityStageLedger,
@@ -4002,24 +4001,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         } catch { /* hydrate/foreground remains a later durable wake */ }
       }
 
-      // Public encounter qualification is derived only from the finalized
-      // server Activity and uploaded real-source witnesses. Queueing this
-      // identity must never block Finish; offline/pending Activities are
-      // retried after their normal server save converges. Simulator evidence
-      // is deliberately excluded at this call boundary as well as server-side.
-      if (serverSaveAcknowledged && s.locationProviderSource === 'real' && s.sessionId) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const publicCairns = require('../features/public/services/publicCairns');
-          const queued = await publicCairns.queuePublicActivityReconciliation(ownerUserId, s.sessionId);
-          if (queued) {
-            void publicCairns.reconcilePublicActivityAfterServerAck(ownerUserId, s.sessionId).catch(() => {});
-          }
-        } catch (publicQueueError) {
-          crashLogger.breadcrumb(`public:post_activity_ack_queue_failed ${String(publicQueueError).slice(0, 80)}`);
-        }
-      }
-
       // O7 (2026-07-26): 用户报 12:11 真实 hike Save 后 activity detail
       // "Loading route..." 然后 session 消失。aliyun 上 too_short_check
       // 之后 zero save events → stopTracking 在这里之前 die 但 crashLogger
@@ -5833,33 +5814,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           memoryProjectionPending = true;
         }
         const latest = get();
-        if (
-          !isSimulatorSample
-          && before.sessionId
-          && before.remoteSessionId
-          && before.liveOwnerGeneration
-        ) {
-          const discoveryIdentity = {
-            sessionId: before.sessionId,
-            ownerGeneration: before.liveOwnerGeneration,
-            remoteSessionId: before.remoteSessionId,
-          };
-          void maybeVerifyPublicWalkingDiscovery({
-            sourceActivityClientId: discoveryIdentity.sessionId,
-            serverActivityId: discoveryIdentity.remoteSessionId,
-            ownerUserId: before.ownerUserId,
-            ownerGeneration: discoveryIdentity.ownerGeneration,
-            points: latest.trackPoints.map(toServerPoint),
-            isCurrent: () => {
-              const live = get();
-              return live.status === 'tracking'
-                && live.locationProviderSource === 'real'
-                && live.sessionId === discoveryIdentity.sessionId
-                && live.liveOwnerGeneration === discoveryIdentity.ownerGeneration
-                && live.remoteSessionId === discoveryIdentity.remoteSessionId;
-            },
-          }).catch(() => {});
-        }
         appendSimulatorLog('ACTIVITY_POINT', 'activity_point_committed', {
           sampleSource: owned.source ?? 'foreground',
           segmentId: accepted.segmentId,

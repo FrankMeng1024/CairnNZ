@@ -13,7 +13,7 @@
  */
 import React, { useMemo, useState, useEffect } from 'react';
 import { View, StyleSheet, LayoutChangeEvent, TouchableOpacity, Text, Platform } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useIsFocused } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { HomeScreen as GeneratedHome } from './home_generated/HomeScreen.generated';
@@ -23,6 +23,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import { useWeatherStore, NZ_TEST_CITIES } from '../store/useWeatherStore';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { useMarkerStore } from '../store/useMarkerStore';
 import { useScenicTimeState } from '../hooks/useScenicTimeState';
 import { resolveCurrentCountry } from '../services/countryService';
 import { getHomeBackground, getWeatherReviewBackground } from '../utils/homeBackground';
@@ -38,6 +39,8 @@ import {
 } from '../features/activity/activityOperationalState';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { useDistance } from '../utils/distanceFormat';
+import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
+import { resolveHomeStateWindow } from '../features/cairns/homeStateWindow';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -101,6 +104,7 @@ function activityStateCopy(
 
 export function HomeScreen() {
   const nav = useNavigation<Nav>();
+  const isHomeFocused = useIsFocused();
   const distance = useDistance();
   const user = useAppStore(s => s.user);
   const sessions = useSessionStore(s => s.sessions);
@@ -113,7 +117,16 @@ export function HomeScreen() {
   const liveStartedAt = useTrackingStore(s => s.startedAt);
   const liveDistanceM = useTrackingStore(s => s.distanceM);
   const liveDurationS = useTrackingStore(s => s.durationS);
+  const saveLostSessionId = useTrackingStore(s => s.saveLostSessionId);
+  const saveLostPayload = useTrackingStore(s => s.saveLostPayload);
   const memoryPointCount = useMemoryStore(s => s.points.length);
+  const ownedCairnCount = useMarkerStore(s => s.markers.length);
+  const presentationViewerId = useCairnPresentationStore(s => s.viewerId);
+  const presentationPendingCount = useCairnPresentationStore(s => s.pendingGroups.length);
+  const presentationGroup = useCairnPresentationStore(s => s.activeGroup);
+  const presentationSurface = useCairnPresentationStore(s => s.activeSurface);
+  const presentationBlocked = useCairnPresentationStore(s => s.presentationBlocked);
+  const memoryUnreadCount = useCairnPresentationStore(s => s.unreadCount);
   const weatherCondition = useWeatherStore(s => s.condition);
   const conditionOverride = useWeatherStore(s => s.conditionOverride);
   const locationOverride = useWeatherStore(s => s.locationOverride);
@@ -270,6 +283,46 @@ export function HomeScreen() {
     ? null
     : unfinishedActivity;
   const showUnfinished = showLiveActivity || !!topUnfinished;
+  const showSaveRecovery = Boolean(saveLostSessionId
+    && saveLostPayload
+    && String(saveLostPayload.userId) === currentUserId);
+  const hasDiscoverySurface = isHomeFocused && presentationSurface === 'home' && !!presentationGroup;
+  const homeWindow = resolveHomeStateWindow({
+    saveRecovery: showSaveRecovery,
+    activeOrRecoverable: showUnfinished,
+    unannouncedDiscovery: hasDiscoverySurface,
+    recentActivity: Boolean(lastHike),
+    personalMemory: memoryPointCount > 0 || ownedCairnCount > 0,
+  });
+  const showPriorityActivity = homeWindow === 'save-recovery' || homeWindow === 'active-or-recoverable';
+  const showDiscovery = homeWindow === 'discovery';
+  const showMemoryReturn = homeWindow === 'memory';
+
+  useFocusEffect(React.useCallback(() => {
+    if (!currentUserId) return undefined;
+    const presentation = useCairnPresentationStore.getState();
+    if (presentation.viewerId !== currentUserId) void presentation.initialize(currentUserId);
+    else void presentation.refresh();
+    return () => {
+      useCairnPresentationStore.getState().release('home');
+    };
+  }, [currentUserId]));
+
+  useEffect(() => {
+    if (!isHomeFocused || showPriorityActivity || presentationBlocked) {
+      useCairnPresentationStore.getState().release('home');
+      return;
+    }
+    if (presentationPendingCount > 0) useCairnPresentationStore.getState().claim('home');
+  }, [isHomeFocused, presentationBlocked, presentationPendingCount, presentationViewerId, showPriorityActivity]);
+
+  useEffect(() => {
+    if (!showDiscovery || !presentationGroup) return undefined;
+    const timer = setTimeout(() => {
+      void useCairnPresentationStore.getState().acknowledgeActive('home');
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [presentationGroup?.eventThroughId, presentationGroup?.token, showDiscovery]);
   const displayedMode = showLiveActivity ? liveActivityMode : topUnfinished?.activityMode;
   const displayedDistanceM = showLiveActivity ? liveDistanceM : (topUnfinished?.distanceM ?? 0);
   const displayedDurationS = showLiveActivity ? liveDurationS : (topUnfinished?.durationS ?? 0);
@@ -285,16 +338,41 @@ export function HomeScreen() {
     : showUnfinished ? 'recovery' : 'stopped';
   const displayedStateCopy = activityStateCopy(displayedOperationalState, displayedMode);
   const lastCompletedMode = lastHike?.activityMode === 'running' ? 'running' as const : 'hiking' as const;
-  const lastHikeTitle = showUnfinished
-    ? displayedStateCopy.title
+  const lastHikeTitle = showSaveRecovery
+    ? 'Activity needs saving'
+    : showUnfinished
+      ? displayedStateCopy.title
+    : showDiscovery
+      ? (presentationGroup!.cairnCount === 1
+        ? (presentationGroup!.eventCount > 0
+          && presentationGroup!.updatedEventCount === presentationGroup!.eventCount
+          ? 'A Cairn story was updated'
+          : 'A Cairn is now in Memory')
+        : `${presentationGroup!.cairnCount} Cairns are now in Memory`)
+    : showMemoryReturn
+      ? (memoryPointCount > 0 ? 'Your Memory is growing' : 'Your Cairns are in Memory')
     : (lastHike?.name || (lastCompletedMode === 'running' ? 'Recent run' : 'Recent hike'));
-  const lastHikeMeta = showUnfinished
-    ? `${formatActivityDistance(displayedDistanceM)} · ${formatDuration(displayedDurationS)} · ${formatRelativeDay(displayedStartedAt)}`
+  const lastHikeMeta = showSaveRecovery
+    ? 'Recorded on this device · Tap to retry'
+    : showUnfinished
+      ? `${formatActivityDistance(displayedDistanceM)} · ${formatDuration(displayedDurationS)} · ${formatRelativeDay(displayedStartedAt)}`
+    : showDiscovery
+      ? `Saved in Memory · ${formatRelativeDay(presentationGroup!.mergeStartedAt)}`
+    : showMemoryReturn
+      ? (memoryPointCount > 0 ? `${Math.max(0.01, exploredKm2).toFixed(2)} km² explored` : `${ownedCairnCount} ${ownedCairnCount === 1 ? 'Cairn' : 'Cairns'} saved`)
     : (lastHike
     ? `${formatActivityDistance(lastHike.distanceM || 0)} · ${formatDuration(lastHike.durationS || 0)} · ${formatRelativeDay(lastHike.startedAt)}`
     : '');
-  const lastHikeDetails = showUnfinished
-    ? [formatActivityDistance(displayedDistanceM), formatDuration(displayedDurationS), formatRelativeDay(displayedStartedAt)]
+  const lastHikeDetails = showSaveRecovery
+    ? ['Recorded on device', 'Action required']
+    : showUnfinished
+      ? [formatActivityDistance(displayedDistanceM), formatDuration(displayedDurationS), formatRelativeDay(displayedStartedAt)]
+    : showDiscovery
+      ? ['Saved in Memory', formatRelativeDay(presentationGroup!.mergeStartedAt)]
+    : showMemoryReturn
+      ? (memoryPointCount > 0
+        ? [`${Math.max(0.01, exploredKm2).toFixed(2)} km² explored`, 'View Memory']
+        : [`${ownedCairnCount} ${ownedCairnCount === 1 ? 'Cairn' : 'Cairns'}`, 'View Memory'])
     : (lastHike
       ? [formatActivityDistance(lastHike.distanceM || 0), formatDuration(lastHike.durationS || 0), formatRelativeDay(lastHike.startedAt)]
       : []);
@@ -369,7 +447,7 @@ export function HomeScreen() {
           ]}
         >
           <GeneratedHome
-            state={showUnfinished ? 'H1' : displayState}
+            state={showPriorityActivity || showDiscovery || showMemoryReturn ? 'H1' : displayState}
             initial={initial}
             greetingName={greetingName}
             exploredKm2={exploredKm2}
@@ -380,11 +458,19 @@ export function HomeScreen() {
             lastHikeTitle={lastHikeTitle}
             lastHikeMeta={lastHikeMeta}
             lastHikeDetails={lastHikeDetails}
-            lastHikeEyebrow={showUnfinished
-              ? displayedStateCopy.eyebrow
+            lastHikeEyebrow={showSaveRecovery
+              ? 'SAVE NEEDS ATTENTION'
+              : showUnfinished
+                ? displayedStateCopy.eyebrow
+              : showDiscovery
+                ? 'FOUND IN YOUR WALK'
+              : showMemoryReturn
+                ? 'YOUR MEMORY'
               : (lastCompletedMode === 'running' ? 'LAST RUN' : 'LAST HIKE')}
-            lastHikeMode={showUnfinished ? displayedMode : lastCompletedMode}
-            onLastHikePress={showUnfinished
+            lastHikeMode={showSaveRecovery ? saveLostPayload?.activityMode : showUnfinished ? displayedMode : lastCompletedMode}
+            onLastHikePress={showSaveRecovery
+              ? () => nav.navigate(saveLostPayload!.activityMode === 'running' ? 'Running' : 'Hiking')
+              : showUnfinished
               ? () => {
                   if (showLiveActivity) {
                     nav.navigate(liveActivityMode === 'running' ? 'Running' : 'Hiking');
@@ -396,12 +482,19 @@ export function HomeScreen() {
                     { recoverClientActivityId: activity.clientActivityId },
                   );
                 }
+              : showDiscovery
+                ? () => presentationGroup!.singleMarkerId
+                  ? nav.navigate('AcquiredCairnDetail', { markerId: presentationGroup!.singleMarkerId })
+                  : nav.navigate('AllCairns', { initialSection: 'found' })
+              : showMemoryReturn
+                ? () => nav.navigate('Memory')
               : lastHike
                 ? () => nav.navigate('MapHistory', {
                     sessionId: lastHike.id,
                     activityBackContext: 'previous',
                   })
                 : undefined}
+            memoryUnreadCount={memoryUnreadCount}
             onHikingPress={() => nav.navigate('Hiking')}
             onRunningPress={() => nav.navigate('Running')}
             onPlantPress={() => nav.navigate('Plant', { origin: { kind: 'standalone' } })}

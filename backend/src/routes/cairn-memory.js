@@ -390,6 +390,19 @@ router.get('/library', async (req, res) => {
               revision.lat,revision.lng,revision.source_audience,
               CASE WHEN COALESCE(moderation.state,'available')<>'available'
                    THEN moderation.state ELSE revision.availability END AS availability,
+              EXISTS (
+                SELECT 1 FROM friends current_friend
+                JOIN friends reverse_friend
+                  ON reverse_friend.user_id=current_friend.friend_id
+                 AND reverse_friend.friend_id=current_friend.user_id
+               WHERE current_friend.user_id=collection.viewer_id
+                 AND current_friend.friend_id=revision.owner_id
+                 AND NOT EXISTS (
+                   SELECT 1 FROM blocked_users blocked
+                    WHERE (blocked.blocker_id=collection.viewer_id AND blocked.blocked_id=revision.owner_id)
+                       OR (blocked.blocker_id=revision.owner_id AND blocked.blocked_id=collection.viewer_id)
+                 )
+              ) AS is_current_friend,
               CASE
                 WHEN revision.identity_policy='friends_acquired'
                   THEN revision.friend_author_name_snapshot
@@ -590,7 +603,26 @@ router.get('/presentation/pending', async (req, res) => {
     const [rows] = await pool.execute(
       `SELECT presentation.id,presentation.group_token,presentation.merge_started_at,
               presentation.merge_until,presentation.haptic_eligible,presentation.sound_eligible,
-              COUNT(DISTINCT acquisition.marker_id) AS cairn_count
+              COUNT(DISTINCT acquisition.marker_id) AS cairn_count,
+              CASE WHEN COUNT(DISTINCT acquisition.marker_id)=1
+                   THEN MIN(acquisition.marker_id) ELSE NULL END AS single_marker_id,
+              COUNT(event.id) AS event_count,
+              SUM(CASE WHEN EXISTS (
+                    SELECT 1 FROM cairn_acquisitions earlier
+                     WHERE earlier.viewer_id=acquisition.viewer_id
+                       AND earlier.marker_id=acquisition.marker_id
+                       AND earlier.id<acquisition.id
+                       AND earlier.removed_at IS NULL
+                  ) THEN 1 ELSE 0 END) AS updated_event_count,
+              MAX(event.id) AS event_through_id,
+              SUM(CASE WHEN event.announced_at IS NULL THEN 1 ELSE 0 END) AS unannounced_event_count,
+              SUM(CASE WHEN event.announced_at IS NULL AND EXISTS (
+                    SELECT 1 FROM cairn_acquisitions earlier
+                     WHERE earlier.viewer_id=acquisition.viewer_id
+                       AND earlier.marker_id=acquisition.marker_id
+                       AND earlier.id<acquisition.id
+                       AND earlier.removed_at IS NULL
+                  ) THEN 1 ELSE 0 END) AS unannounced_updated_event_count
          FROM cairn_presentation_groups presentation
          JOIN cairn_acquisition_events event ON event.presentation_group_id=presentation.id
          JOIN cairn_acquisitions acquisition ON acquisition.id=event.acquisition_id
@@ -598,17 +630,35 @@ router.get('/presentation/pending', async (req, res) => {
          JOIN cairn_collections collection
            ON collection.viewer_id=acquisition.viewer_id AND collection.marker_id=acquisition.marker_id
          LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
-        WHERE presentation.viewer_id=? AND presentation.announced_at IS NULL
-          AND presentation.merge_until<=UTC_TIMESTAMP(3)
+        WHERE presentation.viewer_id=?
           AND acquisition.removed_at IS NULL AND collection.archived_at IS NULL
           AND collection.removed_at IS NULL AND revision.availability='available'
           AND COALESCE(moderation.state,'available')='available'
         GROUP BY presentation.id,presentation.group_token,presentation.merge_started_at,
                  presentation.merge_until,presentation.haptic_eligible,presentation.sound_eligible
+       HAVING SUM(CASE WHEN event.announced_at IS NULL THEN 1 ELSE 0 END)>0
+           OR presentation.merge_until>=UTC_TIMESTAMP(3)
         ORDER BY presentation.merge_started_at ASC`,
       [req.user.userId],
     );
-    return res.json({ groups: rows });
+    const [[unread]] = await pool.execute(
+      `SELECT COUNT(DISTINCT collection.marker_id) AS unread_count
+         FROM cairn_collections collection
+        WHERE collection.viewer_id=? AND collection.relationship='found'
+          AND collection.archived_at IS NULL AND collection.removed_at IS NULL
+          AND EXISTS (
+            SELECT 1 FROM cairn_acquisitions acquisition
+            JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
+            LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
+             WHERE acquisition.viewer_id=collection.viewer_id
+               AND acquisition.marker_id=collection.marker_id
+               AND acquisition.removed_at IS NULL AND acquisition.opened_at IS NULL
+               AND revision.availability='available'
+               AND COALESCE(moderation.state,'available')='available'
+          )`,
+      [req.user.userId],
+    );
+    return res.json({ groups: rows, unread_count: Number(unread?.unread_count ?? 0) });
   } catch (error) {
     console.error('[cairn-memory/presentation:pending]', error.message);
     return res.status(500).json({ error: 'Server error' });
@@ -618,26 +668,54 @@ router.get('/presentation/pending', async (req, res) => {
 router.post('/presentation/:group_id/announced', mutationLimiter, async (req, res) => {
   const groupId = positiveId(req.params.group_id);
   if (!groupId) return res.status(400).json({ error: 'Invalid group id' });
+  const requestedEventThroughId = positiveId(req.body?.event_through_id);
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const [result] = await conn.execute(
-      `UPDATE cairn_presentation_groups
-          SET announced_at=COALESCE(announced_at,UTC_TIMESTAMP(3))
-        WHERE id=? AND viewer_id=? AND merge_until<=UTC_TIMESTAMP(3)`,
+    const [groups] = await conn.execute(
+      `SELECT id FROM cairn_presentation_groups
+        WHERE id=? AND viewer_id=? LIMIT 1 FOR UPDATE`,
       [groupId, req.user.userId],
     );
-    if (!result.affectedRows) {
+    if (!groups[0]) {
       await conn.rollback();
       return res.status(404).json({ error: 'Presentation group unavailable' });
     }
+    let eventThroughId = requestedEventThroughId;
+    if (!eventThroughId) {
+      const [[latest]] = await conn.execute(
+        `SELECT MAX(id) AS event_through_id FROM cairn_acquisition_events
+          WHERE viewer_id=? AND presentation_group_id=?`,
+        [req.user.userId, groupId],
+      );
+      eventThroughId = positiveId(latest?.event_through_id);
+    }
+    if (!eventThroughId) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Presentation events unavailable' });
+    }
+    const [ownedEvent] = await conn.execute(
+      `SELECT id FROM cairn_acquisition_events
+        WHERE id=? AND viewer_id=? AND presentation_group_id=? LIMIT 1 FOR UPDATE`,
+      [eventThroughId, req.user.userId, groupId],
+    );
+    if (!ownedEvent[0]) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Presentation event unavailable' });
+    }
+    await conn.execute(
+      `UPDATE cairn_presentation_groups
+          SET announced_at=COALESCE(announced_at,UTC_TIMESTAMP(3))
+        WHERE id=? AND viewer_id=?`,
+      [groupId, req.user.userId],
+    );
     await conn.execute(
       `UPDATE cairn_acquisition_events SET announced_at=COALESCE(announced_at,UTC_TIMESTAMP(3))
-        WHERE viewer_id=? AND presentation_group_id=?`,
-      [req.user.userId, groupId],
+        WHERE viewer_id=? AND presentation_group_id=? AND id<=?`,
+      [req.user.userId, groupId, eventThroughId],
     );
     await conn.commit();
-    return res.json({ announced: true });
+    return res.json({ announced: true, event_through_id: String(eventThroughId) });
   } catch (error) {
     try { await conn.rollback(); } catch { /* noop */ }
     console.error('[cairn-memory/presentation:announced]', error.message);

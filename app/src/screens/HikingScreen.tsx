@@ -1307,8 +1307,19 @@ export function HikingScreen() {
         notices={hikeNotices}
       />
       <PublicWalkingDiscoveryCard
+        surface="hike"
+        blocked={Boolean(
+          stopSummary
+          || (unfinishedResolutionRequested && unfinished)
+          || deleteCairnOpen
+          || lastStopReason === 'too-short'
+          || showTooShortConfirm
+          || permissionDeniedVisible
+        )}
         safeTop={insets.top}
-        onOpen={(cairnId) => nav.navigate('PublicCairnDetail', { cairnId })}
+        onOpen={(markerId) => markerId
+          ? nav.navigate('AcquiredCairnDetail', { markerId })
+          : nav.navigate('AllCairns', { initialSection: 'found' })}
       />
 
       {!stopSummary ? (

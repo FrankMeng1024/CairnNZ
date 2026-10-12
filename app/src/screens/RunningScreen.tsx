@@ -1101,8 +1101,18 @@ export function RunningScreen() {
         notices={runNotices}
       />
       <PublicWalkingDiscoveryCard
+        surface="run"
+        blocked={Boolean(
+          showSaveSheet
+          || (unfinishedResolutionRequested && unfinishedRun)
+          || lastStopReason === 'too-short'
+          || showTooShortConfirmRun
+          || permissionDeniedVisible
+        )}
         safeTop={insets.top}
-        onOpen={(cairnId) => nav.navigate('PublicCairnDetail', { cairnId })}
+        onOpen={(markerId) => markerId
+          ? nav.navigate('AcquiredCairnDetail', { markerId })
+          : nav.navigate('AllCairns', { initialSection: 'found' })}
       />
 
       {!showSaveSheet ? (

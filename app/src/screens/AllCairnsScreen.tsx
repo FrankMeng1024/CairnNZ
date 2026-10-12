@@ -10,7 +10,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { BackButton } from '../components/BackButton';
@@ -28,8 +29,10 @@ import { CairnIdentityLine } from '../features/cairns/CairnIdentityLine';
 import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { authenticatedFetch } from '../services/apiService';
+import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+type ScreenRoute = RouteProp<RootStackParamList, 'AllCairns'>;
 type AudienceFilter = 'all' | Marker['permission'];
 type CairnSort = 'recent' | 'oldest';
 type LibrarySection = 'left' | 'found';
@@ -45,6 +48,9 @@ type FoundCairn = {
   acquired_at: string;
   opened_at: string | null;
   revision_count: number;
+  lat: number;
+  lng: number;
+  has_unread: number | boolean;
 };
 
 const AUDIENCE_FILTERS: ReadonlyArray<{ key: AudienceFilter; label: string }> = [
@@ -142,6 +148,7 @@ function FoundCairnRow({ cairn, archived, onRestore }: { cairn: FoundCairn; arch
 
 export function AllCairnsScreen() {
   const theme = useVisualTheme();
+  const route = useRoute<ScreenRoute>();
   const storedMarkers = useMarkerStore(state => state.markers);
   const debugMode = useSettingsStore(state => state.debugMode);
   const markers = useMemo(() => markersForVisibleWorkspace(storedMarkers, debugMode), [debugMode, storedMarkers]);
@@ -155,7 +162,7 @@ export function AllCairnsScreen() {
   const [query, setQuery] = useState(serverQuery);
   const [audience, setAudience] = useState<AudienceFilter>('all');
   const [sort, setSort] = useState<CairnSort>('recent');
-  const [section, setSection] = useState<LibrarySection>('left');
+  const [section, setSection] = useState<LibrarySection>(route.params?.initialSection ?? 'left');
   const [foundCairns, setFoundCairns] = useState<FoundCairn[]>([]);
   const [foundLoading, setFoundLoading] = useState(false);
   const [foundError, setFoundError] = useState('');
@@ -169,6 +176,7 @@ export function AllCairnsScreen() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const body = await response.json();
       setFoundCairns(Array.isArray(body.cairns) ? body.cairns : []);
+      void useCairnPresentationStore.getState().refreshAcquiredMap();
     } catch {
       setFoundError('Connect to refresh acquired Cairns.');
     } finally {
@@ -180,7 +188,10 @@ export function AllCairnsScreen() {
     const response = await authenticatedFetch(`/api/cairn-memory/cairns/${markerId}/collection`, {
       method: 'PUT', body: JSON.stringify({ action: 'restore' }),
     });
-    if (response.ok) setFoundCairns(current => current.filter(cairn => cairn.marker_id !== markerId));
+    if (response.ok) {
+      setFoundCairns(current => current.filter(cairn => cairn.marker_id !== markerId));
+      void useCairnPresentationStore.getState().refreshAcquiredMap();
+    }
   }, []);
 
   useEffect(() => {
@@ -218,9 +229,12 @@ export function AllCairnsScreen() {
   }, [audience, merged, query, sort]);
   const visibleFound = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
-    return foundCairns.filter(cairn => !normalized
-      || `${cairn.text ?? ''}\n${cairn.author_name ?? ''}`.toLocaleLowerCase().includes(normalized));
-  }, [foundCairns, query]);
+    const requested = route.params?.markerIds?.length ? new Set(route.params.markerIds.map(String)) : null;
+    return foundCairns
+      .filter(cairn => !requested || requested.has(String(cairn.marker_id)))
+      .filter(cairn => !normalized
+        || `${cairn.text ?? ''}\n${cairn.author_name ?? ''}`.toLocaleLowerCase().includes(normalized));
+  }, [foundCairns, query, route.params?.markerIds]);
 
   const refresh = useCallback(() => {
     void loadLibrary({ query: query.trim(), reset: true }).catch(() => {});

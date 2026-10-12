@@ -36,8 +36,15 @@ import {
   recordMemorySyncAttachSkip,
 } from './memorySyncDiagnosticNoise';
 
-const PUSH_DEBOUNCE_MS = 30_000;
-const PUSH_MAX_WAIT_MS = 60_000;
+// Accepted presence is coalesced into bounded foreground bursts. This keeps
+// normal connected discovery near the 5-10 second product target without
+// changing GPS sampling or issuing a request for every observation.
+export const MEMORY_DISCOVERY_SYNC_CADENCE: Readonly<{ debounceMs: number; maxWaitMs: number }> = Object.freeze({
+  debounceMs: 5_000,
+  maxWaitMs: 10_000,
+});
+const PUSH_DEBOUNCE_MS = MEMORY_DISCOVERY_SYNC_CADENCE.debounceMs;
+const PUSH_MAX_WAIT_MS = MEMORY_DISCOVERY_SYNC_CADENCE.maxWaitMs;
 const BACKOFF_MS = 15_000;
 const MAX_BATCH = 500;
 const HTTP_TIMEOUT_MS = 30_000;

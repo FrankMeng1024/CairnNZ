@@ -326,17 +326,24 @@ async function main() {
     assert.equal(new Set(first.acquired.map(item => item.presentation_group_id)).size, 1);
     pass('DISC-PROD-01.dense-locality', 'real API/MySQL discovery selected exactly 3 of 200, retries added none, and unread counted three Cairn groups');
 
+    // The first foreground cue is available immediately; the 20-second
+    // window merges later events into it rather than delaying persistence or
+    // initial presentation.
+    const pending = await api(viewer, '/api/cairn-memory/presentation/pending');
+    assert.equal(pending.groups.length, 1);
+    assert.equal(Number(pending.groups[0].cairn_count), 3);
+    assert.equal(Number(pending.groups[0].unannounced_event_count), 3);
+    await api(viewer, `/api/cairn-memory/presentation/${pending.groups[0].id}/announced`, {
+      method: 'POST', body: { event_through_id: pending.groups[0].event_through_id },
+    });
+    const stillMerging = await api(viewer, '/api/cairn-memory/presentation/pending');
+    assert.equal(stillMerging.groups.length, 1);
+    assert.equal(Number(stillMerging.groups[0].unannounced_event_count), 0);
     await db.execute(
       `UPDATE cairn_presentation_groups SET merge_until=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 SECOND)
         WHERE viewer_id=?`,
       [viewer.id],
     );
-    const pending = await api(viewer, '/api/cairn-memory/presentation/pending');
-    assert.equal(pending.groups.length, 1);
-    assert.equal(Number(pending.groups[0].cairn_count), 3);
-    await api(viewer, `/api/cairn-memory/presentation/${pending.groups[0].id}/announced`, {
-      method: 'POST', body: {},
-    });
     assert.deepEqual((await api(viewer, '/api/cairn-memory/presentation/pending')).groups, []);
     const [[presentationState]] = await db.execute(
       `SELECT COUNT(DISTINCT presentation_group_id) AS groups_n,
@@ -348,7 +355,7 @@ async function main() {
       [Number(presentationState.groups_n), Number(presentationState.announced_events)],
       [1, 3],
     );
-    pass('DISC-PROD-02.presentation', 'three durable acquisitions merged into one announcement group; announcement remained independent of per-revision read state');
+    pass('DISC-PROD-02.presentation', 'three durable acquisitions surfaced immediately in one mergeable group; exact event watermark acknowledgement remained independent of per-revision read state');
 
     const friendOwner = await actor(db, 'FriendOwner');
     const friendViewer = await actor(db, 'FriendViewer');

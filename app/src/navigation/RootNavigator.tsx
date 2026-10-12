@@ -10,7 +10,7 @@
  * inside the existing tools row, not a wholesale tab-bar swap.
  */
 import React from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -62,6 +62,7 @@ import {
   retryPendingFriendContentActions,
 } from '../features/friends/services/friendContent';
 import { usePublicCairnStore } from '../features/public/services/publicCairns';
+import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
 import networkMonitor from '../services/networkMonitor';
 
 // v302: mark immediately after all transitive imports above resolved.
@@ -101,7 +102,7 @@ export type RootStackParamList = {
     } | { kind: 'standalone' };
   } | undefined;
   MarkerDetail: { markerId: string };
-  AllCairns: undefined;
+  AllCairns: { initialSection?: 'left' | 'found'; markerIds?: string[] } | undefined;
   Friends: undefined;
   FriendContent: { friendId: string; friendName: string };
   PublicCairnDetail: { cairnId: string };
@@ -143,11 +144,13 @@ export function RootNavigator() {
   React.useEffect(() => {
     if (!isLoggedIn || !user?.id) {
       usePublicCairnStore.getState().clearForAccountBoundary();
+      useCairnPresentationStore.getState().clearForAccountBoundary();
       return;
     }
     void retryPendingFriendContentActions();
     void drainBorrowedRouteTerminalOutbox();
     void usePublicCairnStore.getState().initialize(String(user.id));
+    void useCairnPresentationStore.getState().initialize(String(user.id));
   }, [isLoggedIn, user?.id]);
   React.useEffect(() => networkMonitor.onChange(state => {
     if (state.state === 'online') {
@@ -158,9 +161,29 @@ export function RootNavigator() {
         // activation path for an already-installed client after server-side
         // canary enablement; requiring `enabled` here made it unreachable.
         void usePublicCairnStore.getState().initialize(viewerId, { preservePresentation: true });
+        void useCairnPresentationStore.getState().refresh();
       }
     }
   }), []);
+  React.useEffect(() => {
+    if (!isLoggedIn || !user?.id) return undefined;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (timer) return;
+      void useCairnPresentationStore.getState().refresh();
+      timer = setInterval(() => { void useCairnPresentationStore.getState().refresh(); }, 5_000);
+    };
+    const stop = () => {
+      if (timer) clearInterval(timer);
+      timer = null;
+    };
+    if (AppState.currentState === 'active') start();
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') start();
+      else stop();
+    });
+    return () => { stop(); subscription.remove(); };
+  }, [isLoggedIn, user?.id]);
   markBootPhase('navigator_body_running', { isLoggedIn: !!isLoggedIn });
 
   // v312 anchor: just before NavigationContainer JSX. If we see this
@@ -192,6 +215,12 @@ export function RootNavigator() {
     })();
     return () => { cancelled = true; };
   }, [isLoggedIn]);
+
+  React.useEffect(() => {
+    const blocksPresentation = isLoggedIn && (!onboardingChecked || showOnboarding);
+    useCairnPresentationStore.getState().setPresentationBlock('onboarding', blocksPresentation);
+    return () => useCairnPresentationStore.getState().setPresentationBlock('onboarding', false);
+  }, [isLoggedIn, onboardingChecked, showOnboarding]);
 
   return (
     <NavigationContainer
@@ -266,6 +295,7 @@ export function RootNavigator() {
               stores.useMemorySettingsStore = require('../features/memory/store/useMemorySettingsStore').useMemorySettingsStore;
               stores.useMarkerStore = require('../store/useMarkerStore').useMarkerStore;
               stores.usePublicCairnStore = require('../features/public/services/publicCairns').usePublicCairnStore;
+              stores.useCairnPresentationStore = useCairnPresentationStore;
             } catch { /* ignore */ }
             (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = stores;
           }

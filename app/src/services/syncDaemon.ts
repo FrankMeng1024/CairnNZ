@@ -804,16 +804,6 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
         elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
       },
     });
-    try {
-      // Public qualification is downstream of the normal Activity ACK. Its
-      // own durable action queue may remain offline without weakening or
-      // rolling back the Activity handoff.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { reconcilePublicActivityAfterServerAck } = require('../features/public/services/publicCairns');
-      await reconcilePublicActivityAfterServerAck(hike.userId, hike.localId);
-    } catch (publicError) {
-      crashLogger.breadcrumb(`public:post_activity_ack_deferred ${String(publicError).slice(0, 80)}`);
-    }
     if (simulatorActivity) {
       const { appendSimulatorLog } = require('../features/activitySimulator/simulatorLog');
       appendSimulatorLog('SYNC_ACK', 'simulator_activity_server_acknowledged', {
