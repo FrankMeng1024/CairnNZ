@@ -66,13 +66,18 @@ function snapshotHash({ type = 'cairn', text, lat, lng, approximate = true }) {
   })).digest('hex');
 }
 
-async function seedPublicCairn(db, owner, operator, { lat, lng, text, revision = 1, epoch = 1 }) {
+async function seedPublicCairn(db, owner, operator, {
+  lat, lng, text, revision = 1, epoch = 1, eligibleNow = false,
+}) {
+  const eligibleAtSql = eligibleNow
+    ? 'UTC_TIMESTAMP(3)'
+    : 'DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 MINUTE)';
   const [marker] = await db.execute(
     `INSERT INTO markers
        (user_id,type,text,lat,lng,permission,approximate,status,created_at,updated_at,
         content_revision,public_intent,public_state,publication_epoch,public_state_changed_at)
-     VALUES (?,'cairn',?,?,?,'public',1,'healthy',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),
-             ?,1,'published',?,UTC_TIMESTAMP(3))`,
+     VALUES (?,'cairn',?,?,?,'public',1,'healthy',${eligibleAtSql},${eligibleAtSql},
+             ?,1,'published',?,${eligibleAtSql})`,
     [owner.id, text, lat, lng, revision, epoch],
   );
   const hash = snapshotHash({ text, lat, lng });
@@ -81,33 +86,48 @@ async function seedPublicCairn(db, owner, operator, { lat, lng, text, revision =
        (marker_id,owner_id,publication_epoch,content_revision,
         snapshot_type,snapshot_text,snapshot_lat,snapshot_lng,snapshot_approximate,
         snapshot_sha256,state,decided_at,decided_by,published_at)
-     VALUES (?,?,?,?,'cairn',?,?,?,1,?,'published',UTC_TIMESTAMP(3),?,UTC_TIMESTAMP(3))`,
+     VALUES (?,?,?,?,'cairn',?,?,?,1,?,'published',${eligibleAtSql},?,${eligibleAtSql})`,
     [marker.insertId, owner.id, epoch, revision, text, lat, lng, hash, operator.id],
   );
   return { markerId: String(marker.insertId), publicationId: String(publication.insertId) };
 }
 
-async function seedFriendCairn(db, owner, { lat, lng, text, revision = 1 }) {
+async function seedFriendCairn(db, owner, {
+  lat, lng, text, revision = 1, eligibleNow = false,
+}) {
+  const eligibleAtSql = eligibleNow
+    ? 'UTC_TIMESTAMP(3)'
+    : 'DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 MINUTE)';
   const [marker] = await db.execute(
     `INSERT INTO markers
        (user_id,type,text,lat,lng,permission,approximate,status,created_at,updated_at,
         content_revision)
-     VALUES (?,'cairn',?,?,?,'group',1,'healthy',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),?)`,
+     VALUES (?,'cairn',?,?,?,'group',1,'healthy',${eligibleAtSql},${eligibleAtSql},?)`,
     [owner.id, text, lat, lng, revision],
+  );
+  await db.execute(
+    `INSERT INTO marker_audience_epochs
+       (marker_id,owner_id,audience_epoch,visibility,starts_at)
+     SELECT id,user_id,audience_epoch,'group',created_at
+       FROM markers WHERE id=?`,
+    [marker.insertId],
   );
   return { markerId: String(marker.insertId) };
 }
 
-async function makeFriends(db, first, second) {
+async function makeFriends(db, first, second, { startsNow = false } = {}) {
+  const startedAtSql = startsNow
+    ? 'UTC_TIMESTAMP(3)'
+    : 'DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 MINUTE)';
   await db.execute(
     `INSERT INTO friends (user_id,friend_id,created_at)
-     VALUES (?,?,UTC_TIMESTAMP(3)),(?,?,UTC_TIMESTAMP(3))`,
+     VALUES (?,?,${startedAtSql}),(?,?,${startedAtSql})`,
     [first.id, second.id, second.id, first.id],
   );
   await db.execute(
     `INSERT INTO friendship_episodes
        (episode_id,user_low_id,user_high_id,started_at)
-     VALUES (?,LEAST(?,?),GREATEST(?,?),UTC_TIMESTAMP(3))`,
+     VALUES (?,LEAST(?,?),GREATEST(?,?),${startedAtSql})`,
     [crypto.randomUUID(), first.id, second.id, first.id, second.id],
   );
 }
@@ -162,6 +182,112 @@ async function acceptedPresence(viewer, lat, lng, observedAt = Date.now()) {
   });
   assert.deepEqual(body.presence_witnesses.map(item => item.cid), [cid]);
   return cid;
+}
+
+async function acceptedActivityPresence(viewer, canonical, witness, observedAt = Date.now()) {
+  const clientActivityId = crypto.randomUUID();
+  const sourceSegmentId = `${clientActivityId}:segment-1`;
+  const timestamps = [observedAt - 15_000, observedAt];
+  const canonicalPoints = timestamps.map((t, index) => ({
+    lat: canonical.lat + index * 0.000005,
+    lng: canonical.lng + index * 0.000005,
+    t,
+    acc: 9,
+    segment_id: sourceSegmentId,
+  }));
+  const started = await api(viewer, '/api/sessions/start', {
+    method: 'POST', expected: 201,
+    body: {
+      client_activity_id: clientActivityId,
+      type: 'hiking',
+      start_time: new Date(timestamps[0]).toISOString(),
+    },
+  });
+  await api(viewer, `/api/sessions/${started.id}/save`, {
+    method: 'PATCH',
+    body: {
+      client_activity_id: clientActivityId,
+      end_time: new Date(timestamps[1]).toISOString(),
+      distance_m: 20,
+      duration_s: 15,
+      name: 'Isolated canonical-evidence adversary',
+      route_points: canonicalPoints,
+      route_points_raw: canonicalPoints,
+      route_points_canonical: canonicalPoints,
+      memory_points: canonicalPoints.map(point => ({
+        lat: point.lat, lng: point.lng, ts: point.t,
+        cid: crypto.randomUUID(), evidence_source: 'activity_real',
+        source_activity_client_id: clientActivityId,
+        source_segment_id: sourceSegmentId,
+        horizontal_accuracy_m: 9, continuity_state: 'accepted',
+      })),
+    },
+  });
+  await api(viewer, '/api/memory/points', {
+    method: 'POST',
+    body: {
+      presence_witnesses: timestamps.map((t, index) => ({
+        cid: crypto.randomUUID(),
+        first_lat: witness.lat + index * 0.000005,
+        first_lng: witness.lng + index * 0.000005,
+        first_observed_at_ms: t,
+        lat: witness.lat + index * 0.000005,
+        lng: witness.lng + index * 0.000005,
+        observed_at_ms: t,
+        evidence_source: 'activity_real',
+        source_activity_client_id: clientActivityId,
+        source_segment_id: sourceSegmentId,
+        horizontal_accuracy_m: 9,
+        continuity_state: 'accepted',
+      })),
+    },
+  });
+  return { clientActivityId, canonicalPoints };
+}
+
+async function acceptedActiveActivityPresence(viewer, location, observedAt = Date.now()) {
+  const clientActivityId = crypto.randomUUID();
+  const sourceSegmentId = `${clientActivityId}:segment-1`;
+  const timestamps = [observedAt - 15_000, observedAt];
+  const canonicalPoints = timestamps.map((t, index) => ({
+    lat: location.lat + index * 0.000005,
+    lng: location.lng + index * 0.000005,
+    t,
+    acc: 9,
+    segment_id: sourceSegmentId,
+  }));
+  const started = await api(viewer, '/api/sessions/start', {
+    method: 'POST', expected: 201,
+    body: {
+      client_activity_id: clientActivityId,
+      type: 'hiking',
+      start_time: new Date(timestamps[0]).toISOString(),
+    },
+  });
+  await api(viewer, `/api/sessions/${started.id}/append-points`, {
+    method: 'PATCH',
+    body: { points: canonicalPoints, client_op_id: crypto.randomUUID() },
+  });
+  await api(viewer, '/api/memory/points', {
+    method: 'POST',
+    body: {
+      presence_witnesses: timestamps.map((t, index) => ({
+        cid: crypto.randomUUID(),
+        first_lat: canonicalPoints[index].lat,
+        first_lng: canonicalPoints[index].lng,
+        first_observed_at_ms: t,
+        lat: canonicalPoints[index].lat,
+        lng: canonicalPoints[index].lng,
+        observed_at_ms: t,
+        evidence_source: 'activity_real',
+        source_activity_client_id: clientActivityId,
+        source_segment_id: sourceSegmentId,
+        horizontal_accuracy_m: 9,
+        continuity_state: 'accepted',
+      })),
+    },
+  });
+  return { clientActivityId, canonicalPoints };
 }
 
 async function main() {
@@ -263,6 +389,28 @@ async function main() {
     assert.deepEqual(afterUnfriend.acquired, []);
     pass('DISC-PROD-02a.friend-guarantee', 'five eligible Friend Cairns beat the normal cap and two hundred Public candidates, shared one presentation group, and stayed as acquired history after unfriend while future Friend-only eligibility ended');
 
+    const overflowTimings = {};
+    for (const total of [20, 100]) {
+      const loadViewer = await actor(db, `FriendLoad${total}`);
+      await makeFriends(db, friendOwner, loadViewer);
+      const loadPlace = { lat: -40.1000 - total * 0.0001, lng: 175.1000 };
+      for (let index = 0; index < total; index += 1) {
+        await seedFriendCairn(db, friendOwner, {
+          ...loadPlace, text: `Guaranteed Friend load ${total} / ${index}`,
+        });
+      }
+      await acceptedPresence(loadViewer, loadPlace.lat, loadPlace.lng, Date.now() + total * 20);
+      const startedAt = Date.now();
+      const draw = await api(loadViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+      overflowTimings[total] = Date.now() - startedAt;
+      assert.equal(draw.acquired.length, total);
+      assert.equal(new Set(draw.acquired.map(item => item.presentation_group_id)).size, 1);
+      const loadLibrary = await api(loadViewer, '/api/cairn-memory/library?section=found');
+      assert.equal(loadLibrary.cairns.length, total);
+      assert.equal(loadLibrary.unread_count, total);
+    }
+    pass('DISC-PROD-02aa.friend-overflow-load', `20 and 100 same-author Friend Cairns were all acquired into one presentation group; API timings ${JSON.stringify(overflowTimings)} ms`);
+
     const publicFriendViewer = await actor(db, 'PublicFriendViewer');
     await makeFriends(db, friendOwner, publicFriendViewer);
     const publicFriendPlace = { lat: -39.4902, lng: 176.9179 };
@@ -282,6 +430,64 @@ async function main() {
     )));
     pass('DISC-PROD-02b.friend-public-priority', 'a current friend Public Cairn was guaranteed ahead of two hundred ordinary Public candidates while the ordinary visit target remained three');
 
+    const canonicalViewer = await actor(db, 'CanonicalViewer');
+    const canonicalTarget = { lat: -37.7870, lng: 175.2793 };
+    const canonicalElsewhere = { lat: -37.7970, lng: 175.2793 };
+    await seedPublicCairn(db, owner, operator, {
+      ...canonicalTarget, text: 'Must match canonical Activity evidence',
+    });
+    await acceptedActivityPresence(
+      canonicalViewer,
+      canonicalElsewhere,
+      canonicalTarget,
+      Date.now() + 1_800,
+    );
+    const mismatchedActivity = await api(canonicalViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    });
+    assert.deepEqual(mismatchedActivity.acquired, []);
+    assert.equal(mismatchedActivity.reason, 'fresh_continuous_presence_required');
+    pass('DISC-PROD-02c.canonical-proof', 'an activity_real witness near a Cairn was rejected when its timestamp/coordinate/segment did not exist in the Activity canonical geometry');
+
+    const canonicalPositiveViewer = await actor(db, 'CanonicalPositiveViewer');
+    const canonicalPositiveTarget = { lat: -37.6868, lng: 176.1667 };
+    const canonicalPositiveCairn = await seedPublicCairn(db, owner, operator, {
+      ...canonicalPositiveTarget, text: 'Matches final canonical Activity evidence',
+    });
+    await acceptedActivityPresence(
+      canonicalPositiveViewer,
+      canonicalPositiveTarget,
+      canonicalPositiveTarget,
+      Date.now() + 2_000,
+    );
+    const matchedActivity = await api(canonicalPositiveViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    });
+    assert.deepEqual(
+      matchedActivity.acquired.map(item => item.marker_id),
+      [canonicalPositiveCairn.markerId],
+    );
+    pass('DISC-PROD-02d.canonical-positive', 'activity_real evidence was accepted when both observations matched the finalized canonical timestamp, coordinate and segment identity');
+
+    const activeCanonicalViewer = await actor(db, 'ActiveCanonicalViewer');
+    const activeCanonicalTarget = { lat: -39.0556, lng: 174.0752 };
+    const activeCanonicalCairn = await seedPublicCairn(db, owner, operator, {
+      ...activeCanonicalTarget, text: 'Matches an active Activity route prefix',
+    });
+    await acceptedActiveActivityPresence(
+      activeCanonicalViewer,
+      activeCanonicalTarget,
+      Date.now() + 2_500,
+    );
+    const activeMatched = await api(activeCanonicalViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    });
+    assert.deepEqual(
+      activeMatched.acquired.map(item => item.marker_id),
+      [activeCanonicalCairn.markerId],
+    );
+    pass('DISC-PROD-02e.active-canonical-positive', 'activity_real evidence from an unfinished Hike was accepted only after its exact ordered route prefix was durably acknowledged by the server');
+
     const distant = await seedPublicCairn(db, owner, operator, {
       ...placeB, text: 'Different locality without global cooldown',
     });
@@ -291,6 +497,157 @@ async function main() {
     assert.equal(elsewhere.acquired[0].marker_id, distant.markerId);
     assert.notEqual(elsewhere.visit_id, first.visit_id);
     pass('DISC-PROD-03.no-global-cooldown', 'fresh accepted evidence in a genuinely different locality acquired immediately despite the first visit reaching its cap');
+
+    const temporalViewer = await actor(db, 'TemporalViewer');
+    const temporalPlace = { lat: -46.4132, lng: 168.3538 };
+    await acceptedPresence(temporalViewer, temporalPlace.lat, temporalPlace.lng, Date.now() + 2_000);
+    const emptyArrival = await api(temporalViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+    assert.deepEqual(emptyArrival.acquired, []);
+    const publishedWhileStanding = await seedPublicCairn(db, owner, operator, {
+      ...temporalPlace, text: 'Published after arrival', eligibleNow: true,
+    });
+    await acceptedPresence(temporalViewer, temporalPlace.lat, temporalPlace.lng, Date.now() + 2_500);
+    const noStationaryFeed = await api(temporalViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+    assert.deepEqual(noStationaryFeed.acquired, []);
+    const temporalDeparture = { lat: temporalPlace.lat + 0.002, lng: temporalPlace.lng };
+    await acceptedPresence(temporalViewer, temporalDeparture.lat, temporalDeparture.lng, Date.now() + 3_000);
+    await api(temporalViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+    await db.execute(
+      `UPDATE cairn_local_visits SET departed_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 16 MINUTE)
+        WHERE viewer_id=? AND anchor_lat BETWEEN ? AND ?`,
+      [temporalViewer.id, temporalPlace.lat - 0.0001, temporalPlace.lat + 0.0001],
+    );
+    await acceptedPresence(temporalViewer, temporalPlace.lat, temporalPlace.lng, Date.now() + 30_000);
+    const laterArrival = await api(temporalViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+    assert.deepEqual(laterArrival.acquired.map(item => item.marker_id), [publishedWhileStanding.markerId]);
+    pass('DISC-PROD-03b.temporal-eligibility', 'publication after visit entry did not create a stationary feed; genuine departure, elapsed revisit gate and fresh arrival acquired it later');
+
+    const friendshipTemporalViewer = await actor(db, 'FriendshipTemporalViewer');
+    const friendshipTemporalOwner = await actor(db, 'FriendshipTemporalOwner');
+    const friendshipTemporalPlace = { lat: -35.7251, lng: 174.3237 };
+    const beforeFriendship = await seedFriendCairn(db, friendshipTemporalOwner, {
+      ...friendshipTemporalPlace, text: 'Friendship starts after arrival',
+    });
+    await acceptedPresence(
+      friendshipTemporalViewer,
+      friendshipTemporalPlace.lat,
+      friendshipTemporalPlace.lng,
+      Date.now() + 4_000,
+    );
+    assert.deepEqual((await api(friendshipTemporalViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    })).acquired, []);
+    await makeFriends(db, friendshipTemporalOwner, friendshipTemporalViewer, { startsNow: true });
+    await acceptedPresence(
+      friendshipTemporalViewer,
+      friendshipTemporalPlace.lat,
+      friendshipTemporalPlace.lng,
+      Date.now() + 4_500,
+    );
+    assert.deepEqual((await api(friendshipTemporalViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    })).acquired, []);
+    const friendshipDeparture = {
+      lat: friendshipTemporalPlace.lat + 0.002,
+      lng: friendshipTemporalPlace.lng,
+    };
+    await acceptedPresence(friendshipTemporalViewer, friendshipDeparture.lat, friendshipDeparture.lng, Date.now() + 5_000);
+    await api(friendshipTemporalViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+    await db.execute(
+      `UPDATE cairn_local_visits SET departed_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 16 MINUTE)
+        WHERE viewer_id=? AND anchor_lat BETWEEN ? AND ?`,
+      [friendshipTemporalViewer.id, friendshipTemporalPlace.lat - 0.0001, friendshipTemporalPlace.lat + 0.0001],
+    );
+    await acceptedPresence(
+      friendshipTemporalViewer,
+      friendshipTemporalPlace.lat,
+      friendshipTemporalPlace.lng,
+      Date.now() + 31_000,
+    );
+    const friendshipReturn = await api(friendshipTemporalViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    });
+    assert.deepEqual(friendshipReturn.acquired.map(item => item.marker_id), [beforeFriendship.markerId]);
+    pass('DISC-PROD-03c.friendship-boundary', 'a friendship beginning after visit entry did not retroactively unlock a stationary Friend Cairn; a genuine later visit did');
+
+    const audienceTemporalViewer = await actor(db, 'AudienceTemporalViewer');
+    const audienceTemporalOwner = await actor(db, 'AudienceTemporalOwner');
+    await makeFriends(db, audienceTemporalOwner, audienceTemporalViewer);
+    const audienceTemporalPlace = { lat: -36.8485, lng: 174.7633 };
+    const [privateMarker] = await db.execute(
+      `INSERT INTO markers
+         (user_id,type,text,lat,lng,permission,approximate,status,created_at,updated_at,
+          content_revision,audience_epoch)
+       VALUES (?,'cairn','Audience starts after arrival',?,?,'personal',1,'healthy',
+               UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),1,1)`,
+      [audienceTemporalOwner.id, audienceTemporalPlace.lat, audienceTemporalPlace.lng],
+    );
+    await db.execute(
+      `INSERT INTO marker_audience_epochs
+         (marker_id,owner_id,audience_epoch,visibility,starts_at)
+       VALUES (?,?,1,'personal',UTC_TIMESTAMP(3))`,
+      [privateMarker.insertId, audienceTemporalOwner.id],
+    );
+    await acceptedPresence(
+      audienceTemporalViewer,
+      audienceTemporalPlace.lat,
+      audienceTemporalPlace.lng,
+      Date.now() + 6_000,
+    );
+    assert.deepEqual((await api(audienceTemporalViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    })).acquired, []);
+    await db.execute(
+      `UPDATE marker_audience_epochs SET ends_at=UTC_TIMESTAMP(3)
+        WHERE marker_id=? AND audience_epoch=1`,
+      [privateMarker.insertId],
+    );
+    await db.execute(
+      `UPDATE markers SET permission='group',audience_epoch=2,
+              audience_changed_at=UTC_TIMESTAMP(3),updated_at=UTC_TIMESTAMP(3)
+        WHERE id=?`,
+      [privateMarker.insertId],
+    );
+    await db.execute(
+      `INSERT INTO marker_audience_epochs
+         (marker_id,owner_id,audience_epoch,visibility,starts_at)
+       VALUES (?,?,2,'group',UTC_TIMESTAMP(3))`,
+      [privateMarker.insertId, audienceTemporalOwner.id],
+    );
+    await acceptedPresence(
+      audienceTemporalViewer,
+      audienceTemporalPlace.lat,
+      audienceTemporalPlace.lng,
+      Date.now() + 6_500,
+    );
+    assert.deepEqual((await api(audienceTemporalViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    })).acquired, []);
+    const audienceDeparture = {
+      lat: audienceTemporalPlace.lat + 0.002,
+      lng: audienceTemporalPlace.lng,
+    };
+    await acceptedPresence(audienceTemporalViewer, audienceDeparture.lat, audienceDeparture.lng, Date.now() + 7_000);
+    await api(audienceTemporalViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+    await db.execute(
+      `UPDATE cairn_local_visits SET departed_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 16 MINUTE)
+        WHERE viewer_id=? AND anchor_lat BETWEEN ? AND ?`,
+      [audienceTemporalViewer.id, audienceTemporalPlace.lat - 0.0001, audienceTemporalPlace.lat + 0.0001],
+    );
+    await acceptedPresence(
+      audienceTemporalViewer,
+      audienceTemporalPlace.lat,
+      audienceTemporalPlace.lng,
+      Date.now() + 32_000,
+    );
+    const audienceReturn = await api(audienceTemporalViewer, '/api/cairn-memory/discover', {
+      method: 'POST', body: {},
+    });
+    assert.deepEqual(
+      audienceReturn.acquired.map(item => item.marker_id),
+      [String(privateMarker.insertId)],
+    );
+    pass('DISC-PROD-03d.audience-boundary', 'a Friends audience epoch beginning after visit entry did not retroactively unlock a stationary Cairn; a genuine later visit did');
 
     const cadenceViewer = await actor(db, 'CadenceViewer');
     const cadenceMarkers = [];
@@ -351,7 +708,7 @@ async function main() {
         WHERE viewer_id=? AND anchor_lat BETWEEN ? AND ?`,
       [versionViewer.id, versionPlace.lat - 0.0001, versionPlace.lat + 0.0001],
     );
-    await acceptedPresence(versionViewer, versionPlace.lat, versionPlace.lng, Date.now() + 7_000);
+    await acceptedPresence(versionViewer, versionPlace.lat, versionPlace.lng, Date.now() + 35_000);
     const returned = await api(versionViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
     assert.deepEqual(returned.acquired.map(item => item.content_revision), [5]);
     const history = await api(versionViewer, `/api/cairn-memory/cairns/${versionOnly.markerId}/history`);
@@ -406,8 +763,17 @@ async function main() {
     await acceptedPresence(removedViewer, removedPlace.lat, removedPlace.lng, Date.now() + 8_000);
     const removedFirst = await api(removedViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
     assert.deepEqual(removedFirst.acquired.map(item => item.marker_id), [removedOnly.markerId]);
+    const removedHistoryBefore = await api(removedViewer, `/api/cairn-memory/cairns/${removedOnly.markerId}/history`);
+    const removedRevisionId = removedHistoryBefore.revisions[0].revision_id;
     await api(removedViewer, `/api/cairn-memory/cairns/${removedOnly.markerId}/collection`, {
       method: 'PUT', body: { action: 'remove' },
+    });
+    await api(removedViewer, `/api/cairn-memory/cairns/${removedOnly.markerId}/history`, { expected: 404 });
+    await api(removedViewer, `/api/cairn-memory/revisions/${removedRevisionId}/read`, {
+      method: 'POST', body: {}, expected: 404,
+    });
+    await api(removedViewer, `/api/cairn-memory/revisions/${removedRevisionId}/thanks`, {
+      method: 'POST', body: {}, expected: 404,
     });
     await publishRevision(db, removedOnly, owner, operator, {
       text: 'Reader removal version two', revision: 2, epoch: 2,
@@ -420,11 +786,77 @@ async function main() {
         WHERE viewer_id=? AND anchor_lat BETWEEN ? AND ?`,
       [removedViewer.id, removedPlace.lat - 0.0001, removedPlace.lat + 0.0001],
     );
-    await acceptedPresence(removedViewer, removedPlace.lat, removedPlace.lng, Date.now() + 10_000);
+    await acceptedPresence(removedViewer, removedPlace.lat, removedPlace.lng, Date.now() + 36_000);
     const removedReturn = await api(removedViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
     assert.deepEqual(removedReturn.acquired, []);
     assert.equal((await api(removedViewer, '/api/cairn-memory/library?section=found')).cairns.length, 0);
-    pass('DISC-PROD-06.reader-removal', 'reader removal persisted across a newer source revision and a genuine later visit; refresh and discovery did not resurrect the collection');
+    pass('DISC-PROD-06.reader-removal', 'reader removal immediately blocked history/read/Thanks, persisted across a newer source revision and genuine later visit, and did not resurrect on refresh or discovery');
+
+    const oldRevision = history.revisions[1];
+    const revisionCase = await api(versionViewer, `/api/cairn-memory/revisions/${oldRevision.revision_id}/cases`, {
+      method: 'POST', expected: 201,
+      body: {
+        client_submission_id: crypto.randomUUID(), case_type: 'report',
+        category: 'privacy', detail: 'Synthetic revision-only review.',
+      },
+    });
+    await api(operator, `/api/cairn-memory/operator/cases/${revisionCase.case_id}/decision`, {
+      method: 'POST',
+      body: {
+        case_state: 'reviewed', content_state: 'under_review',
+        decision_scope: 'revision', reason: 'synthetic_revision_review',
+      },
+    });
+    const revisionFrozenHistory = await api(versionViewer, `/api/cairn-memory/cairns/${versionOnly.markerId}/history`);
+    assert.equal(
+      revisionFrozenHistory.revisions.find(item => String(item.revision_id) === String(oldRevision.revision_id)).availability,
+      'under_review',
+    );
+    assert.equal(
+      revisionFrozenHistory.revisions.find(item => String(item.revision_id) === String(latest.revision_id)).availability,
+      'available',
+    );
+    assert.equal(
+      (await api(versionViewer, '/api/cairn-memory/library?section=found')).cairns
+        .find(item => String(item.marker_id) === versionOnly.markerId).availability,
+      'available',
+    );
+    await api(operator, `/api/cairn-memory/operator/cases/${revisionCase.case_id}/decision`, {
+      method: 'POST',
+      body: {
+        case_state: 'dismissed', content_state: 'available',
+        decision_scope: 'revision', reason: 'synthetic_revision_restore',
+      },
+    });
+    const revisionRestoredHistory = await api(versionViewer, `/api/cairn-memory/cairns/${versionOnly.markerId}/history`);
+    assert.equal(
+      revisionRestoredHistory.revisions.find(item => String(item.revision_id) === String(oldRevision.revision_id)).availability,
+      'available',
+    );
+    pass('DISC-PROD-06a.revision-moderation', 'revision-only freeze hid v1 without hiding v5; restore changed safety state without creating an acquisition or collection');
+    await api(operator, `/api/cairn-memory/operator/cases/${revisionCase.case_id}/decision`, {
+      method: 'POST',
+      body: {
+        case_state: 'actioned', content_state: 'removed',
+        decision_scope: 'revision', reason: 'synthetic_revision_removal',
+      },
+    });
+    const afterRevisionRemoval = await api(versionViewer, `/api/cairn-memory/cairns/${versionOnly.markerId}/history`);
+    assert.deepEqual(afterRevisionRemoval.revisions.map(item => Number(item.content_revision)), [5]);
+    assert.equal(
+      (await api(versionViewer, '/api/cairn-memory/library?section=found')).cairns
+        .find(item => String(item.marker_id) === versionOnly.markerId).availability,
+      'available',
+    );
+    const revisionRestoreRejected = await api(operator, `/api/cairn-memory/operator/cases/${revisionCase.case_id}/decision`, {
+      method: 'POST', expected: 409,
+      body: {
+        case_state: 'dismissed', content_state: 'available',
+        decision_scope: 'revision', reason: 'must_not_restore_removed_revision',
+      },
+    });
+    assert.match(revisionRestoreRejected.error, /cannot be restored/i);
+    pass('DISC-PROD-06b.revision-removal', 'confirmed revision-only removal purged v1 without removing v5 or the source and could not be restored');
 
     const reportId = crypto.randomUUID();
     const report = await api(versionViewer, `/api/cairn-memory/revisions/${latest.revision_id}/cases`, {
@@ -438,12 +870,12 @@ async function main() {
     assert.equal(report.case_id, reportRetry.case_id);
     const unauthorized = await api(viewer, `/api/cairn-memory/operator/cases/${report.case_id}/decision`, {
       method: 'POST', expected: 403,
-      body: { case_state: 'reviewed', content_state: 'under_review', reason: 'unauthorized' },
+      body: { case_state: 'reviewed', content_state: 'under_review', decision_scope: 'source', reason: 'unauthorized' },
     });
     assert.equal(unauthorized.error, 'Operator access required');
     await api(operator, `/api/cairn-memory/operator/cases/${report.case_id}/decision`, {
       method: 'POST',
-      body: { case_state: 'reviewed', content_state: 'under_review', reason: 'synthetic_review' },
+      body: { case_state: 'reviewed', content_state: 'under_review', decision_scope: 'source', reason: 'synthetic_review' },
     });
     const frozen = await api(versionViewer, '/api/cairn-memory/library?section=found');
     const frozenCairn = frozen.cairns.find(item => String(item.marker_id) === versionOnly.markerId);
@@ -476,7 +908,7 @@ async function main() {
 
     await api(operator, `/api/cairn-memory/operator/cases/${report.case_id}/decision`, {
       method: 'POST',
-      body: { case_state: 'actioned', content_state: 'removed', reason: 'synthetic_confirmed_removal' },
+      body: { case_state: 'actioned', content_state: 'removed', decision_scope: 'source', reason: 'synthetic_confirmed_removal' },
     });
     assert.equal(
       (await api(versionViewer, '/api/cairn-memory/library?section=found')).cairns

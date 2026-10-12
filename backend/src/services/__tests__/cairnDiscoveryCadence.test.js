@@ -8,6 +8,8 @@ const {
   SAME_LOCALITY_REVISIT_MINUTES,
   PRESENTATION_MERGE_WINDOW_SECONDS,
   HAPTIC_MIN_INTERVAL_SECONDS,
+  FRESHNESS_MAX_BOOST_PERCENT,
+  FRESHNESS_WINDOW_HOURS,
   DEFAULT_DISCOVERY_SOUND_ENABLED,
   decideLocalVisitTransition,
   selectFairCandidates,
@@ -36,6 +38,8 @@ test('V1 cadence defaults are explicit and discovery sound remains off', () => {
   assert.equal(SAME_LOCALITY_REVISIT_MINUTES, 15);
   assert.equal(PRESENTATION_MERGE_WINDOW_SECONDS, 20);
   assert.equal(HAPTIC_MIN_INTERVAL_SECONDS, 180);
+  assert.equal(FRESHNESS_MAX_BOOST_PERCENT, 20);
+  assert.equal(FRESHNESS_WINDOW_HOURS, 168);
   assert.equal(DEFAULT_DISCOVERY_SOUND_ENABLED, false);
 });
 
@@ -124,6 +128,26 @@ test('category-first weighting redistributes empty categories and preserves auth
   const onlyPublic = selectFairCandidates({ friend: [], updated: [], public: [candidate(1), candidate(2)] }, 3, () => 0.8);
   assert.equal(onlyPublic.length, 2);
   assert.ok(onlyPublic.every(row => row.discovery_category === 'public'));
+});
+
+test('freshness adds only the configured bounded advantage and keeps older items eligible', () => {
+  const now = Date.parse('2026-10-12T12:00:00.000Z');
+  const old = { ...candidate('old'), published_at: '2026-09-01T00:00:00.000Z' };
+  const fresh = { ...candidate('fresh'), published_at: '2026-10-12T12:00:00.000Z' };
+  const selected = selectFairCandidates(
+    { updated: [], public: [old, fresh] },
+    1,
+    () => 0.48,
+    now,
+  );
+  assert.equal(selected[0].id, 'fresh');
+  const oldStillSelectable = selectFairCandidates(
+    { updated: [], public: [old, fresh] },
+    1,
+    () => 0,
+    now,
+  );
+  assert.equal(oldStillSelectable[0].id, 'old');
 });
 
 test('every eligible friend Cairn is guaranteed before the ordinary visit target', () => {

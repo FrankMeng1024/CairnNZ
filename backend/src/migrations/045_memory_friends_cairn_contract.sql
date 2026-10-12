@@ -241,6 +241,7 @@ CREATE TABLE cairn_review_cases (
   disposed_at DATETIME(3) NULL,
   disposed_by BIGINT UNSIGNED NULL,
   disposition_note VARCHAR(240) NULL,
+  decision_scope ENUM('revision','source') NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_cairn_case_client (submitted_by, client_submission_id),
   UNIQUE KEY uk_cairn_case_revision_type
@@ -264,6 +265,7 @@ CREATE TABLE cairn_review_audit (
   case_id BIGINT UNSIGNED NULL,
   from_state VARCHAR(32) NULL,
   to_state VARCHAR(32) NULL,
+  decision_scope ENUM('revision','source') NULL,
   reason VARCHAR(240) NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   INDEX idx_cairn_review_audit_created (created_at, id),

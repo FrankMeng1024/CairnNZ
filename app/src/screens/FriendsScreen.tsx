@@ -219,7 +219,7 @@ function IncomingRow({
       <View style={[s.requestConsentRow, { borderTopColor: theme.borderSubtle }]}>
         <View style={{ flex: 1, paddingRight: 12 }}>
           <Text style={[s.cardName, { color: theme.foreground }]}>Share my exploration after accepting</Text>
-          <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>Full accepted history, delayed at least 30 min; no route line or timestamps.</Text>
+          <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>Full accepted history, delayed at least 30 min; no route line or timestamps. Familiar places may still be inferred.</Text>
         </View>
         <Switch
           value={shareMemory}

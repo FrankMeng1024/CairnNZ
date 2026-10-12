@@ -151,7 +151,12 @@ async function acquireCairnRevision(conn, acquisition) {
      ON DUPLICATE KEY UPDATE relationship='found'`,
     [acquisition.viewerId, acquisition.markerId],
   );
-  const presentationGroup = await assignPresentationGroup(conn, acquisition.viewerId, acquisitionId);
+  const presentationGroup = await assignPresentationGroup(
+    conn,
+    acquisition.viewerId,
+    acquisitionId,
+    acquisition.presentationGroupId ?? null,
+  );
   return { acquired: true, acquisitionId, presentationGroup };
 }
 

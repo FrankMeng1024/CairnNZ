@@ -19,7 +19,7 @@ describe('Memory sharing account and rollback fences', () => {
   beforeEach(() => {
     mockAuthenticatedFetch.mockReset();
     useMemorySharingStore.getState().reset();
-    useMemorySharingStore.setState({ grants: [grant('1', true), grant('2', false)] });
+    useMemorySharingStore.setState({ ownerId: 'account-a', grants: [grant('1', true), grant('2', false)] });
   });
 
   test('bulk grant failure restores the complete previous selection', async () => {
@@ -42,5 +42,33 @@ describe('Memory sharing account and rollback fences', () => {
 
     await expect(pending).resolves.toBe(false);
     expect(useMemorySharingStore.getState()).toMatchObject({ grants: [], loading: false, error: null });
+  });
+
+  test('switching owner clears exact places immediately and fences a late account-A load', async () => {
+    let resolveA!: (value: any) => void;
+    const pendingA = new Promise(resolve => { resolveA = resolve; });
+    mockAuthenticatedFetch
+      .mockReturnValueOnce(pendingA)
+      .mockReturnValueOnce(pendingA)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ grants: [grant('b', true)], delay_seconds: 1800 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ private_places: [] }) });
+    useMemorySharingStore.setState({
+      ownerId: 'account-a',
+      privatePlaces: [{ id: 9, label: 'A home', lat: -41.2, lng: 174.7, radius_m: 250 }],
+    });
+
+    const loadA = useMemorySharingStore.getState().load('account-a');
+    const loadB = useMemorySharingStore.getState().load('account-b');
+    expect(useMemorySharingStore.getState()).toMatchObject({
+      ownerId: 'account-b', grants: [], privatePlaces: [], loading: true,
+    });
+    resolveA({ ok: true, json: async () => ({ grants: [grant('a', true)], private_places: [] }) });
+    await loadA;
+    await loadB;
+
+    expect(useMemorySharingStore.getState()).toMatchObject({
+      ownerId: 'account-b', privatePlaces: [], loading: false,
+    });
+    expect(useMemorySharingStore.getState().grants.map(item => item.friend_id)).toEqual(['b']);
   });
 });

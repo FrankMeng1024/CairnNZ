@@ -12,6 +12,8 @@ const SAME_LOCALITY_EXIT_DISTANCE_M = boundedInteger('SAME_LOCALITY_EXIT_DISTANC
 const SAME_LOCALITY_REVISIT_MINUTES = boundedInteger('SAME_LOCALITY_REVISIT_MINUTES', 15, 1, 240);
 const PRESENTATION_MERGE_WINDOW_SECONDS = boundedInteger('PRESENTATION_MERGE_WINDOW_SECONDS', 20, 1, 120);
 const HAPTIC_MIN_INTERVAL_SECONDS = boundedInteger('HAPTIC_MIN_INTERVAL_SECONDS', 180, 30, 3600);
+const FRESHNESS_MAX_BOOST_PERCENT = boundedInteger('CAIRN_FRESHNESS_MAX_BOOST_PERCENT', 20, 0, 20);
+const FRESHNESS_WINDOW_HOURS = boundedInteger('CAIRN_FRESHNESS_WINDOW_HOURS', 168, 1, 720);
 const DEFAULT_DISCOVERY_SOUND_ENABLED = false;
 
 const CATEGORY_WEIGHTS = Object.freeze({
@@ -41,7 +43,9 @@ function asMillis(value) {
  * a new visit merely because the wall clock later crosses 15 minutes.
  */
 function decideLocalVisitTransition(visits, observation, serverNowMs) {
-  const ordered = [...visits].sort((a, b) => asMillis(b.entered_at) - asMillis(a.entered_at));
+  const enteredAtMillis = visit => Number(visit.entered_at_ms) || asMillis(visit.entered_at);
+  const departedAtMillis = visit => Number(visit.departed_at_ms) || asMillis(visit.departed_at);
+  const ordered = [...visits].sort((a, b) => enteredAtMillis(b) - enteredAtMillis(a));
   const nearest = ordered
     .map(visit => ({ visit, distance: distanceMeters(observation, { lat: visit.anchor_lat, lng: visit.anchor_lng }) }))
     .filter(entry => entry.distance <= SAME_LOCALITY_EXIT_DISTANCE_M)
@@ -56,7 +60,7 @@ function decideLocalVisitTransition(visits, observation, serverNowMs) {
   if (!visit.departed_at) {
     return { action: 'continue', departedIds, visitId: Number(visit.id), clearDeparture: false };
   }
-  const elapsedMs = serverNowMs - asMillis(visit.departed_at);
+  const elapsedMs = serverNowMs - departedAtMillis(visit);
   const revisitMs = SAME_LOCALITY_REVISIT_MINUTES * 60 * 1000;
   if (elapsedMs < revisitMs) {
     return { action: 'continue', departedIds, visitId: Number(visit.id), clearDeparture: true };
@@ -65,16 +69,21 @@ function decideLocalVisitTransition(visits, observation, serverNowMs) {
 }
 
 async function ensureLocalVisit(conn, viewerId, observation) {
-  const [nowRows] = await conn.execute('SELECT UTC_TIMESTAMP(3) AS server_now');
+  const [nowRows] = await conn.execute(
+    'SELECT UTC_TIMESTAMP(3) AS server_now,UNIX_TIMESTAMP(UTC_TIMESTAMP(3))*1000 AS server_now_ms',
+  );
   const serverNow = nowRows[0]?.server_now ? new Date(nowRows[0].server_now) : new Date();
+  const serverNowMs = Number(nowRows[0]?.server_now_ms) || Date.now();
   const [visits] = await conn.execute(
-    `SELECT id,anchor_lat,anchor_lng,entered_at,last_inside_at,departed_at,closed_at
+    `SELECT id,anchor_lat,anchor_lng,entered_at,last_inside_at,departed_at,closed_at,
+            UNIX_TIMESTAMP(entered_at)*1000 AS entered_at_ms,
+            UNIX_TIMESTAMP(departed_at)*1000 AS departed_at_ms
        FROM cairn_local_visits
       WHERE viewer_id = ? AND entered_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 30 DAY)
       ORDER BY entered_at DESC, id DESC LIMIT 100 FOR UPDATE`,
     [viewerId],
   );
-  const transition = decideLocalVisitTransition(visits, observation, serverNow.getTime());
+  const transition = decideLocalVisitTransition(visits, observation, serverNowMs);
   if (transition.departedIds.length > 0) {
     await conn.query(
       `UPDATE cairn_local_visits
@@ -84,6 +93,7 @@ async function ensureLocalVisit(conn, viewerId, observation) {
     );
   }
   if (transition.action === 'continue') {
+    const continuedVisit = visits.find(value => Number(value.id) === Number(transition.visitId));
     await conn.execute(
       `UPDATE cairn_local_visits
           SET last_inside_at = UTC_TIMESTAMP(3),
@@ -91,7 +101,12 @@ async function ensureLocalVisit(conn, viewerId, observation) {
         WHERE id = ? AND viewer_id = ?`,
       [transition.clearDeparture ? 1 : 0, transition.visitId, viewerId],
     );
-    return { id: transition.visitId, isNew: false };
+    return {
+      id: transition.visitId,
+      isNew: false,
+      enteredAt: continuedVisit?.entered_at ?? serverNow,
+      enteredAtMs: Number(continuedVisit?.entered_at_ms) || serverNowMs,
+    };
   }
   if (transition.previousVisitId) {
     await conn.execute(
@@ -107,7 +122,10 @@ async function ensureLocalVisit(conn, viewerId, observation) {
      VALUES (?,?,?,?,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))`,
     [viewerId, token, Number(observation.lat), Number(observation.lng)],
   );
-  return { id: Number(result.insertId), token, isNew: true };
+  return {
+    id: Number(result.insertId), token, isNew: true,
+    enteredAt: serverNow, enteredAtMs: serverNowMs,
+  };
 }
 
 async function remainingVisitCapacity(conn, visitId) {
@@ -129,13 +147,29 @@ function weightedCategory(nonEmptyCategories, random) {
   return nonEmptyCategories[nonEmptyCategories.length - 1];
 }
 
-function chooseCandidate(candidates, usedAuthors, random) {
-  const diverse = candidates.filter(candidate => !usedAuthors.has(String(candidate.author_id)));
-  const pool = diverse.length > 0 ? diverse : candidates;
-  return pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
+function freshnessWeight(candidate, nowMs) {
+  const publishedMs = Number(candidate.eligible_after_ms)
+    || asMillis(candidate.published_at ?? candidate.eligible_after);
+  if (!publishedMs) return 1;
+  const windowMs = FRESHNESS_WINDOW_HOURS * 60 * 60 * 1000;
+  const remaining = Math.max(0, Math.min(1, 1 - ((nowMs - publishedMs) / windowMs)));
+  return 1 + (FRESHNESS_MAX_BOOST_PERCENT / 100) * remaining;
 }
 
-function selectFairCandidates(categories, slots, random = Math.random) {
+function chooseCandidate(candidates, usedAuthors, random, nowMs) {
+  const diverse = candidates.filter(candidate => !usedAuthors.has(String(candidate.author_id)));
+  const pool = diverse.length > 0 ? diverse : candidates;
+  const weighted = pool.map(candidate => ({ candidate, weight: freshnessWeight(candidate, nowMs) }));
+  const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+  let cursor = random() * total;
+  for (const entry of weighted) {
+    cursor -= entry.weight;
+    if (cursor <= 0) return entry.candidate;
+  }
+  return weighted[weighted.length - 1].candidate;
+}
+
+function selectFairCandidates(categories, slots, random = Math.random, nowMs = Date.now()) {
   const remaining = {
     updated: [...(categories.updated || [])],
     public: [...(categories.public || [])],
@@ -147,7 +181,7 @@ function selectFairCandidates(categories, slots, random = Math.random) {
     const available = Object.keys(remaining).filter(category => remaining[category].length > 0);
     if (available.length === 0) break;
     const category = weightedCategory(available, random);
-    const candidate = chooseCandidate(remaining[category], usedAuthors, random);
+    const candidate = chooseCandidate(remaining[category], usedAuthors, random, nowMs);
     remaining[category] = remaining[category].filter(item => item !== candidate);
     selected.push({ ...candidate, discovery_category: category });
     usedAuthors.add(String(candidate.author_id));
@@ -172,8 +206,18 @@ function selectDiscoveryCandidates(categories, ordinaryCapacity, random = Math.r
   ];
 }
 
-async function assignPresentationGroup(conn, viewerId, acquisitionId) {
-  const [openGroups] = await conn.execute(
+async function assignPresentationGroup(conn, viewerId, acquisitionId, preferredGroupId = null) {
+  let openGroups = [];
+  if (preferredGroupId) {
+    [openGroups] = await conn.execute(
+      `SELECT id,group_token,haptic_eligible,merge_until
+         FROM cairn_presentation_groups
+        WHERE id = ? AND viewer_id = ? AND announced_at IS NULL
+        LIMIT 1 FOR UPDATE`,
+      [preferredGroupId, viewerId],
+    );
+  }
+  if (openGroups.length === 0) [openGroups] = await conn.execute(
     `SELECT id,group_token,haptic_eligible,merge_until
        FROM cairn_presentation_groups
       WHERE viewer_id = ? AND announced_at IS NULL
@@ -221,6 +265,8 @@ module.exports = {
   SAME_LOCALITY_REVISIT_MINUTES,
   PRESENTATION_MERGE_WINDOW_SECONDS,
   HAPTIC_MIN_INTERVAL_SECONDS,
+  FRESHNESS_MAX_BOOST_PERCENT,
+  FRESHNESS_WINDOW_HOURS,
   DEFAULT_DISCOVERY_SOUND_ENABLED,
   CATEGORY_WEIGHTS,
   distanceMeters,

@@ -783,6 +783,15 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
     } catch (_e) {
       // Store not loaded yet — nothing to reset.
     }
+    try {
+      // Exact friend grants and protected-place coordinates are account data.
+      // Clear them synchronously before any signed-out or next-account render.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { useMemorySharingStore } = require('../features/memory/store/useMemorySharingStore');
+      useMemorySharingStore.getState().reset();
+    } catch (_e) {
+      // Store not loaded yet — nothing to reset.
+    }
   },
 
   getMarkersForRegion: (regionCode) => {
@@ -1080,6 +1089,13 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
           // eslint-disable-next-line @typescript-eslint/no-var-requires
           const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
           useFriendMemoryStore.getState().reset();
+        } catch (_e) {
+          // Store not loaded yet — nothing to reset.
+        }
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { useMemorySharingStore } = require('../features/memory/store/useMemorySharingStore');
+          useMemorySharingStore.getState().reset();
         } catch (_e) {
           // Store not loaded yet — nothing to reset.
         }

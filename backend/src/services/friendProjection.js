@@ -156,8 +156,7 @@ async function loadFriendProjectionEvidence(db, ownerId, grant) {
               INTERVAL ${FRIEND_VISIBILITY_DELAY_SECONDS} SECOND
             ) <= UTC_TIMESTAMP(3)
       ORDER BY evidence.source_activity_client_id ASC, evidence.ts ASC,
-               evidence.evidence_kind ASC, evidence.id ASC
-      LIMIT 20000`,
+               evidence.evidence_kind ASC, evidence.id ASC`,
     [ownerId, ownerId, ownerId, ownerId, grant.id, ownerId,
       fullHistory ? 1 : 0, fullHistory ? 1 : 0],
   );

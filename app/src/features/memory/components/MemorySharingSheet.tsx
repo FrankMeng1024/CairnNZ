@@ -6,12 +6,15 @@ import { Radius, Spacing } from '../../../components/tokens';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMemorySharingStore } from '../store/useMemorySharingStore';
+import { useAppStore } from '../../../store/useAppStore';
 
 export function MemorySharingSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const theme = useVisualTheme();
-  const grants = useMemorySharingStore(state => state.grants);
+  const currentOwnerId = useAppStore(state => state.user?.id == null ? null : String(state.user.id));
+  const sharingOwnerId = useMemorySharingStore(state => state.ownerId);
+  const storedGrants = useMemorySharingStore(state => state.grants);
   const delaySeconds = useMemorySharingStore(state => state.delaySeconds);
-  const places = useMemorySharingStore(state => state.privatePlaces);
+  const storedPlaces = useMemorySharingStore(state => state.privatePlaces);
   const loading = useMemorySharingStore(state => state.loading);
   const error = useMemorySharingStore(state => state.error);
   const load = useMemorySharingStore(state => state.load);
@@ -21,13 +24,16 @@ export function MemorySharingSheet({ visible, onClose }: { visible: boolean; onC
   const lastFix = useMemoryStore(state => state.lastWatcherFix);
   const [draftIds, setDraftIds] = useState<string[]>([]);
   const [draftDirty, setDraftDirty] = useState(false);
+  const ownerMatches = Boolean(currentOwnerId && sharingOwnerId === currentOwnerId);
+  const grants = ownerMatches ? storedGrants : [];
+  const places = ownerMatches ? storedPlaces : [];
 
   useEffect(() => {
-    if (visible) {
+    if (visible && currentOwnerId) {
       setDraftDirty(false);
-      void load();
+      void load(currentOwnerId);
     }
-  }, [load, visible]);
+  }, [currentOwnerId, load, visible]);
 
   useEffect(() => {
     if (visible && !draftDirty && !loading) {
@@ -75,7 +81,7 @@ export function MemorySharingSheet({ visible, onClose }: { visible: boolean; onC
             </View>
           ) : null}
           {grants.length === 0 ? (
-            <Text style={[styles.body, { color: theme.foregroundSecondary }]}>Add and accept a friend before sharing Memory.</Text>
+            <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{loading || !ownerMatches ? 'Loading sharing choices…' : 'Add and accept a friend before sharing Memory.'}</Text>
           ) : grants.map((grant, index) => (
             <View key={grant.friend_id} style={[styles.grantRow, index > 0 && { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
               <View style={{ flex: 1, paddingRight: 12 }}>
