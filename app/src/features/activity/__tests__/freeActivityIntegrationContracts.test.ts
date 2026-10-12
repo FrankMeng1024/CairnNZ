@@ -480,7 +480,8 @@ describe('Free Activity integration contracts', () => {
     const settings = read('src/features/memory/store/useMemorySettingsStore.ts');
     const ui = read('src/screens/SettingsScreen.tsx');
     expect(settings).toMatch(/passiveExplorationEnabled:\s*false/);
-    expect(settings).toContain('passiveExplorationContractVersion: 4');
+    expect(settings).toContain('passiveExplorationContractVersion: 5');
+    expect(settings).toContain('memoryLocationTransitionRequired: true');
     expect(settings).not.toContain('recordMode:');
     expect(settings).not.toContain('showFriendOverlay:');
     expect(settings).not.toContain('useH3Fog:');
