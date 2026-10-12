@@ -96,9 +96,12 @@ Non-goals:
 3. Cairn revisions/acquisitions/library and online discovery integration.
 4. Report/appeal/freeze states and authenticated operator transitions.
 5. Persisted local-visit discovery fairness and presentation grouping. The
-   configurable V1 defaults are 3 Cairns per visit, 120 m departure, 15 minute
-   same-locality revisit, 20 second presentation merge, 180 second haptic
-   eligibility, and sound off. These values require later native GPS QA.
+   configurable V1 defaults are 3 ordinary Cairns per visit, 120 m departure,
+   15 minute same-locality revisit, 20 second presentation merge, 180 second
+   haptic eligibility, and sound off. Every eligible current-Friend Cairn is
+   acquired first and may overflow the ordinary target; remaining slots are
+   split fairly between Updated and New Public. These values require later
+   native GPS QA.
 6. Targeted production-path service/route tests, client tests, changed-Activity
    verification, web screenshots where safely renderable, independent review,
    and one review ZIP.
