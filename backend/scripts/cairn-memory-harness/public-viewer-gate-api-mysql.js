@@ -179,4 +179,3 @@ main().catch(error => {
   }, null, 2)}\n`);
   process.exitCode = 1;
 });
-
