@@ -114,6 +114,7 @@ app.use('/api/memory-subscriptions', require('./routes/memory-subscriptions'));
 app.use('/api/friend-sharing', require('./routes/friend-sharing'));
 app.use('/api/friend-content', require('./routes/friend-content'));
 app.use('/api/public-cairns', require('./routes/public-cairns'));
+app.use('/api/cairn-memory', require('./routes/cairn-memory'));
 app.use('/api/circle', require('./routes/circle'));
 app.use('/api/hide', require('./routes/hide'));
 app.use('/api/telemetry', require('./routes/telemetry'));

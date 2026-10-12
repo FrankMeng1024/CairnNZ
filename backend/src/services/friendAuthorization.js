@@ -80,31 +80,108 @@ async function createGrantIfPolicyEnabled(db, ownerId, viewerId, episode) {
   const grantEpoch = crypto.randomUUID();
   const [result] = await db.execute(
     `INSERT INTO memory_share_grants
-       (owner_id, viewer_id, friendship_episode_id, grant_epoch, effective_at)
-     VALUES (?, ?, ?, ?, UTC_TIMESTAMP(3))`,
+       (owner_id, viewer_id, friendship_episode_id, grant_epoch, effective_at,
+        coverage_scope, consent_version)
+     VALUES (?, ?, ?, ?, UTC_TIMESTAMP(3), 'legacy_activity_since_grant', 0)`,
     [ownerId, viewerId, episode.id, grantEpoch],
   );
   return { id: result.insertId, grant_epoch: grantEpoch, authorization_version: 1 };
 }
 
 async function provisionFriendshipGrants(db, userA, userB, episode) {
-  await createGrantIfPolicyEnabled(db, userA, userB, episode);
-  await createGrantIfPolicyEnabled(db, userB, userA, episode);
+  // New friendships never inherit an owner's historical global preference.
+  // Sharing accepted Memory history is a directional, explicit decision made
+  // from Friends. Keep this function as a compatibility seam for callers.
+  void db;
+  void userA;
+  void userB;
+  void episode;
+  return [];
+}
+
+async function setExplicitMemoryGrant(db, ownerId, viewerId, enabled) {
+  const episode = await currentFriendshipEpisode(db, ownerId, viewerId, true);
+  if (!episode) return { status: 'not_friends' };
+  const [blocked] = await db.execute(
+    `SELECT 1 FROM blocked_users
+      WHERE (blocker_id = ? AND blocked_id = ?)
+         OR (blocker_id = ? AND blocked_id = ?)
+      LIMIT 1 FOR SHARE`,
+    [ownerId, viewerId, viewerId, ownerId],
+  );
+  if (blocked[0]) return { status: 'not_friends' };
+  const [active] = await db.execute(
+    `SELECT id, grant_epoch, coverage_scope, authorization_version
+       FROM memory_share_grants
+      WHERE owner_id = ? AND viewer_id = ? AND status = 'active'
+      LIMIT 1 FOR UPDATE`,
+    [ownerId, viewerId],
+  );
+  if (!enabled) {
+    if (!active[0]) return { status: 'revoked', changed: false };
+    await db.execute(
+      `UPDATE memory_share_grants
+          SET status = 'revoked', revoked_at = UTC_TIMESTAMP(3),
+              revoked_reason = 'corrective',
+              authorization_version = authorization_version + 1
+        WHERE id = ?`,
+      [active[0].id],
+    );
+    await db.execute(
+      'DELETE FROM memory_subscriptions WHERE user_id = ? AND friend_id = ?',
+      [viewerId, ownerId],
+    );
+    return { status: 'revoked', changed: true };
+  }
+  if (active[0]?.coverage_scope === 'full_history_delayed_v1') {
+    return { status: 'active', changed: false, grant: active[0] };
+  }
+  if (active[0]) {
+    // Revoke the legacy row instead of silently widening its authority.
+    await db.execute(
+      `UPDATE memory_share_grants
+          SET status = 'revoked', revoked_at = UTC_TIMESTAMP(3),
+              revoked_reason = 'corrective',
+              authorization_version = authorization_version + 1
+        WHERE id = ?`,
+      [active[0].id],
+    );
+  }
+  const grantEpoch = crypto.randomUUID();
+  const [result] = await db.execute(
+    `INSERT INTO memory_share_grants
+       (owner_id, viewer_id, friendship_episode_id, grant_epoch, effective_at,
+        coverage_scope, consent_version)
+     VALUES (?, ?, ?, ?, UTC_TIMESTAMP(3), 'full_history_delayed_v1', 1)`,
+    [ownerId, viewerId, episode.id, grantEpoch],
+  );
+  return {
+    status: 'active',
+    changed: true,
+    grant: {
+      id: result.insertId,
+      grant_epoch: grantEpoch,
+      coverage_scope: 'full_history_delayed_v1',
+      authorization_version: 1,
+    },
+  };
 }
 
 async function currentMemoryGrant(db, ownerId, viewerId, { requireSelected = false } = {}) {
   const [rows] = await db.execute(
-    `SELECT g.id, g.grant_epoch, g.effective_at, g.authorization_version,
+    `SELECT g.id, g.grant_epoch, g.effective_at, g.coverage_scope,
+            g.consent_version, g.authorization_version,
             e.id AS friendship_episode_id, e.started_at AS friendship_started_at,
-            p.policy_epoch
+            COALESCE(p.policy_epoch, 0) AS policy_epoch
        FROM memory_share_grants g
-       JOIN memory_share_policies p ON p.owner_id = g.owner_id AND p.enabled = 1
+       LEFT JOIN memory_share_policies p ON p.owner_id = g.owner_id
        JOIN friendship_episodes e ON e.id = g.friendship_episode_id AND e.ended_at IS NULL
        JOIN friends f ON f.user_id = g.viewer_id AND f.friend_id = g.owner_id
        JOIN users owner ON owner.id = g.owner_id AND owner.deleted_at IS NULL
        JOIN users viewer ON viewer.id = g.viewer_id AND viewer.deleted_at IS NULL
        ${requireSelected ? 'JOIN memory_subscriptions ms ON ms.user_id = g.viewer_id AND ms.friend_id = g.owner_id' : ''}
       WHERE g.owner_id = ? AND g.viewer_id = ? AND g.status = 'active'
+        AND (g.coverage_scope = 'full_history_delayed_v1' OR p.enabled = 1)
         AND NOT EXISTS (
           SELECT 1 FROM blocked_users b
            WHERE (b.blocker_id = g.owner_id AND b.blocked_id = g.viewer_id)
@@ -153,8 +230,10 @@ async function authorizedFriendCairn(db, viewerId, markerId, { includeHidden = f
        JOIN friendship_episodes episode
          ON episode.id = encounter.friendship_episode_id AND episode.ended_at IS NULL
        JOIN users u ON u.id = encounter.author_id AND u.deleted_at IS NULL
+       LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=m.id
       WHERE encounter.viewer_id = ? AND encounter.marker_id = ?
         ${includeHidden ? '' : 'AND encounter.hidden_at IS NULL'}
+        AND COALESCE(moderation.state,'available')='available'
         AND NOT EXISTS (
           SELECT 1 FROM blocked_users b
            WHERE (b.blocker_id = encounter.viewer_id AND b.blocked_id = encounter.author_id)
@@ -203,6 +282,7 @@ module.exports = {
   revokePairGrants,
   createGrantIfPolicyEnabled,
   provisionFriendshipGrants,
+  setExplicitMemoryGrant,
   currentMemoryGrant,
   areCurrentFriends,
   authorizedFriendCairn,

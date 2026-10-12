@@ -36,24 +36,31 @@ function buildOwnedCairnLibraryQuery({ userId, limit, query, cursor }) {
   // integral, so interpolate only this independently validated integer. All
   // user/content/cursor data remains bound below.
   const fetchLimit = limit + 1;
-  const where = ['user_id = ?'];
+  const where = ['marker.user_id = ?'];
   const values = [userId];
   if (query) {
-    where.push("text LIKE ? ESCAPE '\\\\'");
+    where.push("marker.text LIKE ? ESCAPE '\\\\'");
     values.push(`%${escapeLike(query)}%`);
   }
   if (cursor) {
-    where.push('(created_at < ? OR (created_at = ? AND id < ?))');
+    where.push('(marker.created_at < ? OR (marker.created_at = ? AND marker.id < ?))');
     values.push(cursor.createdAt, cursor.createdAt, cursor.id);
   }
   return {
-    sql: `SELECT id, user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
-                 type, text, lat, lng, alt, permission, approximate, public_snapshot,
-                 public_intent, public_state, publication_epoch, content_revision,
-                 created_at, updated_at
-          FROM markers
+    sql: `SELECT marker.id, marker.user_id, marker.client_cairn_id,
+                 marker.origin_activity_client_id, marker.origin_session_id,
+                 marker.type,
+                 CASE WHEN COALESCE(moderation.state,'available')='available'
+                      THEN marker.text ELSE '' END AS text,
+                 marker.lat, marker.lng, marker.alt, marker.permission, marker.approximate,
+                 marker.public_snapshot, marker.public_intent, marker.public_state,
+                 marker.publication_epoch, marker.content_revision,
+                 COALESCE(moderation.state,'available') AS content_state,
+                 marker.created_at, marker.updated_at
+          FROM markers marker
+          LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=marker.id
           WHERE ${where.join(' AND ')}
-          ORDER BY created_at DESC, id DESC
+          ORDER BY marker.created_at DESC, marker.id DESC
           LIMIT ${fetchLimit}`,
     values,
   };

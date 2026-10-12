@@ -98,13 +98,18 @@ test('hard delete commits all explicit owned-data cleanup in one transaction', a
   assert.equal(await User.hardDelete(42), true);
   assert.equal(calls[0], 'BEGIN');
   const sql = calls.filter((call) => typeof call === 'object').map((call) => call.sql).join('\n');
+  assert.match(sql, /DELETE collection\s+FROM cairn_collections collection/);
   for (const table of [
     'unlocked_regions', 'idempotency_keys', 'abuse_signals', 'memory_points',
     'debug_events_v2', 'app_logs', 'telemetry_sessions', 'notification_log',
     'password_reset_email_events', 'password_reset_codes', 'pending_registrations', 'users',
   ]) assert.match(sql, new RegExp(`DELETE FROM ${table}`));
   const eligibility = calls.find((call) => typeof call === 'object' && call.sql.startsWith('SELECT id, email'));
+  const collectionPurge = calls.find((call) => typeof call === 'object' && call.sql.includes('DELETE collection'));
+  const userDelete = calls.findIndex((call) => typeof call === 'object' && call.sql.startsWith('DELETE FROM users'));
   assert.deepEqual(eligibility.params, [42, 10080]);
+  assert.deepEqual(collectionPurge.params, [42]);
+  assert.ok(calls.indexOf(collectionPurge) < userDelete);
   assert.ok(calls.indexOf('COMMIT') < calls.indexOf('RELEASE'));
   assert.equal(calls.includes('ROLLBACK'), false);
 });

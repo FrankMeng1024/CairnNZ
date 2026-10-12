@@ -247,6 +247,7 @@ const routeUpdate = Joi.object({
 // ── Friends ────────────────────────────────────────────────────────────
 const friendRequest = Joi.object({
   email: Joi.string().email().max(255).required(),
+  shareMemory: Joi.boolean().default(false),
 });
 
 // Sprint 6 round-42 R42: schemas MUST match client field names + handler
@@ -259,6 +260,7 @@ const friendRequest = Joi.object({
 // Fix: schema uses `requestId` to match both sides.
 const friendAccept = Joi.object({
   requestId: Joi.number().integer().min(1).required(),
+  shareMemory: Joi.boolean().default(false),
 });
 
 const friendReject = Joi.object({

@@ -28,6 +28,7 @@ const {
   provisionFriendshipGrants,
   closeFriendshipEpisode,
   currentMemoryGrant,
+  setExplicitMemoryGrant,
 } = require('../services/friendAuthorization');
 
 // All routes require auth
@@ -64,7 +65,7 @@ async function isBlocked(userA, userB) {
 // ── Send friend request ─────────────────────────────────────────────────────
 router.post('/request', friendRequestLimiter, validateBody(schemas.friend.request), async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, shareMemory = false } = req.body;
     const fromUserId = req.user.userId;
 
     if (!email) return res.status(400).json({ error: 'Email is required' });
@@ -189,14 +190,18 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
         // duplicate, reset status='pending' + refresh created_at +
         // clear resolved_at so a legitimate re-request after cooldown
         // reuses the historical row instead of failing.
-        `INSERT INTO friend_requests (from_user_id, to_user_id, status, created_at)
-         VALUES (?, ?, 'pending', NOW())
+        `INSERT INTO friend_requests
+           (from_user_id, to_user_id, status, requester_memory_share,
+            accepter_memory_share, created_at)
+         VALUES (?, ?, 'pending', ?, 0, NOW())
          ON DUPLICATE KEY UPDATE
            status = 'pending',
+           requester_memory_share = VALUES(requester_memory_share),
+           accepter_memory_share = 0,
            created_at = NOW(),
            resolved_at = NULL,
            id = LAST_INSERT_ID(id)`,
-        [fromUserId, toUser.id]
+        [fromUserId, toUser.id, shareMemory ? 1 : 0]
       );
       await conn.commit();
     } catch (txErr) {
@@ -242,7 +247,8 @@ router.get('/requests', async (req, res) => {
     // than a handful of pending incoming requests. 200 covers a
     // popular user with a large fan base.
     const [requests] = await pool.execute(
-      `SELECT fr.id, fr.from_user_id, u.name as from_name, u.email as from_email, fr.created_at as sent_at
+      `SELECT fr.id, fr.from_user_id, u.name as from_name, u.email as from_email,
+              fr.requester_memory_share, fr.created_at as sent_at
        FROM friend_requests fr
        JOIN users u ON u.id = fr.from_user_id AND u.deleted_at IS NULL
        WHERE fr.to_user_id = ? AND fr.status = "pending"
@@ -260,7 +266,7 @@ router.get('/requests', async (req, res) => {
 // ── Accept friend request ───────────────────────────────────────────────────
 router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => {
   try {
-    const { requestId } = req.body;
+    const { requestId, shareMemory = false } = req.body;
     if (!requestId) return res.status(400).json({ error: 'requestId required' });
 
     // Sprint 6 review B2 fix: wrap accept flow in a transaction so a
@@ -338,11 +344,31 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
         request.from_user_id,
         friendshipEpisode,
       );
+      // Pending intent becomes authorization only inside the same transaction
+      // that creates the accepted relationship. Each direction is independent.
+      if (request.requester_memory_share) {
+        await setExplicitMemoryGrant(
+          conn,
+          request.from_user_id,
+          req.user.userId,
+          true,
+        );
+      }
+      if (shareMemory) {
+        await setExplicitMemoryGrant(
+          conn,
+          req.user.userId,
+          request.from_user_id,
+          true,
+        );
+      }
       await conn.execute(
         // Sprint 6 round-14 R14B7: set resolved_at so authSweep purge
         // uses the actual resolution time, not creation time.
-        'UPDATE friend_requests SET status = "accepted", resolved_at = NOW() WHERE id = ?',
-        [requestId],
+        `UPDATE friend_requests
+            SET status = 'accepted', accepter_memory_share = ?, resolved_at = NOW()
+          WHERE id = ?`,
+        [shareMemory ? 1 : 0, requestId],
       );
       await conn.commit();
     } catch (txErr) {
@@ -455,7 +481,7 @@ router.get('/requests/outbound', async (req, res) => {
     // Sprint 6 R74: cap at 200 (matches inbound pending cap).
     const [rows] = await pool.execute(
       `SELECT fr.id, fr.to_user_id, u.name AS to_name, u.email AS to_email,
-              fr.status, fr.created_at AS sent_at
+              fr.status, fr.requester_memory_share, fr.created_at AS sent_at
        FROM friend_requests fr
        JOIN users u ON u.id = fr.to_user_id AND u.deleted_at IS NULL
        WHERE fr.from_user_id = ? AND fr.status = 'pending'

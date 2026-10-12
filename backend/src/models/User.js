@@ -249,6 +249,19 @@ async function hardDelete(userId, graceMinutes = ACCOUNT_DELETION_GRACE_MINUTES)
     const { withdrawOwnerPublications } = require('../services/publicPublication');
     await withdrawOwnerPublications(conn, userId, 'account_hard_delete');
 
+    // Acquired Cairn history deliberately has no marker foreign key: an
+    // ordinary Cairn deletion must not erase a version another user already
+    // earned. Account hard deletion is different. Remove every viewer's
+    // collection index for this owner's revisions before the owner cascade
+    // removes those immutable revisions/acquisitions.
+    await conn.execute(
+      `DELETE collection
+         FROM cairn_collections collection
+         JOIN cairn_revisions revision ON revision.marker_id = collection.marker_id
+        WHERE revision.owner_id = ?`,
+      [userId],
+    );
+
     // These historical/diagnostic tables either predate FK ownership or are
     // intentionally nullable. Delete explicit account-owned references before
     // the users row; all normal product tables then cascade from users.

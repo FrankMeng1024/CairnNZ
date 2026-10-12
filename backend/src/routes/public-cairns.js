@@ -144,6 +144,7 @@ async function loadAuthorizedPublicCairn(conn, viewerId, markerId, lock = false)
        JOIN markers marker ON marker.id=encounter.marker_id
        JOIN users author ON author.id=encounter.author_id AND author.deleted_at IS NULL
        JOIN public_cairn_publications publication ON publication.id=encounter.publication_id
+       LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=marker.id
       WHERE encounter.viewer_id=? AND encounter.marker_id=?
         AND encounter.hidden_at IS NULL
         AND marker.user_id=encounter.author_id
@@ -155,6 +156,7 @@ async function loadAuthorizedPublicCairn(conn, viewerId, markerId, lock = false)
         AND publication.publication_epoch=marker.publication_epoch
         AND publication.content_revision=marker.content_revision
         AND publication.snapshot_location_policy_version=?
+        AND COALESCE(moderation.state,'available')='available'
         AND NOT EXISTS (
           SELECT 1 FROM hidden_items hidden
            WHERE hidden.user_id=encounter.viewer_id
@@ -468,6 +470,7 @@ router.get('/scene', async (req, res) => {
            JOIN users author ON author.id=encounter.author_id AND author.deleted_at IS NULL
            JOIN public_cairn_publications publication ON publication.id=encounter.publication_id
            LEFT JOIN memory_presence_witnesses witness ON witness.id=encounter.evidence_witness_id
+           LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=marker.id
           WHERE encounter.viewer_id=? AND encounter.hidden_at IS NULL
             AND marker.permission='public' AND marker.public_intent=1
             AND marker.public_state='published' AND marker.status <> 'hidden'
@@ -477,6 +480,7 @@ router.get('/scene', async (req, res) => {
             AND publication.publication_epoch=marker.publication_epoch
             AND publication.content_revision=marker.content_revision
             AND publication.snapshot_location_policy_version=?
+            AND COALESCE(moderation.state,'available')='available'
             AND NOT EXISTS (
               SELECT 1 FROM hidden_items hidden
                WHERE hidden.user_id=encounter.viewer_id

@@ -32,6 +32,7 @@ const {
   encodeCursor,
 } = require('../services/ownedCairnLibrary');
 const { synchronizePublicSubmission, withdrawPublication } = require('../services/publicPublication');
+const { captureCurrentMarkerRevision } = require('../services/cairnHistory');
 
 router.use(authenticate);
 
@@ -124,11 +125,19 @@ router.get('/', async (req, res) => {
     // for 30 years = ~4700). Client already sorts by created_at DESC
     // so the newest 5000 win.
     const [markers] = await pool.execute(
-      `SELECT id, user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
-              type, text, lat, lng, alt, permission, approximate, public_snapshot,
-              public_intent, public_state, publication_epoch, content_revision,
-              created_at, updated_at
-       FROM markers WHERE user_id = ? ORDER BY created_at DESC LIMIT 5000`,
+      `SELECT marker.id, marker.user_id, marker.client_cairn_id,
+              marker.origin_activity_client_id, marker.origin_session_id,
+              marker.type,
+              CASE WHEN COALESCE(moderation.state,'available')='available'
+                   THEN marker.text ELSE '' END AS text,
+              marker.lat, marker.lng, marker.alt, marker.permission, marker.approximate,
+              marker.public_snapshot, marker.public_intent, marker.public_state,
+              marker.publication_epoch, marker.content_revision,
+              COALESCE(moderation.state,'available') AS content_state,
+              marker.created_at, marker.updated_at
+         FROM markers marker
+         LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=marker.id
+        WHERE marker.user_id = ? ORDER BY marker.created_at DESC LIMIT 5000`,
       [req.user.userId]
     );
     res.json(markers);
@@ -358,6 +367,18 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
       const permissionChanged = stored.permission !== perm;
       const contentChanged = resourceChanged || permissionChanged;
       if (contentChanged) {
+        if (resourceChanged) {
+          const [moderation] = await conn.execute(
+            `SELECT state FROM cairn_source_moderation
+              WHERE marker_id=? AND state<>'available' LIMIT 1 FOR UPDATE`,
+            [stored.id],
+          );
+          if (moderation[0]) {
+            const frozen = new Error('This Cairn is under review and cannot create a new revision.');
+            frozen.code = 'CAIRN_SOURCE_FROZEN';
+            throw frozen;
+          }
+        }
         if (stored.public_state === 'suspended' && resourceChanged
           && stored.permission === PERMISSION.PUBLIC && perm === PERMISSION.PUBLIC) {
           const suspended = new Error('A suspended Public Cairn must be restored or withdrawn before editing.');
@@ -405,6 +426,9 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
     const publicSubmission = await synchronizePublicSubmission(
       conn, stored.id, req.user.userId, { actorUserId: req.user.userId },
     );
+    if (stored.permission !== PERMISSION.PUBLIC) {
+      await captureCurrentMarkerRevision(conn, stored.id, req.user.userId);
+    }
     await conn.commit();
     res.status(201).json({
       id: stored.id,
@@ -429,7 +453,7 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
     });
   } catch (err) {
     if (conn) try { await conn.rollback(); } catch { /* ignore */ }
-    if (err.code === 'CAIRN_IDENTITY_MISMATCH' || err.code === 'PUBLIC_SUSPENDED_EDIT_BLOCKED') {
+    if (['CAIRN_IDENTITY_MISMATCH', 'PUBLIC_SUSPENDED_EDIT_BLOCKED', 'CAIRN_SOURCE_FROZEN'].includes(err.code)) {
       return res.status(409).json({ error: err.message, code: err.code });
     }
     console.error('[markers/create]', err.message);
@@ -528,6 +552,20 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
         code: 'PUBLIC_SUSPENDED_EDIT_BLOCKED',
       });
     }
+    if (resourceChanged) {
+      const [moderation] = await conn.execute(
+        `SELECT state FROM cairn_source_moderation
+          WHERE marker_id=? AND state<>'available' LIMIT 1 FOR UPDATE`,
+        [markerId],
+      );
+      if (moderation[0]) {
+        await conn.rollback();
+        return res.status(409).json({
+          error: 'This Cairn is under review and cannot create a new revision.',
+          code: 'CAIRN_SOURCE_FROZEN',
+        });
+      }
+    }
     if (resourceChanged) updates.push('content_revision = content_revision + 1');
     if (updates.length > 0) {
       updates.push('updated_at = NOW()');
@@ -549,6 +587,10 @@ router.put('/:id', validateBody(schemas.marker.update), async (req, res) => {
     const publicSubmission = await synchronizePublicSubmission(
       conn, markerId, req.user.userId, { actorUserId: req.user.userId },
     );
+    const resultingPermission = requestedPermission;
+    if (resultingPermission !== PERMISSION.PUBLIC) {
+      await captureCurrentMarkerRevision(conn, markerId, req.user.userId);
+    }
     await conn.commit();
 
     // BUG-006 fix: echo user_id on update too. Updating a mark currently

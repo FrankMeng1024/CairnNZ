@@ -120,7 +120,8 @@ for migration in \
   041_public_cairn_pilot.sql \
   042_v1_closure_authority.sql \
   043_friend_discovery_marker_location.sql \
-  044_public_cairn_moderation_audit.sql; do
+  044_public_cairn_moderation_audit.sql \
+  045_memory_friends_cairn_contract.sql; do
   apply_sql_file "$BACKEND_DIR/src/migrations/$migration"
 done
 
@@ -156,6 +157,14 @@ if [ "${SKIP_API_BASELINE:-0}" != "1" ]; then
     node "$SCRIPT_DIR/public-cairn-harness/$HARNESS_SCRIPT" | tee "$EVIDENCE_DIR/result.json"
   else
     node "$SCRIPT_DIR/public-cairn-harness/$HARNESS_SCRIPT"
+  fi
+fi
+
+if [ "$HARNESS_MODE" = "api" ]; then
+  if [ -n "${EVIDENCE_DIR:-}" ]; then
+    node "$SCRIPT_DIR/cairn-memory-harness/api-mysql.js" | tee "$EVIDENCE_DIR/cairn-memory-result.json"
+  else
+    node "$SCRIPT_DIR/cairn-memory-harness/api-mysql.js"
   fi
 fi
 

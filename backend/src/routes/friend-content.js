@@ -233,7 +233,9 @@ router.get('/cairns', async (req, res) => {
            ON episode.id = encounter.friendship_episode_id AND episode.ended_at IS NULL
          JOIN friends f ON f.user_id = encounter.viewer_id AND f.friend_id = encounter.author_id
          JOIN users u ON u.id = encounter.author_id AND u.deleted_at IS NULL
+         LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=m.id
         WHERE encounter.viewer_id = ? AND encounter.hidden_at IS NULL
+          AND COALESCE(moderation.state,'available')='available'
           ${friendClause}
           AND NOT EXISTS (
             SELECT 1 FROM blocked_users b
