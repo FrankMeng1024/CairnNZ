@@ -21,7 +21,7 @@ const {
   distanceMeters,
   ensureLocalVisit,
   remainingVisitCapacity,
-  selectFairCandidates,
+  selectDiscoveryCandidates,
 } = require('../services/cairnDiscoveryCadence');
 const {
   captureCurrentMarkerRevision,
@@ -33,7 +33,6 @@ const router = express.Router();
 router.use(authenticate);
 
 const FRESH_ONLINE_EVIDENCE_MS = 2 * 60 * 1000;
-const DISCOVERY_CANDIDATE_LIMIT = 200;
 
 const mutationLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -125,14 +124,11 @@ async function loadDiscoveryCandidates(conn, viewerId, visitId, point) {
            WHERE removed_collection.viewer_id=? AND removed_collection.marker_id=marker.id
              AND removed_collection.removed_at IS NOT NULL
         )
-      -- A visit-seeded order keeps the bounded query fair in localities with
-      -- more than the query cap. Stable marker order would permanently starve
-      -- every row after the first 200 across all genuine revisits.
-      ORDER BY CRC32(CONCAT(marker.id, ':', ?)),marker.id ASC
-      LIMIT ${DISCOVERY_CANDIDATE_LIMIT} FOR SHARE`,
+      ORDER BY marker.id ASC
+      FOR SHARE`,
     [viewerId, viewerId, viewerId, viewerId, viewerId,
       point.lng, point.lat, ENCOUNTER_RADIUS_M,
-      viewerId, viewerId, viewerId, visitId, viewerId, visitId],
+      viewerId, viewerId, viewerId, visitId, viewerId],
   );
 
   const [publicRows] = await conn.execute(
@@ -144,6 +140,14 @@ async function loadDiscoveryCandidates(conn, viewerId, visitId, point) {
             publication.publication_epoch,publication.id AS publication_id,
             publication.snapshot_sha256,user.name AS author_name,
             'public' AS source_audience,
+            EXISTS (
+              SELECT 1 FROM friends current_friend
+              JOIN friends reverse_friend
+                ON reverse_friend.user_id=current_friend.friend_id
+               AND reverse_friend.friend_id=current_friend.user_id
+             WHERE current_friend.user_id=?
+               AND current_friend.friend_id=marker.user_id
+            ) AS is_current_friend,
             EXISTS (SELECT 1 FROM cairn_acquisitions prior
                      WHERE prior.viewer_id=? AND prior.marker_id=marker.id) AS had_prior
        FROM markers marker
@@ -179,15 +183,19 @@ async function loadDiscoveryCandidates(conn, viewerId, visitId, point) {
            WHERE removed_collection.viewer_id=? AND removed_collection.marker_id=marker.id
              AND removed_collection.removed_at IS NOT NULL
         )
-      ORDER BY CRC32(CONCAT(marker.id, ':', ?)),marker.id ASC
-      LIMIT ${DISCOVERY_CANDIDATE_LIMIT} FOR SHARE`,
-    [viewerId, viewerId, point.lng, point.lat, ENCOUNTER_RADIUS_M,
-      viewerId, viewerId, viewerId, visitId, viewerId, visitId],
+      ORDER BY marker.id ASC
+      FOR SHARE`,
+    [viewerId, viewerId, viewerId, point.lng, point.lat, ENCOUNTER_RADIUS_M,
+      viewerId, viewerId, viewerId, visitId, viewerId],
   );
+  const friendPublicRows = publicRows.filter(row => (
+    Boolean(row.is_current_friend) && publicPilotAuthorized(row.author_id)
+  ));
+  const ordinaryPublicRows = publicRows.filter(row => !row.is_current_friend);
   return {
-    friend: friendRows,
-    updated: publicRows.filter(row => Boolean(row.had_prior) && publicPilotAuthorized(row.author_id)),
-    public: publicRows.filter(row => !row.had_prior && publicPilotAuthorized(row.author_id)),
+    friend: [...friendRows, ...friendPublicRows],
+    updated: ordinaryPublicRows.filter(row => Boolean(row.had_prior) && publicPilotAuthorized(row.author_id)),
+    public: ordinaryPublicRows.filter(row => !row.had_prior && publicPilotAuthorized(row.author_id)),
   };
 }
 
@@ -206,10 +214,6 @@ router.post('/discover', mutationLimiter, async (req, res) => {
     const observation = { lat: Number(latestEvidence.lat), lng: Number(latestEvidence.lng) };
     const visit = await ensureLocalVisit(conn, viewerId, observation);
     const capacity = await remainingVisitCapacity(conn, visit.id);
-    if (capacity <= 0) {
-      await conn.commit();
-      return res.json({ acquired: [], reason: 'local_visit_limit', visit_id: String(visit.id) });
-    }
     const candidates = await loadDiscoveryCandidates(conn, viewerId, visit.id, observation);
     // Every selected Cairn must have the two accepted observations inside its
     // own 50 m radius. The 120 m visit boundary is never used as proximity.
@@ -223,7 +227,11 @@ router.post('/discover', mutationLimiter, async (req, res) => {
         return Boolean(candidate.qualifying_evidence);
       });
     }
-    const selected = selectFairCandidates(candidates, capacity);
+    const selected = selectDiscoveryCandidates(candidates, capacity);
+    if (selected.length === 0 && capacity <= 0) {
+      await conn.commit();
+      return res.json({ acquired: [], reason: 'local_visit_limit', visit_id: String(visit.id) });
+    }
     const acquired = [];
     for (const candidate of selected) {
       const revision = candidate.source_audience === 'friends'

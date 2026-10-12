@@ -11,6 +11,7 @@ const {
   DEFAULT_DISCOVERY_SOUND_ENABLED,
   decideLocalVisitTransition,
   selectFairCandidates,
+  selectDiscoveryCandidates,
 } = require('../cairnDiscoveryCadence');
 
 function candidate(id, authorId = id) {
@@ -107,13 +108,12 @@ test('genuine departure plus 15 minutes and fresh re-entry may reset', () => {
 
 test('category-first weighting redistributes empty categories and preserves author diversity', () => {
   const mixed = selectFairCandidates({
-    friend: [candidate('f1', 'a'), candidate('f2', 'a'), candidate('f3', 'b')],
     updated: [candidate('u1', 'c')],
     public: [candidate('p0', 'd'), candidate('p1', 'e')],
   }, 3, (() => {
-    // category/public, candidate/first; category/friend, candidate/first;
-    // category/updated, candidate/first
-    const values = [0.9, 0.1, 0.1, 0.1, 0.6, 0.1];
+    // category/public, candidate/first; category/updated, candidate/first;
+    // category/public, candidate/first
+    const values = [0.9, 0.1, 0.1, 0.1, 0.9, 0.1];
     let index = 0;
     return () => values[index++ % values.length];
   })());
@@ -126,6 +126,35 @@ test('category-first weighting redistributes empty categories and preserves auth
   assert.ok(onlyPublic.every(row => row.discovery_category === 'public'));
 });
 
+test('every eligible friend Cairn is guaranteed before the ordinary visit target', () => {
+  for (const total of [0, 1, 2, 3, 5, 20, 100]) {
+    const selected = selectDiscoveryCandidates({
+      friend: Array.from({ length: total }, (_, index) => candidate(`friend-${index}`, 'same-author')),
+      updated: [candidate('updated')],
+      public: Array.from({ length: 200 }, (_, index) => candidate(`public-${index}`)),
+    }, 3, () => 0.99);
+    const friends = selected.filter(item => item.discovery_category === 'friend');
+    assert.equal(friends.length, total, `${total} friends`);
+    assert.equal(selected.length, Math.max(total, 3), `${total} total selection`);
+  }
+});
+
+test('two friends leave one fair ordinary slot and three friends leave none', () => {
+  const two = selectDiscoveryCandidates({
+    friend: [candidate('f1'), candidate('f2')],
+    updated: [candidate('u1')],
+    public: [candidate('p1')],
+  }, 3, () => 0.9);
+  assert.deepEqual(two.map(item => item.discovery_category), ['friend', 'friend', 'public']);
+
+  const three = selectDiscoveryCandidates({
+    friend: [candidate('f1'), candidate('f2'), candidate('f3')],
+    updated: [candidate('u1')],
+    public: [candidate('p1')],
+  }, 3, () => 0.1);
+  assert.ok(three.every(item => item.discovery_category === 'friend'));
+});
+
 test('30–60 minute dense walk remains bounded per locality without becoming globally empty', () => {
   // Twelve genuinely distinct localities, five minutes apart, with realistic
   // ±8 m accepted-position jitter and 20 candidates at every locality.
@@ -136,7 +165,6 @@ test('30–60 minute dense walk remains bounded per locality without becoming gl
     const localityKey = `${(-36.85 + locality * 0.0015 + jitter).toFixed(4)}:174.7645`;
     if (!visited.has(localityKey)) {
       acquisitions += selectFairCandidates({
-        friend: Array.from({ length: 10 }, (_, i) => candidate(`f-${locality}-${i}`, `fa-${i}`)),
         updated: Array.from({ length: 5 }, (_, i) => candidate(`u-${locality}-${i}`, `ua-${i}`)),
         public: Array.from({ length: 5 }, (_, i) => candidate(`p-${locality}-${i}`, `pa-${i}`)),
       }, 3, () => 0.42).length;

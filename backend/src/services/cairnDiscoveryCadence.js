@@ -15,9 +15,8 @@ const HAPTIC_MIN_INTERVAL_SECONDS = boundedInteger('HAPTIC_MIN_INTERVAL_SECONDS'
 const DEFAULT_DISCOVERY_SOUND_ENABLED = false;
 
 const CATEGORY_WEIGHTS = Object.freeze({
-  friend: 0.5,
-  updated: 0.25,
-  public: 0.25,
+  updated: 0.5,
+  public: 0.5,
 });
 
 function distanceMeters(a, b) {
@@ -138,7 +137,6 @@ function chooseCandidate(candidates, usedAuthors, random) {
 
 function selectFairCandidates(categories, slots, random = Math.random) {
   const remaining = {
-    friend: [...(categories.friend || [])],
     updated: [...(categories.updated || [])],
     public: [...(categories.public || [])],
   };
@@ -155,6 +153,23 @@ function selectFairCandidates(categories, slots, random = Math.random) {
     usedAuthors.add(String(candidate.author_id));
   }
   return selected;
+}
+
+/**
+ * Current-friend Cairns are authorization-prioritized, not lottery entries.
+ * They may overflow the ordinary visit target. Only the remaining ordinary
+ * capacity is sampled between UPDATED and NEW_PUBLIC.
+ */
+function selectDiscoveryCandidates(categories, ordinaryCapacity, random = Math.random) {
+  const guaranteedFriends = [...(categories.friend || [])].map(candidate => ({
+    ...candidate,
+    discovery_category: 'friend',
+  }));
+  const remainingSlots = Math.max(0, Number(ordinaryCapacity) - guaranteedFriends.length);
+  return [
+    ...guaranteedFriends,
+    ...selectFairCandidates({ updated: categories.updated, public: categories.public }, remainingSlots, random),
+  ];
 }
 
 async function assignPresentationGroup(conn, viewerId, acquisitionId) {
@@ -213,5 +228,6 @@ module.exports = {
   ensureLocalVisit,
   remainingVisitCapacity,
   selectFairCandidates,
+  selectDiscoveryCandidates,
   assignPresentationGroup,
 };

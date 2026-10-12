@@ -87,6 +87,31 @@ async function seedPublicCairn(db, owner, operator, { lat, lng, text, revision =
   return { markerId: String(marker.insertId), publicationId: String(publication.insertId) };
 }
 
+async function seedFriendCairn(db, owner, { lat, lng, text, revision = 1 }) {
+  const [marker] = await db.execute(
+    `INSERT INTO markers
+       (user_id,type,text,lat,lng,permission,approximate,status,created_at,updated_at,
+        content_revision)
+     VALUES (?,'cairn',?,?,?,'group',1,'healthy',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),?)`,
+    [owner.id, text, lat, lng, revision],
+  );
+  return { markerId: String(marker.insertId) };
+}
+
+async function makeFriends(db, first, second) {
+  await db.execute(
+    `INSERT INTO friends (user_id,friend_id,created_at)
+     VALUES (?,?,UTC_TIMESTAMP(3)),(?,?,UTC_TIMESTAMP(3))`,
+    [first.id, second.id, second.id, first.id],
+  );
+  await db.execute(
+    `INSERT INTO friendship_episodes
+       (episode_id,user_low_id,user_high_id,started_at)
+     VALUES (?,LEAST(?,?),GREATEST(?,?),UTC_TIMESTAMP(3))`,
+    [crypto.randomUUID(), first.id, second.id, first.id, second.id],
+  );
+}
+
 async function publishRevision(db, cairn, owner, operator, { text, revision, epoch }) {
   const [[position]] = await db.execute('SELECT lat,lng FROM markers WHERE id=?', [cairn.markerId]);
   await db.execute(
@@ -196,6 +221,66 @@ async function main() {
       [1, 3],
     );
     pass('DISC-PROD-02.presentation', 'three durable acquisitions merged into one announcement group; announcement remained independent of per-revision read state');
+
+    const friendOwner = await actor(db, 'FriendOwner');
+    const friendViewer = await actor(db, 'FriendViewer');
+    await makeFriends(db, friendOwner, friendViewer);
+    const friendPlace = { lat: -40.9006, lng: 174.8860 };
+    const guaranteedFriends = [];
+    for (let index = 0; index < 5; index += 1) {
+      guaranteedFriends.push(await seedFriendCairn(db, friendOwner, {
+        ...friendPlace, text: `Guaranteed friend Cairn ${index}`,
+      }));
+    }
+    for (let index = 0; index < 200; index += 1) {
+      await seedPublicCairn(db, owner, operator, {
+        ...friendPlace, text: `Competing Public Cairn ${index}`,
+      });
+    }
+    await acceptedPresence(friendViewer, friendPlace.lat, friendPlace.lng, Date.now() + 500);
+    const friendOverflow = await api(friendViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+    assert.equal(friendOverflow.acquired.length, 5);
+    assert.ok(friendOverflow.acquired.every(item => item.category === 'friend'));
+    assert.deepEqual(
+      new Set(friendOverflow.acquired.map(item => item.marker_id)),
+      new Set(guaranteedFriends.map(item => item.markerId)),
+    );
+    assert.equal(new Set(friendOverflow.acquired.map(item => item.presentation_group_id)).size, 1);
+    await db.execute('DELETE FROM friends WHERE (user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?)',
+      [friendOwner.id, friendViewer.id, friendViewer.id, friendOwner.id]);
+    await db.execute(
+      `UPDATE friendship_episodes SET ended_at=UTC_TIMESTAMP(3),ended_reason='unfriended'
+        WHERE user_low_id=LEAST(?,?) AND user_high_id=GREATEST(?,?) AND ended_at IS NULL`,
+      [friendOwner.id, friendViewer.id, friendOwner.id, friendViewer.id],
+    );
+    const historyAfterUnfriend = await api(friendViewer, '/api/cairn-memory/library?section=found');
+    assert.equal(historyAfterUnfriend.cairns.length, 5);
+    assert.ok(historyAfterUnfriend.cairns.every(item => item.author_name === 'Memory FriendOwner'));
+    const postUnfriendPlace = { lat: friendPlace.lat + 0.002, lng: friendPlace.lng };
+    await seedFriendCairn(db, friendOwner, { ...postUnfriendPlace, text: 'Not eligible after unfriend' });
+    await acceptedPresence(friendViewer, postUnfriendPlace.lat, postUnfriendPlace.lng, Date.now() + 1_000);
+    const afterUnfriend = await api(friendViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+    assert.deepEqual(afterUnfriend.acquired, []);
+    pass('DISC-PROD-02a.friend-guarantee', 'five eligible Friend Cairns beat the normal cap and two hundred Public candidates, shared one presentation group, and stayed as acquired history after unfriend while future Friend-only eligibility ended');
+
+    const publicFriendViewer = await actor(db, 'PublicFriendViewer');
+    await makeFriends(db, friendOwner, publicFriendViewer);
+    const publicFriendPlace = { lat: -39.4902, lng: 176.9179 };
+    const currentFriendPublic = await seedPublicCairn(db, friendOwner, operator, {
+      ...publicFriendPlace, text: 'Current friend Public Cairn',
+    });
+    for (let index = 0; index < 200; index += 1) {
+      await seedPublicCairn(db, owner, operator, {
+        ...publicFriendPlace, text: `Ordinary Public competition ${index}`,
+      });
+    }
+    await acceptedPresence(publicFriendViewer, publicFriendPlace.lat, publicFriendPlace.lng, Date.now() + 1_500);
+    const publicFriendDraw = await api(publicFriendViewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
+    assert.equal(publicFriendDraw.acquired.length, 3);
+    assert.ok(publicFriendDraw.acquired.some(item => (
+      item.marker_id === currentFriendPublic.markerId && item.category === 'friend'
+    )));
+    pass('DISC-PROD-02b.friend-public-priority', 'a current friend Public Cairn was guaranteed ahead of two hundred ordinary Public candidates while the ordinary visit target remained three');
 
     const distant = await seedPublicCairn(db, owner, operator, {
       ...placeB, text: 'Different locality without global cooldown',
@@ -448,6 +533,7 @@ async function main() {
       cadence_acquisitions: cadenceAcquisitions.length,
       version_history_pages: history.revisions.length,
       presentation_groups: Number(presentationState.groups_n),
+      guaranteed_friend_overflow: friendOverflow.acquired.length,
     };
     result.finished_at = new Date().toISOString();
     result.summary = { passed: result.assertions.length, failed: 0 };
