@@ -2,17 +2,25 @@
 
 - Preserved upstream checkpoint: Memory/Friends/Cairn commit `27865c7`; ZIP in
   `/Users/mzm/Downloads/Cairn_Memory_Friends_Cairn_Implementation.zip`.
-- Active batch: B3 editor/UI integration, following the persistence/share checkpoint.
+- Final source checkpoint: `d8a715b` (behavior through `aa9b109`; the last
+  commit only aligns legacy regression fixtures with current store/navigation
+  contracts).
 - Baseline worktree: `/private/tmp/CairnNZ-memory-friends-cairn`.
-- Completed in current slice: targeted preflight, official provider-limit
-  check, ordered topology/Undo contract, bounded Draw/Point provider boundary,
-  additive ordered-draft persistence, and immutable direct recipient delivery.
-- Current deterministic result: 74/74 targeted client Route tests and 11/11
-  backend Route origin/delivery tests pass. A repository-wide TypeScript run is
-  blocked by pre-existing Playwright/generated-preview errors; filtering that
-  output found no error in the changed Route files.
-- Next action: implement the real Create/Use Activity entry and connect the
-  ordered model to the existing editor before removing Activity Detail's old
-  entry.
+- Completed: targeted preflight; one Create entry with Plan / Use an Activity;
+  ordered multipart draft and atomic Undo; Draw and Point provider contracts;
+  append, interval replacement and adjacent-gap repair; draft recovery;
+  Activity import/Trim; owner-scoped offline persistence; received immutable
+  Route snapshots; explicit multi-recipient delivery; separate editable copy;
+  Use for Hike/Run snapshot pinning; Activity Detail entry removal; and
+  server-authoritative topology plus gap-excluded distance.
+- Final deterministic Route result: 15 client suites / 195 tests and 75 shared
+  backend target tests pass on the final candidate. Migration 046 upgraded a
+  populated legacy fixture and rolled back in isolated MySQL. The full app
+  TypeScript command remains nonzero with 159 known repository-wide errors;
+  none are in files touched after this preserved Routes checkpoint.
+- Independent final focused review of `aa9b109` returned ACCEPT after fixes for
+  account-switch cache isolation, high-density Draw spur detection, partial
+  share idempotency and server distance authority.
 - External gates: Mapbox account-specific durable-result terms; native gesture,
-  Reduce Motion and real renderer/device acceptance.
+  Reduce Motion, native renderer, live-provider coverage and device performance.
+  No build, migration deployment, provider batch, OTA or release was run.

@@ -96,3 +96,19 @@ preserved Memory/Friends/Cairn checkpoint; it is not based on O72/O75.
 - Migration 046 will remain local and additive. It must be rehearsed in an
   isolated database; it will not be run in production.
 
+## Final implementation reconciliation
+
+The preflight deltas above were implemented without changing Activity Snap,
+GPS filtering, Memory geometry or the protected Home artwork. The former
+`RouteEditorScreen.tsx` entry now re-exports the ordered editor so existing
+navigation keeps one editor contract. Activity conversion moved to
+`Routes > Create Route > Use an Activity`; the factual Activity remains
+read-only. Received Routes are immutable deliveries, while editing creates a
+separate owned draft. Provider calls remain user-initiated and are fenced by
+draft revision/operation identity; map pan, theme, Fog updates and animation do
+not invoke routing.
+
+Deterministic adapters and topology/property tests are complete. Native
+Mapbox gestures, real provider terrain/coverage, Reduce Motion timing and
+extreme-device performance remain explicitly outside the available runtime and
+must be checked before release.

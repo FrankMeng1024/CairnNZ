@@ -1,0 +1,50 @@
+{
+  "contract": "Cairn_Overnight_Master_EN.md",
+  "base": "27865c744da76224a1f898a1719ee0eafb648efc",
+  "behavior_commit": "aa9b109857d727e093b183c7ddb8c94e1ae7ad4c",
+  "final_source_commit_before_docs": "d8a715b",
+  "status_axes": {
+    "development_source": "READY_FOR_OWNER_ACCEPTANCE",
+    "selected_automated_core": "PASS",
+    "integration_db_api": "PASS_ISOLATED",
+    "web_runtime": "PASS_BOUNDED_MAPBOX_GATE",
+    "native_simulator": "BLOCKED_ENV",
+    "physical_device": "NOT_RUN",
+    "live_provider": "BLOCKED_CREDENTIALS_AND_TERMS",
+    "release": "NOT_AUTHORIZED"
+  },
+  "batches": {
+    "B0": "PASS",
+    "B1": "REUSED_VERIFIED",
+    "B2": "REUSED_AND_CLOSED",
+    "B3": "PASS_SOURCE_INTEGRATION_NATIVE_GATE",
+    "B4": "PASS_WEB_NATIVE_GATE",
+    "B5": "ALREADY_MATCHES_VERIFIED",
+    "B6": "PASS_SELECTED_WITH_DISCLOSED_GLOBAL_TSC_FAILURE",
+    "B7": "PASS"
+  },
+  "evidence": {
+    "memory_friends_cairn": [
+      "backend/scripts/cairn-memory-harness/api-mysql.js",
+      "backend/src/services/__tests__/cairnDiscoveryCadence.test.js",
+      "app/src/features/memory/__tests__",
+      "app/src/features/cairns/__tests__"
+    ],
+    "routes": [
+      "docs/review/routes/ROUTES_REQUIREMENT_EVIDENCE.json",
+      "app/src/features/route/__tests__",
+      "backend/src/services/__tests__/routeGeometryAuthority.test.js",
+      "backend/src/services/__tests__/routeDelivery.test.js"
+    ],
+    "activity_regression": ["app/scripts/verify-activity.mjs"],
+    "web_runtime": ["package/screenshots/b4", "package/screenshots/routes"],
+    "review": ["docs/review/overnight-master/REVIEW_FINDINGS.md"]
+  },
+  "blocked_requirements": [
+    "Native Mapbox renderer and gestures",
+    "Physical-device GPS/background/battery",
+    "Live Mapbox route coverage and token/style",
+    "Account-specific provider result-storage/sharing permission",
+    "Authorized install/backend migration/deployment"
+  ]
+}
