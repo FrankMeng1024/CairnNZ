@@ -15,7 +15,7 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   const webMapbox = read('src/features/memory/services/mapboxAdapter.web.tsx');
 
   test('Memory exposes a normal All Cairns route outside map/location branches', () => {
-    expect(navigation).toContain('AllCairns: undefined');
+    expect(navigation).toContain("AllCairns: { initialSection?: 'left' | 'found'; markerIds?: string[] } | undefined");
     expect(navigation).toContain('<Stack.Screen name="AllCairns" component={AllCairnsScreen} />');
     expect(memory).toContain('testID="memory-all-cairns-entry"');
     expect(memory).toContain("nav.navigate('AllCairns')");
