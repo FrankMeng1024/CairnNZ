@@ -127,7 +127,7 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
         AND ST_Distance_Sphere(POINT(marker.lng,marker.lat),POINT(?,?))<=?
         AND GREATEST(
           episode.started_at,marker.created_at,marker.content_changed_at,audience.starts_at
-        )<=FROM_UNIXTIME(?/1000)
+        )<FROM_UNIXTIME(?/1000)
         AND NOT EXISTS (
           SELECT 1 FROM blocked_users blocked
            WHERE (blocked.blocker_id=? AND blocked.blocked_id=marker.user_id)
@@ -198,7 +198,7 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
         AND marker.user_id<>?
         AND COALESCE(moderation.state,'available')='available'
         AND ST_Distance_Sphere(POINT(publication.snapshot_lng,publication.snapshot_lat),POINT(?,?))<=?
-        AND publication.published_at<=FROM_UNIXTIME(?/1000)
+        AND publication.published_at<FROM_UNIXTIME(?/1000)
         AND NOT EXISTS (
           SELECT 1 FROM blocked_users blocked
            WHERE (blocked.blocker_id=? AND blocked.blocked_id=marker.user_id)
@@ -233,7 +233,7 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
   const visitStartedMs = Number(visit.enteredAtMs);
   const friendPublicRows = publicRows.filter(row => (
     row.current_friend_started_at_ms
-      && Number(row.current_friend_started_at_ms) <= visitStartedMs
+      && Number(row.current_friend_started_at_ms) < visitStartedMs
       && publicPilotAuthorized(row.author_id)
   )).map(row => ({
     ...row,

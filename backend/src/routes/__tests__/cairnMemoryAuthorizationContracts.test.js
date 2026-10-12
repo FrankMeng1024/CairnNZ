@@ -20,6 +20,9 @@ test('Friend revision eligibility starts after the trusted mutable revision fron
     /GREATEST\([\s\S]*?episode\.started_at,marker\.created_at,marker\.content_changed_at,audience\.starts_at[\s\S]*?\)/g,
   ) || [];
   assert.ok(revisionFrontiers.length >= 2, 'both evidence and visit-entry frontiers include marker.content_changed_at');
+  assert.match(candidates, /\)<FROM_UNIXTIME\(\?\/1000\)/);
+  assert.doesNotMatch(candidates, /\)<=FROM_UNIXTIME\(\?\/1000\)/);
+  assert.match(candidates, /current_friend_started_at_ms\) < visitStartedMs/);
   assert.match(migration, /content_changed_at DATETIME\(3\) NOT NULL/);
   assert.match(markerSource, /content_changed_at = CASE WHEN \? = 1 THEN UTC_TIMESTAMP\(3\)/);
   assert.match(markerSource, /content_changed_at = UTC_TIMESTAMP\(3\)/);

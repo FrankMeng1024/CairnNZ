@@ -726,6 +726,16 @@ async function main() {
         > Number(friendRevisionOpenVisit.entered_at_ms),
       'the authenticated content frontier must be strictly after the open visit',
     );
+    // Force the otherwise sub-millisecond race boundary exactly equal. The
+    // production predicate must fail closed rather than treating equality as
+    // proof that content existed before entry.
+    await db.execute(
+      `UPDATE cairn_local_visits visit
+         JOIN markers marker ON marker.id=?
+          SET visit.entered_at=marker.content_changed_at
+        WHERE visit.id=? AND visit.viewer_id=?`,
+      [friendRevisionCairn.markerId, friendRevisionOpenVisit.id, friendRevisionViewer.id],
+    );
     await acceptedPresence(
       friendRevisionViewer,
       friendRevisionPlace.lat,
@@ -735,7 +745,7 @@ async function main() {
     assert.deepEqual((await api(friendRevisionViewer, '/api/cairn-memory/discover', {
       method: 'POST', body: {},
     })).acquired, []);
-    pass('DISC-PROD-03e.content-frontier', 'authenticated Friend edits use a millisecond content frontier strictly after the already-open visit and remain ineligible while stationary');
+    pass('DISC-PROD-03e.content-frontier', 'authenticated Friend edits use a millisecond content frontier strictly after the already-open visit; exact equality also fails closed and remains ineligible while stationary');
     // MySQL timestamps are millisecond-granular. Ensure the next server-side
     // visit entry is observably after the edit rather than equal to it.
     await new Promise(resolve => setTimeout(resolve, 20));
