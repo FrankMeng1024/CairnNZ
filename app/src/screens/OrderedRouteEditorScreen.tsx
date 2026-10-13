@@ -274,6 +274,9 @@ export function OrderedRouteEditorScreen() {
   const initialBoundsRef = useRef<ReturnType<typeof initialBounds>>(null);
   const operationAbortRef = useRef<AbortController | null>(null);
   const activeOperationIdRef = useRef<string | null>(null);
+  // React state alone cannot fence two taps delivered before the next render.
+  // This ref is the synchronous owner for the one allowed provider transaction.
+  const providerTransactionRef = useRef(false);
   const routeAnimationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initializedKeyRef = useRef('');
   const initializingKeyRef = useRef('');
@@ -295,6 +298,7 @@ export function OrderedRouteEditorScreen() {
     operationAbortRef.current?.abort();
     operationAbortRef.current = null;
     activeOperationIdRef.current = null;
+    providerTransactionRef.current = false;
     finishRouteAnimation();
     setProviderBusy(false);
     setPendingReview(null);
@@ -302,7 +306,11 @@ export function OrderedRouteEditorScreen() {
     setPendingIntervalReview(null);
     setManualRecovery(null);
     setPendingDrawChoice(null);
+    setPendingAnchor(null);
     setPendingMultiStroke(null);
+    setReplacementStart(null);
+    setPointIntent('append');
+    setSelectedGapId(undefined);
   }, [finishRouteAnimation]);
 
   const animateAcceptedPoint = useCallback((points: RoutePoint[], hiddenPartId?: string) => {
@@ -608,6 +616,10 @@ export function OrderedRouteEditorScreen() {
     setTool('browse');
     const current = historyRef.current;
     if (!current) return;
+    if (providerTransactionRef.current) {
+      setError('Finish or cancel the current Route edit first.');
+      return;
+    }
     const transactionPoints = pendingMultiStroke
       ? normalizeOrderedPoints([...pendingMultiStroke.points, ...raw])
       : raw;
@@ -628,6 +640,7 @@ export function OrderedRouteEditorScreen() {
     const token = beginRouteOperation(current.present, ownerId, intent.kind === 'bridge' ? 'bridge' : intent.kind === 'replace' ? 'replace' : 'draw', operationId);
     operationAbortRef.current?.abort();
     const controller = new AbortController();
+    providerTransactionRef.current = true;
     operationAbortRef.current = controller;
     activeOperationIdRef.current = operationId;
     setProviderBusy(true);
@@ -664,6 +677,7 @@ export function OrderedRouteEditorScreen() {
       if (operationAbortRef.current === controller) {
         operationAbortRef.current = null;
         if (activeOperationIdRef.current === operationId) activeOperationIdRef.current = null;
+        providerTransactionRef.current = false;
       }
       if (!controller.signal.aborted) setProviderBusy(false);
     }
@@ -716,12 +730,14 @@ export function OrderedRouteEditorScreen() {
   ) => {
     const current = historyRef.current;
     if (!current) return;
+    if (providerTransactionRef.current) return;
     finishRouteAnimation();
     const baseRevision = current.present.revision;
     const operationId = uuidv4();
     const token = beginRouteOperation(current.present, ownerId, 'point', operationId);
     operationAbortRef.current?.abort();
     const controller = new AbortController();
+    providerTransactionRef.current = true;
     operationAbortRef.current = controller;
     activeOperationIdRef.current = operationId;
     setProviderBusy(true);
@@ -741,6 +757,7 @@ export function OrderedRouteEditorScreen() {
       if (operationAbortRef.current === controller) {
         operationAbortRef.current = null;
         if (activeOperationIdRef.current === operationId) activeOperationIdRef.current = null;
+        providerTransactionRef.current = false;
       }
       if (!controller.signal.aborted) setProviderBusy(false);
     }
@@ -769,8 +786,8 @@ export function OrderedRouteEditorScreen() {
     void runPointRequest(startPoint, endPoint, { kind: 'replace', start: lower, end: upper, reverse: !forward });
   }, [replacementStart, runPointRequest]);
 
-  const chooseAnchor = useCallback((candidate: RouteAnchorCandidate) => {
-    if (pendingAnchor?.role === 'start') {
+  const chooseAnchor = useCallback((role: PendingAnchorChoice['role'], candidate: RouteAnchorCandidate) => {
+    if (role === 'start') {
       setReplacementStart({
         partId: candidate.partId,
         pointIndex: candidate.pointIndex,
@@ -779,10 +796,10 @@ export function OrderedRouteEditorScreen() {
       setPointIntent('replace-end');
       setPendingAnchor(null);
       setError('Pan to the end of the section, then confirm it.');
-    } else if (pendingAnchor?.role === 'end') {
+    } else {
       chooseReplacementEnd(candidate);
     }
-  }, [chooseReplacementEnd, pendingAnchor?.role]);
+  }, [chooseReplacementEnd]);
 
   const confirmPointTarget = useCallback(() => {
     const current = historyRef.current;
@@ -810,7 +827,7 @@ export function OrderedRouteEditorScreen() {
       const options = nearestOrderedPositions(current.present, target);
       if (options.length === 0) { setError('Move the target onto the Route.'); return; }
       if (options.length > 1) setPendingAnchor({ role: 'start', options, target });
-      else chooseAnchor(options[0]);
+      else chooseAnchor('start', options[0]);
       return;
     }
     if (pointIntent === 'replace-end') {
@@ -827,7 +844,7 @@ export function OrderedRouteEditorScreen() {
         });
       if (options.length === 0) { setError('Choose another ordered position without crossing an unknown gap.'); return; }
       if (options.length > 1) setPendingAnchor({ role: 'end', options, target });
-      else chooseReplacementEnd(options[0]);
+      else chooseAnchor('end', options[0]);
       return;
     }
     const start = current.present.parts.at(-1)?.points.at(-1) ?? current.present.startPoint;
@@ -835,11 +852,16 @@ export function OrderedRouteEditorScreen() {
     void runPointRequest(start, target, { kind: 'append' });
   }, [chooseAnchor, chooseReplacementEnd, commitResult, pendingMultiStroke, pointIntent, providerBusy, replacementStart, runPointRequest, selectedGap]);
 
+  const hasUncommittedRouteEdit = providerBusy
+    || providerTransactionRef.current
+    || Boolean(pendingMultiStroke || pendingReview || pendingPointReview || pendingIntervalReview
+      || pendingDrawChoice || manualRecovery || pendingAnchor || replacementStart);
+
   const handleUndo = useCallback(() => {
-    if (pendingMultiStroke) {
+    if (hasUncommittedRouteEdit) {
       invalidatePendingOperation();
       setTool('browse');
-      setError('In-progress section cancelled. Your Route is unchanged.');
+      setError('In-progress Route edit cancelled. Your Route is unchanged.');
       return;
     }
     invalidatePendingOperation();
@@ -849,7 +871,7 @@ export function OrderedRouteEditorScreen() {
     historyRef.current = next;
     setHistory(next);
     setError(null);
-  }, [invalidatePendingOperation, pendingMultiStroke]);
+  }, [hasUncommittedRouteEdit, invalidatePendingOperation]);
 
   const applyTrim = useCallback(() => {
     const current = historyRef.current;
@@ -1177,7 +1199,7 @@ export function OrderedRouteEditorScreen() {
           <TouchableOpacity
             style={[styles.topUtility, { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle }]}
             onPress={handleUndo}
-            disabled={!history || (history.past.length === 0 && !pendingMultiStroke)}
+            disabled={!history || (history.past.length === 0 && !hasUncommittedRouteEdit)}
             accessibilityRole="button"
             accessibilityLabel="Undo last Route edit"
           >
@@ -1367,7 +1389,7 @@ export function OrderedRouteEditorScreen() {
       <ModalCard visible={Boolean(pendingAnchor)} onDismiss={() => setPendingAnchor(null)}>
         <ModalCardHeader title="Choose the ordered position" body="This location occurs more than once. Cairn will not guess which visit you meant." />
         {pendingAnchor?.options.map(option => (
-          <PrimaryButton key={`${option.partId}:${option.pointIndex}:${option.fraction ?? 0}`} label={positionLabel(draft, option)} variant="secondary" onPress={() => chooseAnchor(option)} style={styles.modalButton} />
+          <PrimaryButton key={`${option.partId}:${option.pointIndex}:${option.fraction ?? 0}`} label={positionLabel(draft, option)} variant="secondary" onPress={() => chooseAnchor(pendingAnchor.role, option)} style={styles.modalButton} />
         ))}
       </ModalCard>
 

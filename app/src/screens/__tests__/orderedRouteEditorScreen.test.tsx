@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockCameraSet = jest.fn();
 const mockCameraFit = jest.fn();
@@ -26,6 +26,8 @@ const mockDraft = {
   }],
   gaps: [],
 };
+let mockLoadedDraft: any = mockDraft;
+let mockRecoveredPast: any[] = [];
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ goBack: jest.fn(), replace: jest.fn(), navigate: jest.fn() }),
@@ -105,7 +107,7 @@ jest.mock('../../config/mapbox', () => ({
 jest.mock('../../features/route/routePlannerDraftPersistence', () => ({
   loadRoutePlannerDraft: jest.fn(async () => ({
     schemaVersion: 1, ownerId: 'owner-a', draftId: 'plan:screen',
-    history: { present: mockDraft, past: [] }, name: 'Screen Route', permission: 'personal', savedAt: 1,
+    history: { present: mockLoadedDraft, past: mockRecoveredPast }, name: 'Screen Route', permission: 'personal', savedAt: 1,
     pendingDraw: mockRecoveredPending,
   })),
   plannerDraftMatchesRequest: () => true,
@@ -145,6 +147,8 @@ describe('OrderedRouteEditorScreen closure UI', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockRecoveredPending = null;
+    mockLoadedDraft = mockDraft;
+    mockRecoveredPast = [];
     mockSearchPlaces.mockResolvedValue([{ id: 'place-1', label: 'Wellington', center: { lat: -41.2865, lng: 174.7762 } }]);
     mockResolveDraw.mockResolvedValue({ outcome: 'review', reason: 'shape-deviation', points: mockStroke });
     mockResolvePoint.mockResolvedValue({
@@ -196,9 +200,12 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(mockDraft.parts[0].points).toHaveLength(3);
   });
 
-  test('a recovered multi-stroke transaction is visible and excludes competing topology edits until Undo cancels it', async () => {
+  test.each([
+    { kind: 'pending-replace' as const },
+    { kind: 'pending-bridge' as const, gapId: 'gap-a' },
+  ])('a recovered $kind transaction is visible and excludes competing topology edits until Undo cancels it', async pending => {
     mockRecoveredPending = {
-      kind: 'pending-replace',
+      ...pending,
       draftId: 'plan:screen',
       baseRevision: 1,
       points: [
@@ -235,5 +242,152 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     // The accepted part is intentionally hidden while its bounded growth
     // animation renders the exact validated provider geometry.
     expect(screen.getByTestId('source-ordered-route-growth').props.shape.geometry.coordinates).toHaveLength(2);
+  });
+
+  test.each(['plan', 'activity'] as const)('N01 an unambiguous Point replacement on a %s draft advances and remains undoable', async origin => {
+    mockLoadedDraft = { ...mockDraft, origin };
+    mockResolvePoint.mockResolvedValueOnce({
+      outcome: 'accepted',
+      points: [
+        { lat: -41.2865, lng: 174.7772 },
+        { lat: -41.2862, lng: 174.77745 },
+        { lat: -41.2865, lng: 174.7777 },
+      ],
+    });
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByText('Point'));
+    fireEvent.press(screen.getByText('Replace a section'));
+    fireEvent.press(screen.getByText('Set replacement start'));
+    expect(await screen.findByText('Pan to the end of the section, then confirm it.')).toBeTruthy();
+
+    fireEvent(screen.getByTestId('mock-map'), 'cameraChanged', {
+      properties: { center: [174.7777, -41.2865] },
+    });
+    fireEvent.press(screen.getByText('Set replacement end'));
+    expect(await screen.findByText('Review this walking Route')).toBeTruthy();
+    fireEvent.press(screen.getByText('Apply reviewed path'));
+    await waitFor(() => expect(screen.queryByText('Review this walking Route')).toBeNull());
+    expect(screen.getByTestId('source-ordered-route-growth')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Undo last Route edit'));
+    expect(screen.getByTestId('source-ordered-route-parts').props.shape.features[0].geometry.coordinates).toEqual(
+      mockDraft.parts[0].points.map(point => [point.lng, point.lat]),
+    );
+  });
+
+  test('N01 repeated-coordinate Point anchors still require an explicit ordered occurrence', async () => {
+    mockLoadedDraft = {
+      ...mockDraft,
+      parts: [{
+        ...mockDraft.parts[0],
+        points: [
+          { lat: -41.2865, lng: 174.7762 },
+          { lat: -41.2865, lng: 174.7772 },
+          { lat: -41.2865, lng: 174.7782 },
+          { lat: -41.2865, lng: 174.7772 },
+          { lat: -41.2865, lng: 174.7792 },
+        ],
+      }],
+    };
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByText('Point'));
+    fireEvent.press(screen.getByText('Replace a section'));
+    fireEvent.press(screen.getByText('Set replacement start'));
+    expect(await screen.findByText('Choose the ordered position')).toBeTruthy();
+    fireEvent.press(screen.getByText('Section 1, point 2'));
+    expect(await screen.findByText('Set replacement end')).toBeTruthy();
+  });
+
+  test('N02 Undo cancels a slow uncommitted Point request before a later deliberate Undo changes history', async () => {
+    mockLoadedDraft = {
+      ...mockDraft,
+      revision: 2,
+      parts: [
+        mockDraft.parts[0],
+        {
+          id: 'part-b', resolution: 'point' as const,
+          points: [
+            { lat: -41.2865, lng: 174.7782 },
+            { lat: -41.2861, lng: 174.7787 },
+            { lat: -41.2865, lng: 174.7792 },
+          ],
+        },
+      ],
+    };
+    mockRecoveredPast = [{ draft: mockDraft, operation: 'append-point' }];
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    expect(await screen.findByText(/2 sections/)).toBeTruthy();
+
+    let resolveSlow!: (value: any) => void;
+    mockResolvePoint.mockReturnValueOnce(new Promise(resolve => { resolveSlow = resolve; }));
+    fireEvent.press(screen.getByText('Point'));
+    fireEvent.press(screen.getByText('Add destination'));
+    expect(await screen.findByText('Preparing one Route edit…')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Undo last Route edit'));
+    await act(async () => {
+      resolveSlow({ outcome: 'accepted', points: mockStroke });
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('Review this walking Route')).toBeNull();
+    expect(screen.getByText(/2 sections/)).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Undo last Route edit'));
+    expect(screen.getByText(/1 section/)).toBeTruthy();
+  });
+
+  test('N02 Undo cancels a slow Draw request with empty committed history and fences its late reply', async () => {
+    let resolveSlow!: (value: any) => void;
+    mockResolveDraw.mockReturnValueOnce(new Promise(resolve => { resolveSlow = resolve; }));
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByText('Draw'));
+    fireEvent.press(screen.getByTestId('emit-route-stroke'));
+    expect(await screen.findByText('Preparing one Route edit…')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Undo last Route edit'));
+    await act(async () => {
+      resolveSlow({ outcome: 'review', reason: 'shape-deviation', points: mockStroke });
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('Review this Route edit')).toBeNull();
+    expect(screen.getByTestId('source-ordered-route-parts').props.shape.features[0].geometry.coordinates).toEqual(
+      mockDraft.parts[0].points.map(point => [point.lng, point.lat]),
+    );
+  });
+
+  test('N02 Undo dismisses an uncommitted provider review without popping committed history', async () => {
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByText('Point'));
+    fireEvent.press(screen.getByText('Add destination'));
+    expect(await screen.findByText('Review this walking Route')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Undo last Route edit'));
+    expect(screen.queryByText('Review this walking Route')).toBeNull();
+    expect(screen.getByTestId('source-ordered-route-parts').props.shape.features[0].geometry.coordinates).toEqual(
+      mockDraft.parts[0].points.map(point => [point.lng, point.lat]),
+    );
+  });
+
+  test('N02 same-frame repeated Point confirmation starts only one provider transaction', async () => {
+    let resolveSlow!: (value: any) => void;
+    mockResolvePoint.mockReturnValueOnce(new Promise(resolve => { resolveSlow = resolve; }));
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByText('Point'));
+    let action: any = screen.getByText('Add destination');
+    while (action && typeof action.props.onPress !== 'function') action = action.parent;
+    expect(action).toBeTruthy();
+    act(() => {
+      action.props.onPress();
+      action.props.onPress();
+    });
+    expect(mockResolvePoint).toHaveBeenCalledTimes(1);
+    fireEvent.press(screen.getByLabelText('Undo last Route edit'));
+    await act(async () => {
+      resolveSlow({ outcome: 'accepted', points: mockStroke });
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('Review this walking Route')).toBeNull();
   });
 });
