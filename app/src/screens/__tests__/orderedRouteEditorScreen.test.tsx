@@ -5,7 +5,7 @@ const mockCameraSet = jest.fn();
 const mockCameraFit = jest.fn();
 const mockResolveDraw = jest.fn();
 const mockSearchPlaces = jest.fn();
-const mockSaveDraft = jest.fn(async () => undefined);
+const mockSaveDraft = jest.fn(async (..._args: any[]) => undefined);
 const mockStroke = [
   { lat: -41.2865, lng: 174.7767 },
   { lat: -41.2862, lng: 174.7772 },
