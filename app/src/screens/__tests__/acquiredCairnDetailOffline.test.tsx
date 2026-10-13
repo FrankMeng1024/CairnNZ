@@ -4,7 +4,9 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 const mockFetch = jest.fn();
 const mockLoadCache = jest.fn();
 const mockCacheHistory = jest.fn();
-const mockBeginHistoryRequest = jest.fn((_ownerId: string, _markerId: string) => 1);
+const mockHistoryToken = { ownerGeneration: 0, markerEpoch: 1 };
+const mockBeginHistoryRequest = jest.fn((_ownerId: string, _markerId: string) => mockHistoryToken);
+const mockHistoryRequestIsCurrent = jest.fn(() => true);
 const mockMarkUnavailable = jest.fn();
 const mockUpdateCache = jest.fn();
 const mockGoBack = jest.fn();
@@ -59,6 +61,7 @@ jest.mock('../../store/useAppStore', () => {
 jest.mock('../../services/apiService', () => ({ authenticatedFetch: (...args: any[]) => mockFetch(...args) }));
 jest.mock('../../features/cairns/acquiredCairnHistoryCache', () => ({
   beginAcquiredCairnHistoryRequest: (ownerId: string, markerId: string) => mockBeginHistoryRequest(ownerId, markerId),
+  acquiredCairnHistoryRequestIsCurrent: (...args: any[]) => mockHistoryRequestIsCurrent(...args),
   loadCachedAcquiredCairnHistory: (...args: any[]) => mockLoadCache(...args),
   cacheAcquiredCairnHistory: (...args: any[]) => mockCacheHistory(...args),
   markAcquiredCairnKnownUnavailable: (...args: any[]) => mockMarkUnavailable(...args),
@@ -75,6 +78,7 @@ describe('AcquiredCairnDetail offline entitlement boundary', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockOwnerId = 'owner-a';
+    mockHistoryRequestIsCurrent.mockReturnValue(true);
     mockLoadCache.mockResolvedValue([acquired]);
     mockCacheHistory.mockImplementation(async (_owner: string, _marker: string, rows: unknown[]) => rows);
     mockMarkUnavailable.mockResolvedValue(undefined);
@@ -85,7 +89,7 @@ describe('AcquiredCairnDetail offline entitlement boundary', () => {
     mockFetch.mockRejectedValueOnce(new Error('offline'));
     const screen = render(<AcquiredCairnDetailScreen />);
     expect(await screen.findByText('Already found page')).toBeTruthy();
-    expect(screen.getByText(/Offline copy of versions already acquired/)).toBeTruthy();
+    expect(screen.getByText(/keeps up to the latest 100 acquired versions/)).toBeTruthy();
     expect(mockLoadCache).toHaveBeenCalledWith('owner-a', 'marker-1');
   });
 
@@ -131,5 +135,37 @@ describe('AcquiredCairnDetail offline entitlement boundary', () => {
 
     expect(mockCacheHistory).not.toHaveBeenCalled();
     expect(screen.queryByText('Already found page')).toBeNull();
+  });
+
+  test('N03 a marker invalidated after cache persistence never reaches the mounted detail', async () => {
+    let resolveCache!: (rows: (typeof acquired)[]) => void;
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ revisions: [acquired] }) });
+    mockCacheHistory.mockReturnValueOnce(new Promise(resolve => { resolveCache = resolve; }));
+    const screen = render(<AcquiredCairnDetailScreen />);
+    await waitFor(() => expect(mockCacheHistory).toHaveBeenCalledTimes(1));
+    mockHistoryRequestIsCurrent.mockReturnValue(false);
+    await act(async () => { resolveCache([acquired]); });
+    expect(mockHistoryRequestIsCurrent).toHaveBeenCalledWith('owner-a', 'marker-1', mockHistoryToken);
+    expect(await screen.findByText('This acquired Cairn is unavailable right now.')).toBeTruthy();
+    expect(screen.queryByText('Already found page')).toBeNull();
+  });
+
+  test('N04 all 101 authorized online revisions remain reachable while offline scope is separately disclosed', async () => {
+    const rows = Array.from({ length: 101 }, (_, index) => ({
+      ...acquired,
+      revision_id: 101 - index,
+      content_revision: 101 - index,
+      text: `page-${101 - index}`,
+      opened_at: '2026-10-13T00:01:00.000Z',
+    }));
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ revisions: rows }) });
+    mockCacheHistory.mockResolvedValueOnce(rows);
+    const screen = render(<AcquiredCairnDetailScreen />);
+    expect(await screen.findByText('1 of 101')).toBeTruthy();
+    expect(screen.getByText('page-101')).toBeTruthy();
+    for (let index = 0; index < 100; index += 1) fireEvent.press(screen.getByText('Earlier'));
+    expect(screen.getByText('101 of 101')).toBeTruthy();
+    expect(screen.getByText('page-1')).toBeTruthy();
+    expect(screen.queryByText(/keeps up to the latest 100/)).toBeNull();
   });
 });

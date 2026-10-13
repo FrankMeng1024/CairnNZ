@@ -16,6 +16,11 @@ export interface CachedAcquiredCairnRevision {
   thanked_at: string | null;
 }
 
+export interface AcquiredCairnHistoryRequestToken {
+  ownerGeneration: number;
+  markerEpoch: number;
+}
+
 interface MarkerRecord {
   markerId: string;
   state: 'active' | 'known-unavailable';
@@ -136,38 +141,75 @@ function cloneRevisions(revisions: CachedAcquiredCairnRevision[]): CachedAcquire
   return revisions.map(revision => ({ ...revision }));
 }
 
+function requestIsCurrent(
+  ownerId: string,
+  markerId: string,
+  request: AcquiredCairnHistoryRequestToken,
+): boolean {
+  return Number.isSafeInteger(request?.ownerGeneration)
+    && Number.isSafeInteger(request?.markerEpoch)
+    && (generations.get(ownerId) ?? 0) === request.ownerGeneration
+    && markerEpochs.get(markerEpochKey(ownerId, markerId)) === request.markerEpoch;
+}
+
 export async function cacheAcquiredCairnHistory(
   ownerId: string,
   markerId: string,
   rawRevisions: unknown[],
-  requestEpoch: number,
+  request: AcquiredCairnHistoryRequestToken,
 ): Promise<CachedAcquiredCairnRevision[]> {
   const owner = exactOwner(ownerId);
   const marker = exactMarker(markerId);
-  if (!Number.isSafeInteger(requestEpoch)
-    || markerEpochs.get(markerEpochKey(owner, marker)) !== requestEpoch) {
+  if (!requestIsCurrent(owner, marker, request)) {
     throw new Error('acquired_cache_marker_invalidated');
   }
-  const revisions = rawRevisions.map(normalizeRevision).filter(Boolean)
-    .slice(0, MAX_REVISIONS_PER_MARKER) as CachedAcquiredCairnRevision[];
-  if (revisions.length === 0) throw new Error('acquired_cache_empty_history');
-  const generation = generations.get(owner) ?? 0;
+  const onlineRevisions = rawRevisions.map(normalizeRevision).filter(Boolean) as CachedAcquiredCairnRevision[];
+  if (onlineRevisions.length === 0) throw new Error('acquired_cache_empty_history');
+  const cachedRevisions = onlineRevisions.slice(0, MAX_REVISIONS_PER_MARKER);
+  const generation = request.ownerGeneration;
   const cache = await loadOwner(owner);
   if ((generations.get(owner) ?? 0) !== generation) throw new Error('acquired_cache_owner_invalidated');
-  if (markerEpochs.get(markerEpochKey(owner, marker)) !== requestEpoch) {
+  if (!requestIsCurrent(owner, marker, request)) {
     throw new Error('acquired_cache_marker_invalidated');
   }
-  cache.markers[marker] = { markerId: marker, state: 'active', revisions, updatedAt: Date.now() };
+  cache.markers[marker] = { markerId: marker, state: 'active', revisions: cachedRevisions, updatedAt: Date.now() };
   const ordered = Object.values(cache.markers).sort((a, b) => b.updatedAt - a.updatedAt);
   for (const evicted of ordered.slice(MAX_MARKERS_PER_OWNER)) delete cache.markers[evicted.markerId];
-  await persist(owner, cache, generation);
-  return cloneRevisions(revisions);
+  try {
+    await persist(owner, cache, generation);
+  } catch (cause) {
+    // A valid online response remains readable when only bounded offline
+    // persistence fails. Safety invalidation still wins below.
+    if (!requestIsCurrent(owner, marker, request)) throw new Error('acquired_cache_marker_invalidated');
+    return cloneRevisions(onlineRevisions);
+  }
+  if ((generations.get(owner) ?? 0) !== generation) throw new Error('acquired_cache_owner_invalidated');
+  if (!requestIsCurrent(owner, marker, request)) throw new Error('acquired_cache_marker_invalidated');
+  return cloneRevisions(onlineRevisions);
 }
 
 /** Capture before starting the authenticated history GET. Newer requests and
  * safety tombstones invalidate the returned epoch. */
-export function beginAcquiredCairnHistoryRequest(ownerId: string, markerId: string): number {
-  return advanceMarkerEpoch(exactOwner(ownerId), exactMarker(markerId));
+export function beginAcquiredCairnHistoryRequest(
+  ownerId: string,
+  markerId: string,
+): AcquiredCairnHistoryRequestToken {
+  const owner = exactOwner(ownerId);
+  const marker = exactMarker(markerId);
+  return {
+    ownerGeneration: generations.get(owner) ?? 0,
+    markerEpoch: advanceMarkerEpoch(owner, marker),
+  };
+}
+
+/** Final screen handoff fence for the narrow interval after cache persistence. */
+export function acquiredCairnHistoryRequestIsCurrent(
+  ownerId: string,
+  markerId: string,
+  request: AcquiredCairnHistoryRequestToken,
+): boolean {
+  try { return requestIsCurrent(exactOwner(ownerId), exactMarker(markerId), request); }
+  catch { return false; }
 }
 
 export async function loadCachedAcquiredCairnHistory(

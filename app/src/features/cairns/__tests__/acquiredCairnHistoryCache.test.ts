@@ -88,4 +88,82 @@ describe('account-scoped acquired Cairn history cache', () => {
       .rejects.toThrow('acquired_cache_marker_invalidated');
     expect(await loadCachedAcquiredCairnHistory('owner-a', 'marker-1')).toBeNull();
   });
+
+  test('N03 invalidation while persistence is blocked cannot return readable stale history', async () => {
+    let release!: () => void;
+    mockStorage.setItem.mockImplementationOnce((key: string, value: string) => new Promise<void>(resolve => {
+      release = () => { mockMemory.set(key, value); resolve(); };
+    }));
+    const request = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    const stale = cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(1)], request);
+    const staleResult = expect(stale).rejects.toThrow('acquired_cache_marker_invalidated');
+    while (!release) await Promise.resolve();
+    const tombstone = markAcquiredCairnKnownUnavailable('owner-a', 'marker-1');
+    release();
+    await staleResult;
+    await tombstone;
+    expect(await loadCachedAcquiredCairnHistory('owner-a', 'marker-1')).toBeNull();
+  });
+
+  test('N03 owner purge while persistence is blocked invalidates the returning payload', async () => {
+    let release!: () => void;
+    mockStorage.setItem.mockImplementationOnce((key: string, value: string) => new Promise<void>(resolve => {
+      release = () => { mockMemory.set(key, value); resolve(); };
+    }));
+    const request = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    const stale = cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(1)], request);
+    const staleResult = expect(stale).rejects.toThrow('acquired_cache_owner_invalidated');
+    while (!release) await Promise.resolve();
+    const purge = purgeAcquiredCairnHistoryForOwner('owner-a');
+    release();
+    await staleResult;
+    await purge;
+    expect(await loadCachedAcquiredCairnHistory('owner-a', 'marker-1')).toBeNull();
+  });
+
+  test('N03 a newer valid request overtakes an older persistence without reviving the older page', async () => {
+    let release!: () => void;
+    mockStorage.setItem.mockImplementationOnce((key: string, value: string) => new Promise<void>(resolve => {
+      release = () => { mockMemory.set(key, value); resolve(); };
+    }));
+    const oldRequest = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    const oldWrite = cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(1)], oldRequest);
+    const oldResult = expect(oldWrite).rejects.toThrow('acquired_cache_marker_invalidated');
+    while (!release) await Promise.resolve();
+    const newRequest = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    const newWrite = cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(2)], newRequest);
+    release();
+    await oldResult;
+    await expect(newWrite).resolves.toMatchObject([{ revision_id: 2 }]);
+    expect(await loadCachedAcquiredCairnHistory('owner-a', 'marker-1')).toMatchObject([{ revision_id: 2 }]);
+  });
+
+  test('N03 a newly authorized request can restore content after an older tombstone', async () => {
+    await markAcquiredCairnKnownUnavailable('owner-a', 'marker-1');
+    const authorized = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    await expect(cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(5)], authorized))
+      .resolves.toMatchObject([{ revision_id: 5, text: 'page-5' }]);
+    expect(await loadCachedAcquiredCairnHistory('owner-a', 'marker-1')).toMatchObject([{ revision_id: 5 }]);
+  });
+
+  test('N04 a storage quota failure does not hide an authorized online response', async () => {
+    mockStorage.setItem.mockRejectedValueOnce(new Error('synthetic quota failure'));
+    const request = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    await expect(cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(3), revision(2)], request))
+      .resolves.toMatchObject([{ revision_id: 3 }, { revision_id: 2 }]);
+    __acquiredCairnHistoryCacheTest.reset();
+    expect(await loadCachedAcquiredCairnHistory('owner-a', 'marker-1')).toBeNull();
+  });
+
+  test.each([100, 101, 137])('N04 %i online revisions remain complete while offline keeps the newest bounded subset', async count => {
+    const serverRows = Array.from({ length: count }, (_, index) => revision(count - index));
+    const request = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    const online = await cacheAcquiredCairnHistory('owner-a', 'marker-1', serverRows, request);
+    expect(online).toHaveLength(count);
+    expect(online.at(-1)?.revision_id).toBe(1);
+    __acquiredCairnHistoryCacheTest.reset();
+    const offline = await loadCachedAcquiredCairnHistory('owner-a', 'marker-1');
+    expect(offline).toHaveLength(Math.min(count, 100));
+    expect(offline?.at(-1)?.revision_id).toBe(Math.max(1, count - 99));
+  });
 });

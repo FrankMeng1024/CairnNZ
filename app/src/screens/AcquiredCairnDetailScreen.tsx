@@ -16,6 +16,7 @@ import * as Crypto from 'expo-crypto';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
 import {
   beginAcquiredCairnHistoryRequest,
+  acquiredCairnHistoryRequestIsCurrent,
   cacheAcquiredCairnHistory,
   loadCachedAcquiredCairnHistory,
   markAcquiredCairnKnownUnavailable,
@@ -76,6 +77,11 @@ export function AcquiredCairnDetailScreen() {
         throw new Error('AUTHORIZATION_UNCONFIRMED');
       }
       if (!isCurrentOwner()) return;
+      if (!acquiredCairnHistoryRequestIsCurrent(ownerId, route.params.markerId, requestEpoch)) {
+        setRevisions([]);
+        setError('This acquired Cairn is unavailable right now.');
+        return;
+      }
       setRevisions(next);
       setPageIndex(0);
     } catch (cause) {
@@ -214,7 +220,7 @@ export function AcquiredCairnDetailScreen() {
           {showingOfflineCopy ? (
             <View style={[styles.offlineNotice, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Icon name="CloudOff" size={16} color={theme.iconInactive} />
-              <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Offline copy of versions already acquired by this account. New discoveries and actions still need a connection.</Text>
+              <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Offline copy from this account. This device keeps up to the latest 100 acquired versions; reconnect for older history and new actions.</Text>
             </View>
           ) : null}
           {revisions[pageIndex] ? (() => {
