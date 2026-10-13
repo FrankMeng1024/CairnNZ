@@ -858,7 +858,10 @@ export function OrderedRouteEditorScreen() {
       || pendingDrawChoice || manualRecovery || pendingAnchor || replacementStart);
 
   const handleUndo = useCallback(() => {
-    if (hasUncommittedRouteEdit) {
+    // The provider guard is set synchronously before React can render the
+    // corresponding busy state. Read it at invocation time so an immediate
+    // Undo cancels that transaction instead of consuming committed history.
+    if (providerTransactionRef.current || hasUncommittedRouteEdit) {
       invalidatePendingOperation();
       setTool('browse');
       setError('In-progress Route edit cancelled. Your Route is unchanged.');

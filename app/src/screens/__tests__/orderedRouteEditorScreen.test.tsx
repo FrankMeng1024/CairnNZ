@@ -337,6 +337,50 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.getByText(/1 section/)).toBeTruthy();
   });
 
+  test('N02 same-frame Undo cancels a Point request without consuming committed history', async () => {
+    mockLoadedDraft = {
+      ...mockDraft,
+      revision: 2,
+      parts: [
+        mockDraft.parts[0],
+        {
+          id: 'part-b', resolution: 'point' as const,
+          points: [
+            { lat: -41.2865, lng: 174.7782 },
+            { lat: -41.2861, lng: 174.7787 },
+            { lat: -41.2865, lng: 174.7792 },
+          ],
+        },
+      ],
+    };
+    mockRecoveredPast = [{ draft: mockDraft, operation: 'append-point' }];
+    let resolveSlow!: (value: any) => void;
+    mockResolvePoint.mockReturnValueOnce(new Promise(resolve => { resolveSlow = resolve; }));
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    expect(await screen.findByText(/2 sections/)).toBeTruthy();
+    fireEvent.press(screen.getByText('Point'));
+
+    let addDestination: any = screen.getByText('Add destination');
+    while (addDestination && typeof addDestination.props.onPress !== 'function') addDestination = addDestination.parent;
+    let undo: any = screen.getByLabelText('Undo last Route edit');
+    while (undo && typeof undo.props.onPress !== 'function') undo = undo.parent;
+    expect(addDestination).toBeTruthy();
+    expect(undo).toBeTruthy();
+    act(() => {
+      addDestination.props.onPress();
+      undo.props.onPress();
+    });
+
+    expect(screen.getByText(/2 sections/)).toBeTruthy();
+    await act(async () => {
+      resolveSlow({ outcome: 'accepted', points: mockStroke });
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('Review this walking Route')).toBeNull();
+    expect(screen.getByText(/2 sections/)).toBeTruthy();
+  });
+
   test('N02 Undo cancels a slow Draw request with empty committed history and fences its late reply', async () => {
     let resolveSlow!: (value: any) => void;
     mockResolveDraw.mockReturnValueOnce(new Promise(resolve => { resolveSlow = resolve; }));
