@@ -30,6 +30,14 @@ export function buildDiscoveryHomeCopy(group: {
   };
 }
 
+export function resolveDiscoveryHomeDestination(singleMarkerId: string | null):
+  | { screen: 'AcquiredCairnDetail'; params: { markerId: string } }
+  | { screen: 'AllCairns'; params: { initialSection: 'found' } } {
+  return singleMarkerId
+    ? { screen: 'AcquiredCairnDetail', params: { markerId: singleMarkerId } }
+    : { screen: 'AllCairns', params: { initialSection: 'found' } };
+}
+
 /** The single Home middle window has one deterministic, non-cycling owner. */
 export function resolveHomeStateWindow(input: {
   saveRecovery: boolean;

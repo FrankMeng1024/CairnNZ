@@ -40,7 +40,12 @@ import {
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { useDistance } from '../utils/distanceFormat';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
-import { buildDiscoveryHomeCopy, hasPersonalMemoryEvidence, resolveHomeStateWindow } from '../features/cairns/homeStateWindow';
+import {
+  buildDiscoveryHomeCopy,
+  hasPersonalMemoryEvidence,
+  resolveDiscoveryHomeDestination,
+  resolveHomeStateWindow,
+} from '../features/cairns/homeStateWindow';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -488,9 +493,14 @@ export function HomeScreen() {
                   );
                 }
               : showDiscovery
-                ? () => presentationGroup!.singleMarkerId
-                  ? nav.navigate('AcquiredCairnDetail', { markerId: presentationGroup!.singleMarkerId })
-                  : nav.navigate('AllCairns', { initialSection: 'found' })
+                ? () => {
+                    const destination = resolveDiscoveryHomeDestination(presentationGroup!.singleMarkerId);
+                    if (destination.screen === 'AcquiredCairnDetail') {
+                      nav.navigate(destination.screen, destination.params);
+                    } else {
+                      nav.navigate(destination.screen, destination.params);
+                    }
+                  }
               : showMemoryReturn
                 ? () => nav.navigate('Memory')
               : lastHike

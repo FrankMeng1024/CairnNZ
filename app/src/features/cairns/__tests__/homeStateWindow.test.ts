@@ -1,4 +1,9 @@
-import { buildDiscoveryHomeCopy, hasPersonalMemoryEvidence, resolveHomeStateWindow } from '../homeStateWindow';
+import {
+  buildDiscoveryHomeCopy,
+  hasPersonalMemoryEvidence,
+  resolveDiscoveryHomeDestination,
+  resolveHomeStateWindow,
+} from '../homeStateWindow';
 
 describe('Home state window priority', () => {
   test.each([
@@ -22,6 +27,15 @@ describe('Home discovery copy', () => {
   ] as const)('summarizes durable discovery state without repeated cards %#', (group, title) => {
     expect(buildDiscoveryHomeCopy(group, 'Just now')).toEqual({
       title, meta: 'Saved in Memory · Just now', details: ['Saved in Memory', 'Just now'],
+    });
+  });
+
+  test('a single acquisition opens its acquired history while a group opens the found list', () => {
+    expect(resolveDiscoveryHomeDestination('marker-7')).toEqual({
+      screen: 'AcquiredCairnDetail', params: { markerId: 'marker-7' },
+    });
+    expect(resolveDiscoveryHomeDestination(null)).toEqual({
+      screen: 'AllCairns', params: { initialSection: 'found' },
     });
   });
 });
