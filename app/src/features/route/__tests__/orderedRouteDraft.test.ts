@@ -11,7 +11,9 @@ import {
   orderedDraftCanUseOrShare,
   orderedDraftDistanceM,
   orderedDraftPoints,
+  orderedPositionAtDistanceFraction,
   replaceOrderedInterval,
+  routePointDistanceM,
   routeOperationIsCurrent,
   setOrderedDraftStart,
   trimOrderedDraft,
@@ -231,6 +233,81 @@ describe('multipart Activity repair', () => {
       { partId: draft.parts[0].id, pointIndex: 1 },
     );
     expect(emptyTrim).toMatchObject({ ok: false, code: 'EMPTY_ROUTE' });
+  });
+
+  test('R1 trim applies both anchors to the original same part before mutating it', () => {
+    const draft = createImportedOrderedDraft({
+      draftId: 'trim-same-part',
+      ownerId: 'owner-a',
+      segments: [[p(0, 0), p(100, 0), p(200, 0), p(300, 0), p(400, 0)]],
+    });
+    const part = draft.parts[0];
+    const trimmed = trimOrderedDraft(
+      draft,
+      { partId: part.id, pointIndex: 1 },
+      { partId: part.id, pointIndex: 3 },
+    );
+    expect(trimmed.ok).toBe(true);
+    if (!trimmed.ok) return;
+    expect(trimmed.draft.parts).toHaveLength(1);
+    expect(trimmed.draft.parts[0].points).toEqual([p(100, 0), p(200, 0), p(300, 0)]);
+  });
+
+  test('R1 trim rejects reversed same-part anchors without changing the draft', () => {
+    const draft = createImportedOrderedDraft({
+      draftId: 'trim-reversed', ownerId: 'owner-a',
+      segments: [[p(0, 0), p(100, 0), p(200, 0), p(300, 0)]],
+    });
+    const part = draft.parts[0];
+    expect(trimOrderedDraft(
+      draft,
+      { partId: part.id, pointIndex: 3 },
+      { partId: part.id, pointIndex: 1 },
+    )).toEqual({ ok: false, code: 'INVALID_INTERVAL', draft });
+  });
+
+  test('R1 cross-part trim preserves only internal gaps and exact remaining endpoints', () => {
+    const draft = createImportedOrderedDraft({
+      draftId: 'trim-cross-part', ownerId: 'owner-a',
+      segments: [
+        [p(0, 0), p(20, 0), p(40, 0)],
+        [p(80, 0), p(100, 0), p(120, 0)],
+        [p(160, 0), p(180, 0), p(200, 0)],
+      ],
+    });
+    const trimmed = trimOrderedDraft(
+      draft,
+      { partId: draft.parts[0].id, pointIndex: 1 },
+      { partId: draft.parts[2].id, pointIndex: 1 },
+    );
+    expect(trimmed.ok).toBe(true);
+    if (!trimmed.ok) return;
+    expect(trimmed.draft.parts.map(part => part.points)).toEqual([
+      [p(20, 0), p(40, 0)],
+      draft.parts[1].points,
+      [p(160, 0), p(180, 0)],
+    ]);
+    expect(trimmed.draft.gaps.map(gap => gap.afterPartId)).toEqual([
+      draft.parts[0].id,
+      draft.parts[1].id,
+    ]);
+  });
+
+  test('R1 Trim UI fractions follow arc length rather than point count', () => {
+    const draft = createImportedOrderedDraft({
+      draftId: 'trim-distance', ownerId: 'owner-a',
+      segments: [[p(0, 0), p(10, 0), p(110, 0), p(210, 0)]],
+    });
+    const halfway = orderedPositionAtDistanceFraction(draft, 0.5);
+    expect(halfway).toMatchObject({ partId: draft.parts[0].id, pointIndex: 1 });
+    expect(halfway?.fraction).toBeCloseTo(0.95, 6);
+    const end = orderedPositionAtDistanceFraction(draft, 0.75);
+    expect(end).not.toBeNull();
+    const trimmed = trimOrderedDraft(draft, halfway!, end!);
+    expect(trimmed.ok).toBe(true);
+    if (!trimmed.ok) return;
+    expect(routePointDistanceM(trimmed.draft.parts[0].points[0], p(105, 0))).toBeLessThan(0.5);
+    expect(routePointDistanceM(trimmed.draft.parts[0].points.at(-1)!, p(157.5, 0))).toBeLessThan(0.5);
   });
 });
 

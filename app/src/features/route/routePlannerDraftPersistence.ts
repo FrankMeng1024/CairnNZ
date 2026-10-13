@@ -5,6 +5,7 @@ import {
   type OrderedRouteDraft,
   type RouteDraftHistory,
 } from './orderedRouteDraft';
+import type { DrawTransactionIntent } from './routeEditTransactions';
 
 const KEY_PREFIX = '@cairn:route-planner:v1:';
 const ownerWriteTails = new Map<string, Promise<void>>();
@@ -20,6 +21,7 @@ export interface PersistedRoutePlannerDraft {
   sourceActivityId?: string;
   sourceRouteId?: string;
   reconnectsActivityGap?: boolean;
+  pendingDraw?: Extract<DrawTransactionIntent, { kind: 'pending-bridge' | 'pending-replace' }>;
   savedAt: number;
 }
 
@@ -47,12 +49,19 @@ function latestKey(ownerId: string): string {
 }
 
 function validRecord(value: any, ownerId: string): value is PersistedRoutePlannerDraft {
+  const pendingValid = value?.pendingDraw == null || (
+    (value.pendingDraw.kind === 'pending-bridge' || value.pendingDraw.kind === 'pending-replace')
+    && Array.isArray(value.pendingDraw.points)
+    && value.pendingDraw.points.length >= 2
+    && value.pendingDraw.points.every((point: any) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng))
+  );
   return value?.schemaVersion === 1
     && value.ownerId === ownerId
     && value.draftId === value.history?.present?.draftId
     && value.history.present.ownerId === ownerId
     && validateOrderedDraft(value.history.present).length === 0
-    && Array.isArray(value.history.past);
+    && Array.isArray(value.history.past)
+    && pendingValid;
 }
 
 export async function saveRoutePlannerDraft(
@@ -68,6 +77,10 @@ export async function saveRoutePlannerDraft(
         draft: cloneOrderedDraft(item.draft),
       })),
     },
+    pendingDraw: record.pendingDraw ? {
+      ...record.pendingDraw,
+      points: record.pendingDraw.points.map(point => ({ ...point })),
+    } : undefined,
     savedAt: Date.now(),
   };
   const generation = ownerGenerations.get(record.ownerId) ?? 0;

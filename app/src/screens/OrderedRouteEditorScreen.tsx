@@ -30,6 +30,7 @@ import { loadActivityFinalArtifact } from '../features/activity/activityFinalArt
 import {
   applyDrawTransaction,
   classifyDrawTransaction,
+  continueDrawTransaction,
   nearestOrderedPositions,
   type DrawTransactionIntent,
   type RouteAnchorCandidate,
@@ -45,9 +46,14 @@ import {
   createImportedOrderedDraft,
   createLegacyOrderedDraft,
   keepOnlyOrderedPart,
+  compareOrderedPositions,
+  normalizeOrderedPoints,
   orderedDraftCanUseOrShare,
   orderedDraftDistanceM,
   orderedDraftPoints,
+  orderedIntervalCrossesGap,
+  orderedPositionAtDistanceFraction,
+  orderedPositionPoint,
   replaceOrderedInterval,
   routeOperationIsCurrent,
   setOrderedDraftStart,
@@ -183,13 +189,9 @@ function initialBounds(draft: OrderedRouteDraft): { ne: [number, number]; sw: [n
   };
 }
 
-function pointAt(draft: OrderedRouteDraft, position: OrderedPosition): RoutePoint | null {
-  return draft.parts.find(part => part.id === position.partId)?.points[position.pointIndex] ?? null;
-}
-
 function positionLabel(draft: OrderedRouteDraft, position: OrderedPosition): string {
   const part = draft.parts.findIndex(item => item.id === position.partId);
-  return `Section ${part + 1}, point ${position.pointIndex + 1}`;
+  return `Section ${part + 1}, ${position.fraction ? `between points ${position.pointIndex + 1}–${position.pointIndex + 2}` : `point ${position.pointIndex + 1}`}`;
 }
 
 export function OrderedRouteEditorScreen() {
@@ -230,6 +232,7 @@ export function OrderedRouteEditorScreen() {
   const [pendingPointReview, setPendingPointReview] = useState<PendingPointReview | null>(null);
   const [manualRecovery, setManualRecovery] = useState<PendingCandidateReview | null>(null);
   const [pendingAnchor, setPendingAnchor] = useState<PendingAnchorChoice | null>(null);
+  const [pendingMultiStroke, setPendingMultiStroke] = useState<Extract<DrawTransactionIntent, { kind: 'pending-bridge' | 'pending-replace' }> | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [trimOpen, setTrimOpen] = useState(false);
   const [trimStart, setTrimStart] = useState(0);
@@ -277,6 +280,7 @@ export function OrderedRouteEditorScreen() {
     setPendingPointReview(null);
     setManualRecovery(null);
     setPendingDrawChoice(null);
+    setPendingMultiStroke(null);
   }, [finishRouteAnimation]);
 
   const animateAcceptedPoint = useCallback((points: RoutePoint[], hiddenPartId?: string) => {
@@ -339,6 +343,7 @@ export function OrderedRouteEditorScreen() {
           setHistory(recovered.history);
           setName(recovered.name);
           setPermission(recovered.permission);
+          setPendingMultiStroke(recovered.pendingDraw ?? null);
           initialBoundsRef.current = initialBounds(recovered.history.present);
           initializedKeyRef.current = initKey;
           initializingKeyRef.current = '';
@@ -410,6 +415,7 @@ export function OrderedRouteEditorScreen() {
           setHistory(recoveredHistory);
           setName(initialName);
           setPermission(initialPermission);
+          setPendingMultiStroke(recovered.pendingDraw ?? null);
           initialBoundsRef.current = initialBounds(recoveredHistory.present);
           initializedKeyRef.current = initKey;
           initializingKeyRef.current = '';
@@ -426,6 +432,7 @@ export function OrderedRouteEditorScreen() {
       setHistory(nextHistory);
       setName(initialName);
       setPermission(initialPermission);
+      setPendingMultiStroke(null);
       initializedKeyRef.current = initKey;
       initializingKeyRef.current = '';
       setInitializing(false);
@@ -455,10 +462,11 @@ export function OrderedRouteEditorScreen() {
         sourceActivityId: fromSessionId,
         sourceRouteId: routeId,
         reconnectsActivityGap: history.present.gaps.length === 0 && initialDraftRef.current?.gaps.length !== 0,
+        pendingDraw: pendingMultiStroke ?? undefined,
       }).catch(() => setError('This draft could not be saved on this device. Keep this screen open.'));
     }, 120);
     return () => clearTimeout(timeout);
-  }, [fromSessionId, history, initializing, name, ownerId, permission, readOnlyShared, routeId]);
+  }, [fromSessionId, history, initializing, name, ownerId, pendingMultiStroke, permission, readOnlyShared, routeId]);
 
   const draft = history?.present ?? null;
   const routeParts = draft?.parts ?? [];
@@ -482,11 +490,16 @@ export function OrderedRouteEditorScreen() {
       }
       const option = intent.options[0];
       if (!option) { setError('Choose which section to replace.'); return; }
-      commitResult(applyDrawTransaction(current.present, { kind: 'replace', option }, points, resolution), 'replace-draw');
+      if (commitResult(applyDrawTransaction(current.present, { kind: 'replace', option }, points, resolution), 'replace-draw')) {
+        setPendingMultiStroke(null);
+      }
       return;
     }
     if (intent.kind === 'reject') { setError(editFailure(intent.code)); return; }
-    commitResult(applyDrawTransaction(current.present, intent, points, resolution), intent.kind === 'bridge' ? 'bridge-draw' : 'append-draw');
+    if (intent.kind === 'pending-bridge' || intent.kind === 'pending-replace') return;
+    if (commitResult(applyDrawTransaction(current.present, intent, points, resolution), intent.kind === 'bridge' ? 'bridge-draw' : 'append-draw')) {
+      setPendingMultiStroke(null);
+    }
     if (intent.kind === 'bridge') setSelectedGapId(undefined);
   }, [commitResult]);
 
@@ -494,8 +507,18 @@ export function OrderedRouteEditorScreen() {
     setTool('browse');
     const current = historyRef.current;
     if (!current) return;
-    const intent = classifyDrawTransaction(current.present, raw, selectedGapId);
+    const transactionPoints = pendingMultiStroke
+      ? normalizeOrderedPoints([...pendingMultiStroke.points, ...raw])
+      : raw;
+    const intent = pendingMultiStroke
+      ? continueDrawTransaction(current.present, pendingMultiStroke, raw)
+      : classifyDrawTransaction(current.present, raw, selectedGapId);
     if (intent.kind === 'reject') { setError(editFailure(intent.code)); return; }
+    if (intent.kind === 'pending-bridge' || intent.kind === 'pending-replace') {
+      setPendingMultiStroke(intent);
+      setError('Section kept as a draft. Pan or zoom, then continue drawing from its open end.');
+      return;
+    }
     const operationId = uuidv4();
     const token = beginRouteOperation(current.present, ownerId, intent.kind === 'bridge' ? 'bridge' : intent.kind === 'replace' ? 'replace' : 'draw', operationId);
     operationAbortRef.current?.abort();
@@ -505,7 +528,7 @@ export function OrderedRouteEditorScreen() {
     setProviderBusy(true);
     setError(null);
     try {
-      const resolved = await resolveDrawPlan(raw, { signal: controller.signal });
+      const resolved = await resolveDrawPlan(transactionPoints, { signal: controller.signal });
       const live = historyRef.current;
       if (!live || controller.signal.aborted
         || !routeOperationIsCurrent(live.present, ownerId, token, activeOperationIdRef.current)) return;
@@ -539,7 +562,7 @@ export function OrderedRouteEditorScreen() {
       }
       if (!controller.signal.aborted) setProviderBusy(false);
     }
-  }, [applyResolvedDraw, ownerId, selectedGapId]);
+  }, [applyResolvedDraw, ownerId, pendingMultiStroke, selectedGapId]);
 
   const applyResolvedPoint = useCallback((points: RoutePoint[], intent: PointTransactionIntent, baseRevision: number) => {
     const current = historyRef.current;
@@ -619,15 +642,21 @@ export function OrderedRouteEditorScreen() {
   const chooseReplacementEnd = useCallback((end: RouteAnchorCandidate) => {
     const current = historyRef.current;
     const start = replacementStart;
-    if (!current || !start || start.partId !== end.partId || start.pointIndex === end.pointIndex) {
-      setError('Choose two different positions on the same ordered section.');
+    if (!current || !start) return;
+    const comparison = compareOrderedPositions(current.present, start, end);
+    if (comparison == null || comparison === 0 || orderedIntervalCrossesGap(
+      current.present,
+      comparison < 0 ? start : end,
+      comparison < 0 ? end : start,
+    )) {
+      setError('Choose two ordered positions without an unknown gap between them.');
       return;
     }
-    const startPoint = pointAt(current.present, start);
-    const endPoint = pointAt(current.present, end);
+    const startPoint = orderedPositionPoint(current.present, start);
+    const endPoint = orderedPositionPoint(current.present, end);
     if (!startPoint || !endPoint) return;
     setPendingAnchor(null);
-    const forward = start.pointIndex < end.pointIndex;
+    const forward = comparison < 0;
     const lower = forward ? start : end;
     const upper = forward ? end : start;
     void runPointRequest(startPoint, endPoint, { kind: 'replace', start: lower, end: upper, reverse: !forward });
@@ -635,7 +664,11 @@ export function OrderedRouteEditorScreen() {
 
   const chooseAnchor = useCallback((candidate: RouteAnchorCandidate) => {
     if (pendingAnchor?.role === 'start') {
-      setReplacementStart({ partId: candidate.partId, pointIndex: candidate.pointIndex });
+      setReplacementStart({
+        partId: candidate.partId,
+        pointIndex: candidate.pointIndex,
+        ...(candidate.fraction != null ? { fraction: candidate.fraction } : {}),
+      });
       setPointIntent('replace-end');
       setPendingAnchor(null);
       setError('Pan to the end of the section, then confirm it.');
@@ -671,8 +704,17 @@ export function OrderedRouteEditorScreen() {
     }
     if (pointIntent === 'replace-end') {
       const options = nearestOrderedPositions(current.present, target)
-        .filter(option => option.partId === replacementStart?.partId && option.pointIndex !== replacementStart?.pointIndex);
-      if (options.length === 0) { setError('Choose another position on the same section.'); return; }
+        .filter(option => {
+          if (!replacementStart) return false;
+          const comparison = compareOrderedPositions(current.present, replacementStart, option);
+          if (comparison == null || comparison === 0) return false;
+          return !orderedIntervalCrossesGap(
+            current.present,
+            comparison < 0 ? replacementStart : option,
+            comparison < 0 ? option : replacementStart,
+          );
+        });
+      if (options.length === 0) { setError('Choose another ordered position without crossing an unknown gap.'); return; }
       if (options.length > 1) setPendingAnchor({ role: 'end', options, target });
       else chooseReplacementEnd(options[0]);
       return;
@@ -695,9 +737,9 @@ export function OrderedRouteEditorScreen() {
   const applyTrim = useCallback(() => {
     const current = historyRef.current;
     if (!current || current.present.parts.length === 0) return;
-    const occurrences = current.present.parts.flatMap(part => part.points.map((_point, pointIndex) => ({ partId: part.id, pointIndex })));
-    const start = occurrences[Math.min(occurrences.length - 1, Math.round(trimStart * (occurrences.length - 1)))];
-    const end = occurrences[Math.min(occurrences.length - 1, Math.round(trimEnd * (occurrences.length - 1)))];
+    const start = orderedPositionAtDistanceFraction(current.present, trimStart);
+    const end = orderedPositionAtDistanceFraction(current.present, trimEnd);
+    if (!start || !end) return;
     if (commitResult(trimOrderedDraft(current.present, start, end), 'trim')) {
       setTrimOpen(false);
       setTrimStart(0);
@@ -708,6 +750,7 @@ export function OrderedRouteEditorScreen() {
   const saveRoute = useCallback(async () => {
     const current = historyRef.current;
     if (!current || saving || readOnlyShared) return;
+    if (pendingMultiStroke) { setError('Finish or cancel the in-progress Route section before saving.'); return; }
     const title = name.trim();
     if (!title) { setError('Name this Route before saving.'); return; }
     if (current.present.parts.length === 0) { setError('Add a path before saving this Route.'); return; }
@@ -758,7 +801,7 @@ export function OrderedRouteEditorScreen() {
     } finally {
       setSaving(false);
     }
-  }, [addRoute, fromSessionId, name, nav, ownerId, permission, readOnlyShared, routeId, saving, sessions, updateRoute]);
+  }, [addRoute, fromSessionId, name, nav, ownerId, pendingMultiStroke, permission, readOnlyShared, routeId, saving, sessions, updateRoute]);
 
   const useSharedRoute = useCallback((mode: 'hiking' | 'running') => {
     const shared = sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
@@ -942,6 +985,16 @@ export function OrderedRouteEditorScreen() {
           {providerBusy ? (
             <View style={styles.busyRow}><ActivityIndicator size="small" color={theme.primary} /><Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Preparing one Route edit…</Text></View>
           ) : null}
+          {pendingMultiStroke ? (
+            <View style={[styles.gapNotice, { backgroundColor: theme.controlSelected, borderColor: theme.borderSubtle }]} testID="route-pending-multistroke">
+              <Text style={[styles.gapTitle, { color: theme.foreground }]}>Route section in progress</Text>
+              <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Browse the map, then continue Draw from the open end. Nothing is added until the other boundary is reached.</Text>
+              <View style={styles.row}>
+                <PrimaryButton label="Continue Draw" variant="secondary" onPress={() => setTool('draw')} style={styles.flexButton} />
+                <PrimaryButton label="Cancel section" variant="secondary" onPress={() => { setPendingMultiStroke(null); setError('In-progress section cancelled. Your Route is unchanged.'); }} style={styles.flexButton} />
+              </View>
+            </View>
+          ) : null}
           {draft.gaps.length > 0 ? (
             <View style={[styles.gapNotice, { backgroundColor: theme.destructiveSurface, borderColor: theme.borderSubtle }]}>
               <View style={styles.gapHeading}><Icon name="TriangleAlert" size={16} color={theme.destructive} /><Text style={[styles.gapTitle, { color: theme.foreground }]}>{draft.gaps.length} unknown {draft.gaps.length === 1 ? 'gap' : 'gaps'}</Text></View>
@@ -987,7 +1040,7 @@ export function OrderedRouteEditorScreen() {
                 </Text>
               </View>
               <View style={styles.toolRow}>
-                <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'draw' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'draw' ? theme.controlSelected : theme.surface }]} onPress={() => { setTool('draw'); setError(selectedGap ? 'Draw from one highlighted gap endpoint to the other.' : 'Draw one connected stroke, then browse the map to continue.'); }} accessibilityRole="button" accessibilityState={{ selected: tool === 'draw' }}>
+                <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'draw' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'draw' ? theme.controlSelected : theme.surface }]} onPress={() => { setTool('draw'); setError(pendingMultiStroke ? 'Continue from the open end of the in-progress section.' : selectedGap ? 'Draw from one highlighted gap endpoint to the other.' : 'Draw one connected stroke, then browse the map to continue.'); }} accessibilityRole="button" accessibilityState={{ selected: tool === 'draw' }}>
                   <Icon name="Pencil" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Draw</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'point' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'point' ? theme.controlSelected : theme.surface }]} onPress={() => setTool('point')} accessibilityRole="button" accessibilityState={{ selected: tool === 'point' }}>
@@ -1011,7 +1064,7 @@ export function OrderedRouteEditorScreen() {
                 label={draft.gaps.length ? 'Save repairable draft' : 'Save Route'}
                 onPress={() => { void saveRoute(); }}
                 loading={saving}
-                disabled={draft.parts.length === 0 || !name.trim()}
+                disabled={draft.parts.length === 0 || !name.trim() || Boolean(pendingMultiStroke)}
                 testID="ordered-route-save"
               />
             </>
@@ -1033,7 +1086,9 @@ export function OrderedRouteEditorScreen() {
                 if (!pending) return;
                 const current = historyRef.current;
                 if (!current) return;
-                commitResult(applyDrawTransaction(current.present, { kind: 'replace', option }, pending.points, pending.resolution), 'replace-draw');
+                if (commitResult(applyDrawTransaction(current.present, { kind: 'replace', option }, pending.points, pending.resolution), 'replace-draw')) {
+                  setPendingMultiStroke(null);
+                }
               }}
               style={styles.modalButton}
             />
@@ -1044,7 +1099,7 @@ export function OrderedRouteEditorScreen() {
       <ModalCard visible={Boolean(pendingAnchor)} onDismiss={() => setPendingAnchor(null)}>
         <ModalCardHeader title="Choose the ordered position" body="This location occurs more than once. Cairn will not guess which visit you meant." />
         {pendingAnchor?.options.map(option => (
-          <PrimaryButton key={`${option.partId}:${option.pointIndex}`} label={positionLabel(draft, option)} variant="secondary" onPress={() => chooseAnchor(option)} style={styles.modalButton} />
+          <PrimaryButton key={`${option.partId}:${option.pointIndex}:${option.fraction ?? 0}`} label={positionLabel(draft, option)} variant="secondary" onPress={() => chooseAnchor(option)} style={styles.modalButton} />
         ))}
       </ModalCard>
 

@@ -44,6 +44,27 @@ describe('Route planner draft recovery', () => {
     expect((await loadRoutePlannerDraft('owner-a'))?.history.present.parts[0].points[0].lat).toBe(-41.2);
   });
 
+  test('round-trips one bounded pending multi-stroke edit without committing geometry', async () => {
+    const draft = createImportedOrderedDraft({
+      draftId: 'pending-draft', ownerId: 'owner-a',
+      segments: [
+        [{ lat: -41.2, lng: 174.7 }, { lat: -41.2, lng: 174.701 }],
+        [{ lat: -41.2, lng: 174.703 }, { lat: -41.2, lng: 174.704 }],
+      ],
+    });
+    const pendingDraw = {
+      kind: 'pending-bridge' as const,
+      gapId: draft.gaps[0].id,
+      points: [draft.parts[0].points[1], { lat: -41.201, lng: 174.702 }],
+    };
+    await saveRoutePlannerDraft({
+      ownerId: 'owner-a', draftId: draft.draftId,
+      history: { present: draft, past: [] }, name: 'Pending bridge', permission: 'personal', pendingDraw,
+    });
+    expect((await loadRoutePlannerDraft('owner-a'))?.pendingDraw).toEqual(pendingDraw);
+    expect((await loadRoutePlannerDraft('owner-a'))?.history.present).toEqual(draft);
+  });
+
   test('never loads another account draft and removal clears the latest pointer', async () => {
     const draft = createEmptyOrderedDraft({ draftId: 'draft-a', ownerId: 'owner-a' });
     await saveRoutePlannerDraft({

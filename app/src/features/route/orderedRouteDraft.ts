@@ -30,7 +30,9 @@ export interface OrderedRouteDraft {
 
 export interface OrderedPosition {
   partId: string;
+  /** Segment start plus a 0..1 fraction. Omitted/zero means the exact vertex. */
   pointIndex: number;
+  fraction?: number;
 }
 
 export interface RouteDraftSnapshot {
@@ -224,6 +226,32 @@ export function orderedDraftDistanceM(draft: OrderedRouteDraft): number {
   ), 0), 0);
 }
 
+/** Maps a UI distance fraction onto ordered geometry; unknown gaps contribute no length. */
+export function orderedPositionAtDistanceFraction(
+  draft: OrderedRouteDraft,
+  fraction: number,
+): OrderedPosition | null {
+  if (draft.parts.length === 0 || !Number.isFinite(fraction)) return null;
+  const clamped = Math.max(0, Math.min(1, fraction));
+  const total = orderedDraftDistanceM(draft);
+  if (total <= ROUTE_COORDINATE_EQUALITY_M) return null;
+  let remaining = total * clamped;
+  for (let partIndex = 0; partIndex < draft.parts.length; partIndex += 1) {
+    const part = draft.parts[partIndex];
+    for (let pointIndex = 0; pointIndex < part.points.length - 1; pointIndex += 1) {
+      const length = routePointDistanceM(part.points[pointIndex], part.points[pointIndex + 1]);
+      if (remaining <= length || (partIndex === draft.parts.length - 1 && pointIndex === part.points.length - 2)) {
+        const segmentFraction = length > 0 ? Math.max(0, Math.min(1, remaining / length)) : 0;
+        if (segmentFraction >= 1 - 1e-9) return { partId: part.id, pointIndex: pointIndex + 1 };
+        return { partId: part.id, pointIndex, ...(segmentFraction > 0 ? { fraction: segmentFraction } : {}) };
+      }
+      remaining -= length;
+    }
+  }
+  const last = draft.parts.at(-1)!;
+  return { partId: last.id, pointIndex: last.points.length - 1 };
+}
+
 export function setOrderedDraftStart(draft: OrderedRouteDraft, point: RoutePoint): RouteEditResult {
   if (!validRoutePoint(point)) return { ok: false, code: 'INVALID_COORDINATE', draft };
   if (draft.parts.length > 0) return { ok: false, code: 'INVALID_INTERVAL', draft };
@@ -283,6 +311,90 @@ function orderedPositionIndex(draft: OrderedRouteDraft, position: OrderedPositio
   return draft.parts.findIndex(part => part.id === position.partId);
 }
 
+function normalizedPositionFraction(position: OrderedPosition): number {
+  return position.fraction ?? 0;
+}
+
+export function orderedPositionPoint(
+  draft: OrderedRouteDraft,
+  position: OrderedPosition,
+): RoutePoint | null {
+  const partIndex = orderedPositionIndex(draft, position);
+  if (partIndex < 0) return null;
+  const part = draft.parts[partIndex];
+  const fraction = normalizedPositionFraction(position);
+  if (!Number.isFinite(fraction) || fraction < 0 || fraction >= 1
+    || position.pointIndex < 0 || position.pointIndex >= part.points.length) return null;
+  if (fraction === 0) return clonePoint(part.points[position.pointIndex]);
+  const next = part.points[position.pointIndex + 1];
+  if (!next) return null;
+  const start = part.points[position.pointIndex];
+  return {
+    lat: start.lat + (next.lat - start.lat) * fraction,
+    lng: start.lng + (next.lng - start.lng) * fraction,
+    ...(typeof start.alt === 'number' && typeof next.alt === 'number'
+      ? { alt: start.alt + (next.alt - start.alt) * fraction }
+      : {}),
+  };
+}
+
+export function compareOrderedPositions(
+  draft: OrderedRouteDraft,
+  a: OrderedPosition,
+  b: OrderedPosition,
+): number | null {
+  const aPart = orderedPositionIndex(draft, a);
+  const bPart = orderedPositionIndex(draft, b);
+  if (aPart < 0 || bPart < 0 || !orderedPositionPoint(draft, a) || !orderedPositionPoint(draft, b)) return null;
+  if (aPart !== bPart) return aPart - bPart;
+  return (a.pointIndex + normalizedPositionFraction(a))
+    - (b.pointIndex + normalizedPositionFraction(b));
+}
+
+export function orderedIntervalCrossesGap(
+  draft: OrderedRouteDraft,
+  start: OrderedPosition,
+  end: OrderedPosition,
+): boolean {
+  const startPart = orderedPositionIndex(draft, start);
+  const endPart = orderedPositionIndex(draft, end);
+  if (startPart < 0 || endPart < startPart) return true;
+  const gapsAfter = new Set(draft.gaps.map(gap => gap.afterPartId));
+  for (let index = startPart; index < endPart; index += 1) {
+    if (gapsAfter.has(draft.parts[index].id)) return true;
+  }
+  return false;
+}
+
+function prefixThroughPosition(part: OrderedRoutePart, position: OrderedPosition, point: RoutePoint): RoutePoint[] {
+  const prefix = part.points.slice(0, position.pointIndex + 1).map(clonePoint);
+  if (normalizedPositionFraction(position) > 0) prefix.push(clonePoint(point));
+  return prefix;
+}
+
+function suffixFromPosition(part: OrderedRoutePart, position: OrderedPosition, point: RoutePoint): RoutePoint[] {
+  if (normalizedPositionFraction(position) === 0) return part.points.slice(position.pointIndex).map(clonePoint);
+  return [clonePoint(point), ...part.points.slice(position.pointIndex + 1).map(clonePoint)];
+}
+
+function pointsBetweenPositions(
+  part: OrderedRoutePart,
+  start: OrderedPosition,
+  end: OrderedPosition,
+  startPoint: RoutePoint,
+  endPoint: RoutePoint,
+): RoutePoint[] {
+  const output: RoutePoint[] = [clonePoint(startPoint)];
+  const firstWholeIndex = start.pointIndex + (normalizedPositionFraction(start) > 0 ? 1 : 0);
+  const lastWholeIndex = end.pointIndex;
+  for (let index = firstWholeIndex; index <= lastWholeIndex; index += 1) {
+    const point = part.points[index];
+    if (point && routePointDistanceM(output.at(-1)!, point) > ROUTE_COORDINATE_EQUALITY_M) output.push(clonePoint(point));
+  }
+  if (routePointDistanceM(output.at(-1)!, endPoint) > ROUTE_COORDINATE_EQUALITY_M) output.push(clonePoint(endPoint));
+  return output;
+}
+
 export function replaceOrderedInterval(
   draft: OrderedRouteDraft,
   start: OrderedPosition,
@@ -292,23 +404,24 @@ export function replaceOrderedInterval(
 ): RouteEditResult {
   const startPartIndex = orderedPositionIndex(draft, start);
   const endPartIndex = orderedPositionIndex(draft, end);
-  if (startPartIndex < 0 || endPartIndex < 0 || startPartIndex !== endPartIndex) {
+  const order = compareOrderedPositions(draft, start, end);
+  if (startPartIndex < 0 || endPartIndex < 0 || order == null || order >= 0
+    || orderedIntervalCrossesGap(draft, start, end)) {
     return { ok: false, code: 'INVALID_INTERVAL', draft };
   }
-  if (start.pointIndex < 0 || end.pointIndex <= start.pointIndex) {
-    return { ok: false, code: 'INVALID_INTERVAL', draft };
-  }
-  const part = draft.parts[startPartIndex];
-  if (end.pointIndex >= part.points.length) return { ok: false, code: 'INVALID_INTERVAL', draft };
-  const connected = connectCandidate(candidate, part.points[start.pointIndex], part.points[end.pointIndex]);
+  const startPart = draft.parts[startPartIndex];
+  const endPart = draft.parts[endPartIndex];
+  const startPoint = orderedPositionPoint(draft, start)!;
+  const endPoint = orderedPositionPoint(draft, end)!;
+  const connected = connectCandidate(candidate, startPoint, endPoint);
   if (!connected.ok) return { ok: false, code: connected.code, draft };
-  const prefix = part.points.slice(0, start.pointIndex + 1);
-  const suffix = part.points.slice(end.pointIndex);
+  const prefix = prefixThroughPosition(startPart, start, startPoint);
+  const suffix = suffixFromPosition(endPart, end, endPoint);
   const replacementParts: OrderedRoutePart[] = [];
   if (prefix.length >= 2) replacementParts.push({
     id: makePartId(draft, `replace-prefix:${startPartIndex}`),
     points: prefix.map(clonePoint),
-    resolution: part.resolution,
+    resolution: startPart.resolution,
   });
   replacementParts.push({
     id: makePartId(draft, `replace:${startPartIndex}`),
@@ -318,12 +431,14 @@ export function replaceOrderedInterval(
   if (suffix.length >= 2) replacementParts.push({
     id: makePartId(draft, `replace-suffix:${startPartIndex}`),
     points: suffix.map(clonePoint),
-    resolution: part.resolution,
+    resolution: endPart.resolution,
   });
   const next = cloneOrderedDraft(draft);
-  next.parts.splice(startPartIndex, 1, ...replacementParts);
+  next.parts.splice(startPartIndex, endPartIndex - startPartIndex + 1, ...replacementParts);
   const lastReplacementPartId = replacementParts[replacementParts.length - 1].id;
-  next.gaps = next.gaps.map(gap => gap.afterPartId === part.id
+  const removedIds = new Set(draft.parts.slice(startPartIndex, endPartIndex + 1).map(part => part.id));
+  next.gaps = next.gaps.filter(gap => !removedIds.has(gap.afterPartId) || gap.afterPartId === endPart.id)
+    .map(gap => gap.afterPartId === endPart.id
     ? { ...gap, afterPartId: lastReplacementPartId }
     : gap);
   next.revision += 1;
@@ -375,18 +490,26 @@ export function trimOrderedDraft(
 ): RouteEditResult {
   const startPartIndex = orderedPositionIndex(draft, start);
   const endPartIndex = orderedPositionIndex(draft, end);
-  if (startPartIndex < 0 || endPartIndex < startPartIndex) {
+  const order = compareOrderedPositions(draft, start, end);
+  if (startPartIndex < 0 || endPartIndex < startPartIndex || order == null || order > 0) {
     return { ok: false, code: 'INVALID_INTERVAL', draft };
   }
+  if (order === 0) return { ok: false, code: 'EMPTY_ROUTE', draft };
   if (start.pointIndex < 0 || end.pointIndex < 0
     || start.pointIndex >= draft.parts[startPartIndex].points.length
     || end.pointIndex >= draft.parts[endPartIndex].points.length) {
     return { ok: false, code: 'INVALID_INTERVAL', draft };
   }
+  const startPoint = orderedPositionPoint(draft, start)!;
+  const endPoint = orderedPositionPoint(draft, end)!;
   const kept = draft.parts.slice(startPartIndex, endPartIndex + 1).map((part, index, all) => {
     let points = part.points;
-    if (index === 0) points = points.slice(start.pointIndex);
-    if (index === all.length - 1) points = points.slice(0, end.pointIndex + 1);
+    // For a same-part trim both anchors must be applied to the original array.
+    if (all.length === 1) points = pointsBetweenPositions(part, start, end, startPoint, endPoint);
+    else {
+      if (index === 0) points = suffixFromPosition(part, start, startPoint);
+      if (index === all.length - 1) points = prefixThroughPosition(part, end, endPoint);
+    }
     return { ...part, points: points.map(clonePoint) };
   }).filter(part => part.points.length >= 2);
   if (kept.length === 0) return { ok: false, code: 'EMPTY_ROUTE', draft };
