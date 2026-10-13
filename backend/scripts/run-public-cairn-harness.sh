@@ -10,6 +10,7 @@ DB_NAME="cairn_public_${SAFE_RUN_ID}"
 DB_PASSWORD="public-${SAFE_RUN_ID}-local-only"
 JWT_SECRET="public-cairn-harness-${SAFE_RUN_ID}-only-32-chars"
 MYSQL_IMAGE="${HARNESS_MYSQL_IMAGE:-mysql:8.0.36}"
+MYSQL_READY_ATTEMPTS="${HARNESS_MYSQL_READY_ATTEMPTS:-60}"
 TEMP_DIR=""
 API_PID=""
 
@@ -103,9 +104,9 @@ docker run -d --name "$CONTAINER" --security-opt seccomp=unconfined \
   -e MYSQL_ROOT_PASSWORD="$DB_PASSWORD" -e MYSQL_DATABASE="$DB_NAME" \
   -p 127.0.0.1::3306 "$MYSQL_IMAGE" >/dev/null
 
-for attempt in $(seq 1 60); do
+for attempt in $(seq 1 "$MYSQL_READY_ATTEMPTS"); do
   if docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse 'SELECT 1' >/dev/null 2>&1; then break; fi
-  if [ "$attempt" = 60 ]; then docker logs "$CONTAINER" >&2; exit 1; fi
+  if [ "$attempt" = "$MYSQL_READY_ATTEMPTS" ]; then docker logs "$CONTAINER" >&2; exit 1; fi
   sleep 1
 done
 

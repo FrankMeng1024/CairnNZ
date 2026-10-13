@@ -333,7 +333,8 @@ async function main() {
     assert.equal(pending.groups.length, 1);
     assert.equal(Number(pending.groups[0].cairn_count), 3);
     assert.equal(Number(pending.groups[0].unannounced_event_count), 3);
-    await api(viewer, `/api/cairn-memory/presentation/${pending.groups[0].id}/announced`, {
+    const presentationGroupId = String(pending.groups[0].id);
+    await api(viewer, `/api/cairn-memory/presentation/${presentationGroupId}/announced`, {
       method: 'POST', body: { event_through_id: pending.groups[0].event_through_id },
     });
     const stillMerging = await api(viewer, '/api/cairn-memory/presentation/pending');
@@ -355,7 +356,41 @@ async function main() {
       [Number(presentationState.groups_n), Number(presentationState.announced_events)],
       [1, 3],
     );
+    const activeExpired = await api(
+      viewer,
+      `/api/cairn-memory/presentation/pending?active_group_ids=${presentationGroupId}`,
+    );
+    assert.equal(activeExpired.groups.length, 1);
+    assert.equal(String(activeExpired.groups[0].id), presentationGroupId);
+    assert.equal(Number(activeExpired.groups[0].cairn_count), 3);
+
+    await api(viewer, `/api/cairn-memory/cairns/${found.cairns[0].marker_id}/collection`, {
+      method: 'PUT', body: { action: 'remove' },
+    });
+    const partiallyRemoved = await api(
+      viewer,
+      `/api/cairn-memory/presentation/pending?active_group_ids=${presentationGroupId}`,
+    );
+    assert.equal(partiallyRemoved.groups.length, 1);
+    assert.equal(Number(partiallyRemoved.groups[0].cairn_count), 2);
+    assert.deepEqual(partiallyRemoved.withdrawn_group_ids, []);
+
+    for (const cairn of found.cairns.slice(1)) {
+      await api(viewer, `/api/cairn-memory/cairns/${cairn.marker_id}/collection`, {
+        method: 'PUT', body: { action: 'remove' },
+      });
+    }
+    const explicitlyWithdrawn = await api(
+      viewer,
+      `/api/cairn-memory/presentation/pending?active_group_ids=${presentationGroupId}`,
+    );
+    assert.deepEqual(explicitlyWithdrawn.groups, []);
+    assert.deepEqual(explicitlyWithdrawn.withdrawn_group_ids, [presentationGroupId]);
+    assert.equal(explicitlyWithdrawn.acquired_cairn_count, 0);
+    assert.equal(explicitlyWithdrawn.unread_count, 0);
     pass('DISC-PROD-02.presentation', 'three durable acquisitions surfaced immediately in one mergeable group; exact event watermark acknowledgement remained independent of per-revision read state');
+    pass('DISC-PROD-02b.active-group-authority', 'an acknowledged expired active group remained queryable with its authoritative count; one explicit removal reduced it from three to two without withdrawing the group');
+    pass('DISC-PROD-02c.explicit-withdrawal', 'explicit removal of every eligible Cairn returned no active group and named the group in withdrawn_group_ids');
 
     const friendOwner = await actor(db, 'FriendOwner');
     const friendViewer = await actor(db, 'FriendViewer');
