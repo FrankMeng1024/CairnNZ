@@ -295,6 +295,18 @@ async function acceptedActiveActivityPresence(viewer, location, observedAt = Dat
 async function main() {
   const db = await mysql.createConnection(dbConfig);
   try {
+    if (process.env.HARNESS_EXPECT_PRE046_ROUTE === '1') {
+      const [[legacyRoute]] = await db.execute(
+        `SELECT COUNT(*) AS route_count,MIN(resolution_state) AS resolution_state,
+                SUM(ordered_draft IS NULL) AS null_ordered_drafts
+           FROM routes WHERE name='Harness pre-046 legacy route'`,
+      );
+      assert.deepEqual(
+        [Number(legacyRoute.route_count), legacyRoute.resolution_state, Number(legacyRoute.null_ordered_drafts)],
+        [1, 'continuous', 1],
+      );
+      pass('MIG-PROD-046.populated-recovery', 'migration 046 and its isolated rollback/reapply rehearsal preserved a populated legacy Route as a continuous row without inventing an ordered draft');
+    }
     const owner = await actor(db, 'Owner');
     const viewer = await actor(db, 'Viewer');
     const operator = await actor(db, 'Operator', { operator: true });
@@ -363,10 +375,40 @@ async function main() {
     assert.equal(activeExpired.groups.length, 1);
     assert.equal(String(activeExpired.groups[0].id), presentationGroupId);
     assert.equal(Number(activeExpired.groups[0].cairn_count), 3);
+    const duplicateMalformed = await api(
+      viewer,
+      `/api/cairn-memory/presentation/pending?active_group_ids=${presentationGroupId},bad,${presentationGroupId},0,-1,1.5`,
+    );
+    assert.equal(duplicateMalformed.groups.length, 1);
+    assert.equal(String(duplicateMalformed.groups[0].id), presentationGroupId);
+    assert.equal(Number(duplicateMalformed.groups[0].cairn_count), 3);
+    assert.deepEqual(duplicateMalformed.withdrawn_group_ids, []);
+    const otherViewer = await actor(db, 'OtherPresentationViewer');
+    const otherViewerProbe = await api(
+      otherViewer,
+      `/api/cairn-memory/presentation/pending?active_group_ids=${presentationGroupId}`,
+    );
+    assert.deepEqual(otherViewerProbe.groups, []);
+    assert.deepEqual(otherViewerProbe.withdrawn_group_ids, []);
+    assert.deepEqual((await api(viewer, '/api/cairn-memory/presentation/pending?active_group_ids=')).groups, []);
 
-    await api(viewer, `/api/cairn-memory/cairns/${found.cairns[0].marker_id}/collection`, {
-      method: 'PUT', body: { action: 'remove' },
-    });
+    const safetyReview = async (cairn, index) => {
+      const reviewCase = await api(viewer, `/api/cairn-memory/revisions/${cairn.revision_id}/cases`, {
+        method: 'POST', expected: 201,
+        body: {
+          client_submission_id: crypto.randomUUID(), case_type: 'report',
+          category: 'privacy', detail: `Synthetic active-group safety review ${index}.`,
+        },
+      });
+      await api(operator, `/api/cairn-memory/operator/cases/${reviewCase.case_id}/decision`, {
+        method: 'POST',
+        body: {
+          case_state: 'reviewed', content_state: 'under_review',
+          decision_scope: 'revision', reason: `synthetic_active_group_safety_${index}`,
+        },
+      });
+    };
+    await safetyReview(found.cairns[0], 0);
     const partiallyRemoved = await api(
       viewer,
       `/api/cairn-memory/presentation/pending?active_group_ids=${presentationGroupId}`,
@@ -375,10 +417,8 @@ async function main() {
     assert.equal(Number(partiallyRemoved.groups[0].cairn_count), 2);
     assert.deepEqual(partiallyRemoved.withdrawn_group_ids, []);
 
-    for (const cairn of found.cairns.slice(1)) {
-      await api(viewer, `/api/cairn-memory/cairns/${cairn.marker_id}/collection`, {
-        method: 'PUT', body: { action: 'remove' },
-      });
+    for (const [index, cairn] of found.cairns.slice(1).entries()) {
+      await safetyReview(cairn, index + 1);
     }
     const explicitlyWithdrawn = await api(
       viewer,
@@ -389,8 +429,9 @@ async function main() {
     assert.equal(explicitlyWithdrawn.acquired_cairn_count, 0);
     assert.equal(explicitlyWithdrawn.unread_count, 0);
     pass('DISC-PROD-02.presentation', 'three durable acquisitions surfaced immediately in one mergeable group; exact event watermark acknowledgement remained independent of per-revision read state');
-    pass('DISC-PROD-02b.active-group-authority', 'an acknowledged expired active group remained queryable with its authoritative count; one explicit removal reduced it from three to two without withdrawing the group');
-    pass('DISC-PROD-02c.explicit-withdrawal', 'explicit removal of every eligible Cairn returned no active group and named the group in withdrawn_group_ids');
+    pass('DISC-PROD-02b.active-group-authority', 'an acknowledged expired active group remained queryable with its authoritative count; one real operator safety freeze reduced it from three to two without withdrawing the group');
+    pass('DISC-PROD-02c.explicit-withdrawal', 'real operator safety freezes of every eligible Cairn returned no active group and named the group in withdrawn_group_ids');
+    pass('DISC-PROD-02d.active-id-isolation', 'duplicate IDs were deduplicated, malformed/empty IDs were ignored, and another authenticated account learned neither the group nor its withdrawal state');
 
     const friendOwner = await actor(db, 'FriendOwner');
     const friendViewer = await actor(db, 'FriendViewer');

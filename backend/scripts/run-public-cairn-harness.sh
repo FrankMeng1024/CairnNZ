@@ -143,6 +143,30 @@ for migration in \
   apply_sql_file "$BACKEND_DIR/src/migrations/$migration"
 done
 
+# Rehearse 045 -> 046 against a populated legacy Route. The rollback leg is
+# isolated to this disposable database and intentionally contains no delivery
+# snapshots, because the real rollback is destructive once deliveries exist.
+docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -e \
+  "INSERT INTO users (name,email,password_hash,date_of_birth)
+     VALUES ('Pre-046 Route Owner','pre-046-${SAFE_RUN_ID}@example.invalid','test-only','1990-01-01');
+   SET @route_owner=LAST_INSERT_ID();
+   INSERT INTO routes (user_id,name,points,waypoints,distance_m,elevation_gain_m,permission)
+     VALUES (@route_owner,'Harness pre-046 legacy route',
+       JSON_ARRAY(JSON_OBJECT('lat',-41.0,'lng',174.0),JSON_OBJECT('lat',-41.001,'lng',174.001)),
+       JSON_ARRAY(),140,10,'personal');" >/dev/null
+apply_sql_file "$BACKEND_DIR/src/migrations/046_ordered_routes_and_deliveries.sql"
+if [ "${HARNESS_REHEARSE_046_RECOVERY:-0}" = "1" ]; then
+  legacy_state="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -Nse \
+    "SELECT CONCAT(COUNT(*),':',MIN(resolution_state),':',SUM(ordered_draft IS NULL))
+       FROM routes WHERE name='Harness pre-046 legacy route'" 2>/dev/null)"
+  [ "$legacy_state" = "1:continuous:1" ]
+  apply_sql_file "$BACKEND_DIR/src/migrations/rollback/046_ordered_routes_and_deliveries_down.sql"
+  legacy_rows="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -Nse \
+    "SELECT COUNT(*) FROM routes WHERE name='Harness pre-046 legacy route'" 2>/dev/null)"
+  [ "$legacy_rows" = "1" ]
+  apply_sql_file "$BACKEND_DIR/src/migrations/046_ordered_routes_and_deliveries.sql"
+fi
+
 MYSQL_DOCKER_CONTAINER="$CONTAINER" DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" \
   DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \
   "$SCRIPT_DIR/verify-migration-044.sh"
@@ -172,6 +196,7 @@ export DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" DB_USER=root DB_PASSWORD="$DB_PASSWO
 export JWT_SECRET="$JWT_SECRET" CAIRN_REALM="$API_REALM"
 export ALLOW_ISOLATED_QA_SOURCE_CONTRACT="$API_ISOLATED_SOURCE_CONTRACT"
 export NODE_ENV="$API_NODE_ENV" PUBLIC_CAIRN_PILOT_ENABLED="$PUBLIC_CAIRN_FLAG"
+export HARNESS_EXPECT_PRE046_ROUTE=1
 export PUBLIC_CAIRN_PILOT_USER_IDS="$PUBLIC_USER_IDS"
 export PUBLIC_CAIRN_SENSITIVE_ZONES_JSON="$PUBLIC_ZONE_POLICY"
 if [ "$HARNESS_MODE" = "memory-public-gate" ]; then
