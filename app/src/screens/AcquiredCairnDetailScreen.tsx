@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -14,75 +14,124 @@ import { FontSize, Spacing } from '../components/tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import * as Crypto from 'expo-crypto';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
+import {
+  cacheAcquiredCairnHistory,
+  loadCachedAcquiredCairnHistory,
+  markAcquiredCairnKnownUnavailable,
+  updateCachedAcquiredRevision,
+  type CachedAcquiredCairnRevision,
+} from '../features/cairns/acquiredCairnHistoryCache';
+import { useAppStore } from '../store/useAppStore';
 
 type DetailRoute = RouteProp<RootStackParamList, 'AcquiredCairnDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type Revision = {
-  revision_id: number;
-  content_revision: number;
-  type: string;
-  text: string | null;
-  source_audience: 'friends' | 'public';
-  availability: 'available' | 'under_review' | 'unavailable' | 'removed';
-  acquired_at: string;
-  opened_at: string | null;
-  thanked_at: string | null;
-};
-
 export function AcquiredCairnDetailScreen() {
   const theme = useVisualTheme();
   const route = useRoute<DetailRoute>();
   const nav = useNavigation<Nav>();
-  const [revisions, setRevisions] = useState<Revision[]>([]);
+  const ownerId = useAppStore(state => String(state.user?.id ?? ''));
+  const [revisions, setRevisions] = useState<CachedAcquiredCairnRevision[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reviewMessage, setReviewMessage] = useState('');
+  const [showingOfflineCopy, setShowingOfflineCopy] = useState(false);
+  const actionFlights = useRef(new Set<string>());
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
+    setShowingOfflineCopy(false);
     try {
-      const response = await authenticatedFetch(`/api/cairn-memory/cairns/${encodeURIComponent(route.params.markerId)}/history`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const response = await authenticatedFetch(`/api/cairn-memory/cairns/${encodeURIComponent(route.params.markerId)}/history`, {
+        expectedUserId: ownerId,
+        skipLogoutOn401: true,
+      });
+      if (!response.ok) {
+        if ([403, 404, 410].includes(response.status)) {
+          await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
+          throw new Error('KNOWN_UNAVAILABLE');
+        }
+        if (response.status === 401) throw new Error('AUTHORIZATION_UNCONFIRMED');
+        throw new Error(`HTTP_${response.status}`);
+      }
       const body = await response.json();
-      const next = Array.isArray(body.revisions) ? body.revisions : [];
+      const networkRevisions = Array.isArray(body.revisions) ? body.revisions : [];
+      if (networkRevisions.length === 0) {
+        await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
+        throw new Error('KNOWN_UNAVAILABLE');
+      }
+      let next: CachedAcquiredCairnRevision[];
+      try {
+        next = await cacheAcquiredCairnHistory(ownerId, route.params.markerId, networkRevisions);
+      } catch {
+        throw new Error('AUTHORIZATION_UNCONFIRMED');
+      }
       setRevisions(next);
       setPageIndex(0);
-    } catch {
-      setError('This acquired Cairn is unavailable right now.');
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : '';
+      if (reason === 'KNOWN_UNAVAILABLE' || reason === 'AUTHORIZATION_UNCONFIRMED') {
+        setRevisions([]);
+        setError('This acquired Cairn is unavailable right now.');
+      } else {
+        const cached = await loadCachedAcquiredCairnHistory(ownerId, route.params.markerId).catch(() => null);
+        if (cached?.length) {
+          setRevisions(cached);
+          setPageIndex(0);
+          setShowingOfflineCopy(true);
+        } else setError('This acquired Cairn is unavailable right now.');
+      }
     } finally {
       setLoading(false);
     }
-  }, [route.params.markerId]);
+  }, [ownerId, route.params.markerId]);
 
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     const revision = revisions[pageIndex];
     if (!revision || revision.availability !== 'available' || revision.opened_at) return;
+    const flightKey = `read:${revision.revision_id}`;
+    if (actionFlights.current.has(flightKey)) return;
+    actionFlights.current.add(flightKey);
     let active = true;
     void authenticatedFetch(`/api/cairn-memory/revisions/${revision.revision_id}/read`, {
-      method: 'POST', body: '{}',
+      method: 'POST', body: '{}', expectedUserId: ownerId, skipLogoutOn401: true,
     }).then(response => {
-      if (!active || !response.ok) return;
+      if (!active) return;
+      if (!response.ok) {
+        setReviewMessage('Could not mark this page as read. It remains unread.');
+        return;
+      }
+      const openedAt = new Date().toISOString();
       setRevisions(current => current.map(item => item.revision_id === revision.revision_id
-        ? { ...item, opened_at: item.opened_at || new Date().toISOString() }
+        ? { ...item, opened_at: item.opened_at || openedAt }
         : item));
+      void updateCachedAcquiredRevision(ownerId, route.params.markerId, revision.revision_id, { opened_at: openedAt });
       void useCairnPresentationStore.getState().refreshAcquiredMap();
-    });
+    }).catch(() => {
+      if (active) setReviewMessage('Could not mark this page as read. It remains unread.');
+    }).finally(() => actionFlights.current.delete(flightKey));
     return () => { active = false; };
-  }, [pageIndex, revisions]);
+  }, [ownerId, pageIndex, revisions, route.params.markerId]);
 
   const updateCollection = async (action: 'archive' | 'remove') => {
-    const response = await authenticatedFetch(`/api/cairn-memory/cairns/${encodeURIComponent(route.params.markerId)}/collection`, {
-      method: 'PUT', body: JSON.stringify({ action }),
-    });
-    if (response.ok) {
-      void useCairnPresentationStore.getState().refreshAcquiredMap();
-      nav.goBack();
-    }
-    else setError('Could not update this Memory collection.');
+    const flightKey = `collection:${action}`;
+    if (actionFlights.current.has(flightKey)) return;
+    actionFlights.current.add(flightKey);
+    try {
+      const response = await authenticatedFetch(`/api/cairn-memory/cairns/${encodeURIComponent(route.params.markerId)}/collection`, {
+        method: 'PUT', body: JSON.stringify({ action }), expectedUserId: ownerId, skipLogoutOn401: true,
+      });
+      if (response.ok) {
+        if (action === 'remove') await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
+        void useCairnPresentationStore.getState().refreshAcquiredMap();
+        nav.goBack();
+      } else setError('Could not update this Memory collection.');
+    } catch {
+      setError('Could not update this Memory collection.');
+    } finally { actionFlights.current.delete(flightKey); }
   };
 
   const confirmRemove = () => Alert.alert(
@@ -95,22 +144,40 @@ export function AcquiredCairnDetailScreen() {
   );
 
   const thank = async (revisionId: number) => {
-    const response = await authenticatedFetch(`/api/cairn-memory/revisions/${revisionId}/thanks`, { method: 'POST', body: '{}' });
-    if (response.ok) setRevisions(current => current.map(revision => revision.revision_id === revisionId
-      ? { ...revision, thanked_at: revision.thanked_at || new Date().toISOString() }
-      : revision));
+    const flightKey = `thanks:${revisionId}`;
+    if (actionFlights.current.has(flightKey)) return;
+    actionFlights.current.add(flightKey);
+    try {
+      const response = await authenticatedFetch(`/api/cairn-memory/revisions/${revisionId}/thanks`, {
+        method: 'POST', body: '{}', expectedUserId: ownerId, skipLogoutOn401: true,
+      });
+      if (response.ok) {
+        const thankedAt = new Date().toISOString();
+        setRevisions(current => current.map(revision => revision.revision_id === revisionId
+          ? { ...revision, thanked_at: revision.thanked_at || thankedAt }
+          : revision));
+        await updateCachedAcquiredRevision(ownerId, route.params.markerId, revisionId, { thanked_at: thankedAt });
+      } else setReviewMessage('Could not send Thanks. Try again later.');
+    } catch { setReviewMessage('Could not send Thanks. Try again later.'); }
+    finally { actionFlights.current.delete(flightKey); }
   };
 
   const report = async (revisionId: number) => {
-    const response = await authenticatedFetch(`/api/cairn-memory/revisions/${revisionId}/cases`, {
-      method: 'POST',
-      body: JSON.stringify({
-        client_submission_id: Crypto.randomUUID(),
-        case_type: 'report',
-        category: 'other',
-      }),
-    });
-    setReviewMessage(response.ok ? 'Report sent for review.' : 'Could not send the report. Try again later.');
+    const flightKey = `report:${revisionId}`;
+    if (actionFlights.current.has(flightKey)) return;
+    actionFlights.current.add(flightKey);
+    try {
+      const response = await authenticatedFetch(`/api/cairn-memory/revisions/${revisionId}/cases`, {
+        method: 'POST', expectedUserId: ownerId, skipLogoutOn401: true,
+        body: JSON.stringify({
+          client_submission_id: Crypto.randomUUID(),
+          case_type: 'report',
+          category: 'other',
+        }),
+      });
+      setReviewMessage(response.ok ? 'Report sent for review.' : 'Could not send the report. Try again later.');
+    } catch { setReviewMessage('Could not send the report. Try again later.'); }
+    finally { actionFlights.current.delete(flightKey); }
   };
 
   return (
@@ -127,6 +194,12 @@ export function AcquiredCairnDetailScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
+          {showingOfflineCopy ? (
+            <View style={[styles.offlineNotice, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Icon name="CloudOff" size={16} color={theme.iconInactive} />
+              <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Offline copy of versions already acquired by this account. New discoveries and actions still need a connection.</Text>
+            </View>
+          ) : null}
           {revisions[pageIndex] ? (() => {
             const revision = revisions[pageIndex];
             return (
@@ -212,6 +285,7 @@ const styles = StyleSheet.create({
   body: { fontSize: FontSize.body, lineHeight: 21 },
   meta: { fontSize: FontSize.small },
   unavailable: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  offlineNotice: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1, borderRadius: 12, padding: Spacing.md },
   thanks: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, alignSelf: 'flex-start', minHeight: 36 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xl },
   thanksText: { fontSize: FontSize.small, fontWeight: '700' },

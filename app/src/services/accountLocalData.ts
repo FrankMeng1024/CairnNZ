@@ -339,6 +339,8 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
   // in-process snapshot. Fence and clear that authority before the key sweep.
   const { purgeCairnPresentationForOwner } = require('../features/cairns/cairnPresentationStore');
   await purgeCairnPresentationForOwner(owner);
+  const { purgeAcquiredCairnHistoryForOwner } = require('../features/cairns/acquiredCairnHistoryCache');
+  await purgeAcquiredCairnHistoryForOwner(owner);
   const { purgeRoutePlannerDraftsForOwner } = require('../features/route/routePlannerDraftPersistence');
   await purgeRoutePlannerDraftsForOwner(owner);
   // Fence deferred/chunked precise-geometry writes before the broad key sweep;
