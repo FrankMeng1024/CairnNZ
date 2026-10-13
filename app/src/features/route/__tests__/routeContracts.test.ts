@@ -84,15 +84,15 @@ describe('Route Detail / editor / use source contracts', () => {
   const hike = read('src/screens/HikingScreen.tsx');
   const run = read('src/screens/RunningScreen.tsx');
 
-  test('Detail owns Use, Edit, acknowledged rename/delete, origin, and explicit unavailable states', () => {
+  test('Detail owns direct Use, Edit, acknowledged rename/delete, source, and explicit unavailable states', () => {
     expect(detail).toContain('routeMatchesIdentity(item, targetRouteId)');
     expect(detail).toContain("'Route unavailable'");
     expect(detail).toContain('await useRouteStore.getState().updateRoute');
     expect(detail).toContain('await useRouteStore.getState().deleteRoute');
-    expect(detail).toContain('routeOriginLines(selectedRoute)');
-    expect(detail).toContain('title="Use this Route"');
-    expect(detail).toContain('testID="route-use-hike"');
-    expect(detail).toContain('testID="route-use-run"');
+    expect(detail).toContain('routeSourceLabel(selectedRoute)');
+    expect(detail).toContain('testID="route-use-action"');
+    expect(detail).toContain("void useSelectedRoute('hiking')");
+    expect(detail).toContain("void useSelectedRoute('running')");
     expect(detail).toContain("tracking.status !== 'idle'");
     expect(detail).not.toContain('shown on the map for guidance');
   });
@@ -110,7 +110,8 @@ describe('Route Detail / editor / use source contracts', () => {
 
   test('editor keeps Draw/Point transactional, recoverable, and separate from Activity truth', () => {
     expect(overlay).toContain("onCancel('gesture-interrupted')");
-    expect(editor).toContain('label={draft.gaps.length ? \'Save repairable draft\' : \'Save Route\'}');
+    expect(overlay).toContain('onPause(points)');
+    expect(editor).toContain('testID="ordered-route-save"');
     expect(editor).toContain('saveRoutePlannerDraft({');
     expect(editor).toContain('loadActivityFinalArtifact(ownerId, clientActivityId)');
     expect(editor).toContain('createImportedOrderedDraft');
@@ -127,10 +128,12 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(editor).not.toContain('startTracking(');
   });
 
-  test('Detail uses ordinary metrics and labels the shared mode chooser honestly', () => {
-    expect(detail).toContain('label="Use Route"');
-    expect(detail).not.toContain('Use for a Hike');
-    expect(detail).not.toContain('Use for a Run');
+  test('Detail uses ordinary metrics and direct compact Hike/Run actions without a mode confirmation modal', () => {
+    expect(detail).toContain('Use for Hike');
+    expect(detail).toContain('Use for Run');
+    expect(detail).not.toContain('title="Use this Route"');
+    expect(detail).not.toContain('route-use-hike');
+    expect(detail).not.toContain('route-use-run');
     expect(detail).not.toContain('selectedRoute.points.length ||');
     expect(detail).not.toContain('>points</Text>');
   });
@@ -150,8 +153,7 @@ describe('Route Detail / editor / use source contracts', () => {
       expect(capture).toBeGreaterThan(startHandler);
       expect(startTracking).toBeGreaterThan(capture);
     }
-    expect(detail).toContain("nav.navigate('Running', { routeId: ready.id })");
-    expect(detail).toContain("nav.navigate('Hiking', { routeId: ready.id })");
+    expect(detail).toContain("nav.navigate(mode === 'running' ? 'Running' : 'Hiking', { routeId: ready.id })");
   });
 
   test('all three surfaces use shared semantic theme roles', () => {
@@ -164,6 +166,6 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(detail).toContain('<CanonicalRouteLayer');
     expect(editor).toContain('<CanonicalRouteLayer');
     expect(detail).toContain('canonicalRouteGeometry(selectedRoute)');
-    expect(editor).toContain('canonicalRouteGeometry({ orderedDraft: draft })');
+    expect(editor).toContain('canonicalRouteGeometry({ orderedDraft: displayDraft })');
   });
 });

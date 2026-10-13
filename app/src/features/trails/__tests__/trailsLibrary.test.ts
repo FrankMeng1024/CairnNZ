@@ -7,9 +7,12 @@ import {
   filterActivities,
   filterRoutes,
   groupActivitiesByMonth,
+  groupRoutesByMonth,
   hasActivitySyncIssue,
   hasRouteSyncIssue,
   routeModeLabel,
+  routeSourceLabel,
+  routeStatusLabel,
 } from '../trailsLibrary';
 
 const activity = (id: string, startedAt: number, mode: 'hiking' | 'running' = 'hiking', name?: string): TrackingSession => ({
@@ -93,6 +96,29 @@ describe('Trails personal journey library projection', () => {
     expect(filterRoutes(routes, 'milford').map(item => item.id)).toEqual(['older']);
     expect(routeModeLabel(routes[0])).toBe('Hike route');
     expect(routeModeLabel(routes[1])).toBe('Run route');
+  });
+
+  it('groups Routes by their own creation timestamps and keeps unknown dates explicit', () => {
+    const september = route('september', Date.UTC(2026, 8, 13), 'September Route');
+    const august = route('august', Date.UTC(2026, 7, 31), 'August Route');
+    const unknown = route('unknown', 0, 'Legacy Route');
+    const filtered = filterRoutes([august, unknown, september], '');
+    expect(groupRoutesByMonth(filtered).map(section => [section.key, section.title, section.data.map(item => item.id)]))
+      .toEqual([
+        ['2026-09', 'September 2026', ['september']],
+        ['2026-08', 'August 2026', ['august']],
+        ['unknown', 'Date unavailable', ['unknown']],
+      ]);
+  });
+
+  it('uses ownership/source labels instead of repeating Route on every record', () => {
+    const mine = route('mine', 1, 'Mine');
+    const received = { ...route('received', 2, 'Received'), isSharedDelivery: true, sharedBy: 'Aroha' };
+    expect(routeSourceLabel(mine)).toBe('Mine');
+    expect(routeSourceLabel(received)).toBe('Shared by Aroha');
+    expect(routeStatusLabel(mine)).toBe('Ready');
+    expect(routeStatusLabel({ ...mine, syncState: 'pending' })).toBe('Saving');
+    expect(routeSourceLabel(mine)).not.toContain('Route');
   });
 
   it('surfaces only failed sync as a library exception', () => {

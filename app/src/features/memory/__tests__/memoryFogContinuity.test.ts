@@ -12,6 +12,7 @@ import {
   buildFogShape,
   MEMORY_FOG_GEOMETRY_REVISION,
   memoryFogContentSignature,
+  memoryFogRenderAuthority,
   selectFogEvidencePoints,
 } from '../components/FogLayer';
 
@@ -95,5 +96,17 @@ describe('Memory evidence rendering continuity', () => {
       .not.toBe(memoryFogContentSignature('viewer-b|self', points, []));
     expect(memoryFogContentSignature('viewer-a|self', points, []))
       .toContain(`|${MEMORY_FOG_GEOMETRY_REVISION}|`);
+  });
+
+  test.each(['day', 'sunset', 'night'])('%s Mine + Friends keeps the exact Mine authority when no friend cells exist', theme => {
+    const mine = memoryFogRenderAuthority('viewer-a', 'self', null, `ready:${theme}`, 0);
+    expect(memoryFogRenderAuthority('viewer-a', 'combined', null, `loading:${theme}`, 0)).toBe(mine);
+    expect(memoryFogRenderAuthority('viewer-a', 'combined', null, `error:${theme}`, 0)).toBe(mine);
+    expect(memoryFogRenderAuthority('viewer-a', 'combined', null, `ready:${theme}`, 0)).toBe(mine);
+  });
+
+  test('combined authority changes only after eligible friend geometry is present', () => {
+    expect(memoryFogRenderAuthority('viewer-a', 'combined', null, 'ready:v4', 2))
+      .toBe('viewer-a|combined||ready:v4');
   });
 });

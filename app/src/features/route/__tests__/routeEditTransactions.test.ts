@@ -48,7 +48,7 @@ describe('Route edit transaction classification', () => {
     expect(intent.options[0].end.pointIndex).toBe(3);
   });
 
-  test('repeated coordinate occurrences expose interval choices instead of guessing', () => {
+  test('repeated coordinate occurrences stay unchanged instead of guessing an interval', () => {
     const base = appendOrderedSegment(
       empty(),
       [p(0, 0), p(20, 0), p(0, 0), p(-20, 0), p(0, 0), p(30, 0)],
@@ -57,10 +57,84 @@ describe('Route edit transaction classification', () => {
     expect(base.ok).toBe(true);
     if (!base.ok) return;
     expect(nearestOrderedPositions(base.draft, p(0, 0))).toHaveLength(3);
+    const before = JSON.stringify(base.draft);
     const intent = classifyDrawTransaction(base.draft, [p(0, 0), p(0, 20), p(0, 0)]);
+    expect(intent).toMatchObject({ kind: 'pending-replace', ambiguity: 'overlap' });
+    expect(JSON.stringify(base.draft)).toBe(before);
+  });
+
+  test('a near-but-not-exact end hotspot extends without requiring pen-up to touch the Route', () => {
+    const base = appendOrderedSegment(empty(), [p(0, 0), p(40, 0), p(80, 0)], 'point');
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const raw = [p(86, 2), p(115, 18), p(145, 28)];
+    const intent = classifyDrawTransaction(base.draft, raw, undefined, 12);
+    expect(intent).toEqual({ kind: 'append' });
+    if (intent.kind !== 'append') return;
+    const result = applyDrawTransaction(base.draft, intent, raw, 'draw-manual');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.draft.parts[0].points).toEqual(base.draft.parts[0].points);
+    expect(result.draft.parts[1].points[0]).toEqual(p(80, 0));
+    expect(result.draft.parts[1].points.at(-1)).toEqual(p(145, 28));
+  });
+
+  test('the equivalent start hotspot prepends while preserving canonical traversal order', () => {
+    const base = appendOrderedSegment(empty(), [p(0, 0), p(40, 0), p(80, 0)], 'point');
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    // The gesture begins at the old start and ends at the intended new start.
+    const raw = [p(4, -2), p(-25, 15), p(-55, 25)];
+    const intent = classifyDrawTransaction(base.draft, raw, undefined, 12);
+    expect(intent).toEqual({ kind: 'prepend' });
+    if (intent.kind !== 'prepend') return;
+    const result = applyDrawTransaction(base.draft, intent, raw, 'draw-manual');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.draft.parts[0].points[0]).toEqual(p(-55, 25));
+    expect(result.draft.parts[0].points.at(-1)).toEqual(p(0, 0));
+    expect(result.draft.parts[1].points).toEqual(base.draft.parts[0].points);
+  });
+
+  test('an interior start with a free endpoint cannot delete the untouched suffix', () => {
+    const base = appendOrderedSegment(empty(), [p(0, 0), p(50, 0), p(100, 0), p(150, 0)], 'point');
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const before = JSON.stringify(base.draft);
+    const intent = classifyDrawTransaction(base.draft, [p(50, 2), p(70, 35), p(95, 55)]);
+    expect(intent.kind).toBe('pending-replace');
+    expect(JSON.stringify(base.draft)).toBe(before);
+  });
+
+  test('true final pen-up selects the boundary after an overlapping tail', () => {
+    const base = appendOrderedSegment(empty(), [p(0, 0), p(20, 0), p(40, 0), p(60, 0), p(80, 0), p(100, 0)], 'point');
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const raw = [p(20, 0), p(35, 30), p(40, 0), p(60, 0), p(80, 0)];
+    const intent = classifyDrawTransaction(base.draft, raw);
     expect(intent.kind).toBe('replace');
     if (intent.kind !== 'replace') return;
-    expect(intent.options.length).toBeGreaterThan(1);
+    expect(intent.options[0].start.pointIndex).toBe(1);
+    expect(intent.options[0].end.pointIndex).toBe(4);
+  });
+
+  test('reverse-direction replacement is stored in canonical Route order', () => {
+    const base = appendOrderedSegment(empty(), [p(0, 0), p(20, 0), p(40, 0), p(60, 0), p(80, 0), p(100, 0)], 'point');
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const raw = [p(80, 0), p(60, -25), p(40, -30), p(20, 0)];
+    const intent = classifyDrawTransaction(base.draft, raw);
+    expect(intent.kind).toBe('replace');
+    if (intent.kind !== 'replace') return;
+    expect(intent.options[0].reverseCandidate).toBe(true);
+    const result = applyDrawTransaction(base.draft, { kind: 'replace', option: intent.options[0] }, raw, 'draw-manual');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const replacement = result.draft.parts.find(part => part.resolution === 'draw-manual');
+    expect(replacement?.points[0]).toEqual(p(20, 0));
+    expect(replacement?.points.at(-1)).toEqual(p(80, 0));
+    expect(result.draft.parts[0].points[0]).toEqual(p(0, 0));
+    expect(result.draft.parts.at(-1)?.points.at(-1)).toEqual(p(100, 0));
   });
 
   test('selected Activity gap accepts only its adjacent endpoints and reverse drawing is oriented', () => {

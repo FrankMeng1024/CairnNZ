@@ -63,6 +63,13 @@ let _moduleFogAuthority = '';
 let _moduleFogSig = '';
 let _moduleFogShape: Feature<Polygon | MultiPolygon> | null = null;
 let _moduleEvidenceShape: Feature<Polygon | MultiPolygon> | null = null;
+// Personal Fog is cached independently from the optional friend union. If a
+// friend response becomes empty, fails, or is revoked, the proven Mine shape
+// can paint immediately without retaining any borrowed geometry.
+let _moduleSelfAccount = '';
+let _moduleSelfSig = '';
+let _moduleSelfFogShape: Feature<Polygon | MultiPolygon> | null = null;
+let _moduleSelfEvidenceShape: Feature<Polygon | MultiPolygon> | null = null;
 export type DisplayTileCacheEntry = {
   signature: string;
   pointCount: number;
@@ -82,6 +89,7 @@ export type DisplayGeometrySliceSample = {
 };
 type DisplayGeometrySliceObserver = (sample: DisplayGeometrySliceSample) => void;
 let _moduleDisplayGeometryCache: DisplayGeometryCache | null = null;
+let _moduleSelfDisplayGeometryCache: DisplayGeometryCache | null = null;
 
 // Footprint radius in meters around each Memory evidence row — this is the "trail width"
 // visible to the user. R114 (2026-08-07): 25 → 30. User reported that 25m
@@ -156,6 +164,22 @@ export function memoryFogContentSignature(
   friendCells: Array<{ id: string; polygon: Array<[number, number]>; sourceFriendId?: string; authorizationVersion?: number; projectionVersion?: string }>,
 ): string {
   return prepareMemoryFogContent(authority, points, friendCells).contentSignature;
+}
+
+export function memoryFogRenderAuthority(
+  accountId: string,
+  scope: MemoryScope,
+  selectedFriendId: string | null,
+  friendAuthority: string,
+  friendCellCount: number,
+  syntheticQaAuthority = false,
+): string {
+  if (syntheticQaAuthority) return `${accountId}|qa-simulator-isolated`;
+  // Selecting Friends with no authorized visible evidence is exactly Mine.
+  // Keeping one authority prevents the renderer from clearing a proven Mine
+  // shape to solid fog while an empty/error/loading friend response settles.
+  if (friendCellCount === 0) return `${accountId}|self`;
+  return `${accountId}|${scope}|${selectedFriendId ?? ''}|${friendAuthority}`;
 }
 
 function solidFogShape(): Feature<Polygon> {
@@ -1209,14 +1233,23 @@ export function FogLayer({
     cell.authorizationVersion ?? '',
     cell.projectionVersion ?? '',
   ].join(':')))].sort().join(',');
-  const authority = syntheticQaAuthority
-    ? `${accountId}|qa-simulator-isolated`
-    : `${accountId}|${scope}|${selectedFriendId ?? ''}|${friendAuthority}`;
+  const authority = memoryFogRenderAuthority(
+    accountId,
+    scope,
+    selectedFriendId,
+    friendAuthority,
+    friendCells.length,
+    syntheticQaAuthority,
+  );
   const preparedContent = useMemo(
     () => prepareMemoryFogContent(authority, points, friendCells),
     [authority, friendCells, points],
   );
   const { contentSignature } = preparedContent;
+  const selfContentSignature = useMemo(
+    () => prepareMemoryFogContent(`${accountId}|self`, points, []).contentSignature,
+    [accountId, points],
+  );
   const readinessKey = `${authority}|local:${localHydration.ownerUserId ?? 'none'}:${localHydration.status}:${localHydration.requiresInitialReconcile ? 'needs-reconcile' : 'durable'}:${localHydration.initialReconcile}:${localHydration.revision}|${contentSignature}`;
   const readinessKeyRef = useRef(readinessKey);
   readinessKeyRef.current = readinessKey;
@@ -1224,16 +1257,22 @@ export function FogLayer({
   // classification layers. Rebuild bounded friend tiles on remount so a
   // cached fog can never silently lose or misclassify Friend/overlap color.
   const exactCachedAuthority = _moduleFogAuthority === authority && friendCells.length === 0;
-  const lastAuthorityRef = useRef<string>(exactCachedAuthority ? authority : '');
-  const lastSigRef = useRef<string>(exactCachedAuthority ? _moduleFogSig : '');
+  const exactCachedSelf = !syntheticQaAuthority
+    && friendCells.length === 0
+    && _moduleSelfAccount === accountId
+    && _moduleSelfSig === selfContentSignature
+    && Boolean(_moduleSelfFogShape);
+  const hasInitialCache = exactCachedAuthority || exactCachedSelf;
+  const lastAuthorityRef = useRef<string>(hasInitialCache ? authority : '');
+  const lastSigRef = useRef<string>(hasInitialCache ? contentSignature : '');
   const lastShapeRef = useRef<Feature<Polygon | MultiPolygon> | null>(
-    exactCachedAuthority ? _moduleFogShape : null,
+    exactCachedAuthority ? _moduleFogShape : exactCachedSelf ? _moduleSelfFogShape : null,
   );
   const lastEvidenceRef = useRef<Feature<Polygon | MultiPolygon> | null>(
-    exactCachedAuthority ? _moduleEvidenceShape : null,
+    exactCachedAuthority ? _moduleEvidenceShape : exactCachedSelf ? _moduleSelfEvidenceShape : null,
   );
   const lastDisplayGeometryCacheRef = useRef<DisplayGeometryCache | null>(
-    exactCachedAuthority ? _moduleDisplayGeometryCache : null,
+    exactCachedAuthority ? _moduleDisplayGeometryCache : exactCachedSelf ? _moduleSelfDisplayGeometryCache : null,
   );
   // v359 diagnostic: count build invocations for this FogLayer instance.
   // Lets us tell apart "first build after mount" vs "rebuild on points
@@ -1251,16 +1290,18 @@ export function FogLayer({
   const onFogReadyRef = useRef(onFogReady);
   onFogReadyRef.current = onFogReady;
   const [fogShape, setFogShape] = useState<Feature<Polygon | MultiPolygon>>(
-    exactCachedAuthority && _moduleFogShape ? _moduleFogShape : solidFogShape(),
+    exactCachedAuthority && _moduleFogShape
+      ? _moduleFogShape
+      : exactCachedSelf && _moduleSelfFogShape ? _moduleSelfFogShape : solidFogShape(),
   );
   const [friendDisplayShape, setFriendDisplayShape] = useState<Feature<Polygon | MultiPolygon> | null>(null);
   const [overlapDisplayShape, setOverlapDisplayShape] = useState<Feature<Polygon | MultiPolygon> | null>(null);
   const [geometryReady, setGeometryReady] = useState(
-    localHydrationReady && ((exactCachedAuthority && _moduleFogSig === contentSignature)
+    localHydrationReady && ((hasInitialCache)
       || (points.length === 0 && friendCells.length === 0)),
   );
   const [displayCacheChecked, setDisplayCacheChecked] = useState(
-    exactCachedAuthority && _moduleFogSig === contentSignature,
+    hasInitialCache,
   );
   // Reset the parent gate synchronously before a new account/scope/content
   // authority can paint with the prior geometry.
@@ -1331,12 +1372,17 @@ export function FogLayer({
     const authorityChanged = lastAuthorityRef.current !== authority;
     if (authorityChanged) {
       lastAuthorityRef.current = authority;
-      lastSigRef.current = '';
-      lastShapeRef.current = null;
-      lastEvidenceRef.current = null;
-      lastDisplayGeometryCacheRef.current = null;
-      setFogShape(solidFogShape());
-      setGeometryReady(false);
+      const canRestoreMine = !syntheticQaAuthority
+        && friendCells.length === 0
+        && _moduleSelfAccount === accountId
+        && _moduleSelfSig === selfContentSignature
+        && Boolean(_moduleSelfFogShape);
+      lastSigRef.current = canRestoreMine ? contentSignature : '';
+      lastShapeRef.current = canRestoreMine ? _moduleSelfFogShape : null;
+      lastEvidenceRef.current = canRestoreMine ? _moduleSelfEvidenceShape : null;
+      lastDisplayGeometryCacheRef.current = canRestoreMine ? _moduleSelfDisplayGeometryCache : null;
+      setFogShape(canRestoreMine && _moduleSelfFogShape ? _moduleSelfFogShape : solidFogShape());
+      setGeometryReady(canRestoreMine);
     }
     if (points.length === 0 && friendCells.length === 0) {
       const solid = solidFogShape();
@@ -1389,6 +1435,9 @@ export function FogLayer({
       const displayEvidence = combined?.evidence ?? built.evidence;
       const nextFriendDisplay = combined?.friendEvidence ?? null;
       const nextOverlapDisplay = combined?.overlapEvidence ?? null;
+      const selfShape = pointSnapshot.length > 0 && built.evidence
+        ? composeFogShape(built.evidence)
+        : pointSnapshot.length === 0 ? solidFogShape() : null;
       const shape = (pointSnapshot.length > 0 || friendSnapshot.length > 0) && !displayEvidence
         ? null
         : composeFogShape(displayEvidence);
@@ -1434,6 +1483,13 @@ export function FogLayer({
       lastShapeRef.current = shape;
       lastEvidenceRef.current = displayEvidence;
       lastDisplayGeometryCacheRef.current = built.cache;
+      if (!syntheticQaAuthority && selfShape) {
+        _moduleSelfAccount = accountId;
+        _moduleSelfSig = selfContentSignature;
+        _moduleSelfFogShape = selfShape;
+        _moduleSelfEvidenceShape = built.evidence;
+        _moduleSelfDisplayGeometryCache = built.cache;
+      }
       setFogShape(shape);
       setFriendDisplayShape(nextFriendDisplay);
       setOverlapDisplayShape(nextOverlapDisplay);
@@ -1486,7 +1542,7 @@ export function FogLayer({
       });
     }, 120);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [accountId, authority, contentSignature, displayCacheChecked, friendCells, localHydrationReady, points, readinessKey]);
+  }, [accountId, authority, contentSignature, displayCacheChecked, friendCells, localHydrationReady, points, readinessKey, selfContentSignature, syntheticQaAuthority]);
 
 
   const authoritativeEmpty = points.length === 0 && friendCells.length === 0;
@@ -1496,13 +1552,19 @@ export function FogLayer({
   const sameAuthorityShape = lastAuthorityRef.current === authority
     ? (exactShapeReady ? fogShape : lastShapeRef.current)
     : null;
+  const mineFallbackShape = !syntheticQaAuthority
+    && friendCells.length === 0
+    && _moduleSelfAccount === accountId
+    && _moduleSelfSig === selfContentSignature
+    ? _moduleSelfFogShape
+    : null;
   // While an append-only/same-scope update builds, retain the last proven
   // shape instead of briefly re-covering the user's entire history. Readiness
   // remains exact-signature gated, so pins and completion signals still wait
   // for the new geometry to paint. Authority changes always render solid.
   const displayedFogShape = authoritativeEmpty
     ? solidFogShape()
-    : sameAuthorityShape ?? solidFogShape();
+    : sameAuthorityShape ?? mineFallbackShape ?? solidFogShape();
 
   // v359: detect when fogShape first contains holes (corridor cutouts from
   // GPS data), then fire onFogReady ONCE. This is one of two gates the

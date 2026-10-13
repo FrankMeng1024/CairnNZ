@@ -10,13 +10,14 @@ interface Props<T extends string> {
   onChange: (value: T) => void;
   containerStyle?: StyleProp<ViewStyle>;
   testID?: string;
+  compact?: boolean;
 }
 
 /**
  * The canonical CairnNZ page-tab grammar: one containing track with related
  * active and inactive states. Screens own placement, not material decisions.
  */
-export function SegmentedControl<T extends string>({ value, segments, onChange, containerStyle, testID }: Props<T>) {
+export function SegmentedControl<T extends string>({ value, segments, onChange, containerStyle, testID, compact = false }: Props<T>) {
   const theme = useVisualTheme();
   return (
     <View
@@ -34,6 +35,7 @@ export function SegmentedControl<T extends string>({ value, segments, onChange, 
             onPress={() => onChange(segment.key)}
             style={[
               styles.segment,
+              compact && styles.segmentCompact,
               index === 0 && styles.firstSegment,
               index === segments.length - 1 && styles.lastSegment,
               {
@@ -41,6 +43,7 @@ export function SegmentedControl<T extends string>({ value, segments, onChange, 
                 borderColor: selected ? theme.borderStrong : 'transparent',
               },
             ]}
+            hitSlop={compact ? { top: 5, bottom: 5, left: 2, right: 2 } : undefined}
           >
             <Text
               testID={testID ? `${testID}-${selected ? 'active' : 'inactive'}` : undefined}
@@ -72,6 +75,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.md,
   },
+  segmentCompact: { minHeight: 32, paddingHorizontal: Spacing.sm },
   firstSegment: {
     borderTopLeftRadius: RadiusRole.segmentedItem,
     borderBottomLeftRadius: RadiusRole.segmentedItem,

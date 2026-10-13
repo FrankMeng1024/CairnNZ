@@ -5,10 +5,12 @@
  * want to use again. Cairns remain owned by Memory / Activity / Cairn Detail,
  * and unresolved friend discovery is intentionally not surfaced here.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  InteractionManager,
+  Platform,
   SectionList,
   StyleSheet,
   Text,
@@ -42,9 +44,11 @@ import {
   filterActivities,
   filterRoutes,
   groupActivitiesByMonth,
+  groupRoutesByMonth,
   hasActivitySyncIssue,
   hasRouteSyncIssue,
-  routeModeLabel,
+  routeSourceLabel,
+  routeStatusLabel,
   type ActivityModeFilter,
   type TrailsTab,
 } from '../features/trails/trailsLibrary';
@@ -141,6 +145,11 @@ function LibraryIntro({ tab, count }: { tab: TrailsTab; count: number }) {
       <Text style={[styles.libraryCount, { color: theme.textSecondary }]}>{count} {noun}</Text>
     </View>
   );
+}
+
+function DateSectionHeader({ title }: { title: string }) {
+  const theme = useVisualTheme();
+  return <Text style={[styles.monthLabel, { color: theme.textSecondary }]}>{title}</Text>;
 }
 
 function EmptyLibraryState({
@@ -261,15 +270,15 @@ function RouteRecord({ route, onOpen, onRetry }: { route: Route; onOpen: () => v
         <View style={styles.recordContent}>
           <View style={styles.recordTitleRow}>
             <Text style={[styles.recordTitle, { color: theme.textPrimary }]} numberOfLines={1}>{route.name || 'Saved route'}</Text>
-            <Text style={[styles.objectKind, { color: theme.textMuted }]}>{route.isSharedDelivery ? 'RECEIVED' : 'ROUTE'}</Text>
+            <Text style={[styles.routeSource, { color: theme.textMuted }]} numberOfLines={1}>{routeSourceLabel(route)}</Text>
           </View>
           <Text style={[styles.recordMeta, { color: theme.textSecondary }]} numberOfLines={1}>
-            {routeModeLabel(route)} · {dist.format(route.distanceM, 1)} {dist.unit}
+            {dist.format(route.distanceM, 1)} {dist.unit}
             {route.elevationGainM > 0 ? ` · +${dist.formatElevation(route.elevationGainM)}${dist.elevUnit}` : ''}
+            {` · ${routeStatusLabel(route)}`}
           </Text>
         </View>
         <View style={styles.routeOpenCue}>
-          <Text style={[styles.useCue, { color: theme.primary }]}>Use</Text>
           <Icon name="ChevronRight" size={16} color={theme.iconInactive} strokeWidth={2} />
         </View>
       </PressBtn>
@@ -284,7 +293,6 @@ function RouteRecord({ route, onOpen, onRetry }: { route: Route; onOpen: () => v
 
 function ActivitiesLibrary() {
   const nav = useNavigation<Nav>();
-  const theme = useVisualTheme();
   const sessions = useSessionStore(state => state.sessions);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<ActivityModeFilter>('all');
@@ -324,9 +332,7 @@ function ActivitiesLibrary() {
           ) : null}
         </View>
       )}
-      renderSectionHeader={({ section }) => (
-        <Text style={[styles.monthLabel, { color: theme.textSecondary }]}>{section.title}</Text>
-      )}
+      renderSectionHeader={({ section }) => <DateSectionHeader title={section.title} />}
       renderItem={({ item }) => (
         <ActivityRecord
           session={item}
@@ -374,6 +380,7 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
       ? sharedRoutes
       : [...routes, ...sharedRoutes], [ownership, routes, sharedRoutes]);
   const visible = useMemo(() => filterRoutes(sourceRoutes, query), [sourceRoutes, query]);
+  const sections = useMemo(() => groupRoutesByMonth(visible), [visible]);
   const retryLoad = () => { void loadRoutes(); };
 
   useEffect(() => { void loadSharedRoutes(); }, [loadSharedRoutes]);
@@ -403,9 +410,10 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
   if (routes.length === 0 && sharedRoutes.length === 0) return <EmptyLibraryState kind="routes" onPrimary={onCreate} />;
 
   return (
-    <FlatList
-      data={visible}
+    <SectionList
+      sections={sections}
       keyExtractor={item => `${item.isSharedDelivery ? 'received' : 'mine'}:${item.id}`}
+      stickySectionHeadersEnabled={false}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={styles.listContent}
       initialNumToRender={14}
@@ -422,6 +430,7 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
               onChange={setOwnership}
               containerStyle={styles.routeOwnershipFilter}
               testID="route-ownership-filter"
+              compact
             />
             <TouchableOpacity
               style={[styles.inlineCreateButton, { backgroundColor: theme.primaryAction }]}
@@ -429,9 +438,10 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
               accessibilityRole="button"
               accessibilityLabel="Create Route"
               testID="routes-create"
+              hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
             >
               <Icon name="Plus" size={16} color={theme.onPrimary} strokeWidth={2.4} />
-              <Text style={[styles.inlineCreateLabel, { color: theme.onPrimary }]}>Create</Text>
+              <Text style={[styles.inlineCreateLabel, { color: theme.onPrimary }]}>New</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.discoveryTools}>
@@ -445,11 +455,12 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
           </View>
         </View>
       )}
+      renderSectionHeader={({ section }) => <DateSectionHeader title={section.title} />}
       renderItem={({ item }) => (
         <RouteRecord
           route={item}
           onOpen={() => item.isSharedDelivery && item.sharedDeliveryId
-            ? nav.navigate('RouteEditor', { sharedDeliveryId: item.sharedDeliveryId })
+            ? nav.navigate('MapHistory', { sharedDeliveryId: item.sharedDeliveryId })
             : nav.navigate('MapHistory', { routeId: item.id })}
           onRetry={() => { if (!item.isSharedDelivery) void retryRouteSync(item.id); }}
         />
@@ -468,6 +479,7 @@ export function RoutesScreen() {
   const [tab, setTab] = useState<TrailsTab>(initialTab);
   const [createOpen, setCreateOpen] = useState(false);
   const [createStep, setCreateStep] = useState<'source' | 'activity'>('source');
+  const createTransitionRef = useRef<RootStackParamList['RouteEditor'] | null>(null);
   const sessions = useSessionStore(state => state.sessions);
   const loadRoutes = useRouteStore(state => state.loadRoutes);
 
@@ -477,6 +489,26 @@ export function RoutesScreen() {
     const requested = route.params?.initialTab === 'routes' ? 'routes' : 'activities';
     setTab(requested);
   }, [route.params?.initialTab]);
+
+  const finishCreateTransition = useCallback(() => {
+    const destination = createTransitionRef.current;
+    if (!destination) return;
+    createTransitionRef.current = null;
+    setCreateStep('source');
+    nav.navigate('RouteEditor', destination);
+  }, [nav]);
+
+  useEffect(() => {
+    if (createOpen || !createTransitionRef.current || Platform.OS === 'ios') return undefined;
+    const task = InteractionManager.runAfterInteractions(finishCreateTransition);
+    return () => task.cancel();
+  }, [createOpen, finishCreateTransition]);
+
+  const leaveCreateFlow = useCallback((destination: NonNullable<RootStackParamList['RouteEditor']>) => {
+    if (createTransitionRef.current) return;
+    createTransitionRef.current = destination;
+    setCreateOpen(false);
+  }, []);
 
   return (
     <>
@@ -510,7 +542,12 @@ export function RoutesScreen() {
     </SafeAreaView>
     <ModalCard
       visible={createOpen}
-      onDismiss={() => { setCreateOpen(false); setCreateStep('source'); }}
+      onDismiss={() => {
+        if (createTransitionRef.current) return;
+        setCreateOpen(false);
+        setCreateStep('source');
+      }}
+      onClosed={finishCreateTransition}
       testID={createStep === 'source' ? 'route-create-source' : 'route-activity-picker'}
     >
       {createStep === 'source' ? (
@@ -521,10 +558,7 @@ export function RoutesScreen() {
           />
           <PrimaryButton
             label="Plan a route"
-            onPress={() => {
-              setCreateOpen(false);
-              nav.navigate('RouteEditor', { creationSource: 'plan' });
-            }}
+            onPress={() => leaveCreateFlow({ creationSource: 'plan' })}
             renderIcon={color => <Icon name="Map" size={18} color={color} strokeWidth={2} />}
             testID="route-create-plan"
           />
@@ -541,7 +575,7 @@ export function RoutesScreen() {
         <>
           <ModalCardHeader
             title="Use an Activity"
-            body="The factual Activity stays read-only. Cairn creates a separate editable Route draft with its recorded section order."
+            body="The factual Activity stays read-only. Cairn creates a separate editable Route copy with its recorded path and real gaps."
           />
           <TouchableOpacity
             style={styles.pickerBack}
@@ -566,11 +600,7 @@ export function RoutesScreen() {
               renderItem={({ item: session }) => (
                 <TouchableOpacity
                   style={[styles.pickerRow, { borderColor: theme.borderSubtle }]}
-                  onPress={() => {
-                    setCreateOpen(false);
-                    setCreateStep('source');
-                    nav.navigate('RouteEditor', { creationSource: 'activity', fromSessionId: session.id });
-                  }}
+                  onPress={() => leaveCreateFlow({ creationSource: 'activity', fromSessionId: session.id })}
                   accessibilityRole="button"
                   testID={`route-activity-${session.id}`}
                 >
@@ -629,9 +659,9 @@ const styles = StyleSheet.create({
   libraryEyebrow: { flex: 1, fontSize: FontSize.tiny, fontWeight: '800', letterSpacing: 1.05 },
   libraryCount: { fontSize: FontSize.small, fontWeight: '600' },
   discoveryTools: { gap: Spacing.sm, paddingBottom: Spacing.md },
-  routeFilterRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingBottom: Spacing.md },
-  routeOwnershipFilter: { flex: 1 },
-  inlineCreateButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs, paddingHorizontal: Spacing.md, borderRadius: RadiusRole.button },
+  routeFilterRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingBottom: Spacing.md, flexWrap: 'wrap' },
+  routeOwnershipFilter: { flexGrow: 1, flexBasis: 220 },
+  inlineCreateButton: { minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: Spacing.sm, borderRadius: RadiusRole.button },
   inlineCreateLabel: { fontSize: FontSize.caption, fontWeight: '800' },
   searchField: {
     minHeight: 44,
@@ -686,10 +716,10 @@ const styles = StyleSheet.create({
   recordTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   recordTitle: { flex: 1, fontSize: FontSize.body, fontWeight: '700', letterSpacing: -0.1 },
   objectKind: { fontSize: FontSize.tiny, fontWeight: '800', letterSpacing: 0.8 },
+  routeSource: { maxWidth: '42%', fontSize: FontSize.tiny, fontWeight: '700' },
   recordMeta: { marginTop: 3, fontSize: FontSize.small, fontWeight: '500' },
   exceptionRow: { paddingHorizontal: 58, paddingBottom: Spacing.sm },
   routeOpenCue: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  useCue: { fontSize: FontSize.small, fontWeight: '700' },
   emptyState: {
     flex: 1,
     alignItems: 'center',

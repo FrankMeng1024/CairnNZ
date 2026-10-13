@@ -41,6 +41,7 @@ describe('Trails personal journey library screen contracts', () => {
     expect(trails).toContain('ACTIVITY_DISCOVERY_THRESHOLD');
     expect(trails).toContain('initialNumToRender={16}');
     expect(trails).toContain('windowSize={9}');
+    expect(trails).toContain('groupRoutesByMonth(visible)');
   });
 
   test('only failed object sync becomes visible library chrome', () => {
@@ -60,8 +61,8 @@ describe('Trails personal journey library screen contracts', () => {
 
   test('Route Detail is use-first and enters a truthful preselected Hike/Run map flow', () => {
     expect(detail).toContain('route-use-action');
-    expect(detail).toContain("nav.navigate('Hiking', { routeId: ready.id })");
-    expect(detail).toContain("nav.navigate('Running', { routeId: ready.id })");
+    expect(detail).toContain("nav.navigate(mode === 'running' ? 'Running' : 'Hiking', { routeId: ready.id })");
+    expect(detail).not.toContain('title="Use this Route"');
     expect(detail.indexOf('route-use-action')).toBeLessThan(detail.indexOf('accessibilityLabel="Edit route"'));
     expect(read('src/screens/HikingScreen.tsx')).toContain('This Route is shown on the map for reference.');
     expect(read('src/screens/RunningScreen.tsx')).toContain('This Route is shown on the map for reference.');
@@ -72,7 +73,8 @@ describe('Trails personal journey library screen contracts', () => {
     const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
     expect(trails).toContain("createStep === 'source' ? 'route-create-source' : 'route-activity-picker'");
     expect(trails).toContain('testID="route-create-activity"');
-    expect(trails).toContain("nav.navigate('RouteEditor', { creationSource: 'activity', fromSessionId: session.id })");
+    expect(trails).toContain("leaveCreateFlow({ creationSource: 'activity', fromSessionId: session.id })");
+    expect(trails).toContain('onClosed={finishCreateTransition}');
     expect(detail).not.toContain('activity-save-as-route');
     expect(detail).not.toContain('Save as Route');
     expect(editor).toContain('createImportedOrderedDraft');

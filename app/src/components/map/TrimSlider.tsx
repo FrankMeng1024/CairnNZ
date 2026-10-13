@@ -16,7 +16,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, StyleSheet, LayoutChangeEvent } from 'react-native';
+import { View, StyleSheet, LayoutChangeEvent, Platform } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { Colors } from '../tokens';
@@ -143,27 +143,42 @@ export function TrimSlider({
   const startX = localStart * usable;
   const endX = localEnd * usable;
 
+  const track = (
+    <View
+      style={styles.trackRow}
+      onLayout={onTrackLayout}
+      collapsable={false}
+      testID="route-trim-track"
+      {...(Platform.OS === 'web' ? {
+        onStartShouldSetResponder: () => true,
+        onMoveShouldSetResponder: () => true,
+        onResponderGrant: (event: any) => handleBegin(event.nativeEvent.locationX),
+        onResponderMove: (event: any) => handleUpdate(event.nativeEvent.locationX),
+        onResponderRelease: handleEnd,
+        onResponderTerminate: handleEnd,
+      } : {})}
+    >
+      <View style={styles.trackBg} />
+      <View
+        style={[
+          styles.trackFill,
+          { left: startX + HANDLE_W / 2, width: Math.max(0, endX - startX) },
+        ]}
+      />
+      <View
+        style={[styles.handle, styles.handleStart, { left: startX }]}
+        pointerEvents="none"
+      />
+      <View
+        style={[styles.handle, styles.handleEnd, { left: endX }]}
+        pointerEvents="none"
+      />
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      <GestureDetector gesture={pan}>
-        <View style={styles.trackRow} onLayout={onTrackLayout} collapsable={false}>
-          <View style={styles.trackBg} />
-          <View
-            style={[
-              styles.trackFill,
-              { left: startX + HANDLE_W / 2, width: Math.max(0, endX - startX) },
-            ]}
-          />
-          <View
-            style={[styles.handle, styles.handleStart, { left: startX }]}
-            pointerEvents="none"
-          />
-          <View
-            style={[styles.handle, styles.handleEnd, { left: endX }]}
-            pointerEvents="none"
-          />
-        </View>
-      </GestureDetector>
+      {Platform.OS === 'web' ? track : <GestureDetector gesture={pan}>{track}</GestureDetector>}
     </View>
   );
 }

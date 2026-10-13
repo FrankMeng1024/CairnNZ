@@ -12,14 +12,16 @@ interface Props {
   dismissible?: boolean;
   keyboardVerticalOffset?: number;
   testID?: string;
+  /** Called after the native modal has fully dismissed. */
+  onClosed?: () => void;
 }
 
 /** Calm centered-dialog frame. Content owns hierarchy; frame owns material. */
-export function ModalCard({ visible, onDismiss, children, dismissible = true, keyboardVerticalOffset = 0, testID }: Props) {
+export function ModalCard({ visible, onDismiss, onClosed, children, dismissible = true, keyboardVerticalOffset = 0, testID }: Props) {
   const theme = useVisualTheme();
   const insets = useSafeAreaInsets();
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={dismissible ? onDismiss : undefined}>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={dismissible ? onDismiss : undefined} onDismiss={onClosed}>
       <KeyboardAvoidingView
         style={[
           styles.backdrop,

@@ -307,6 +307,35 @@ export function appendOrderedSegment(
   return { ok: true, draft: next };
 }
 
+/**
+ * Extend the beginning of one ordered traversal. The supplied candidate is
+ * already in canonical new-start -> old-start order; this never mutates or
+ * reverses the approved route that follows it.
+ */
+export function prependOrderedSegment(
+  draft: OrderedRouteDraft,
+  candidate: RoutePoint[],
+  resolution: EditableRouteResolution,
+): RouteEditResult {
+  const first = draft.parts[0]?.points[0] ?? draft.startPoint;
+  if (!first) return appendOrderedSegment(draft, candidate, resolution);
+  const normalized = normalizeOrderedPoints(candidate);
+  if (normalized.length < 2) return { ok: false, code: 'ZERO_LENGTH', draft };
+  if (routePointDistanceM(normalized.at(-1)!, first) > ROUTE_ATTACHMENT_TOLERANCE_M) {
+    return { ok: false, code: 'DISCONNECTED', draft };
+  }
+  normalized[normalized.length - 1] = clonePoint(first);
+  const next = cloneOrderedDraft(draft);
+  next.startPoint = undefined;
+  next.parts.unshift({
+    id: makePartId(draft, 'prepend'),
+    points: normalized,
+    resolution,
+  });
+  next.revision += 1;
+  return { ok: true, draft: next };
+}
+
 function orderedPositionIndex(draft: OrderedRouteDraft, position: OrderedPosition): number {
   return draft.parts.findIndex(part => part.id === position.partId);
 }

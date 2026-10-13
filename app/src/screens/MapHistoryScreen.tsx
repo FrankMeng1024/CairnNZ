@@ -65,7 +65,8 @@ import {
   formatAverageActivityPace,
   linkedCairnsForActivity,
 } from '../features/activity/activityDetailPresentation';
-import { routeCanBeUsed, routeMatchesIdentity, routeOriginLines } from '../features/route/routeContracts';
+import { routeCanBeUsed, routeMatchesIdentity } from '../features/route/routeContracts';
+import { routeSourceLabel, routeStatusLabel } from '../features/trails/trailsLibrary';
 import {
   canonicalRouteBounds,
   canonicalRouteGeometry,
@@ -892,20 +893,30 @@ function MapHistoryObjectScreen() {
     : route.params?.sessionId as string | undefined;
   const activityBackContext = route.params?.activityBackContext as 'previous' | 'activities' | undefined;
   const targetRouteId = (route.params as { routeId?: string } | undefined)?.routeId;
+  const targetSharedDeliveryId = (route.params as { sharedDeliveryId?: string } | undefined)?.sharedDeliveryId;
+  const isRouteDetail = Boolean(targetRouteId || targetSharedDeliveryId);
   // 2026-08-16 Round 13: Route Detail (concept T5) — look up route object
   // by targetRouteId. Renders a full-screen route detail view with Edit Route
   // + Preview + Delete stacked buttons per row-03 col 5.
   const allRoutes = useRouteStore(s => s.routes);
-  const selectedRoute = targetRouteId
-    ? allRoutes.find(item => routeMatchesIdentity(item, targetRouteId)) ?? null
-    : null;
+  const sharedRoutes = useRouteStore(s => s.sharedRoutes);
+  const selectedRoute = targetSharedDeliveryId
+    ? sharedRoutes.find(item => item.sharedDeliveryId === targetSharedDeliveryId) ?? null
+    : targetRouteId
+      ? allRoutes.find(item => routeMatchesIdentity(item, targetRouteId)) ?? null
+      : null;
   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
-  const routeDetailState = useRouteStore(s => targetRouteId
+  const loadSharedRouteDetail = useRouteStore(s => s.loadSharedRouteDetail);
+  const removeSharedRoute = useRouteStore(s => s.removeSharedRoute);
+  const captureActivityRouteReference = useRouteStore(s => s.captureActivityRouteReference);
+  const ownRouteDetailState = useRouteStore(s => targetRouteId
     ? (s.routeDetailState[selectedRoute?.id ?? targetRouteId] ?? 'idle')
     : 'idle');
+  const [sharedRouteDetailState, setSharedRouteDetailState] = useState<import('../store/useRouteStore').RouteDetailState>('idle');
+  const routeDetailState = targetSharedDeliveryId ? sharedRouteDetailState : ownRouteDetailState;
   const [routeUseLoading, setRouteUseLoading] = useState(false);
-  const [routeUseTargetId, setRouteUseTargetId] = useState<string | null>(null);
   const [routeDeleteConfirm, setRouteDeleteConfirm] = useState(false);
+  const [routeMoreOpen, setRouteMoreOpen] = useState(false);
   const routeFriends = useFriendStore(s => s.friends);
   const loadFriendsFromBackend = useFriendStore(s => s.loadFriendsFromBackend);
   const [routeShareOpen, setRouteShareOpen] = useState(false);
@@ -942,19 +953,32 @@ function MapHistoryObjectScreen() {
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
+    if (targetSharedDeliveryId) {
+      if (selectedRoute && selectedRoute.points.length >= 2) {
+        setSharedRouteDetailState('ready');
+        return;
+      }
+      setSharedRouteDetailState('loading');
+      void loadSharedRouteDetail(targetSharedDeliveryId).then(setSharedRouteDetailState);
+      return;
+    }
     if (!targetRouteId || (selectedRoute && selectedRoute.points.length >= 2)) return;
     void loadRouteDetail(selectedRoute?.id ?? targetRouteId).catch(() => {});
-  }, [loadRouteDetail, selectedRoute?.id, selectedRoute?.points.length, targetRouteId]);
+  }, [loadRouteDetail, loadSharedRouteDetail, selectedRoute?.id, selectedRoute?.points.length, targetRouteId, targetSharedDeliveryId]);
 
-  const useSelectedRoute = useCallback(async () => {
+  const useSelectedRoute = useCallback(async (mode: 'hiking' | 'running' = 'hiking') => {
     if (!selectedRoute || routeUseLoading || routeUseInFlightRef.current) return;
     routeUseInFlightRef.current = true;
     setRouteUseLoading(true);
     try {
       if (selectedRoute.points.length < 2) {
-        await loadRouteDetail(selectedRoute.id);
+        if (targetSharedDeliveryId) await loadSharedRouteDetail(targetSharedDeliveryId);
+        else await loadRouteDetail(selectedRoute.id);
       }
-      const ready = useRouteStore.getState().routes.find(item => routeMatchesIdentity(item, selectedRoute.id));
+      const routeState = useRouteStore.getState();
+      const ready = targetSharedDeliveryId
+        ? routeState.sharedRoutes.find(item => item.sharedDeliveryId === targetSharedDeliveryId)
+        : routeState.routes.find(item => routeMatchesIdentity(item, selectedRoute.id));
       if (!ready || ready.points.length < 2) {
         Alert.alert(
           'Route unavailable',
@@ -984,31 +1008,15 @@ function MapHistoryObjectScreen() {
         );
         return;
       }
-      setRouteUseTargetId(ready.id);
+      captureActivityRouteReference(ready.id);
+      nav.navigate(mode === 'running' ? 'Running' : 'Hiking', { routeId: ready.id });
     } catch {
       Alert.alert('Route unavailable', 'The route could not be prepared. Check your connection and try again.');
     } finally {
       routeUseInFlightRef.current = false;
       setRouteUseLoading(false);
     }
-  }, [loadRouteDetail, nav, routeUseLoading, selectedRoute]);
-
-  const openRouteForActivity = useCallback((mode: 'hiking' | 'running') => {
-    if (!routeUseTargetId || routeUseInFlightRef.current) return;
-    const ready = useRouteStore.getState().routes.find(item => routeMatchesIdentity(item, routeUseTargetId));
-    if (!ready || !routeCanBeUsed(ready)) {
-      setRouteUseTargetId(null);
-      Alert.alert('Route unavailable', ready
-        ? 'Connect every unknown gap before using this Route.'
-        : 'The route could not be prepared. Check your connection and try again.');
-      return;
-    }
-    routeUseInFlightRef.current = true;
-    setRouteUseTargetId(null);
-    if (mode === 'running') nav.navigate('Running', { routeId: ready.id });
-    else nav.navigate('Hiking', { routeId: ready.id });
-    routeUseInFlightRef.current = false;
-  }, [nav, routeUseTargetId]);
+  }, [captureActivityRouteReference, loadRouteDetail, loadSharedRouteDetail, nav, routeUseLoading, selectedRoute, targetSharedDeliveryId]);
 
   const region = getCurrentRegion();
   const allSessions = useSessionStore(s => s.sessions);
@@ -1157,6 +1165,24 @@ function MapHistoryObjectScreen() {
       setDeleteSaving(false);
     }
   }, [deleteSaving, nav, selectedRoute]);
+
+  const removeSelectedReceivedRoute = useCallback(async () => {
+    if (!targetSharedDeliveryId || deleteSaving || routeDeleteInFlightRef.current) return;
+    routeDeleteInFlightRef.current = true;
+    setDeleteSaving(true);
+    setRouteActionError(null);
+    try {
+      await removeSharedRoute(targetSharedDeliveryId);
+      setRouteDeleteConfirm(false);
+      nav.goBack();
+    } catch {
+      setRouteActionError('The received Route was not removed. Try again when connected.');
+      setRouteDeleteConfirm(false);
+    } finally {
+      routeDeleteInFlightRef.current = false;
+      setDeleteSaving(false);
+    }
+  }, [deleteSaving, nav, removeSharedRoute, targetSharedDeliveryId]);
 
   const openRouteShare = useCallback(() => {
     if (!selectedRoute) return;
@@ -1606,7 +1632,7 @@ function MapHistoryObjectScreen() {
           MapView
             ? <NativeTrackMap session={routePreviewSession} markers={[]} plannedRouteGeometry={routePreviewGeometry ?? undefined} />
             : <TrackPolyline session={routePreviewSession} planned />
-        ) : targetRouteId ? (
+        ) : isRouteDetail ? (
           <View style={trackStyles.noGpsWrap} testID="route-map-unavailable">
             {routeDetailState === 'loading' ? <ActivityIndicator color={visualTheme.primary} /> : null}
             <Text style={[trackStyles.noGpsLabel, { color: visualTheme.foregroundSecondary }]}>
@@ -1687,10 +1713,10 @@ function MapHistoryObjectScreen() {
               has NO top title — the tab bar (Activities/Routes/Cairns) below
               already anchors the context. Only detail views show a title.
               Type-specific label based on which detail is open. */}
-          <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>{targetRouteId ? 'Route Detail' : targetSessionId ? 'Activity Detail' : (tab === 'flags' ? 'Cairns' : 'Routes')}</Text>
+          <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>{isRouteDetail ? 'Route Detail' : targetSessionId ? 'Activity Detail' : (tab === 'flags' ? 'Cairns' : 'Routes')}</Text>
           {/* User decision 2026-08-16: Plan button removed from Trails top row.
               Also drop the right-side spacer — nothing to balance now. */}
-          {!targetSessionId && !targetRouteId ? (
+          {!targetSessionId && !isRouteDetail ? (
             <View style={{ width: 40 }} />
           ) : (
             <View style={{ width: 40 }} />
@@ -1699,7 +1725,7 @@ function MapHistoryObjectScreen() {
 
         {/* Tab bar — only show when viewing all sessions (Trails index). Hide
             for both Activity Detail (targetSessionId) and Route Detail (targetRouteId). */}
-        {!targetSessionId && !targetRouteId && (
+        {!targetSessionId && !isRouteDetail && (
           <View style={styles.tabBar}>
             <TouchableOpacity
               style={[styles.tabItem, tab === 'routes' && styles.tabItemActive]}
@@ -1720,7 +1746,7 @@ function MapHistoryObjectScreen() {
           Edit Route (deep green pill, full width) stacked above Delete
           (red outline pill, full width). Pill radius 14, minHeight 54 — Auth
           submit style. */}
-      {targetRouteId && selectedRoute ? (
+      {isRouteDetail && selectedRoute ? (
         <>
         <View style={[styles.singleSessionPanel, { paddingBottom: Math.max(insets.bottom, Spacing.base) + Spacing.md, backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
           <View style={{ marginBottom: Spacing.md }}>
@@ -1759,7 +1785,7 @@ function MapHistoryObjectScreen() {
               </View>
             ) : (
               <TouchableOpacity
-                disabled={isQaReviewClone}
+                disabled={isQaReviewClone || Boolean(targetSharedDeliveryId)}
                 onPress={() => {
                   setRenameText(selectedRoute.name || 'Route');
                   setRenameEditing(true);
@@ -1770,12 +1796,12 @@ function MapHistoryObjectScreen() {
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={[styles.detailTitle, { color: visualTheme.foreground }]} numberOfLines={1}>{selectedRoute.name || 'Route'}</Text>
-                  <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} />
+                  {!targetSharedDeliveryId ? <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} /> : null}
                 </View>
               </TouchableOpacity>
             )}
           </View>
-          {selectedRoute.syncState && selectedRoute.syncState !== 'synced' ? (
+          {!targetSharedDeliveryId && selectedRoute.syncState && selectedRoute.syncState !== 'synced' ? (
             <View style={styles.routeSyncBlock}>
               <SyncBadge
                 state={selectedRoute.syncState}
@@ -1802,13 +1828,11 @@ function MapHistoryObjectScreen() {
             </Text>
           ) : null}
           <View style={styles.routeOriginBlock} testID="route-origin-context">
-            {routeOriginLines(selectedRoute).map(line => (
-              <Text key={line} style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary }]}>{line}</Text>
-            ))}
+            <Text style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary }]}>{routeSourceLabel(selectedRoute)} · {routeStatusLabel(selectedRoute)}</Text>
             {selectedRoute.originPersistence === 'legacy-local' ? (
               <Text style={[styles.routeStateText, { color: Colors.warning }]}>Origin is saved on this device; server support is pending.</Text>
             ) : null}
-            <Text style={[styles.routeUpdatedText, { color: visualTheme.muted }]}>Updated {formatDate(selectedRoute.updatedAt)}</Text>
+            <Text style={[styles.routeUpdatedText, { color: visualTheme.muted }]}>{targetSharedDeliveryId ? 'Received' : 'Saved'} {formatDate(selectedRoute.createdAt)}</Text>
           </View>
           {!routeCanBeUsed(selectedRoute) ? (
             <Text style={[styles.routeStateText, { color: Colors.warning }]} testID="route-unresolved-gap-notice">
@@ -1828,19 +1852,24 @@ function MapHistoryObjectScreen() {
             ) : null}
           </View>
           <View style={styles.routeActions}>
-            <PrimaryButton
-              label="Use Route"
-              onPress={() => { void useSelectedRoute(); }}
-              loading={routeUseLoading}
-              disabled={!routeCanBeUsed(selectedRoute)}
-              renderIcon={color => <Icon name="Navigation" size={IconSize.sm} color={color} strokeWidth={2} />}
-              testID="route-use-action"
-            />
             <View style={styles.routeMaintenanceRow}>
+              <TouchableOpacity
+                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.primaryAction, borderColor: visualTheme.primaryAction }, !routeCanBeUsed(selectedRoute) && styles.routeActionDisabled]}
+                onPress={() => { void useSelectedRoute('hiking'); }}
+                disabled={routeUseLoading || !routeCanBeUsed(selectedRoute)}
+                accessibilityRole="button"
+                accessibilityLabel="Use route for Hike"
+                testID="route-use-action"
+              >
+                {routeUseLoading ? <ActivityIndicator size="small" color={visualTheme.onPrimary} /> : <Icon name="Navigation" size={IconSize.sm} color={visualTheme.onPrimary} strokeWidth={2} />}
+                <Text style={[styles.routeMaintenanceText, { color: visualTheme.onPrimary }]}>Use for Hike</Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
                 onPress={() => {
-                  (nav as any).navigate('RouteEditor', { routeId: selectedRoute.id });
+                  (nav as any).navigate('RouteEditor', targetSharedDeliveryId
+                    ? { sharedDeliveryId: targetSharedDeliveryId, creationSource: 'shared-copy' }
+                    : { routeId: selectedRoute.id });
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Edit route"
@@ -1848,29 +1877,31 @@ function MapHistoryObjectScreen() {
                 <Icon name="Edit3" size={IconSize.sm} color={visualTheme.iconActive} strokeWidth={2} />
                 <Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>Edit</Text>
               </TouchableOpacity>
+              {!targetSharedDeliveryId ? (
+                <TouchableOpacity
+                  style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
+                  onPress={openRouteShare}
+                  disabled={!routeCanBeUsed(selectedRoute)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share route with friends"
+                >
+                  <Icon name="Share2" size={IconSize.sm} color={routeCanBeUsed(selectedRoute) ? visualTheme.iconActive : visualTheme.iconInactive} strokeWidth={2} />
+                  <Text style={[styles.routeMaintenanceText, { color: routeCanBeUsed(selectedRoute) ? visualTheme.foreground : visualTheme.foregroundSecondary }]}>Share</Text>
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
-                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
-                onPress={openRouteShare}
-                disabled={!routeCanBeUsed(selectedRoute)}
+                style={[styles.routeMoreAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
+                onPress={() => setRouteMoreOpen(value => !value)}
                 accessibilityRole="button"
-                accessibilityLabel="Share route with friends"
-              >
-                <Icon name="Share2" size={IconSize.sm} color={routeCanBeUsed(selectedRoute) ? visualTheme.iconActive : visualTheme.iconInactive} strokeWidth={2} />
-                <Text style={[styles.routeMaintenanceText, { color: routeCanBeUsed(selectedRoute) ? visualTheme.foreground : visualTheme.foregroundSecondary }]}>Share</Text>
-              </TouchableOpacity>
+                accessibilityLabel="More Route actions"
+              ><Icon name="Settings2" size={IconSize.sm} color={visualTheme.iconActive} strokeWidth={2} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>More</Text></TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[styles.routeDeleteAction, { backgroundColor: visualTheme.destructiveSurface }]}
-              onPress={() => setRouteDeleteConfirm(true)}
-              disabled={deleteSaving}
-              accessibilityRole="button"
-              accessibilityLabel="Delete route"
-            >
-              {deleteSaving
-                ? <ActivityIndicator size="small" color={visualTheme.destructive} />
-                : <Icon name="Trash2" size={16} color={visualTheme.destructive} strokeWidth={2} />}
-              <Text style={[styles.routeDeleteText, { color: visualTheme.destructive }]}>Delete Route</Text>
-            </TouchableOpacity>
+            {routeMoreOpen ? (
+              <View style={[styles.routeCompactMenu, { backgroundColor: visualTheme.surface, borderColor: visualTheme.borderSubtle }]} testID="route-detail-more-menu">
+                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); void useSelectedRoute('running'); }} disabled={!routeCanBeUsed(selectedRoute)}><Icon name="Footprints" size={16} color={visualTheme.iconActive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>Use for Run</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); setRouteDeleteConfirm(true); }} disabled={deleteSaving}><Icon name="Trash2" size={16} color={visualTheme.destructive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.destructive }]}>{targetSharedDeliveryId ? 'Remove received Route' : 'Delete Route'}</Text></TouchableOpacity>
+              </View>
+            ) : null}
           </View>
         </View>
         <ModalCard
@@ -1919,49 +1950,20 @@ function MapHistoryObjectScreen() {
           </View>
         </ModalCard>
         <ModalCard
-          visible={routeUseTargetId != null}
-          onDismiss={() => setRouteUseTargetId(null)}
-          testID="route-use-mode-picker"
-        >
-          <ModalCardHeader
-            title="Use this Route"
-            body="Choose an Activity. This Route is shown on the map for reference, and you will review it before starting."
-            onClose={() => setRouteUseTargetId(null)}
-          />
-          <View style={styles.deleteModalActions}>
-            <PrimaryButton
-              label="Hike"
-              onPress={() => openRouteForActivity('hiking')}
-              testID="route-use-hike"
-            />
-            <PrimaryButton
-              label="Run"
-              variant="secondary"
-              onPress={() => openRouteForActivity('running')}
-              testID="route-use-run"
-            />
-            <PrimaryButton
-              label="Cancel"
-              variant="secondary"
-              onPress={() => setRouteUseTargetId(null)}
-            />
-          </View>
-        </ModalCard>
-        <ModalCard
           visible={routeDeleteConfirm}
           onDismiss={() => !deleteSaving && setRouteDeleteConfirm(false)}
           dismissible={!deleteSaving}
           testID="route-delete-confirmation"
         >
           <ModalCardHeader
-            title="Delete Route?"
-            body="This removes the Route. Its source Activity, Cairns, and Memory stay unchanged."
+            title={targetSharedDeliveryId ? 'Remove received Route?' : 'Delete Route?'}
+            body={targetSharedDeliveryId ? 'This removes only your independent received snapshot.' : 'This removes the Route. Its source Activity, Cairns, and Memory stay unchanged.'}
           />
           <View style={styles.deleteModalActions}>
             <PrimaryButton
-              label="Delete Route"
+              label={targetSharedDeliveryId ? 'Remove Route' : 'Delete Route'}
               variant="destructive"
-              onPress={() => { void deleteSelectedRoute(); }}
+              onPress={() => { void (targetSharedDeliveryId ? removeSelectedReceivedRoute() : deleteSelectedRoute()); }}
               loading={deleteSaving}
               testID="route-delete-confirm"
             />
@@ -1974,7 +1976,7 @@ function MapHistoryObjectScreen() {
           </View>
         </ModalCard>
         </>
-      ) : targetRouteId ? (
+      ) : isRouteDetail ? (
         <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]} testID="route-detail-state">
           <Text style={[styles.detailTitle, { color: visualTheme.foreground }]}>
             {routeDetailState === 'not-found' ? 'Route unavailable' : 'Loading Route'}
@@ -1988,7 +1990,10 @@ function MapHistoryObjectScreen() {
           </Text>
           {routeDetailState === 'error' ? (
             <View style={{ marginTop: Spacing.lg }}>
-              <PrimaryButton label="Try Again" onPress={() => { void loadRouteDetail(targetRouteId); }} />
+              <PrimaryButton label="Try Again" onPress={() => {
+                if (targetSharedDeliveryId) void loadSharedRouteDetail(targetSharedDeliveryId).then(setSharedRouteDetailState);
+                else if (targetRouteId) void loadRouteDetail(targetRouteId);
+              }} />
             </View>
           ) : null}
         </View>
@@ -2835,15 +2840,16 @@ const styles = StyleSheet.create({
   },
   activityDeleteText: { fontSize: FontSize.caption, fontWeight: '600' },
   deleteModalActions: { gap: Spacing.sm },
-  routeActions: { gap: Spacing.sm, marginTop: Spacing.lg },
+  routeActions: { gap: Spacing.sm, marginTop: Spacing.sm },
   routeOriginBlock: { gap: 3, marginBottom: Spacing.md },
   routeSyncBlock: { gap: Spacing.xs, marginBottom: Spacing.sm, alignItems: 'flex-start' },
   routeOriginText: { fontSize: FontSize.caption, lineHeight: 19, fontWeight: '600' },
   routeUpdatedText: { fontSize: FontSize.small, lineHeight: 17, marginTop: 2 },
   routeStateText: { fontSize: FontSize.small, lineHeight: 18, marginBottom: Spacing.xs },
-  routeMaintenanceRow: { flexDirection: 'row', gap: Spacing.sm },
+  routeMaintenanceRow: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
   routeMaintenanceAction: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 104,
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
@@ -2852,6 +2858,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.button,
   },
+  routeMoreAction: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    borderWidth: 1,
+    borderRadius: Radius.button,
+  },
+  routeActionDisabled: { opacity: 0.42 },
+  routeCompactMenu: { alignSelf: 'flex-end', minWidth: 210, borderWidth: 1, borderRadius: Radius.card, paddingHorizontal: Spacing.md },
+  routeCompactMenuAction: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   routeMaintenanceText: { fontSize: FontSize.caption, fontWeight: '700' },
   routeDeleteAction: {
     minHeight: 40,

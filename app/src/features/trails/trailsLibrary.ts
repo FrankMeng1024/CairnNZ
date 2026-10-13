@@ -11,6 +11,12 @@ export interface ActivityMonthSection {
   data: TrackingSession[];
 }
 
+export interface RouteMonthSection {
+  key: string;
+  title: string;
+  data: Route[];
+}
+
 export const ACTIVITY_DISCOVERY_THRESHOLD = 8;
 
 function normalized(value: string | undefined): string {
@@ -69,7 +75,40 @@ export function filterRoutes(routes: readonly Route[], query: string): Route[] {
   const needle = normalized(query);
   return routes
     .filter(route => !needle || normalized(route.name).includes(needle))
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+    .sort((a, b) => {
+      const aCreated = Number.isFinite(a.createdAt) && a.createdAt > 0 ? a.createdAt : Number.NEGATIVE_INFINITY;
+      const bCreated = Number.isFinite(b.createdAt) && b.createdAt > 0 ? b.createdAt : Number.NEGATIVE_INFINITY;
+      return bCreated - aCreated || a.name.localeCompare(b.name);
+    });
+}
+
+export function groupRoutesByMonth(routes: readonly Route[]): RouteMonthSection[] {
+  const formatter = new Intl.DateTimeFormat(PRODUCT_LOCALE, { month: 'long', year: 'numeric' });
+  const sections: RouteMonthSection[] = [];
+  for (const route of routes) {
+    const timestamp = Number(route.createdAt);
+    const valid = Number.isFinite(timestamp) && timestamp > 0;
+    const date = valid ? new Date(timestamp) : null;
+    const key = date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` : 'unknown';
+    const title = date ? formatter.format(date) : 'Date unavailable';
+    const last = sections.at(-1);
+    if (last?.key === key) last.data.push(route);
+    else sections.push({ key, title, data: [route] });
+  }
+  return sections;
+}
+
+export function routeSourceLabel(route: Route): string {
+  if (!route.isSharedDelivery) return 'Mine';
+  const sender = route.sharedBy?.trim();
+  return sender ? `Shared by ${sender}` : 'Received';
+}
+
+export function routeStatusLabel(route: Route): string {
+  if (route.resolutionState === 'unresolved_gaps') return 'Needs repair';
+  if (route.syncState === 'failed') return 'Saved on this device';
+  if (route.syncState === 'pending' || route.syncState === 'syncing') return 'Saving';
+  return 'Ready';
 }
 
 export function routeModeLabel(route: Route): string {

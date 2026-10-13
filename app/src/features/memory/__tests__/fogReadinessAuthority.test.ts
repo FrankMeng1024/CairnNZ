@@ -24,7 +24,7 @@ describe('Memory fog readiness authority', () => {
     expect(fog).toContain('localHydration.initialReconcile');
     expect(fog).toContain('readinessKeyRef.current !== readinessKey');
     expect(fog).toMatch(/localHydrationReady, readinessKey\]\);/);
-    expect(fog).toMatch(/points, readinessKey\]\);/);
+    expect(fog).toContain('points, readinessKey, selfContentSignature, syntheticQaAuthority]);');
     expect(fog).toContain('onFogUnavailableRef.current?.(readinessKey)');
   });
 
@@ -41,7 +41,8 @@ describe('Memory fog readiness authority', () => {
   test('same-authority rebuilds retain prior fog and web emits the correlated paint callback', () => {
     const fog = read('src/features/memory/components/FogLayer.tsx');
     const web = read('src/features/memory/services/mapboxAdapter.web.tsx');
-    expect(fog).toContain('sameAuthorityShape ?? solidFogShape()');
+    expect(fog).toContain('sameAuthorityShape ?? mineFallbackShape ?? solidFogShape()');
+    expect(fog).toContain('_moduleSelfFogShape');
     expect(fog).toContain('fog.display_cache_read_failed');
     expect(fog).toContain('fog.display_cache_write_failed');
     expect(web).toContain('onDidFinishRenderingFrameFully?: () => void;');

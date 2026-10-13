@@ -225,7 +225,19 @@ export function MapView({
           }}
           mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
           mapStyle={parsedStyleJSON ?? styleUrl}
-          onLoad={() => {
+          onLoad={(event) => {
+            const bounds = firstCamera?.props.bounds;
+            if (bounds) {
+              event.target.fitBounds([bounds.sw, bounds.ne], {
+                padding: {
+                  top: bounds.paddingTop ?? 0,
+                  bottom: bounds.paddingBottom ?? 0,
+                  left: bounds.paddingLeft ?? 0,
+                  right: bounds.paddingRight ?? 0,
+                },
+                duration: 0,
+              });
+            }
             onDidFinishLoadingMap?.();
           }}
           initialViewState={
@@ -263,6 +275,14 @@ interface CameraProps {
   centerCoordinate?: [number, number];
   zoomLevel?: number;
   defaultSettings?: { centerCoordinate?: [number, number]; zoomLevel?: number };
+  bounds?: {
+    ne: [number, number];
+    sw: [number, number];
+    paddingTop?: number;
+    paddingBottom?: number;
+    paddingLeft?: number;
+    paddingRight?: number;
+  };
   animationMode?: string;
   animationDuration?: number;
   minZoomLevel?: number;
@@ -383,12 +403,48 @@ export function FillLayer({ id, style, __sourceId }: LayerProps) {
 
 // ── LineLayer ─────────────────────────────────────────────────────────
 export function LineLayer({ id, style, __sourceId }: LayerProps) {
+  const lineLayoutKeys = new Set([
+    'lineCap',
+    'lineJoin',
+    'lineMiterLimit',
+    'lineRoundLimit',
+    'lineSortKey',
+    'visibility',
+  ]);
+  const layoutStyle: Record<string, any> = {};
+  const paintStyle: Record<string, any> = {};
+  for (const [key, value] of Object.entries(style ?? {})) {
+    (lineLayoutKeys.has(key) ? layoutStyle : paintStyle)[key] = value;
+  }
   return (
     <Layer
       id={id}
       type="line"
       source={__sourceId}
-      paint={paintToKebab(style) as any}
+      layout={paintToKebab(layoutStyle) as any}
+      paint={paintToKebab(paintStyle) as any}
+    />
+  );
+}
+
+export function CircleLayer({ id, style, __sourceId }: LayerProps) {
+  return <Layer id={id} type="circle" source={__sourceId} paint={paintToKebab(style) as any} />;
+}
+
+export function SymbolLayer({ id, style, __sourceId }: LayerProps) {
+  const paintStyle: Record<string, any> = {};
+  const layoutStyle: Record<string, any> = {};
+  for (const [key, value] of Object.entries(style ?? {})) {
+    const isPaint = /^(icon|text)(Color|Halo|Opacity|Translate)/.test(key);
+    (isPaint ? paintStyle : layoutStyle)[key] = value;
+  }
+  return (
+    <Layer
+      id={id}
+      type="symbol"
+      source={__sourceId}
+      layout={paintToKebab(layoutStyle) as any}
+      paint={paintToKebab(paintStyle) as any}
     />
   );
 }
@@ -455,11 +511,8 @@ export function makeWebMapboxAdapter() {
     LineLayer,
     FillLayer,
     ShapeSource,
-    // v383: web doesn't need sprite-rendering — Memory map web is
-    // playwright-only and uses PointAnnotation. Stub as no-op React
-    // components so <CircleLayer .../> etc. renders safely as null.
-    CircleLayer: NoopComponent,
-    SymbolLayer: NoopComponent,
+    CircleLayer,
+    SymbolLayer,
     Images: NoopComponent,
     Image: NoopComponent,
     MarkerView: NoopComponent,

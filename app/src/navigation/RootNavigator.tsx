@@ -78,6 +78,7 @@ export type RootStackParamList = {
   MapHistory: {
     sessionId?: string;
     routeId?: string;
+    sharedDeliveryId?: string;
     qaReviewClone?: 'almost-done-v1';
     /**
      * Activity Detail is shared by Home, Trails, Cairn provenance, Finish and

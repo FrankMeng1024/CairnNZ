@@ -11,21 +11,25 @@ interface Props {
   active: boolean;
   mapViewRef: React.MutableRefObject<any>;
   onStroke: (points: RoutePoint[]) => void;
+  onPause?: (points: RoutePoint[]) => void;
   onCancel: (reason: 'gesture-interrupted' | 'coordinate-unavailable') => void;
+  nativeMapGesture?: ReturnType<typeof Gesture.Native>;
   bottomInset?: number;
   strokeColor?: string;
 }
 
 /**
- * One deliberate one-finger Draw transaction. Multi-touch fails the pending
- * ink and leaves native map gestures available on the next touch; partial ink
- * is never promoted to a connected Route segment.
+ * One finger draws. A second finger fails this stroke gesture so the native
+ * map gesture can pan/zoom; already sampled geographic ink is handed back as
+ * a paused continuation and is never committed as a half-edit.
  */
 export function RouteDrawOverlay({
   active,
   mapViewRef,
   onStroke,
+  onPause,
   onCancel,
+  nativeMapGesture,
   bottomInset = 250,
   strokeColor = '#245C43',
 }: Props): React.JSX.Element | null {
@@ -105,16 +109,21 @@ export function RouteDrawOverlay({
     onStroke(points);
   }
 
-  function finalizeWithoutEnd() {
+  async function finalizeWithoutEnd() {
     if (endedNormallyRef.current) return;
+    const generation = generationRef.current;
+    await chainRef.current;
+    if (generationRef.current !== generation || endedNormallyRef.current) return;
+    const points = pointsRef.current.map(point => ({ ...point }));
     generationRef.current += 1;
     pointsRef.current = [];
     screenPointsRef.current = [];
     setScreenPoints([]);
-    onCancel('gesture-interrupted');
+    if (points.length >= 2 && onPause) onPause(points);
+    else onCancel('gesture-interrupted');
   }
 
-  const draw = Gesture.Pan()
+  let draw = Gesture.Pan()
     .minDistance(0)
     .minPointers(1)
     .maxPointers(1)
@@ -134,6 +143,7 @@ export function RouteDrawOverlay({
       'worklet';
       runOnJS(finalizeWithoutEnd)();
     });
+  if (nativeMapGesture) draw = draw.blocksExternalGesture(nativeMapGesture);
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
