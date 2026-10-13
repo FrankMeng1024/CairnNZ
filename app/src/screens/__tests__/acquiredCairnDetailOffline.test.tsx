@@ -6,7 +6,11 @@ const mockLoadCache = jest.fn();
 const mockCacheHistory = jest.fn();
 const mockHistoryToken = { ownerGeneration: 0, markerEpoch: 1 };
 const mockBeginHistoryRequest = jest.fn((_ownerId: string, _markerId: string) => mockHistoryToken);
-const mockHistoryRequestIsCurrent = jest.fn(() => true);
+const mockHistoryRequestIsCurrent = jest.fn((
+  _ownerId: string,
+  _markerId: string,
+  _request: typeof mockHistoryToken,
+) => true);
 const mockMarkUnavailable = jest.fn();
 const mockUpdateCache = jest.fn();
 const mockGoBack = jest.fn();
@@ -61,7 +65,11 @@ jest.mock('../../store/useAppStore', () => {
 jest.mock('../../services/apiService', () => ({ authenticatedFetch: (...args: any[]) => mockFetch(...args) }));
 jest.mock('../../features/cairns/acquiredCairnHistoryCache', () => ({
   beginAcquiredCairnHistoryRequest: (ownerId: string, markerId: string) => mockBeginHistoryRequest(ownerId, markerId),
-  acquiredCairnHistoryRequestIsCurrent: (...args: any[]) => mockHistoryRequestIsCurrent(...args),
+  acquiredCairnHistoryRequestIsCurrent: (
+    ownerId: string,
+    markerId: string,
+    request: typeof mockHistoryToken,
+  ) => mockHistoryRequestIsCurrent(ownerId, markerId, request),
   loadCachedAcquiredCairnHistory: (...args: any[]) => mockLoadCache(...args),
   cacheAcquiredCairnHistory: (...args: any[]) => mockCacheHistory(...args),
   markAcquiredCairnKnownUnavailable: (...args: any[]) => mockMarkUnavailable(...args),
