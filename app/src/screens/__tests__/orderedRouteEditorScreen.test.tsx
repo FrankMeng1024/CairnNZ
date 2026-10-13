@@ -4,8 +4,10 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 const mockCameraSet = jest.fn();
 const mockCameraFit = jest.fn();
 const mockResolveDraw = jest.fn();
+const mockResolvePoint = jest.fn();
 const mockSearchPlaces = jest.fn();
 const mockSaveDraft = jest.fn(async (..._args: any[]) => undefined);
+let mockRecoveredPending: any = null;
 const mockStroke = [
   { lat: -41.2865, lng: 174.7767 },
   { lat: -41.2862, lng: 174.7772 },
@@ -104,6 +106,7 @@ jest.mock('../../features/route/routePlannerDraftPersistence', () => ({
   loadRoutePlannerDraft: jest.fn(async () => ({
     schemaVersion: 1, ownerId: 'owner-a', draftId: 'plan:screen',
     history: { present: mockDraft, past: [] }, name: 'Screen Route', permission: 'personal', savedAt: 1,
+    pendingDraw: mockRecoveredPending,
   })),
   plannerDraftMatchesRequest: () => true,
   saveRoutePlannerDraft: (...args: any[]) => mockSaveDraft(...args),
@@ -111,7 +114,7 @@ jest.mock('../../features/route/routePlannerDraftPersistence', () => ({
 }));
 jest.mock('../../features/route/routePlanningProvider', () => ({
   resolveDrawPlan: (...args: any[]) => mockResolveDraw(...args),
-  resolvePointPlan: jest.fn(),
+  resolvePointPlan: (...args: any[]) => mockResolvePoint(...args),
 }));
 jest.mock('../../features/route/routePlaceSearch', () => ({
   searchRoutePlaces: (...args: any[]) => mockSearchPlaces(...args),
@@ -141,8 +144,17 @@ import { OrderedRouteEditorScreen } from '../OrderedRouteEditorScreen';
 describe('OrderedRouteEditorScreen closure UI', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRecoveredPending = null;
     mockSearchPlaces.mockResolvedValue([{ id: 'place-1', label: 'Wellington', center: { lat: -41.2865, lng: 174.7762 } }]);
     mockResolveDraw.mockResolvedValue({ outcome: 'review', reason: 'shape-deviation', points: mockStroke });
+    mockResolvePoint.mockResolvedValue({
+      outcome: 'accepted',
+      points: [
+        { lat: -41.2865, lng: 174.7782 },
+        { lat: -41.2858, lng: 174.7777 },
+        { lat: -41.2865, lng: 174.7772 },
+      ],
+    });
   });
 
   test('mounts real editor controls, endpoints and manual visual provenance', async () => {
@@ -180,6 +192,48 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(await screen.findByText('Review this Route edit')).toBeTruthy();
     expect(screen.getByTestId('source-ordered-route-review-candidate')).toBeTruthy();
     expect(screen.getByTestId('source-ordered-route-review-original')).toBeTruthy();
+    expect(mockCameraFit).toHaveBeenCalled();
     expect(mockDraft.parts[0].points).toHaveLength(3);
+  });
+
+  test('a recovered multi-stroke transaction is visible and excludes competing topology edits until Undo cancels it', async () => {
+    mockRecoveredPending = {
+      kind: 'pending-replace',
+      draftId: 'plan:screen',
+      baseRevision: 1,
+      points: [
+        { lat: -41.2865, lng: 174.7767 },
+        { lat: -41.2858, lng: 174.7777 },
+      ],
+    };
+    const screen = render(<OrderedRouteEditorScreen />);
+    expect(await screen.findByTestId('route-pending-multistroke')).toBeTruthy();
+    expect(screen.getByTestId('source-ordered-route-pending')).toBeTruthy();
+    expect(screen.getByTestId('source-ordered-route-pending-endpoint')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('Point'));
+    expect(screen.queryByText('Add destination')).toBeNull();
+    fireEvent.press(screen.getByText('More'));
+    expect(screen.queryByText('Route actions')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Undo last Route edit'));
+    expect(screen.queryByTestId('route-pending-multistroke')).toBeNull();
+    expect(mockDraft.parts[0].points).toHaveLength(3);
+  });
+
+  test('Point keeps an accepted provider path transactional and visible before the user applies it', async () => {
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByText('Point'));
+    fireEvent.press(screen.getByText('Add destination'));
+    expect(await screen.findByText('Review this walking Route')).toBeTruthy();
+    expect(screen.getByTestId('source-ordered-route-review-candidate')).toBeTruthy();
+    expect(mockCameraFit).toHaveBeenCalled();
+    expect(mockDraft.parts).toHaveLength(1);
+    fireEvent.press(screen.getByText('Apply reviewed path'));
+    await waitFor(() => expect(screen.queryByText('Review this walking Route')).toBeNull());
+    // The accepted part is intentionally hidden while its bounded growth
+    // animation renders the exact validated provider geometry.
+    expect(screen.getByTestId('source-ordered-route-growth').props.shape.geometry.coordinates).toHaveLength(2);
   });
 });

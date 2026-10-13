@@ -180,6 +180,7 @@ describe('Route edit transaction classification', () => {
     );
     expect((intent as any).kind).toBe('pending-bridge');
     if (intent.kind !== 'pending-bridge') return;
+    expect(intent).toMatchObject({ draftId: imported.draftId, baseRevision: imported.revision });
     const continued = continueDrawTransaction(
       imported,
       intent,
@@ -232,5 +233,17 @@ describe('Route edit transaction classification', () => {
     });
     const complete = continueDrawTransaction(base.draft, pending, [p(130.1, 35), p(200, 25), p(250, 0)]);
     expect(complete.kind).toBe('replace');
+  });
+
+  test('R4 a pending transaction is fenced to its exact draft revision', () => {
+    const base = appendOrderedSegment(empty(), [p(0, 0), p(100, 0), p(200, 0), p(300, 0)], 'point');
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const pending = classifyDrawTransaction(base.draft, [p(50, 0), p(90, 30), p(130, 35)]);
+    expect(pending.kind).toBe('pending-replace');
+    if (pending.kind !== 'pending-replace') return;
+    const changed = { ...base.draft, revision: base.draft.revision + 1 };
+    expect(continueDrawTransaction(changed, pending, [p(130.1, 35), p(250, 0)]))
+      .toEqual({ kind: 'reject', code: 'STALE_TRANSACTION' });
   });
 });

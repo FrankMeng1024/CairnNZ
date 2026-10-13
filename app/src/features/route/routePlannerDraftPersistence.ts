@@ -48,20 +48,24 @@ function latestKey(ownerId: string): string {
   return `${KEY_PREFIX}${encodeURIComponent(ownerId)}:latest`;
 }
 
-function validRecord(value: any, ownerId: string): value is PersistedRoutePlannerDraft {
-  const pendingValid = value?.pendingDraw == null || (
+function validPendingDraw(value: any): boolean {
+  return value?.pendingDraw == null || (
     (value.pendingDraw.kind === 'pending-bridge' || value.pendingDraw.kind === 'pending-replace')
     && Array.isArray(value.pendingDraw.points)
     && value.pendingDraw.points.length >= 2
     && value.pendingDraw.points.every((point: any) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng))
+    && value.pendingDraw.draftId === value.history?.present?.draftId
+    && value.pendingDraw.baseRevision === value.history?.present?.revision
   );
+}
+
+function validRecord(value: any, ownerId: string): value is PersistedRoutePlannerDraft {
   return value?.schemaVersion === 1
     && value.ownerId === ownerId
     && value.draftId === value.history?.present?.draftId
     && value.history.present.ownerId === ownerId
     && validateOrderedDraft(value.history.present).length === 0
-    && Array.isArray(value.history.past)
-    && pendingValid;
+    && Array.isArray(value.history.past);
 }
 
 export async function saveRoutePlannerDraft(
@@ -108,7 +112,11 @@ export async function loadRoutePlannerDraft(
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
-    return validRecord(parsed, ownerId) ? parsed : null;
+    if (!validRecord(parsed, ownerId)) return null;
+    // Older pre-closure drafts may contain an unfenced pending stroke. Keep
+    // the valid Route/history, but discard that unsafe uncommitted edit.
+    if (!validPendingDraw(parsed)) delete parsed.pendingDraw;
+    return parsed;
   } catch {
     return null;
   }

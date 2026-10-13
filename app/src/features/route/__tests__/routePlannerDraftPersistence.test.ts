@@ -55,6 +55,8 @@ describe('Route planner draft recovery', () => {
     const pendingDraw = {
       kind: 'pending-bridge' as const,
       gapId: draft.gaps[0].id,
+      draftId: draft.draftId,
+      baseRevision: draft.revision,
       points: [draft.parts[0].points[1], { lat: -41.201, lng: 174.702 }],
     };
     await saveRoutePlannerDraft({
@@ -63,6 +65,22 @@ describe('Route planner draft recovery', () => {
     });
     expect((await loadRoutePlannerDraft('owner-a'))?.pendingDraw).toEqual(pendingDraw);
     expect((await loadRoutePlannerDraft('owner-a'))?.history.present).toEqual(draft);
+  });
+
+  test('keeps a valid recovered Route but discards an unfenced legacy pending stroke', async () => {
+    const draft = createImportedOrderedDraft({
+      draftId: 'legacy-pending', ownerId: 'owner-a',
+      segments: [[{ lat: -41.2, lng: 174.7 }, { lat: -41.2, lng: 174.701 }]],
+    });
+    mockMemory.set('@cairn:route-planner:v1:owner-a:latest', draft.draftId);
+    mockMemory.set('@cairn:route-planner:v1:owner-a:legacy-pending', JSON.stringify({
+      schemaVersion: 1, ownerId: 'owner-a', draftId: draft.draftId,
+      history: { present: draft, past: [] }, name: 'Legacy', permission: 'personal', savedAt: 1,
+      pendingDraw: { kind: 'pending-replace', points: draft.parts[0].points },
+    }));
+    const recovered = await loadRoutePlannerDraft('owner-a');
+    expect(recovered?.history.present).toEqual(draft);
+    expect(recovered?.pendingDraw).toBeUndefined();
   });
 
   test('never loads another account draft and removal clears the latest pointer', async () => {

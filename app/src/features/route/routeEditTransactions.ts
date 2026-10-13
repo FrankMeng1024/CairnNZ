@@ -31,9 +31,9 @@ export type DrawTransactionIntent =
   | { kind: 'append' }
   | { kind: 'bridge'; gapId: string; reverseCandidate: boolean }
   | { kind: 'replace'; options: RouteIntervalCandidate[] }
-  | { kind: 'pending-bridge'; gapId: string; points: RoutePoint[] }
-  | { kind: 'pending-replace'; points: RoutePoint[] }
-  | { kind: 'reject'; code: 'ZERO_LENGTH' | 'DISCONNECTED' | 'AMBIGUOUS_INTERVAL' };
+  | { kind: 'pending-bridge'; gapId: string; points: RoutePoint[]; draftId: string; baseRevision: number }
+  | { kind: 'pending-replace'; points: RoutePoint[]; draftId: string; baseRevision: number }
+  | { kind: 'reject'; code: 'ZERO_LENGTH' | 'DISCONNECTED' | 'AMBIGUOUS_INTERVAL' | 'STALE_TRANSACTION' };
 
 function projectToSegment(point: RoutePoint, a: RoutePoint, b: RoutePoint): {
   fraction: number;
@@ -121,7 +121,10 @@ export function classifyDrawTransaction(
       const startsAtLeft = routePointDistanceM(first, left.points.at(-1)!) <= ROUTE_ATTACHMENT_TOLERANCE_M;
       const startsAtRight = routePointDistanceM(first, right.points[0]) <= ROUTE_ATTACHMENT_TOLERANCE_M;
       if ((startsAtLeft || startsAtRight) && normalizeOrderedPoints(raw).length >= 2) {
-        return { kind: 'pending-bridge', gapId: selectedGapId, points: normalizeOrderedPoints(raw) };
+        return {
+          kind: 'pending-bridge', gapId: selectedGapId, points: normalizeOrderedPoints(raw),
+          draftId: draft.draftId, baseRevision: draft.revision,
+        };
       }
       return { kind: 'reject', code: 'DISCONNECTED' };
     }
@@ -155,7 +158,12 @@ export function classifyDrawTransaction(
     }
   }
   if (options.length > 0) return { kind: 'replace', options };
-  if (starts.length > 0 && ends.length === 0) return { kind: 'pending-replace', points: normalizeOrderedPoints(raw) };
+  if (starts.length > 0 && ends.length === 0) {
+    return {
+      kind: 'pending-replace', points: normalizeOrderedPoints(raw),
+      draftId: draft.draftId, baseRevision: draft.revision,
+    };
+  }
   return { kind: 'reject', code: starts.length > 1 || ends.length > 1 ? 'AMBIGUOUS_INTERVAL' : 'DISCONNECTED' };
 }
 
@@ -164,6 +172,9 @@ export function continueDrawTransaction(
   pending: Extract<DrawTransactionIntent, { kind: 'pending-bridge' | 'pending-replace' }>,
   nextStroke: RoutePoint[],
 ): DrawTransactionIntent {
+  if (pending.draftId !== draft.draftId || pending.baseRevision !== draft.revision) {
+    return { kind: 'reject', code: 'STALE_TRANSACTION' };
+  }
   const next = normalizeOrderedPoints(nextStroke);
   if (next.length < 2) return { kind: 'reject', code: 'ZERO_LENGTH' };
   const terminal = pending.points.at(-1);
